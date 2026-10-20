@@ -187,17 +187,6 @@ export const RECORD_DETAIL_BLOCK_RELEASE_1_2_0: PlatformBlockRelease = release(
 /** Exact immutable metadata release for the query-bound calendar display block. */
 export const CALENDAR_BLOCK_RELEASE: PlatformBlockRelease = release(sources.CALENDAR_BLOCK_RELEASE);
 
-/** Exact immutable metadata release for the installed query-bound board display block. */
-export const BOARD_BLOCK_RELEASE: PlatformBlockRelease = release(sources.BOARD_BLOCK_RELEASE);
-
-/**
- * Release 1.1.0 of the board adds the `card_moved` event: moving a card to another column is held as
- * a binding to a flow that saves the record. Release 1.0.0 stays published unchanged.
- */
-export const BOARD_BLOCK_RELEASE_1_1_0: PlatformBlockRelease = release(
-  sources.BOARD_BLOCK_RELEASE_1_1_0,
-);
-
 /** Exact immutable metadata release for the text input block. */
 export const TEXT_INPUT_BLOCK_RELEASE: PlatformBlockRelease = release(
   sources.TEXT_INPUT_BLOCK_RELEASE,
@@ -429,8 +418,6 @@ export const DISPLAY_BLOCK_RELEASES: readonly PlatformBlockRelease[] = Object.fr
   TABLE_BLOCK_RELEASE,
   RECORD_DETAIL_BLOCK_RELEASE_1_2_0,
   CALENDAR_BLOCK_RELEASE,
-  BOARD_BLOCK_RELEASE,
-  BOARD_BLOCK_RELEASE_1_1_0,
   CHART_BLOCK_RELEASE,
 ]);
 

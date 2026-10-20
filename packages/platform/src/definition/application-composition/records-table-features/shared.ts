@@ -147,6 +147,30 @@ export type RecordsTableRelatedRecordsFacts = Readonly<{
 }>;
 
 /**
+ * What a Board needs of the bound query and its record type: every field of the record type, what
+ * the query selects, groups by and totals, and the stage fields of the record type's pipelines.
+ * Identities are spelled as the table's settings spell them.
+ */
+export type RecordsTableBoardFacts = Readonly<{
+  queryLabel: string;
+  fields: readonly Readonly<{
+    field: string;
+    label: string;
+    type: string;
+    filterable: boolean;
+    /** For a choice field, how many options it declares. */
+    choiceCount?: number;
+  }>[];
+  selected: readonly string[];
+  groupBy: readonly string[];
+  /** The aliases of the query's own totals. */
+  aggregates: readonly string[];
+  relationshipHops: number;
+  pageSize: number;
+  stageFields: readonly string[];
+}>;
+
+/**
  * What a Records table's bound query offers, the input of every feature check: the fields it
  * selects with their canonical type and flags, its relationships and the record type's named
  * actions, and what the application offers its rows' related records. Publication builds it from
@@ -164,6 +188,8 @@ export type RecordsTableQueryFacts = Readonly<{
   /** The query groups or aggregates its rows, so rows are not records a person can act on. */
   grouped: boolean;
   relatedRecords: RecordsTableRelatedRecordsFacts;
+  /** What a Board needs; undefined when the query's record type is judged only at publication. */
+  board: RecordsTableBoardFacts | undefined;
   /** The record type's fields the query does not select, so a check can name one a setting chose. */
   unselectedFields?: readonly Readonly<{ field: string; label: string }>[];
 }>;
@@ -192,6 +218,7 @@ export type RecordsTableFeatureRefusalCode = Extract<
   | "definition_records_table_master_detail"
   | "definition_records_table_conditional_formatting"
   | "definition_records_table_pinning"
+  | "definition_records_table_board"
 >;
 
 /** The outcome of one feature check: available, or not possible with its one business sentence. */

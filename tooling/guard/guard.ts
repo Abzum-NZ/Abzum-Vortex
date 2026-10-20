@@ -871,49 +871,57 @@ for (const file of files.filter(
 }
 
 // A Records table grid feature exists in the platform contract (with its one capability check),
-// Studio's Features panel, the UI's lazy chunks and its extension points. All four name the same
+// Studio's Features panel, the UI's lazy chunks and its extension points or whole-grid views.
+// All four name the same
 // features, and only the UI registry imports a feature's chunk, so there is no second gating path
 // (the core header menu and toolbar beside it are imported directly; auto-size is their own chunk).
 {
-  const registries: Array<[string, string]> = [
+  const registries: Array<[string, string[]]> = [
     [
       "packages/platform/src/definition/application-composition/records-table-features/index.ts",
-      "recordsTableFeatureKeys",
+      ["recordsTableFeatureKeys"],
     ],
-    ["packages/ui/src/studio/grid-features/index.ts", "studioGridFeatureEditors"],
-    ["packages/ui/src/display/grid-features/registry.tsx", "loaders"],
-    ["packages/ui/src/display/grid-features/registry.tsx", "featurePoints"],
+    ["packages/ui/src/studio/grid-features/index.ts", ["studioGridFeatureEditors"]],
+    ["packages/ui/src/display/grid-features/registry.tsx", ["loaders", "viewLoaders"]],
+    ["packages/ui/src/display/grid-features/registry.tsx", ["featurePoints", "viewLoaders"]],
   ];
-  const keySets = registries.map(([file, name]): [string, string[]] => {
+  const keySets = registries.map(([file, names]): [string, string[]] => {
     const source = ts.createSourceFile(file, read(file), ts.ScriptTarget.Latest, true);
-    let initializer: ts.Expression | undefined;
-    for (const statement of source.statements) {
-      if (!ts.isVariableStatement(statement)) continue;
-      for (const declaration of statement.declarationList.declarations)
-        if (ts.isIdentifier(declaration.name) && declaration.name.text === name)
-          initializer = declaration.initializer;
-    }
-    while (initializer && (ts.isAsExpression(initializer) || ts.isSatisfiesExpression(initializer)))
-      initializer = initializer.expression;
-    // Read only direct properties/elements: nested settings and comments are not feature keys.
-    const entries =
-      initializer && ts.isArrayLiteralExpression(initializer)
-        ? initializer.elements.map((element) =>
-            ts.isStringLiteral(element) ? element.text : undefined,
-          )
-        : initializer && ts.isObjectLiteralExpression(initializer)
-          ? initializer.properties.map((property) =>
-              ts.isPropertyAssignment(property) &&
-              (ts.isIdentifier(property.name) || ts.isStringLiteral(property.name))
-                ? property.name.text
-                : undefined,
+    const keys: string[] = [];
+    for (const name of names) {
+      let initializer: ts.Expression | undefined;
+      for (const statement of source.statements) {
+        if (!ts.isVariableStatement(statement)) continue;
+        for (const declaration of statement.declarationList.declarations)
+          if (ts.isIdentifier(declaration.name) && declaration.name.text === name)
+            initializer = declaration.initializer;
+      }
+      while (
+        initializer &&
+        (ts.isAsExpression(initializer) || ts.isSatisfiesExpression(initializer))
+      )
+        initializer = initializer.expression;
+      // Read only direct properties/elements: nested settings and comments are not feature keys.
+      const entries =
+        initializer && ts.isArrayLiteralExpression(initializer)
+          ? initializer.elements.map((element) =>
+              ts.isStringLiteral(element) ? element.text : undefined,
             )
-          : undefined;
-    if (entries === undefined || entries.some((entry) => entry === undefined)) {
-      add("grid-feature-registry", file, 1, "the grid feature registry could not be read");
-      return [file, []];
+          : initializer && ts.isObjectLiteralExpression(initializer)
+            ? initializer.properties.map((property) =>
+                ts.isPropertyAssignment(property) &&
+                (ts.isIdentifier(property.name) || ts.isStringLiteral(property.name))
+                  ? property.name.text
+                  : undefined,
+              )
+            : undefined;
+      if (entries === undefined || entries.some((entry) => entry === undefined)) {
+        add("grid-feature-registry", file, 1, "the grid feature registry could not be read");
+        continue;
+      }
+      keys.push(...(entries as string[]));
     }
-    return [file, [...new Set(entries as string[])].sort()];
+    return [file, [...new Set(keys)].sort()];
   });
   const [platformFile, platformKeys] = keySets[0]!;
   for (const [file, keys] of keySets.slice(1))

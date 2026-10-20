@@ -266,18 +266,6 @@ export const PLATFORM_BLOCK_RELEASE_IDENTITIES = Object.freeze({
     rendererKey: "platform.renderer.calendar",
     releaseVersion: "1.0.0",
   },
-  BOARD_BLOCK_RELEASE: {
-    blockId: "626c1ff5-ae7b-47da-b0d4-370e3a262444",
-    key: "platform.display.board",
-    rendererKey: "platform.renderer.board",
-    releaseVersion: "1.0.0",
-  },
-  BOARD_BLOCK_RELEASE_1_1_0: {
-    blockId: "626c1ff5-ae7b-47da-b0d4-370e3a262444",
-    key: "platform.display.board",
-    rendererKey: "platform.renderer.board",
-    releaseVersion: "1.1.0",
-  },
   CONTAINER_BLOCK_RELEASE_1_3_0: {
     blockId: "11d1a889-531f-4880-a1a4-5dda5289e5ff",
     key: "platform.layout.container",
