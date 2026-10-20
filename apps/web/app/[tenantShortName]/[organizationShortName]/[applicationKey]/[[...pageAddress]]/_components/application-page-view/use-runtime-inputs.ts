@@ -132,6 +132,7 @@ export function useRuntimeInputs({
   refreshPlacements: (
     placementIds: readonly string[],
     tableContinuation?: TableContinuationTarget,
+    options?: Readonly<{ content?: true }>,
   ) => Promise<void>;
   setSelection: Dispatch<SetStateAction<Readonly<Record<string, readonly string[]>>>>;
   changeTableQuery: (
