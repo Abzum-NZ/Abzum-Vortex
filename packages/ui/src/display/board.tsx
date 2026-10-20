@@ -42,8 +42,8 @@ type BoardBucket = Readonly<{
   values: BoardBucketPayload;
   /** The stages a card in this bucket may move to. */
   moves: readonly string[];
-  /** The pipeline stage a column is: its colour role and its owning action. */
-  stage?: Readonly<{ tone: PipelineStageTone; gatedBy?: string }>;
+  /** The pipeline stage a column is: its colour role, its owning action and whether a new record may start there. */
+  stage?: Readonly<{ tone: PipelineStageTone; gatedBy?: string; addable: boolean }>;
 }>;
 
 /** Each stage colour role as its theme token; never a colour value. */
@@ -189,7 +189,7 @@ function BoardColumn({
             />
           )}
           {bucket.label}
-          {onAdd === undefined || bucket.selector.kind !== "option" ? null : (
+          {onAdd === undefined || bucket.stage?.addable !== true ? null : (
             <Button
               type="button"
               variant="ghost"
@@ -481,6 +481,7 @@ export function BoardView(props: DisplayRenderProps<BoardPayload>): ReactElement
             stage: {
               tone: column.tone,
               ...(column.gatedBy === undefined ? {} : { gatedBy: column.gatedBy }),
+              addable: column.addable,
             },
           })),
           // A required stage hides Unassigned once a read finds it empty; until then it is unknown.
@@ -648,7 +649,12 @@ export function BoardView(props: DisplayRenderProps<BoardPayload>): ReactElement
   });
 
   const addCard = (bucket: BoardBucket): void => {
-    if (cardAdded === undefined || values === undefined || bucket.selector.kind !== "option")
+    if (
+      cardAdded === undefined ||
+      values === undefined ||
+      bucket.selector.kind !== "option" ||
+      bucket.stage?.addable !== true
+    )
       return;
     void Promise.resolve(
       cardAdded({

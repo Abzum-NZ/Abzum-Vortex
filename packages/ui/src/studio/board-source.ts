@@ -92,7 +92,6 @@ export const studioBoardPipelines = (
                 columnField: reference,
                 cardFields: [],
                 totals: [],
-                quickAdd: false,
               });
         const selectable =
           stage?.type === "choice" &&

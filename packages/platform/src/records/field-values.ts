@@ -871,30 +871,30 @@ const finalizeRecordFieldCandidateInternal = (
 
   // A changed stage moves only along its pipeline's transitions, whoever or whatever changed it:
   // a person's save, a rule's output or a named action. A record with no stage yet moves as if it
-  // were at the start stage, and a stage once set is never cleared.
-  if (input.initialCandidate.operation === "update")
-    for (const pipeline of trustedRecordType.pipelines) {
-      const fieldId = String(pipeline.stageFieldId);
-      const original = input.initialCandidate.originalValues[fieldId];
-      const final = normalizedCandidate[fieldId];
-      const before = typeof original === "string" ? original : undefined;
-      const after = typeof final === "string" ? final : undefined;
-      if (pipelineAllowsMove(pipeline, before, after)) continue;
-      const field = fieldsById.get(fieldId);
-      const options = field?.type === "choice" ? field.settings.options : [];
-      const optionLabel = (value: string): string =>
-        options.find((option) => option.value === value)?.label ?? value;
-      issue(context, "stage_move_refused", ["candidateValues", fieldId], fieldId, {
-        code: "stage_move_refused",
-        message: pipelineMoveRefusalMessage(
-          pipeline,
-          field?.label ?? pipeline.name,
-          optionLabel,
-          before,
-          after,
-        ),
-      });
-    }
+  // were at the start stage, and a stage once set is never cleared. A new record has no stage
+  // before, so it is created only in the start stage or a stage the start stage moves to.
+  for (const pipeline of trustedRecordType.pipelines) {
+    const fieldId = String(pipeline.stageFieldId);
+    const original = input.initialCandidate.originalValues[fieldId];
+    const final = normalizedCandidate[fieldId];
+    const before = typeof original === "string" ? original : undefined;
+    const after = typeof final === "string" ? final : undefined;
+    if (pipelineAllowsMove(pipeline, before, after)) continue;
+    const field = fieldsById.get(fieldId);
+    const options = field?.type === "choice" ? field.settings.options : [];
+    const optionLabel = (value: string): string =>
+      options.find((option) => option.value === value)?.label ?? value;
+    issue(context, "stage_move_refused", ["candidateValues", fieldId], fieldId, {
+      code: "stage_move_refused",
+      message: pipelineMoveRefusalMessage(
+        pipeline,
+        field?.label ?? pipeline.name,
+        optionLabel,
+        before,
+        after,
+      ),
+    });
+  }
 
   if (context.issues.length > 0) return { success: false, issues: context.issues };
 

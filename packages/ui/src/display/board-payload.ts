@@ -27,8 +27,8 @@ import {
 
 /**
  * The strict bounded payload a query-bound board renders: its protected columns in pipeline stage
- * order, each with its colour role, the stages a card in it may move to and the action that owns
- * it, and the unassigned bucket.
+ * order, each with its colour role, the stages a card in it may move to, the action that owns
+ * it and whether a new record may start in it, and the unassigned bucket.
  */
 const maximumBoardRows = 100_000;
 const maximumBoardColumns = 12;
@@ -258,7 +258,18 @@ export const parseBoardPayload = (
     const column = requireRecord(candidate, "A board column must be an object", columnLocation);
     requireExactKeys(
       column,
-      ["value", "label", "tone", "moves", "gatedBy", "state", "rowCount", "aggregates", "page"],
+      [
+        "value",
+        "label",
+        "tone",
+        "moves",
+        "gatedBy",
+        "addable",
+        "state",
+        "rowCount",
+        "aggregates",
+        "page",
+      ],
       columnLocation,
     );
     const optionValue = requireString(
@@ -299,6 +310,10 @@ export const parseBoardPayload = (
       if (gatedBy.length > 60)
         fail("A board column's action name exceeds its bound", columnLocation);
     }
+    if (typeof column.addable !== "boolean")
+      fail("A board column says whether a new record may start in it", columnLocation);
+    if (column.addable === true && gatedBy !== undefined)
+      fail("A new record never starts in a column an action owns", columnLocation);
     const bucket = parseBoardBucket(
       {
         state: column.state,
@@ -316,6 +331,7 @@ export const parseBoardPayload = (
       tone: tone.data,
       moves: Object.freeze(moves as string[]),
       ...(gatedBy === undefined ? {} : { gatedBy }),
+      addable: column.addable === true,
       ...bucket,
     });
   });

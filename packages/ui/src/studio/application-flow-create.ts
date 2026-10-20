@@ -1,6 +1,6 @@
 import {
   applicationSourceDocumentSchema,
-  authoredRecordsTableFeatureEnabled,
+  authoredRecordsTableEventAvailable,
   builderKeySchema,
   flowContractVersion,
   sourcePageItems,
@@ -207,9 +207,10 @@ export const projectStudioFlowCreateChoices = (
         release?.supportedEvents.includes(event) !== true ||
         bound.has(`${alias} ${event}`) ||
         (event === "action" && node.settings.action_kind === "submit") ||
-        // The action that saves an inline edit belongs to the feature, so it is offered while on.
-        ((event === "inline_edit" || event === "row_edit") &&
-          (placed === undefined || !authoredRecordsTableFeatureEnabled(placed.props, event)))
+        // The action that saves an inline edit belongs to the feature, so it is offered while on;
+        // a card added from a column is offered while the board's quick add is on.
+        ((event === "inline_edit" || event === "row_edit" || event === "card_added") &&
+          (placed === undefined || !authoredRecordsTableEventAvailable(placed.props, event)))
       )
         continue;
       const recordType = controlEventRecordType(event, placements.get(alias), pageRecord, queries);

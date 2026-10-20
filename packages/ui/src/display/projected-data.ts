@@ -261,7 +261,8 @@ export type BoardBucketPayload = Readonly<{
 
 /**
  * One installed choice column in its pipeline's stage order: its colour role from the theme, the
- * stages a card in it may move to, and the named action that owns it, if one does.
+ * stages a card in it may move to, the named action that owns it, if one does, and whether a new
+ * record may start in it.
  */
 export type BoardColumnPayload = BoardBucketPayload &
   Readonly<{
@@ -270,6 +271,8 @@ export type BoardColumnPayload = BoardBucketPayload &
     tone: PipelineStageTone;
     moves: readonly string[];
     gatedBy?: string;
+    /** A new record may start in this stage, so quick add offers it. */
+    addable: boolean;
   }>;
 
 /** The ready values a Data grid in Board mode renders. */

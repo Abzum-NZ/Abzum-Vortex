@@ -35,7 +35,7 @@ export type RecordsTableBoardSettings = Readonly<{
   totals: readonly Readonly<{ alias: string; label: string }>[];
   wipLimit?: number;
   /** Each stage column offers adding a card there, through the flow bound to a card being added. */
-  quickAdd: boolean;
+  quickAdd?: boolean;
 }>;
 
 /** The Board feature while it is on: what the board projection and its capability check read. */
@@ -78,6 +78,7 @@ export const recordsTableBoardFeature: RecordsTableFeatureDefinition<RecordsTabl
     const columnField = settingField(group["column_field"]);
     const cardTitleField = settingField(group["card_title_field"]);
     const wipLimit = group["wip_limit"];
+    const quickAdd = group["quick_add"];
     return {
       enabled: true,
       ...(columnField === undefined ? {} : { columnField }),
@@ -85,7 +86,7 @@ export const recordsTableBoardFeature: RecordsTableFeatureDefinition<RecordsTabl
       cardFields: fieldList(group["card_fields"]),
       totals,
       ...(wipLimit?.kind === "number" ? { wipLimit: wipLimit.value } : {}),
-      quickAdd: group["quick_add"]?.kind === "boolean" && group["quick_add"].value,
+      ...(quickAdd?.kind === "boolean" ? { quickAdd: quickAdd.value } : {}),
     };
   },
   // A board's columns and moves come from the pipeline of its stage field, so the bound query must
@@ -171,6 +172,8 @@ export const boardProblem = (
       state.wipLimit > RECORDS_TABLE_BOARD_MAXIMUM_WIP_LIMIT)
   )
     return refuse(`Limit a column to 1 to ${RECORDS_TABLE_BOARD_MAXIMUM_WIP_LIMIT} cards.`);
+  if (state.quickAdd === undefined)
+    return refuse("Choose whether each column offers adding a card.");
   return undefined;
 };
 

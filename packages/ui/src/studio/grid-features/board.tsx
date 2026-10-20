@@ -217,9 +217,11 @@ export function StudioBoardEditor({
             const chosen = pipelines.find((entry) => entry.reference === next);
             if (chosen?.selectable !== true || chosen.titleField === undefined) return;
             // A pipeline belongs to one record type, so the card fields of another one are dropped.
+            // A new board states that its columns do not offer adding a card until it is turned on.
             commit({
               column_field: { kind: "field_reference", field: chosen.reference },
               card_title_field: { kind: "field_reference", field: chosen.titleField },
+              quick_add: value.properties["quick_add"] ?? { kind: "boolean", value: false },
             });
           }}
         />

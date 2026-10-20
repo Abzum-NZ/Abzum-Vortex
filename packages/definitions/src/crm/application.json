@@ -6364,11 +6364,11 @@
       },
       {
         "contractVersion": "1.0.0",
-        "id": "crm_add_opportunity_in_stage",
-        "key": "crm_add_opportunity_in_stage",
-        "description": "Opens the opportunity creation form with the stage of the pipeline column chosen.",
+        "id": "navigate_new_opportunity",
+        "key": "navigate_new_opportunity",
+        "description": "Opens the opportunity creation form, with the stage chosen when one is given.",
         "labels": {
-          "name": "Add opportunity to a stage"
+          "name": "New opportunity"
         },
         "execution": "interactive",
         "runAs": {
@@ -6377,7 +6377,7 @@
         "inputs": {
           "stage": {
             "type": "text",
-            "required": true
+            "required": false
           }
         },
         "tasks": [
@@ -6397,37 +6397,6 @@
                 "kind": "map",
                 "entries": {
                   "stage": "{{ inputs.stage }}"
-                }
-              }
-            }
-          }
-        ],
-        "outputs": {}
-      },
-      {
-        "contractVersion": "1.0.0",
-        "id": "navigate_new_opportunity",
-        "key": "navigate_new_opportunity",
-        "description": "Opens the opportunity creation form.",
-        "labels": {
-          "name": "New opportunity"
-        },
-        "execution": "interactive",
-        "runAs": {
-          "kind": "initiator"
-        },
-        "inputs": {},
-        "tasks": [
-          {
-            "id": "open_page",
-            "type": "interface.navigate",
-            "version": "1.0.0",
-            "properties": {
-              "page": {
-                "kind": "literal",
-                "literal": {
-                  "type": "text",
-                  "value": "crm_opportunity_create"
                 }
               }
             }
@@ -6736,7 +6705,7 @@
         "control": "board_crm_pipeline",
         "event_id": "event_crm_pipeline_add_opportunity",
         "event": "card_added",
-        "flow": "crm_add_opportunity_in_stage",
+        "flow": "navigate_new_opportunity",
         "inputs": {
           "stage": {
             "kind": "caller",
