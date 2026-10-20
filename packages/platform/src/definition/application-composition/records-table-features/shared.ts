@@ -106,6 +106,8 @@ export type RecordsTableFieldFacts = Readonly<{
   choiceValues?: readonly string[];
   /** For a calculation or total, the type of the value it produces. */
   resultType?: string;
+  /** The field is a one-record link from the record type to itself, so a record names its parent. */
+  parentLink: boolean;
 }>;
 
 /** The type of value a field holds: a calculation's or total's result type, else its own type. */
@@ -180,6 +182,8 @@ export type RecordsTableQueryFacts = Readonly<{
   /** The page requires a person to sign in before using its table. */
   signedIn: boolean;
   recordTypeLabel: string;
+  /** The bound query's ceiling, absent while no query has been chosen in Studio. */
+  maximumPageSize: number | undefined;
   fields: readonly RecordsTableFieldFacts[];
   relationships: readonly Readonly<{ key: string; label: string }>[];
   /**
@@ -218,6 +222,7 @@ export type RecordsTableFeatureRefusalCode = Extract<
   | "definition_records_table_bulk_actions"
   | "definition_records_table_inline_edit"
   | "definition_records_table_master_detail"
+  | "definition_records_table_tree"
   | "definition_records_table_conditional_formatting"
   | "definition_records_table_pinning"
   | "definition_records_table_pivot"

@@ -12,6 +12,7 @@ import {
   protectedQueryPageRowSchema,
   protectedQueryRefusalReasonCodes,
   protectedQueryRowCapabilitiesSchema,
+  protectedQueryTreeRowSchema,
 } from "./protected-query-contracts";
 import { recordSystemValuesSchema } from "./record-system-values";
 
@@ -86,6 +87,21 @@ export const groupedMemberPageReadSchema = z.discriminatedUnion("outcome", [
       rows: z.array(protectedQueryPageRowSchema).max(200),
       next: pageAnchorSchema.nullable(),
       opposite: pageAnchorSchema.nullable(),
+    })
+    .strict(),
+  refusedSchema,
+]);
+
+export const treeLevelPageReadSchema = z.discriminatedUnion("outcome", [
+  z
+    .object({
+      outcome: z.literal("completed"),
+      moduleReleaseRevision: revisionSchema,
+      moduleReleaseVersion: stableDefinitionReleaseVersionSchema,
+      rows: z.array(protectedQueryTreeRowSchema).max(200),
+      next: pageAnchorSchema.nullable(),
+      opposite: pageAnchorSchema.nullable(),
+      fieldBounds: protectedQueryFieldBoundsSchema,
     })
     .strict(),
   refusedSchema,

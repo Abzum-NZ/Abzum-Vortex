@@ -226,6 +226,8 @@ export type StudioQueryField = Readonly<{
   choiceValues?: readonly string[];
   /** For a calculation or total, the type of the value it produces. */
   resultType?: string;
+  /** The field is a one-record link from its record type to itself, so a record names its parent. */
+  parentLink?: boolean;
 }>;
 
 /** The facts of one draft field, as a query field carries them. */
@@ -289,6 +291,8 @@ export type StudioQueryChoice = Readonly<{
   grouped: boolean;
   /** The values the query asks for. */
   inputs: readonly StudioQueryInput[];
+  /** The most rows one read of the query returns. */
+  pageSize: number;
   /** What a Board needs of the query; absent for a query of a Module the application only uses. */
   board?: RecordsTableBoardFacts;
   /** Whether the Applications that use its Module may read it. A borrowed query is always exposed. */
@@ -382,6 +386,36 @@ export const studioBoardFacts = (
 };
 
 /** The queries of the application's own Modules: they are in its source. */
+/**
+ * Whether a draft field is a one-record link from its record type to itself: a many-to-one
+ * relationship from the field whose target is the same qualified record type, as publication judges.
+ */
+const isParentLink = (
+  moduleKey: string,
+  recordType: string,
+  record:
+    | Readonly<{
+        relationships: readonly Readonly<{
+          from_field: string;
+          cardinality: string;
+          to_record_type?: string | undefined;
+        }>[];
+      }>
+    | undefined,
+  field: Readonly<{ key: string; type: string }>,
+): boolean =>
+  record !== undefined &&
+  field.type === "link" &&
+  record.relationships.some(
+    (relationship) =>
+      relationship.from_field === field.key &&
+      relationship.cardinality === "many_to_one" &&
+      relationship.to_record_type !== undefined &&
+      (relationship.to_record_type.includes(":")
+        ? relationship.to_record_type
+        : `${moduleKey}:${relationship.to_record_type}`) === recordType,
+  );
+
 const ownQueries = (source: ApplicationSourceDocument): StudioQueryChoice[] =>
   (source.body.modules ?? []).flatMap((module) =>
     module.queries.map((query) => {
@@ -404,6 +438,9 @@ const ownQueries = (source: ApplicationSourceDocument): StudioQueryChoice[] =>
                 label: field.label,
                 type: field.type,
                 ...studioFieldFacts(field),
+                ...(isParentLink(module.key, recordType, record, field)
+                  ? { parentLink: true }
+                  : {}),
               }),
             ];
       });
@@ -431,6 +468,7 @@ const ownQueries = (source: ApplicationSourceDocument): StudioQueryChoice[] =>
         fields: Object.freeze(fields),
         grouped: query.group_by.length > 0 || query.aggregates.length > 0,
         inputs: Object.freeze(inputs),
+        pageSize: query.page_size,
         exposure: query.exposure,
         ...(record === undefined ? {} : { board: studioBoardFacts(module.key, query, record) }),
       });

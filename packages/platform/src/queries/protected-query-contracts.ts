@@ -486,6 +486,46 @@ export type ProtectedQueryGroupedMembersResult = z.infer<
   typeof protectedQueryGroupedMembersResultSchema
 >;
 
+/**
+ * One level of a tree over a record type's one-record link to itself: the children of one parent
+ * record, or, with no parent, the roots (the records no readable parent holds). It takes the
+ * Records table's own read shape, so the viewer's sort, filter and search apply at every level.
+ */
+export const protectedQueryTreeLevelCommandSchema = protectedQueryCommandSchema
+  .omit({ exactRecordId: true })
+  .extend({
+    /** The record type's link to itself that makes a record the child of another. */
+    parentFieldId: fieldIdSchema,
+    /** The parent whose children are read; null reads the roots. */
+    parentRecordId: recordIdSchema.nullable(),
+  })
+  .strict();
+export type ProtectedQueryTreeLevelCommand = z.infer<typeof protectedQueryTreeLevelCommandSchema>;
+
+/** A tree row is a page row that also says whether the reader may read a child of it. */
+export const protectedQueryTreeRowSchema = protectedQueryPageRowSchema
+  .extend({ hasChildren: z.boolean() })
+  .strict();
+export type ProtectedQueryTreeRow = z.infer<typeof protectedQueryTreeRowSchema>;
+
+export const protectedQueryTreeLevelCompletedSchema = z
+  .object({
+    outcome: z.literal("completed"),
+    moduleRootId: moduleRootIdSchema,
+    moduleReleaseVersion: stableDefinitionReleaseVersionSchema,
+    queryId: queryIdSchema,
+    rows: z.array(protectedQueryTreeRowSchema).max(200),
+    fieldBounds: protectedQueryFieldBoundsSchema,
+    nextContinuationToken: z.string().optional(),
+    previousContinuationToken: z.string().optional(),
+  })
+  .strict();
+export const protectedQueryTreeLevelResultSchema = z.discriminatedUnion("outcome", [
+  protectedQueryTreeLevelCompletedSchema,
+  protectedQueryRefusalSchema,
+]);
+export type ProtectedQueryTreeLevelResult = z.infer<typeof protectedQueryTreeLevelResultSchema>;
+
 export const protectedQueryResultSchema = z.discriminatedUnion("outcome", [
   protectedQueryPageSchema,
   protectedQueryRefusalSchema,
