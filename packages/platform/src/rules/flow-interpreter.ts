@@ -1156,9 +1156,14 @@ export const resumeFlowRun = (
       resume.outcome === "refused" ||
       resume.outcome === "conflict" ||
       resume.outcome === "validation";
-    // Authentication recovery needs the person to sign in again. Preserve that confirmed
-    // diagnostic as the final result even when an authored flow handles ordinary refusals.
-    if (awaiting.allowRefusal && branchable && resume.diagnostic?.code !== "recent_authentication_required") {
+    // Authentication recovery and incompatible storage need their confirmed guidance;
+    // an authored handler for ordinary permission refusals must not replace it.
+    if (
+      awaiting.allowRefusal &&
+      branchable &&
+      resume.diagnostic?.code !== "recent_authentication_required" &&
+      resume.diagnostic?.code !== "application_storage_incompatible"
+    ) {
       replaceTop(machine, storeTaskOutputs(activation, awaiting.taskId, outputs));
       return drive(machine, observer);
     }

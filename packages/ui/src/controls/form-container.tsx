@@ -88,6 +88,8 @@ const refusalFeedbackText = (feedback: Extract<FormFlowFeedback, { kind: "refusa
       return "To protect your organisation, this change needs a sign-in within the last 15 minutes. Sign in again, then retry the change.";
     case "role_settings_change_required":
       return "Accepting application role changes keeps the role settings. Use Manage roles to change its name, description, classification or assignment and activation settings.";
+    case "application_storage_incompatible":
+      return "This version changes stored fields in a way existing records cannot accept. Keep existing choice options unchanged when adding options, and preserve field types, storage and ownership settings.";
     default:
       return "The supplied inputs are invalid.";
   }
