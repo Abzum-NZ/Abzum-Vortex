@@ -3,10 +3,6 @@ import type { moduleCompilationRequestSchema } from "../../schema";
 import {
   moduleDraftSchema,
   moduleCompilationOutputSchema,
-  ruleIdSchema,
-  containedComponentIdSchema,
-  recordTypeIdSchema,
-  fieldIdSchema,
   isRegisteredWritableSystemProjection,
   recordOwnershipModeSchema,
   type ModuleCompilationOutput,
@@ -19,7 +15,6 @@ import {
   fingerprintCanonicalValue,
 } from "../canonical-json-definition";
 import { DefinitionCompilationError } from "../compilation-error";
-import { flowIssueLocation } from "../flow-validation";
 import { compileActionFlow, platformServiceProtectedOperationReference } from "./action-flows";
 import { dependencyOrder, resolvedDependencies } from "./dependencies";
 import { fieldSettings, validatePersonLinkApplicationAccess } from "./field-settings";

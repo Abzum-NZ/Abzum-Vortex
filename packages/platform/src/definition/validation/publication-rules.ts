@@ -15,7 +15,6 @@ import {
   type DefinitionSetValidationContext,
   type DefinitionValidationStage,
   type DefinitionSemanticRule,
-  allValidationOutputs,
   type PreparedValidationContext,
   editSaveSources,
   parseEditSaveSource,
