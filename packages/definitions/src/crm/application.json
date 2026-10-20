@@ -652,6 +652,9 @@
                       "pinning": {
                         "enabled": true
                       },
+                      "pivot": {
+                        "enabled": false
+                      },
                       "spreadsheet": {
                         "enabled": false
                       }
@@ -770,6 +773,9 @@
                     "features": {
                       "pinning": {
                         "enabled": true
+                      },
+                      "pivot": {
+                        "enabled": false
                       },
                       "spreadsheet": {
                         "enabled": false
@@ -909,6 +915,9 @@
                     "features": {
                       "pinning": {
                         "enabled": true
+                      },
+                      "pivot": {
+                        "enabled": false
                       },
                       "spreadsheet": {
                         "enabled": false
@@ -1174,6 +1183,9 @@
                       "pinning": {
                         "enabled": true
                       },
+                      "pivot": {
+                        "enabled": false
+                      },
                       "spreadsheet": {
                         "enabled": false
                       }
@@ -1371,6 +1383,9 @@
                     "features": {
                       "pinning": {
                         "enabled": true
+                      },
+                      "pivot": {
+                        "enabled": false
                       },
                       "spreadsheet": {
                         "enabled": false
@@ -2898,6 +2913,9 @@
                       "pinning": {
                         "enabled": true
                       },
+                      "pivot": {
+                        "enabled": false
+                      },
                       "spreadsheet": {
                         "enabled": false
                       }
@@ -4224,6 +4242,9 @@
                             "label": "Total amount"
                           }
                         ]
+                      },
+                      "pivot": {
+                        "enabled": false
                       }
                     },
                     "empty_message": "No opportunities in this stage.",

@@ -55,6 +55,16 @@ export type GridFeatureContext = Readonly<{
   /** The person's pin per lower-cased field identity, and the one way to change it. */
   pins: GridLayoutControls["state"]["pins"];
   setPin: GridLayoutControls["setPin"];
+  /**
+   * The pivot view, when the pivot feature is on: `view` is undefined while the ordinary grid is
+   * shown, and `setView` opens, pages or closes the pivot and keeps it in the address.
+   */
+  pivot: GridPivotView | undefined;
+}>;
+
+export type GridPivotView = Readonly<{
+  view: Readonly<{ cursor?: string }> | undefined;
+  setView: (view: Readonly<{ cursor?: string }> | undefined) => void;
 }>;
 
 /** The one grid focus model, shared with optional page interactions. */
@@ -130,6 +140,8 @@ export type GridFeatureModule = Readonly<{
   CellEditor?: ComponentType<GridFeatureCellProps>;
   RowExpansion?: ComponentType<GridFeatureRowProps>;
   SelectionBanner?: ComponentType<GridFeaturePointProps>;
+  /** The view that takes the place of the rows while the feature's view is open (the pivot). */
+  ViewBody?: ComponentType<GridFeaturePointProps>;
 }>;
 
 type ComponentPoint = Exclude<keyof GridFeatureModule, "cellDecoration">;
@@ -150,6 +162,7 @@ const loaders: Readonly<
   inline_edit: () => import("./inline-edit"),
   master_detail: () => import("./master-detail"),
   conditional_formatting: () => import("./conditional-format"),
+  pivot: () => import("./pivot"),
 };
 
 const projectionKeys: Readonly<Record<keyof RecordsTableFeatureProjection, GridExtensionKey>> = {
@@ -162,6 +175,7 @@ const projectionKeys: Readonly<Record<keyof RecordsTableFeatureProjection, GridE
   inlineEdit: "inline_edit",
   masterDetail: "master_detail",
   conditionalFormatting: "conditional_formatting",
+  pivot: "pivot",
 };
 
 /** The features a projection turns on, in the registry's order. */
@@ -219,6 +233,7 @@ const featurePoints: Readonly<Record<GridExtensionKey, readonly ComponentPoint[]
   inline_edit: ["CellEditor"],
   master_detail: ["RowExpansion"],
   conditional_formatting: ["CellAdornment", "HeaderAdornment"],
+  pivot: ["ToolbarItems", "ViewBody"],
 };
 
 const activeKeys = (signature: string): readonly GridExtensionKey[] =>
@@ -257,6 +272,8 @@ export function useGridFeatures(context: GridFeatureContext | undefined): Readon
   headerAdornment: (column: GridColumn) => ReactNode;
   columnMenuItems: (column: GridColumn) => ReactNode;
   rowExpansion: (row: DisplayRow) => ReactNode;
+  /** The open view that replaces the rows (the pivot); nothing when no feature has one open. */
+  viewBody: () => ReactNode;
   cell: (row: DisplayRow, column: GridColumn, plain: ReactNode) => ReactNode;
   /** A value with its decorations and adornments only, for surfaces that never edit (cards). */
   decorate: (row: DisplayRow, column: GridColumn, plain: ReactNode) => ReactNode;
@@ -375,6 +392,7 @@ export function useGridFeatures(context: GridFeatureContext | undefined): Readon
       context === undefined ? null : drawPoint(active, "ToolbarItems", context, {}),
     selectionBanner: () =>
       context === undefined ? null : drawPoint(active, "SelectionBanner", context, {}),
+    viewBody: () => (context === undefined ? null : drawPoint(active, "ViewBody", context, {})),
     ...cellPoints,
   };
 }

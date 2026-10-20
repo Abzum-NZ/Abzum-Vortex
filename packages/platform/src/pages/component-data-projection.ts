@@ -229,6 +229,8 @@ export type ComponentDataProjectionInput = Readonly<{
   fieldTableColumns?: Readonly<Record<string, readonly TableFieldColumn[]>>;
   /** What a Records table's formatting rules are evaluated with; supplied only when they are on. */
   formatting?: ConditionalFormattingContext;
+  /** The pivot view the address opens the table in; absent shows the ordinary grid. */
+  pivotView?: Readonly<{ cursor?: string }>;
 }>;
 
 /** One declared column of a table field: its key, readable heading, cell type and, for a choice, its options. */
@@ -543,6 +545,7 @@ export const projectRecordsTableData = (
     completeRows,
     input.filterFields,
     formatting?.projection,
+    input.pivotView,
   );
 
   return {
