@@ -68,6 +68,13 @@ export const readCalendar = async (
     return;
   }
   logPlacementFailure(address, placementId, projection.cause);
+  if (projection.cause === "calendar_range_unsupported") {
+    data[placementId] = {
+      status: "awaiting_input",
+      message: "Choose a calendar period whose endpoints have UTC years from 0000 to 9999",
+    };
+    return;
+  }
   data[placementId] =
     projection.outcome === "unavailable"
       ? { status: "error" }

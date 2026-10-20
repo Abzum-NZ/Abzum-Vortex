@@ -1,6 +1,11 @@
 "use client";
 
 import type { ReactElement } from "react";
+import {
+  calendarAddDays as addDays,
+  calendarLocalDate,
+  calendarStartOfDay,
+} from "@vortex/platform/schema";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Button } from "../components/button";
 import { Card, CardContent, CardDescription, CardHeader } from "../components/card";
@@ -14,22 +19,6 @@ import type { CalendarPayload, CalendarView } from "./projected-data";
 const calendarViews: readonly CalendarView[] = ["month", "week", "agenda"];
 const datePattern = /^\d{4}-\d{2}-\d{2}$/;
 type DayBoundaries = Readonly<{ start: number; end: number }>;
-const calendarDateFormatters = new Map<string, Intl.DateTimeFormat>();
-
-const calendarDateFormatter = (timeZone: string): Intl.DateTimeFormat => {
-  let formatter = calendarDateFormatters.get(timeZone);
-  if (formatter === undefined) {
-    formatter = new Intl.DateTimeFormat("en", {
-      timeZone,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    });
-    calendarDateFormatters.set(timeZone, formatter);
-  }
-  return formatter;
-};
-
 const dateAtUtc = (year: number, month: number, day: number): Date => {
   const result = new Date(0);
   result.setUTCFullYear(year, month, day);
@@ -40,16 +29,7 @@ const dateAtUtc = (year: number, month: number, day: number): Date => {
 const toIsoDate = (date: Date): string =>
   `${String(date.getUTCFullYear()).padStart(4, "0")}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
 
-const addDays = (date: string, count: number): string => {
-  const [year, month, day] = date.split("-").map(Number) as [number, number, number];
-  return toIsoDate(dateAtUtc(year, month - 1, day + count));
-};
-
-const localToday = (timeZone: string): string => {
-  const parts = calendarDateFormatter(timeZone).formatToParts(new Date());
-  const values = new Map(parts.map((part) => [part.type, part.value]));
-  return `${values.get("year")}-${values.get("month")}-${values.get("day")}`;
-};
+const localToday = (timeZone: string): string => calendarLocalDate(Date.now(), timeZone);
 
 const weekdayIndex = (date: string): number => {
   const [year, month, day] = date.split("-").map(Number) as [number, number, number];
@@ -67,29 +47,6 @@ const shiftMonth = (date: string, offset: number): string => {
   const boundedDay = Math.min(day, daysInMonth(toIsoDate(first)));
   first.setUTCDate(boundedDay);
   return toIsoDate(first);
-};
-
-const localDateOf = (instant: string, timeZone: string): string => {
-  const parts = calendarDateFormatter(timeZone).formatToParts(new Date(instant));
-  const values = new Map(parts.map((part) => [part.type, part.value]));
-  return `${values.get("year")}-${values.get("month")}-${values.get("day")}`;
-};
-
-const localDayStart = (date: string, timeZone: string): number => {
-  const [year, month, day] = date.split("-").map(Number) as [number, number, number];
-  const estimate = dateAtUtc(year, month - 1, day).getTime();
-  let lower = estimate - 48 * 60 * 60 * 1_000;
-  let upper = estimate + 48 * 60 * 60 * 1_000;
-  const localDateAt = (instant: number): string =>
-    localDateOf(new Date(instant).toISOString(), timeZone);
-  if (localDateAt(lower) >= date) return lower;
-  if (localDateAt(upper) < date) return upper;
-  while (upper - lower > 1) {
-    const middle = Math.floor((lower + upper) / 2);
-    if (localDateAt(middle) >= date) upper = middle;
-    else lower = middle;
-  }
-  return upper;
 };
 
 const itemIntersectsDay = (
@@ -168,7 +125,7 @@ export function CalendarDisplay(props: DisplayRenderProps<CalendarPayload>): Rea
     const boundaryStart = (day: string): number => {
       let start = boundaryStarts.get(day);
       if (start === undefined) {
-        start = localDayStart(day, values.timeZone);
+        start = Date.parse(calendarStartOfDay(day, values.timeZone));
         boundaryStarts.set(day, start);
       }
       return start;

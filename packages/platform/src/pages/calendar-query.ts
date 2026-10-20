@@ -1,6 +1,14 @@
 import "server-only";
 
 import {
+  CalendarEndpointError,
+  calendarAddDays,
+  calendarLocalDate,
+  calendarStartOfDay,
+} from "./calendar-date";
+export { calendarAddDays, calendarStartOfDay } from "./calendar-date";
+
+import {
   type CalendarMapping,
   type BlockPropertyValueContract,
   calendarMappingSchema,
@@ -98,54 +106,7 @@ const calendarUtcDate = (year: number, month: number, day: number): Date => {
 const calendarIsoDate = (date: Date): string =>
   `${String(date.getUTCFullYear()).padStart(4, "0")}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
 
-export const calendarAddDays = (date: string, count: number): string => {
-  const [year, month, day] = date.split("-").map(Number) as [number, number, number];
-  return calendarIsoDate(calendarUtcDate(year, month - 1, day + count));
-};
-
-const calendarToday = (timeZone: string): string => {
-  const values = new Map(
-    new Intl.DateTimeFormat("en", {
-      timeZone,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    })
-      .formatToParts(new Date())
-      .map((part) => [part.type, part.value]),
-  );
-  return `${values.get("year")}-${values.get("month")}-${values.get("day")}`;
-};
-
-const calendarLocalDate = (instant: number, timeZone: string): string => {
-  const values = new Map(
-    new Intl.DateTimeFormat("en", {
-      timeZone,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    })
-      .formatToParts(new Date(instant))
-      .map((part) => [part.type, part.value]),
-  );
-  return `${values.get("year")}-${values.get("month")}-${values.get("day")}`;
-};
-
-/** First instant of an organisation-local day, including offset changes around daylight saving. */
-export const calendarStartOfDay = (date: string, timeZone: string): string => {
-  const [year, month, day] = date.split("-").map(Number) as [number, number, number];
-  const estimate = calendarUtcDate(year, month - 1, day).getTime();
-  let lower = estimate - 48 * 60 * 60 * 1_000;
-  let upper = estimate + 48 * 60 * 60 * 1_000;
-  if (calendarLocalDate(lower, timeZone) >= date) return new Date(lower).toISOString();
-  if (calendarLocalDate(upper, timeZone) < date) return new Date(upper).toISOString();
-  while (upper - lower > 1) {
-    const middle = Math.floor((lower + upper) / 2);
-    if (calendarLocalDate(middle, timeZone) >= date) upper = middle;
-    else lower = middle;
-  }
-  return new Date(upper).toISOString();
-};
+const calendarToday = (timeZone: string): string => calendarLocalDate(Date.now(), timeZone);
 
 const calendarPeriod = (
   view: CalendarView,
@@ -276,6 +237,7 @@ export type CalendarPlacementProjectionInput = Readonly<{
 
 export type CalendarPlacementFailureCause =
   | "calendar_settings_invalid"
+  | "calendar_range_unsupported"
   | "calendar_query_invalid"
   | "calendar_query_unavailable"
   | "calendar_query_refused"
@@ -364,13 +326,23 @@ export const projectCalendarPlacement = async (
       ? rawView
       : calendarContract.defaultView;
   const rawDate = input.requestedDate;
-  const candidateDate = calendarDateIsValid(rawDate) ? rawDate : calendarToday(timeZone);
-  const candidateWindow = calendarPeriod(view, candidateDate);
-  const date =
-    calendarDateIsValid(candidateWindow.startDate) && calendarDateIsValid(candidateWindow.endDate)
-      ? candidateDate
-      : calendarToday(timeZone);
+  if (rawDate !== undefined && !calendarDateIsValid(rawDate))
+    return refused("calendar_range_unsupported");
+  const date = rawDate ?? calendarToday(timeZone);
   const window = calendarPeriod(view, date);
+  if (!calendarDateIsValid(window.startDate) || !calendarDateIsValid(window.endDate))
+    return refused("calendar_range_unsupported");
+  let filter: JsonValue;
+  try {
+    // Check both endpoints even for date-only calendars: a period must also be renderable
+    // by the same calendar when it contains instants.
+    calendarStartOfDay(window.startDate, timeZone);
+    calendarStartOfDay(window.endDate, timeZone);
+    filter = calendarWindowFilter(mapping, dateFieldType as "date" | "date_time", window, timeZone);
+  } catch (error) {
+    if (!(error instanceof CalendarEndpointError)) throw error;
+    return refused("calendar_range_unsupported");
+  }
   const filterableFieldIds =
     mapping.kind === "start_end"
       ? [mapping.startFieldId, mapping.endFieldId].map((fieldId) => fieldId.toLowerCase())
@@ -382,7 +354,7 @@ export const projectCalendarPlacement = async (
     requestedFieldIds: [...new Set(requestedFieldIds.map((fieldId) => fieldId.toLowerCase()))],
     requestedSystemFieldKeys: [],
     sort: [],
-    filter: calendarWindowFilter(mapping, dateFieldType as "date" | "date_time", window, timeZone),
+    filter,
     sortableFieldIds: [],
     filterableFieldIds,
     searchableFieldIds: [],

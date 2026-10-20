@@ -1,4 +1,5 @@
 import { Temporal } from "@js-temporal/polyfill";
+import { CalendarEndpointError, calendarStartOfDay } from "./calendar-date";
 import {
   defaultAwaitingMessage,
   parseQueryBindingText,
@@ -183,14 +184,19 @@ const resolveOne = async (
       const date = relativeAnchorDate(context.now, timeZone, source.anchor).add({
         days: source.offsetDays,
       });
-      // A date and time input gets the instant the day starts in the organisation's time zone.
-      return {
-        kind: "value",
-        value:
-          type.kind === "date_time"
-            ? date.toZonedDateTime({ timeZone }).toInstant().toString()
-            : date.toString(),
-      };
+      // Date-time bindings use the same organisation-day boundary as Calendar and filters.
+      try {
+        return {
+          kind: "value",
+          value:
+            type.kind === "date_time"
+              ? calendarStartOfDay(date.toString(), timeZone)
+              : date.toString(),
+        };
+      } catch (error) {
+        if (!(error instanceof CalendarEndpointError)) throw error;
+        return { kind: "refused", reason: "calendar_range_unsupported" };
+      }
     }
     case "this_row": {
       const row = context.row;
