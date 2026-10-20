@@ -11,9 +11,7 @@ declare
   content jsonb;
   record_types jsonb := '[]'::jsonb;
   relationships jsonb := '[]'::jsonb;
-  has_installed_rules boolean := false;
-  rule_subject_record_type_ids jsonb := '[]'::jsonb;
-  application_rule_subject_record_type_ids jsonb := '[]'::jsonb;
+  has_before_save_flows boolean := false;
   record_type jsonb;
 begin
   installation := vortex_definition.read_current_active_installation();
@@ -37,13 +35,14 @@ begin
     if pg_catalog.jsonb_typeof(content -> 'recordTypes') <> 'array' then
       raise exception using errcode = '55000', message = 'Installed Record definitions are unavailable';
     end if;
-    has_installed_rules := has_installed_rules or
-      pg_catalog.jsonb_array_length(coalesce(content -> 'rules', '[]'::jsonb)) > 0;
-    rule_subject_record_type_ids := rule_subject_record_type_ids || coalesce((
-      select pg_catalog.jsonb_agg(distinct rule.value -> 'subjectRecordTypeId')
-      from pg_catalog.jsonb_array_elements(coalesce(content -> 'rules', '[]'::jsonb)) rule(value)
-      where rule.value ->> 'profile' = 'before_save'
-    ), '[]'::jsonb);
+    has_before_save_flows := has_before_save_flows or exists (
+      select 1
+      from pg_catalog.jsonb_array_elements(coalesce(content -> 'flows', '[]'::jsonb)) flow(value)
+      cross join pg_catalog.jsonb_array_elements(
+        coalesce(flow.value -> 'triggers', '[]'::jsonb)
+      ) trigger(value)
+      where trigger.value ->> 'type' = 'BeforeSave'
+    );
     record_types := record_types || coalesce((
       select pg_catalog.jsonb_agg(
         item.value || pg_catalog.jsonb_build_object(
@@ -59,37 +58,10 @@ begin
       relationships := relationships || coalesce(record_type -> 'relationships', '[]'::jsonb);
     end loop;
   end loop;
-  begin
-    select release.compilation_output #> '{canonical,content}' into strict content
-    from vortex_definition.runtime_releases release
-    where release.root_id = (installation ->> 'applicationRootId')::uuid
-      and release.release_revision = (installation ->> 'applicationReleaseRevision')::bigint;
-  exception
-    when no_data_found or too_many_rows then
-      raise exception using errcode = '55000',
-        message = 'RELATIONSHIP_TOTAL_APPLICATION_RELEASE_LOOKUP_FAILED',
-        detail = pg_catalog.format('root=%s revision=%s cause=%s',
-          installation ->> 'applicationRootId',
-          installation ->> 'applicationReleaseRevision', sqlstate);
-  end;
-  has_installed_rules := has_installed_rules or
-    pg_catalog.jsonb_array_length(coalesce(content -> 'rules', '[]'::jsonb)) > 0;
-  rule_subject_record_type_ids := rule_subject_record_type_ids || coalesce((
-    select pg_catalog.jsonb_agg(distinct rule.value -> 'subjectRecordTypeId')
-    from pg_catalog.jsonb_array_elements(coalesce(content -> 'rules', '[]'::jsonb)) rule(value)
-    where rule.value ->> 'profile' = 'before_save'
-  ), '[]'::jsonb);
-  application_rule_subject_record_type_ids := coalesce((
-    select pg_catalog.jsonb_agg(distinct rule.value -> 'subjectRecordTypeId')
-    from pg_catalog.jsonb_array_elements(coalesce(content -> 'rules', '[]'::jsonb)) rule(value)
-    where rule.value ->> 'profile' = 'before_save'
-  ), '[]'::jsonb);
   return pg_catalog.jsonb_build_object(
     'recordTypes', record_types,
     'relationships', relationships,
-    'hasInstalledRules', has_installed_rules,
-    'ruleSubjectRecordTypeIds', rule_subject_record_type_ids,
-    'applicationRuleSubjectRecordTypeIds', application_rule_subject_record_type_ids
+    'hasBeforeSaveFlows', has_before_save_flows
   );
 end
 $function$;

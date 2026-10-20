@@ -79,7 +79,7 @@ begin
       preparation_value := null;
     elsif preparation_value ->> 'outcome' = 'defer' then
       catalogue := vortex_record.relationship_total_catalogue_internal();
-      if coalesce((catalogue ->> 'hasInstalledRules')::boolean, false) then
+      if coalesce((catalogue ->> 'hasBeforeSaveFlows')::boolean, false) then
         closure_value := vortex_record.discover_relationship_total_closure_internal(
           catalogue, p_operation, p_record_type_id, p_record_id, p_submitted_values
         );

@@ -3,15 +3,10 @@ import type { moduleCompilationRequestSchema } from "../../schema";
 import {
   moduleDraftSchema,
   moduleCompilationOutputSchema,
-  ruleIdSchema,
-  containedComponentIdSchema,
-  recordTypeIdSchema,
-  fieldIdSchema,
   isRegisteredWritableSystemProjection,
   recordOwnershipModeSchema,
   type ModuleCompilationOutput,
   type FlowDefinition,
-  type RuleGraph,
   type DefinitionCompilationOutput,
 } from "../../schema";
 import {
@@ -20,9 +15,6 @@ import {
   fingerprintCanonicalValue,
 } from "../canonical-json-definition";
 import { DefinitionCompilationError } from "../compilation-error";
-import { compileRuleGraph } from "../rule-graph-compilation";
-import { isBeforeSaveFlow, lowerBeforeSaveFlow } from "../before-save-flow-rules";
-import { flowIssueLocation } from "../flow-validation";
 import { compileActionFlow, platformServiceProtectedOperationReference } from "./action-flows";
 import { dependencyOrder, resolvedDependencies } from "./dependencies";
 import { fieldSettings, validatePersonLinkApplicationAccess } from "./field-settings";
@@ -61,7 +53,6 @@ function compileModule(
   metadata: JsonObject,
   savedConditionRevisions: readonly JsonObject[],
   dependencyOutputs: readonly DefinitionCompilationOutput[],
-  rules: readonly RuleGraph[],
   flows: readonly FlowDefinition[],
 ) {
   const body = asObject(source.body);
@@ -634,7 +625,6 @@ function compileModule(
       actions,
       events,
       flows: [...flows, ...actionFlows],
-      rules,
       sharingConditions,
       extensionPoints: (body.extension_points as JsonObject[]).map((point) => ({
         extensionPointId: resolution.id(
@@ -673,63 +663,6 @@ export function compileParsedModuleRequest(
     const resolution = new Resolution(request.resolution, source);
     const flowSet = compileCheckedFlowSources(source, resolution, dependencyOutputs);
     const definitionKey = request.source.key;
-    // Every BeforeSave flow is lowered to the executable rule the save transaction reads until
-    // the flow interpreter replaces it. A flow that cannot be lowered refuses here, located on it.
-    const ruleSources = request.source.body.flows.flatMap((flow, sourceIndex) =>
-      isBeforeSaveFlow(flow) ? [{ flow, sourceIndex }] : [],
-    );
-    const ruleKeys = new Map(ruleSources.map(({ flow }) => [flow.id, flow.key]));
-    const localRecordKey = (alias: string): string => {
-      const record = request.source.body.record_types.find(
-        (record) => record.id === alias || record.key === alias,
-      );
-      if (!record) fail("vortex.definition.missing_identity", "unresolved_reference");
-      return record.key;
-    };
-    const nestedId = (kind: string, ruleAlias: string, alias: string): string => {
-      const key = ruleKeys.get(ruleAlias);
-      if (key === undefined) fail("vortex.definition.missing_identity", "unresolved_reference");
-      return resolution.id(definitionKey, kind, alias, `rule:${key}`);
-    };
-    const rules = ruleSources
-      .map(({ flow, sourceIndex }) => {
-        const lowered = lowerBeforeSaveFlow(flow);
-        if (!lowered.ok)
-          throw new DefinitionCompilationError(
-            lowered.refusal.ruleCode,
-            lowered.refusal.family,
-            flowIssueLocation(resolution.location("flow", flow.key), lowered.refusal),
-          );
-        return {
-          sourceIndex,
-          ...compileRuleGraph(lowered.graph, {
-            // A rule is the executable form of its flow, so it keeps the flow's own identity.
-            ruleId: (alias) =>
-              ruleIdSchema.parse(resolution.id(definitionKey, "flow", alias, "content")),
-            nodeId: (ruleAlias, alias) =>
-              containedComponentIdSchema.parse(nestedId("rule_node", ruleAlias, alias)),
-            inputId: (ruleAlias, alias) =>
-              containedComponentIdSchema.parse(nestedId("rule_input", ruleAlias, alias)),
-            variableId: (ruleAlias, alias) =>
-              containedComponentIdSchema.parse(nestedId("rule_variable", ruleAlias, alias)),
-            localRecordTypeId: (alias) =>
-              recordTypeIdSchema.parse(
-                resolution.recordType(`${definitionKey}:${alias}`).recordTypeId,
-              ),
-            localFieldId: (record, field) =>
-              fieldIdSchema.parse(
-                resolution.field(`${definitionKey}:${localRecordKey(record)}`, field),
-              ),
-            qualifiedRecordTypeId: (reference) =>
-              recordTypeIdSchema.parse(resolution.recordType(reference).recordTypeId),
-          }),
-        };
-      })
-      .sort(
-        (a, b) =>
-          a.graph.priority - b.graph.priority ||
-          compareCanonicalStrings(a.graph.ruleId, b.graph.ruleId),
-      );
     const canonical = moduleDraftSchema.parse(
       compileModule(
         source,
@@ -737,16 +670,14 @@ export function compileParsedModuleRequest(
         request.draftMetadata as unknown as JsonObject,
         (request.savedConditionRevisions ?? []) as unknown as JsonObject[],
         dependencyOutputs,
-        rules.map(({ graph }) => graph),
         flowSet.flows,
       ),
     );
     // Existing provenance owns the unchanged Module field model. The flow compiler supplies the
-    // exact paths of the flows, and each derived rule traces to the flow it is the executable
-    // form of, so neither is described twice.
+    // exact paths of the flows, so neither is described twice.
     const provenance = provenanceFor(
       { ...source, body: { ...request.source.body, flows: [] } },
-      { ...canonical, content: { ...canonical.content, flows: [], rules: [] } },
+      { ...canonical, content: { ...canonical.content, flows: [] } },
       resolution,
     );
     for (const entry of flowSet.provenance)
@@ -771,15 +702,6 @@ export function compileParsedModuleRequest(
           canonicalPath: ["content", "flows", canonicalIndex, ...leaf],
           origin: "source",
           sourcePath: ["body", "actions", actionIndex, "id"],
-          ruleCode: TRANSFORM_RULE,
-        });
-    });
-    rules.forEach((rule, canonicalIndex) => {
-      for (const leaf of leafPaths(canonical.content.rules[canonicalIndex]))
-        provenance.push({
-          canonicalPath: ["content", "rules", canonicalIndex, ...leaf],
-          origin: "source",
-          sourcePath: ["body", "flows", rule.sourceIndex, "key"],
           ruleCode: TRANSFORM_RULE,
         });
     });
