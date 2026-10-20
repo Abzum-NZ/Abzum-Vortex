@@ -155,10 +155,12 @@ export function ApplicationFrame({
     [],
   );
   // Next restores history entries regardless of staleTimes.dynamic. Their page and frame may
-  // predate an installed release or access change, so revalidate the restored address. Queue the
-  // refresh after Next's history handler has selected the destination, whichever listener ran first.
+  // predate an installed release or access change, so revalidate the restored address. A new browser
+  // task lets every history listener finish first; a microtask can run before Next's listener.
   useEffect(() => {
-    const refreshRestoredAddress = () => queueMicrotask(() => router.refresh());
+    const refreshRestoredAddress = () => {
+      window.setTimeout(() => router.refresh(), 0);
+    };
     window.addEventListener("popstate", refreshRestoredAddress);
     return () => window.removeEventListener("popstate", refreshRestoredAddress);
   }, [router]);
