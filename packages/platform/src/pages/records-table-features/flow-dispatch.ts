@@ -137,7 +137,9 @@ export const recordsTableBindingRefusal = async (
   const revision = inputs.revision;
   if (revision !== undefined && typeof revision !== "number")
     return recordsTableRequestRefusal(event, "revision_invalid");
+  // Only an inline edit's subject is its row; another row gesture's subject is the page's record.
   if (
+    event === "inline_edit" &&
     subject !== undefined &&
     (recordIds.length !== 1 || !sameId(subject.recordId, recordIds[0] as string))
   )
