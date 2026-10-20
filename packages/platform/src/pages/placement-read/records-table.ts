@@ -108,7 +108,7 @@ export const readRecordsTable = async (
   let views: GridViewsState | undefined;
   let selectedQuery: RecordsTableQueryState | undefined;
   let selectedLayout: GridLayoutState["layout"] | undefined;
-  if (contract.features.savedViews.enabled && gridLayouts.persisted) {
+  if (contract.features.savedViews.enabled && gridLayouts.storage === "personal") {
     const listed = (gridLayouts.stored.views.get(placementId.toLowerCase()) ?? []).filter(
       (view) => view.queryId === queryId,
     );
@@ -193,7 +193,7 @@ export const readRecordsTable = async (
           queryId,
         );
   const layout: GridLayoutState = {
-    persisted: gridLayouts.persisted,
+    storage: gridLayouts.storage,
     queryId,
     revision: stored?.revision ?? null,
     layout: resolvedLayout.layout,

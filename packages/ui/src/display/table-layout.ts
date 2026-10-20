@@ -78,7 +78,7 @@ const clampWidth = (width: number): number =>
 type Local = Readonly<{
   /** The stored layout state this local copy started from; a new page read starts it again. */
   base: GridLayoutState;
-  /** Which authored columns and density the transient preview arrangement started from. */
+  /** Which authored columns and density the canvas arrangement started from. */
   definition: string;
   layout: GridLayout;
   /** The last completed gesture; a pending write never captures an in-progress resize. */
@@ -97,7 +97,7 @@ const startFrom = (base: GridLayoutState, definition: string): Local => ({
   layout: base.layout,
   committedLayout: base.layout,
   revision: base.revision,
-  commits: base.reset && base.persisted ? 1 : 0,
+  commits: base.reset && base.storage === "personal" ? 1 : 0,
   savedCommits: 0,
   resetting: base.reset,
 });
@@ -130,24 +130,24 @@ export const useGridLayout = ({
     // Before the page is read there is nothing to store; the authored layout shows.
     return authored === undefined
       ? undefined
-      : { persisted: false, queryId: "", revision: null, layout: authored, authored, reset: false };
+      : { storage: "preview", queryId: "", revision: null, layout: authored, authored, reset: false };
   }, [contract]);
   const source = stored ?? fallback;
-  const previewDefinition =
-    source?.persisted === false ? JSON.stringify([contract?.columns, contract?.density]) : "";
+  const canvasDefinition =
+    source?.storage === "canvas" ? JSON.stringify([contract?.columns, contract?.density]) : "";
   const [local, setLocal] = useState<Local | undefined>(() =>
-    source === undefined ? undefined : startFrom(source, previewDefinition),
+    source === undefined ? undefined : startFrom(source, canvasDefinition),
   );
   // A new page read carries the stored layout again; the local copy starts over from it.
   let current = local;
   if (source !== undefined && current?.base !== source) {
     // The canvas reparses the same payload when its inspector receives a gesture. That is not a
     // new authored arrangement: keep the transient layout until its actual definition changes.
-    const samePreview =
+    const sameCanvas =
       current !== undefined &&
-      !source.persisted &&
-      !current.base.persisted &&
-      current.definition === previewDefinition &&
+      source.storage === "canvas" &&
+      current.base.storage === "canvas" &&
+      current.definition === canvasDefinition &&
       current.base.queryId === source.queryId &&
       sameLayout(current.base.layout, source.layout) &&
       sameLayout(current.base.authored, source.authored);
@@ -155,13 +155,13 @@ export const useGridLayout = ({
     // adopting the read's revision; its values are still persisted through the same writer.
     current =
       current !== undefined &&
-      (samePreview ||
-        (source.persisted &&
-          current.base.persisted &&
+      (sameCanvas ||
+        (source.storage === "personal" &&
+          current.base.storage === "personal" &&
           current.base.queryId === source.queryId &&
           current.commits > current.savedCommits))
-        ? { ...current, base: source, definition: previewDefinition, revision: source.revision }
-        : startFrom(source, previewDefinition);
+        ? { ...current, base: source, definition: canvasDefinition, revision: source.revision }
+        : startFrom(source, canvasDefinition);
     setLocal(current);
   }
   const layout = current?.layout ?? { columns: [] };
@@ -380,7 +380,9 @@ export const useGridLayout = ({
     }
     const { current: snapshot, carried: loaded, events: handlers } = latest.current;
     const onColumns = handlers?.columns_changed;
-    if (snapshot === undefined || onColumns === undefined) return;
+    // An application preview keeps the arrangement on screen: nothing is reported or stored.
+    if (snapshot === undefined || snapshot.base.storage === "preview" || onColumns === undefined)
+      return;
     const loadedKeys = new Set(loaded.map((column) => column.key.toLowerCase()));
     held.busy = true;
     let result: GridLayoutCommitResult = { outcome: "unavailable" };
@@ -460,26 +462,27 @@ export const useGridLayout = ({
   }, [updateLocal]);
   // Entering canvas arrangement accepts its starting layout too, including a grid with no rows.
   // It uses the same event as later gestures, so capture never falls back to inspector settings.
-  const previewSource =
-    source?.persisted === false && events?.columns_changed !== undefined
-      ? `${source.queryId}:${previewDefinition}`
+  const canvasSource =
+    source?.storage === "canvas" && events?.columns_changed !== undefined
+      ? `${source.queryId}:${canvasDefinition}`
       : undefined;
-  const reportedPreview = useRef<string | undefined>(undefined);
+  const reportedCanvas = useRef<string | undefined>(undefined);
   useEffect(() => {
-    if (previewSource === undefined) {
-      reportedPreview.current = undefined;
+    if (canvasSource === undefined) {
+      reportedCanvas.current = undefined;
       return;
     }
-    if (reportedPreview.current === previewSource) return;
-    reportedPreview.current = previewSource;
+    if (reportedCanvas.current === canvasSource) return;
+    reportedCanvas.current = canvasSource;
     void store();
-  }, [previewSource, store]);
+  }, [canvasSource, store]);
   const commits = current?.commits ?? 0;
   useEffect(() => {
-    if (commits === 0) return;
+    const storage = latest.current.current?.base.storage;
+    if (commits === 0 || storage === "preview") return;
     // Capture must see the completed canvas gesture before the next click; only personal writes
     // need the coalescing delay. Both hosts still receive the same committed-layout event.
-    if (latest.current.current?.base.persisted === false) {
+    if (storage === "canvas") {
       void store();
       return;
     }
@@ -506,7 +509,7 @@ export const useGridLayout = ({
     shown,
     entries,
     density: layout.density ?? contract?.density ?? "comfortable",
-    persisted: source?.persisted === true,
+    persisted: source?.storage === "personal",
     setWidths,
     commit,
     moveColumn,

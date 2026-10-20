@@ -206,10 +206,16 @@ export const gridViewsStateSchema = z
   .strict();
 export type GridViewsState = z.output<typeof gridViewsStateSchema>;
 
+/**
+ * Where a grid's arrangement goes: stored for the person, kept on screen in an application preview,
+ * or reported to Studio for capture into the authored default view.
+ */
+export const gridLayoutStorages = ["personal", "preview", "canvas"] as const;
+export type GridLayoutStorage = (typeof gridLayoutStorages)[number];
+
 /** The layout a grid placement shows, as the server sends it with the grid's page. */
 export type GridLayoutState = Readonly<{
-  /** False in a preview: the person may arrange the grid, but nothing is stored. */
-  persisted: boolean;
+  storage: GridLayoutStorage;
   /** The query the placement reads; a stored layout of another query is not this grid's. */
   queryId: string;
   /** The stored layout's revision; null when the person has none and sees the authored layout. */
@@ -226,7 +232,7 @@ export type GridLayoutState = Readonly<{
 
 export const gridLayoutStateSchema = z
   .object({
-    persisted: z.boolean(),
+    storage: z.enum(gridLayoutStorages),
     queryId: z.string().regex(FIELD_ID_PATTERN),
     revision: z.number().int().min(1).max(Number.MAX_SAFE_INTEGER).nullable(),
     layout: gridLayoutSchema,
