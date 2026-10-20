@@ -59,7 +59,7 @@ import {
 import type {
   ApplicationPageLoaderAddress,
   SearchParameters,
-  BoardContinuationTarget,
+  BoardReadTarget,
   TableContinuationTarget,
   ApplicationPageInternalResult,
   PermissionEntry,
@@ -183,7 +183,7 @@ export const loadApplicationPageInternal = async (
   address: ApplicationPageLoaderAddress,
   parameters: SearchParameters,
   selectedPlacementIds?: ReadonlySet<string>,
-  boardContinuation?: BoardContinuationTarget,
+  boardReads?: readonly BoardReadTarget[],
   expectedInstallationRevision?: number,
   tableContinuation?: TableContinuationTarget,
   options?: PageLoadOptions,
@@ -196,7 +196,7 @@ export const loadApplicationPageInternal = async (
       address,
       parameters,
       selectedPlacementIds,
-      boardContinuation,
+      boardReads,
       expectedInstallationRevision,
       tableContinuation,
       options,
@@ -212,13 +212,12 @@ const loadApplicationPageJoined = async (
   address: ApplicationPageLoaderAddress,
   parameters: SearchParameters,
   selectedPlacementIds?: ReadonlySet<string>,
-  boardContinuation?: BoardContinuationTarget,
+  boardReads?: readonly BoardReadTarget[],
   expectedInstallationRevision?: number,
   tableContinuation?: TableContinuationTarget,
   options?: PageLoadOptions,
 ): Promise<ApplicationPageInternalResult> => {
-  if (boardContinuation !== undefined && tableContinuation !== undefined)
-    return { kind: "unavailable" };
+  if (boardReads !== undefined && tableContinuation !== undefined) return { kind: "unavailable" };
   const dependencies = requestDependencies();
   const initialContinuationKey =
     expectedInstallationRevision === undefined ? getQueryContinuationKey() : undefined;
@@ -313,9 +312,9 @@ const loadApplicationPageJoined = async (
       ? `/studio/${encodeURIComponent(context.organizationId)}/${encodeURIComponent(context.applicationRootId)}?tab=data`
       : undefined;
   let allPlacements = editsProjection ? collectPlacements(page) : projectedPlacements;
-  if (boardContinuation !== undefined) {
+  for (const boardRead of boardReads ?? []) {
     const targets = allPlacements.filter(({ placementId }) =>
-      sameId(placementId, boardContinuation.placementId),
+      sameId(placementId, boardRead.placementId),
     );
     const target = targets[0];
     if (
@@ -778,7 +777,7 @@ const loadApplicationPageJoined = async (
     services: services.placementServices(resolveRecordLinks, readSubject),
     permittedApplicationKeys,
     permittedApplicationsUnavailable: permittedApplicationsRead?.kind === "temporarily_unavailable",
-    ...(boardContinuation === undefined ? {} : { boardContinuation }),
+    ...(boardReads === undefined ? {} : { boardReads }),
     ...(tableContinuation === undefined ? {} : { tableContinuation }),
     gridLayouts,
     markSubjectUnreadable,

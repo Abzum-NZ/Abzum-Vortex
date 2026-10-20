@@ -116,6 +116,7 @@ export type RecordsGridProps = Readonly<{
   selection: "single" | "multiple" | undefined;
   selectedRecordIds: readonly string[];
   showActions: boolean;
+  retainedRecordIds?: readonly string[];
   events: DisplayEventHandlers | undefined;
   activateRow: ((recordId: string) => unknown) | undefined;
   renderers: GridRenderers;
@@ -263,7 +264,9 @@ const GridRow = memo(function GridRow({
               />
             )
           ) : slot.kind === "select" ? (
-            renderers.select(row, selected)
+            selectable ? (
+              renderers.select(row, selected)
+            ) : null
           ) : slot.kind === "actions" ? (
             renderers.actions(row)
           ) : slot.column === undefined ? null : slot.id === indentColumnId ? (
@@ -347,6 +350,7 @@ export function RecordsGrid({
   selection,
   selectedRecordIds,
   showActions,
+  retainedRecordIds,
   events,
   activateRow,
   renderers,
@@ -677,9 +681,18 @@ export function RecordsGrid({
     void onSort({ event: "sort_changed", sort: nextRecordsTableSort(sort, column.key, additive) });
   };
 
+  // The selection holds records of the page (each at the revision the page read); a sub-row is not
+  // selectable.
+  const pageRecordIds = new Set(rows.map((row) => row.recordId));
   const toggleSelection = (row: DisplayRow | undefined): void => {
     const onSelection = events?.selection_changed;
-    if (row === undefined || onSelection === undefined || selection === undefined) return;
+    if (
+      row === undefined ||
+      onSelection === undefined ||
+      selection === undefined ||
+      !pageRecordIds.has(row.recordId)
+    )
+      return;
     const selected = selectedRecordIds.includes(row.recordId);
     if (selection === "single" && selected) return;
     void onSelection({ event: "selection_changed", recordId: row.recordId, selected: !selected });
@@ -824,6 +837,12 @@ export function RecordsGrid({
           return;
         }
       }
+    }
+    // A notice of a level spans every column: the left arrow moves to the row it belongs to.
+    if (line?.kind === "notice" && event.key === "ArrowLeft" && !event.altKey && !control) {
+      handled();
+      moveTo(rowIndexOf(line.parentId), Math.max(0, visibleIds.indexOf(indentColumnId ?? "")));
+      return;
     }
     if (header && event.altKey && event.key === "ArrowDown") {
       handled();
@@ -1138,7 +1157,7 @@ export function RecordsGrid({
           slots={slots}
           rowHeight={rowHeight}
           selected={selectedSet.has(row.recordId)}
-          selectable={selectable}
+          selectable={selectable && line.level === 1}
           activeColumnId={activeRow === index ? active.columnId : undefined}
           pending={pendingRecordId === row.recordId}
           activatable={activateRow !== undefined}
@@ -1241,7 +1260,10 @@ export function RecordsGrid({
               fallback={<div role="rowgroup" style={{ height: lines.length * rowHeight }} />}
             >
               <VirtualRows
-                expandedRecordIds={expansion?.expandedRecordIds}
+                expandedRecordIds={[
+                  ...(expansion?.expandedRecordIds ?? []),
+                  ...(retainedRecordIds ?? []),
+                ]}
                 lines={lines}
                 rowHeight={rowHeight}
                 activeRow={activeRow}

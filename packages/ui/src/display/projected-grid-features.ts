@@ -1,4 +1,6 @@
 import {
+  type RecordsTableInlineEditField,
+  type RecordsTableInlineEditor,
   type RecordsTableBulkActionContract,
   type RecordsTableBulkRefusalReason,
   type RecordsTableFeatureProjection,
@@ -227,17 +229,129 @@ export const parseTableSelectionParts = (
   });
 };
 
-const parseFieldKeys = (
+const optionalText = (
   value: unknown,
   message: string,
   location: DefinitionRenderErrorLocation,
-): readonly string[] => {
-  const fields = requireArray(value, message, location).map((field) =>
-    requireFieldKey(field, message, location),
-  );
+): string | undefined =>
+  value === undefined ? undefined : requireNonEmptyString(value, message, location);
+
+const optionalInteger = (
+  value: unknown,
+  message: string,
+  location: DefinitionRenderErrorLocation,
+): number | undefined => {
+  if (value === undefined) return undefined;
+  if (typeof value !== "number" || !Number.isSafeInteger(value)) fail(message, location);
+  return value as number;
+};
+
+/** The closed editor description of one editable field; any other shape is refused whole. */
+const parseInlineEditor = (
+  value: unknown,
+  location: DefinitionRenderErrorLocation,
+): RecordsTableInlineEditor => {
+  const message = "A projected cell editor is invalid";
+  const editor = requireRecord(value, message, location);
+  if (typeof editor.required !== "boolean") fail(message, location);
+  const required = editor.required as boolean;
+  switch (editor.kind) {
+    case "text": {
+      requireExactKeys(editor, ["kind", "required", "input", "maxLength"], location);
+      if (!["text", "long_text", "email", "phone", "web"].includes(editor.input as string))
+        fail(message, location);
+      const maxLength = optionalInteger(editor.maxLength, message, location);
+      return Object.freeze({
+        kind: "text",
+        required,
+        input: editor.input as "text" | "long_text" | "email" | "phone" | "web",
+        ...(maxLength === undefined ? {} : { maxLength }),
+      });
+    }
+    case "whole_number": {
+      requireExactKeys(editor, ["kind", "required", "minimum", "maximum", "step"], location);
+      const minimum = optionalInteger(editor.minimum, message, location);
+      const maximum = optionalInteger(editor.maximum, message, location);
+      const step = optionalInteger(editor.step, message, location);
+      return Object.freeze({
+        kind: "whole_number",
+        required,
+        ...(minimum === undefined ? {} : { minimum }),
+        ...(maximum === undefined ? {} : { maximum }),
+        ...(step === undefined ? {} : { step }),
+      });
+    }
+    case "decimal": {
+      requireExactKeys(
+        editor,
+        ["kind", "required", "digitsBeforeDecimal", "decimalPlaces", "minimum", "maximum"],
+        location,
+      );
+      const digitsBeforeDecimal = optionalInteger(editor.digitsBeforeDecimal, message, location);
+      const decimalPlaces = optionalInteger(editor.decimalPlaces, message, location);
+      if (digitsBeforeDecimal === undefined || decimalPlaces === undefined) fail(message, location);
+      const minimum = optionalText(editor.minimum, message, location);
+      const maximum = optionalText(editor.maximum, message, location);
+      return Object.freeze({
+        kind: "decimal",
+        required,
+        digitsBeforeDecimal: digitsBeforeDecimal as number,
+        decimalPlaces: decimalPlaces as number,
+        ...(minimum === undefined ? {} : { minimum }),
+        ...(maximum === undefined ? {} : { maximum }),
+      });
+    }
+    case "yes_no":
+      requireExactKeys(editor, ["kind", "required"], location);
+      return Object.freeze({ kind: "yes_no", required });
+    case "choice": {
+      requireExactKeys(editor, ["kind", "required", "options"], location);
+      const options = requireArray(editor.options, message, location).map((option) => {
+        const entry = requireRecord(option, message, location);
+        requireExactKeys(entry, ["value", "label"], location);
+        return Object.freeze({
+          value: requireNonEmptyString(entry.value, message, location),
+          label: requireNonEmptyString(entry.label, message, location),
+        });
+      });
+      if (options.length === 0) fail(message, location);
+      return Object.freeze({ kind: "choice", required, options: Object.freeze(options) });
+    }
+    case "date": {
+      requireExactKeys(editor, ["kind", "required", "earliest", "latest"], location);
+      const earliest = optionalText(editor.earliest, message, location);
+      const latest = optionalText(editor.latest, message, location);
+      return Object.freeze({
+        kind: "date",
+        required,
+        ...(earliest === undefined ? {} : { earliest }),
+        ...(latest === undefined ? {} : { latest }),
+      });
+    }
+    case "date_time":
+      requireExactKeys(editor, ["kind", "required"], location);
+      return Object.freeze({ kind: "date_time", required });
+    default:
+      return fail(message, location);
+  }
+};
+
+const parseInlineEditFields = (
+  value: unknown,
+  location: DefinitionRenderErrorLocation,
+): readonly RecordsTableInlineEditField[] => {
+  const message = "Projected editable fields are invalid";
+  const fields = requireArray(value, message, location).map((entry) => {
+    const record = requireRecord(entry, message, location);
+    requireExactKeys(record, ["field", "editor"], location);
+    return Object.freeze({
+      field: requireFieldKey(record.field, message, location),
+      editor: parseInlineEditor(record.editor, location),
+    });
+  });
   if (
     fields.length === 0 ||
-    new Set(fields.map((field) => field.toLowerCase())).size !== fields.length
+    new Set(fields.map((field) => field.field.toLowerCase())).size !== fields.length
   )
     fail(message, location);
   return Object.freeze(fields);
@@ -298,8 +412,10 @@ export const parseTableFeatures = (
       "savedViews",
       "bulkActions",
       "inlineEdit",
+      "rowEdit",
       "masterDetail",
       "tree",
+      "grouping",
       "conditionalFormatting",
       "pinning",
       "pivot",
@@ -337,6 +453,17 @@ export const parseTableFeatures = (
         );
   if (bulkActions !== undefined && bulkActions.length === 0)
     fail("Projected bulk actions are empty", location);
+  let rowEdit: RecordsTableFeatureProjection["rowEdit"];
+  if (record.rowEdit !== undefined) {
+    const row = requireRecord(record.rowEdit, "Projected row editing is invalid", location);
+    requireExactKeys(row, ["eventId", "fields", "trigger"], location);
+    if (row.trigger !== "button") fail("Row editing requires its button trigger", location);
+    rowEdit = Object.freeze({
+      eventId: requireNonEmptyString(row.eventId, "Row editing needs its event", location),
+      trigger: "button",
+      fields: parseInlineEditFields(row.fields, location),
+    });
+  }
   let inlineEdit: RecordsTableFeatureProjection["inlineEdit"];
   if (record.inlineEdit !== undefined) {
     const inline = requireRecord(
@@ -347,7 +474,7 @@ export const parseTableFeatures = (
     requireExactKeys(inline, ["eventId", "fields"], location);
     inlineEdit = Object.freeze({
       eventId: requireNonEmptyString(inline.eventId, "Inline editing needs its event", location),
-      fields: parseFieldKeys(inline.fields, "Projected editable fields are invalid", location),
+      fields: parseInlineEditFields(inline.fields, location),
     });
   }
   let masterDetail: RecordsTableFeatureProjection["masterDetail"];
@@ -372,6 +499,20 @@ export const parseTableFeatures = (
     requireExactKeys(beneath, ["pageSize"], location);
     tree = Object.freeze({
       pageSize: requirePositiveInteger(beneath.pageSize, "A tree needs its page size", location),
+    });
+  }
+  let grouping: RecordsTableFeatureProjection["grouping"];
+  if (record.grouping !== undefined) {
+    const held = requireRecord(record.grouping, "Projected grouping is invalid", location);
+    requireExactKeys(held, ["fieldId", "label", "unassignedLabel"], location);
+    grouping = Object.freeze({
+      fieldId: requireNonEmptyString(held.fieldId, "Grouping needs its field", location),
+      label: requireNonEmptyString(held.label, "Grouping needs its field's name", location),
+      unassignedLabel: requireNonEmptyString(
+        held.unassignedLabel,
+        "Grouping needs the name of the records with no value",
+        location,
+      ),
     });
   }
   let pivot: RecordsTableFeatureProjection["pivot"];
@@ -433,12 +574,83 @@ export const parseTableFeatures = (
     ...(record.savedViews === true ? { savedViews: true as const } : {}),
     ...(bulkActions === undefined ? {} : { bulkActions: Object.freeze(bulkActions) }),
     ...(inlineEdit === undefined ? {} : { inlineEdit }),
+    ...(rowEdit === undefined ? {} : { rowEdit }),
     ...(masterDetail === undefined ? {} : { masterDetail }),
     ...(tree === undefined ? {} : { tree }),
+    ...(grouping === undefined ? {} : { grouping }),
     ...(record.conditionalFormatting === undefined
       ? {}
       : {
           conditionalFormatting: parseConditionalFormatting(record.conditionalFormatting, location),
         }),
+  });
+};
+
+/** One group of a grouped table: its key, its label and how many records it holds right now. */
+export type TableGroup = Readonly<{
+  key: string;
+  label: string;
+  count: number;
+  unassigned?: true;
+}>;
+
+/**
+ * The groups a grouped table was read with: one bounded count per group from the same read as the
+ * table's filters and search, or the statement that there are too many filtered records to count
+ * them in groups. The open group's key is one of the groups.
+ */
+export type TableGroups =
+  | Readonly<{
+      status: "ready";
+      fieldId: string;
+      groups: readonly TableGroup[];
+      total: number;
+      expanded?: string;
+    }>
+  | Readonly<{ status: "too_many" }>;
+
+export const parseTableGroups = (
+  value: unknown,
+  location: DefinitionRenderErrorLocation,
+): TableGroups => {
+  const record = requireRecord(value, "Projected groups are invalid", location);
+  if (record.status === "too_many") {
+    requireExactKeys(record, ["status"], location);
+    return Object.freeze({ status: "too_many" as const });
+  }
+  if (record.status !== "ready") return fail("Projected groups need a status", location);
+  requireExactKeys(record, ["status", "fieldId", "groups", "total", "expanded"], location);
+  const groups = requireArray(record.groups, "Projected groups must be an array", location).map(
+    (item): TableGroup => {
+      const group = requireRecord(item, "A projected group must be an object", location);
+      requireExactKeys(group, ["key", "label", "count", "unassigned"], location);
+      if (group.unassigned !== undefined && group.unassigned !== true)
+        fail("A projected group is only ever unassigned", location);
+      if (typeof group.count !== "number" || !Number.isInteger(group.count) || group.count < 0)
+        fail("A projected group count must be a whole number", location);
+      return Object.freeze({
+        key: requireNonEmptyString(group.key, "A projected group needs its key", location),
+        label: requireNonEmptyString(group.label, "A projected group needs its label", location),
+        count: group.count as number,
+        ...(group.unassigned === true ? { unassigned: true as const } : {}),
+      });
+    },
+  );
+  if (new Set(groups.map((group) => group.key)).size !== groups.length)
+    fail("Projected groups name each group once", location);
+  if (typeof record.total !== "number" || !Number.isInteger(record.total) || record.total < 0)
+    fail("Projected groups need their total", location);
+  const expanded =
+    record.expanded === undefined
+      ? undefined
+      : requireNonEmptyString(record.expanded, "The open group must be named by its key", location);
+  if (expanded !== undefined && !groups.some((group) => group.key === expanded))
+    fail("The open group must be one of the groups", location);
+  return Object.freeze({
+    status: "ready" as const,
+    fieldId: requireNonEmptyString(record.fieldId, "Projected groups need their field", location),
+    groups: Object.freeze(groups),
+    total: record.total as number,
+    ...(expanded === undefined ? {} : { expanded }),
   });
 };

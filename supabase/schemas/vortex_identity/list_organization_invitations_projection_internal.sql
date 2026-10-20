@@ -1,6 +1,6 @@
 create or replace function vortex_identity.list_organization_invitations_projection_internal(
   p_organization_id uuid, p_record_ids uuid[], p_sort_key text,
-  p_direction text, p_after jsonb, p_limit integer
+  p_direction text, p_after jsonb, p_limit integer, p_predicate jsonb
 )
 returns table (
   invitation_id uuid, invited_email text, invitation_state text,
@@ -16,6 +16,7 @@ declare
   after_expires_at timestamptz;
   after_record_id uuid;
   scan_sql text;
+  predicate_plan jsonb;
 begin
   if p_sort_key not in ('record_id', 'invited_email', 'expires_at', 'state')
     or p_direction not in ('ascending', 'descending')
@@ -77,6 +78,14 @@ begin
       sort_column, case when p_sort_key in ('invited_email', 'state') then ' collate "C"' else '' end,
       case when p_direction = 'ascending' then 'asc' else 'desc' end,
       case when p_direction = 'ascending' then 'asc' else 'desc' end) end;
+  predicate_plan := vortex_record.compile_projection_predicate_internal(
+    p_predicate,
+    $declared${
+      "state": {"sql": "(case when invitation.accepted_at is not null then 'accepted' when invitation.revoked_at is not null then 'revoked' when invitation.expires_at <= pg_catalog.statement_timestamp() then 'expired' else 'pending' end)", "database": "text", "filter": true},
+      "invited_email": {"sql": "invitation.invited_email", "database": "text", "search": true}
+    }$declared$::jsonb,
+    7
+  );
   scan_sql := $scan$
     select invitation.invitation_id, invitation.invited_email,
       case
@@ -91,18 +100,18 @@ begin
       and $1 is not null
       and $1 <> '00000000-0000-0000-0000-000000000000'::uuid
       and ($2 is null or invitation.invitation_id = any($2))
-  $scan$ || keyset_sql || pg_catalog.format(' order by %s limit $6', order_sql);
+  $scan$ || coalesce(' and ' || (predicate_plan ->> 'predicate'), '') || keyset_sql || pg_catalog.format(' order by %s limit $6', order_sql);
   return query execute scan_sql using p_organization_id, p_record_ids,
-    after_text, after_record_id, after_expires_at, p_limit;
+    after_text, after_record_id, after_expires_at, p_limit, predicate_plan -> 'parameters';
 end
 $function$;
 
 revoke all on function vortex_identity.list_organization_invitations_projection_internal(
-  uuid, uuid[], text, text, jsonb, integer
+  uuid, uuid[], text, text, jsonb, integer, jsonb
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_identity.list_organization_invitations_projection_internal(
-  uuid, uuid[], text, text, jsonb, integer
+  uuid, uuid[], text, text, jsonb, integer, jsonb
 ) to vortex_owner, postgres;
 alter function vortex_identity.list_organization_invitations_projection_internal(
-  uuid, uuid[], text, text, jsonb, integer
+  uuid, uuid[], text, text, jsonb, integer, jsonb
 ) owner to vortex_owner;

@@ -3,6 +3,7 @@
 import {
   lazy,
   Suspense,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -21,7 +22,7 @@ import type {
 } from "@vortex/platform/schema";
 import type { DisplayEventHandlers, DisplayRow, TableNarrowing } from "../projected-data";
 import type { RowExpansionKind } from "../row-expansion";
-import type { RowWrite, SubRowsBeneath, SubRowsKind } from "../sub-rows";
+import type { RowLine, SubRowsKind, SubRowsOpen } from "../sub-rows";
 import type { TableSelectionParts } from "../projected-grid-features";
 import type { GridColumn, GridLayoutControls } from "../table-layout";
 
@@ -38,6 +39,11 @@ export type GridFeatureContext = Readonly<{
   /** The columns the page carries, in display order. */
   columns: readonly GridColumn[];
   rows: readonly DisplayRow[];
+  /**
+   * Every row the table draws, in order: the page's rows and the sub-rows and notices beneath the
+   * open ones. A cell's `data-row` is its index here.
+   */
+  lines: readonly RowLine[];
   selectedRecordIds: readonly string[];
   /**
    * The selection beyond the shown page: the read's sealed descriptor of every matching record and
@@ -61,6 +67,16 @@ export type GridFeatureContext = Readonly<{
    * shown, and `setView` opens, pages or closes the pivot and keeps it in the address.
    */
   pivot: GridPivotView | undefined;
+  /**
+   * The grouping, when the grouping feature is on: whether the table is grouped now, and the one
+   * way to group it by the authored field or to show the records ungrouped. The address keeps it.
+   */
+  grouping: GridGroupingView | undefined;
+}>;
+
+export type GridGroupingView = Readonly<{
+  grouped: boolean;
+  setGrouped: (grouped: boolean) => void;
 }>;
 
 export type GridPivotView = Readonly<{
@@ -78,6 +94,13 @@ export type GridFeatureInteractionProps = Readonly<{
   surface: GridInteractionSurface;
 }>;
 
+export type GridFeatureScopeProps = Readonly<{
+  context: GridFeatureContext;
+  children: ReactNode;
+  retainRow: (recordId: string | undefined) => void;
+}>;
+export type GridFeatureCommandProps = Readonly<{ context: GridFeatureContext; row: DisplayRow }>;
+
 export type GridFeaturePointProps = Readonly<{ context: GridFeatureContext }>;
 export type GridFeatureColumnProps = Readonly<{ context: GridFeatureContext; column: GridColumn }>;
 /**
@@ -92,17 +115,10 @@ export type GridFeatureRowProps = Readonly<{
   memory: RowPanelMemory;
 }>;
 /**
- * What the controller of a feature that contributes sub-rows receives: the record identities the
- * person has opened, `publish`, through which it reports the entries beneath each open record, and
- * the latest settled write on a row of the table. The table draws those entries as rows of its own
- * grid (or cards of its own list).
+ * What the controller of a feature that contributes sub-rows receives (see `SubRowsOpen`). The
+ * table draws the entries it publishes as rows of its own grid (or cards of its own list).
  */
-export type GridFeatureSubRowsProps = Readonly<{
-  context: GridFeatureContext;
-  expandedRecordIds: readonly string[];
-  publish: (beneath: SubRowsBeneath) => void;
-  written: RowWrite | undefined;
-}>;
+export type GridFeatureSubRowsProps = SubRowsOpen & Readonly<{ context: GridFeatureContext }>;
 /** A cell a feature may draw instead of the plain value; `children` is the plain value. */
 export type GridFeatureCellProps = Readonly<{
   context: GridFeatureContext;
@@ -152,6 +168,9 @@ export const GridBoardView = lazy(async () => ({
  * selected rows.
  */
 export type GridFeatureModule = Readonly<{
+  Scope?: ComponentType<GridFeatureScopeProps>;
+  RowCommands?: ComponentType<GridFeatureCommandProps>;
+  RowEditor?: ComponentType<GridFeatureCommandProps>;
   GridInteraction?: ComponentType<GridFeatureInteractionProps>;
   ToolbarItems?: ComponentType<GridFeaturePointProps>;
   ColumnMenuItems?: ComponentType<GridFeatureColumnProps>;
@@ -186,8 +205,10 @@ const loaders: Readonly<
   saved_views: () => import("./saved-views"),
   bulk_actions: () => import("./bulk-actions"),
   inline_edit: () => import("./inline-edit"),
+  row_edit: () => import("./row-editor"),
   master_detail: () => import("./master-detail"),
   tree: () => import("./tree"),
+  grouping: () => import("./grouping"),
   conditional_formatting: () => import("./conditional-format"),
   pivot: () => import("./pivot"),
 };
@@ -200,8 +221,10 @@ const projectionKeys: Readonly<Record<keyof RecordsTableFeatureProjection, GridE
   savedViews: "saved_views",
   bulkActions: "bulk_actions",
   inlineEdit: "inline_edit",
+  rowEdit: "row_edit",
   masterDetail: "master_detail",
   tree: "tree",
+  grouping: "grouping",
   conditionalFormatting: "conditional_formatting",
   pivot: "pivot",
 };
@@ -259,8 +282,10 @@ const featurePoints: Readonly<Record<GridExtensionKey, readonly ComponentPoint[]
   saved_views: ["ToolbarItems"],
   bulk_actions: ["SelectionBanner"],
   inline_edit: ["CellEditor"],
+  row_edit: ["Scope", "CellEditor", "RowCommands", "RowEditor", "ToolbarItems"],
   master_detail: ["RowExpansion"],
   tree: ["SubRows"],
+  grouping: ["ToolbarItems", "ColumnMenuItems"],
   conditional_formatting: ["CellAdornment", "HeaderAdornment"],
   pivot: ["ToolbarItems", "ViewBody"],
 };
@@ -285,6 +310,14 @@ const subRowsKinds: Readonly<Partial<Record<RecordsTableFeatureKey, SubRowsKind>
     expandable: (row) => row.hasChildren === true,
   },
 };
+
+/** What the projected feature's sub-rows hold; undefined when no feature contributes any. */
+export const subRowsKindOf = (
+  features: RecordsTableFeatureProjection | undefined,
+): SubRowsKind | undefined =>
+  projectedGridFeatures(features)
+    .map((key) => subRowsKinds[key])
+    .find((kind) => kind !== undefined);
 
 const activeKeys = (signature: string): readonly GridExtensionKey[] =>
   signature === "" ? [] : (signature.split(",") as GridExtensionKey[]);
@@ -314,18 +347,16 @@ const drawPoint = (
  */
 export function useGridFeatures(context: GridFeatureContext | undefined): Readonly<{
   keys: readonly GridExtensionKey[];
+  scope: (children: ReactNode) => ReactNode;
+  rowCommands: (row: DisplayRow) => ReactNode;
+  rowEditor: (row: DisplayRow) => ReactNode;
+  retainedRecordIds: readonly string[];
   /** A projected feature draws a panel below an expanded row, so rows offer an expand toggle. */
   expands: boolean;
   /** What that panel holds and how many may be open; undefined when no feature draws one. */
   expansionKind: RowExpansionKind | undefined;
-  /** What a projected feature's sub-rows hold; undefined when no feature contributes any. */
-  subRowsKind: SubRowsKind | undefined;
   /** The controller of the sub-rows, drawn once; it draws nothing and reports through `publish`. */
-  subRowsController: (
-    expandedRecordIds: readonly string[],
-    publish: (beneath: SubRowsBeneath) => void,
-    written: RowWrite | undefined,
-  ) => ReactNode;
+  subRowsController: (open: SubRowsOpen) => ReactNode;
   toolbarItems: () => ReactNode;
   interaction: (surface: GridInteractionSurface) => ReactNode;
   selectionBanner: () => ReactNode;
@@ -339,6 +370,8 @@ export function useGridFeatures(context: GridFeatureContext | undefined): Readon
   decorate: (row: DisplayRow, column: GridColumn, plain: ReactNode) => ReactNode;
   cellClassName: (row: DisplayRow, column: GridColumn) => string | undefined;
 }> {
+  const [retainedRow, setRetainedRow] = useState<string | undefined>(undefined);
+  const retainRow = useCallback((recordId: string | undefined) => setRetainedRow(recordId), []);
   const keys = projectedGridFeatures(context?.features);
   const signature = keys.join(",");
   // Cell decorations are plain functions, not components: their modules are read once loaded.
@@ -422,16 +455,14 @@ export function useGridFeatures(context: GridFeatureContext | undefined): Readon
       return current === undefined ? null : drawPoint(active, point, current, props);
     };
     return {
+      rowCommands: (row: DisplayRow) => drawAt("RowCommands", { row }),
+      rowEditor: (row: DisplayRow) => drawAt("RowEditor", { row }),
       interaction: (surface: GridInteractionSurface) => drawAt("GridInteraction", { surface }),
       headerAdornment: (column: GridColumn) => drawAt("HeaderAdornment", { column }),
       columnMenuItems: (column: GridColumn) => drawAt("ColumnMenuItems", { column }),
       rowExpansion: (row: DisplayRow, memory: RowPanelMemory) =>
         drawAt("RowExpansion", { row, memory }),
-      subRowsController: (
-        expandedRecordIds: readonly string[],
-        publish: (beneath: SubRowsBeneath) => void,
-        written: RowWrite | undefined,
-      ) => drawAt("SubRows", { expandedRecordIds, publish, written }),
+      subRowsController: (open: SubRowsOpen) => drawAt("SubRows", open),
       decorate: (row: DisplayRow, column: GridColumn, plain: ReactNode): ReactNode => {
         const decoration = classNameOf(row, column);
         return adorn(
@@ -464,9 +495,24 @@ export function useGridFeatures(context: GridFeatureContext | undefined): Readon
   const active = activeKeys(signature);
   return {
     keys: active,
+    retainedRecordIds: retainedRow === undefined ? [] : [retainedRow],
+    scope: (children) =>
+      context === undefined
+        ? children
+        : active
+            .filter((key) => featurePoints[key].includes("Scope"))
+            .reduce<ReactNode>((inner, key) => {
+              const Scope = featurePoint<GridFeatureScopeProps>(key, "Scope");
+              return (
+                <Suspense key={key} fallback={inner}>
+                  <Scope context={context} retainRow={retainRow}>
+                    {inner}
+                  </Scope>
+                </Suspense>
+              );
+            }, children),
     expands: active.some((key) => featurePoints[key].includes("RowExpansion")),
     expansionKind: active.map((key) => expansionKinds[key]).find((kind) => kind !== undefined),
-    subRowsKind: active.map((key) => subRowsKinds[key]).find((kind) => kind !== undefined),
     toolbarItems: () =>
       context === undefined ? null : drawPoint(active, "ToolbarItems", context, {}),
     selectionBanner: () =>

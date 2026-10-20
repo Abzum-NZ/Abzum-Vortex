@@ -27,7 +27,9 @@ begin
     return pg_catalog.format('stored.%I is null', p_column);
   end if;
   -- Only canonical bucket starts may select members. The upper bound is the next
-  -- local calendar boundary, so a DST day can contain 23 or 25 hours.
+  -- local calendar boundary, so a DST day can contain 23 or 25 hours. A selector
+  -- whose bucket leaves the supported year domain raises V3187 here (the caller
+  -- returns value_out_of_range); the domain check lives in grouping_value_internal and runs through the group key.
   if vortex_record.grouping_value_internal(p_value, p_field_type, bucket) is distinct from p_value then
     return null;
   end if;
@@ -36,13 +38,13 @@ begin
   end if;
   if p_field_type = 'date' then
     start_date := (p_value #>> '{}')::date;
-    end_date := (start_date::timestamp + (case when bucket ->> 'unit' = 'quarter' then '3 months' else '1 ' || (bucket ->> 'unit') end)::interval)::date;
+    end_date := pg_catalog.timezone('UTC', vortex_record.date_bucket_end_internal(
+      pg_catalog.timezone('UTC', start_date::timestamp), bucket ->> 'unit', 'UTC'))::date;
     return pg_catalog.format('stored.%I >= %L::date and stored.%I < %L::date',
       p_column, start_date, p_column, end_date);
   end if;
   start_instant := (p_value #>> '{}')::timestamptz;
-  end_instant := (pg_catalog.date_trunc(bucket ->> 'unit', start_instant at time zone (bucket ->> 'timeZone'))
-    + (case when bucket ->> 'unit' = 'quarter' then '3 months' else '1 ' || (bucket ->> 'unit') end)::interval) at time zone (bucket ->> 'timeZone');
+  end_instant := vortex_record.date_bucket_end_internal(start_instant, bucket ->> 'unit', bucket ->> 'timeZone');
   -- A repeated local midnight resolves to its later instant. Keep the indexable
   -- range broad enough for both occurrences, then match the exact bucket before
   -- the candidate page budget is applied. The readable projection is rechecked.
@@ -60,4 +62,4 @@ revoke all on function vortex_record.grouping_member_predicate_internal(text,tex
 grant execute on function vortex_record.grouping_member_predicate_internal(text,text,text,jsonb,jsonb) to vortex_record_adapter;
 
 comment on function vortex_record.grouping_member_predicate_internal(text,text,text,jsonb,jsonb) is
-  'Protected group member scan predicate over a validated stored field and selector. Date buckets use typed half-open calendar ranges suitable for storage indexes, with local DST-aware upper boundaries and an exact projection recheck by the reader.';
+  'Protected group member scan predicate over a validated stored field and selector. Date buckets use typed half-open calendar ranges suitable for storage indexes, with local DST-aware upper boundaries and an exact projection recheck by the reader. Raises SQLSTATE V3187 for a selector outside the supported year domain.';

@@ -24,13 +24,16 @@ const PRIORITY_ORDER: Readonly<Record<RecordsTableColumnContract["priority"], nu
 const INTERACTIVE_IN_CARD =
   "a,button,input,select,textarea,label,summary,[role='button'],[role='checkbox'],[role='radio'],[role='menuitem'],[role='switch']";
 
-/** Content renderers the host supplies; the same ones the grid uses. */
+/** Content renderers the host supplies; the same ones the grid uses. A card's heading opens the record, so only its labelled details carry editors. */
 export type CardRenderers = Readonly<{
   value: (row: DisplayRow, column: GridColumn) => ReactNode;
+  /** A labelled detail value: the plain value, or its editor where inline editing is on. */
+  cell: (row: DisplayRow, column: GridColumn) => ReactNode;
   /** Decorated plain text for the heading that opens the row; it cannot contain a nested link. */
   heading: (row: DisplayRow, column: GridColumn) => ReactNode;
   select: (row: DisplayRow, selected: boolean) => ReactNode;
   actions: (row: DisplayRow) => ReactNode;
+  rowEditor: (row: DisplayRow) => ReactNode;
 }>;
 
 /**
@@ -174,7 +177,7 @@ export function RecordsCards({
               className={cn(CARD_SPACING[density], selected && "ring-2 ring-primary")}
             >
               <div className="flex min-w-0 items-center gap-2">
-                {selectable ? renderers.select(row, selected) : null}
+                {selectable && line.level === 1 ? renderers.select(row, selected) : null}
                 <h3
                   id={headingId}
                   data-vortex-field-key={heading?.key}
@@ -222,12 +225,13 @@ export function RecordsCards({
                         data-vortex-field-key={column.key}
                         className="m-0 min-w-0 truncate text-end"
                       >
-                        {renderers.value(row, column)}
+                        {renderers.cell(row, column)}
                       </dd>
                     </div>
                   ))}
                 </dl>
               )}
+              {renderers.rowEditor(row)}
             </Card>
             {!expanded || expansion === undefined || !expandable ? null : (
               <div

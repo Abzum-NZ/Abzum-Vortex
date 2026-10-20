@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode, type RefObject } from "react";
+import { useCallback, useEffect, useMemo, useState, type RefObject } from "react";
 import type {
   DisplayEventHandler,
   DisplayEventHandlers,
@@ -59,18 +59,29 @@ export type RowLine =
     }>
   | Readonly<{ kind: "notice"; id: string; level: number; parentId: string; notice: SubRowNotice }>;
 
+/**
+ * What the controller of a feature that contributes sub-rows works from: the record identities the
+ * person has opened, `publish`, through which it reports the entries beneath each open record, and
+ * the latest settled write on a row of the table.
+ */
+export type SubRowsOpen = Readonly<{
+  expandedRecordIds: readonly string[];
+  publish: (beneath: SubRowsBeneath) => void;
+  written: RowWrite | undefined;
+}>;
+
 /** The sub-rows the grid and the cards show, and the one toggle that opens and closes them. */
 export type SubRowsControls = Readonly<{
   noun: string;
   toggle: (recordId: string) => void;
 }>;
 
-/** A settled write on one row of the table (an inline edit or a row command); each is a new value. */
+/** A settled write on one row of the table (an edit or a row command); each is a new value. */
 export type RowWrite = Readonly<{ recordId: string }>;
 
 /**
- * The table's event handlers, reporting each settled write on a row (an inline edit or a row
- * command) to `written`. The host's refresh after a write reads the page only, so the rows a
+ * The table's event handlers, reporting each settled write on a row (an inline edit, a row edit or a
+ * row command) to `written`. The host's refresh after a write reads the page only, so the rows a
  * feature holds beneath the page are read again from this report.
  */
 export const useRowWrites = (
@@ -85,14 +96,19 @@ export const useRowWrites = (
         try {
           return await handler(event);
         } finally {
-          if (event.event === "inline_edit" || event.event === "row_action")
+          if (
+            event.event === "inline_edit" ||
+            event.event === "row_edit" ||
+            event.event === "row_action"
+          )
             written.current(event.recordId);
         }
       };
-    const { inline_edit: inlineEdit, row_action: rowAction } = events;
+    const { inline_edit: inlineEdit, row_edit: rowEdit, row_action: rowAction } = events;
     return {
       ...events,
       ...(inlineEdit === undefined ? {} : { inline_edit: reporting(inlineEdit) }),
+      ...(rowEdit === undefined ? {} : { row_edit: reporting(rowEdit) }),
       ...(rowAction === undefined ? {} : { row_action: reporting(rowAction) }),
     };
   }, [events, written]);
@@ -166,8 +182,9 @@ const flatten = (
 
 /**
  * The rows a table shows, in order: the page's rows and, while a feature contributes sub-rows, the
- * entries beneath every open row. The feature's controller (drawn once, drawing nothing) reads what
- * the open rows need and reports it; the grid and the cards draw this one list. An open row leaves
+ * entries beneath every open row. The feature's controller (drawn once from `open`, drawing nothing)
+ * reads what the open rows need and reports it; the grid, the cards and the grid features use this
+ * one list. An open row leaves
  * the list's open set when it leaves the shown list, so a new page, a closed parent or a searched
  * (flat) list starts with none open.
  */
@@ -180,21 +197,16 @@ export const useRowLines = (
     paged: boolean;
     rowName: (row: DisplayRow) => string;
     announce: (message: string) => void;
-    /** Draws the feature's controller for the open rows; it reports through `publish`. */
-    controller: (
-      expandedRecordIds: readonly string[],
-      publish: (beneath: SubRowsBeneath) => void,
-      written: RowWrite | undefined,
-    ) => ReactNode;
   }>,
 ): Readonly<{
   lines: readonly RowLine[];
   subRows: SubRowsControls | undefined;
-  controller: ReactNode;
+  /** What the feature's controller is drawn from; undefined while no feature contributes sub-rows. */
+  open: SubRowsOpen | undefined;
   /** Reports a settled write on a row, so the controller reads the row's level again. */
   rowWritten: (recordId: string) => void;
 }> => {
-  const { kind, enabled, rows, paged, rowName, announce, controller } = input;
+  const { kind, enabled, rows, paged, rowName, announce } = input;
   const active = enabled ? kind : undefined;
   const [expanded, setExpanded] = useState<readonly string[]>([]);
   const [beneath, setBeneath] = useState<SubRowsBeneath>(noBeneath);
@@ -239,10 +251,12 @@ export const useRowLines = (
     () => (noun === undefined ? undefined : { noun, toggle }),
     [noun, toggle],
   );
-  return {
-    lines,
-    subRows,
-    controller: active === undefined ? null : controller(expanded, setBeneath, written),
-    rowWritten,
-  };
+  const open = useMemo(
+    () =>
+      active === undefined
+        ? undefined
+        : { expandedRecordIds: expanded, publish: setBeneath, written },
+    [active, expanded, written],
+  );
+  return { lines, subRows, open, rowWritten };
 };

@@ -15,36 +15,17 @@ export const asComponentBinding = (
     flow: { flowId: binding.flowId, inputs: {} },
   }) as ComponentFlowBinding;
 
-/** The JSON a table cell reports when a surface hands it to a flow as a caller input. */
-const cellToJson = (value: unknown): unknown => {
-  if (typeof value !== "object" || value === null) return null;
-  const cell = value as Record<string, unknown>;
-  switch (cell.kind) {
-    case "text":
-      return cell.text;
-    case "number":
-    case "boolean":
-      return cell.value;
-    case "date":
-      return cell.iso;
-    case "choice":
-      return cell.key;
-    case "link":
-      return cell.address;
-    default:
-      return null;
-  }
-};
-
 /**
  * What a component event supplies to its bound flow, by the caller input names the flow declares.
- * The vocabulary is closed and event-shaped: `record_id`, `revision`, `field`,
- * `value` and `values` (the one changed field of a moved board card, named by its field key). A
- * binding receives only the names it declares, and the endpoint refuses anything else.
+ * The vocabulary is closed and event-shaped: `record_id`, `revision`, `value` and `values` (the
+ * one changed field of a moved board card or an inline edit, named by its field key and holding the
+ * new stored value). A binding receives only the names it declares, and the endpoint refuses
+ * anything else.
  *
- * A row action carries the row's server-projected current revision exactly as an inline-edit commit
- * does, so a command that changes one existing row is bound at the revision the person actually saw.
- * The value comes from the projected row, never from anything the person types.
+ * A row action carries the row's server-projected current revision, so a command that changes one
+ * existing row is bound at the revision the person actually saw. An inline edit carries its
+ * revision as the gesture's subject. The revision comes from the
+ * projected row, never from anything the person types.
  */
 export const suppliedValues = (event: DisplaySemanticEvent): Record<string, unknown> => {
   switch (event.event) {
@@ -55,13 +36,10 @@ export const suppliedValues = (event: DisplaySemanticEvent): Record<string, unkn
         record_id: event.recordId,
         ...(event.revision === undefined ? {} : { revision: event.revision }),
       };
+    case "row_edit":
+      return { record_id: event.recordId, values: event.values };
     case "inline_edit":
-      return {
-        record_id: event.recordId,
-        field: event.field,
-        value: cellToJson(event.value),
-        ...(event.revision === undefined ? {} : { revision: event.revision }),
-      };
+      return { record_id: event.recordId, values: { [event.field]: event.value } };
     case "card_moved":
       return {
         record_id: event.recordId,

@@ -195,7 +195,12 @@ export function useGridLayout({
   useEffect(() => {
     for (const [placementId, data] of Object.entries(currentData)) {
       const layout = tablePayloadFor(data)?.layout;
-      if (layout === undefined || !layout.reset || !layout.persisted || layout.revision === null)
+      if (
+        layout === undefined ||
+        !layout.reset ||
+        layout.storage !== "personal" ||
+        layout.revision === null
+      )
         continue;
       const key = `${placementId.toLowerCase()}:${layout.revision}`;
       if (noticed.current.has(key)) continue;

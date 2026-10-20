@@ -16,6 +16,7 @@ import {
 } from "@vortex/platform/schema";
 import type { PlatformComponentRegistry } from "../registry";
 import { studioReleaseReadsQuery } from "./contextual-palette";
+import { useStudioCanvasGridEvents } from "./studio-canvas-grid";
 
 /**
  * The Studio canvas renders the stored items Puck holds with the one Puck config. A block's render
@@ -36,7 +37,9 @@ export function StudioCanvasCompiledSettings({
   settings,
   children,
 }: Readonly<{ settings: CompiledSettings; children: ReactNode }>): ReactElement {
-  return <CompiledSettingsContext.Provider value={settings}>{children}</CompiledSettingsContext.Provider>;
+  return (
+    <CompiledSettingsContext.Provider value={settings}>{children}</CompiledSettingsContext.Provider>
+  );
 }
 
 /**
@@ -64,7 +67,10 @@ export type StudioCanvasRecords = Readonly<{
 export type StudioCanvasSample = Readonly<{ recordTypeName: string; title?: string }>;
 
 const NO_RECORDS: StudioCanvasRecords = Object.freeze({
-  state: "loading", records: {}, saved: new Map<string, string>(), current: new Map<string, string>(),
+  state: "loading",
+  records: {},
+  saved: new Map<string, string>(),
+  current: new Map<string, string>(),
   updating: false,
 });
 const CanvasRecordsContext = createContext<StudioCanvasRecords>(NO_RECORDS);
@@ -82,7 +88,10 @@ export function StudioCanvasRecordsProvider({
  * holds. A block is judged with the page projection's own view rule, so the canvas hides exactly the
  * blocks the running application drops for that role; `null` is the design view, where all show.
  */
-export type StudioCanvasViewer = Readonly<{ roleName: string; decisions: NavigationPermissionDecisions }>;
+export type StudioCanvasViewer = Readonly<{
+  roleName: string;
+  decisions: NavigationPermissionDecisions;
+}>;
 const CanvasViewerContext = createContext<StudioCanvasViewer | null>(null);
 
 /** Supplies the role the canvas previews, or `null` for the design view. */
@@ -93,10 +102,34 @@ export function StudioCanvasViewerProvider({
   return <CanvasViewerContext.Provider value={viewer}>{children}</CanvasViewerContext.Provider>;
 }
 
+/**
+ * Records the value the builder chose in a control on the canvas, by the control's placement name.
+ * The canvas then asks the server to read the blocks bound to that control again; nothing is
+ * resolved in the browser.
+ */
+const CanvasControlContext = createContext<
+  ((placement: string, value: string) => void) | undefined
+>(undefined);
+
+/** Supplies the canvas's control values to the controls that publish a page parameter. */
+export function StudioCanvasControlsProvider({
+  onValue,
+  children,
+}: Readonly<{
+  onValue: (placement: string, value: string) => void;
+  children: ReactNode;
+}>): ReactElement {
+  return <CanvasControlContext.Provider value={onValue}>{children}</CanvasControlContext.Provider>;
+}
+
+/** The controls whose chosen value the canvas can hold: their value is plain text. */
+const previewControlKey = /\.(text|choice|date)_input$/;
+
 /** What the canvas says in place of a current data block's records, or nothing when it has them. */
 const recordsNote = (records: StudioCanvasRecords, id: string): string | undefined => {
   if (records.state === "loading") return "Reading records…";
-  if (records.state === "refused") return "Showing records here needs permission to preview this application.";
+  if (records.state === "refused")
+    return "Showing records here needs permission to preview this application.";
   if (records.state === "unavailable") return "Records could not be read just now.";
   if (Object.hasOwn(records.records, id)) return undefined;
   return records.sample !== undefined && records.sample.title === undefined
@@ -129,34 +162,49 @@ const renderProps = (
       delete result[property.key];
     }
     // A block added since the last compile draws with its release's defaults, as publication writes them.
-    Object.assign(result, compiled ?? catalogueDefaults(release), exact && compiled !== undefined ? {} : authored);
+    Object.assign(
+      result,
+      compiled ?? catalogueDefaults(release),
+      exact && compiled !== undefined ? {} : authored,
+    );
   }
   result.vortex = {
     block: { blockId: vortex.block?.block_id, releaseVersion: vortex.block?.release_version },
-    responsive: vortex.responsive === undefined ? undefined : canonicalResponsivePlacement(vortex.responsive),
+    responsive:
+      vortex.responsive === undefined ? undefined : canonicalResponsivePlacement(vortex.responsive),
   };
   return result;
 };
 
 /** The release's declared defaults, as the plain values a compiled item carries. */
 const catalogueDefaults = (release: PlatformBlockRelease): Record<string, unknown> =>
-  Object.fromEntries(release.properties.flatMap((property) =>
-    property.defaultValue === undefined ? [] : [[property.key, plainSettingValue(property.defaultValue)]]));
+  Object.fromEntries(
+    release.properties.flatMap((property) =>
+      property.defaultValue === undefined
+        ? []
+        : [[property.key, plainSettingValue(property.defaultValue)]],
+    ),
+  );
 
 /**
  * The slot fields only, without Puck's `allow` lists: a block dropped or moved into any slot
  * reaches Studio, whose stored composition check admits it or refuses it with its place and rule.
  */
 const slotFields = (fields: Record<string, Field> | undefined): Record<string, Field> =>
-  Object.fromEntries(Object.entries(fields ?? {}).flatMap(([key, field]) => {
-    if (field.type !== "slot") return [];
-    const slot: Record<string, unknown> = { ...field };
-    delete slot.allow;
-    delete slot.disallow;
-    return [[key, slot as unknown as Field]];
-  }));
+  Object.fromEntries(
+    Object.entries(fields ?? {}).flatMap(([key, field]) => {
+      if (field.type !== "slot") return [];
+      const slot: Record<string, unknown> = { ...field };
+      delete slot.allow;
+      delete slot.disallow;
+      return [[key, slot as unknown as Field]];
+    }),
+  );
 
-const releaseOf = (registry: PlatformComponentRegistry, props: Readonly<Record<string, unknown>>) => {
+const releaseOf = (
+  registry: PlatformComponentRegistry,
+  props: Readonly<Record<string, unknown>>,
+) => {
   const block = ((props.vortex ?? {}) as StoredVortex).block;
   return typeof block?.block_id === "string" && typeof block.release_version === "string"
     ? registry.get(block.block_id, block.release_version)?.metadata
@@ -175,7 +223,11 @@ function CanvasBlock({
   const compiled = useContext(CompiledSettingsContext);
   const records = useContext(CanvasRecordsContext);
   const viewer = useContext(CanvasViewerContext);
+  const publishControl = useContext(CanvasControlContext);
   const id = typeof props.id === "string" ? props.id : "";
+  const release = releaseOf(registry, props);
+  const current = Object.hasOwn(compiled, id) && records.saved.get(id) === records.current.get(id);
+  const gridEvents = useStudioCanvasGridEvents(props, current ? compiled[id] : undefined, release);
   // A block just dropped from the palette is shown as a placeholder until Studio adds it.
   if (props.vortex === undefined)
     return (
@@ -186,42 +238,108 @@ function CanvasBlock({
       </Item>
     );
   const viewKey = (props.vortex as { view_permission?: unknown }).view_permission;
-  if (viewer !== null && !placementViewShown(viewKey,
-    typeof viewKey === "string" && holdsPermission(viewer.decisions, viewKey)))
-    return <Item variant="outline" size="sm" className="border-dashed opacity-60" data-vortex-canvas-hidden={id}>
-      <ItemContent>
-        <ItemDescription>Hidden from {viewer.roleName}</ItemDescription>
-      </ItemContent>
-    </Item>;
+  if (
+    viewer !== null &&
+    !placementViewShown(
+      viewKey,
+      typeof viewKey === "string" && holdsPermission(viewer.decisions, viewKey),
+    )
+  )
+    return (
+      <Item
+        variant="outline"
+        size="sm"
+        className="border-dashed opacity-60"
+        data-vortex-canvas-hidden={id}
+      >
+        <ItemContent>
+          <ItemDescription>Hidden from {viewer.roleName}</ItemDescription>
+        </ItemContent>
+      </Item>
+    );
   const render = component.render as (props: Record<string, unknown>) => ReactElement;
-  const release = releaseOf(registry, props);
   // A block whose drawing needs what the compiler derives (an automatic field input's control, a
   // data block's resolved fields) is drawn only from a compile of exactly this block. Until then
   // it shows that a save draws it; it is never drawn from settings the compiler has not seen.
-  const current = Object.hasOwn(compiled, id) && records.saved.get(id) === records.current.get(id);
-  if (release !== undefined && !current &&
-    (findFieldInputBinding(release.properties) !== undefined || studioReleaseReadsQuery(release)))
-    return <Item variant="outline" className="border-dashed" data-vortex-canvas-pending={id}>
-      <ItemContent>
-        <ItemTitle>{release.name}</ItemTitle>
-        <ItemDescription>{records.updating ? "Updating the canvas…" : "Save to show this block."}</ItemDescription>
-      </ItemContent>
-    </Item>;
+  if (
+    release !== undefined &&
+    !current &&
+    (findFieldInputBinding(release.properties) !== undefined || studioReleaseReadsQuery(release))
+  )
+    return (
+      <Item variant="outline" className="border-dashed" data-vortex-canvas-pending={id}>
+        <ItemContent>
+          <ItemTitle>{release.name}</ItemTitle>
+          <ItemDescription>
+            {records.updating ? "Updating the canvas…" : "Save to show this block."}
+          </ItemDescription>
+        </ItemContent>
+      </Item>
+    );
   const drawn = renderProps(props, release, Object.hasOwn(compiled, id) ? compiled[id] : undefined);
+  // A control that publishes a page parameter reports its chosen value, so the blocks bound to it
+  // are read again for that value, exactly as the running page reads them for its address.
+  if (
+    release !== undefined &&
+    publishControl !== undefined &&
+    previewControlKey.test(release.key) &&
+    release.supportedEvents.includes("field_changed") &&
+    typeof drawn.publishes_parameter === "string" &&
+    drawn.publishes_parameter !== ""
+  ) {
+    const puck = (props.puck ?? {}) as { metadata?: Record<string, unknown> };
+    const fieldChanged = (event: { event: string; value?: unknown }) => {
+      if (event.event === "field_changed")
+        publishControl(
+          id,
+          event.value === null || event.value === undefined ? "" : String(event.value),
+        );
+    };
+    return render({
+      ...drawn,
+      puck: {
+        ...puck,
+        metadata: {
+          ...puck.metadata,
+          runtimeInputs: { [id]: { events: { field_changed: fieldChanged } } },
+        },
+      },
+    });
+  }
   // A block of the page's own record (a Record detail) draws that record as its saved version read it.
-  if (release === undefined || !(studioReleaseReadsQuery(release) || (release.paletteGroup === "record" && current)))
+  if (
+    release === undefined ||
+    !(studioReleaseReadsQuery(release) || (release.paletteGroup === "record" && current))
+  )
     return render(drawn);
   // A data block draws the records its saved version reads, and says so when it has none to show.
   const note = recordsNote(records, id);
   const puck = (props.puck ?? {}) as { metadata?: Record<string, unknown> };
   // No wrapper around the block itself: its own layout wrapper stays the child of its slot.
-  return note === undefined
-    ? render({ ...renderProps(props, release, Object.hasOwn(compiled, id) ? compiled[id] : undefined, true),
-        puck: { ...puck, metadata: { ...puck.metadata, runtimeInputs: { [id]: { data: records.records[id] } } } } })
-    : <>
-        <p className="text-xs text-muted-foreground" data-vortex-canvas-records-note={id}>{note}</p>
-        {render(drawn)}
-      </>;
+  return note === undefined ? (
+    render({
+      ...renderProps(props, release, Object.hasOwn(compiled, id) ? compiled[id] : undefined, true),
+      puck: {
+        ...puck,
+        metadata: {
+          ...puck.metadata,
+          runtimeInputs: {
+            [id]: {
+              data: records.records[id],
+              ...(gridEvents === undefined ? {} : { events: gridEvents }),
+            },
+          },
+        },
+      },
+    })
+  ) : (
+    <>
+      <p className="text-xs text-muted-foreground" data-vortex-canvas-records-note={id}>
+        {note}
+      </p>
+      {render(drawn)}
+    </>
+  );
 }
 
 const canvasConfigs = new WeakMap<Config, Config>();
@@ -236,30 +354,30 @@ export const studioCanvasConfig = (config: Config, registry: PlatformComponentRe
   let canvas = canvasConfigs.get(config);
   if (canvas !== undefined) return canvas;
   const components = Object.fromEntries(
-    Object.entries(config.components as Record<string, ComponentConfig<Record<string, unknown>>>).map(
-      ([type, component]) => [
-        type,
-        {
-          label: component.label,
-          fields: slotFields(component.fields as Record<string, Field> | undefined),
-          ...(component.resolveFields === undefined
-            ? {}
-            : {
-                resolveFields: (data: { props: Record<string, unknown> }, params: unknown) => {
-                  const props = renderProps(data.props, releaseOf(registry, data.props), undefined);
-                  const resolve = component.resolveFields as unknown as (
-                    data: { props: Record<string, unknown> },
-                    params: unknown,
-                  ) => Record<string, Field>;
-                  return slotFields(resolve({ ...data, props }, params));
-                },
-              }),
-          render: (props: Record<string, unknown>) => (
-            <CanvasBlock component={component} registry={registry} props={props} />
-          ),
-        },
-      ],
-    ),
+    Object.entries(
+      config.components as Record<string, ComponentConfig<Record<string, unknown>>>,
+    ).map(([type, component]) => [
+      type,
+      {
+        label: component.label,
+        fields: slotFields(component.fields as Record<string, Field> | undefined),
+        ...(component.resolveFields === undefined
+          ? {}
+          : {
+              resolveFields: (data: { props: Record<string, unknown> }, params: unknown) => {
+                const props = renderProps(data.props, releaseOf(registry, data.props), undefined);
+                const resolve = component.resolveFields as unknown as (
+                  data: { props: Record<string, unknown> },
+                  params: unknown,
+                ) => Record<string, Field>;
+                return slotFields(resolve({ ...data, props }, params));
+              },
+            }),
+        render: (props: Record<string, unknown>) => (
+          <CanvasBlock component={component} registry={registry} props={props} />
+        ),
+      },
+    ]),
   );
   canvas = { ...config, components } as unknown as Config;
   canvasConfigs.set(config, canvas);

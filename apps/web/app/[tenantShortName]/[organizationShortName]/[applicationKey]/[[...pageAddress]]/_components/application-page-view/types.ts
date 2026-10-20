@@ -1,12 +1,9 @@
+import type { ControlSemanticEvent, FormBlockRuntime } from "@vortex/ui";
 import type {
-  ControlSemanticEvent,
-  FormBlockRuntime,
-} from "@vortex/ui";
-import type { ReferenceChoiceSelectionEvidenceMap } from "@vortex/platform/schema";
-import type {
-  ApplicationPageModel,
-  PageDataState,
-} from "../../../../../../_lib/application-page";
+  FlowFieldCorrection,
+  ReferenceChoiceSelectionEvidenceMap,
+} from "@vortex/platform/schema";
+import type { ApplicationPageModel, PageDataState } from "../../../../../../_lib/application-page";
 import type {
   GuidedFormAbandonRequest,
   GuidedFormConfirmRequest,
@@ -32,7 +29,9 @@ export type GuidedFormActions = Readonly<{
   confirm: (request: GuidedFormConfirmRequest) => Promise<GuidedFormConfirmResult>;
   abandon: (
     request: GuidedFormAbandonRequest,
-  ) => Promise<Readonly<{ kind: "abandoned" | "conflict" | "unavailable" | "temporarily_unavailable" }>>;
+  ) => Promise<
+    Readonly<{ kind: "abandoned" | "conflict" | "unavailable" | "temporarily_unavailable" }>
+  >;
 }>;
 
 /**
@@ -56,6 +55,18 @@ export type Notice = Readonly<{
   tone: "info" | "problem";
   text: string;
   link?: Readonly<{ label: string; href: string }>;
+}>;
+
+/**
+ * What one dispatched gesture came to: the sentence the person is told, whether the server
+ * confirmed the write, and whether the record changed under the person. A gesture that is shown on
+ * its own control (a grid cell) is reported only here and not in the page notice.
+ */
+export type DispatchOutcome = Readonly<{
+  notice: Notice | undefined;
+  confirmed: boolean;
+  changed: boolean;
+  corrections?: readonly FlowFieldCorrection[];
 }>;
 
 export type SubmittedForm = Readonly<{

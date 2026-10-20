@@ -13,18 +13,8 @@
       "storage_contract_id": "srt_00000004",
       "storage_scope": "application_contained",
       "ownership_mode": "group",
-      "standard_actions": [
-        "create",
-        "read",
-        "update",
-        "soft_delete",
-        "restore",
-        "export"
-      ],
-      "custom_actions": [
-        "act_opp_mark_won",
-        "act_opp_mark_lost"
-      ],
+      "standard_actions": ["create", "read", "update", "soft_delete", "restore", "export"],
+      "custom_actions": ["act_opp_mark_won", "act_opp_mark_lost"],
       "fields": [
         {
           "id": "fld_opp_number",
@@ -443,14 +433,7 @@
       "storage_scope": "application_contained",
       "ownership_mode": "inherited",
       "ownership_relationship": "opportunity",
-      "standard_actions": [
-        "create",
-        "read",
-        "update",
-        "soft_delete",
-        "restore",
-        "export"
-      ],
+      "standard_actions": ["create", "read", "update", "soft_delete", "restore", "export"],
       "custom_actions": [],
       "fields": [
         {
@@ -760,16 +743,8 @@
         ]
       },
       "field_policy": {
-        "readable_fields": [
-          "opportunity",
-          "contact",
-          "role"
-        ],
-        "changeable_fields": [
-          "opportunity",
-          "contact",
-          "role"
-        ]
+        "readable_fields": ["opportunity", "contact", "role"],
+        "changeable_fields": ["opportunity", "contact", "role"]
       }
     },
     {
@@ -788,11 +763,7 @@
         ]
       },
       "field_policy": {
-        "readable_fields": [
-          "opportunity",
-          "contact",
-          "role"
-        ],
+        "readable_fields": ["opportunity", "contact", "role"],
         "changeable_fields": []
       }
     },
@@ -812,16 +783,8 @@
         ]
       },
       "field_policy": {
-        "readable_fields": [
-          "opportunity",
-          "contact",
-          "role"
-        ],
-        "changeable_fields": [
-          "opportunity",
-          "contact",
-          "role"
-        ]
+        "readable_fields": ["opportunity", "contact", "role"],
+        "changeable_fields": ["opportunity", "contact", "role"]
       }
     },
     {
@@ -880,11 +843,7 @@
         ]
       },
       "field_policy": {
-        "readable_fields": [
-          "opportunity",
-          "contact",
-          "role"
-        ],
+        "readable_fields": ["opportunity", "contact", "role"],
         "changeable_fields": []
       }
     },
@@ -905,12 +864,8 @@
         ]
       },
       "field_policy": {
-        "readable_fields": [
-          "stage"
-        ],
-        "changeable_fields": [
-          "stage"
-        ]
+        "readable_fields": ["stage"],
+        "changeable_fields": ["stage"]
       }
     },
     {
@@ -930,14 +885,8 @@
         ]
       },
       "field_policy": {
-        "readable_fields": [
-          "stage",
-          "lost_reason"
-        ],
-        "changeable_fields": [
-          "stage",
-          "lost_reason"
-        ]
+        "readable_fields": ["stage", "lost_reason"],
+        "changeable_fields": ["stage", "lost_reason"]
       }
     }
   ],
@@ -1009,12 +958,7 @@
       "precondition": {
         "field": "stage",
         "operator": "in",
-        "value": [
-          "discovery",
-          "qualified",
-          "proposal",
-          "negotiation"
-        ]
+        "value": ["discovery", "qualified", "proposal", "negotiation"]
       },
       "tasks": [
         {
@@ -1049,12 +993,7 @@
       "key": "vortex.crm.opportunities.opportunity.created",
       "label": "Opportunity created",
       "record_type": "opportunity",
-      "carries": [
-        "opportunity_number",
-        "company",
-        "value",
-        "stage"
-      ],
+      "carries": ["opportunity_number", "company", "value", "stage"],
       "personal_or_sensitive_values_allowed": false
     },
     {
@@ -1062,11 +1001,7 @@
       "key": "vortex.crm.opportunities.opportunity.stage_changed",
       "label": "Opportunity stage changed",
       "record_type": "opportunity",
-      "carries": [
-        "opportunity_number",
-        "stage",
-        "value"
-      ],
+      "carries": ["opportunity_number", "stage", "value"],
       "personal_or_sensitive_values_allowed": false
     },
     {
@@ -1074,11 +1009,7 @@
       "key": "vortex.crm.opportunities.opportunity.won",
       "label": "Opportunity won",
       "record_type": "opportunity",
-      "carries": [
-        "opportunity_number",
-        "company",
-        "net_value"
-      ],
+      "carries": ["opportunity_number", "company", "net_value"],
       "personal_or_sensitive_values_allowed": false
     }
   ],
@@ -1249,17 +1180,13 @@
       "id": "ext_opp_fields",
       "key": "opportunity_fields",
       "record_type": "opportunity",
-      "accepts": [
-        "field"
-      ]
+      "accepts": ["field"]
     },
     {
       "id": "ext_opp_actions",
       "key": "opportunity_actions",
       "record_type": "opportunity",
-      "accepts": [
-        "action"
-      ]
+      "accepts": ["action"]
     }
   ],
   "sharing_conditions": [],
@@ -1278,15 +1205,13 @@
         "value",
         "net_value",
         "stage",
-        "expected_close_date"
+        "expected_close_date",
+        "probability"
       ],
       "filter": {
         "field": "stage",
         "operator": "not_in",
-        "value": [
-          "won",
-          "lost"
-        ]
+        "value": ["won", "lost"]
       },
       "group_by": [],
       "aggregates": [],
@@ -1311,18 +1236,10 @@
           "label": "Company",
           "required": true,
           "type": "record_reference",
-          "record_types": [
-            "vortex.crm.organisations:company"
-          ]
+          "record_types": ["vortex.crm.organisations:company"]
         }
       ],
-      "select": [
-        "opportunity_number",
-        "name",
-        "stage",
-        "value",
-        "expected_close_date"
-      ],
+      "select": ["opportunity_number", "name", "stage", "value", "expected_close_date"],
       "filter": {
         "field": "company",
         "operator": "equals",
@@ -1347,13 +1264,9 @@
       "description": "Opportunity count for each pipeline stage",
       "record_type": "opportunity",
       "inputs": [],
-      "select": [
-        "stage"
-      ],
+      "select": ["stage"],
       "filter": null,
-      "group_by": [
-        "stage"
-      ],
+      "group_by": ["stage"],
       "aggregates": [
         {
           "operation": "count",
@@ -1377,17 +1290,9 @@
       "description": "Opportunities grouped by stage with the total value of each stage",
       "record_type": "opportunity",
       "inputs": [],
-      "select": [
-        "stage",
-        "name",
-        "opportunity_number",
-        "value",
-        "expected_close_date"
-      ],
+      "select": ["stage", "name", "opportunity_number", "value", "expected_close_date"],
       "filter": null,
-      "group_by": [
-        "stage"
-      ],
+      "group_by": ["stage"],
       "aggregates": [
         {
           "operation": "sum",

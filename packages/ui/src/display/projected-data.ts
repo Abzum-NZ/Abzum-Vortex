@@ -1,5 +1,8 @@
 export { parseCalendarPayload } from "./calendar-payload";
 import {
+  jsonValueSchema,
+  type JsonValue,
+  type FlowFieldCorrection,
   builderKeySchema,
   moduleFieldValueSchemas,
   fieldIdSchema,
@@ -26,8 +29,10 @@ import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "../de
 import { parseRowFormat } from "./projected-format";
 import {
   parseTableFeatures,
+  parseTableGroups,
   parseTableNarrowing,
   parseTableSelectionParts,
+  type TableGroups,
   type TableSelectionParts,
 } from "./projected-grid-features";
 
@@ -105,6 +110,11 @@ export type DisplayRow = Readonly<{
   recordId: string;
   revision?: number;
   capabilities?: DisplayRowCapabilities;
+  /**
+   * The stored value of each field the viewer may edit on this row (null when empty), as the
+   * field's own contract spells it. An editor starts from this, never from a displayed cell.
+   */
+  edit?: Readonly<Record<string, JsonValue>>;
   cells: Readonly<Record<string, DisplayCellValue>>;
   /** The style keys and measures the table's formatting gives the row, decided on the server. */
   format?: RecordsTableRowFormat;
@@ -159,6 +169,11 @@ export type TablePayload = Readonly<{
   /** The person's layout of the grid: column order, shown columns, widths and density. */
   layout: GridLayoutState;
   rows: readonly DisplayRow[];
+  /**
+   * Present when the table is grouped: the groups and their counts. The rows are then the open
+   * group's members only, so a closed table carries none.
+   */
+  groups?: TableGroups;
   /**
    * The grid features the server projected for this viewer and read; absent when every feature is
    * off. The table draws a feature only from this projection, never from its settings alone.
@@ -236,7 +251,8 @@ export type BoardPage = Readonly<{
 
 /** Exact current protected totals plus a bounded page, or null when this bucket was untouched. */
 export type BoardBucketPayload = Readonly<{
-  rowCount: number;
+  state: "unread" | "reading" | "read";
+  rowCount: number | null;
   aggregates: readonly DisplaySummaryMetric[];
   page: BoardPage | null;
 }>;
@@ -271,8 +287,6 @@ export type BoardPayload = Readonly<{
   cardTitleFieldId: string;
   /** The only field identities a card may carry; readable values and labels may be omitted. */
   cardFieldIds: readonly string[];
-  totalRowCount: number;
-  aggregates: readonly DisplaySummaryMetric[];
   columns: readonly BoardColumnPayload[];
   /** Cards with no stage yet, and the stages they may move to: the start stage and its moves. */
   unassigned: BoardBucketPayload & Readonly<{ moves: readonly string[] }>;
@@ -318,6 +332,7 @@ export type DisplaySemanticEventName =
       | "page_changed"
       | "bulk_action"
       | "inline_edit"
+      | "row_edit"
       | "card_moved"
       | "row_expanded"
     >
@@ -335,6 +350,14 @@ export type DisplaySemanticEventName =
   | "pivot_requested"
   | "pivot_view_changed"
   | "pivot_drilled"
+  /**
+   * A grouped table's person groups or ungroups it (an address change that reads the groups), asks
+   * for one page of an open group's members, or opens or closes a group (kept in the address
+   * without a read). These are the Group by feature's own reads and address changes, not flow events.
+   */
+  | "group_changed"
+  | "group_requested"
+  | "group_opened"
   /** The Saved views feature asks the host to open, store, share or delete a view. */
   | "grid_view_requested";
 
@@ -389,6 +412,24 @@ export type DisplaySemanticEvent =
       view: Readonly<{ cursor?: string }> | undefined;
     }>
   | Readonly<{
+      /** Groups the table by its authored field, or (null) shows the records ungrouped. */
+      event: "group_changed";
+      grouped: boolean;
+    }>
+  | Readonly<{
+      /** Asks for one page of the members of one group; its handler resolves to that page. */
+      event: "group_requested";
+      key: string;
+      /** The token of the page before, to read another page; absent for the first page. */
+      continuationToken?: string;
+      direction?: "forward" | "backward";
+    }>
+  | Readonly<{
+      /** The group that is open now (null when every group is closed), to keep in the address. */
+      event: "group_opened";
+      key: string | null;
+    }>
+  | Readonly<{
       event: "pivot_drilled";
       /** The typed filters (address spelling) that select the cell's records in the ordinary grid. */
       filters: readonly Readonly<{ fieldId: string; filter: string }>[];
@@ -427,21 +468,33 @@ export type DisplaySemanticEvent =
     }>
   | Readonly<{
       event: "page_changed";
-      column: BoardColumnSelector;
-      continuationToken: string;
+      columns: readonly BoardColumnSelector[];
+      continuationToken?: string;
     }>
   /** Runs a declared bulk named action over the selection the page holds for the table. */
   | Readonly<{ event: "bulk_action"; action: string }>
   /** Widens the selection to every matching record, or clears it (and a finished run's summary). */
   | Readonly<{ event: "selection_scope_changed"; scope: "matching" | "cleared" }>
   | Readonly<{
+      event: "row_edit";
+      eventId: string;
+      recordId: string;
+      revision: number;
+      values: Readonly<Record<string, JsonValue>>;
+      commandId: string;
+    }>
+  | Readonly<{
       event: "inline_edit";
       eventId: string;
       recordId: string;
-      /** The record revision the editor read; a stale one is refused by the server. */
-      revision?: number;
+      /** The record revision the row was displayed at; the writer refuses a stale one. */
+      revision: number;
+      /** The field's key as the table's column names it. */
       field: string;
-      value: DisplayCellValue;
+      /** The new stored value in the field's own contract (null clears it). */
+      value: JsonValue;
+      /** One identity for this explicit commit, so a repeated request is the same write. */
+      commandId: string;
     }>
   | Readonly<{
       /**
@@ -466,6 +519,21 @@ export type DisplaySemanticEvent =
       continuationToken?: string;
       /** Remaining room in the shared row budget; can only narrow the authored page size. */
       pageSize?: number;
+    }>;
+
+/**
+ * What one commit of an inline edit came to, told by the host once the server answered: saved, or
+ * not saved with the safe sentence to show on the cell. `changed` says the record changed under
+ * the person, so their draft is kept until they reload and retry. Nothing is ever shown as saved
+ * before the server confirmed it.
+ */
+export type DisplayInlineEditResult =
+  | Readonly<{ kind: "saved" }>
+  | Readonly<{
+      kind: "refused";
+      message: string;
+      changed: boolean;
+      corrections?: readonly FlowFieldCorrection[];
     }>;
 
 /** A handler may return the promise of the flow it started; the control stays busy until it settles. */
@@ -493,6 +561,9 @@ export const DISPLAY_EVENT_NAMES: readonly DisplaySemanticEventName[] = Object.f
   "pivot_requested",
   "pivot_view_changed",
   "pivot_drilled",
+  "group_changed",
+  "group_requested",
+  "group_opened",
   "grid_view_requested",
   "search_changed",
   "sort_changed",
@@ -501,6 +572,7 @@ export const DISPLAY_EVENT_NAMES: readonly DisplaySemanticEventName[] = Object.f
   "bulk_action",
   "selection_scope_changed",
   "inline_edit",
+  "row_edit",
   "card_moved",
   "row_expanded",
 ]);
@@ -804,6 +876,22 @@ export const parseRowCapabilities = (
   });
 };
 
+/** The stored values of a row's editable fields: JSON in the field's own contract, keyed by field. */
+const parseEditValues = (
+  value: unknown,
+  location: DefinitionRenderErrorLocation,
+): Readonly<Record<string, JsonValue>> => {
+  const record = requireRecord(value, "A projected row's edit values must be an object", location);
+  const values: Record<string, JsonValue> = {};
+  for (const [key, held] of Object.entries(record)) {
+    const field = requireFieldKey(key, `Invalid projected edit key '${key}'`, location);
+    if (!jsonValueSchema.safeParse(held).success)
+      fail(`A projected edit value for '${field}' is not JSON`, location);
+    values[field] = held as JsonValue;
+  }
+  return Object.freeze(values);
+};
+
 const parseRows = (
   value: unknown,
   location: DefinitionRenderErrorLocation,
@@ -816,7 +904,7 @@ const parseRows = (
       const record = requireRecord(item, "A projected row must be an object", rowLocation);
       requireExactKeys(
         record,
-        ["recordId", "revision", "capabilities", "cells", "format", "hasChildren"],
+        ["recordId", "revision", "capabilities", "edit", "cells", "format", "hasChildren"],
         rowLocation,
       );
       if (record.hasChildren !== undefined && record.hasChildren !== true)
@@ -855,6 +943,13 @@ const parseRows = (
               ...rowLocation,
               propertyPath: [`rows[${index}]`, "capabilities"],
             });
+      const edit =
+        record.edit === undefined
+          ? undefined
+          : parseEditValues(record.edit, {
+              ...rowLocation,
+              propertyPath: [`rows[${index}]`, "edit"],
+            });
       const format =
         record.format === undefined
           ? undefined
@@ -866,6 +961,7 @@ const parseRows = (
         recordId,
         ...(revision === undefined ? {} : { revision }),
         ...(capabilities === undefined ? {} : { capabilities }),
+        ...(edit === undefined ? {} : { edit }),
         cells: Object.freeze(cells),
         ...(format === undefined ? {} : { format }),
         ...(record.hasChildren === true ? { hasChildren: true as const } : {}),
@@ -1095,6 +1191,7 @@ export const parseTablePayload = (
       "hiddenColumns",
       "layout",
       "rows",
+      "groups",
       "features",
       "selectedRecordIds",
       "sort",
@@ -1201,6 +1298,8 @@ export const parseTablePayload = (
     record.narrowing === undefined ? undefined : parseTableNarrowing(record.narrowing, location);
   const features =
     record.features === undefined ? undefined : parseTableFeatures(record.features, location);
+  const groups =
+    record.groups === undefined ? undefined : parseTableGroups(record.groups, location);
   const selectionParts = parseTableSelectionParts(record, location);
   return Object.freeze({
     kind: "table",
@@ -1208,6 +1307,7 @@ export const parseTablePayload = (
     hiddenColumns,
     layout: layout.data,
     rows,
+    ...(groups === undefined ? {} : { groups }),
     ...(features === undefined ? {} : { features }),
     ...selectionParts,
     ...(selection === undefined ? {} : { selectedRecordIds: selection }),
