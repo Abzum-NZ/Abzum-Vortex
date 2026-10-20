@@ -618,9 +618,9 @@ const openButton = (
   return alias;
 };
 
-/** The first records table on a page that reads a query of the record type. */
-const recordTable = (source: Source, page: Page, resolved: Resolved) =>
-  sourcePageItems(page.composition).find((item) => {
+/** Every records table on a page that reads a query of the record type, including related records. */
+const recordTables = (source: Source, page: Page, resolved: Pick<Resolved, "module" | "record">) =>
+  sourcePageItems(page.composition).filter((item) => {
     const query = item.props.vortex.query;
     if (String(item.type) !== "platform.renderer.table" || query === undefined) return false;
     const owner = source.body.modules.find((entry) => entry.key === resolved.module.key);
@@ -631,6 +631,37 @@ const recordTable = (source: Source, page: Page, resolved: Resolved) =>
       ) === true
     );
   });
+
+/** Connect tables through the same row flow, whichever companion page was added first. */
+const linkTablesToDetail = (
+  context: StudioStructureContext,
+  plan: Plan,
+  resolved: Resolved,
+  detail: Page,
+  pageIds: readonly string[],
+) => {
+  for (const pageId of pageIds) {
+    const page = plan.source.body.pages.find((entry) => entry.id === pageId)!;
+    for (const table of recordTables(plan.source, page, resolved)) {
+      if (table.props.row_click !== undefined) continue;
+      const tableRelease = context.catalogue.releases.find(
+        (entry) =>
+          String(entry.blockId) === table.props.vortex.block.block_id &&
+          String(entry.releaseVersion) === table.props.vortex.block.release_version,
+      );
+      if (tableRelease?.properties.some((entry) => entry.key === "row_click") !== true) {
+        plan.details.push(
+          `The table on ${quoted(page.name)} cannot open records. Choose a records table that supports opening rows.`,
+        );
+        continue;
+      }
+      openRows(plan, table.props.id, resolved, detail);
+      plan.details.push(
+        `Rows of the ${resolved.record.plural_name.toLowerCase()} table on ${quoted(page.name)} now open ${quoted(detail.name)}.`,
+      );
+    }
+  }
+};
 
 /** Whether any control on the page opens one of the given pages. */
 const opensAny = (source: Source, page: Page, targets: readonly string[]): boolean => {
@@ -961,23 +992,27 @@ const addDetail = (
     plan.details.push(
       `No Edit button yet: ${record.plural_name.toLowerCase()} have no edit form. Adding one puts the button here.`,
     );
-  for (const listId of found.list.map((entry) => entry.id)) {
-    const list = plan.source.body.pages.find((entry) => entry.id === listId)!;
-    const table = recordTable(plan.source, list, resolved);
-    if (table === undefined || table.props.row_click !== undefined) continue;
-    const tableRelease = context.catalogue.releases.find(
-      (entry) =>
-        String(entry.blockId) === table.props.vortex.block.block_id &&
-        String(entry.releaseVersion) === table.props.vortex.block.release_version,
-    );
-    if (tableRelease?.properties.some((entry) => entry.key === "row_click") !== true) {
-      plan.details.push(
-        `The table on ${quoted(list.name)} uses a release without row clicks, so its rows still open nothing.`,
-      );
-      continue;
+  linkTablesToDetail(
+    context,
+    plan,
+    resolved,
+    page,
+    plan.source.body.pages.map((entry) => entry.id),
+  );
+  for (const module of plan.source.body.modules) {
+    for (const target of module.record_types) {
+      const qualified = `${module.key}:${target.key}`;
+      const targetDetail = companions(plan.source, qualified).detail;
+      if (
+        targetDetail === undefined ||
+        qualified === resolved.qualified ||
+        recordTables(plan.source, page, { module, record: target }).length === 0
+      )
+        continue;
+      linkTablesToDetail(context, plan, resolveRecordType(plan.source, qualified), targetDetail, [
+        page.id,
+      ]);
     }
-    openRows(plan, table.props.id, resolved, page);
-    plan.details.push(`Rows of the table on ${quoted(list.name)} now open this page.`);
   }
   return page;
 };
@@ -1184,7 +1219,7 @@ const linkFormBack = (
         )
       )
         continue;
-      const table = recordTable(plan.source, list, resolved);
+      const table = recordTables(plan.source, list, resolved)[0];
       const label = `New ${lowerFirst(resolved.record.name)}`;
       const data = list.composition as unknown as Parameters<typeof sourcePageZones>[0];
       const zone =
