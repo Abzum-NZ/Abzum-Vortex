@@ -8,7 +8,7 @@ import {
   createVortexStyleRootProps,
   resolveVortexStyleSelection,
   type VortexStyleRootProps,
-} from "@vortex/ui";
+} from "@vortex/ui/theme";
 import { loadApplicationStartTheme } from "./application-frame";
 import { requestAddressHeader } from "./request-address";
 
@@ -20,7 +20,9 @@ const platformStyle = createVortexStyleRootProps(resolveVortexStyleSelection());
 
 /** The same Studio root props serve the document's first paint and client-side route transitions. */
 const studioTheme = createThemeRootProps(STUDIO_THEME_ROOT, DEFAULT_PLATFORM_THEME_RELEASE.tokens);
-const studioStyle = createVortexStyleRootProps(resolveVortexStyleSelection(STUDIO_THEME_ROOT.selection));
+const studioStyle = createVortexStyleRootProps(
+  resolveVortexStyleSelection(STUDIO_THEME_ROOT.selection),
+);
 export const STUDIO_DOCUMENT_THEME = {
   ...studioTheme,
   ...studioStyle,
@@ -32,16 +34,30 @@ export const STUDIO_DOCUMENT_THEME = {
  * application is addressed, and what remains when an application's own variables (inline on the
  * document root) are removed after a client-side navigation leaves the application.
  */
-export const PLATFORM_ROOT_CSS = `:root{${Object.entries({
+const variablesRule = (selector: string, style: CSSProperties): string =>
+  `${selector}{${Object.entries(style)
+    .map(([name, value]) => `${name}:${String(value)}`)
+    .join(";")}}`;
+export const PLATFORM_ROOT_CSS = variablesRule(":root", {
   ...platformTheme.style,
   ...platformStyle.style,
-})
-  .map(([name, value]) => `${name}:${String(value)}`)
-  .join(";")}}`;
+});
+
+// Studio's fixed definition also supplies its first paint through a cached stylesheet. A surface
+// overrides these variables inline. Leaving a surface restores the platform attributes, which no
+// longer match this selector, so the platform defaults apply even if the stylesheet stays loaded.
+const { style: studioDocumentStyle, ...studioDocumentAttributes } = STUDIO_DOCUMENT_THEME;
+export const STUDIO_ROOT_CSS = variablesRule(
+  `:root${Object.entries(studioDocumentAttributes)
+    .map(([name, value]) => `[${name}=${JSON.stringify(value)}]`)
+    .join("")}`,
+  studioDocumentStyle,
+);
 
 type DocumentTheme = Readonly<{
   attributes: Omit<VortexStyleRootProps, "style">;
   style: CSSProperties;
+  stylesheet: "platform" | "studio";
 }>;
 
 /**
@@ -51,6 +67,7 @@ type DocumentTheme = Readonly<{
  */
 export async function loadDocumentTheme(): Promise<DocumentTheme> {
   const platform: DocumentTheme = {
+    stylesheet: "platform",
     attributes: {
       "data-vortex-style": platformStyle["data-vortex-style"],
       "data-vortex-menu": platformStyle["data-vortex-menu"],
@@ -66,8 +83,7 @@ export async function loadDocumentTheme(): Promise<DocumentTheme> {
     .map((segment) => decodeURIComponent(segment));
   const [tenant, organization, application] = segments;
   if (tenant === "studio") {
-    const { style, ...attributes } = STUDIO_DOCUMENT_THEME;
-    return { attributes, style };
+    return { attributes: studioDocumentAttributes, style: {}, stylesheet: "studio" };
   }
   if (
     segments.length !== 4 ||
@@ -82,6 +98,7 @@ export async function loadDocumentTheme(): Promise<DocumentTheme> {
   const themeRoot = createThemeRootProps(theme, DEFAULT_PLATFORM_THEME_RELEASE.tokens);
   const styleRoot = createVortexStyleRootProps(resolveVortexStyleSelection(theme.selection));
   return {
+    stylesheet: "platform",
     attributes: {
       "data-vortex-style": styleRoot["data-vortex-style"],
       "data-vortex-menu": styleRoot["data-vortex-menu"],

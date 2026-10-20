@@ -1,5 +1,5 @@
 "use client";
-import { useIdlePreload } from "../_lib/use-idle-preload";
+import { useIntentPreload } from "../_lib/use-intent-preload";
 import dynamic from "next/dynamic";
 import { Suspense, useCallback, useMemo, useRef, useState, type ReactNode } from "react";
 import {
@@ -149,7 +149,10 @@ export function useStudioCanvasTab({
   /** The organisation's applications, which name the owner of a choice from a used Module. */
   applications: readonly StudioModuleOwnerApplication[];
 }>) {
-  useIdlePreload(preloadPuckEditor);
+  useIntentPreload(
+    preloadPuckEditor,
+    "#studio-rail-outline, #studio-rail-blocks, #studio-rail-menu, #studio-rail-theme, #studio-rail-panel [data-tree-key^='page:']",
+  );
   const { organizationId, source, selected, state, view } = draft;
   const rootId = state.rootId;
   const key = draft.saved.key;

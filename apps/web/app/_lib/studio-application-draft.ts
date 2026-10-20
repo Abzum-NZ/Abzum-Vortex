@@ -53,14 +53,14 @@ import {
   fingerprintCanonicalValue,
   DefinitionCompilationError,
 } from "@vortex/platform/server";
-import {
-  studioUsesSignature,
-  type StudioActionChoice,
-  type StudioBorrowedChoices,
-  type StudioCompileFailure,
-  type StudioQueryChoice,
-  type StudioQueryInput,
-  type StudioRelationshipChoice,
+import { studioUsesSignature } from "@vortex/ui/studio/contextual-palette";
+import type {
+  StudioActionChoice,
+  StudioBorrowedChoices,
+  StudioCompileFailure,
+  StudioQueryChoice,
+  StudioQueryInput,
+  StudioRelationshipChoice,
 } from "@vortex/ui/studio";
 import { installedReleaseCatalogue } from "./definition-catalogue";
 import type {
