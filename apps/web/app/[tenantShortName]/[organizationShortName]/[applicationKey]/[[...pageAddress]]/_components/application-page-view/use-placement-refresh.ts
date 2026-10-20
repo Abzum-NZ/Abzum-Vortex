@@ -26,6 +26,7 @@ import {
 } from "../../../../../../_lib/mounted-record-pin-watch-client";
 import type { RefreshedPlacementData, TableContinuationTarget, EditFormBaseline } from "./types";
 import { useProjectionRefresh } from "./use-projection-refresh";
+import { boardPayloadFor, loadedBoardColumns } from "./placement-helpers";
 
 const subscribeToNothing = (): (() => void) => () => undefined;
 const afterHydration = (): boolean => true;
@@ -134,6 +135,21 @@ export function usePlacementRefresh({
         });
         return;
       }
+      // A refreshed board shows the same columns it showed: only those columns' cards are read.
+      const shownData =
+        refreshedPlacementData?.navigationKey === requestScope.key
+          ? refreshedPlacementData.data
+          : undefined;
+      const boardReads = [...requests.values()].flatMap((request) => {
+        const key = request.componentId.toLowerCase();
+        const findIn = (data: Readonly<Record<string, PageDataState>> | undefined) =>
+          Object.entries(data ?? {}).find(([candidate]) => candidate.toLowerCase() === key)?.[1];
+        const board = boardPayloadFor(findIn(shownData) ?? findIn(model.data));
+        const columns = board === undefined ? [] : loadedBoardColumns(board);
+        return columns.length === 0
+          ? []
+          : [{ placementId: request.componentId, request: { columns } }];
+      });
       const loadedData = new Map<string, PageDataState>();
       const loadedBaselines = new Map<string, EditFormBaseline | null>();
       const loadedSubjects = new Map<string, ApplicationPageModel["subject"] | null>();
@@ -161,7 +177,11 @@ export function usePlacementRefresh({
               search: currentSearch,
             },
             batch.map(([, request]) => request.componentId),
-            undefined,
+            tableContinuation === undefined
+              ? boardReads.filter((read) =>
+                  batch.some(([, request]) => request.componentId === read.placementId),
+                )
+              : undefined,
             tableContinuation,
             options?.content,
           );
@@ -313,6 +333,7 @@ export function usePlacementRefresh({
       model.data,
       model.editFormBaselines,
       navigationKey,
+      refreshedPlacementData,
       router,
     ],
   );

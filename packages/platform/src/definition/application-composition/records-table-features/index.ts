@@ -59,6 +59,7 @@ export {
   factsValueType,
   recordsTableActionCapabilities,
   recordsTableEditableFieldTypes,
+  recordsTableFieldNotEditableReason,
   type RecordsTableActionCapability,
   type RecordsTableActionContract,
   type RecordsTableBoardFacts,

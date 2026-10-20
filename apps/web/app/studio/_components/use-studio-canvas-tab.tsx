@@ -502,7 +502,7 @@ export function useStudioCanvasTab({
   // The records of the canvas's data blocks, read once per area for the compiled saved revision,
   // when the builder's preview runs that revision's data shape.
   const readCanvasRecords = useCallback(
-    async (area: string, signal: AbortSignal) => {
+    async (area: string, signal: AbortSignal, controlValues: Readonly<Record<string, string>>) => {
       const pageAlias = canvasPageRef.current;
       if (pageAlias === undefined) return { state: "unavailable" as const, records: {} };
       const result = await readWhenPreviewReady(
@@ -519,6 +519,7 @@ export function useStudioCanvasTab({
               sourceFingerprint: view.sourceFingerprint,
               pageAlias,
               area,
+              controlValues,
             },
             signal,
           ),

@@ -129,6 +129,9 @@ export const pageQueryBindingContext = (
             recordTypeId: facts.currentPersonRecordType,
             recordId: input.context.viewerOrganizationAccountId,
           },
+    // The organisation of the verified installed context; no address parameter, control or preview
+    // value may choose it.
+    viewerOrganisation: String(input.context.organizationId),
     timeZone: input.readTimeZone,
     now: new Date(),
   };

@@ -10,11 +10,7 @@ import {
   TABLE_BLOCK_RELEASE,
 } from "../../definition/application-composition-catalogue";
 import { pageSubjectFromRead } from "../page-subject-read";
-import {
-  recordsTableEditableFields,
-  recordsTableRequestRefusal,
-  type RecordsTableRequestRefusal,
-} from ".";
+import { recordsTableRequestRefusal, rowMayChangeField, type RecordsTableRequestRefusal } from ".";
 
 /** Locate the exact compiled placement; bindings of other block types keep their own gates. */
 export const installedPlacementProps = (
@@ -48,11 +44,17 @@ export const installedPlacementProps = (
  * authority. The rows come from the gesture's own inputs, never from the page subject: a table on a
  * record's page lists other records. A supplied row revision must still be current; the protected
  * writer checks permission and revision again at the actual write.
+ *
+ * An inline edit names its one field as the single key of the `values` input and its displayed
+ * revision as the gesture's subject. The field must be authored, shown to this viewer and changeable
+ * on this row now. A stale revision is not refused here: the writer compares it atomically and the
+ * person gets a conflict they can resolve, not a neutral refusal.
  */
 export const recordsTableBindingRefusal = async (
   installation: InstalledFlowBindings,
   binding: ComponentFlowBinding,
   inputs: Readonly<Record<string, unknown>>,
+  subject: Readonly<{ recordId: string; revision: number }> | undefined,
   run: <Result>(
     operation: (transaction: RequestDatabaseTransaction) => Promise<Result>,
   ) => Promise<HumanOrganizationRequestResult<Result>>,
@@ -90,15 +92,21 @@ export const recordsTableBindingRefusal = async (
   )
     return recordsTableRequestRefusal(event, "command_not_declared");
   const inline = contract.features.inlineEdit;
+  let editedField: string | undefined;
   if (event === "inline_edit") {
     if (!inline.enabled) return recordsTableRequestRefusal(event, "feature_off");
     if (inline.eventId === undefined || !sameId(inline.eventId, binding.eventId))
       return recordsTableRequestRefusal(event, "binding_not_declared");
+    const values = inputs.values;
+    const names = isRecord(values) ? Object.keys(values) : [];
+    if (names.length !== 1) return recordsTableRequestRefusal(event, "values_not_one_field");
+    editedField = names[0];
     if (
-      typeof inputs.field !== "string" ||
-      !inline.fields.some((field) => sameId(field, inputs.field as string))
+      editedField === undefined ||
+      !inline.fields.some((field) => sameId(field, editedField as string))
     )
       return recordsTableRequestRefusal(event, "field_not_editable");
+    if (subject === undefined) return recordsTableRequestRefusal(event, "revision_missing");
   }
   const queries = (installation.modules ?? []).flatMap((module) =>
     module.content.queries.filter(
@@ -129,6 +137,13 @@ export const recordsTableBindingRefusal = async (
   const revision = inputs.revision;
   if (revision !== undefined && typeof revision !== "number")
     return recordsTableRequestRefusal(event, "revision_invalid");
+  // Only an inline edit's subject is its row; another row gesture's subject is the page's record.
+  if (
+    event === "inline_edit" &&
+    subject !== undefined &&
+    (recordIds.length !== 1 || !sameId(subject.recordId, recordIds[0] as string))
+  )
+    return recordsTableRequestRefusal(event, "subject_not_the_record");
   const read = await run(async (transaction) => {
     const rows = await transaction.query<{
       record_id: string;
@@ -152,11 +167,11 @@ export const recordsTableBindingRefusal = async (
         !row.capabilities?.actions.includes(command.capability)
       )
         return recordsTableRequestRefusal(event, "command_not_permitted");
-      if (event === "inline_edit") {
-        const editable = recordsTableEditableFields(contract, [row]);
-        if (!editable.some((field) => sameId(field, inputs.field as string)))
-          return recordsTableRequestRefusal(event, "field_not_permitted");
-      }
+      if (
+        event === "inline_edit" &&
+        (editedField === undefined || !rowMayChangeField(row, editedField))
+      )
+        return recordsTableRequestRefusal(event, "field_not_permitted");
     }
     return undefined;
   });

@@ -102,6 +102,29 @@ export function StudioCanvasViewerProvider({
   return <CanvasViewerContext.Provider value={viewer}>{children}</CanvasViewerContext.Provider>;
 }
 
+/**
+ * Records the value the builder chose in a control on the canvas, by the control's placement name.
+ * The canvas then asks the server to read the blocks bound to that control again; nothing is
+ * resolved in the browser.
+ */
+const CanvasControlContext = createContext<
+  ((placement: string, value: string) => void) | undefined
+>(undefined);
+
+/** Supplies the canvas's control values to the controls that publish a page parameter. */
+export function StudioCanvasControlsProvider({
+  onValue,
+  children,
+}: Readonly<{
+  onValue: (placement: string, value: string) => void;
+  children: ReactNode;
+}>): ReactElement {
+  return <CanvasControlContext.Provider value={onValue}>{children}</CanvasControlContext.Provider>;
+}
+
+/** The controls whose chosen value the canvas can hold: their value is plain text. */
+const previewControlKey = /\.(text|choice|date)_input$/;
+
 /** What the canvas says in place of a current data block's records, or nothing when it has them. */
 const recordsNote = (records: StudioCanvasRecords, id: string): string | undefined => {
   if (records.state === "loading") return "Reading records…";
@@ -200,6 +223,7 @@ function CanvasBlock({
   const compiled = useContext(CompiledSettingsContext);
   const records = useContext(CanvasRecordsContext);
   const viewer = useContext(CanvasViewerContext);
+  const publishControl = useContext(CanvasControlContext);
   const id = typeof props.id === "string" ? props.id : "";
   const release = releaseOf(registry, props);
   const current = Object.hasOwn(compiled, id) && records.saved.get(id) === records.current.get(id);
@@ -253,6 +277,35 @@ function CanvasBlock({
       </Item>
     );
   const drawn = renderProps(props, release, Object.hasOwn(compiled, id) ? compiled[id] : undefined);
+  // A control that publishes a page parameter reports its chosen value, so the blocks bound to it
+  // are read again for that value, exactly as the running page reads them for its address.
+  if (
+    release !== undefined &&
+    publishControl !== undefined &&
+    previewControlKey.test(release.key) &&
+    release.supportedEvents.includes("field_changed") &&
+    typeof drawn.publishes_parameter === "string" &&
+    drawn.publishes_parameter !== ""
+  ) {
+    const puck = (props.puck ?? {}) as { metadata?: Record<string, unknown> };
+    const fieldChanged = (event: { event: string; value?: unknown }) => {
+      if (event.event === "field_changed")
+        publishControl(
+          id,
+          event.value === null || event.value === undefined ? "" : String(event.value),
+        );
+    };
+    return render({
+      ...drawn,
+      puck: {
+        ...puck,
+        metadata: {
+          ...puck.metadata,
+          runtimeInputs: { [id]: { events: { field_changed: fieldChanged } } },
+        },
+      },
+    });
+  }
   // A block of the page's own record (a Record detail) draws that record as its saved version read it.
   if (
     release === undefined ||

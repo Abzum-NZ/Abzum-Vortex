@@ -5,6 +5,7 @@ import {
   type BoardPayload,
 } from "@vortex/ui";
 import {
+  type BoardColumnReadRequest,
   type BoardColumnSelector,
   PLATFORM_BLOCK_RELEASE_IDENTITIES,
   isRecord,
@@ -75,7 +76,9 @@ export const boardPayloadFor = (candidate: unknown): BoardPayload | undefined =>
   }
 };
 
-export const tablePayloadFor = (candidate: unknown): ReturnType<typeof parseTablePayload> | undefined => {
+export const tablePayloadFor = (
+  candidate: unknown,
+): ReturnType<typeof parseTablePayload> | undefined => {
   if (!isRecord(candidate) || candidate.status !== "ready") return undefined;
   if (!isRecord(candidate.values) || candidate.values.kind !== "table") return undefined;
   try {
@@ -93,8 +96,8 @@ const sameBoardSource = (left: BoardPayload, right: BoardPayload): boolean =>
   left.choiceFieldId.toLowerCase() === right.choiceFieldId.toLowerCase() &&
   left.cardTitleFieldId.toLowerCase() === right.cardTitleFieldId.toLowerCase() &&
   left.cardFieldIds.length === right.cardFieldIds.length &&
-  left.cardFieldIds.every((fieldId, index) =>
-    fieldId.toLowerCase() === right.cardFieldIds[index]?.toLowerCase(),
+  left.cardFieldIds.every(
+    (fieldId, index) => fieldId.toLowerCase() === right.cardFieldIds[index]?.toLowerCase(),
   );
 
 export const boardBucketForSelector = (
@@ -105,10 +108,22 @@ export const boardBucketForSelector = (
     ? board.unassigned
     : board.columns.find((column) => column.value === selector.value);
 
-export const mergeBoardContinuation = (
+/** The columns of a board whose cards have been read: the set a refresh reads again. */
+export const loadedBoardColumns = (board: BoardPayload): readonly BoardColumnSelector[] => [
+  ...board.columns.flatMap((column) =>
+    column.page === null ? [] : [{ kind: "option" as const, value: column.value }],
+  ),
+  ...(board.unassigned.page === null ? [] : [{ kind: "unassigned" as const }]),
+];
+
+/**
+ * The displayed board with the pages one column read returned: every named column takes its fresh
+ * page, every other column keeps what it showed, and counts and totals come from the fresh summary.
+ */
+export const mergeBoardColumnRead = (
   current: BoardPayload,
   fresh: BoardPayload,
-  selector: BoardColumnSelector,
+  request: BoardColumnReadRequest,
 ): BoardPayload | undefined => {
   if (
     !sameBoardSource(current, fresh) ||
@@ -120,29 +135,34 @@ export const mergeBoardContinuation = (
     )
   )
     return undefined;
-  const selectedCurrent = boardBucketForSelector(current, selector);
-  const selectedFresh = boardBucketForSelector(fresh, selector);
-  if (
-    selectedCurrent?.page?.nextContinuationToken === undefined ||
-    selectedFresh?.page === undefined ||
-    selectedFresh.page === null
-  )
-    return undefined;
-  const columns = fresh.columns.map((column, index) => ({
-    ...column,
-    page:
-      selector.kind === "option" && column.value === selector.value
-        ? column.page
-        : (current.columns[index]?.page ?? null),
-  }));
-  const unassigned = {
-    ...fresh.unassigned,
-    page: selector.kind === "unassigned" ? fresh.unassigned.page : current.unassigned.page,
-  };
+  const named = (selector: BoardColumnSelector): boolean =>
+    request.columns.some(
+      (candidate) =>
+        candidate.kind === selector.kind &&
+        (candidate.kind === "unassigned" ||
+          (selector.kind === "option" && candidate.value === selector.value)),
+    );
+  for (const selector of request.columns) {
+    const currentBucket = boardBucketForSelector(current, selector);
+    const freshBucket = boardBucketForSelector(fresh, selector);
+    if (
+      currentBucket === undefined ||
+      freshBucket?.page === undefined ||
+      freshBucket.page === null ||
+      (request.continuationToken !== undefined &&
+        currentBucket.page?.nextContinuationToken !== request.continuationToken)
+    )
+      return undefined;
+  }
+  const columns = fresh.columns.map((column, index) =>
+    named({ kind: "option", value: column.value }) ? column : current.columns[index]!,
+  );
+  const unassigned = named({ kind: "unassigned" }) ? fresh.unassigned : current.unassigned;
   try {
     return parseBoardPayload({ ...fresh, columns, unassigned });
-  } catch {
-    // A duplicate live record identity or strict merged-shape mismatch triggers an initial reread.
+  } catch (error) {
+    console.error("[board] merged column payload invalid", error);
+    // A duplicate live record identity or strict merged-shape mismatch triggers a fresh read.
     return undefined;
   }
 };

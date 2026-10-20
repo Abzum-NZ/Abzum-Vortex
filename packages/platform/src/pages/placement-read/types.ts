@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { BoardColumnContinuationRequest, PageDefinition } from "../../schema";
+import type { BoardColumnReadRequest, PageDefinition } from "../../schema";
 import type {
   HumanOrganizationRequestResult,
   readCurrentOrganizationRuntimeSettingsAfterAuthorization,
@@ -101,7 +101,8 @@ export type PlacementReadInput = Readonly<{
   /** The applications the viewer may open, for a query-bound launcher; undefined when unread. */
   permittedApplicationKeys: readonly string[] | undefined;
   permittedApplicationsUnavailable: boolean;
-  boardContinuation?: Readonly<{ placementId: string; request: BoardColumnContinuationRequest }>;
+  /** The columns each named board shows, or the one column it continues; other boards read their first columns. */
+  boardReads?: readonly Readonly<{ placementId: string; request: BoardColumnReadRequest }>[];
   tableContinuation?: Readonly<{
     placementId: string;
     fromAddress?: true;

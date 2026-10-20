@@ -3,9 +3,6 @@ import type { useRouter } from "next/navigation";
 import type { createFlowRuntime, parseTablePayload } from "@vortex/ui";
 import type { DisplaySemanticEvent, FlowDispatchResult } from "@vortex/ui";
 import {
-  boardColumnContinuationRequestSchema,
-  isCurrentComponentRequestGeneration,
-  nextComponentRequestGeneration,
   type ComponentRequestGeneration,
   containedComponentIdSchema,
   recordIdSchema,
@@ -16,14 +13,13 @@ import type {
   ApplicationPageModel,
   PlacementFlowBinding,
 } from "../../../../../../_lib/application-page";
-import { rereadApplicationPlacements } from "../../placement-refresh-action";
-import type { Notice, RefreshedPlacementData, TableContinuationTarget } from "./types";
+import type {
+  DispatchOutcome,
+  Notice,
+  RefreshedPlacementData,
+  TableContinuationTarget,
+} from "./types";
 import { asComponentBinding } from "./event-values";
-import {
-  boardPayloadFor,
-  boardBucketForSelector,
-  mergeBoardContinuation,
-} from "./placement-helpers";
 
 export function usePlacementActions({
   applyDispatch,
@@ -49,7 +45,8 @@ export function usePlacementActions({
     formPlacementId?: string,
     afterAccepted?: () => Promise<Notice | undefined>,
     sourceBindingId?: string,
-  ) => Promise<void>;
+    reportOnControl?: true,
+  ) => Promise<DispatchOutcome>;
   flowRuntime: ReturnType<typeof createFlowRuntime>;
   formOwners: Readonly<Record<string, string>>;
   busy: boolean;
@@ -88,6 +85,10 @@ export function usePlacementActions({
       /** The one record this gesture is about, when it is not the record the page shows. */
       gestureSubject?: Readonly<{ recordId: string; revision: number }>,
       afterAccepted?: () => Promise<Notice | undefined>,
+      /** One identity for this user gesture, so a repeated request is the same run. */
+      clickId?: string,
+      /** The gesture is shown on its own control, which tells the person its outcome. */
+      reportOnControl?: true,
     ) => {
       const callerInputs = { ...supplied };
       for (const selectedReadInput of binding.selectedReadInputs ?? []) {
@@ -110,156 +111,39 @@ export function usePlacementActions({
           Object.fromEntries(
             Object.entries(callerInputs).filter(([name]) => binding.callerInputs.includes(name)),
           ),
-          undefined,
+          clickId,
           gestureSubject,
         ),
         formOwners[placementId],
         afterAccepted,
         binding.bindingId,
+        reportOnControl,
       );
     },
     [applyDispatch, formOwners, flowRuntime],
   );
 
-  const continueBoardColumn = useCallback(
+  const readBoardColumns = useCallback(
     async (placementId: string, event: DisplaySemanticEvent): Promise<boolean> => {
-      if (
-        busy ||
-        event.event !== "page_changed" ||
-        !("column" in event) ||
-        typeof event.continuationToken !== "string"
-      )
-        return false;
-      const parsedId = containedComponentIdSchema.safeParse(placementId);
-      const continuation = boardColumnContinuationRequestSchema.safeParse({
-        column: event.column,
-        continuationToken: event.continuationToken,
-      });
-      const requestScope = placementRequestsRef.current;
-      if (
-        !parsedId.success ||
-        !continuation.success ||
-        requestScope.key !== navigationKey ||
-        currentPageKey === undefined
-      )
-        return false;
-
-      const displayId =
-        Object.keys(currentData).find(
-          (candidate) => candidate.toLowerCase() === parsedId.data.toLowerCase(),
-        ) ?? parsedId.data;
-      const currentBoard = boardPayloadFor(currentData[displayId]);
-      const currentBucket =
-        currentBoard === undefined
-          ? undefined
-          : boardBucketForSelector(currentBoard, continuation.data.column);
-      if (
-        currentBoard === undefined ||
-        currentBucket?.page?.nextContinuationToken !== continuation.data.continuationToken
-      )
-        return false;
-
-      const serialKey = `${requestScope.key}\u0000${parsedId.data.toLowerCase()}`;
-      if (boardContinuationInFlightRef.current.has(serialKey)) return false;
-      boardContinuationInFlightRef.current.add(serialKey);
-      const request = nextComponentRequestGeneration(
-        requestScope.generations.get(parsedId.data.toLowerCase()),
-        parsedId.data,
-        requestScope.key,
+      if (busy || event.event !== "page_changed" || !("columns" in event)) return false;
+      const board = await import("./board-column-read");
+      return board.readBoardColumns(
+        {
+          busy,
+          placementRequestsRef,
+          navigationKey,
+          currentPageKey,
+          currentData,
+          boardContinuationInFlightRef,
+          setRefreshedPlacementData,
+          refreshPlacements,
+          application,
+          currentSearch,
+          router,
+        },
+        placementId,
+        event,
       );
-      requestScope.generations.set(parsedId.data.toLowerCase(), request);
-
-      const clearAndReload = (): false => {
-        if (
-          placementRequestsRef.current.key === requestScope.key &&
-          isCurrentComponentRequestGeneration(
-            requestScope.generations.get(parsedId.data.toLowerCase()),
-            request,
-          )
-        ) {
-          setRefreshedPlacementData((current) => {
-            const liveScope = placementRequestsRef.current;
-            if (liveScope.key !== requestScope.key) return current;
-            const prior = current?.navigationKey === requestScope.key ? current : undefined;
-            return {
-              navigationKey: requestScope.key,
-              data: { ...(prior?.data ?? {}), [displayId]: { status: "error" } },
-              editFormBaselines: { ...(prior?.editFormBaselines ?? {}) },
-              ...(prior?.subject === undefined ? {} : { subject: prior.subject }),
-            };
-          });
-          void refreshPlacements([parsedId.data]);
-        }
-        return false;
-      };
-
-      try {
-        let result: Awaited<ReturnType<typeof rereadApplicationPlacements>>;
-        try {
-          result = await rereadApplicationPlacements(
-            {
-              tenantShortName: application.tenantShortName,
-              organizationShortName: application.organizationShortName,
-              applicationKey: application.applicationKey,
-              pageKey: currentPageKey,
-              installationRevision: application.installationRevision,
-              search: currentSearch,
-            },
-            [parsedId.data],
-            { placementId: parsedId.data, request: continuation.data },
-          );
-        } catch {
-          result = { kind: "temporarily_unavailable" };
-        }
-        if (
-          placementRequestsRef.current.key !== requestScope.key ||
-          !isCurrentComponentRequestGeneration(
-            requestScope.generations.get(parsedId.data.toLowerCase()),
-            request,
-          )
-        )
-          return false;
-        if (result.kind === "reload") {
-          router.refresh();
-          return false;
-        }
-        if (result.kind !== "available") return clearAndReload();
-
-        const returnedData = Object.entries(result.data).find(
-          ([candidate]) => candidate.toLowerCase() === parsedId.data.toLowerCase(),
-        )?.[1];
-        const freshBoard = boardPayloadFor(returnedData);
-        const mergedBoard =
-          freshBoard === undefined
-            ? undefined
-            : mergeBoardContinuation(currentBoard, freshBoard, continuation.data.column);
-        if (mergedBoard === undefined) return clearAndReload();
-
-        setRefreshedPlacementData((current) => {
-          const liveScope = placementRequestsRef.current;
-          if (
-            liveScope.key !== requestScope.key ||
-            !isCurrentComponentRequestGeneration(
-              liveScope.generations.get(parsedId.data.toLowerCase()),
-              request,
-            )
-          )
-            return current;
-          const prior = current?.navigationKey === requestScope.key ? current : undefined;
-          return {
-            navigationKey: requestScope.key,
-            data: {
-              ...(prior?.data ?? {}),
-              [displayId]: { status: "ready", values: mergedBoard },
-            },
-            editFormBaselines: { ...(prior?.editFormBaselines ?? {}) },
-            ...(prior?.subject === undefined ? {} : { subject: prior.subject }),
-          };
-        });
-        return true;
-      } finally {
-        boardContinuationInFlightRef.current.delete(serialKey);
-      }
     },
     [
       application,
@@ -282,7 +166,7 @@ export function usePlacementActions({
       if (
         busy ||
         event.event !== "page_changed" ||
-        "column" in event ||
+        "columns" in event ||
         !Number.isSafeInteger(event.page) ||
         event.page < 1 ||
         event.page > 100_000 ||
@@ -343,5 +227,5 @@ export function usePlacementActions({
     [busy, commitTablePage, currentSearch, navigationKey, refreshPlacements, tableQueryPending],
   );
 
-  return { runBinding, continueBoardColumn, continueTablePage };
+  return { runBinding, readBoardColumns, continueTablePage };
 }

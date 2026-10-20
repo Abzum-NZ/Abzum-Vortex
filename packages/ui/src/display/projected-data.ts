@@ -1,5 +1,7 @@
 export { parseCalendarPayload } from "./calendar-payload";
 import {
+  jsonValueSchema,
+  type JsonValue,
   builderKeySchema,
   moduleFieldValueSchemas,
   fieldIdSchema,
@@ -105,6 +107,11 @@ export type DisplayRow = Readonly<{
   recordId: string;
   revision?: number;
   capabilities?: DisplayRowCapabilities;
+  /**
+   * The stored value of each field the viewer may edit on this row (null when empty), as the
+   * field's own contract spells it. An editor starts from this, never from a displayed cell.
+   */
+  edit?: Readonly<Record<string, JsonValue>>;
   cells: Readonly<Record<string, DisplayCellValue>>;
   /** The style keys and measures the table's formatting gives the row, decided on the server. */
   format?: RecordsTableRowFormat;
@@ -236,7 +243,8 @@ export type BoardPage = Readonly<{
 
 /** Exact current protected totals plus a bounded page, or null when this bucket was untouched. */
 export type BoardBucketPayload = Readonly<{
-  rowCount: number;
+  state: "unread" | "reading" | "read";
+  rowCount: number | null;
   aggregates: readonly DisplaySummaryMetric[];
   page: BoardPage | null;
 }>;
@@ -271,8 +279,6 @@ export type BoardPayload = Readonly<{
   cardTitleFieldId: string;
   /** The only field identities a card may carry; readable values and labels may be omitted. */
   cardFieldIds: readonly string[];
-  totalRowCount: number;
-  aggregates: readonly DisplaySummaryMetric[];
   columns: readonly BoardColumnPayload[];
   /** Cards with no stage yet, and the stages they may move to: the start stage and its moves. */
   unassigned: BoardBucketPayload & Readonly<{ moves: readonly string[] }>;
@@ -427,8 +433,8 @@ export type DisplaySemanticEvent =
     }>
   | Readonly<{
       event: "page_changed";
-      column: BoardColumnSelector;
-      continuationToken: string;
+      columns: readonly BoardColumnSelector[];
+      continuationToken?: string;
     }>
   /** Runs a declared bulk named action over the selection the page holds for the table. */
   | Readonly<{ event: "bulk_action"; action: string }>
@@ -438,10 +444,14 @@ export type DisplaySemanticEvent =
       event: "inline_edit";
       eventId: string;
       recordId: string;
-      /** The record revision the editor read; a stale one is refused by the server. */
-      revision?: number;
+      /** The record revision the row was displayed at; the writer refuses a stale one. */
+      revision: number;
+      /** The field's key as the table's column names it. */
       field: string;
-      value: DisplayCellValue;
+      /** The new stored value in the field's own contract (null clears it). */
+      value: JsonValue;
+      /** One identity for this explicit commit, so a repeated request is the same write. */
+      commandId: string;
     }>
   | Readonly<{
       /**
@@ -467,6 +477,15 @@ export type DisplaySemanticEvent =
       /** Remaining room in the shared row budget; can only narrow the authored page size. */
       pageSize?: number;
     }>;
+
+/**
+ * What one commit of an inline edit came to, told by the host once the server answered: saved, or
+ * not saved with the safe sentence to show on the cell. `changed` says the record changed under
+ * the person, so their draft is kept until they reload and retry. Nothing is ever shown as saved
+ * before the server confirmed it.
+ */
+export type DisplayInlineEditResult =
+  Readonly<{ kind: "saved" }> | Readonly<{ kind: "refused"; message: string; changed: boolean }>;
 
 /** A handler may return the promise of the flow it started; the control stays busy until it settles. */
 export type DisplayEventHandler = (event: DisplaySemanticEvent) => void | Promise<unknown>;
@@ -804,6 +823,22 @@ export const parseRowCapabilities = (
   });
 };
 
+/** The stored values of a row's editable fields: JSON in the field's own contract, keyed by field. */
+const parseEditValues = (
+  value: unknown,
+  location: DefinitionRenderErrorLocation,
+): Readonly<Record<string, JsonValue>> => {
+  const record = requireRecord(value, "A projected row's edit values must be an object", location);
+  const values: Record<string, JsonValue> = {};
+  for (const [key, held] of Object.entries(record)) {
+    const field = requireFieldKey(key, `Invalid projected edit key '${key}'`, location);
+    if (!jsonValueSchema.safeParse(held).success)
+      fail(`A projected edit value for '${field}' is not JSON`, location);
+    values[field] = held as JsonValue;
+  }
+  return Object.freeze(values);
+};
+
 const parseRows = (
   value: unknown,
   location: DefinitionRenderErrorLocation,
@@ -816,7 +851,7 @@ const parseRows = (
       const record = requireRecord(item, "A projected row must be an object", rowLocation);
       requireExactKeys(
         record,
-        ["recordId", "revision", "capabilities", "cells", "format", "hasChildren"],
+        ["recordId", "revision", "capabilities", "edit", "cells", "format", "hasChildren"],
         rowLocation,
       );
       if (record.hasChildren !== undefined && record.hasChildren !== true)
@@ -855,6 +890,13 @@ const parseRows = (
               ...rowLocation,
               propertyPath: [`rows[${index}]`, "capabilities"],
             });
+      const edit =
+        record.edit === undefined
+          ? undefined
+          : parseEditValues(record.edit, {
+              ...rowLocation,
+              propertyPath: [`rows[${index}]`, "edit"],
+            });
       const format =
         record.format === undefined
           ? undefined
@@ -866,6 +908,7 @@ const parseRows = (
         recordId,
         ...(revision === undefined ? {} : { revision }),
         ...(capabilities === undefined ? {} : { capabilities }),
+        ...(edit === undefined ? {} : { edit }),
         cells: Object.freeze(cells),
         ...(format === undefined ? {} : { format }),
         ...(record.hasChildren === true ? { hasChildren: true as const } : {}),
