@@ -41,7 +41,12 @@ import {
   type RelationshipTotalParentMutation,
 } from "./relationship-total-save";
 import { calculateAndFinalize, operationClock } from "./field-candidate";
-import { uniqueValueRefusal, violatedUniqueFieldId } from "./unique-violation";
+import {
+  parentCycleRefusal,
+  uniqueValueRefusal,
+  violatedParentFieldId,
+  violatedUniqueFieldId,
+} from "./unique-violation";
 export { calculateAndFinalize, operationClock };
 
 type PreparationRow = DatabaseRow & { readonly preparation: unknown };
@@ -521,22 +526,28 @@ const persist = async (
 };
 
 /**
- * A write that another record's unique value defeated becomes a correction located on that field,
- * worded from the definition's labels. The database's unique index is the one rule, so the check is
- * exact under concurrent writes; the failed statement rolled the whole save back, so nothing was
- * written. A field the caller neither reads nor submitted is never named.
+ * A write that another record's unique value defeated, or that would make a record its own
+ * ancestor through its link to its own record type, becomes a correction located on that field,
+ * worded from the definition's labels. The database holds both rules, so each check is exact under
+ * concurrent writes; the failed statement rolled the whole save back, so nothing was written. A
+ * field the caller neither reads nor submitted is never named.
  */
-const uniqueValueCorrection = (
+const constraintCorrection = (
   error: unknown,
   prepared: PreparedSave | undefined,
   command: SaveRecordCommand,
 ): SaveRecordResult | undefined => {
-  const fieldId = violatedUniqueFieldId(error);
+  const uniqueFieldId = violatedUniqueFieldId(error);
+  const parentFieldId = violatedParentFieldId(error);
+  const fieldId = uniqueFieldId ?? parentFieldId;
   if (fieldId === undefined || prepared === undefined) return undefined;
-  const correction = uniqueValueRefusal(prepared.recordType, fieldId);
+  const correction =
+    uniqueFieldId === undefined
+      ? parentCycleRefusal(prepared.recordType, fieldId)
+      : uniqueValueRefusal(prepared.recordType, fieldId);
   if (correction === undefined) return undefined;
   console.error(
-    `[record] save refused RECORD_SAVE_VALUE_NOT_UNIQUE: field=${correction.fieldId} ${describeFailure(error)}`,
+    `[record] save refused ${uniqueFieldId === undefined ? "RECORD_SAVE_PARENT_CYCLE" : "RECORD_SAVE_VALUE_NOT_UNIQUE"}: field=${correction.fieldId} ${describeFailure(error)}`,
   );
   const named =
     prepared.readableFieldIds.has(correction.fieldId) ||
@@ -987,7 +998,7 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
               backgroundDelivery: stored.backgroundDelivery,
             });
           },
-          (_code, error) => uniqueValueCorrection(error, attempted.prepared, command.data),
+          (_code, error) => constraintCorrection(error, attempted.prepared, command.data),
         );
 
         if (result.kind !== "available") return result;

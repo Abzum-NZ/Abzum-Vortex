@@ -483,8 +483,12 @@ export function useRuntimeInputs({
             if (event.event !== "grid_view_requested") return;
             return runViewCommand(placementId, event.command);
           };
-        // An expanded row reads its related records; only a table whose rows expand offers it.
-        if (supportsEvent("row_expanded") && tableData?.features?.masterDetail !== undefined)
+        // An expanded row reads its related records or the records beneath it; only a table whose rows expand offers it.
+        if (
+          supportsEvent("row_expanded") &&
+          (tableData?.features?.masterDetail !== undefined ||
+            tableData?.features?.tree !== undefined)
+        )
           events.row_expanded = rowDetailHandlers(placementId);
       }
       if (model.referenceChoiceInputs.some((field) => field.placementId === placementId))

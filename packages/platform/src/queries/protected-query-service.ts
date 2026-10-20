@@ -20,12 +20,15 @@ import {
   protectedQueryBoardMembersCommandSchema,
   type ProtectedQueryGroupedMembersResult,
   protectedQueryGroupedMembersCommandSchema,
+  type ProtectedQueryTreeLevelResult,
+  protectedQueryTreeLevelCommandSchema,
   type ProtectedQuerySummaryResult,
   protectedQuerySummaryCommandSchema,
   type ProtectedQueryBoardSummaryResult,
   protectedQueryBoardSummaryCommandSchema,
 } from "./protected-query-contracts";
 import { groupedMembersCommand } from "./protected-query-grouped";
+import { treeLevelCommand } from "./protected-query-tree";
 import { refusal } from "./protected-query-helpers";
 import { summariseCommand, boardSummaryCommand } from "./protected-query-summary";
 import { runCommand } from "./protected-query-table";
@@ -125,6 +128,25 @@ export const createProtectedQueryService = (dependencies: ProtectedQueryServiceD
       if (selection.applicationRootId === undefined) return { kind: "unavailable" };
       return requests.run(personCaller, selection, (transaction, scope) =>
         groupedMembersCommand(transaction, scope, personCaller, command.data, continuationKey),
+      );
+    },
+    async treeLevel(
+      caller: IdentitySession | ExecutionAuthorityContext,
+      selection: OrganizationSelectionCandidate,
+      commandCandidate: unknown,
+    ): Promise<HumanOrganizationRequestResult<ProtectedQueryTreeLevelResult>> {
+      if (caller !== null && typeof caller === "object" && "kind" in caller)
+        return { kind: "unavailable" };
+      const personCaller: IdentitySession = caller;
+      const command = protectedQueryTreeLevelCommandSchema.safeParse(commandCandidate);
+      if (!command.success)
+        return {
+          kind: "available",
+          value: { outcome: "refused", reasonCode: "request_invalid" },
+        };
+      if (selection.applicationRootId === undefined) return { kind: "unavailable" };
+      return requests.run(personCaller, selection, (transaction, scope) =>
+        treeLevelCommand(transaction, scope, personCaller, command.data, continuationKey),
       );
     },
     async summarise(

@@ -51,6 +51,7 @@ export function useRowDetail({
           search: current.currentSearch,
           placementId,
           recordId: event.recordId,
+          ...(event.pageSize === undefined ? {} : { pageSize: event.pageSize }),
           ...(event.continuationToken === undefined
             ? {}
             : { continuationToken: event.continuationToken }),
