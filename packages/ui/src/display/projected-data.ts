@@ -1,5 +1,6 @@
 import {
   builderKeySchema,
+  moduleFieldValueSchemas,
   fieldIdSchema,
   richTextDocumentSchema,
   timestampSchema,
@@ -663,17 +664,20 @@ const parseCellValue = (
         ? Object.freeze({ kind: "date", iso })
         : fail("A date display value must be an ISO date or offset timestamp", location);
     }
-    case "choice":
+    case "choice": {
       requireExactKeys(record, ["kind", "key", "label"], location);
+      const key = moduleFieldValueSchemas.choice.safeParse(record.key);
+      if (!key.success) return fail("A choice display value requires a valid stored value", location);
       return Object.freeze({
         kind: "choice",
-        key: requireBuilderKey(record.key, "A choice display value requires a key", location),
+        key: key.data,
         label: requireNonEmptyString(
           record.label,
           "A choice display value requires a label",
           location,
         ),
       });
+    }
     case "link": {
       requireExactKeys(record, ["kind", "address", "label"], location);
       return isSafeLinkAddress(record.address)

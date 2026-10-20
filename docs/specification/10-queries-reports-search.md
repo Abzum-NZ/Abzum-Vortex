@@ -315,12 +315,22 @@ Grid grouping is state of the Data grid, executed by `run_module_query_summary` 
 `groupedMembers` reader. Query-authored grouping and totals supply defaults; they are not a second
 grid engine. The separate `grouped_data` block converges to a Data grid preset in #3085.
 
-The protected readers accept `groupingFieldId` to replace those defaults with one query-selected,
-filterable choice field with at most 50 options. A lifecycle stage uses its canonical choice field
-identity, never its label. Both readers refuse this override unless the field is guaranteed readable
-under the current read plan. The summary retains the 100,000-candidate ceiling and returns a neutral
-`dataset_limit_exceeded` refusal above it. Counts describe the currently read result, independently
-of a later member page.
+The protected readers accept `grouping: { fieldId, limit, dateBucket? }` to replace those defaults
+with one query-selected, filterable dimension. A choice field has at most 50 options; a lifecycle
+stage uses its canonical choice field identity, never its label. A date or date-time field requires
+`dateBucket: { unit, timeZone }`, with a day, week (Monday start), month, quarter or year unit and an
+explicit recognised time zone. Date-only values retain calendar dates. Date-time values bucket the
+stored instant in that zone and return the bucket's start as canonical UTC, independent of session
+time zone or display format. Both readers refuse this override unless the field is guaranteed
+readable under the current read plan.
+
+The authored `limit` is 1–200 groups. A summary returns only that page of groups, ordered by its
+canonical JSON group key. `nextGroupKey` is the last visible key when more groups exist and null
+otherwise; the next request supplies it as `groupAfter`. Each page rechecks current access and
+recomputes counts over the complete filtered set. `totalRowCount` and aggregate totals do not shrink
+to the visible group page. The summary retains the 100,000-candidate ceiling and returns a neutral
+`dataset_limit_exceeded` refusal above it. Counts describe the currently readable result,
+independently of a later member page.
 
 Summary and member requests carry the same resolved query inputs, narrowing filter and search.
 Search matches only the current readable scalar or choice-array values of fields the record type
@@ -330,12 +340,18 @@ before it reads records. It does not derive counts from a loaded member page.
 
 Generic member pages take the ordinary ordered sort contract and forward/backward keysets. They
 carry at most 200 records, with only the requested field projection. Choice grouping narrows the
-candidate scan by its stored key only after guaranteed readability is established, then rechecks
-membership from the current readable record. JSON null denotes the unassigned group; a missing or
+candidate scan by its stored key; date grouping uses typed half-open calendar ranges. Instant
+grouping widens the index range around the bucket boundaries and applies exact authored-zone
+bucket equality before the candidate page limit, so repeated local midnight retains both
+occurrences (including 23/25-hour DST days). These predicates apply only after guaranteed
+readability is established, then membership is rechecked by the same canonical bucket operation
+on the current readable record. A noncanonical bucket start is refused. JSON null denotes the unassigned group; a missing or
 withheld value never establishes generic group membership. Continuations bind the actor, scope,
-release, query, resolved inputs, exact selector, grouping field, sort, filters, search, projection,
+release, query, resolved inputs, exact selector, grouping dimension/bucket/zone/cap, sort, filters, search, projection,
 page size and direction. Member reads remain uncached.
 
-These reader capabilities are the execution foundation of #3027. The grid feature gate, Studio
+These reader capabilities are the execution foundation of #3027 and the date/group-cap part of
+#3032. Link dimensions still require permitted batched titles and neutral unreadable-target groups;
+they are refused as grid overrides until that support lands. The grid feature gate, Studio
 controls, single URL codec, group headers and active-group interactions are supplied by that
 feature's UI/runtime integration, rather than inferred by the query readers.

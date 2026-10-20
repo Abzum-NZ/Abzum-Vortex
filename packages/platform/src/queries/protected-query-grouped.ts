@@ -61,9 +61,7 @@ const readGroupedMemberPage = async (
         sortableFieldIds: command.sortableFieldIds,
         filterableFieldIds: command.filterableFieldIds,
         searchableFieldIds: command.searchableFieldIds,
-        ...(command.groupingFieldId === undefined
-          ? {}
-          : { groupingFieldId: command.groupingFieldId }),
+        ...(command.grouping === undefined ? {} : { grouping: command.grouping }),
         groupMember: selector,
       })}::text::jsonb,
       ${command.pageDirection ?? "forward"}::text,
@@ -143,7 +141,13 @@ export const groupedMembersCommand = async (
     requestedFieldIds: command.requestedFieldIds.map((fieldId) => fieldId.toLowerCase()).sort(),
     requestedSystemFieldKeys: [...command.requestedSystemFieldKeys].sort(),
     pageSize: command.pageSize,
-    groupingFieldId: command.groupingFieldId?.toLowerCase() ?? null,
+    grouping:
+      command.grouping === undefined
+        ? null
+        : {
+            ...command.grouping,
+            fieldId: command.grouping.fieldId.toLowerCase(),
+          },
     sort: command.sort.map((key) => ({ ...key, fieldId: key.fieldId.toLowerCase() })),
     search: command.search ?? null,
     sortableFieldIds: command.sortableFieldIds.map((id) => id.toLowerCase()).sort(),
