@@ -343,6 +343,16 @@ const moduleSourceSystemProjectionSchema = z
     protected_view: sourceProvenanceUnchanged(protectedReadModelKeySchema),
     organization_field: sourceProvenanceTarget(builderKeySchema, ["organizationFieldId"]),
     revision_field: sourceProvenanceTarget(builderKeySchema, ["revisionFieldId"]),
+    refresh_while: sourceProvenanceUnchanged(
+      z
+        .object({
+          field: sourceProvenanceTarget(builderKeySchema, ["fieldId"]),
+          values: sourceProvenanceUnchanged(z.array(z.string().min(1).max(200)).min(1).max(100)),
+          interval_milliseconds: sourceProvenanceUnchanged(z.number().int().min(1_000).max(60_000)),
+        })
+        .strict()
+        .optional(),
+    ),
     filterable_fields: sourceProvenanceUnchanged(
       z.array(sourceProvenanceTarget(builderKeySchema, ["filterableFieldIds/#"])).max(500),
     ),
@@ -572,6 +582,19 @@ const moduleSourceRecordTypeSchema = z
         message: "The organisation field must be a required text field of the record type",
       });
     const revision = fields.get(projection.revision_field);
+    if (projection.refresh_while !== undefined) {
+      const refresh = projection.refresh_while;
+      const field = fields.get(refresh.field);
+      if (
+        field?.type !== "choice" ||
+        refresh.values.some((key) => !field.settings.options.some((option) => option.value === key))
+      )
+        context.addIssue({
+          code: "custom",
+          path: ["system_projection", "refresh_while"],
+          message: "Refresh states must be choices of a field of the record type",
+        });
+    }
     if (revision === undefined || revision.type !== "whole_number" || !revision.required)
       context.addIssue({
         code: "custom",

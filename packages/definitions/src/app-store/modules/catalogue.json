@@ -20,7 +20,12 @@
         "organization_field": "organization_id",
         "revision_field": "revision",
         "filterable_fields": [],
-        "sortable_fields": ["key"]
+        "sortable_fields": ["key"],
+        "refresh_while": {
+          "field": "record_update_status",
+          "values": ["pending", "updating", "retrying"],
+          "interval_milliseconds": 2000
+        }
       },
       "fields": [
         {

@@ -70,6 +70,17 @@ export type ApplicationPageModel = Readonly<{
   bindings: Readonly<Record<string, readonly PlacementFlowBinding[]>>;
   /** Data placements to re-read after a write from each installed flow binding. */
   refreshPlacementsByBinding: Readonly<Record<string, readonly string[]>>;
+  /** Pending states declared by a protected projection; only displayed values trigger a reread. */
+  refreshWhileByPlacement: Readonly<
+    Record<
+      string,
+      Readonly<{
+        fieldId: string;
+        values: readonly string[];
+        intervalMilliseconds: number;
+      }>
+    >
+  >;
   /**
    * The parameters the page declares that its controls publish and its blocks' bindings read: the
    * placements reading each parameter, by name, and the parameter each control writes, by placement.
