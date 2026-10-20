@@ -1,4 +1,146 @@
 import type { ApplicationDraftCompilation } from "./definition-publication";
+import type { DefinitionPublicationHistoryEvidence } from "../schema";
+import type {
+  DefinitionCandidateDraft,
+  DefinitionDraftCandidate,
+  DefinitionPublicationCandidate,
+  DefinitionResolution,
+  OwnedModuleRoot,
+} from "./definition-publication-contracts";
+import type { ResolvedDependencies } from "./definition-dependency-resolution";
+
+const sameApplicationPublication = (
+  retained: ApplicationDraftCompilation,
+  application: DefinitionCandidateDraft,
+): boolean =>
+  retained.candidate.draft.rootId === application.draft.rootId &&
+  retained.candidate.draft.organizationId === application.draft.organizationId &&
+  retained.candidate.draft.publishedRevision === application.draft.publishedRevision;
+
+/** The authenticated inputs of the same immutable staged Module revision, before a history read. */
+export const readRetainedApplicationModuleCandidate = (
+  application: DefinitionCandidateDraft,
+  root: OwnedModuleRoot,
+  sourceFingerprint: string,
+): DefinitionPublicationCandidate | undefined => {
+  if (root.sourceFingerprint !== sourceFingerprint) return undefined;
+  for (const retained of [...applicationDraftCompilations.values()].reverse()) {
+    if (!sameApplicationPublication(retained, application)) continue;
+    const step = retained.releasePlan.moduleCompilations.find(
+      ({ candidate }) =>
+        candidate.draft.rootId === root.rootId &&
+        candidate.draft.key === root.key &&
+        candidate.draft.draftRevision === root.draftRevision &&
+        candidate.draft.sourceFingerprint === sourceFingerprint &&
+        (candidate.draft.publishedRevision ?? null) === root.currentReleaseRevision,
+    );
+    if (step !== undefined) return step.candidate;
+  }
+  return undefined;
+};
+
+/** A possible retained draft; the reader must check its live revision and fingerprints. */
+export const readRetainedApplicationDraftCandidate = (
+  organizationId: string,
+  rootId: string,
+  revision: number,
+): DefinitionDraftCandidate | undefined => {
+  for (const compilation of [...applicationDraftCompilations.values()].reverse()) {
+    const candidate = compilation.candidate;
+    if (
+      candidate.draft.organizationId === organizationId &&
+      candidate.draft.rootId === rootId &&
+      candidate.draft.draftRevision === revision
+    )
+      return candidate;
+  }
+  return undefined;
+};
+
+/** Immutable history is reusable while the live Application publication anchor is unchanged. */
+export const readRetainedApplicationPublicationHistory = (
+  candidate: DefinitionCandidateDraft,
+): DefinitionPublicationHistoryEvidence | undefined => {
+  for (const compilation of [...applicationDraftCompilations.values()].reverse()) {
+    if (
+      compilation.candidate.draft.organizationId === candidate.draft.organizationId &&
+      compilation.candidate.draft.rootId === candidate.draft.rootId &&
+      compilation.publicationHistory?.anchorReleaseRevision ===
+        (candidate.draft.publishedRevision ?? null)
+    )
+      return compilation.publicationHistory;
+  }
+  return undefined;
+};
+
+/** Keep the authenticated history read with the compilation that uses it, in the same retention. */
+export const retainApplicationDraftPublicationHistory = (
+  compilation: ApplicationDraftCompilation,
+  publicationHistory: DefinitionPublicationHistoryEvidence,
+): void => {
+  for (const [key, retained] of applicationDraftCompilations) {
+    if (retained === compilation && retained.publicationHistory === undefined) {
+      applicationDraftCompilations.set(
+        key,
+        Object.freeze({
+          ...retained,
+          publicationHistory: deepFreeze(publicationHistory),
+        }),
+      );
+      return;
+    }
+  }
+};
+
+/**
+ * An unchanged staged Module from a retained Application compile. It is still staged, so its
+ * current published release is older than this output. Reuse requires the same stored draft,
+ * publication anchor, resolved identities and exact dependency releases, including fingerprints.
+ * The existing bounded revision retention owns the output; there is no Module cache.
+ */
+export const readRetainedApplicationModule = (
+  application: DefinitionCandidateDraft,
+  module: DefinitionPublicationCandidate,
+  dependencies: ResolvedDependencies,
+  resolution: DefinitionResolution,
+): ApplicationDraftCompilation["releasePlan"]["moduleCompilations"][number] | undefined => {
+  for (const retained of [...applicationDraftCompilations.values()].reverse()) {
+    if (!sameApplicationPublication(retained, application)) continue;
+    const step = retained.releasePlan.moduleCompilations.find(
+      ({ append }) =>
+        append.draft.rootId === module.draft.rootId &&
+        append.draft.draftRevision === module.draft.draftRevision &&
+        append.draft.sourceFingerprint === module.draft.sourceFingerprint &&
+        append.draft.publishedRevision === module.draft.publishedRevision &&
+        append.resolutionSnapshot.fingerprint === resolution.fingerprint,
+    );
+    if (step === undefined) continue;
+    if (
+      step.dependencies.modules.length === dependencies.modules.length &&
+      dependencies.modules.every((release, index) => {
+        const previous = step.dependencies.modules[index]!;
+        return (
+          previous.rootId === release.rootId &&
+          previous.releaseRevision === release.releaseRevision &&
+          previous.releaseVersion === release.releaseVersion &&
+          previous.contentFingerprint === release.contentFingerprint &&
+          previous.resolutionFingerprint === release.resolutionFingerprint
+        );
+      }) &&
+      step.dependencies.connections.length === dependencies.connections.length &&
+      dependencies.connections.every((release, index) => {
+        const previous = step.dependencies.connections[index]!;
+        return (
+          previous.rootId === release.rootId &&
+          previous.releaseVersion === release.releaseVersion &&
+          previous.contentFingerprint === release.contentFingerprint
+        );
+      })
+    )
+      return step;
+  }
+  return undefined;
+};
 
 /**
  * Compiled Application drafts that were already produced for one organisation, root, draft
@@ -6,8 +148,8 @@ import type { ApplicationDraftCompilation } from "./definition-publication";
  * not compile it again. Compilation is a pure function of the draft source, the exact resolved
  * dependencies and the platform catalogue, and the key names every one of them, so a changed
  * draft, another organisation or a different dependency resolution can never read an entry. An
- * entry holds only what the compile itself returned; authorisation runs before every lookup and
- * is never cached.
+ * entry holds the compile's authenticated inputs and outputs; authorisation runs before every
+ * lookup and is never cached.
  */
 const applicationDraftCompilationCacheLimit = 16;
 // Page rendering, actions and API routes can load separate module runtimes in one process.
