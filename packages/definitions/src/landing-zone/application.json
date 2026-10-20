@@ -1091,61 +1091,71 @@
                         "field": "vortex.landing_zone:tile.target_kind",
                         "label": "Saved target type",
                         "format": "text",
-                        "visible": true
+                        "visible": true,
+                        "pin": "start"
                       },
                       {
                         "field": "vortex.landing_zone:tile.label",
                         "label": "Saved label",
                         "format": "text",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.landing_zone:tile.application_key",
                         "label": "Saved application",
                         "format": "text",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.landing_zone:tile.page_key",
                         "label": "Saved page",
                         "format": "text",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.landing_zone:tile.record_type",
                         "label": "Saved record type",
                         "format": "text",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.landing_zone:tile.record_id",
                         "label": "Saved record identifier",
                         "format": "text",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.landing_zone:tile.external_address",
                         "label": "Saved external HTTPS address",
                         "format": "text",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.landing_zone:tile.description",
                         "label": "Saved description",
                         "format": "text",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.landing_zone:tile.open_behaviour",
                         "label": "Saved open behaviour",
                         "format": "text",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.landing_zone:tile.is_favourite",
                         "label": "Favourite status",
                         "format": "boolean",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       }
                     ],
                     "row_actions": [
@@ -1176,6 +1186,11 @@
                             "kind": "content"
                           }
                         }
+                      }
+                    },
+                    "features": {
+                      "pinning": {
+                        "enabled": true
                       }
                     }
                   }

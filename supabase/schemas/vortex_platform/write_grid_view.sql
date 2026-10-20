@@ -26,8 +26,10 @@ begin
     or (p_based_on_view_id is not null
       and not vortex_platform.is_non_nil_uuid(p_based_on_view_id::text))
     or not vortex_platform.grid_view_document_valid_internal(p_layout, 'current_layout') then
+
     raise exception using errcode = '22023', message = 'Grid layout write is invalid';
   end if;
+
 
   select context.* into strict scope from vortex_platform.grid_view_scope_internal() as context;
 

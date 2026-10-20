@@ -20,7 +20,7 @@ import type {
   RecordsTableSortState,
 } from "@vortex/platform/schema";
 import type { DisplayEventHandlers, DisplayRow, TableNarrowing } from "../projected-data";
-import type { GridColumn } from "../table-layout";
+import type { GridColumn, GridLayoutControls } from "../table-layout";
 
 /**
  * What every extension point of a grid feature receives: the viewer's feature projection for this
@@ -42,6 +42,9 @@ export type GridFeatureContext = Readonly<{
   /** The saved views of this grid; absent when the grid is not stored for the person. */
   views: GridViewsState | undefined;
   events: DisplayEventHandlers | undefined;
+  /** The person's pin per lower-cased field identity, and the one way to change it. */
+  pins: GridLayoutControls["state"]["pins"];
+  setPin: GridLayoutControls["setPin"];
 }>;
 
 export type GridFeaturePointProps = Readonly<{ context: GridFeatureContext }>;
@@ -102,6 +105,7 @@ type ComponentPoint = Exclude<keyof GridFeatureModule, "cellDecoration">;
 const loaders: Readonly<
   Record<RecordsTableFeatureKey, () => Promise<{ gridFeature: GridFeatureModule }>>
 > = {
+  pinning: () => import("./pinning"),
   search: () => import("./search"),
   column_filters: () => import("./column-filters"),
   saved_views: () => import("./saved-views"),
@@ -113,6 +117,7 @@ const loaders: Readonly<
 const projectionKeys: Readonly<
   Record<keyof RecordsTableFeatureProjection, RecordsTableFeatureKey>
 > = {
+  pinning: "pinning",
   search: "search",
   columnFilters: "column_filters",
   savedViews: "saved_views",
@@ -167,6 +172,7 @@ const lazyPoint = <Props,>(
 
 /** Which points each feature fills, so the table never draws a boundary for an empty point. */
 const featurePoints: Readonly<Record<RecordsTableFeatureKey, readonly ComponentPoint[]>> = {
+  pinning: ["ColumnMenuItems"],
   search: ["ToolbarItems"],
   column_filters: ["ToolbarItems", "HeaderAdornment"],
   saved_views: ["ToolbarItems"],

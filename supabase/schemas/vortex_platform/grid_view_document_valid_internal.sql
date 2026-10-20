@@ -22,10 +22,12 @@ as $function$
     and not exists (
       select 1 from pg_catalog.jsonb_array_elements(p_document -> 'columns') as entry(value)
       where pg_catalog.jsonb_typeof(entry.value) <> 'object'
-        or entry.value - array['fieldId', 'visible', 'width'] <> '{}'::jsonb
+        or entry.value - array['fieldId', 'visible', 'width', 'pin'] <> '{}'::jsonb
         or pg_catalog.jsonb_typeof(entry.value -> 'fieldId') is distinct from 'string'
         or not vortex_platform.is_non_nil_uuid(entry.value ->> 'fieldId')
         or pg_catalog.jsonb_typeof(entry.value -> 'visible') is distinct from 'boolean'
+        or pg_catalog.jsonb_typeof(entry.value -> 'pin') is distinct from 'string'
+        or entry.value ->> 'pin' not in ('start', 'end', 'unpinned')
         or (entry.value ? 'width' and case
           when pg_catalog.jsonb_typeof(entry.value -> 'width') = 'number' then
             (entry.value ->> 'width')::numeric not between 64 and 640

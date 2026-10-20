@@ -4501,6 +4501,31 @@
                 "kind": "boolean",
                 "value": false
               }
+            },
+            {
+              "kind": "choice",
+              "key": "pin",
+              "label": "Pin position",
+              "help": "Keep this column at the start or end when Column pinning is on; narrow viewports release pins to leave room to scroll",
+              "required": false,
+              "defaultValue": {
+                "kind": "choice",
+                "value": "unpinned"
+              },
+              "options": [
+                {
+                  "key": "unpinned",
+                  "label": "Unpinned"
+                },
+                {
+                  "key": "start",
+                  "label": "Start"
+                },
+                {
+                  "key": "end",
+                  "label": "End"
+                }
+              ]
             }
           ]
         }
@@ -4627,18 +4652,6 @@
         "presentation": true,
         "label": "Sticky header",
         "help": "Keep the column headings in view while the rows scroll; applies when Scrolling is Bounded",
-        "required": false,
-        "defaultValue": {
-          "kind": "boolean",
-          "value": true
-        }
-      },
-      {
-        "kind": "boolean",
-        "key": "sticky_first_column",
-        "presentation": true,
-        "label": "Sticky first column",
-        "help": "Keep the first column in view while a wide table scrolls sideways",
         "required": false,
         "defaultValue": {
           "kind": "boolean",
@@ -5514,6 +5527,35 @@
                 }
               }
             ]
+          },
+          {
+            "kind": "group",
+            "key": "pinning",
+            "label": "Column pinning",
+            "help": "Keep columns in view while scrolling; set each column's default pin in Columns",
+            "required": false,
+            "defaultValue": {
+              "kind": "group",
+              "properties": {
+                "enabled": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            },
+            "properties": [
+              {
+                "kind": "boolean",
+                "key": "enabled",
+                "label": "On",
+                "help": "Allow start and end column pinning",
+                "required": false,
+                "defaultValue": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            ]
           }
         ],
         "defaultValue": {
@@ -5565,6 +5607,15 @@
               }
             },
             "conditional_formatting": {
+              "kind": "group",
+              "properties": {
+                "enabled": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            },
+            "pinning": {
               "kind": "group",
               "properties": {
                 "enabled": {

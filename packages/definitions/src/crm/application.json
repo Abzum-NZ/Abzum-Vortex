@@ -595,27 +595,32 @@
                       {
                         "field": "vortex.crm.organisations:company.company_number",
                         "label": "Company number",
-                        "visible": true
+                        "visible": true,
+                        "pin": "start"
                       },
                       {
                         "field": "vortex.crm.organisations:company.name",
                         "label": "Company name",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.crm.organisations:company.industry",
                         "label": "Industry",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.crm.organisations:company.phone",
                         "label": "Main phone",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.crm.organisations:company.website",
                         "label": "Website",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       }
                     ],
                     "sortable_fields": [
@@ -650,6 +655,11 @@
                             "kind": "content"
                           }
                         }
+                      }
+                    },
+                    "features": {
+                      "pinning": {
+                        "enabled": true
                       }
                     }
                   }
@@ -715,27 +725,32 @@
                       {
                         "field": "vortex.crm.people:contact.contact_number",
                         "label": "Contact number",
-                        "visible": true
+                        "visible": true,
+                        "pin": "start"
                       },
                       {
                         "field": "vortex.crm.people:contact.full_name",
                         "label": "Full name",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.crm.people:contact.email",
                         "label": "Email",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.crm.people:contact.company",
                         "label": "Company",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.crm.people:contact.relationship_owner",
                         "label": "Relationship owner",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       }
                     ],
                     "title": "Contacts",
@@ -755,6 +770,11 @@
                             "kind": "content"
                           }
                         }
+                      }
+                    },
+                    "features": {
+                      "pinning": {
+                        "enabled": true
                       }
                     }
                   }
@@ -820,37 +840,44 @@
                       {
                         "field": "vortex.crm.people:lead.lead_number",
                         "label": "Lead number",
-                        "visible": true
+                        "visible": true,
+                        "pin": "start"
                       },
                       {
                         "field": "vortex.crm.people:lead.display_name",
                         "label": "Name",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.crm.people:lead.company_name",
                         "label": "Company name",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.crm.people:lead.source",
                         "label": "Source",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.crm.people:lead.score",
                         "label": "Score",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.crm.people:lead.status",
                         "label": "Status",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.crm.people:lead.received_at",
                         "label": "Received at",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       }
                     ],
                     "sortable_fields": [
@@ -878,6 +905,11 @@
                             "kind": "content"
                           }
                         }
+                      }
+                    },
+                    "features": {
+                      "pinning": {
+                        "enabled": true
                       }
                     }
                   }
@@ -1021,6 +1053,9 @@
                             "token": "info"
                           }
                         ]
+                      },
+                      "pinning": {
+                        "enabled": true
                       }
                     },
                     "row_click": {
@@ -1031,37 +1066,44 @@
                       {
                         "field": "vortex.crm.opportunities:opportunity.opportunity_number",
                         "label": "Opportunity number",
-                        "visible": true
+                        "visible": true,
+                        "pin": "start"
                       },
                       {
                         "field": "vortex.crm.opportunities:opportunity.name",
                         "label": "Opportunity name",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.crm.opportunities:opportunity.company",
                         "label": "Company",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.crm.opportunities:opportunity.value",
                         "label": "Value",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.crm.opportunities:opportunity.net_value",
                         "label": "Net value",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.crm.opportunities:opportunity.stage",
                         "label": "Stage",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.crm.opportunities:opportunity.expected_close_date",
                         "label": "Expected close date",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       }
                     ],
                     "sortable_fields": [
@@ -1152,32 +1194,38 @@
                       {
                         "field": "vortex.crm.activities:activity.subject",
                         "label": "Subject",
-                        "visible": true
+                        "visible": true,
+                        "pin": "start"
                       },
                       {
                         "field": "vortex.crm.activities:activity.activity_type",
                         "label": "Type",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.crm.activities:activity.due_at",
                         "label": "Due at",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.crm.activities:activity.completed",
                         "label": "Completed",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.crm.activities:activity.regarding",
                         "label": "Regarding",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.crm.activities:activity.owner",
                         "label": "Owner",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       }
                     ],
                     "title": "Activities",
@@ -1197,6 +1245,11 @@
                             "kind": "content"
                           }
                         }
+                      }
+                    },
+                    "features": {
+                      "pinning": {
+                        "enabled": true
                       }
                     }
                   }
@@ -2675,17 +2728,20 @@
                       {
                         "field": "vortex.crm.people:contact.contact_number",
                         "label": "Contact number",
-                        "visible": true
+                        "visible": true,
+                        "pin": "start"
                       },
                       {
                         "field": "vortex.crm.people:contact.full_name",
                         "label": "Full name",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.crm.people:contact.email",
                         "label": "Email",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       }
                     ],
                     "query_parameters": [
@@ -2711,6 +2767,11 @@
                             "kind": "content"
                           }
                         }
+                      }
+                    },
+                    "features": {
+                      "pinning": {
+                        "enabled": true
                       }
                     }
                   }

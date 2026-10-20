@@ -273,37 +273,44 @@
                       {
                         "field": "vortex.app_store:store_application.name",
                         "label": "Application",
-                        "visible": true
+                        "visible": true,
+                        "pin": "start"
                       },
                       {
                         "field": "vortex.app_store:store_application.status",
                         "label": "Status",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.app_store:store_application.record_update_status",
                         "label": "Existing records",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.app_store:store_application.records_processed",
                         "label": "Records processed",
-                        "visible": false
+                        "visible": false,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.app_store:store_application.installed_version",
                         "label": "Installed version",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.app_store:store_application.latest_version",
                         "label": "Latest version",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.app_store:store_application.published_at",
                         "label": "Published",
-                        "visible": false
+                        "visible": false,
+                        "pin": "unpinned"
                       }
                     ],
                     "row_actions": [
@@ -333,6 +340,11 @@
                             "kind": "content"
                           }
                         }
+                      }
+                    },
+                    "features": {
+                      "pinning": {
+                        "enabled": true
                       }
                     }
                   }
