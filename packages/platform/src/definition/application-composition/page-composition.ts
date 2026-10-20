@@ -296,7 +296,7 @@ const isItemShaped = (value: unknown): boolean =>
   typeof (value as { props?: { vortex?: unknown } }).props?.vortex === "object";
 
 /**
- * A plain setting value: text, a number, a boolean, a list of values or an object of values. A
+ * A plain setting value: text, a number, a boolean, null, a list or an object of values. A
  * list of compiled items is a slot, never a setting, so an item array never reads as one.
  */
 const plainSettingSchema: z.ZodType<unknown> = z.lazy(() =>
@@ -304,6 +304,7 @@ const plainSettingSchema: z.ZodType<unknown> = z.lazy(() =>
     z.string(),
     z.number().finite(),
     z.boolean(),
+    z.null(),
     z.array(plainSettingSchema).refine((items) => !items.some(isItemShaped), {
       message: "A list of compiled items is a slot, not a setting",
     }),
