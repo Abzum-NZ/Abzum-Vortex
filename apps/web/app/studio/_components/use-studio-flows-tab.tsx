@@ -36,10 +36,7 @@ export function useStudioFlowsTab({ draft, catalogue, labels, applications, open
   applications: readonly StudioModuleOwnerApplication[];
   openFlowsTab: () => void;
 }>) {
-  useIdlePreload(
-    preloadFlowCanvas,
-    "#studio-rail-flows, #studio-rail-panel [data-tree-key^='flow:']",
-  );
+  useIdlePreload(preloadFlowCanvas, "#studio-rail-flows");
   const { state, source, selected } = draft;
   const appearance = useAppearanceMode();
   const disabled = draft.locked;
