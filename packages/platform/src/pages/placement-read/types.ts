@@ -70,6 +70,12 @@ export type PlacementReadServices = Readonly<{
       ) => Promise<NonNullable<RecordsTableFeatureProjection["rowActions"]>>;
     }>;
   resolveRecordLinks: RecordLinkResolver;
+  /**
+   * Whether the viewer may export the records of one record type now: an export permission that
+   * reaches every record. Decided per read when a table has Export on; never cached. A draft
+   * preview offers no export.
+   */
+  exportAllowed: (context: InstalledRuntimeContext, recordTypeId: string) => Promise<boolean>;
   readCalendarSettings: () => Promise<
     HumanOrganizationRequestResult<{
       settings: Awaited<

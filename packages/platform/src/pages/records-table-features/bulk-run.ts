@@ -3,8 +3,6 @@ import "server-only";
 import { createHash, randomUUID } from "node:crypto";
 import {
   authoredGridLayout,
-  isRecord,
-  readRecordsTableContract,
   sameId,
   type ExecuteNamedActionResult,
   type IdentitySession,
@@ -16,7 +14,6 @@ import {
   type RecordsTableBulkActionRequest,
   type RecordsTableBulkRefusalReason,
   type RecordsTableBulkRunLine,
-  type RecordsTableContract,
   type RecordsTableFilterValue,
   type RecordsTableSortKey,
 } from "../../schema";
@@ -24,13 +21,7 @@ import {
   createHumanOrganizationRequestService,
   type HumanOrganizationRequestDependencies,
 } from "../../access/index";
-import {
-  placementSettings,
-  TABLE_BLOCK_RELEASE,
-} from "../../definition/application-composition-catalogue";
-import { createHumanInstalledPageBundleContextLoader } from "../../definition/installed-page-bundle-context";
 import { installedNamedActions } from "../../definition/installed-named-actions";
-import type { InstalledRuntimeContext } from "../../definition/index";
 import {
   createProtectedQueryService,
   tableReadCandidatesPerRequest,
@@ -48,13 +39,15 @@ import {
   fieldFilterTargetsOf,
   fieldLabelsOf,
   fieldLinkTypesOf,
-  type PlacementModule,
-  type PlacementQuery,
 } from "../placement-read/shared";
 import { buildRecordsTableQueryCommand } from "../records-table-query";
 import { recordsSelectionCountCeiling } from "../records-selection";
 import { openRecordsSelection, type RecordsSelectionDescriptor } from "../records-selection-seal";
-import { installedPlacementProps } from "./flow-dispatch";
+import {
+  loadRecordsTablePlacement,
+  type RecordsTableCommandAddress,
+  type RecordsTablePlacement,
+} from "./placement";
 import { readNamedActionEligibility } from "./named-action-eligibility";
 
 /**
@@ -70,19 +63,9 @@ export type RecordsTableBulkDependencies = HumanOrganizationRequestDependencies 
   Readonly<{ continuationKey: QueryContinuationKey }>;
 
 /** The application the request's own address resolved, and the installed context it read. */
-export type RecordsTableBulkAddress = Readonly<{
-  selection: OrganizationSelectionCandidate & Readonly<{ applicationRootId: string }>;
-  installedContext?: InstalledRuntimeContext;
-}>;
+export type RecordsTableBulkAddress = RecordsTableCommandAddress;
 
-type BulkPlacement = Readonly<{
-  installed: InstalledRuntimeContext;
-  contract: RecordsTableContract;
-  settings: ReturnType<typeof placementSettings>;
-  module: PlacementModule;
-  query: PlacementQuery;
-  recordTypeId: string;
-}>;
+type BulkPlacement = RecordsTablePlacement;
 
 /**
  * The most scan-limited reader requests one "matching" enumeration follows. A full page is bounded
@@ -90,7 +73,7 @@ type BulkPlacement = Readonly<{
  * `tableReadCandidatesPerRequest` candidates, so this many of them examine the candidate ceiling
  * the count uses (`recordsSelectionCountCeiling`) before the run refuses as "too many".
  */
-const enumerationScanLimitedCeiling = Math.ceil(
+export const enumerationScanLimitedCeiling = Math.ceil(
   recordsSelectionCountCeiling / tableReadCandidatesPerRequest,
 );
 
@@ -134,63 +117,22 @@ export const createRecordsTableBulkService = (dependencies: RecordsTableBulkDepe
   const selectionOf = (address: RecordsTableBulkAddress): OrganizationSelectionCandidate =>
     address.selection;
 
-  /** The installed Records table placement with bulk actions on, under the person's own scope. */
+  /**
+   * The installed Records table placement under the person's own scope, with the feature that
+   * uses it on: bulk actions run and count over a selection, and Export counts the same one.
+   */
   const placementFor = async (
     session: IdentitySession,
     address: RecordsTableBulkAddress,
     placementId: string,
+    use: "run" | "count",
   ): Promise<BulkPlacement | undefined> => {
-    const selection = selectionOf(address);
-    let installed = address.installedContext;
-    if (
-      installed === undefined ||
-      !sameId(installed.organizationId, address.selection.organizationId) ||
-      !sameId(installed.applicationRootId, address.selection.applicationRootId)
-    ) {
-      const read = await requests.run(session, selection, async (transaction, scope) => {
-        if (scope.applicationRootId === undefined) throw new Error("BULK_SCOPE_UNAVAILABLE");
-        return createHumanInstalledPageBundleContextLoader({
-          transaction,
-          scope: {
-            organizationId: scope.organizationId,
-            organizationAccountId: scope.organizationAccountId,
-            applicationRootId: scope.applicationRootId,
-            ...(scope.previewInstallationId === undefined
-              ? {}
-              : { previewInstallationId: scope.previewInstallationId }),
-          },
-        }).load();
-      });
-      if (read.kind !== "available") return refuse("installation_unavailable");
-      installed = read.value;
-    }
-    const props = installedPlacementProps(installed.releaseSet.application.content, placementId);
-    if (props === undefined) return refuse("placement_not_installed");
-    const vortex = props.vortex;
-    if (!isRecord(vortex) || !isRecord(vortex.block) || typeof vortex.queryId !== "string")
-      return refuse("placement_metadata_unreadable");
-    if (vortex.block.blockId !== TABLE_BLOCK_RELEASE.blockId) return refuse("not_a_table");
-    const settings = placementSettings(props);
-    const contract = readRecordsTableContract(settings);
-    if (contract === undefined) return refuse("contract_unreadable");
-    if (!contract.features.bulkActions.enabled) return refuse("feature_off");
-    const queryId = vortex.queryId;
-    const bound = installed.releaseSet.modules.flatMap((module) =>
-      module.content.queries
-        .filter((query) => sameId(query.queryId, queryId))
-        .map((query) => ({ module, query })),
-    );
-    const only = bound.length === 1 ? bound[0] : undefined;
-    if (only === undefined || only.query.recordType.state !== "resolved")
-      return refuse("query_not_installed");
-    return {
-      installed,
-      contract,
-      settings,
-      module: only.module,
-      query: only.query,
-      recordTypeId: String(only.query.recordType.recordTypeId),
-    };
+    const loaded = await loadRecordsTablePlacement(requests, session, address, placementId);
+    if ("refused" in loaded) return refuse(loaded.refused);
+    const { bulkActions, export: exported } = loaded.contract.features;
+    if (!bulkActions.enabled && !(use === "count" && exported.enabled))
+      return refuse("feature_off");
+    return loaded;
   };
 
   /** The sealed descriptor of a matching selection, opened for this person and this release. */
@@ -311,7 +253,7 @@ export const createRecordsTableBulkService = (dependencies: RecordsTableBulkDepe
       address: RecordsTableBulkAddress,
       request: RecordsSelectionCountRequest,
     ): Promise<RecordsSelectionCountResult> {
-      const placement = await placementFor(session, address, request.placementId);
+      const placement = await placementFor(session, address, request.placementId, "count");
       if (placement === undefined) return { kind: "refused" };
       const descriptor = descriptorFor(
         session,
@@ -354,7 +296,7 @@ export const createRecordsTableBulkService = (dependencies: RecordsTableBulkDepe
       report: (line: RecordsTableBulkRunLine) => void,
     ): Promise<void> {
       const selection = selectionOf(address);
-      const placement = await placementFor(session, address, request.placementId);
+      const placement = await placementFor(session, address, request.placementId, "run");
       if (placement === undefined) return report({ kind: "refused" });
       const bulk = placement.contract.features.bulkActions;
       const declared: RecordsTableBulkActionContract | undefined = bulk.enabled

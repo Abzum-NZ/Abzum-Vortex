@@ -317,6 +317,12 @@ export const readRecordsTable = async (
           membersOnly: groupMembers !== undefined,
         }
       : undefined;
+  // Export is projected only for a viewer whose export permission reaches every record; the
+  // permission is decided in this read and again by the export route on every request.
+  const exportAllowed =
+    contract.features.export.enabled && recordType.state === "resolved"
+      ? await read.services.exportAllowed(read.context, String(recordType.recordTypeId))
+      : undefined;
   const effectiveState = selectedQuery ?? addressed.state;
   const continuation = read.tableContinuation;
   const explicitRequest =
@@ -338,6 +344,7 @@ export const readRecordsTable = async (
       ...(contract.features.inlineEdit.enabled || contract.features.rowEdit.enabled
         ? { fieldEditors: fieldEditorsOf(bound.module, read.context.releaseSet.modules) }
         : {}),
+      ...(exportAllowed === undefined ? {} : { exportAllowed }),
       ...(timeZone === undefined ? {} : { timeZone }),
       resolveRecordLinks: read.services.resolveRecordLinks,
       state: { ...effectiveState, page },
@@ -411,7 +418,8 @@ export const readRecordsTable = async (
     // resolved inputs and query state minus the page) for this viewer, with no extra read.
     const seal = read.services.tables.sealSelection;
     const selectionToken =
-      seal === undefined || values.features?.bulkActions === undefined
+      seal === undefined ||
+      (values.features?.bulkActions === undefined && values.features?.export === undefined)
         ? undefined
         : seal({
             installationRevision: read.context.applicationReleaseRevision,

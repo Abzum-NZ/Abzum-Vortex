@@ -10,6 +10,7 @@ import {
   installedNamedActions,
   createReferenceChoiceService,
   createViewerSafeRecordLinkService,
+  decideRecordTypeExport,
   readCurrentOrganizationRuntimeSettingsAfterAuthorization,
   runtimeDatabasePoolSize,
   type HumanOrganizationRequestDependencies,
@@ -159,6 +160,24 @@ export const createPlacementReadServices = (
     );
   let calendarSettingsRead: ReturnType<typeof loadCalendarSettings> | undefined;
   const readCalendarSettings = () => (calendarSettingsRead ??= loadCalendarSettings());
+  // Export is offered to a person whose export permission reaches every record of the table's
+  // record type; the export route decides it again on every request. A draft preview offers none.
+  const exportAllowed = async (
+    context: InstalledRuntimeContext,
+    recordTypeId: string,
+  ): Promise<boolean> => {
+    if (selection.previewInstallationId !== undefined) return false;
+    const decided = await humanOrganizationRequests(dependencies.identityAuthorityId).run(
+      session,
+      selection,
+      (transaction, scope) => decideRecordTypeExport(transaction, scope, context, recordTypeId),
+    );
+    if (decided.kind !== "available") {
+      console.error(`[page] export permission unavailable: kind=${decided.kind}`);
+      return false;
+    }
+    return decided.value.kind === "permitted";
+  };
   const subjects = createPageSubjectReader(dependencies);
   // One labelled read per page and link target: a link shows its target's name as the viewer may
   // read it, and a detail address only where the viewer may open that page.
@@ -194,6 +213,7 @@ export const createPlacementReadServices = (
     queryNotices,
     tables,
     resolveRecordLinks,
+    exportAllowed,
     readCalendarSettings,
     readSubject,
     launcherValues: applicationLauncherQueryRowsToListValues,

@@ -188,25 +188,27 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
   if (grouped?.memberFeatures !== undefined) lastFeatures.current = grouped.memberFeatures;
   else if (values !== undefined) lastFeatures.current = values.features;
   const features = lastFeatures.current;
-  // Rows are selectable only for bulk commands over the selection.
+  // Rows are selectable only for commands over the selection: bulk actions and Export.
   const selectable =
     events?.selection_changed !== undefined &&
     contract !== undefined &&
-    features?.bulkActions !== undefined;
+    (features?.bulkActions !== undefined || features?.export !== undefined);
   const selectedRecordIds = values?.selectedRecordIds ?? [];
   // The selection beyond the page: the read's sealed descriptor and what the page runtime holds.
   const selectionToken = values?.selectionToken;
   const selectionScope = values?.selectionScope;
   const bulkRun = values?.bulkRun;
+  const exportRun = values?.exportRun;
   const actionAvailability = values?.actionAvailability;
   const selectionParts = useMemo(
     () => ({
       ...(selectionToken === undefined ? {} : { selectionToken }),
       ...(selectionScope === undefined ? {} : { selectionScope }),
       ...(bulkRun === undefined ? {} : { bulkRun }),
+      ...(exportRun === undefined ? {} : { exportRun }),
       ...(actionAvailability === undefined ? {} : { actionAvailability }),
     }),
-    [selectionToken, selectionScope, bulkRun, actionAvailability],
+    [selectionToken, selectionScope, bulkRun, exportRun, actionAvailability],
   );
   const paged =
     grouped !== undefined || values?.hasNextPage === true || values?.hasPreviousPage === true;

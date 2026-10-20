@@ -212,6 +212,7 @@ const loaders: Readonly<
   grouping: () => import("./grouping"),
   conditional_formatting: () => import("./conditional-format"),
   pivot: () => import("./pivot"),
+  export: () => import("./export"),
 };
 
 const projectionKeys: Readonly<Record<keyof RecordsTableFeatureProjection, GridExtensionKey>> = {
@@ -229,6 +230,7 @@ const projectionKeys: Readonly<Record<keyof RecordsTableFeatureProjection, GridE
   grouping: "grouping",
   conditionalFormatting: "conditional_formatting",
   pivot: "pivot",
+  export: "export",
 };
 
 /** The features a projection turns on, in the registry's order. */
@@ -291,6 +293,7 @@ const featurePoints: Readonly<Record<GridExtensionKey, readonly ComponentPoint[]
   grouping: ["ToolbarItems", "ColumnMenuItems"],
   conditional_formatting: ["CellAdornment", "HeaderAdornment"],
   pivot: ["ToolbarItems", "ViewBody"],
+  export: ["ToolbarItems", "SelectionBanner"],
 };
 
 /** What a row opens to for each feature that fills the row panel: its related records, at most three. */

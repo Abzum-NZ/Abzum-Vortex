@@ -79,6 +79,12 @@ export type RecordsTableFeatureProjection = Readonly<{
    * `view` is present when the address opens the table as a pivot, with its row position.
    */
   pivot?: Readonly<{ rowPageSize: number; totals: boolean; view?: Readonly<{ cursor?: string }> }>;
+  /**
+   * The viewer may export the records they see: the most records one export holds. Present only
+   * when the feature is on and the viewer's export permission allowed it in this read; the export
+   * route decides both again on every request.
+   */
+  export?: Readonly<{ maxRows: number }>;
 }>;
 
 /**
@@ -229,6 +235,8 @@ export const projectRecordsTableFeatures = (
   conditionalFormatting?: ConditionalFormattingProjection,
   pivotView?: Readonly<{ cursor?: string }>,
   fieldLabels?: Readonly<Record<string, string>>,
+  /** The viewer holds an export permission that reaches every record, decided in this read. */
+  exportAllowed?: boolean,
 ): RecordsTableFeatureProjection | undefined => {
   const { features } = contract;
   const readable = (field: string): boolean =>
@@ -288,7 +296,15 @@ export const projectRecordsTableFeatures = (
           unassignedLabel: groupingSettings.unassignedLabel,
         }
       : undefined;
+  const exportSettings = features.export;
   const projection: RecordsTableFeatureProjection = {
+    ...(exportSettings.enabled &&
+    exportAllowed === true &&
+    exportSettings.maxRows !== undefined &&
+    exportSettings.formats.includes("csv") &&
+    contract.columns.some((column) => readable(column.field))
+      ? { export: { maxRows: exportSettings.maxRows } }
+      : {}),
     ...(rowEdit.enabled &&
     rowEdit.eventId !== undefined &&
     rowEdit.trigger === "button" &&
