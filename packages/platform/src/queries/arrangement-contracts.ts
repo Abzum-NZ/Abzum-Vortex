@@ -422,6 +422,8 @@ export const arrangementRefusalReasonCodes = [
   "time_zone_invalid",
   /** A pivot's column dimension holds more values than one pivot shows. */
   "pivot_columns_exceeded",
+  /** A date bucket (its start or its exclusive end) falls outside the supported UTC years 0001 to 9999. */
+  "value_out_of_range",
 ] as const;
 export type ArrangementRefusalReasonCode = (typeof arrangementRefusalReasonCodes)[number];
 
