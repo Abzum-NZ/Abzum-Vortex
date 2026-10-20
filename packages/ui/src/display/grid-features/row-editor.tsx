@@ -26,6 +26,7 @@ import { useUnsavedWorkRegistry } from "../../controls/unsaved-work";
 import { Pencil } from "lucide-react";
 import { useDateFormatOptions } from "../date-format-context";
 import { fail, requireRecord, type DisplayEventHandlers, type DisplayRow } from "../projected-data";
+import type { RowLine } from "../sub-rows";
 import { LinkDraftPicker, linkedRecordTitle } from "./record-choice-picker";
 import {
   readEditDraft,
@@ -129,7 +130,10 @@ function RowEditScope({ context, children, retainRow }: GridFeatureScopeProps): 
   // submit. A conflict with unchanged access keeps the original draft and revision.
   useEffect(() => {
     if (draft === undefined || saving) return;
-    const current = context.rows.find((row) => same(row.recordId, draft.recordId));
+    const current = context.lines.find(
+      (line): line is Extract<RowLine, { kind: "row" }> =>
+        line.kind === "row" && same(line.row.recordId, draft.recordId),
+    )?.row;
     const allowed = context.features.rowEdit;
     if (
       current === undefined ||
@@ -149,7 +153,7 @@ function RowEditScope({ context, children, retainRow }: GridFeatureScopeProps): 
       setConflict(false);
       setMessage("This row can no longer be edited. Your changes were not saved.");
     }
-  }, [context.features.rowEdit, context.rows, draft, saving]);
+  }, [context.features.rowEdit, context.lines, draft, saving]);
 
   const start = (row: DisplayRow): void => {
     const feature = context.features.rowEdit;
