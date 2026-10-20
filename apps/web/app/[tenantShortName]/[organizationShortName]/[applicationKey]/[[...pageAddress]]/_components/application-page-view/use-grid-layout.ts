@@ -3,6 +3,7 @@ import { toast } from "@vortex/ui/components/sonner";
 import type { DisplaySemanticEvent } from "@vortex/ui";
 import {
   readRecordsTableAddressedQuery,
+  readRecordsTableView,
   type GridLayout,
   type GridLayoutCommitResult,
   type GridLayoutState,
@@ -98,6 +99,52 @@ export function useGridLayout({
     },
     [navigationKey, setRefreshedPlacementData],
   );
+
+  /**
+   * A write's change to the views list, applied now and kept for a few seconds: a grid read that
+   * was already under way when the write answered lands with the views it read before the write,
+   * and would otherwise undo the change on screen. Whenever the page's data changes and no longer
+   * shows the change, it is applied again.
+   */
+  const trackedPatches = useRef(
+    new Map<
+      string,
+      Readonly<{
+        placementId: string;
+        expires: number;
+        apply: (layout: GridLayoutState) => GridLayoutState;
+        done: (layout: GridLayoutState) => boolean;
+      }>
+    >(),
+  );
+  const patchViews = useCallback(
+    (
+      placementId: string,
+      viewId: string,
+      apply: (layout: GridLayoutState) => GridLayoutState,
+      done: (layout: GridLayoutState) => boolean,
+    ): void => {
+      trackedPatches.current.set(`${placementId.toLowerCase()}:${viewId}`, {
+        placementId,
+        expires: Date.now() + 15_000,
+        apply,
+        done,
+      });
+      patchLayoutState(placementId, apply);
+    },
+    [patchLayoutState],
+  );
+  useEffect(() => {
+    for (const [key, patch] of trackedPatches.current) {
+      if (patch.expires < Date.now()) {
+        trackedPatches.current.delete(key);
+        continue;
+      }
+      const layout = layoutOf(patch.placementId);
+      if (layout?.views !== undefined && !patch.done(layout))
+        patchLayoutState(patch.placementId, patch.apply);
+    }
+  }, [currentData, layoutOf, patchLayoutState]);
 
   const commitLayout = useCallback(
     async (placementId: string, event: DisplaySemanticEvent): Promise<GridLayoutCommitResult> => {
@@ -268,24 +315,32 @@ export function useGridLayout({
       selectedChange: (selected: SelectedGridView) => SelectedGridView,
       itemChange: Partial<GridViewItem> = {},
     ): void =>
-      patchLayoutState(placementId, (layout) => {
-        if (layout.views === undefined) return layout;
-        const { selected } = layout.views;
-        return {
-          ...layout,
-          views: {
-            ...layout.views,
-            items: layout.views.items.map((item) =>
-              item.viewId === viewId ? { ...item, ...itemChange, revision } : item,
-            ),
-            selected:
-              selected !== null && selected.viewId === viewId
-                ? { ...selectedChange(selected), revision }
-                : selected,
-          },
-        };
-      }),
-    [patchLayoutState],
+      patchViews(
+        placementId,
+        viewId,
+        (layout) => {
+          if (layout.views === undefined) return layout;
+          const { selected } = layout.views;
+          return {
+            ...layout,
+            views: {
+              ...layout.views,
+              items: layout.views.items.map((item) =>
+                item.viewId === viewId && item.revision < revision
+                  ? { ...item, ...itemChange, revision }
+                  : item,
+              ),
+              selected:
+                selected !== null && selected.viewId === viewId && selected.revision < revision
+                  ? { ...selectedChange(selected), revision }
+                  : selected,
+            },
+          };
+        },
+        (layout) =>
+          (layout.views?.items.find((item) => item.viewId === viewId)?.revision ?? 0) >= revision,
+      ),
+    [patchViews],
   );
 
   /** Another tab changed the view first: the grid reads it again once, so the latest shows. */
@@ -335,25 +390,37 @@ export function useGridLayout({
             };
             await adoptOwnLayout(placementId, result.viewId, document);
             // The grid already shows exactly this view, so it is selected without a read.
-            patchLayoutState(placementId, (layout) =>
-              layout.views === undefined
-                ? layout
-                : {
-                    ...layout,
-                    views: {
-                      ...layout.views,
-                      items: [...layout.views.items, item],
-                      selected: {
-                        ...item,
-                        document,
-                        hidden: { columns: 0, filters: 0, sort: 0 },
-                        sharing: { organization: false, roleIds: [], groupIds: [] },
-                      },
-                      notice: null,
-                    },
-                  },
-            );
             selectTableViewInPlace(placementId, result.viewId);
+            patchViews(
+              placementId,
+              result.viewId,
+              (layout) =>
+                layout.views === undefined
+                  ? layout
+                  : {
+                      ...layout,
+                      views: {
+                        ...layout.views,
+                        items: layout.views.items.some((held) => held.viewId === item.viewId)
+                          ? layout.views.items
+                          : [...layout.views.items, item],
+                        // Only while the address still names the new view: the person may move on.
+                        selected:
+                          readRecordsTableView(placementId, [
+                            ...new URLSearchParams(window.location.search),
+                          ])?.viewId === item.viewId
+                            ? {
+                                ...item,
+                                document,
+                                hidden: { columns: 0, filters: 0, sort: 0 },
+                                sharing: { organization: false, roleIds: [], groupIds: [] },
+                              }
+                            : layout.views.selected,
+                        notice: null,
+                      },
+                    },
+              (layout) => layout.views?.items.some((held) => held.viewId === item.viewId) === true,
+            );
           }
           return result;
         }
@@ -431,16 +498,22 @@ export function useGridLayout({
           if (result.outcome === "done") {
             if (state.views.selected?.viewId === command.viewId) openTableView(placementId, null);
             else
-              patchLayoutState(placementId, (layout) =>
-                layout.views === undefined
-                  ? layout
-                  : {
-                      ...layout,
-                      views: {
-                        ...layout.views,
-                        items: layout.views.items.filter((item) => item.viewId !== command.viewId),
+              patchViews(
+                placementId,
+                command.viewId,
+                (layout) =>
+                  layout.views === undefined
+                    ? layout
+                    : {
+                        ...layout,
+                        views: {
+                          ...layout.views,
+                          items: layout.views.items.filter(
+                            (item) => item.viewId !== command.viewId,
+                          ),
+                        },
                       },
-                    },
+                (layout) => !layout.views?.items.some((item) => item.viewId === command.viewId),
               );
           } else if (result.outcome === "conflict") reopenAfterConflict(placementId);
           return result;
@@ -455,7 +528,7 @@ export function useGridLayout({
       dropOwnLayout,
       layoutOf,
       openTableView,
-      patchLayoutState,
+      patchViews,
       patchViewState,
       reopenAfterConflict,
       selectTableViewInPlace,
