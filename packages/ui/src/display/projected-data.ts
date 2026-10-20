@@ -430,6 +430,8 @@ export type DisplaySemanticEvent =
       recordId: string;
       /** The token of the page before, to read the next page; absent for the first page. */
       continuationToken?: string;
+      /** Remaining room in the shared row budget; can only narrow the authored page size. */
+      pageSize?: number;
     }>;
 
 /** A handler may return the promise of the flow it started; the control stays busy until it settles. */

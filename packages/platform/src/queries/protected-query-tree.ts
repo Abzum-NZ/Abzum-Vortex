@@ -137,7 +137,7 @@ export const treeLevelCommand = async (
     filterableFieldIds: command.filterableFieldIds.map((fieldId) => fieldId.toLowerCase()).sort(),
     requestedFieldIds: command.requestedFieldIds.map((fieldId) => fieldId.toLowerCase()).sort(),
     requestedSystemFieldKeys: [...command.requestedSystemFieldKeys].sort(),
-    pageSize: command.pageSize,
+    // A keyset position is independent of page size: each read can shrink to the remaining row budget.
     sort: command.sort.map((key) => ({ ...key, fieldId: key.fieldId.toLowerCase() })),
     search: command.search ?? null,
     sortableFieldIds: command.sortableFieldIds.map((id) => id.toLowerCase()).sort(),

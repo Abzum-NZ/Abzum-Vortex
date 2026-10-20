@@ -122,6 +122,7 @@ export function applicationPageRules(scope: ApplicationScope): void {
     );
     return {
       recordTypeLabel: String(record?.singularLabel ?? ""),
+      maximumPageSize: Number(bound.pageSize),
       fields: array(record?.fields)
         .filter((field) => offered.has(String(field.fieldId).toLowerCase()))
         .map((field) => {

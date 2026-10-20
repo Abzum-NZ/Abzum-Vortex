@@ -56,6 +56,7 @@ export const loadApplicationRowDetail = async (
     placementId: string;
     recordId: string;
     continuationToken?: string;
+    pageSize?: number;
     installationRevision: number;
   }>,
 ): Promise<RowDetailLoadResult> => {
@@ -205,6 +206,7 @@ export const loadApplicationRowDetail = async (
             placement,
             {
               parentRecordId: parentRecordId.data,
+              ...(request.pageSize === undefined ? {} : { pageSize: request.pageSize }),
               ...(request.continuationToken === undefined
                 ? {}
                 : { continuationToken: request.continuationToken }),

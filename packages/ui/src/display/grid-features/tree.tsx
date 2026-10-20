@@ -137,13 +137,14 @@ function TreeLevel({
   );
 
   const readPage = useCallback(
-    async (token: string | undefined): Promise<Outcome | undefined> => {
+    async (token: string | undefined, requestedRows: number): Promise<Outcome | undefined> => {
       if (readLevel === undefined) return { status: "error" };
       try {
         return parseOutcome(
           await readLevel({
             event: "row_expanded",
             recordId: parentRecordId,
+            pageSize: requestedRows,
             ...(token === undefined ? {} : { continuationToken: token }),
           }),
         );
@@ -164,13 +165,14 @@ function TreeLevel({
   );
 
   const load = useCallback(async () => {
-    if (remaining() < pageSize) {
+    const requestedRows = Math.min(pageSize, Math.max(remaining(), 0));
+    if (requestedRows === 0) {
       setState({ kind: "budget" });
       return;
     }
-    budget.set(nodeKey, pageSize);
+    budget.set(nodeKey, requestedRows);
     setState({ kind: "loading" });
-    const outcome = await readPage(undefined);
+    const outcome = await readPage(undefined, requestedRows);
     if (!mounted.current || outcome === undefined) return;
     if (outcome.status !== "ready") {
       budget.delete(nodeKey);
@@ -204,13 +206,14 @@ function TreeLevel({
     if (state.kind !== "ready" || state.level.next === undefined || state.more === "reading")
       return;
     const shown = state.level;
-    if (remaining() - shown.rows.length < pageSize) {
+    const requestedRows = Math.min(pageSize, Math.max(remaining() - shown.rows.length, 0));
+    if (requestedRows === 0) {
       setState({ ...state, capped: true });
       return;
     }
-    budget.set(nodeKey, shown.rows.length + pageSize);
+    budget.set(nodeKey, shown.rows.length + requestedRows);
     setState({ ...state, more: "reading" });
-    const outcome = await readPage(shown.next);
+    const outcome = await readPage(shown.next, requestedRows);
     if (!mounted.current) return;
     // A dropped reply leaves the shown rows as they were.
     if (outcome === undefined) {

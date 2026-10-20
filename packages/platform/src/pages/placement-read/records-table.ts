@@ -142,6 +142,14 @@ export const readRecordsTable = async (
   // A tree table reads one level at a time: its roots, or the children of the record a level
   // read names, whose page position is the level's own token and never the address's.
   const treeFeature = contract.features.tree;
+  if (
+    treeFeature.enabled &&
+    (treeFeature.parentField === undefined || treeFeature.childPageSize === undefined)
+  ) {
+    logPlacementFailure(address, placementId, "table_tree_invalid");
+    data[placementId] = { status: "error" };
+    return;
+  }
   const level =
     read.treeLevel !== undefined && sameId(read.treeLevel.placementId, placementId)
       ? read.treeLevel
@@ -152,14 +160,16 @@ export const readRecordsTable = async (
     return;
   }
   const tree =
-    treeFeature.enabled && treeFeature.parentField !== undefined
+    treeFeature.enabled &&
+    treeFeature.parentField !== undefined &&
+    treeFeature.childPageSize !== undefined
       ? {
           parentFieldId: treeFeature.parentField.toLowerCase(),
           parentRecordId: level?.parentRecordId ?? null,
           pageSize:
             level === undefined
               ? contract.pageSize
-              : (treeFeature.childPageSize ?? contract.pageSize),
+              : Math.min(treeFeature.childPageSize, level.pageSize ?? treeFeature.childPageSize),
         }
       : undefined;
   const continuation = read.tableContinuation;

@@ -180,6 +180,8 @@ export type RecordsTableBoardFacts = Readonly<{
  */
 export type RecordsTableQueryFacts = Readonly<{
   recordTypeLabel: string;
+  /** The bound query's ceiling, absent while no query has been chosen in Studio. */
+  maximumPageSize: number | undefined;
   fields: readonly RecordsTableFieldFacts[];
   relationships: readonly Readonly<{ key: string; label: string }>[];
   /**

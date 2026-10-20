@@ -68,6 +68,16 @@ export const recordsTableTreeFeature: RecordsTableFeatureDefinition<RecordsTable
         code,
         `Show at most ${RECORDS_TABLE_TREE_MAXIMUM_PAGE_SIZE} child records at a time.`,
       );
+    if (facts.maximumPageSize === undefined)
+      return featureNotPossible(
+        code,
+        "Choose a query with a known page limit before enabling a tree.",
+      );
+    if (state.childPageSize > facts.maximumPageSize)
+      return featureNotPossible(
+        code,
+        `This query allows at most ${facts.maximumPageSize} child records at a time.`,
+      );
     return featureAvailable;
   },
 };

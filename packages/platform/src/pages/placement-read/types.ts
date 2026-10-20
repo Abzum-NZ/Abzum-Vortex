@@ -115,6 +115,7 @@ export type PlacementReadInput = Readonly<{
     placementId: string;
     parentRecordId: string;
     continuationToken?: string;
+    pageSize?: number;
   }>;
   gridLayouts: PlacementGridLayouts;
   markSubjectUnreadable: () => void;

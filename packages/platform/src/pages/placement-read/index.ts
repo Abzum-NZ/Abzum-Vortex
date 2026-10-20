@@ -156,7 +156,7 @@ export const isTreeTablePlacement = (placement: PlacementReadEntry): boolean =>
 export const readRecordsTableTreeLevel = async (
   read: PlacementReadInput,
   placement: PlacementReadEntry,
-  request: Readonly<{ parentRecordId: string; continuationToken?: string }>,
+  request: Readonly<{ parentRecordId: string; continuationToken?: string; pageSize?: number }>,
 ): Promise<TreeLevelResult | undefined> => {
   if (!isTreeTablePlacement(placement)) return undefined;
   const { placementId } = placement;
@@ -168,6 +168,7 @@ export const readRecordsTableTreeLevel = async (
       treeLevel: {
         placementId,
         parentRecordId: request.parentRecordId,
+        ...(request.pageSize === undefined ? {} : { pageSize: request.pageSize }),
         ...(request.continuationToken === undefined
           ? {}
           : { continuationToken: request.continuationToken }),

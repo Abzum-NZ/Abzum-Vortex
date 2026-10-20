@@ -110,6 +110,7 @@ export const studioRecordsTableQueryFacts = (
   related: StudioRelatedRecordsChoices,
 ): RecordsTableQueryFacts => ({
   recordTypeLabel: query?.label ?? "",
+  maximumPageSize: query?.board?.pageSize,
   fields: (query?.fields ?? []).map((field) => ({
     field: field.reference,
     label: field.label,
