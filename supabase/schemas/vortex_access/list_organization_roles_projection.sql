@@ -1,6 +1,6 @@
 create or replace function vortex_access.list_organization_roles_projection(
   p_record_ids uuid[], p_sort_key text, p_direction text, p_after jsonb,
-  p_limit integer
+  p_limit integer, p_predicate jsonb
 )
 returns table (
   organization_id uuid,
@@ -22,6 +22,7 @@ declare
   after_record_id uuid;
   join_sql text;
   scan_sql text;
+  predicate_plan jsonb;
 begin
   if p_sort_key not in ('record_id', 'key', 'label', 'lifecycle')
     or p_direction not in ('ascending', 'descending')
@@ -81,6 +82,18 @@ begin
       and role_revision.role_id = role.role_id
       and role_revision.revision = role.live_revision
   $join$ end;
+  predicate_plan := vortex_record.compile_projection_predicate_internal(
+    p_predicate,
+    $declared${
+      "key": {"sql": "role_revision.role_key", "database": "text", "search": true},
+      "label": {"sql": "role_revision.label", "database": "text", "search": true},
+      "lifecycle": {"sql": "role_revision.lifecycle::text", "database": "text", "filter": true},
+      "role_kind": {"sql": "role.role_kind::text", "database": "text", "filter": true},
+      "privilege_classification": {"sql": "role_revision.privilege_classification::text", "database": "text", "filter": true},
+      "assignment_policy": {"sql": "role_revision.assignment_policy::text", "database": "text", "filter": true}
+    }$declared$::jsonb,
+    6
+  );
   begin
     select authorized.* into strict scope_row
     from vortex_access.organization_roles_administration_scope() as authorized;
@@ -111,15 +124,15 @@ begin
   $scan$ || join_sql || $scan$
   where role.organization_id = $1
     and ($2 is null or role.role_id = any($2))
-  $scan$ || keyset_sql || pg_catalog.format(' order by %s limit $5', order_sql);
+  $scan$ || coalesce(' and ' || (predicate_plan ->> 'predicate'), '') || keyset_sql || pg_catalog.format(' order by %s limit $5', order_sql);
   return query execute scan_sql using scope_row.organization_id, p_record_ids,
-    after_value, after_record_id, p_limit;
+    after_value, after_record_id, p_limit, predicate_plan -> 'parameters';
 end
 $function$;
 
-revoke all on function vortex_access.list_organization_roles_projection(uuid[], text, text, jsonb, integer)
+revoke all on function vortex_access.list_organization_roles_projection(uuid[], text, text, jsonb, integer, jsonb)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-grant execute on function vortex_access.list_organization_roles_projection(uuid[], text, text, jsonb, integer)
+grant execute on function vortex_access.list_organization_roles_projection(uuid[], text, text, jsonb, integer, jsonb)
   to vortex_owner, vortex_record_adapter, postgres;
-alter function vortex_access.list_organization_roles_projection(uuid[], text, text, jsonb, integer)
+alter function vortex_access.list_organization_roles_projection(uuid[], text, text, jsonb, integer, jsonb)
   owner to vortex_owner;
