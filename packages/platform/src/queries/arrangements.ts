@@ -576,7 +576,7 @@ export const arrangeSummary = async (
 
 type ProtectedBoardService = Pick<
   ReturnType<typeof createProtectedQueryService>,
-  "boardMembers" | "boardInitialPages" | "boardSummary"
+  "boardMembers" | "boardColumnPages" | "boardSummary"
 >;
 type ProtectedBoardSummaryArguments = Parameters<ProtectedBoardService["boardSummary"]>;
 type ProtectedBoardMembersArguments = Parameters<ProtectedBoardService["boardMembers"]>;
@@ -678,9 +678,9 @@ const validateProtectedBoardPage = (
 };
 
 /**
- * Composes one current protected board summary with only its requested member pages. Initial
- * requests read at most twelve installed columns plus unassigned in one protected operation;
- * continuations read one column. The summary and member operation have separate snapshots.
+ * Composes one protected summary of the requested columns with their bounded member pages. A read names the columns on screen and reads their first pages in one
+ * protected operation; a continuation reads one column. A column not named keeps a null page. The
+ * summary and member operation have separate snapshots.
  */
 export const arrangeProtectedBoard = async (
   queries: ProtectedBoardService,
@@ -699,6 +699,10 @@ export const arrangeProtectedBoard = async (
     queryId: command.queryId,
     inputValues: command.inputValues,
     choiceFieldId: command.choiceFieldId,
+    columns:
+      command.pageRequest.kind === "read"
+        ? command.pageRequest.columns
+        : [command.pageRequest.selector.column],
     filter: command.filter,
     filterableFieldIds: command.filterableFieldIds,
   });
@@ -739,16 +743,20 @@ export const arrangeProtectedBoard = async (
     return undefined;
   };
 
-  if (command.pageRequest.kind === "initial") {
-    const selectors: ProtectedQueryBoardSelector[] = summary.columns.map((column) => ({
+  if (command.pageRequest.kind === "read") {
+    // Only the named columns are read; each must be an installed option or the unassigned bucket.
+    const installed = new Set(summary.columns.map((column) => column.value));
+    const named = command.pageRequest.columns;
+    if (
+      new Set(named.map((column) => JSON.stringify(column))).size !== named.length ||
+      named.some((column) => column.kind === "option" && !installed.has(column.value))
+    )
+      return { kind: "available", value: refusal("cursor_stale") };
+    const selectors: ProtectedQueryBoardSelector[] = named.map((column) => ({
       choiceFieldId: summary.choiceFieldId,
-      column: { kind: "option", value: column.value },
+      column,
     }));
-    selectors.push({
-      choiceFieldId: summary.choiceFieldId,
-      column: { kind: "unassigned" },
-    });
-    const producedPages = await queries.boardInitialPages(caller, selection, {
+    const producedPages = await queries.boardColumnPages(caller, selection, {
       moduleRootId: command.moduleRootId,
       queryId: command.queryId,
       inputValues: command.inputValues,

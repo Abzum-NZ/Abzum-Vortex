@@ -236,7 +236,8 @@ export type BoardPage = Readonly<{
 
 /** Exact current protected totals plus a bounded page, or null when this bucket was untouched. */
 export type BoardBucketPayload = Readonly<{
-  rowCount: number;
+  state: "unread" | "reading" | "read";
+  rowCount: number | null;
   aggregates: readonly DisplaySummaryMetric[];
   page: BoardPage | null;
 }>;
@@ -271,8 +272,6 @@ export type BoardPayload = Readonly<{
   cardTitleFieldId: string;
   /** The only field identities a card may carry; readable values and labels may be omitted. */
   cardFieldIds: readonly string[];
-  totalRowCount: number;
-  aggregates: readonly DisplaySummaryMetric[];
   columns: readonly BoardColumnPayload[];
   /** Cards with no stage yet, and the stages they may move to: the start stage and its moves. */
   unassigned: BoardBucketPayload & Readonly<{ moves: readonly string[] }>;
@@ -427,8 +426,8 @@ export type DisplaySemanticEvent =
     }>
   | Readonly<{
       event: "page_changed";
-      column: BoardColumnSelector;
-      continuationToken: string;
+      columns: readonly BoardColumnSelector[];
+      continuationToken?: string;
     }>
   /** Runs a declared bulk named action over the selection the page holds for the table. */
   | Readonly<{ event: "bulk_action"; action: string }>
