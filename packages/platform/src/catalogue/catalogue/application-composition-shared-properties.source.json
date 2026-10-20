@@ -65,9 +65,20 @@
           "key": "value",
           "label": "Value",
           "help": "The fixed value, written for the input's type",
-          "required": true,
+          "required": false,
           "minLength": 0,
           "maxLength": 500,
+          "showWhen": {
+            "property": "source",
+            "values": ["fixed"]
+          }
+        },
+        {
+          "kind": "record_reference",
+          "key": "record",
+          "label": "Record",
+          "help": "The fixed record, for an input that takes a record",
+          "required": false,
           "showWhen": {
             "property": "source",
             "values": ["fixed"]
@@ -107,6 +118,10 @@
             {
               "key": "person",
               "label": "Person"
+            },
+            {
+              "key": "organisation",
+              "label": "Organisation"
             }
           ],
           "showWhen": {
