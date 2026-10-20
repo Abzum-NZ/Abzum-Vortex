@@ -168,6 +168,11 @@ export type ProjectedTableValues = Readonly<{
   nextContinuationToken?: string;
   hasPreviousPage?: boolean;
   previousContinuationToken?: string;
+  /**
+   * The sealed "every matching record" descriptor of this read, present only when bulk actions are
+   * on: the browser hands it back to select every matching record without listing them.
+   */
+  selectionToken?: string;
 }>;
 
 /** The viewer's search and filters a table page was read with; both empty when it was not narrowed. */
