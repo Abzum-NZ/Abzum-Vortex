@@ -113,7 +113,12 @@ export function useBulkSelection({
         if (selected.length === 0 || scopes[placementId] !== undefined) continue;
         const held = heldAvailability.current[placementId];
         // A table whose selection and rows did not change keeps its decisions; no second read.
-        if (held?.data === currentData[placementId] && held.selected === selected) continue;
+        if (
+          held !== undefined &&
+          held.data === currentData[placementId] &&
+          held.selected === selected
+        )
+          continue;
         const table = tablePayloadFor(currentData[placementId]);
         if (table?.features?.bulkActions === undefined || table.rows.length === 0) continue;
         const visible = table.rows.filter((row) => selected.includes(row.recordId));
