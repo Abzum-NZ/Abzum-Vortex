@@ -498,32 +498,38 @@
                       {
                         "field": "vortex.organisation_administration:activity_entry.occurred_at",
                         "label": "Occurred",
-                        "visible": true
+                        "visible": true,
+                        "pin": "start"
                       },
                       {
                         "field": "vortex.organisation_administration:activity_entry.actor_kind",
                         "label": "Actor kind",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.organisation_administration:activity_entry.actor",
                         "label": "Actor",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.organisation_administration:activity_entry.action",
                         "label": "Action",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.organisation_administration:activity_entry.subject_count",
                         "label": "Subjects",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.organisation_administration:activity_entry.changed_field_count",
                         "label": "Changed fields",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       }
                     ],
                     "title": "Activity (last 90 days)",
@@ -543,6 +549,11 @@
                             "kind": "content"
                           }
                         }
+                      }
+                    },
+                    "features": {
+                      "pinning": {
+                        "enabled": true
                       }
                     }
                   }
@@ -646,22 +657,26 @@
                       {
                         "field": "vortex.system_directory:person.display_name",
                         "label": "Display name",
-                        "visible": true
+                        "visible": true,
+                        "pin": "start"
                       },
                       {
                         "field": "vortex.system_directory:person.state",
                         "label": "State",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.system_directory:person.language",
                         "label": "Language",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.system_directory:person.time_zone",
                         "label": "Time zone",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       }
                     ],
                     "row_actions": [
@@ -694,6 +709,11 @@
                             "kind": "content"
                           }
                         }
+                      }
+                    },
+                    "features": {
+                      "pinning": {
+                        "enabled": true
                       }
                     }
                   }
@@ -752,22 +772,26 @@
                       {
                         "field": "vortex.system_directory:organization_invitation.invited_email",
                         "label": "Invited email",
-                        "visible": true
+                        "visible": true,
+                        "pin": "start"
                       },
                       {
                         "field": "vortex.system_directory:organization_invitation.state",
                         "label": "State",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.system_directory:organization_invitation.invited_at",
                         "label": "Invited at",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.system_directory:organization_invitation.expires_at",
                         "label": "Expires at",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       }
                     ],
                     "row_actions": [
@@ -792,6 +816,11 @@
                             "kind": "content"
                           }
                         }
+                      }
+                    },
+                    "features": {
+                      "pinning": {
+                        "enabled": true
                       }
                     }
                   }
@@ -958,32 +987,38 @@
                       {
                         "field": "vortex.organisation_administration:organization_settings.language",
                         "label": "Language",
-                        "visible": true
+                        "visible": true,
+                        "pin": "start"
                       },
                       {
                         "field": "vortex.organisation_administration:organization_settings.time_zone",
                         "label": "Time zone",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.organisation_administration:organization_settings.currency",
                         "label": "Currency",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.organisation_administration:organization_settings.date_format",
                         "label": "Date format",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.organisation_administration:organization_settings.number_format",
                         "label": "Number format",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.organisation_administration:organization_settings.default_application_root_id",
                         "label": "Default application",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       }
                     ],
                     "vortex": {
@@ -1002,6 +1037,11 @@
                             "kind": "content"
                           }
                         }
+                      }
+                    },
+                    "features": {
+                      "pinning": {
+                        "enabled": true
                       }
                     }
                   }
@@ -1259,22 +1299,26 @@
                       {
                         "field": "vortex.organisation_administration:organisation_notice.title",
                         "label": "Title",
-                        "visible": true
+                        "visible": true,
+                        "pin": "start"
                       },
                       {
                         "field": "vortex.organisation_administration:organisation_notice.body",
                         "label": "Body",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.organisation_administration:organisation_notice.state",
                         "label": "State",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.organisation_administration:organisation_notice.published_at",
                         "label": "Published",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       }
                     ],
                     "title": "Organisation notices",
@@ -1294,6 +1338,11 @@
                             "kind": "content"
                           }
                         }
+                      }
+                    },
+                    "features": {
+                      "pinning": {
+                        "enabled": true
                       }
                     }
                   }
@@ -1479,27 +1528,32 @@
                       {
                         "field": "vortex.organisation_administration:privacy_request_case.subject",
                         "label": "Subject",
-                        "visible": true
+                        "visible": true,
+                        "pin": "start"
                       },
                       {
                         "field": "vortex.organisation_administration:privacy_request_case.request_kind",
                         "label": "Request kind",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.organisation_administration:privacy_request_case.state",
                         "label": "State",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.organisation_administration:privacy_request_case.received_at",
                         "label": "Received",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.organisation_administration:privacy_request_case.closed_at",
                         "label": "Closed",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       }
                     ],
                     "title": "Privacy request cases",
@@ -1519,6 +1573,11 @@
                             "kind": "content"
                           }
                         }
+                      }
+                    },
+                    "features": {
+                      "pinning": {
+                        "enabled": true
                       }
                     }
                   }

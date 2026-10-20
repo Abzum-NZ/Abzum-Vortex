@@ -232,11 +232,13 @@ export const tasksApplication: ApplicationSourceDocument = loadApplicationSource
             TABLE_BLOCK_RELEASE,
             {
               title: "Tasks",
+              features: { pinning: { enabled: true } },
               columns: (["title", "notes"] as const).map((field) => ({
                 field: `${recordType}.${field}`,
                 label: field === "title" ? "Title" : "Notes",
                 visible: true,
                 auto_size: false,
+                pin: field === "title" ? "start" : "unpinned",
               })),
             },
             {},

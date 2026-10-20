@@ -82,25 +82,8 @@ export const groupedMemberPageReadSchema = z.discriminatedUnion("outcome", [
       groupByFieldIds: z.array(fieldIdSchema).min(1).max(10),
       groupValues: z.record(fieldIdSchema, jsonValueSchema),
       rows: z.array(protectedQueryPageRowSchema).max(200),
-      next: z
-        .object({
-          sortKey: z.array(z.string().nullable()).max(20),
-          sort: z
-            .array(
-              z
-                .object({
-                  fieldId: fieldIdSchema,
-                  direction: z.enum(["ascending", "descending"]),
-                  pushed: z.boolean(),
-                })
-                .strict(),
-            )
-            .max(20),
-          phase: z.enum(["null", "value"]),
-          recordId: recordIdSchema,
-        })
-        .strict()
-        .nullable(),
+      next: pageAnchorSchema.nullable(),
+      opposite: pageAnchorSchema.nullable(),
     })
     .strict(),
   refusedSchema,

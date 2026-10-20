@@ -500,12 +500,14 @@
                       {
                         "field": "vortex.hr:department.department_code",
                         "label": "Department code",
-                        "visible": true
+                        "visible": true,
+                        "pin": "start"
                       },
                       {
                         "field": "vortex.hr:department.name",
                         "label": "Name",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       }
                     ],
                     "title": "Departments",
@@ -525,6 +527,11 @@
                             "kind": "content"
                           }
                         }
+                      }
+                    },
+                    "features": {
+                      "pinning": {
+                        "enabled": true
                       }
                     }
                   }
@@ -919,17 +926,20 @@
                       {
                         "field": "vortex.hr:position.position_code",
                         "label": "Position code",
-                        "visible": true
+                        "visible": true,
+                        "pin": "start"
                       },
                       {
                         "field": "vortex.hr:position.title",
                         "label": "Title",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.hr:position.department",
                         "label": "Department",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       }
                     ],
                     "title": "Positions",
@@ -949,6 +959,11 @@
                             "kind": "content"
                           }
                         }
+                      }
+                    },
+                    "features": {
+                      "pinning": {
+                        "enabled": true
                       }
                     }
                   }
@@ -1395,32 +1410,38 @@
                       {
                         "field": "vortex.hr:employee.employee_number",
                         "label": "Employee identifier",
-                        "visible": true
+                        "visible": true,
+                        "pin": "start"
                       },
                       {
                         "field": "vortex.hr:employee.employment_status",
                         "label": "Employment status",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.hr:employee.start_date",
                         "label": "Start date",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.hr:employee.person",
                         "label": "Person",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.hr:employee.position",
                         "label": "Position",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.hr:employee.annual_leave_days",
                         "label": "Annual leave entitlement (days)",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       }
                     ],
                     "title": "Employees",
@@ -1440,6 +1461,11 @@
                             "kind": "content"
                           }
                         }
+                      }
+                    },
+                    "features": {
+                      "pinning": {
+                        "enabled": true
                       }
                     }
                   }
@@ -2046,32 +2072,38 @@
                       {
                         "field": "vortex.hr:leave_request.start_date",
                         "label": "Start date",
-                        "visible": true
+                        "visible": true,
+                        "pin": "start"
                       },
                       {
                         "field": "vortex.hr:leave_request.end_date",
                         "label": "End date",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.hr:leave_request.days",
                         "label": "Leave days",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.hr:leave_request.status",
                         "label": "Status",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.hr:leave_request.employee",
                         "label": "Employee",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.hr:leave_request.entitlement",
                         "label": "Entitlement",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       }
                     ],
                     "title": "Leave requests",
@@ -2091,6 +2123,11 @@
                             "kind": "content"
                           }
                         }
+                      }
+                    },
+                    "features": {
+                      "pinning": {
+                        "enabled": true
                       }
                     }
                   }
@@ -2751,27 +2788,32 @@
                       {
                         "field": "vortex.hr:leave_entitlement.employee",
                         "label": "Employee",
-                        "visible": true
+                        "visible": true,
+                        "pin": "start"
                       },
                       {
                         "field": "vortex.hr:leave_entitlement.year",
                         "label": "Year",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.hr:leave_entitlement.days",
                         "label": "Entitlement (days)",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.hr:leave_entitlement.approved_days_taken",
                         "label": "Approved days taken",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.hr:leave_entitlement.remaining_days",
                         "label": "Remaining days",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       }
                     ],
                     "title": "Leave entitlements",
@@ -2791,6 +2833,11 @@
                             "kind": "content"
                           }
                         }
+                      }
+                    },
+                    "features": {
+                      "pinning": {
+                        "enabled": true
                       }
                     }
                   }
@@ -3231,27 +3278,32 @@
                       {
                         "field": "vortex.hr:leave_entitlement.employee",
                         "label": "Employee",
-                        "visible": true
+                        "visible": true,
+                        "pin": "start"
                       },
                       {
                         "field": "vortex.hr:leave_entitlement.year",
                         "label": "Year",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.hr:leave_entitlement.days",
                         "label": "Entitlement (days)",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.hr:leave_entitlement.approved_days_taken",
                         "label": "Approved days taken",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.hr:leave_entitlement.remaining_days",
                         "label": "Remaining days",
-                        "visible": true
+                        "visible": true,
+                        "pin": "unpinned"
                       }
                     ],
                     "title": "Leave entitlement by employee and year",
@@ -3271,6 +3323,11 @@
                             "kind": "content"
                           }
                         }
+                      }
+                    },
+                    "features": {
+                      "pinning": {
+                        "enabled": true
                       }
                     }
                   }
