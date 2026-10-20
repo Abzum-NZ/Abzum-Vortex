@@ -42,6 +42,7 @@ import {
   boardModeOf,
   boardMoveRecordTypeProblem,
   createStudioBoardQuery,
+  ensureStudioBoardTotals,
   studioBoardQueryFits,
 } from "./board-source";
 import { studioStarterSlots } from "./composition-starters";
@@ -1095,7 +1096,7 @@ const applySettings = (
     board.cardTitleField !== undefined &&
     (query === null || !studioBoardQueryFits(source, board, query))
   ) {
-    const made = createStudioBoardQuery(source, board, sourceNames(source));
+    const made = createStudioBoardQuery(source, board, sourceNames(source), query);
     if ("problem" in made)
       return {
         kind: "refused",
@@ -1103,6 +1104,7 @@ const applySettings = (
       };
     query = made.query;
   }
+  if (board !== undefined && query !== null) ensureStudioBoardTotals(source, board, query);
   try {
     const working = workingCopy(target.region);
     const item = workingItem(working, target.steps, alias);

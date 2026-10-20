@@ -15,6 +15,7 @@ import {
   type RecordsTableActionContract,
   type RecordsTableContract,
 } from "@vortex/platform/schema";
+import { Alert, AlertDescription } from "../components/alert";
 import { Button } from "../components/button";
 import { Empty, EmptyContent, EmptyHeader, EmptyTitle } from "../components/empty";
 import { cn } from "../lib/utils";
@@ -31,6 +32,7 @@ import {
   GridBoardView,
   useGridFeatures,
   type GridFeatureContext,
+  type GridGroupingView,
   type GridPivotView,
 } from "./grid-features/registry";
 import { FULL_SCREEN_CLASS, GridToolbar, useGridFullScreen } from "./grid-features/toolbar";
@@ -45,6 +47,7 @@ import type {
   TablePayload,
 } from "./projected-data";
 import { useRowExpansion } from "./row-expansion";
+import { GroupedBody, useGroupedTable } from "./table-groups";
 import type { CardRenderers } from "./table-cards";
 import { columnWidth, useTablePresentation } from "./table-geometry";
 import { RecordsGrid, type GridRenderers } from "./table-grid";
@@ -187,11 +190,15 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
     () => new Set(columns.map((column) => column.key.toLowerCase())),
     [columns],
   );
-  const rows = values?.rows ?? [];
+  // A grouped table shows its groups, and under the open group the rows its page holds.
+  const grouped = useGroupedTable(values, events);
+  const rows = grouped === undefined ? (values?.rows ?? []) : grouped.rows;
   // The grid features this viewer may use on this read, as the server projected them. While the
   // next page is being read the last projection stays, so the search box and filters keep focus.
+  // An open group's page carries its own projection, which follows the rows it shows.
   const lastFeatures = useRef(values?.features);
-  if (values !== undefined) lastFeatures.current = values.features;
+  if (grouped?.memberFeatures !== undefined) lastFeatures.current = grouped.memberFeatures;
+  else if (values !== undefined) lastFeatures.current = values.features;
   const features = lastFeatures.current;
   // Rows are selectable only for bulk commands over the selection.
   const selectable =
@@ -213,7 +220,8 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
     }),
     [selectionToken, selectionScope, bulkRun, actionAvailability],
   );
-  const paged = values?.hasNextPage === true || values?.hasPreviousPage === true;
+  const paged =
+    grouped !== undefined || values?.hasNextPage === true || values?.hasPreviousPage === true;
   const narrowing = values?.narrowing;
   const [message, announce] = useAnnouncer();
   const [clearCount, setClearCount] = useState(0);
@@ -244,6 +252,23 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
     [pivotOffered, pivotView, pivotChanged],
   );
 
+  // Grouping is switched on or off in the address; that reads the groups once, on the server.
+  const groupingOffered = features?.grouping !== undefined;
+  const groupingOn = values?.groups !== undefined;
+  const groupChanged = events?.group_changed;
+  const grouping = useMemo(
+    (): GridGroupingView | undefined =>
+      groupingOffered
+        ? {
+            grouped: groupingOn,
+            setGrouped: (next) => {
+              void groupChanged?.({ event: "group_changed", grouped: next });
+            },
+          }
+        : undefined,
+    [groupingOffered, groupingOn, groupChanged],
+  );
+
   // The optional grid features draw through their extension points; each feature's code loads only
   // when the projection turns it on.
   const featureColumns = useMemo(
@@ -271,6 +296,7 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
             views: values?.layout.views,
             events,
             pivot,
+            grouping,
           },
     [
       accessibleName,
@@ -289,6 +315,7 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
       values?.layout.views,
       events,
       pivot,
+      grouping,
     ],
   );
   const gridFeatures = useGridFeatures(featureContext);
@@ -298,6 +325,8 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
     cellClassName,
     headerAdornment,
     columnMenuItems,
+    rowCommands,
+    rowEditor,
   } = gridFeatures;
   // Full screen keeps this same tree and changes only the container classes.
   const containerRef = useRef<HTMLDivElement>(null);
@@ -316,7 +345,9 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
             onRowClick({ event: "row_clicked", eventId: rowClickEventId, recordId }),
     [onRowClick, rowClickEventId],
   );
-  const showActions = (behaviours?.rowActions.length ?? 0) > 0 && events?.row_action !== undefined;
+  const showActions =
+    features?.rowEdit !== undefined ||
+    ((behaviours?.rowActions.length ?? 0) > 0 && events?.row_action !== undefined);
   const headingKey = layout.shown[0]?.key;
   // Rows expand to a panel a projected feature draws (their related records); the panel reads only
   // while its row is open.
@@ -372,14 +403,18 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
         />
       ),
       selectAll: () => null,
+      rowEditor,
       actions: (row) => (
-        <RowActionsMenu
-          recordId={row.recordId}
-          {...(row.revision === undefined ? {} : { revision: row.revision })}
-          name={rowName(row, headingKey)}
-          actions={rowActions.filter((action) => rowShowsAction(row, action))}
-          events={events}
-        />
+        <span className="flex items-center gap-1">
+          {rowCommands(row)}
+          <RowActionsMenu
+            recordId={row.recordId}
+            {...(row.revision === undefined ? {} : { revision: row.revision })}
+            name={rowName(row, headingKey)}
+            actions={rowActions.filter((action) => rowShowsAction(row, action))}
+            events={events}
+          />
+        </span>
       ),
     };
   }, [
@@ -392,6 +427,8 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
     cellClassName,
     headerAdornment,
     columnMenuItems,
+    rowCommands,
+    rowEditor,
   ]);
 
   const pageRecordIds = rows.map((row) => row.recordId);
@@ -489,7 +526,7 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
   // again when the person clears them; their own commits keep the controls (and their focus).
   const controlsKey = `${clearCount}:${values === undefined ? "reading" : "read"}`;
   const layoutControls =
-    !ready || rows.length === 0 || pivotOpen
+    !ready || (rows.length === 0 && grouped === undefined) || pivotOpen
       ? undefined
       : {
           layout,
@@ -531,6 +568,46 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
     />
   );
 
+  // The rows of one page as the grid, or as cards on a phone: the open group's rows use the same.
+  const membersView = (shown: readonly DisplayRow[]): ReactElement =>
+    presentation === "cards" ? (
+      <Suspense fallback={loading}>
+        <RecordsCards
+          accessibleName={accessibleName}
+          columns={layout.shown}
+          rows={shown}
+          selectedRecordIds={selectedRecordIds}
+          selectable={selectable}
+          showActions={showActions}
+          activateRow={activateRow}
+          renderers={renderers}
+          expansion={expansion}
+          fill={fullScreen.active}
+          density={layout.density}
+        />
+      </Suspense>
+    ) : (
+      <RecordsGrid
+        accessibleName={accessibleName}
+        contract={contract}
+        layout={layout}
+        rows={shown}
+        sort={values?.sort}
+        selection={selectable ? "multiple" : undefined}
+        selectedRecordIds={selectedRecordIds}
+        showActions={showActions}
+        events={events}
+        activateRow={activateRow}
+        renderers={gridRenderers}
+        interaction={gridFeatures.interaction}
+        retainedRecordIds={gridFeatures.retainedRecordIds}
+        announce={announce}
+        expansion={expansion}
+        rowName={nameOfRow}
+        fill={fullScreen.active}
+      />
+    );
+
   const body = ((): ReactElement => {
     if (pivotOpen) return <>{gridFeatures.viewBody()}</>;
     if (state.status === "loading") return loading;
@@ -561,7 +638,7 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
         </div>
       );
     if (values === undefined) return loading;
-    if (rows.length === 0)
+    if (rows.length === 0 && grouped === undefined)
       return (
         <Empty
           role="status"
@@ -590,102 +667,95 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
     // The viewport is unknown while the server renders and the page hydrates: the declared
     // skeleton stands in until the one presentation that fits is known.
     if (presentation === undefined) return loading;
-    return presentation === "cards" ? (
-      <Suspense fallback={loading}>
-        <RecordsCards
+    if (grouped !== undefined)
+      return (
+        <GroupedBody
+          placementId={placementId}
           accessibleName={accessibleName}
-          columns={layout.shown}
-          rows={rows}
-          selectedRecordIds={selectedRecordIds}
-          selectable={selectable}
-          showActions={showActions}
-          activateRow={activateRow}
-          renderers={renderers}
-          expansion={expansion}
-          fill={fullScreen.active}
-          density={layout.density}
+          grouped={grouped}
+          loading={loading}
+          members={membersView}
         />
-      </Suspense>
+      );
+    return values.groups?.status === "too_many" ? (
+      <div className="flex flex-col gap-2">
+        <Alert>
+          <AlertDescription>
+            There are too many matching records or values to count in groups. Narrow the table with
+            search or filters to group it.
+          </AlertDescription>
+        </Alert>
+        {membersView(rows)}
+      </div>
     ) : (
-      <RecordsGrid
-        accessibleName={accessibleName}
-        contract={contract}
-        layout={layout}
-        rows={rows}
-        sort={values.sort}
-        selection={selectable ? "multiple" : undefined}
-        selectedRecordIds={selectedRecordIds}
-        showActions={showActions}
-        events={events}
-        activateRow={activateRow}
-        renderers={gridRenderers}
-        interaction={gridFeatures.interaction}
-        announce={announce}
-        expansion={expansion}
-        rowName={nameOfRow}
-        fill={fullScreen.active}
-      />
+      membersView(rows)
     );
   })();
 
   return (
-    <div
-      ref={containerRef}
-      data-vortex-display="table"
-      data-vortex-placement-id={placementId}
-      data-vortex-table-density={layout.density}
-      data-vortex-table-presentation={presentation}
-      {...(fullScreen.active ? { "data-vortex-full-screen": "" } : {})}
-      className={cn(fullScreen.active && FULL_SCREEN_CLASS)}
-      {...(revealed ? { "data-vortex-display-revealed": "" } : {})}
-    >
-      <DisplayHeader
-        title={title}
-        accessibleName={accessibleName}
-        events={state.status === "empty" ? undefined : events}
-      />
-      {state.status === "refused" || state.status === "error" || state.status === "awaiting_input"
-        ? null
-        : toolbar}
-      <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
-        {message}
-      </div>
-      {ready && availability === "unavailable" ? (
-        <DisplayStateContainer
-          accessibleName={accessibleName}
-          availability={availability}
-          projectedData={state}
-          emptyMessage={emptyMessage}
+    <>
+      {gridFeatures.scope(
+        <div
+          ref={containerRef}
+          data-vortex-display="table"
+          data-vortex-placement-id={placementId}
+          data-vortex-table-density={layout.density}
+          data-vortex-table-presentation={presentation}
+          {...(fullScreen.active ? { "data-vortex-full-screen": "" } : {})}
+          className={cn(fullScreen.active && FULL_SCREEN_CLASS)}
+          {...(revealed ? { "data-vortex-display-revealed": "" } : {})}
         >
-          {body}
-        </DisplayStateContainer>
-      ) : (
-        body
-      )}
-      {!ready || values === undefined || pivotOpen ? null : (
-        <div className="mt-2 flex shrink-0 flex-wrap items-center justify-between gap-2">
-          <p className="m-0 text-xs text-muted-foreground tabular-nums">
-            {values.page === undefined ? "" : `Page ${values.page} · `}
-            {rows.length === 1 ? "1 row" : `${rows.length} rows`}
-          </p>
-          <PaginationControl
-            page={values.page}
-            pageCount={values.pageCount}
-            {...(values.hasNextPage === undefined ? {} : { hasNextPage: values.hasNextPage })}
-            {...(values.nextContinuationToken === undefined
-              ? {}
-              : { nextContinuationToken: values.nextContinuationToken })}
-            {...(values.hasPreviousPage === undefined
-              ? {}
-              : { hasPreviousPage: values.hasPreviousPage })}
-            {...(values.previousContinuationToken === undefined
-              ? {}
-              : { previousContinuationToken: values.previousContinuationToken })}
+          <DisplayHeader
+            title={title}
             accessibleName={accessibleName}
-            events={events}
+            events={state.status === "empty" ? undefined : events}
           />
-        </div>
+          {state.status === "refused" ||
+          state.status === "error" ||
+          state.status === "awaiting_input"
+            ? null
+            : toolbar}
+          <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
+            {message}
+          </div>
+          {ready && availability === "unavailable" ? (
+            <DisplayStateContainer
+              accessibleName={accessibleName}
+              availability={availability}
+              projectedData={state}
+              emptyMessage={emptyMessage}
+            >
+              {body}
+            </DisplayStateContainer>
+          ) : (
+            body
+          )}
+          {!ready || values === undefined || pivotOpen || grouped !== undefined ? null : (
+            <div className="mt-2 flex shrink-0 flex-wrap items-center justify-between gap-2">
+              <p className="m-0 text-xs text-muted-foreground tabular-nums">
+                {values.page === undefined ? "" : `Page ${values.page} · `}
+                {rows.length === 1 ? "1 row" : `${rows.length} rows`}
+              </p>
+              <PaginationControl
+                page={values.page}
+                pageCount={values.pageCount}
+                {...(values.hasNextPage === undefined ? {} : { hasNextPage: values.hasNextPage })}
+                {...(values.nextContinuationToken === undefined
+                  ? {}
+                  : { nextContinuationToken: values.nextContinuationToken })}
+                {...(values.hasPreviousPage === undefined
+                  ? {}
+                  : { hasPreviousPage: values.hasPreviousPage })}
+                {...(values.previousContinuationToken === undefined
+                  ? {}
+                  : { previousContinuationToken: values.previousContinuationToken })}
+                accessibleName={accessibleName}
+                events={events}
+              />
+            </div>
+          )}
+        </div>,
       )}
-    </div>
+    </>
   );
 }

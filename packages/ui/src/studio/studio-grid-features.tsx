@@ -33,6 +33,7 @@ import {
   type StudioRelatedRecordsChoices,
 } from "./grid-features";
 import { StudioSpreadsheetEditor } from "./grid-features/spreadsheet";
+import { StudioRowEditEditor } from "./grid-features/row-edit";
 import { StudioInlineEditEditor } from "./grid-features/inline-edit";
 import type { StudioBoardPipeline } from "./board-source";
 import { StudioBoardEditor } from "./grid-features/board";
@@ -90,6 +91,7 @@ export function StudioGridFeatures({
   query,
   compiledFields,
   tableSettings,
+  canvasArrangement,
   signedIn,
   choices,
   boardChoices,
@@ -110,6 +112,7 @@ export function StudioGridFeatures({
   compiledFields: readonly ModuleField[] | undefined;
   /** The block's choices: the bound query's fields by business name. */
   tableSettings: StudioSettingValues;
+  canvasArrangement?: GroupValue | undefined;
   signedIn: boolean;
   choices: StudioSettingChoices;
   /** Real fields of the selected pipeline's record type, including fields not yet queried. */
@@ -285,6 +288,15 @@ export function StudioGridFeatures({
                   onChange={(next) => write(key, next)}
                 />
               ) : null}
+              {enabled && key === "row_edit" ? (
+                <StudioRowEditEditor
+                  value={current}
+                  facts={facts}
+                  columns={tableColumnFields(tableSettings)}
+                  disabled={disabled}
+                  onChange={(next) => write(key, next)}
+                />
+              ) : null}
               {enabled && key === "inline_edit" ? (
                 <StudioInlineEditEditor
                   value={current}
@@ -313,6 +325,7 @@ export function StudioGridFeatures({
                   <StudioSavedViewsEditor
                     value={current}
                     tableSettings={tableSettings}
+                    canvasArrangement={canvasArrangement}
                     roles={choices.roles}
                     disabled={disabled}
                     onChange={(next) => write(key, next)}
@@ -326,6 +339,7 @@ export function StudioGridFeatures({
                   declarations={settings}
                   pipelines={pipelines}
                   choices={boardChoices}
+                  boardFacts={query?.board}
                   disabled={disabled}
                   onChange={(next) => write(key, next)}
                 />

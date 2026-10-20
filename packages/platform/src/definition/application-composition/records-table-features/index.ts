@@ -28,6 +28,7 @@ export {
   recordsTableFilterKinds,
   type RecordsTableFilterKind,
 } from "./column-filters";
+import { recordsTableRowEditFeature, type RecordsTableRowEditSettings } from "./row-edit";
 import { recordsTableInlineEditFeature, type RecordsTableInlineEditSettings } from "./inline-edit";
 import {
   recordsTableMasterDetailFeature,
@@ -46,6 +47,7 @@ import { recordsTableSavedViewsFeature, type RecordsTableSavedViewsSettings } fr
 import { recordsTableSearchFeature, type RecordsTableSearchSettings } from "./search";
 import { recordsTablePinningFeature, type RecordsTablePinningSettings } from "./pinning";
 import { recordsTablePivotFeature, type RecordsTablePivotSettings } from "./pivot";
+import { recordsTableGroupingFeature, type RecordsTableGroupingSettings } from "./grouping";
 import {
   featureNotPossible,
   settingGroup,
@@ -73,7 +75,11 @@ export {
 } from "./shared";
 export { RECORDS_TABLE_RELATED_RECORDS_MAXIMUM_PAGE_SIZE } from "./master-detail";
 export { RECORDS_TABLE_TREE_MAXIMUM_PAGE_SIZE } from "./tree";
-export { boardProblem, recordsTableBoardFactsOf } from "./board";
+export {
+  RECORDS_TABLE_GROUPING_MAXIMUM_CHOICES,
+  RECORDS_TABLE_GROUPING_MAXIMUM_LABEL_LENGTH,
+} from "./grouping";
+export { boardAggregateLabel, boardProblem, recordsTableBoardFactsOf } from "./board";
 export {
   RECORDS_TABLE_PIVOT_MAXIMUM_COLUMNS,
   RECORDS_TABLE_PIVOT_MAXIMUM_ROW_PAGE_SIZE,
@@ -109,8 +115,10 @@ export type {
   RecordsTableBulkActionsSettings,
   RecordsTableColumnFiltersSettings,
   RecordsTableInlineEditSettings,
+  RecordsTableRowEditSettings,
   RecordsTableMasterDetailSettings,
   RecordsTableTreeSettings,
+  RecordsTableGroupingSettings,
   RecordsTableSavedViewsSettings,
   RecordsTableSearchSettings,
   RecordsTablePinningSettings,
@@ -132,8 +140,10 @@ export type RecordsTableFeatures = Readonly<{
   savedViews: RecordsTableFeatureState<RecordsTableSavedViewsSettings>;
   bulkActions: RecordsTableFeatureState<RecordsTableBulkActionsSettings>;
   inlineEdit: RecordsTableFeatureState<RecordsTableInlineEditSettings>;
+  rowEdit: RecordsTableFeatureState<RecordsTableRowEditSettings>;
   masterDetail: RecordsTableFeatureState<RecordsTableMasterDetailSettings>;
   tree: RecordsTableFeatureState<RecordsTableTreeSettings>;
+  grouping: RecordsTableFeatureState<RecordsTableGroupingSettings>;
   conditionalFormatting: RecordsTableFeatureState<RecordsTableConditionalFormattingSettings>;
   pinning: RecordsTableFeatureState<RecordsTablePinningSettings>;
   pivot: RecordsTableFeatureState<RecordsTablePivotSettings>;
@@ -149,8 +159,10 @@ const registry = {
   saved_views: { property: "savedViews", definition: recordsTableSavedViewsFeature },
   bulk_actions: { property: "bulkActions", definition: recordsTableBulkActionsFeature },
   inline_edit: { property: "inlineEdit", definition: recordsTableInlineEditFeature },
+  row_edit: { property: "rowEdit", definition: recordsTableRowEditFeature },
   master_detail: { property: "masterDetail", definition: recordsTableMasterDetailFeature },
   tree: { property: "tree", definition: recordsTableTreeFeature },
+  grouping: { property: "grouping", definition: recordsTableGroupingFeature },
   conditional_formatting: {
     property: "conditionalFormatting",
     definition: recordsTableConditionalFormattingFeature,
@@ -174,8 +186,10 @@ export const recordsTableFeatureKeys = [
   "saved_views",
   "bulk_actions",
   "inline_edit",
+  "row_edit",
   "master_detail",
   "tree",
+  "grouping",
   "conditional_formatting",
   "pivot",
   "board",
@@ -218,8 +232,10 @@ export const readRecordsTableFeatures = (
   const savedViews = read("saved_views");
   const bulkActions = read("bulk_actions");
   const inlineEdit = read("inline_edit");
+  const rowEdit = read("row_edit");
   const masterDetail = read("master_detail");
   const tree = read("tree");
+  const grouping = read("grouping");
   const conditionalFormatting = read("conditional_formatting");
   const pinning = read("pinning");
   const pivot = read("pivot");
@@ -231,8 +247,10 @@ export const readRecordsTableFeatures = (
     savedViews === undefined ||
     bulkActions === undefined ||
     inlineEdit === undefined ||
+    rowEdit === undefined ||
     masterDetail === undefined ||
     tree === undefined ||
+    grouping === undefined ||
     conditionalFormatting === undefined ||
     pinning === undefined ||
     pivot === undefined ||
@@ -247,8 +265,10 @@ export const readRecordsTableFeatures = (
     savedViews: savedViews as RecordsTableFeatures["savedViews"],
     bulkActions: bulkActions as RecordsTableFeatures["bulkActions"],
     inlineEdit: inlineEdit as RecordsTableFeatures["inlineEdit"],
+    rowEdit: rowEdit as RecordsTableFeatures["rowEdit"],
     masterDetail: masterDetail as RecordsTableFeatures["masterDetail"],
     tree: tree as RecordsTableFeatures["tree"],
+    grouping: grouping as RecordsTableFeatures["grouping"],
     conditionalFormatting: conditionalFormatting as RecordsTableFeatures["conditionalFormatting"],
     pivot: pivot as RecordsTableFeatures["pivot"],
     board: board as RecordsTableFeatures["board"],
@@ -295,6 +315,22 @@ export const checkRecordsTableFeature = (
       "definition_records_table_tree",
       "A row shows either its related records or the records beneath it; turn Related records off to use a tree.",
     );
+  // Groups, a board's columns, a tree's levels and a pivot's cells each arrange the records
+  // their own way, so the table shows one of them at a time.
+  if (key === "grouping" && state.enabled) {
+    const other = features.board.enabled
+      ? "Board"
+      : features.tree.enabled
+        ? "Tree"
+        : features.pivot.enabled
+          ? "Pivot"
+          : undefined;
+    if (other !== undefined)
+      return featureNotPossible(
+        "definition_records_table_grouping",
+        `Turn ${other} off to group the records.`,
+      );
+  }
   const check = (registry[key].definition as RecordsTableFeatureDefinition<object>).check(
     state,
     facts,
@@ -339,6 +375,7 @@ const featureEvents: Readonly<Record<string, RecordsTableFeatureKey>> = {
   search_changed: "search",
   filter_changed: "column_filters",
   inline_edit: "inline_edit",
+  row_edit: "row_edit",
   card_moved: "board",
 };
 

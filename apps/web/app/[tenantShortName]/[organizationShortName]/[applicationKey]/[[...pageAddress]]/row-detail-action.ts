@@ -19,11 +19,18 @@ const rowDetailRequestSchema = z
     installationRevision: z.number().finite().pipe(revisionSchema),
     search: z.string().max(8_192),
     placementId: containedComponentIdSchema,
-    recordId: z.string().min(1).max(80),
+    /** The row whose related records or child records are read. */
+    recordId: z.string().min(1).max(80).optional(),
+    /** The group of a grouped table whose members are read (the codec's group key). */
+    groupKey: z.string().min(1).max(400).optional(),
+    direction: z.enum(["forward", "backward"]).optional(),
     continuationToken: z.string().min(1).max(65_536).optional(),
     pageSize: z.number().int().min(1).max(200).optional(),
   })
-  .strict();
+  .strict()
+  .refine((request) => (request.recordId === undefined) !== (request.groupKey === undefined), {
+    message: "A read names either a row or a group",
+  });
 
 const searchParametersOf = (
   search: string,
@@ -42,8 +49,9 @@ const searchParametersOf = (
 };
 
 /**
- * Reads one page of an expanded row's related records under the viewer's current page authority.
- * Each expand and each "Show more" is one call; collapsing or drawing a row reads nothing.
+ * Reads one page of an expanded row's related records, or of an open group's members, under the
+ * viewer's current page authority. Each expand and each "Show more" or group page is one call;
+ * collapsing or drawing a row or a group reads nothing.
  */
 export async function readRowDetail(input: unknown): Promise<RowDetailLoadResult> {
   const request = rowDetailRequestSchema.safeParse(input);
@@ -75,7 +83,9 @@ export async function readRowDetail(input: unknown): Promise<RowDetailLoadResult
       searchParametersOf(request.data.search),
       {
         placementId: request.data.placementId,
-        recordId: request.data.recordId,
+        ...(request.data.recordId === undefined ? {} : { recordId: request.data.recordId }),
+        ...(request.data.groupKey === undefined ? {} : { groupKey: request.data.groupKey }),
+        ...(request.data.direction === undefined ? {} : { direction: request.data.direction }),
         installationRevision: request.data.installationRevision,
         ...(request.data.pageSize === undefined ? {} : { pageSize: request.data.pageSize }),
         ...(request.data.continuationToken === undefined
