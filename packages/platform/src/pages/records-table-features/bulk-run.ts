@@ -442,13 +442,14 @@ export const createRecordsTableBulkService = (dependencies: RecordsTableBulkDepe
           readNamedActionEligibility(
             transaction,
             placement.recordTypeId,
-            named.action,
+            [{ action: named.action, run: runner }],
             batch.map((target) => ({
               recordId: target.recordId,
               commandId: commandIds.get(target.recordId)!,
             })),
             issuedAt,
-            runner,
+          ).then((rows) =>
+            rows.map(({ actions, ...row }) => ({ ...row, eligibility: actions[0]!.eligibility })),
           ),
         );
         if (decided.kind !== "available") {

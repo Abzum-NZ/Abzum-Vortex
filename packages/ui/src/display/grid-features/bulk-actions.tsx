@@ -49,6 +49,43 @@ const selectedCount = (context: GridFeatureContext): number => {
     : context.selectedRecordIds.length;
 };
 
+/** Aggregate only the server's decisions for the exact displayed revisions of this selection. */
+const availabilityFor = (
+  context: GridFeatureContext,
+  action: string,
+): Readonly<{ eligible: number; reason?: string }> | undefined => {
+  const availability = context.selection.actionAvailability;
+  const unchecked = {
+    eligible: 0,
+    reason: "availability could not be checked; select the records again",
+  };
+  if (availability === "unavailable") return unchecked;
+  if (availability === undefined) return undefined;
+  let eligible = 0;
+  const reasons = new Set<RecordsTableBulkRefusalReason>();
+  for (const recordId of context.selectedRecordIds) {
+    const row = context.rows.find((candidate) => candidate.recordId === recordId);
+    if (row === undefined) {
+      reasons.add("removed");
+      continue;
+    }
+    const record = availability.find(
+      (candidate) => candidate.recordId === recordId && candidate.revision === row.revision,
+    );
+    // No decision for the displayed revision: never guess; the person selects again.
+    const decision = record?.actions.find((candidate) => candidate.action === action);
+    if (decision === undefined) return unchecked;
+    if (decision.eligible) eligible += 1;
+    else reasons.add(decision.reason);
+  }
+  return {
+    eligible,
+    ...(reasons.size === 0
+      ? {}
+      : { reason: [...reasons].map((reason) => refusalWords[reason]).join("; ") }),
+  };
+};
+
 /**
  * Every declared bulk action as one Dropdown Menu. An action runs on the rows selected on this
  * page, or on every matching record once the person selected them all; the page runs it on the
@@ -71,6 +108,8 @@ function BulkActionsMenu({
     void onBulkAction({ event: "bulk_action", action: action.action });
   };
   const capped = confirming !== undefined && matching && count > confirming.maxRecords;
+  const confirmedAvailability =
+    confirming === undefined || matching ? undefined : availabilityFor(context, confirming.action);
   return (
     <>
       <DropdownMenu>
@@ -90,21 +129,51 @@ function BulkActionsMenu({
           {count > 0 ? <Badge variant="secondary">{numberFormat.format(count)}</Badge> : null}
         </DropdownMenuTrigger>
         <DropdownMenuContent>
-          {actions.map((action) => (
-            <DropdownMenuItem
-              key={action.action}
-              disabled={!ready || (!matching && count > action.maxRecords)}
-              onClick={() => {
-                if (action.confirm || matching) setConfirming(action);
-                else run(action);
-              }}
-            >
-              {action.label}
-              {!matching && count > action.maxRecords
-                ? ` — select at most ${records(action.maxRecords)}`
-                : ""}
-            </DropdownMenuItem>
-          ))}
+          {actions.map((action) => {
+            const availability = matching ? undefined : availabilityFor(context, action.action);
+            const partial =
+              availability !== undefined &&
+              availability.eligible > 0 &&
+              availability.eligible < count;
+            const description = matching
+              ? "Decided per record when run"
+              : availability === undefined
+                ? "Checking availability…"
+                : availability.eligible === count
+                  ? "Available for all selected records"
+                  : partial
+                    ? `${numberFormat.format(availability.eligible)} of ${numberFormat.format(count)} can use this action. All selected records must be eligible.`
+                    : `Unavailable: ${availability.reason}`;
+            return (
+              // Only the label dims when unavailable; the reason stays readable in both modes.
+              <DropdownMenuItem
+                key={action.action}
+                className="data-disabled:opacity-100"
+                disabled={
+                  !ready ||
+                  (!matching &&
+                    (count > action.maxRecords ||
+                      availability === undefined ||
+                      availability.eligible !== count))
+                }
+                onClick={() => {
+                  if (action.confirm || matching) setConfirming(action);
+                  else run(action);
+                }}
+              >
+                <span className="flex max-w-72 flex-col gap-1 whitespace-normal">
+                  <span className="group-data-disabled/dropdown-menu-item:opacity-50">
+                    {action.label}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {!matching && count > action.maxRecords
+                      ? `Select at most ${records(action.maxRecords)}`
+                      : description}
+                  </span>
+                </span>
+              </DropdownMenuItem>
+            );
+          })}
         </DropdownMenuContent>
       </DropdownMenu>
       <AlertDialog
@@ -131,7 +200,10 @@ function BulkActionsMenu({
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               disabled={
-                !ready || (!matching && confirming !== undefined && count > confirming.maxRecords)
+                !ready ||
+                (!matching &&
+                  confirming !== undefined &&
+                  (count > confirming.maxRecords || confirmedAvailability?.eligible !== count))
               }
               onClick={() => {
                 if (confirming !== undefined) run(confirming);
