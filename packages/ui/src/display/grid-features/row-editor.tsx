@@ -116,14 +116,15 @@ function RowEditScope({ context, children, retainRow }: GridFeatureScopeProps): 
     };
   }, [unsaved, dirty, saving, id]);
 
-  // A new projection may remove access. Forget the entire draft rather than retaining a withheld
-  // value in an editor. A conflict with unchanged access keeps the original draft and revision.
+  // A new projection may remove access or the row itself (refresh, filter, search, paging). Forget
+  // the entire draft rather than retaining a hidden or withheld value that the toolbar could still
+  // submit. A conflict with unchanged access keeps the original draft and revision.
   useEffect(() => {
     if (draft === undefined || saving) return;
     const current = context.rows.find((row) => same(row.recordId, draft.recordId));
-    if (current === undefined) return;
     const allowed = context.features.rowEdit;
     if (
+      current === undefined ||
       allowed === undefined ||
       !current.capabilities?.actions.includes("update") ||
       draft.fields.some(
