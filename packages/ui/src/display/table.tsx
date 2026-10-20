@@ -636,17 +636,27 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
       return (
         <Empty
           role="status"
-          data-vortex-display-state={narrowed(narrowing) ? "no-match" : "empty"}
+          data-vortex-display-state={
+            values.scanLimited === true ? "searching" : narrowed(narrowing) ? "no-match" : "empty"
+          }
           className="border border-border text-muted-foreground"
-          aria-label={`${accessibleName}: ${narrowed(narrowing) ? "no matches" : "empty"}`}
+          aria-label={`${accessibleName}: ${
+            values.scanLimited === true
+              ? "no matches yet"
+              : narrowed(narrowing)
+                ? "no matches"
+                : "empty"
+          }`}
         >
           <EmptyHeader>
             <EmptyTitle>
-              {narrowed(narrowing)
-                ? "No records match the search or filters"
-                : (values.page ?? 1) > 1
-                  ? "No records on this page"
-                  : emptyMessage}
+              {values.scanLimited === true
+                ? "No matches yet in the records searched so far"
+                : narrowed(narrowing)
+                  ? "No records match the search or filters"
+                  : (values.page ?? 1) > 1
+                    ? "No records on this page"
+                    : emptyMessage}
             </EmptyTitle>
           </EmptyHeader>
           {!narrowed(narrowing) ? null : (
@@ -730,6 +740,7 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
               <p className="m-0 text-xs text-muted-foreground tabular-nums">
                 {values.page === undefined ? "" : `Page ${values.page} · `}
                 {rows.length === 1 ? "1 row" : `${rows.length} rows`}
+                {values.scanLimited === true ? " · Still searching: more records may match" : ""}
               </p>
               <PaginationControl
                 page={values.page}

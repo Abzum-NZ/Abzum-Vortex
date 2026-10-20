@@ -334,6 +334,14 @@ const parseInlineEditor = (
     case "date_time":
       requireExactKeys(editor, ["kind", "required"], location);
       return Object.freeze({ kind: "date_time", required });
+    case "link":
+      requireExactKeys(editor, ["kind", "required", "recordTypeId", "targetLabel"], location);
+      return Object.freeze({
+        kind: "link",
+        required,
+        recordTypeId: requireFieldKey(editor.recordTypeId, message, location),
+        targetLabel: requireNonEmptyString(editor.targetLabel, message, location),
+      });
     default:
       return fail(message, location);
   }

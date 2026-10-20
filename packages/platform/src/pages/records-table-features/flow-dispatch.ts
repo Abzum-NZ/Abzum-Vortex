@@ -233,7 +233,7 @@ export const recordsTableBindingRefusal = async (
       if (editing) {
         const module = installation.modules?.find((entry) => entry.content.queries.includes(query));
         if (module === undefined) return recordsTableRequestRefusal(event, "query_module_missing");
-        const editors = fieldEditorsOf(module);
+        const editors = fieldEditorsOf(module, installation.modules ?? []);
         if (event === "row_edit") {
           const projection = projectRecordsTableFeatures(
             contract,
@@ -258,6 +258,23 @@ export const recordsTableBindingRefusal = async (
             editors[field.toLowerCase()] === undefined
           )
             return recordsTableRequestRefusal(event, `field_not_permitted:${field}`);
+          // A link is cleared or names a record of the field's installed target, never of the
+          // caller's choice of type; the writer still decides whether the viewer may read it.
+          const editor = editors[field.toLowerCase()];
+          if (editor?.kind === "link") {
+            const value = isRecord(inputs.values) ? inputs.values[field] : undefined;
+            if (value !== null) {
+              if (
+                !isRecord(value) ||
+                Object.keys(value).length !== 2 ||
+                typeof value.recordTypeId !== "string" ||
+                !sameId(value.recordTypeId, editor.recordTypeId)
+              )
+                return recordsTableRequestRefusal(event, `link_target_type_mismatch:${field}`);
+              if (!recordIdSchema.safeParse(value.recordId).success)
+                return recordsTableRequestRefusal(event, `link_record_invalid:${field}`);
+            }
+          }
         }
       }
     }

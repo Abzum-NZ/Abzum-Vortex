@@ -25,9 +25,16 @@ import { toast } from "../../components/sonner";
 import { useUnsavedWorkRegistry } from "../../controls/unsaved-work";
 import { Pencil } from "lucide-react";
 import { useDateFormatOptions } from "../date-format-context";
-import { fail, requireRecord, type DisplayRow } from "../projected-data";
+import { fail, requireRecord, type DisplayEventHandlers, type DisplayRow } from "../projected-data";
 import type { RowLine } from "../sub-rows";
-import { readEditDraft, sameEditValue, startEditDraft, type EditDraft } from "./edit-values";
+import { LinkDraftPicker, linkedRecordTitle } from "./record-choice-picker";
+import {
+  readEditDraft,
+  sameEditDraft,
+  sameEditValue,
+  startEditDraft,
+  type EditDraft,
+} from "./edit-values";
 import type {
   GridFeatureCellProps,
   GridFeatureCommandProps,
@@ -81,7 +88,8 @@ function RowEditScope({ context, children, retainRow }: GridFeatureScopeProps): 
   const unsaved = useUnsavedWorkRegistry();
   const dirty =
     draft?.fields.some(
-      (field) => field.draft !== startEditDraft(field.editor, field.stored, draft.timeZone),
+      (field) =>
+        !sameEditDraft(field.draft, startEditDraft(field.editor, field.stored, draft.timeZone)),
     ) === true;
   const cancel = (): void => {
     if (submitting.current) return;
@@ -196,7 +204,8 @@ function RowEditScope({ context, children, retainRow }: GridFeatureScopeProps): 
     const values: Record<string, JsonValue> = {};
     const invalid: Record<string, string> = {};
     for (const field of draft.fields) {
-      if (field.draft === startEditDraft(field.editor, field.stored, draft.timeZone)) continue;
+      if (sameEditDraft(field.draft, startEditDraft(field.editor, field.stored, draft.timeZone)))
+        continue;
       const reading = readEditDraft(field.editor, field.draft, field.label, draft.timeZone);
       if (!reading.ok) invalid[field.field] = reading.message;
       else if (!sameEditValue(field.editor, field.stored, reading.value))
@@ -319,8 +328,20 @@ function RowEditScope({ context, children, retainRow }: GridFeatureScopeProps): 
 function FieldControl({
   field,
   editing,
+  events,
+  current,
+  inline,
   id: labelledId,
-}: Readonly<{ field: FieldDraft; editing: RowEditing; id?: string }>): ReactElement {
+}: Readonly<{
+  field: FieldDraft;
+  editing: RowEditing;
+  events: DisplayEventHandlers | undefined;
+  /** The row's title for a stored link, named until another record is chosen. */
+  current?: string | undefined;
+  /** Laid out on one line inside a grid cell. */
+  inline?: boolean;
+  id?: string;
+}>): ReactElement {
   const ownId = useId();
   const id = labelledId ?? ownId;
   const message = editing.errors[field.field];
@@ -334,7 +355,23 @@ function FieldControl({
   const editor = field.editor;
   const text = typeof field.draft === "string" ? field.draft : "";
   let control: ReactElement;
-  if (editor.kind === "yes_no")
+  if (editor.kind === "link")
+    control = (
+      <LinkDraftPicker
+        fieldId={field.field}
+        label={field.label}
+        events={events}
+        draft={typeof field.draft === "object" ? field.draft : null}
+        {...(current === undefined ? {} : { current })}
+        {...(inline === undefined ? {} : { inline })}
+        required={editor.required}
+        disabled={editing.saving}
+        invalid={message !== undefined}
+        {...(message === undefined ? {} : { describedBy: `${id}-error` })}
+        onChange={(next) => editing.change(field.field, next)}
+      />
+    );
+  else if (editor.kind === "yes_no")
     control = (
       <Checkbox
         {...props}
@@ -430,7 +467,13 @@ function RowCell({ context, row, column, children }: GridFeatureCellProps): Reac
       ? editing.draft.fields.find((entry) => same(entry.field, column.key))
       : undefined;
   return context.presentation === "grid" && editing !== undefined && field !== undefined ? (
-    <FieldControl field={field} editing={editing} />
+    <FieldControl
+      field={field}
+      editing={editing}
+      events={context.events}
+      current={linkedRecordTitle(row, column.key)}
+      inline
+    />
   ) : (
     <>{children}</>
   );
@@ -537,7 +580,13 @@ function CardEditor({ context, row }: GridFeatureCommandProps): ReactElement | n
       {editing.draft.fields.map((field) => (
         <div key={field.field} className="space-y-1">
           <Label htmlFor={`${id}-${field.field}`}>{field.label}</Label>
-          <FieldControl id={`${id}-${field.field}`} field={field} editing={editing} />
+          <FieldControl
+            id={`${id}-${field.field}`}
+            field={field}
+            editing={editing}
+            events={context.events}
+            current={linkedRecordTitle(row, field.field)}
+          />
         </div>
       ))}
       <SaveControls editing={editing} />

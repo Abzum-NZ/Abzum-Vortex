@@ -9,6 +9,7 @@ import {
 import {
   sameId,
   type ApplicationRootId,
+  type ApplicationContent,
   type IdentitySession,
   type OrganizationId,
 } from "@vortex/platform/schema";
@@ -41,6 +42,7 @@ export type StudioPreviewRead =
       kind: "available";
       /** The saved draft at exactly the requested revision. */
       draft: StoredApplicationDefinitionDraft;
+      content?: ApplicationContent;
       selection: StudioPreviewSelection;
       context: InstalledRuntimeContext;
       dependencies: HumanOrganizationRequestDependencies;
@@ -61,9 +63,16 @@ export const openStudioPreviewRead = async (
   rootId: ApplicationRootId,
   draftRevision: number,
   signal?: AbortSignal,
+  readCompilation = false,
 ): Promise<StudioPreviewRead> => {
   signal?.throwIfAborted();
-  const state = await readStudioPreviewState(session, organizationId, rootId, draftRevision);
+  const state = await readStudioPreviewState(
+    session,
+    organizationId,
+    rootId,
+    draftRevision,
+    readCompilation,
+  );
   signal?.throwIfAborted();
   if (state.kind === "refused") return { kind: "refused" };
   if (state.kind !== "read") return state;
@@ -150,6 +159,7 @@ export const openStudioPreviewRead = async (
   return {
     kind: "available",
     draft: state.draft,
+    ...(state.content === undefined ? {} : { content: state.content }),
     selection,
     context: installed.value,
     dependencies,
