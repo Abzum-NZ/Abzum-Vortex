@@ -571,6 +571,18 @@ function RuleEditor({
   onChange: (changes: Properties, remove?: readonly string[]) => void;
 }>): ReactElement {
   const reading = readStudioQueryFilter(rule.condition as InlineQueryFilter, fieldIdOf);
+  const savedCondition = JSON.stringify(rule.condition);
+  const [conditionDraft, setConditionDraft] = useState<
+    Readonly<{ saved: string; value: ConditionNode | undefined }> | undefined
+  >(undefined);
+  const currentCondition =
+    conditionDraft?.saved === savedCondition
+      ? conditionDraft.value
+      : reading.kind === "read"
+        ? reading.condition
+        : undefined;
+  if (conditionDraft !== undefined && conditionDraft.saved !== savedCondition)
+    setConditionDraft(undefined);
   const { style } = rule;
   const cells = rule.target.kind === "cells" ? rule.target.fields : [];
   const [cellChoice, setCellChoice] = useState("");
@@ -589,8 +601,10 @@ function RuleEditor({
           <StudioConditionControls
             label="Rule condition"
             context={context}
-            {...(reading.condition === undefined ? {} : { value: reading.condition })}
+            {...(currentCondition === undefined ? {} : { value: currentCondition })}
             onChange={(next: ConditionNode | undefined, validation) => {
+              // Keep unfinished typed input editable without saving an invalid rule.
+              setConditionDraft({ saved: savedCondition, value: next });
               if (next === undefined || !validation.isValid) return;
               const written = writeStudioQueryFilter(next, referenceOf);
               if (written === undefined || written === null) return;
