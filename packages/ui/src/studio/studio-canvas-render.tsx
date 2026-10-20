@@ -202,7 +202,8 @@ function CanvasBlock({
   const viewer = useContext(CanvasViewerContext);
   const id = typeof props.id === "string" ? props.id : "";
   const release = releaseOf(registry, props);
-  const gridEvents = useStudioCanvasGridEvents(props, compiled[id], release);
+  const current = Object.hasOwn(compiled, id) && records.saved.get(id) === records.current.get(id);
+  const gridEvents = useStudioCanvasGridEvents(props, current ? compiled[id] : undefined, release);
   // A block just dropped from the palette is shown as a placeholder until Studio adds it.
   if (props.vortex === undefined)
     return (
@@ -236,7 +237,6 @@ function CanvasBlock({
   // A block whose drawing needs what the compiler derives (an automatic field input's control, a
   // data block's resolved fields) is drawn only from a compile of exactly this block. Until then
   // it shows that a save draws it; it is never drawn from settings the compiler has not seen.
-  const current = Object.hasOwn(compiled, id) && records.saved.get(id) === records.current.get(id);
   if (
     release !== undefined &&
     !current &&
