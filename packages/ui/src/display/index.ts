@@ -42,6 +42,12 @@ export {
   type TextData,
   type TextPayload,
 } from "./projected-data";
+export type {
+  TableBulkRun,
+  TableBulkRunSummary,
+  TableSelectionParts,
+  TableSelectionScope,
+} from "./projected-grid-features";
 
 // Rich Text Rendering
 export { RichTextDocumentView, richTextToPlainText } from "./rich-text";

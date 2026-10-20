@@ -4,6 +4,7 @@ import {
   createPageSubjectReader,
   createProtectedQueryService,
   createQueryNoticeQueryResolver,
+  createRecordsSelectionSealer,
   createRecordsTableQueryResolver,
   createReferenceChoiceService,
   createViewerSafeRecordLinkService,
@@ -38,7 +39,11 @@ export const createPlacementReadServices = (
   const { session, selection, dependencies, continuationKey } = input;
   const queries = createProtectedQueryService({ ...dependencies, continuationKey });
   const referenceChoices = createReferenceChoiceService({ ...dependencies, continuationKey });
-  const tables = createRecordsTableQueryResolver(queries);
+  // A table read seals its "every matching record" descriptor for this viewer, for bulk actions.
+  const tables = {
+    ...createRecordsTableQueryResolver(queries),
+    sealSelection: createRecordsSelectionSealer(continuationKey, session, selection),
+  };
   const queryNotices = createQueryNoticeQueryResolver(queries);
   const recordLinks = createViewerSafeRecordLinkService({
     ...dependencies,

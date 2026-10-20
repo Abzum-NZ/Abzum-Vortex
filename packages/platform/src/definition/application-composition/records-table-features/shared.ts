@@ -156,7 +156,11 @@ export type RecordsTableQueryFacts = Readonly<{
   recordTypeLabel: string;
   fields: readonly RecordsTableFieldFacts[];
   relationships: readonly Readonly<{ key: string; label: string }>[];
-  actions: readonly Readonly<{ key: string; label: string }>[];
+  /**
+   * The record type's named actions. `acceptsSelection` says it can run on several records, each
+   * on its own: it needs no input a person types for one record.
+   */
+  actions: readonly Readonly<{ key: string; label: string; acceptsSelection: boolean }>[];
   /** The query groups or aggregates its rows, so rows are not records a person can act on. */
   grouped: boolean;
   relatedRecords: RecordsTableRelatedRecordsFacts;

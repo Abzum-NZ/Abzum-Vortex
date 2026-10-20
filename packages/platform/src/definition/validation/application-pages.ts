@@ -155,7 +155,12 @@ export function applicationPageRules(scope: ApplicationScope): void {
       })),
       actions: [...actions.values()]
         .filter((action) => String(action.subjectRecordTypeId) === recordTypeId)
-        .map((action) => ({ key: String(action.key), label: String(action.label ?? action.key) })),
+        .map((action) => ({
+          key: String(action.key),
+          label: String(action.label ?? action.key),
+          // A run over several records supplies no inputs, so an action that needs one cannot.
+          acceptsSelection: array(action.inputs).every((input) => input.required !== true),
+        })),
       grouped,
       relatedRecords: relatedRecordsFacts(recordTypeId, page),
     };

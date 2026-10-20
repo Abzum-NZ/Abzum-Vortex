@@ -17,10 +17,7 @@ import { Pagination, PaginationContent, PaginationItem } from "../components/pag
 import { Skeleton } from "../components/skeleton";
 import { Spinner } from "../components/spinner";
 import { usePendingGesture } from "../controls/pending-gesture";
-import type {
-  DisplayEventHandlers,
-  DisplayRow,
-} from "./projected-data";
+import type { DisplayEventHandlers, DisplayRow } from "./projected-data";
 
 /** Optional authored title with a refresh control bound to the declared `refresh` event. */
 export function DisplayHeader({
@@ -154,28 +151,42 @@ export function SelectionControl({
   );
 }
 
-/** The header control that selects or clears every selectable row on the returned page. */
+/**
+ * The header control that selects every row on the shown page, or clears the selection. It shows
+ * the mixed state while some but not all of the page's rows are selected; clearing it clears the
+ * whole selection, every matching record included.
+ */
 export function SelectAllControl({
   allSelected,
+  someSelected = false,
   recordIds,
   accessibleName,
   events,
 }: Readonly<{
   allSelected: boolean;
+  someSelected?: boolean;
   recordIds: readonly string[];
   accessibleName: string;
   events: DisplayEventHandlers | undefined;
 }>): ReactElement | null {
   const onSelection = events?.selection_changed;
   if (onSelection === undefined) return null;
+  const onScope = events?.selection_scope_changed;
   return (
     <Checkbox
       aria-label={
-        allSelected ? `Clear selection for ${accessibleName}` : `Select all ${accessibleName}`
+        allSelected
+          ? `Clear selection for ${accessibleName}`
+          : `Select all on this page of ${accessibleName}`
       }
       checked={allSelected}
+      indeterminate={someSelected}
       disabled={recordIds.length === 0}
       onCheckedChange={() => {
+        if (allSelected && onScope !== undefined) {
+          onScope({ event: "selection_scope_changed", scope: "cleared" });
+          return;
+        }
         for (const recordId of recordIds)
           onSelection({ event: "selection_changed", recordId, selected: !allSelected });
       }}

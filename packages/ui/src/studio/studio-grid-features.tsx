@@ -271,10 +271,19 @@ export function StudioGridFeatures({
                           )}
                           values={settingValues}
                           choices={
-                            own?.choices ??
-                            (editor.offers === undefined
-                              ? choices
-                              : { ...choices, fields: choices.fields.filter(editor.offers) })
+                            own?.choices ?? {
+                              ...choices,
+                              ...(editor.offers === undefined
+                                ? {}
+                                : { fields: choices.fields.filter(editor.offers) }),
+                              ...(editor.boundRecordTypeActions === undefined
+                                ? {}
+                                : {
+                                    actions: choices.actions.filter(
+                                      (action) => action.recordType === query?.recordType,
+                                    ),
+                                  }),
+                            }
                           }
                           disabled={disabled}
                           onChange={(next) =>

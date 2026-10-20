@@ -1,10 +1,12 @@
 import {
-  type RecordsTableActionContract,
+  type RecordsTableBulkActionContract,
+  type RecordsTableBulkRefusalReason,
   type RecordsTableFeatureProjection,
   type RecordsTableFilterField,
   type RecordsTableFilterValue,
   readRecordsTableFieldFilter,
-  recordsTableActionCapabilities,
+  recordsTableBulkActionRecordLimit,
+  recordsTableBulkRefusalReasons,
   recordsTableFilterKinds,
   RECORDS_TABLE_MAXIMUM_SEARCH_LENGTH,
 } from "@vortex/platform/schema";
@@ -71,26 +73,146 @@ export const parseTableNarrowing = (
   });
 };
 
-/** One projected bulk command: its flow binding's event identity, label and optional capability. */
+/** One projected bulk action: the named action's key, its label, confirmation and record limit. */
 const parseTableAction = (
   value: unknown,
   location: DefinitionRenderErrorLocation,
-): RecordsTableActionContract => {
-  const action = requireRecord(value, "A projected bulk command must be an object", location);
-  requireExactKeys(action, ["eventId", "label", "capability"], location);
-  const eventId = requireNonEmptyString(action.eventId, "A bulk command needs its event", location);
-  const label = requireNonEmptyString(action.label, "A bulk command needs its label", location);
+): RecordsTableBulkActionContract => {
+  const action = requireRecord(value, "A projected bulk action must be an object", location);
+  requireExactKeys(action, ["action", "label", "confirm", "maxRecords"], location);
+  const key = requireNonEmptyString(action.action, "A bulk action needs its action", location);
+  const label = requireNonEmptyString(action.label, "A bulk action needs its label", location);
+  if (typeof action.confirm !== "boolean")
+    fail("A bulk action must say if it asks first", location);
   if (
-    action.capability !== undefined &&
-    !(recordsTableActionCapabilities as readonly unknown[]).includes(action.capability)
+    typeof action.maxRecords !== "number" ||
+    !Number.isInteger(action.maxRecords) ||
+    action.maxRecords < 1 ||
+    action.maxRecords > recordsTableBulkActionRecordLimit
   )
-    fail("A bulk command names an unknown capability", location);
+    fail("A bulk action has an invalid record limit", location);
   return Object.freeze({
-    eventId,
+    action: key,
     label,
-    ...(action.capability === undefined
+    confirm: action.confirm as boolean,
+    maxRecords: action.maxRecords as number,
+  });
+};
+
+/**
+ * How far a Records table selection reaches beyond the shown page, as the page runtime holds it:
+ * the count of every matching record is being read, every matching record is selected (minus the
+ * records the person unticked), or the matching records could not be counted.
+ */
+export type TableSelectionScope =
+  | Readonly<{ kind: "counting" }>
+  | Readonly<{ kind: "matching"; count: number; excluded: number }>
+  | Readonly<{ kind: "not_counted"; reason: "too_many" | "search_not_counted" | "unavailable" }>;
+
+/** What a finished bulk run reports: the records it covered, changed, refused and did not reach. */
+export type TableBulkRunSummary = Readonly<{
+  total: number;
+  done: number;
+  refused: readonly Readonly<{ reason: RecordsTableBulkRefusalReason; count: number }>[];
+  notProcessed: number;
+  limited: boolean;
+}>;
+
+/** One bulk run of a table, as the page runtime follows it: running, finished or failed. */
+export type TableBulkRun =
+  | Readonly<{ status: "running"; label: string; total?: number; processed: number }>
+  | Readonly<{ status: "finished"; label: string; selected: number; summary: TableBulkRunSummary }>
+  | Readonly<{ status: "failed"; label: string }>;
+
+/**
+ * The selection parts of a table payload: the server's sealed descriptor of every matching record
+ * of the read, and the selection scope and bulk run the page runtime adds.
+ */
+export type TableSelectionParts = Readonly<{
+  selectionToken?: string;
+  selectionScope?: TableSelectionScope;
+  bulkRun?: TableBulkRun;
+}>;
+
+const wholeCount = (value: unknown, location: DefinitionRenderErrorLocation): number => {
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 0)
+    fail("A selection count must be a whole number", location);
+  return value as number;
+};
+
+const parseSelectionScope = (
+  value: unknown,
+  location: DefinitionRenderErrorLocation,
+): TableSelectionScope => {
+  const scope = requireRecord(value, "A table selection scope is invalid", location);
+  if (scope.kind === "counting") return Object.freeze({ kind: "counting" });
+  if (scope.kind === "matching")
+    return Object.freeze({
+      kind: "matching",
+      count: wholeCount(scope.count, location),
+      excluded: wholeCount(scope.excluded, location),
+    });
+  if (
+    scope.kind === "not_counted" &&
+    (scope.reason === "too_many" ||
+      scope.reason === "search_not_counted" ||
+      scope.reason === "unavailable")
+  )
+    return Object.freeze({ kind: "not_counted", reason: scope.reason });
+  return fail("A table selection scope is invalid", location);
+};
+
+const parseBulkRun = (value: unknown, location: DefinitionRenderErrorLocation): TableBulkRun => {
+  const run = requireRecord(value, "A table bulk run is invalid", location);
+  const label = requireNonEmptyString(run.label, "A table bulk run needs its label", location);
+  if (run.status === "failed") return Object.freeze({ status: "failed", label });
+  if (run.status === "running")
+    return Object.freeze({
+      status: "running",
+      label,
+      ...(run.total === undefined ? {} : { total: wholeCount(run.total, location) }),
+      processed: wholeCount(run.processed, location),
+    });
+  if (run.status !== "finished") return fail("A table bulk run is invalid", location);
+  const summary = requireRecord(run.summary, "A bulk run summary is invalid", location);
+  return Object.freeze({
+    status: "finished",
+    label,
+    selected: wholeCount(run.selected, location),
+    summary: Object.freeze({
+      total: wholeCount(summary.total, location),
+      done: wholeCount(summary.done, location),
+      refused: Object.freeze(
+        requireArray(summary.refused, "Bulk run refusals are invalid", location).map((item) => {
+          const refusal = requireRecord(item, "A bulk run refusal is invalid", location);
+          if (!(recordsTableBulkRefusalReasons as readonly unknown[]).includes(refusal.reason))
+            fail("A bulk run refusal names an unknown reason", location);
+          return Object.freeze({
+            reason: refusal.reason as RecordsTableBulkRefusalReason,
+            count: wholeCount(refusal.count, location),
+          });
+        }),
+      ),
+      notProcessed: wholeCount(summary.notProcessed, location),
+      limited: summary.limited === true,
+    }),
+  });
+};
+
+/** The selection parts of a projected table payload; each is absent unless present. */
+export const parseTableSelectionParts = (
+  record: Readonly<Record<string, unknown>>,
+  location: DefinitionRenderErrorLocation,
+): TableSelectionParts => {
+  const token = record.selectionToken;
+  if (token !== undefined && (typeof token !== "string" || !/^[A-Za-z0-9_-]{1,65536}$/.test(token)))
+    fail("A table selection token is invalid", location);
+  return Object.freeze({
+    ...(token === undefined ? {} : { selectionToken: token as string }),
+    ...(record.selectionScope === undefined
       ? {}
-      : { capability: action.capability as RecordsTableActionContract["capability"] & string }),
+      : { selectionScope: parseSelectionScope(record.selectionScope, location) }),
+    ...(record.bulkRun === undefined ? {} : { bulkRun: parseBulkRun(record.bulkRun, location) }),
   });
 };
 
@@ -196,11 +318,11 @@ export const parseTableFeatures = (
   const bulkActions =
     record.bulkActions === undefined
       ? undefined
-      : requireArray(record.bulkActions, "Projected bulk commands are invalid", location).map(
+      : requireArray(record.bulkActions, "Projected bulk actions are invalid", location).map(
           (action) => parseTableAction(action, location),
         );
   if (bulkActions !== undefined && bulkActions.length === 0)
-    fail("Projected bulk commands are empty", location);
+    fail("Projected bulk actions are empty", location);
   let inlineEdit: RecordsTableFeatureProjection["inlineEdit"];
   if (record.inlineEdit !== undefined) {
     const inline = requireRecord(
