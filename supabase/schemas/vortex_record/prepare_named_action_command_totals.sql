@@ -77,10 +77,10 @@ begin
       ) end;
   end if;
   -- A set-only action still uses the terminal writer's total probe. A command
-  -- with creations carries the exact release's rules for every closure record
+  -- with creations carries the exact release's BeforeSave flows for every closure record
   -- to the existing Record evaluator before any row is written.
   if creation_count = 0
-    and coalesce((catalogue ->> 'hasInstalledRules')::boolean, false) then
+    and coalesce((catalogue ->> 'hasBeforeSaveFlows')::boolean, false) then
     return pg_catalog.jsonb_build_object('outcome', 'defer');
   end if;
 
@@ -323,7 +323,7 @@ begin
       'canRead', prepared_record ->> 'recordKey' = 'root'
         or not (prepared_record ? 'recordId')
         or coalesce(parent_read ->> 'outcome' = 'allowed', false),
-      'beforeSaveRules', vortex_record.before_save_rules_for_record_type_internal(
+      'beforeSaveFlows', vortex_record.before_save_flows_for_record_type_internal(
         rule_module_root_id,
         rule_release_revision,
         (prepared_record ->> 'recordTypeId')::uuid

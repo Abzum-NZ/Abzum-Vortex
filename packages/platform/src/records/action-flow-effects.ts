@@ -44,7 +44,7 @@ export type NamedActionCreateTarget = Readonly<{
   ordinal: number;
   recordTypeId: string;
   recordType: RecordTypeDefinition;
-  beforeSaveRules: unknown;
+  beforeSaveFlows: unknown;
 }>;
 
 export type PreparedNamedAction = Readonly<{

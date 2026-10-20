@@ -6,7 +6,6 @@ import type {
   SourceIdentityKind,
 } from "../schema";
 
-import { isBeforeSaveFlow, lowerBeforeSaveFlow } from "./before-save-flow-rules";
 import { isSourceItemShape } from "./application-composition/source-composition";
 import { reservedItemPropKeys } from "./application-composition/platform-block-release";
 
@@ -137,9 +136,7 @@ export function extractSourceIdentityRequirements(
 }
 
 /**
- * Adds the identities a Module's flows own to the shared vocabulary computed above: each flow, and,
- * for a `BeforeSave` flow, the nodes of the rule graph it is lowered to. A flow that cannot be
- * lowered lists no nodes; compiling it refuses with the located reason.
+ * Adds the identities a Module's flows own to the shared vocabulary computed above: each flow.
  */
 export function extractModuleSourceIdentityRequirements(
   source: ModuleSourceDocument,
@@ -148,7 +145,7 @@ export function extractModuleSourceIdentityRequirements(
     (requirement) => ({ ...requirement }),
   );
   const add = (
-    kind: Extract<SourceIdentityKind, "flow" | "rule_node">,
+    kind: Extract<SourceIdentityKind, "flow">,
     ownerScope: string,
     scope: string,
     componentOwner: string,
@@ -165,11 +162,6 @@ export function extractModuleSourceIdentityRequirements(
 
   for (const flow of source.body.flows) {
     add("flow", "content", "content", flow.id, [flow.id, flow.key]);
-    if (!isBeforeSaveFlow(flow)) continue;
-    const lowered = lowerBeforeSaveFlow(flow);
-    if (!lowered.ok) continue;
-    for (const node of lowered.graph.nodes)
-      add("rule_node", `rule_owner:${flow.id}`, `rule:${flow.key}`, node.id, [node.id]);
   }
   return requirements;
 }
