@@ -61,6 +61,7 @@ export function PersonalFormattingDialog({
   const [activeId, setActiveId] = useState<string | undefined>(undefined);
   const [busy, setBusy] = useState(false);
   const [refused, setRefused] = useState<string | undefined>(undefined);
+  const [unfinished, setUnfinished] = useState<ReadonlySet<string>>(new Set());
   const context = useMemo(() => conditionalFormatConditionContext(fields), [fields]);
   const facts = useMemo(() => conditionalFormatFactsOf(fields), [fields]);
   const labelOf = (fieldId: string): string =>
@@ -68,7 +69,7 @@ export function PersonalFormattingDialog({
     fieldId;
   const issueOf = (rule: GridViewFormatRule): string | undefined =>
     conditionalFormatRuleIssue(rule, facts);
-  const invalid = rules.some((rule) => issueOf(rule) !== undefined);
+  const invalid = rules.some((rule) => unfinished.has(rule.id) || issueOf(rule) !== undefined);
   const active = rules.find((rule) => rule.id === activeId);
   const change = (id: string, next: (rule: GridViewFormatRule) => GridViewFormatRule): void =>
     setRules(rules.map((rule) => (rule.id === id ? next(rule) : rule)));
@@ -230,9 +231,14 @@ export function PersonalFormattingDialog({
                 context={context}
                 value={active.condition}
                 onChange={(next: ConditionNode | undefined, validation) => {
-                  // An unfinished condition stays on screen in the controls; only a valid one is kept.
-                  if (next === undefined || !validation.isValid) return;
-                  change(active.id, (held) => ({ ...held, condition: next }));
+                  setUnfinished((held) => {
+                    const updated = new Set(held);
+                    if (next === undefined || !validation.isValid) updated.add(active.id);
+                    else updated.delete(active.id);
+                    return updated;
+                  });
+                  if (next !== undefined)
+                    change(active.id, (held) => ({ ...held, condition: next }));
                 }}
               />
             </fieldset>
@@ -273,7 +279,7 @@ export function PersonalFormattingDialog({
               }).then((result) => {
                 setBusy(false);
                 if (result.outcome === "formatting_refused") setRefused(result.reason);
-                else if (result.outcome !== "unavailable") onClose();
+                else if (result.outcome === "done") onClose();
               });
             }}
           >

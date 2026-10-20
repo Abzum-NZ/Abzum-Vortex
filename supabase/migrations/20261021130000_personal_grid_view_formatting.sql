@@ -1,7 +1,4 @@
--- #3207: personal conditional-format rules in the one grid view document. A named view may hold
--- formatting rules in the authored rule shape; a save refuses a rule that reads a field that does
--- not exist or the author cannot read, and a recipient's read omits every rule that reads a field
--- they cannot read, with everything it stores, and counts the omission.
+-- #3207: personal formatting in saved views, validated and projected under current access.
 
 set local role vortex_owner;
 
@@ -545,6 +542,10 @@ declare
   owned_count bigint;
   installation jsonb;
   access_plan jsonb;
+  record_type_id uuid;
+  field_types jsonb;
+  field_nulls jsonb;
+  format_rule jsonb;
   written_at timestamptz := pg_catalog.clock_timestamp();
 begin
   if p_page_id is null or not vortex_platform.is_non_nil_uuid(p_page_id::text)
@@ -574,6 +575,49 @@ begin
         p_query_id, p_document, installation, access_plan) ->> 'hiddenFormatting')::integer > 0 then
       return pg_catalog.jsonb_build_object('outcome', 'formatting_refused');
     end if;
+    select distinct (query.value #>> '{recordType,recordTypeId}')::uuid into record_type_id
+    from pg_catalog.jsonb_array_elements(installation -> 'moduleBindings') as binding(value)
+    join vortex_definition.releases as release
+      on release.root_id = (binding.value ->> 'moduleRootId')::uuid
+      and release.release_revision = (binding.value ->> 'moduleReleaseRevision')::bigint
+    cross join lateral pg_catalog.jsonb_array_elements(
+      release.compilation_output #> '{canonical,content,queries}') as query(value)
+    where (query.value ->> 'queryId')::uuid = p_query_id;
+    -- Record-type listings use their record type as the query identity.
+    if record_type_id is null and access_plan -> 'recordTypes' ? p_query_id::text then
+      record_type_id := p_query_id;
+    end if;
+    select pg_catalog.jsonb_object_agg(field.value ->> 'fieldId', case
+        when kind.value in ('whole_number', 'decimal_number', 'money', 'yes_no', 'date', 'date_time')
+          then kind.value
+        when kind.value = 'several_choices' then 'text_collection'
+        when kind.value in ('link', 'link_to_one_of_several') then 'record_reference'
+        when kind.value in ('table', 'attachment') then 'opaque_json'
+        else 'text' end),
+      pg_catalog.jsonb_object_agg(field.value ->> 'fieldId', 'null'::jsonb)
+    into field_types, field_nulls
+    from pg_catalog.jsonb_array_elements(installation -> 'moduleBindings') as binding(value)
+    join vortex_definition.releases as release
+      on release.root_id = (binding.value ->> 'moduleRootId')::uuid
+      and release.release_revision = (binding.value ->> 'moduleReleaseRevision')::bigint
+    cross join lateral pg_catalog.jsonb_array_elements(
+      release.compilation_output #> '{canonical,content,recordTypes}') as record_type(value)
+    cross join lateral pg_catalog.jsonb_array_elements(record_type.value -> 'fields') as field(value)
+    cross join lateral (select case when field.value ->> 'type' in ('calculation', 'total')
+      then field.value #>> '{settings,resultType}' else field.value ->> 'type' end) as kind(value)
+    where (record_type.value ->> 'recordTypeId')::uuid = record_type_id;
+    for format_rule in select value from pg_catalog.jsonb_array_elements(p_document -> 'formatting')
+    loop
+      begin
+        perform vortex_access.evaluate_query_condition_internal(
+          format_rule -> 'condition', field_types, field_nulls,
+          '{"today":"date","start_of_week":"date","end_of_week":"date","start_of_month":"date","end_of_month":"date"}'::jsonb,
+          '{"today":null,"start_of_week":null,"end_of_week":null,"start_of_month":null,"end_of_month":null}'::jsonb,
+          true);
+      exception when invalid_parameter_value then
+        return pg_catalog.jsonb_build_object('outcome', 'formatting_refused');
+      end;
+    end loop;
   end if;
 
   perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(

@@ -450,7 +450,11 @@ const viewOutcome = (rows: readonly ResultRow[]): GridViewOperationOutcome => {
   if (result.outcome === "saved")
     return { outcome: "saved", viewId: result.viewId.toLowerCase(), revision: result.revision };
   if (result.outcome === "formatting_refused")
-    return { outcome: "formatting_refused", reason: "A rule reads a field you cannot read." };
+    return refuseFormatting(
+      "database",
+      "field_not_readable",
+      "A rule reads a field you cannot read.",
+    );
   return result.outcome === "conflict" ? { outcome: "conflict" } : result;
 };
 

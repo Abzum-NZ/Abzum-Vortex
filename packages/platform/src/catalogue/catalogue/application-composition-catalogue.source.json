@@ -3288,6 +3288,10 @@
                 "enabled": {
                   "kind": "boolean",
                   "value": false
+                },
+                "personal_formatting": {
+                  "kind": "boolean",
+                  "value": false
                 }
               }
             },
@@ -3308,7 +3312,11 @@
                 "key": "personal_formatting",
                 "label": "Personal formatting",
                 "help": "Let people add their own highlighting rules to the views they save; needs Formatting on",
-                "required": false
+                "required": true,
+                "defaultValue": {
+                  "kind": "boolean",
+                  "value": false
+                }
               },
               {
                 "kind": "list",
@@ -4877,6 +4885,10 @@
               "kind": "group",
               "properties": {
                 "enabled": {
+                  "kind": "boolean",
+                  "value": false
+                },
+                "personal_formatting": {
                   "kind": "boolean",
                   "value": false
                 }
