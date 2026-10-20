@@ -1,6 +1,6 @@
 create or replace function vortex_access.list_organization_invitations_projection(
   p_record_ids uuid[], p_sort_key text, p_direction text,
-  p_after jsonb, p_limit integer
+  p_after jsonb, p_limit integer, p_predicate jsonb
 )
 returns table (
   organization_id uuid, record_id uuid, revision bigint, attribute_values jsonb
@@ -25,17 +25,18 @@ begin
       'expires_at', projected.expires_at
     )
   from vortex_identity.list_organization_invitations_projection_internal(
-    scope_row.organization_id, p_record_ids, p_sort_key, p_direction, p_after, p_limit
+    scope_row.organization_id, p_record_ids, p_sort_key, p_direction, p_after, p_limit,
+    p_predicate
   ) as projected;
 end
 $function$;
 
 revoke all on function vortex_access.list_organization_invitations_projection(
-  uuid[], text, text, jsonb, integer
+  uuid[], text, text, jsonb, integer, jsonb
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_access.list_organization_invitations_projection(
-  uuid[], text, text, jsonb, integer
+  uuid[], text, text, jsonb, integer, jsonb
 ) to vortex_owner, vortex_record_adapter, postgres;
 alter function vortex_access.list_organization_invitations_projection(
-  uuid[], text, text, jsonb, integer
+  uuid[], text, text, jsonb, integer, jsonb
 ) owner to vortex_owner;
