@@ -493,6 +493,7 @@
                 {
                   "type": "platform.renderer.table",
                   "props": {
+                    "presentation": "grid",
                     "id": "activity_table",
                     "columns": [
                       {
@@ -654,6 +655,7 @@
                 {
                   "type": "platform.renderer.table",
                   "props": {
+                    "presentation": "grid",
                     "id": "accounts_region",
                     "title": "Organisation accounts",
                     "columns": [
@@ -772,6 +774,7 @@
                 {
                   "type": "platform.renderer.table",
                   "props": {
+                    "presentation": "grid",
                     "id": "invitations_region",
                     "title": "Invitations",
                     "columns": [
@@ -986,6 +989,7 @@
                 {
                   "type": "platform.renderer.table",
                   "props": {
+                    "presentation": "grid",
                     "id": "settings_region",
                     "row_click": {
                       "event_id": "event_open_organization_settings",
@@ -1306,6 +1310,7 @@
                 {
                   "type": "platform.renderer.table",
                   "props": {
+                    "presentation": "grid",
                     "id": "notices_table",
                     "columns": [
                       {
@@ -1538,6 +1543,7 @@
                 {
                   "type": "platform.renderer.table",
                   "props": {
+                    "presentation": "grid",
                     "id": "privacy_cases_table",
                     "columns": [
                       {

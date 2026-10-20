@@ -1064,6 +1064,7 @@
                 {
                   "type": "platform.renderer.table",
                   "props": {
+                    "presentation": "grid",
                     "id": "iam_people_region",
                     "row_click": {
                       "event_id": "event_iam_open_person",
@@ -1246,6 +1247,7 @@
                 {
                   "type": "platform.renderer.table",
                   "props": {
+                    "presentation": "grid",
                     "id": "iam_roles_region",
                     "title": "Roles",
                     "columns": [
@@ -1348,6 +1350,7 @@
                 {
                   "type": "platform.renderer.table",
                   "props": {
+                    "presentation": "grid",
                     "id": "iam_groups_region",
                     "title": "Groups",
                     "columns": [
@@ -1424,6 +1427,7 @@
                 {
                   "type": "platform.renderer.table",
                   "props": {
+                    "presentation": "grid",
                     "id": "iam_group_memberships_region",
                     "title": "Group memberships",
                     "columns": [
@@ -2129,6 +2133,7 @@
                 {
                   "type": "platform.renderer.table",
                   "props": {
+                    "presentation": "grid",
                     "id": "iam_assignments_region",
                     "title": "Role assignment ledger",
                     "columns": [
@@ -2242,6 +2247,7 @@
                 {
                   "type": "platform.renderer.table",
                   "props": {
+                    "presentation": "grid",
                     "id": "iam_delegations_region",
                     "title": "Delegated authority",
                     "columns": [
@@ -2693,6 +2699,7 @@
                 {
                   "type": "platform.renderer.table",
                   "props": {
+                    "presentation": "grid",
                     "id": "iam_role_activations_region",
                     "title": "Active roles",
                     "columns": [
@@ -2786,6 +2793,7 @@
                 {
                   "type": "platform.renderer.table",
                   "props": {
+                    "presentation": "grid",
                     "id": "iam_access_requests_list",
                     "row_click": {
                       "event_id": "event_iam_open_access_request",

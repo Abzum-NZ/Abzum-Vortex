@@ -72,6 +72,7 @@ export function StudioGridFeatures({
   idPrefix,
   property,
   value,
+  presentation,
   query,
   compiledFields,
   choices,
@@ -84,6 +85,7 @@ export function StudioGridFeatures({
   property: Extract<BlockPropertySchemaContract, { kind: "group" }>;
   /** The authored features group; unset uses the catalogue default (every feature off). */
   value: SourceBlockPropertyValueContract | undefined;
+  presentation: "grid" | "cards";
   /** The query the table reads, or undefined until one is chosen. */
   query: StudioQueryChoice | undefined;
   /** The saved draft's compiled fields of the record type the query reads; undefined before a save. */
@@ -174,7 +176,12 @@ export function StudioGridFeatures({
           const check =
             features === undefined
               ? undefined
-              : checkRecordsTableFeature(key, recordsTableFeatureState(features, key), facts);
+              : checkRecordsTableFeature(
+                  key,
+                  recordsTableFeatureState(features, key),
+                  facts,
+                  presentation,
+                );
           const switchId = `${idPrefix}-${ownId}-${key}`;
           const settings =
             declaration?.kind === "group"

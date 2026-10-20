@@ -116,6 +116,8 @@ export type RecordsTableContract = Readonly<{
   stickyHeader: boolean;
   /** People may expand the table to fill the screen from its toolbar. */
   allowFullScreen: boolean;
+  /** Table columns or the List preset's cards at every screen size. */
+  presentation: "grid" | "cards";
   phonePresentation: RecordsTablePhonePresentation;
   viewport: RecordsTableViewport;
   /** The optional grid features (search, column filters, saved views, bulk actions, inline editing). */
@@ -236,6 +238,10 @@ export const readRecordsTableContract = (
   // The grid presentation settings are equally explicit: the catalogue defaults fill them in, and a
   // table missing one is not read, so no renderer chooses a presentation the definition did not.
   const density = settingOptionalChoice(settings["density"], recordsTableDensities);
+  const presentation = settingOptionalChoice(
+    settings["presentation"],
+    recordsTablePhonePresentations,
+  );
   const phonePresentation = settingOptionalChoice(
     settings["phone_presentation"],
     recordsTablePhonePresentations,
@@ -247,6 +253,7 @@ export const readRecordsTableContract = (
   if (
     features === undefined ||
     density === undefined ||
+    presentation === undefined ||
     phonePresentation === undefined ||
     viewport === undefined ||
     stickyHeader?.kind !== "boolean" ||
@@ -263,6 +270,7 @@ export const readRecordsTableContract = (
     density,
     stickyHeader: stickyHeader.value,
     allowFullScreen: allowFullScreen.value,
+    presentation,
     phonePresentation,
     viewport,
     features,

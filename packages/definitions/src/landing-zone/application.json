@@ -1081,6 +1081,7 @@
                 {
                   "type": "platform.renderer.table",
                   "props": {
+                    "presentation": "grid",
                     "id": "managed_saved_tiles",
                     "title": "Saved tile configuration",
                     "empty_message": "No saved tile records were returned.",

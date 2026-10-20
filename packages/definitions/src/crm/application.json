@@ -576,6 +576,7 @@
                 {
                   "type": "platform.renderer.table",
                   "props": {
+                    "presentation": "grid",
                     "id": "content_1",
                     "row_click": {
                       "event_id": "event_crm_open_company",
@@ -709,6 +710,7 @@
                 {
                   "type": "platform.renderer.table",
                   "props": {
+                    "presentation": "grid",
                     "id": "content_2",
                     "row_click": {
                       "event_id": "event_crm_open_contact",
@@ -827,6 +829,7 @@
                 {
                   "type": "platform.renderer.table",
                   "props": {
+                    "presentation": "grid",
                     "id": "content_3",
                     "row_click": {
                       "event_id": "event_crm_open_lead",
@@ -965,6 +968,7 @@
                 {
                   "type": "platform.renderer.table",
                   "props": {
+                    "presentation": "grid",
                     "id": "content_4",
                     "features": {
                       "bulk_actions": {
@@ -1194,6 +1198,7 @@
                 {
                   "type": "platform.renderer.table",
                   "props": {
+                    "presentation": "grid",
                     "id": "content_5",
                     "row_click": {
                       "event_id": "event_crm_open_activity",
@@ -2733,6 +2738,7 @@
                 {
                   "type": "platform.renderer.table",
                   "props": {
+                    "presentation": "grid",
                     "id": "contacts_crm_company",
                     "title": "Contacts",
                     "empty_message": "This company has no contacts yet.",

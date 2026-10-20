@@ -17,6 +17,12 @@ export const GRID_ROW_HEIGHT: Readonly<Record<RecordsTableDensity, number>> = Ob
   compact: 32,
 });
 
+/** Card spacing follows the same authored or personal density as the table. */
+export const CARD_SPACING: Readonly<Record<RecordsTableDensity, string>> = Object.freeze({
+  comfortable: "gap-2 p-3",
+  compact: "gap-1 p-2",
+});
+
 /** Starting width of a column per its declared relative width, in pixels. */
 const COLUMN_WIDTH: Readonly<Record<RecordsTableColumnContract["width"], number>> = Object.freeze({
   auto: 180,
@@ -75,12 +81,13 @@ const unknownOnServer = (): undefined => undefined;
 export const useTablePresentation = (
   contract: RecordsTableContract | undefined,
 ): "grid" | "cards" | undefined => {
-  const cards = contract?.phonePresentation === "cards";
+  const cards = contract?.presentation === "grid" && contract.phonePresentation === "cards";
   const phone = useSyncExternalStore<boolean | undefined>(
     cards ? subscribeToPhone : subscribeToNothing,
     cards ? isPhone : never,
     cards ? unknownOnServer : never,
   );
+  if (contract?.presentation === "cards") return "cards";
   if (phone === undefined) return undefined;
   return phone ? "cards" : "grid";
 };

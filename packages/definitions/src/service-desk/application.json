@@ -585,6 +585,7 @@
                 {
                   "type": "platform.renderer.table",
                   "props": {
+                    "presentation": "grid",
                     "id": "content_1",
                     "row_click": {
                       "event_id": "event_sd_open_case",
@@ -837,6 +838,7 @@
                 {
                   "type": "platform.renderer.table",
                   "props": {
+                    "presentation": "grid",
                     "id": "comments_sd_case",
                     "title": "Comments",
                     "empty_message": "This case has no comments yet.",
@@ -1395,6 +1397,7 @@
                 {
                   "type": "platform.renderer.table",
                   "props": {
+                    "presentation": "grid",
                     "id": "content_4",
                     "row_click": {
                       "event_id": "event_sd_open_article",
@@ -1747,6 +1750,7 @@
                 {
                   "type": "platform.renderer.table",
                   "props": {
+                    "presentation": "grid",
                     "id": "content_7",
                     "row_click": {
                       "event_id": "event_sd_open_service_level",
@@ -2083,6 +2087,7 @@
                 {
                   "type": "platform.renderer.table",
                   "props": {
+                    "presentation": "grid",
                     "id": "list_sd_customers",
                     "row_click": {
                       "event_id": "event_sd_open_customer",
@@ -2238,6 +2243,7 @@
                 {
                   "type": "platform.renderer.table",
                   "props": {
+                    "presentation": "grid",
                     "id": "cases_sd_customer",
                     "title": "Cases",
                     "empty_message": "This company has no cases.",
@@ -2354,6 +2360,7 @@
                 {
                   "type": "platform.renderer.table",
                   "props": {
+                    "presentation": "grid",
                     "id": "list_sd_requesters",
                     "row_click": {
                       "event_id": "event_sd_open_requester",

@@ -3,7 +3,11 @@
 import type { ReactElement } from "react";
 import { useMemo } from "react";
 import { useRouter } from "next/navigation";
-import type { ApplicationShell, PageDefinition, PlatformBlockRelease } from "@vortex/platform/schema";
+import type {
+  ApplicationShell,
+  PageDefinition,
+  PlatformBlockRelease,
+} from "@vortex/platform/schema";
 import {
   ApplicationAccountActionsProvider,
   type ApplicationAccount,
@@ -12,7 +16,7 @@ import {
   renderedPageOf,
   type DisplaySemanticEvent,
   type FieldInputControlReleaseMap,
-  type ListPayload,
+  type LauncherRowsPayload,
   type PlatformThemeTokens,
 } from "@vortex/ui";
 import { signOut } from "../../auth/actions";
@@ -35,7 +39,7 @@ export function OrganizationChooserPage({
   page: PageDefinition;
   shell: ApplicationShell;
   placementId: string;
-  values: ListPayload | undefined;
+  values: LauncherRowsPayload | undefined;
   account: ApplicationAccount;
   openOrganization: (event: DisplaySemanticEvent) => Promise<void>;
   platformBlockReleases: readonly PlatformBlockRelease[];
