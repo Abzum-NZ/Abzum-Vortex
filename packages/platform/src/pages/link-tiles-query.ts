@@ -51,7 +51,7 @@ type LinkRow = Readonly<{
   cells: Readonly<Record<string, TextCell | LinkCell>>;
 }>;
 export type ProjectedLinkTilesValues = Readonly<{
-  kind: "list";
+  kind: "launcher_rows";
   headingKey: string;
   secondaryKey?: string;
   rows: readonly LinkRow[];
@@ -264,7 +264,8 @@ export const createLinkTilesQueryResolver = (
         releaseVersion,
         readApplicationPageLink,
       );
-    if (releaseVersion !== LINK_TILES_BLOCK_RELEASE.releaseVersion) return refusedBecause("RELEASE_NOT_SUPPORTED");
+    if (releaseVersion !== LINK_TILES_BLOCK_RELEASE.releaseVersion)
+      return refusedBecause("RELEASE_NOT_SUPPORTED");
     let context: InstalledRuntimeContext;
     try {
       context = requireInstalledRuntimeContext(candidateContext);
@@ -302,8 +303,7 @@ export const createLinkTilesQueryResolver = (
           return refusedBecause("PAGE_SIZE_EXCEEDED");
         // Tiles are one page of the query's own page size (at most 200); a query that offers
         // more is refused loudly rather than silently truncated.
-        if (page.nextContinuationToken !== undefined)
-          return refusedBecause("MORE_THAN_ONE_PAGE");
+        if (page.nextContinuationToken !== undefined) return refusedBecause("MORE_THAN_ONE_PAGE");
         for (const row of page.rows) {
           const recordId = row.recordId.toLowerCase();
           const keys = Object.keys(row.values);
@@ -357,7 +357,7 @@ export const createLinkTilesQueryResolver = (
         return Object.freeze({
           status: "ready",
           values: Object.freeze({
-            kind: "list",
+            kind: "launcher_rows",
             headingKey: binding.mapping.label.key,
             ...(binding.mapping.description === undefined
               ? {}

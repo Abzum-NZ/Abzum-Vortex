@@ -122,26 +122,15 @@ export type DisplaySummaryMetric = Readonly<{
   value: DisplayCellValue | Readonly<{ kind: "unavailable" }>;
 }>;
 
-/** One permission-projected group with stable group identity and its own rows. */
-export type DisplayGroup = Readonly<{
-  groupId: string;
-  label: string;
-  headingKey: string;
-  secondaryKey?: string;
-  rows: readonly DisplayRow[];
-  selectedRecordIds?: readonly string[];
-  summary?: readonly DisplaySummaryValue[];
-}>;
-
 /** The ready values a plain-text block renders. */
 export type TextPayload = Readonly<{ kind: "text"; value: DisplayCellValue }>;
 
 /** The ready values a structured rich-text block renders. */
 export type RichTextPayload = Readonly<{ kind: "rich_text"; document: DisplayRichTextDocument }>;
 
-/** The ready values a list block renders. */
-export type ListPayload = Readonly<{
-  kind: "list";
+/** The ready rows a launcher or link-tile block renders. */
+export type LauncherRowsPayload = Readonly<{
+  kind: "launcher_rows";
   rows: readonly DisplayRow[];
   headingKey: string;
   secondaryKey?: string;
@@ -226,9 +215,6 @@ export type RecordDetailPayload = Readonly<{
   heading?: DisplayCellValue;
 }>;
 
-/** The ready values a grouped-data block renders. */
-export type GroupedPayload = Readonly<{ kind: "grouped_data"; groups: readonly DisplayGroup[] }>;
-
 /** The ready values a summary-values block renders. */
 export type SummaryPayload = Readonly<{
   kind: "summary_values";
@@ -292,10 +278,9 @@ export type BoardPayload = Readonly<{
 
 export type TextData = DisplayDataState<TextPayload>;
 export type RichTextData = DisplayDataState<RichTextPayload>;
-export type ListData = DisplayDataState<ListPayload>;
+export type LauncherRowsData = DisplayDataState<LauncherRowsPayload>;
 export type TableData = DisplayDataState<TablePayload>;
 export type RecordDetailData = DisplayDataState<RecordDetailPayload>;
-export type GroupedData = DisplayDataState<GroupedPayload>;
 export type SummaryData = DisplayDataState<SummaryPayload>;
 export type BoardData = DisplayDataState<BoardPayload>;
 
@@ -975,11 +960,6 @@ export const parseSummaryMetrics = (
   location: DefinitionRenderErrorLocation,
 ): readonly DisplaySummaryMetric[] => parseSummaryEntries(value, location, parseSummaryValue);
 
-const parseSummaryValues = (
-  value: unknown,
-  location: DefinitionRenderErrorLocation,
-): readonly DisplaySummaryValue[] => parseSummaryEntries(value, location, parseCellValue);
-
 /**
  * @internal Shared with the board payload parser. A board card's fields are scalar; only a record
  * detail passes the detail value parser that also accepts a table field's rows.
@@ -1019,61 +999,6 @@ export const parseFields = (
   );
 };
 
-const parseGroups = (
-  value: unknown,
-  location: DefinitionRenderErrorLocation,
-): readonly DisplayGroup[] => {
-  const items = requireArray(value, "Projected groups must be an array", location);
-  const seen = new Set<string>();
-  return Object.freeze(
-    items.map((item, index) => {
-      const groupLocation = { ...location, propertyPath: [`groups[${index}]`] };
-      const record = requireRecord(item, "A projected group must be an object", groupLocation);
-      requireExactKeys(
-        record,
-        ["groupId", "label", "headingKey", "secondaryKey", "rows", "selectedRecordIds", "summary"],
-        groupLocation,
-      );
-      const groupId = requireNonEmptyString(
-        record.groupId,
-        "A projected group requires a stable identity",
-        groupLocation,
-      );
-      if (seen.has(groupId)) fail(`Duplicate projected group identity '${groupId}'`, groupLocation);
-      seen.add(groupId);
-      const rows = parseRows(record.rows, groupLocation);
-      const selection = parseSelection(record.selectedRecordIds, rows, groupLocation);
-      return Object.freeze({
-        groupId,
-        label: requireNonEmptyString(
-          record.label,
-          "A projected group requires a label",
-          groupLocation,
-        ),
-        headingKey: requireBuilderKey(
-          record.headingKey,
-          "A projected group requires a heading key",
-          groupLocation,
-        ),
-        ...(record.secondaryKey === undefined
-          ? {}
-          : {
-              secondaryKey: requireBuilderKey(
-                record.secondaryKey,
-                "A projected group secondary key is invalid",
-                groupLocation,
-              ),
-            }),
-        rows,
-        ...(selection === undefined ? {} : { selectedRecordIds: selection }),
-        ...(record.summary === undefined
-          ? {}
-          : { summary: parseSummaryValues(record.summary, groupLocation) }),
-      });
-    }),
-  );
-};
-
 /** The ready values a plain-text block accepts. */
 export const parseTextPayload = (
   value: unknown,
@@ -1101,14 +1026,17 @@ export const parseRichTextPayload = (
   });
 };
 
-/** The ready values a list block accepts. */
-export const parseListPayload = (
+/** The ready rows a launcher or link-tile block accepts. */
+export const parseLauncherRowsPayload = (
   value: unknown,
   location: DefinitionRenderErrorLocation = {},
-): ListPayload => {
+): LauncherRowsPayload => {
   const record = requireRecord(value, "Projected display values must be an object", location);
-  if (record.kind !== "list")
-    return fail(`Expected 'list' projected values, got '${String(record.kind)}'`, location);
+  if (record.kind !== "launcher_rows")
+    return fail(
+      `Expected 'launcher_rows' projected values, got '${String(record.kind)}'`,
+      location,
+    );
   requireExactKeys(
     record,
     ["kind", "rows", "headingKey", "secondaryKey", "selectedRecordIds", "page", "pageCount"],
@@ -1118,7 +1046,7 @@ export const parseListPayload = (
   const selection = parseSelection(record.selectedRecordIds, rows, location);
   const pagination = parsePagination(record.page, record.pageCount, location);
   return Object.freeze({
-    kind: "list",
+    kind: "launcher_rows",
     rows,
     headingKey: requireBuilderKey(
       record.headingKey,
@@ -1393,18 +1321,6 @@ export const parseRecordDetailPayload = (
     fields: parseFields(record.fields, location, parseDetailFieldValue),
     ...(record.heading === undefined ? {} : { heading: parseCellValue(record.heading, location) }),
   });
-};
-
-/** The ready values a grouped-data block accepts. */
-export const parseGroupedPayload = (
-  value: unknown,
-  location: DefinitionRenderErrorLocation = {},
-): GroupedPayload => {
-  const record = requireRecord(value, "Projected display values must be an object", location);
-  if (record.kind !== "grouped_data")
-    return fail(`Expected 'grouped_data' projected values, got '${String(record.kind)}'`, location);
-  requireExactKeys(record, ["kind", "groups"], location);
-  return Object.freeze({ kind: "grouped_data", groups: parseGroups(record.groups, location) });
 };
 
 /** The ready values a summary-values block accepts. */

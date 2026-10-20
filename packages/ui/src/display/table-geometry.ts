@@ -75,12 +75,13 @@ const unknownOnServer = (): undefined => undefined;
 export const useTablePresentation = (
   contract: RecordsTableContract | undefined,
 ): "grid" | "cards" | undefined => {
-  const cards = contract?.phonePresentation === "cards";
+  const cards = contract?.presentation === "grid" && contract.phonePresentation === "cards";
   const phone = useSyncExternalStore<boolean | undefined>(
     cards ? subscribeToPhone : subscribeToNothing,
     cards ? isPhone : never,
     cards ? unknownOnServer : never,
   );
+  if (contract?.presentation === "cards") return "cards";
   if (phone === undefined) return undefined;
   return phone ? "cards" : "grid";
 };
