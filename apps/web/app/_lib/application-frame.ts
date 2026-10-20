@@ -4,7 +4,6 @@ import { cache } from "react";
 import { headers } from "next/headers";
 import {
   DEFAULT_PLATFORM_THEME_RELEASE,
-  FIELD_INPUT_CONTROL_RELEASES,
   PREVIEW_SEED_RECORD_BOUND,
   runtimePreviewOf,
 } from "@vortex/platform/server";
@@ -26,7 +25,7 @@ import { resolveIdentitySessionWithEmail } from "../auth/_lib/session-server";
 import { resolveApplicationAddress } from "./application-address";
 import { loadApplicationSearch } from "./application-search";
 import { loadPermittedApplicationsAtAddress } from "./organization-context";
-import { platformBlockReleasesFor } from "./platform-block-releases";
+import { fieldInputControlReleasesFor, platformBlockReleasesFor } from "./platform-block-releases";
 import { requestAddressHeader } from "./request-address";
 import { readPageProjections } from "./application-page/load";
 import { pageSubjectParameter } from "./application-page/placement-helpers";
@@ -271,7 +270,9 @@ export const loadApplicationFrame = cache(
           : { email, displayName: resolved.read.accountDisplayName },
       search,
       platformBlockReleases: platformBlockReleasesFor(content.shells),
-      fieldInputControlReleases: FIELD_INPUT_CONTROL_RELEASES,
+      fieldInputControlReleases: fieldInputControlReleasesFor(
+        ...content.shells.map((candidate) => candidate.layout),
+      ),
       platformThemeTokens: DEFAULT_PLATFORM_THEME_RELEASE.tokens,
       ...(preview === undefined
         ? {}

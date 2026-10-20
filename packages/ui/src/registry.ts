@@ -35,8 +35,9 @@ export type PlatformComponentPayloadParser = (
 
 /** Raw, not yet validated component runtime inputs keyed by stable placement identity. */
 export type RuntimeInputsByPlacement = Readonly<Record<string, unknown>>;
+/** Metadata for the automatic controls present in this render; a missing used control is refused. */
 export type FieldInputControlReleaseMap = Readonly<
-  Record<FieldInputControlKey, PlatformBlockRelease>
+  Partial<Record<FieldInputControlKey, PlatformBlockRelease>>
 >;
 
 /** The runtime inputs of a placement that declares none. */
