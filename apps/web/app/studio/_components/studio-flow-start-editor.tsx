@@ -105,19 +105,123 @@ function TriggerEditor({
   id,
   trigger,
   recordTypes,
+  events,
+  actions,
   disabled,
   onChange,
 }: Readonly<{
   id: string;
   trigger: StudioFlowTriggerDraft;
   recordTypes: readonly Readonly<{ key: string; label: string }>[];
+  events: readonly Readonly<{ key: string; label: string }>[];
+  actions: readonly Readonly<{ key: string; label: string }>[];
   disabled: boolean;
   onChange: (trigger: StudioFlowTriggerDraft, setting?: string) => true | string;
 }>) {
-  if (trigger.kind === "kept")
+  if (trigger.kind === "incoming_message")
     return (
-      <p className="text-sm">{trigger.description}. This kind of start is kept as it is here.</p>
+      <StartText
+        id={`${id}-message`}
+        label="Incoming message name"
+        value={trigger.messageName}
+        disabled={disabled}
+        maxLength={40}
+        apply={(messageName) => onChange({ ...trigger, messageName }, `${id}-message`)}
+      />
     );
+  if (trigger.kind === "schedule") {
+    const recurrence = trigger.recurrence;
+    const number = (
+      key: "interval" | "hour" | "minute" | "weekDay" | "monthDay",
+      label: string,
+    ) => (
+      <StartText
+        key={key}
+        id={`${id}-${key}`}
+        label={label}
+        numeric
+        disabled={disabled}
+        value={String(recurrence[key])}
+        apply={(text) =>
+          /^\d+$/.test(text)
+            ? onChange(
+                { ...trigger, recurrence: { ...recurrence, [key]: Number(text) } },
+                `${id}-${key}`,
+              )
+            : `${label}: enter a whole number.`
+        }
+      />
+    );
+    return (
+      <div className="space-y-3">
+        <Label htmlFor={`${id}-cadence`}>Repeat</Label>
+        <StudioOptionControl
+          id={`${id}-cadence`}
+          disabled={disabled}
+          value={recurrence.cadence}
+          options={(["hourly", "daily", "weekly", "monthly"] as const).map((cadence) => ({
+            value: cadence,
+            label: studioWords(cadence),
+          }))}
+          onChange={(next) => {
+            const cadence = next as typeof recurrence.cadence;
+            onChange({
+              ...trigger,
+              recurrence: {
+                cadence,
+                interval: 1,
+                timeZone: recurrence.timeZone,
+                minute: recurrence.minute,
+                ...(cadence === "hourly" ? {} : { hour: 9 }),
+                ...(cadence === "weekly" ? { weekDay: 1 } : {}),
+                ...(cadence === "monthly" ? { monthDay: 1 } : {}),
+              },
+            });
+          }}
+        />
+        {number("interval", "Repeat every")}
+        <StartText
+          id={`${id}-zone`}
+          label="Time zone"
+          disabled={disabled}
+          value={recurrence.timeZone}
+          apply={(timeZone) => {
+            try {
+              new Intl.DateTimeFormat("en", { timeZone });
+            } catch {
+              return "Choose a time zone such as Pacific/Auckland.";
+            }
+            return onChange({ ...trigger, recurrence: { ...recurrence, timeZone } }, `${id}-zone`);
+          }}
+        />
+        {recurrence.cadence !== "hourly" && number("hour", "Hour (0 to 23)")}
+        {number("minute", "Minute (0 to 59)")}
+        {recurrence.cadence === "weekly" && (
+          <>
+            <Label htmlFor={`${id}-weekday`}>Day of the week</Label>
+            <StudioOptionControl
+              id={`${id}-weekday`}
+              disabled={disabled}
+              value={String(recurrence.weekDay)}
+              options={[
+                "Monday",
+                "Tuesday",
+                "Wednesday",
+                "Thursday",
+                "Friday",
+                "Saturday",
+                "Sunday",
+              ].map((label, index) => ({ value: String(index + 1), label }))}
+              onChange={(weekDay) =>
+                onChange({ ...trigger, recurrence: { ...recurrence, weekDay: Number(weekDay) } })
+              }
+            />
+          </>
+        )}
+        {recurrence.cadence === "monthly" && number("monthDay", "Day of the month (1 to 31)")}
+      </div>
+    );
+  }
   const recordType = (
     <div className="space-y-1.5">
       <Label htmlFor={`${id}-record`}>Record type</Label>
@@ -130,6 +234,20 @@ function TriggerEditor({
       />
     </div>
   );
+  if (trigger.kind === "declared_event")
+    return (
+      <div className="space-y-3">
+        {recordType}
+        <Label htmlFor={`${id}-event`}>After this event</Label>
+        <StudioReferencePicker
+          id={`${id}-event`}
+          disabled={disabled}
+          value={trigger.eventKey}
+          options={events.map((event) => ({ value: event.key, label: event.label }))}
+          onChange={(eventKey) => onChange({ ...trigger, eventKey })}
+        />
+      </div>
+    );
   if (trigger.kind === "event")
     return (
       <div className="space-y-2">
@@ -152,6 +270,23 @@ function TriggerEditor({
   return (
     <div className="space-y-2">
       {recordType}
+      {trigger.actions.map((action, index) => (
+        <div key={index} className="space-y-1.5">
+          <Label htmlFor={`${id}-action-${index}`}>Before this action</Label>
+          <StudioReferencePicker
+            id={`${id}-action-${index}`}
+            disabled={disabled}
+            value={action}
+            options={actions.map((entry) => ({ value: entry.key, label: entry.label }))}
+            onChange={(next) =>
+              onChange({
+                ...trigger,
+                actions: trigger.actions.map((entry, at) => (at === index ? next : entry)),
+              })
+            }
+          />
+        </div>
+      ))}
       <div className="flex items-center gap-2">
         <Checkbox
           id={`${id}-create`}
@@ -339,12 +474,18 @@ export function StudioFlowStartEditor({
                 ? "Before a record is saved"
                 : trigger.kind === "event"
                   ? "After a record changes"
-                  : "Trigger"}
+                  : trigger.kind === "declared_event"
+                    ? "After an event"
+                    : trigger.kind === "schedule"
+                      ? "On a schedule"
+                      : "When a message arrives"}
             </legend>
             <TriggerEditor
               id={`flow-start-trigger-${index}`}
               trigger={trigger}
               recordTypes={recordTypes}
+              events={projection.events}
+              actions={projection.actions}
               disabled={disabled}
               onChange={(next, setting) =>
                 change(

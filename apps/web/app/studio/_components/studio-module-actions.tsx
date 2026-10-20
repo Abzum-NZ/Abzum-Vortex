@@ -109,8 +109,11 @@ export function ActionDialog({
   const [precondition, setPrecondition] = useState<InlineModuleActionPrecondition | undefined>(
     action?.precondition,
   );
-  const projected = useMemo(() => projectStudioActionCondition(action?.precondition), [action]);
-  const context = useMemo(() => studioActionConditionContext(record), [record]);
+  const projected = useMemo(
+    () => projectStudioActionCondition(action?.precondition, record, inputs),
+    [action, record, inputs],
+  );
+  const context = useMemo(() => studioActionConditionContext(record, inputs), [record, inputs]);
   const [condition, setCondition] = useState<ConditionNode | undefined>(
     projected.kind === "condition" ? projected.condition : undefined,
   );
@@ -153,7 +156,9 @@ export function ActionDialog({
     validation: StudioConditionValidation,
   ) => {
     setCondition(next);
-    const built = validation.isValid ? studioActionConditionSource(next) : { ok: false as const };
+    const built = validation.isValid
+      ? studioActionConditionSource(next, record, inputs)
+      : { ok: false as const };
     setConditionProblem(built.ok ? "" : "Finish every comparison, with a value on both sides.");
     if (built.ok) setPrecondition(built.condition);
   };
@@ -168,7 +173,7 @@ export function ActionDialog({
                 : `Change ${action.label}`}
             </DialogTitle>
             <DialogDescription>
-              Choose the information this action needs and the tasks it runs in order.
+              Choose the information this action needs and the steps it runs in order.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-1.5">
@@ -208,7 +213,10 @@ export function ActionDialog({
             <legend className="text-sm font-medium">Runs only when</legend>
             {projected.kind === "unsupported" && !replacing ? (
               <div className="space-y-2 text-sm">
-                <p>This condition is kept as it is.</p>
+                <p>
+                  This condition uses a calculation these controls cannot offer. Change it with
+                  Import from source in the Releases tab, or replace it below.
+                </p>
                 <Button
                   type="button"
                   variant="outline"

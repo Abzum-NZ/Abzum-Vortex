@@ -2,7 +2,7 @@
 import { useState, type FormEvent } from "react";
 import {
   createInlineRecordType,
-  defaultOwnedModuleKey,
+  deriveOwnedModuleKey,
   deriveRecordTypeKey,
   type ApplicationSourceDocument,
   type ModuleFieldPublication,
@@ -19,7 +19,11 @@ import {
 } from "@vortex/ui/components/dialog";
 import { Input } from "@vortex/ui/components/input";
 import { NativeSelect, NativeSelectOption } from "@vortex/ui/components/native-select";
-import { StudioReferencePicker, StudioSegmentedControl } from "@vortex/ui/studio";
+import {
+  StudioInspectorGroup,
+  StudioReferencePicker,
+  StudioSegmentedControl,
+} from "@vortex/ui/studio";
 import { StudioField } from "./studio-field";
 import { recordOwnershipLabels, recordStorageLabels } from "./studio-record-storage-ownership";
 import { studioEditProblem, type StudioDataEdit } from "../_lib/studio-data-model";
@@ -75,7 +79,9 @@ export function StudioRecordTypeDialog({
   const [newModuleName, setNewModuleName] = useState<string | null>(null);
   const [issues, setIssues] = useState<readonly string[]>([]);
   const target = modules.find((module) => module.key === moduleKey) ?? modules[0];
-  const effectiveModuleKey = newModuleKey ?? defaultOwnedModuleKey(source);
+  const effectiveModuleName = newModuleName ?? `${source.body.name} data`.slice(0, 120);
+  const effectiveModuleKey =
+    newModuleKey ?? deriveOwnedModuleKey(source, effectiveModuleName) ?? "";
   const targetKey = target?.key ?? effectiveModuleKey;
   const derivedKey =
     deriveRecordTypeKey(
@@ -90,7 +96,6 @@ export function StudioRecordTypeDialog({
   const effectiveKey = key ?? derivedKey;
   const effectivePlural = plural ?? pluralOf(name);
   const firstModule = modules.length === 0;
-  const effectiveModuleName = newModuleName ?? `${source.body.name} data`.slice(0, 120);
 
   const reset = () => {
     setName("");
@@ -176,20 +181,22 @@ export function StudioRecordTypeDialog({
               />
             )}
           </StudioField>
-          <StudioField label="Key" hint="Made from the name. It does not change later.">
-            {(control) => (
-              <Input
-                {...control}
-                required
-                maxLength={40}
-                value={effectiveKey}
-                onChange={(event) => {
-                  setKey(event.target.value);
-                  setIssues([]);
-                }}
-              />
-            )}
-          </StudioField>
+          <StudioInspectorGroup title="Details" defaultOpen={false}>
+            <StudioField label="Key" hint="Made from the name. It does not change later.">
+              {(control) => (
+                <Input
+                  {...control}
+                  required
+                  maxLength={40}
+                  value={effectiveKey}
+                  onChange={(event) => {
+                    setKey(event.target.value);
+                    setIssues([]);
+                  }}
+                />
+              )}
+            </StudioField>
+          </StudioInspectorGroup>
           <StudioField
             label="Title field"
             hint="The label of the field that names each record, for example Name."
@@ -259,23 +266,25 @@ export function StudioRecordTypeDialog({
                   />
                 )}
               </StudioField>
-              <StudioField
-                label="Module key"
-                hint="Made from the application key. It does not change later."
-              >
-                {(control) => (
-                  <Input
-                    {...control}
-                    required
-                    maxLength={120}
-                    value={effectiveModuleKey}
-                    onChange={(event) => {
-                      setNewModuleKey(event.target.value);
-                      setIssues([]);
-                    }}
-                  />
-                )}
-              </StudioField>
+              <StudioInspectorGroup title="Details" defaultOpen={false}>
+                <StudioField
+                  label="Module key"
+                  hint="Made from the name. It is permanent after creation."
+                >
+                  {(control) => (
+                    <Input
+                      {...control}
+                      required
+                      maxLength={120}
+                      value={effectiveModuleKey}
+                      onChange={(event) => {
+                        setNewModuleKey(event.target.value);
+                        setIssues([]);
+                      }}
+                    />
+                  )}
+                </StudioField>
+              </StudioInspectorGroup>
             </fieldset>
           ) : (
             modules.length > 1 && (
