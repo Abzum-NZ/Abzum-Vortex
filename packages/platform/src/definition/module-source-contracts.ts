@@ -400,7 +400,11 @@ const moduleSourceRecordTypeSchema = z
       z
         .array(z.enum(["create", "read", "update", "soft_delete", "restore", "export"]))
         .min(1)
-        .max(6),
+        .max(6)
+        .refine(
+          (actions) => new Set(actions).size === actions.length,
+          "Choose each standard action only once",
+        ),
     ),
     custom_actions: sourceProvenanceUnchanged(
       z.array(sourceProvenanceTarget(sourceAliasSchema, ["customActionIds/#"])).max(100),

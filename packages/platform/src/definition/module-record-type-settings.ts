@@ -3,9 +3,134 @@ import type { ModuleFieldPublication } from "./module-field-edit";
 import type { InlineRecordTypeResult } from "./module-record-type-shape";
 import { applicationSourceDocumentSchema } from "./application-source-contracts";
 import type { RecordOwnershipMode } from "../records/record-ownership-mode";
+import { applicationUses, walkSourceStrings, type ApplicationUsePlace } from "./application-uses";
+import {
+  isStandardRecordPermission,
+  standardPermissionKey,
+  standardRecordActions,
+  type StandardRecordAction,
+} from "./module-field-shape";
+import { standardRecordPermission } from "./module-permission-shape";
 
 type InlineModule = ApplicationSourceDocument["body"]["modules"][number];
 type RecordType = InlineModule["record_types"][number];
+
+/**
+ * Changes the explicit operation set and its generated declarations in one draft edit. Ordinary
+ * grants to removed declarations leave with them; enabling never grants an explicit role access.
+ * The creation policy applies only to creation. Wildcard roles keep their existing wildcard.
+ */
+export const setInlineRecordStandardActions = (
+  current: ApplicationSourceDocument,
+  change: Readonly<{
+    moduleKey: string;
+    recordKey: string;
+    actions: readonly StandardRecordAction[];
+  }>,
+):
+  | InlineRecordTypeResult
+  | Readonly<{ kind: "referenced"; references: readonly ApplicationUsePlace[] }> => {
+  const found = findRecord(current, `${change.moduleKey}:${change.recordKey}`);
+  if (found === undefined)
+    return { kind: "invalid", issues: ["Choose a record type this application owns."] };
+  const { module, record } = found;
+  if (
+    change.actions.length === 0 ||
+    new Set(change.actions).size !== change.actions.length ||
+    change.actions.some((action) => !standardRecordActions.some((entry) => entry.action === action))
+  )
+    return {
+      kind: "invalid",
+      issues: ["Choose at least one standard action, with each action listed only once."],
+    };
+  const removed = record.standard_actions.filter((action) => !change.actions.includes(action));
+  const references = removed.flatMap((action) =>
+    applicationUses(current, {
+      kind: "standard_action",
+      moduleKey: module.key,
+      recordKey: record.key,
+      action,
+    }),
+  );
+  if (references.length > 0) return { kind: "referenced", references };
+  const removedKeys = new Set(
+    module.permissions
+      .filter(
+        (permission) =>
+          isStandardRecordPermission(module, permission) &&
+          removed.some(
+            (action) => permission.key === standardPermissionKey(module.key, record.key, action),
+          ),
+      )
+      .map((permission) => permission.key),
+  );
+  for (const role of current.body.roles) {
+    const remaining = role.permissions.filter((permission) => !removedKeys.has(permission));
+    if (remaining.length === 0)
+      return {
+        kind: "invalid",
+        issues: [
+          `${role.name} needs at least one permission. Give it another permission in Access first.`,
+        ],
+      };
+    const home = current.body.pages.find((page) => page.key === role.home_page);
+    if (home !== undefined && removedKeys.has(home.permission))
+      return {
+        kind: "referenced",
+        references: [
+          {
+            label: `The start page of ${role.name}`,
+            open: { kind: "role", roleKey: role.key },
+          },
+        ],
+      };
+  }
+  const source = structuredClone(current);
+  const target = findRecord(source, `${module.key}:${record.key}`)!;
+  target.module.permissions = target.module.permissions.filter(
+    (permission) => !removedKeys.has(permission.key),
+  );
+  for (const role of source.body.roles)
+    (role as { permissions: string[] }).permissions = role.permissions.filter(
+      (permission) => !removedKeys.has(permission),
+    );
+  const aliases = new Set<string>();
+  walkSourceStrings(target.module, [], (text, _path, key) => {
+    if (key === "id") aliases.add(text);
+  });
+  for (const action of change.actions) {
+    if (record.standard_actions.includes(action)) continue;
+    const key = standardPermissionKey(module.key, record.key, action);
+    if (
+      source.body.permissions.some((permission) => permission.key === key) ||
+      source.body.modules.some((owner) =>
+        owner.permissions.some((permission) => permission.key === key),
+      )
+    )
+      return {
+        kind: "invalid",
+        issues: [
+          "Another permission uses this action's key. Rename that permission in Access first.",
+        ],
+      };
+    const base = `perm_${record.key}_${action}`;
+    let id = base;
+    for (let suffix = 2; aliases.has(id); suffix += 1) id = `${base}_${suffix}`;
+    aliases.add(id);
+    target.module.permissions.push(standardRecordPermission(module.key, target.record, action, id));
+  }
+  (target.record as { standard_actions: StandardRecordAction[] }).standard_actions =
+    standardRecordActions
+      .filter((entry) => change.actions.includes(entry.action))
+      .map((entry) => entry.action);
+  const parsed = applicationSourceDocumentSchema.safeParse(source);
+  if (!parsed.success)
+    return {
+      kind: "invalid",
+      issues: parsed.error.issues.map((issue) => `${issue.message} (${issue.path.join(" / ")})`),
+    };
+  return { kind: "changed", source: parsed.data, moduleKey: module.key, recordKey: record.key };
+};
 
 /** Where a record type's records are kept: shared by the organisation, or only for this application. */
 export type RecordStorageScope = "organization_shared" | "application_contained";
