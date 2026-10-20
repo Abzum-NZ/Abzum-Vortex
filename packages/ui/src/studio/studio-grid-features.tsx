@@ -204,13 +204,11 @@ export function StudioGridFeatures({
                       ...(editor.offers === undefined
                         ? {}
                         : { fields: choices.fields.filter(editor.offers) }),
-                      ...(editor.offersAction === undefined
+                      ...(editor.boundRecordTypeActions === undefined
                         ? {}
                         : {
                             actions: choices.actions.filter(
-                              (action) =>
-                                action.recordType === query?.recordType &&
-                                editor.offersAction!(action),
+                              (action) => action.recordType === query?.recordType,
                             ),
                           }),
                     }}

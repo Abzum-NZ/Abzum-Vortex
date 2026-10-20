@@ -242,13 +242,14 @@ export const createRecordsTableBulkService = (dependencies: RecordsTableBulkDepe
 
   /**
    * Every record the descriptor matches now, in the table's order, minus the exclusions, read in
-   * keyset pages of 200 identities under the person's current access; at most `limit` + 1, so a
-   * run past its limit is known without reading further.
+   * keyset pages of the bound query's own page size (at most 200 identities) under the person's
+   * current access; at most `limit` + 1, so a run past its limit is known without reading further.
    */
   const resolveMatching = async (
     session: IdentitySession,
     selection: OrganizationSelectionCandidate,
     command: NonNullable<ReturnType<typeof commandFor>>["command"],
+    queryPageSize: number,
     excluded: ReadonlySet<string>,
     limit: number,
   ): Promise<readonly string[] | undefined> => {
@@ -258,13 +259,15 @@ export const createRecordsTableBulkService = (dependencies: RecordsTableBulkDepe
     do {
       const result = await queries.run(session, selection, {
         ...command,
-        pageSize: namedActionBatchMaximum,
+        pageSize: Math.min(namedActionBatchMaximum, queryPageSize),
         ...(continuationToken === undefined
           ? {}
           : { pageDirection: "forward" as const, continuationToken }),
       });
-      if (result.kind !== "available" || result.value.outcome !== "completed")
-        return refuse("matching_read_refused");
+      if (result.kind !== "available")
+        return refuse(`matching_read_${result.kind}${"cause" in result ? ` ${result.cause}` : ""}`);
+      if (result.value.outcome !== "completed")
+        return refuse(`matching_read_refused_${result.value.reasonCode}`);
       for (const row of result.value.rows) {
         const recordId = String(row.recordId).toLowerCase();
         if (seen.has(recordId) || excluded.has(recordId)) continue;
@@ -394,6 +397,7 @@ export const createRecordsTableBulkService = (dependencies: RecordsTableBulkDepe
           session,
           selection,
           built.command,
+          placement.query.pageSize,
           new Set(request.selection.excluded.map((recordId) => recordId.toLowerCase())),
           declared.maxRecords,
         );

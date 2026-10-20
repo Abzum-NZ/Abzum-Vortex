@@ -25,10 +25,10 @@ export type StudioGridFeatureEditor =
       /** The bound query's fields the feature's field pickers offer; every field when absent. */
       offers?: (field: StudioQueryField) => boolean;
       /**
-       * The bound record type's named actions the feature's action pickers offer; a feature that
-       * declares this is offered only actions of the record type the query reads.
+       * The feature's action pickers offer only the named actions of the record type the query
+       * reads; the feature's check says when a chosen one cannot run as the feature needs.
        */
-      offersAction?: (action: StudioActionChoice) => boolean;
+      boundRecordTypeActions?: true;
     }>
   | Readonly<{ kind: "custom" }>;
 
@@ -51,8 +51,7 @@ export const studioGridFeatureEditors: Readonly<
       }),
   },
   saved_views: { kind: "settings" },
-  // Only the bound record type's named actions that can run on several records.
-  bulk_actions: { kind: "settings", offersAction: (action) => action.acceptsSelection },
+  bulk_actions: { kind: "settings", boundRecordTypeActions: true },
   inline_edit: { kind: "settings" },
   conditional_formatting: { kind: "custom" },
 };

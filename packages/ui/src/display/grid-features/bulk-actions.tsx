@@ -225,7 +225,9 @@ function SelectionBand({
   else if (scope?.kind === "matching")
     body = (
       <span>
-        All {records(scope.count)} matching are selected
+        {scope.count === 1
+          ? "The 1 matching record is selected"
+          : `All ${numberFormat.format(scope.count)} matching records are selected`}
         {scope.excluded > 0 ? `, except ${numberFormat.format(scope.excluded)} you unticked` : ""}.
       </span>
     );
