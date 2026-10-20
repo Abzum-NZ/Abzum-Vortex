@@ -309,6 +309,7 @@ export const readStudioCanvasRecords = async (
             : () => readSubject(String(subjectType.recordTypeId), subjectId.data),
         subjectRecordTypeId:
           subjectType === undefined ? undefined : String(subjectType.recordTypeId),
+        readViewerTeams: services.readViewerTeams,
         readTimeZone: async () => {
           const read = await services.readCalendarSettings();
           return read.kind === "available" ? read.value.settings?.timeZone : undefined;
