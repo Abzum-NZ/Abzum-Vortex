@@ -60,6 +60,9 @@ export type SubRowsControls = Readonly<{
   toggle: (recordId: string) => void;
 }>;
 
+/** How far each level beneath a page row is indented, in the grid's first column and the cards. */
+export const SUB_ROW_INDENT_REM = 1.25;
+
 const noBeneath: SubRowsBeneath = new Map();
 
 type OpenRows = Readonly<{

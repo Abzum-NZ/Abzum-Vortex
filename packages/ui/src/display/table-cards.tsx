@@ -2,7 +2,6 @@
 
 import { useState, type MouseEvent, type ReactElement, type ReactNode } from "react";
 import type { RecordsTableColumnContract, RecordsTableDensity } from "@vortex/platform/schema";
-import { Button } from "../components/button";
 import { Card } from "../components/card";
 import { cn } from "../lib/utils";
 import type { DisplayRow } from "./projected-data";
@@ -10,7 +9,8 @@ import { cellValueToText } from "./cell";
 import { useRowEntrance } from "./row-entrance";
 import type { RowExpansionControls } from "./row-expansion";
 import { RowExpansionToggle } from "./row-expansion-toggle";
-import type { RowLine, SubRowsControls } from "./sub-rows";
+import { SubRowNoticeView } from "./sub-row-notice";
+import { SUB_ROW_INDENT_REM, type RowLine, type SubRowsControls } from "./sub-rows";
 import type { GridColumn } from "./table-layout";
 import { CARD_SPACING } from "./table-geometry";
 
@@ -20,9 +20,6 @@ const PRIORITY_ORDER: Readonly<Record<RecordsTableColumnContract["priority"], nu
   medium: 2,
   low: 3,
 };
-
-/** How far each level beneath a page card is indented. */
-const INDENT_REM = 1.25;
 
 const INTERACTIVE_IN_CARD =
   "a,button,input,select,textarea,label,summary,[role='button'],[role='checkbox'],[role='radio'],[role='menuitem'],[role='switch']";
@@ -112,32 +109,13 @@ export function RecordsCards({
     >
       {lines.map((line) => {
         if (line.kind === "notice") {
-          const notice = line.notice;
           return (
             <li
               key={line.id}
               data-vortex-sub-rows-of={line.parentId}
-              style={{ marginInlineStart: `${(line.level - 1) * INDENT_REM}rem` }}
+              style={{ marginInlineStart: `${(line.level - 1) * SUB_ROW_INDENT_REM}rem` }}
             >
-              <div
-                role={notice.tone === "alert" ? "alert" : "status"}
-                {...(notice.busy === true ? { "aria-busy": true } : {})}
-                className="flex flex-wrap items-center gap-2 text-sm"
-              >
-                {notice.message === undefined ? null : (
-                  <span className="text-muted-foreground">{notice.message}</span>
-                )}
-                {notice.action === undefined ? null : (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    disabled={notice.action.disabled === true}
-                    onClick={notice.action.run}
-                  >
-                    {notice.action.label}
-                  </Button>
-                )}
-              </div>
+              <SubRowNoticeView notice={line.notice} />
             </li>
           );
         }
@@ -173,7 +151,7 @@ export function RecordsCards({
             style={
               subRows === undefined
                 ? undefined
-                : { marginInlineStart: `${(line.level - 1) * INDENT_REM}rem` }
+                : { marginInlineStart: `${(line.level - 1) * SUB_ROW_INDENT_REM}rem` }
             }
             aria-busy={pending === row.recordId ? true : undefined}
             className={cn(

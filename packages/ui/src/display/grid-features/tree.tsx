@@ -116,8 +116,8 @@ function Levels({ context, expandedRecordIds, publish }: GridFeatureSubRowsProps
   // The latest read of each opened row: an older one's reply never decides its state.
   const requests = useRef(new Map<string, number>());
   const sequence = useRef(0);
-  // The page's own row count is read when a request is sized, so a refreshed page never re-reads
-  // every opened level.
+  // The page's own row count is read when a request is sized, so the reads keep their identity
+  // while the page's rows change.
   const shownPageRows = useRef(pageRows.length);
   shownPageRows.current = pageRows.length;
 
@@ -165,20 +165,24 @@ function Levels({ context, expandedRecordIds, publish }: GridFeatureSubRowsProps
   );
 
   // A read's rows are reserved in the budget before it starts, so every returned row (at most the
-  // requested size) fits and the level's next position is never lost.
+  // requested size) fits and the level's next position is never lost. Reading a shown level again
+  // (the page was refreshed) keeps its rows on screen, and in the budget, until the reply replaces
+  // them with the level's first page.
   const load = useCallback(
-    async (id: string): Promise<void> => {
+    async (id: string, again = false): Promise<void> => {
       sequence.current += 1;
       const request = sequence.current;
       requests.current.set(id, request);
+      const shown = again ? nodesRef.current.get(id) : undefined;
+      const shownRows = shown?.kind === "ready" ? shown.rows.length : undefined;
       const requestedRows = Math.min(pageSize, Math.max(remaining(id), 0));
       if (requestedRows === 0) {
         budget.current.delete(id);
         patch(id, { kind: "budget" });
         return;
       }
-      budget.current.set(id, requestedRows);
-      patch(id, { kind: "loading" });
+      budget.current.set(id, Math.max(requestedRows, shownRows ?? 0));
+      if (shownRows === undefined) patch(id, { kind: "loading" });
       let outcome = await readPage(id, undefined, requestedRows);
       // A reply the host dropped (the page's search or address moved on while it was read) is read
       // again once under the page as it is now.
@@ -274,6 +278,15 @@ function Levels({ context, expandedRecordIds, publish }: GridFeatureSubRowsProps
       heldBudget.clear();
     };
   }, []);
+
+  // A refreshed page (a saved edit or a row command read the table again) reads every opened level
+  // again, so a child row never keeps a value or a revision the server has since replaced.
+  const levelsReadFor = useRef(pageRows);
+  useEffect(() => {
+    if (levelsReadFor.current === pageRows) return;
+    levelsReadFor.current = pageRows;
+    for (const id of wanted) if (requests.current.has(id)) void reads.current.load(id, true);
+  }, [pageRows, wanted]);
 
   // Opening a row reads its level once; closing it (or closing a parent, or reading the parent
   // again) drops the level and gives its rows back to the budget.

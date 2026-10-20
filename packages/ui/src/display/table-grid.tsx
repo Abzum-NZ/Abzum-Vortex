@@ -35,7 +35,6 @@ import {
   type RecordsTableContract,
   type RecordsTableSortState,
 } from "@vortex/platform/schema";
-import { Button } from "../components/button";
 import { Card } from "../components/card";
 import type { GridInteractionSurface } from "./grid-features/registry";
 import { ColumnMenu } from "./grid-features/column-menu";
@@ -45,7 +44,8 @@ import type { DisplayEventHandlers, DisplayRow } from "./projected-data";
 import { useRowEntrance } from "./row-entrance";
 import type { RowExpansionControls } from "./row-expansion";
 import { RowExpansionToggle } from "./row-expansion-toggle";
-import type { RowLine, SubRowNotice, SubRowsControls } from "./sub-rows";
+import { SubRowNoticeView } from "./sub-row-notice";
+import { SUB_ROW_INDENT_REM, type RowLine, type SubRowsControls } from "./sub-rows";
 import {
   BOUNDED_VIEWPORT_CLASS,
   GRID_COLUMN_MAX_WIDTH,
@@ -70,8 +70,6 @@ const loadVirtualRows = () => import("./table-grid-virtual");
 const VirtualRows = lazy(loadVirtualRows);
 
 const RESIZE_STEP = 16;
-/** How far each level beneath a page row is indented inside its first column's cell. */
-const INDENT_REM = 1.25;
 
 /** An expanded row's panel of related records: its controls follow the row in the tab order. */
 const PANEL = "[data-grid-panel]";
@@ -271,7 +269,7 @@ const GridRow = memo(function GridRow({
           ) : slot.column === undefined ? null : slot.id === indentColumnId ? (
             <div
               className={cn("flex w-full min-w-0 items-center gap-1", cellAlignment(slot.column))}
-              style={{ paddingInlineStart: `${(level - 1) * INDENT_REM}rem` }}
+              style={{ paddingInlineStart: `${(level - 1) * SUB_ROW_INDENT_REM}rem` }}
             >
               {subExpandable ? (
                 <RowExpansionToggle
@@ -321,29 +319,6 @@ const GridSpanRow = ({
     >
       {children}
     </div>
-  </div>
-);
-
-/** The notice of a level of sub-rows: its message and the one control it offers. */
-const GridNotice = ({ notice }: Readonly<{ notice: SubRowNotice }>): ReactElement => (
-  <div
-    role={notice.tone === "alert" ? "alert" : "status"}
-    {...(notice.busy === true ? { "aria-busy": true } : {})}
-    className="flex flex-wrap items-center gap-2 text-sm"
-  >
-    {notice.message === undefined ? null : (
-      <span className="text-muted-foreground">{notice.message}</span>
-    )}
-    {notice.action === undefined ? null : (
-      <Button
-        variant="ghost"
-        size="sm"
-        disabled={notice.action.disabled === true}
-        onClick={notice.action.run}
-      >
-        {notice.action.label}
-      </Button>
-    )}
   </div>
 );
 
@@ -1142,8 +1117,8 @@ export function RecordsGrid({
           columnCount={slots.length}
           className="py-1 pe-3 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
         >
-          <div style={{ paddingInlineStart: `${(line.level - 1) * INDENT_REM + 0.5}rem` }}>
-            <GridNotice notice={line.notice} />
+          <div style={{ paddingInlineStart: `${(line.level - 1) * SUB_ROW_INDENT_REM + 0.5}rem` }}>
+            <SubRowNoticeView notice={line.notice} />
           </div>
         </GridSpanRow>
       );
