@@ -79,11 +79,14 @@ export function useApplyDispatch({
         outcome = { ...outcome, notice: resultNotice };
         if (reportOnControl) return;
         // A refusal must remain visible after a flow's form dialog has closed.
-        setNotice(
-          formPlacementId === undefined || resultNotice.tone === "problem"
+        setNotice((current) => {
+          // A client intent can refuse after the server has completed (for example, a page the
+          // viewer cannot open). A successful run must not erase that more specific refusal.
+          if (current?.tone === "problem" && resultNotice.tone !== "problem") return current;
+          return formPlacementId === undefined || resultNotice.tone === "problem"
             ? resultNotice
-            : undefined,
-        );
+            : undefined;
+        });
         if (formPlacementId !== undefined) {
           setFormFeedback((current) => ({
             ...current,

@@ -34,6 +34,7 @@ import {
   type ReferenceChoiceSelectionEvidenceMap,
   type ReferenceChoiceSelectionEvidence,
   isRecord,
+  sameId,
 } from "@vortex/platform/schema";
 import { Button } from "@vortex/ui/components/button";
 import { DialogFooter } from "@vortex/ui/components/dialog";
@@ -232,7 +233,17 @@ export function useFlowRuntime({
   const navigationEnvironment = useMemo<LinkNavigationEnvironment>(
     () => ({
       unsavedWork,
-      recheckInternalTarget: async (target) => target.kind !== "external",
+      recheckInternalTarget: async (target) => {
+        if (
+          target.kind === "page" &&
+          model.pages.some((page) => sameId(page.pageId, target.pageId))
+        )
+          return true;
+        // The projected page list is a rendering hint; the destination still authorises its read.
+        // A page it does not offer must not resolve to the application's home address.
+        setNotice(unavailableNotice);
+        return false;
+      },
       navigateInternal: (target) => {
         if (target.kind !== "page") return;
         const parameters = new URLSearchParams();
@@ -248,7 +259,7 @@ export function useFlowRuntime({
       resolveInternalAddress: (target) =>
         target.kind === "page" ? resolvePageHref(target.pageId) : basePath,
     }),
-    [basePath, resolvePageHref, router, startPageChange, unsavedWork],
+    [basePath, model.pages, resolvePageHref, router, setNotice, startPageChange, unsavedWork],
   );
   const renderForm = useCallback(
     (
