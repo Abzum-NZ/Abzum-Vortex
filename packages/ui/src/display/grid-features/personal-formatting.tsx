@@ -140,7 +140,7 @@ export function PersonalFormattingDialog({
                   <li
                     key={rule.id}
                     className={cn(
-                      "flex items-start gap-2 rounded-md p-2",
+                      "flex items-start gap-2 p-2",
                       activeId === rule.id && "bg-accent text-accent-foreground",
                       !rule.enabled && "opacity-60",
                     )}
