@@ -1,6 +1,6 @@
 create or replace function vortex_access.list_application_role_templates_projection(
   p_record_ids uuid[], p_sort_key text, p_direction text,
-  p_after jsonb, p_limit integer default 40
+  p_after jsonb, p_limit integer, p_predicate jsonb
 )
 returns table (
   organization_id uuid, record_id uuid, revision bigint, attribute_values jsonb
@@ -25,6 +25,7 @@ declare
   scan_sql text;
   comparison text;
   sort_column text;
+  predicate_plan jsonb;
 begin
   if p_sort_key not in ('record_id', 'source_role_id', 'application_root_id', 'key', 'label')
     or p_direction not in ('ascending', 'descending')
@@ -59,6 +60,15 @@ begin
     end if;
   end if;
 
+  predicate_plan := vortex_record.compile_projection_predicate_internal(
+    p_predicate,
+    $declared${
+      "application_root_id": {"sql": "continuity.application_root_id::text", "database": "text", "filter": true},
+      "key": {"sql": "continuity.key", "database": "text", "search": true},
+      "label": {"sql": "continuity.label", "database": "text", "search": true}
+    }$declared$::jsonb,
+    6
+  );
   begin
     select authorized.* into strict scope_row
     from vortex_access.organization_roles_administration_scope() as authorized;
@@ -105,7 +115,7 @@ begin
           and binding.application_release_revision = registration.source_revision
           and binding.state = 'active'
       )
-  $scan$;
+  $scan$ || coalesce(' and ' || (predicate_plan ->> 'predicate'), '');
   if p_after is not null and p_sort_key in ('record_id', 'source_role_id') then
     scan_sql := scan_sql || pg_catalog.format(
       ' and continuity.source_role_id %s $3', comparison
@@ -152,7 +162,7 @@ begin
   -- ordered index walk, so only the rows consumed are read).
 
   for candidate in execute scan_sql using scope_row.organization_id, p_record_ids,
-    after_record_id, after_text, p_limit
+    after_record_id, after_text, p_limit, predicate_plan -> 'parameters'
   loop
     if pg_catalog.jsonb_typeof(candidate.roles) is distinct from 'array' then
       continue;
@@ -212,15 +222,15 @@ end
 $function$;
 
 revoke all on function vortex_access.list_application_role_templates_projection(
-  uuid[], text, text, jsonb, integer
+  uuid[], text, text, jsonb, integer, jsonb
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_access.list_application_role_templates_projection(
-  uuid[], text, text, jsonb, integer
+  uuid[], text, text, jsonb, integer, jsonb
 ) to vortex_owner, vortex_record_adapter, postgres;
 alter function vortex_access.list_application_role_templates_projection(
-  uuid[], text, text, jsonb, integer
+  uuid[], text, text, jsonb, integer, jsonb
 ) owner to vortex_owner;
 
 comment on function vortex_access.list_application_role_templates_projection(
-  uuid[], text, text, jsonb, integer
+  uuid[], text, text, jsonb, integer, jsonb
 ) is 'Returns one keyset page of registered application role templates, defaulting to 40 rows and limited to 200 rows.';
