@@ -173,6 +173,12 @@ export const fillStudioPreviewWhenIdle = async (
   });
   try {
     return await Promise.race([joined.result, cancelled]);
+  } catch (error) {
+    signal.throwIfAborted();
+    // A new preview or revision superseded this fill while another tab still held its lease.
+    // That is a stale read, rather than an outage, and the next reader uses its current revision.
+    if (joined.controller.signal.aborted) return { kind: "conflict" };
+    throw error;
   } finally {
     if (leave !== undefined) signal.removeEventListener("abort", leave);
     joined.readers -= 1;

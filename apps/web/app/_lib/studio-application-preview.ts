@@ -115,7 +115,7 @@ const coordinator = () =>
       createDatabaseDefinitionPublicationService(installedReleaseCatalogue, transaction, authority),
   });
 
-const failure = (error: unknown): PreviewFailure => {
+const failure = (error: unknown, reported = false): PreviewFailure => {
   const code = error instanceof DefinitionError ? error.code : undefined;
   switch (code) {
     case "PREVIEW_INSTALLATION_STALE":
@@ -128,7 +128,7 @@ const failure = (error: unknown): PreviewFailure => {
     case "PREVIEW_INSTALLATION_TEMPORARILY_UNAVAILABLE":
       return { kind: "temporarily_unavailable" };
   }
-  console.error("[studio] preview provisioning failed", error);
+  if (!reported) console.error("[studio] preview provisioning failed", error);
   return { kind: "temporarily_unavailable" };
 };
 
@@ -365,7 +365,7 @@ export const materializeStudioPreviewDemand = async (
     console.error(
       `[studio] preview demand failed: preview=${preview.previewInstallationId} recordTypes=${demand.recordTypes.map((item) => item.recordTypeId).join(",")} cause=${describeFailure(error)}`,
     );
-    return failure(error);
+    return failure(error, true);
   }
 };
 
