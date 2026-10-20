@@ -12,6 +12,7 @@ import type {
   IdentitySession,
   OrganizationSelectionCandidate,
 } from "@vortex/platform/schema";
+import { decideRecordTypeFieldIds } from "./form-field-access";
 import { first } from "./placement-helpers";
 import type { SearchParameters } from "./types";
 
@@ -31,7 +32,6 @@ export type PageGridLayouts = Readonly<{
 }>;
 
 const NONE: StoredGridViews = {
-  readable: new Map(),
   roleKeys: new Set(),
   shareable: new Set(),
   layouts: new Map(),
@@ -95,6 +95,7 @@ export const readPageGridLayouts = async (
   session: IdentitySession,
   dependencies: HumanOrganizationRequestDependencies,
   selection: OrganizationSelectionCandidate,
+  context: InstalledRuntimeContext,
   pageId: string,
   grids: readonly PageGrid[],
 ): Promise<PageGridLayouts> => {
@@ -105,16 +106,21 @@ export const readPageGridLayouts = async (
   const result = await createHumanOrganizationRequestService(dependencies).run(
     session,
     selection,
-    async (transaction) => {
+    async (transaction, scope) => {
       const stored = await readGridViews(
         transaction,
         pageId,
         grids.map((grid) => grid.placementId),
         grids.flatMap((grid) => (grid.selectedViewId === undefined ? [] : [grid.selectedViewId])),
-        recordTypeIds,
         grids.flatMap((grid) => grid.defaultViews),
       );
-      return { stored, readable: stored.readable };
+      const readable = new Map<string, ReadonlySet<string>>();
+      for (const recordTypeId of recordTypeIds)
+        readable.set(
+          recordTypeId,
+          await decideRecordTypeFieldIds(transaction, scope, context, recordTypeId, "read"),
+        );
+      return { stored, readable };
     },
   );
   if (result.kind === "available") return { storage: "personal", ...result.value };

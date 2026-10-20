@@ -3,7 +3,6 @@ import {
   type ProtectedQueryRow,
   type RequestDatabaseTransaction,
   evaluateOrganizationRecordPermissionAvailability,
-  readRecordTypeVisibleFieldIds,
   runtimePreviewOf,
 } from "@vortex/platform/server";
 import {
@@ -103,8 +102,11 @@ export const flowCreatedRecordTypeIds = (
 };
 
 /**
- * The changeable fields of eligible create permissions, or the one current column visibility
- * policy: the union of exact readable field bounds over eligible records, including shares.
+ * The fields one kind of permission on a record type gives this viewer now: the changeable fields
+ * of every create permission (as the record writer unions them), or the readable fields of every
+ * read permission (the fields they can read on at least one record; a record's own route or share
+ * may still withhold one, which its read decides). Each permission is decided on its own, without
+ * a row, through the record permission availability the record decisions start from.
  */
 export const decideRecordTypeFieldIds = async (
   transaction: RequestDatabaseTransaction,
@@ -113,7 +115,6 @@ export const decideRecordTypeFieldIds = async (
   recordTypeId: string,
   action: "create" | "read",
 ): Promise<ReadonlySet<string>> => {
-  if (action === "read") return readRecordTypeVisibleFieldIds(transaction, recordTypeId);
   const entries = context.permissionRegistration.entries.filter(
     (entry) =>
       entry.permission.actionKind === action &&
@@ -157,7 +158,9 @@ export const decideRecordTypeFieldIds = async (
     );
     if (availability.outcome !== "eligible") continue;
     const policy = entry.permission.fieldPolicy;
-    for (const fieldId of policy?.changeableFieldIds ?? [])
+    for (const fieldId of (action === "create"
+      ? policy?.changeableFieldIds
+      : policy?.readableFieldIds) ?? [])
       fieldIds.add(String(fieldId).toLowerCase());
   }
   return fieldIds;

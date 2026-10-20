@@ -332,7 +332,6 @@ export const readStudioCanvasRecords = async (
       gridLayouts: {
         storage: "canvas",
         stored: {
-          readable: new Map(),
           roleKeys: new Set(),
           shareable: new Set(),
           layouts: new Map(),
