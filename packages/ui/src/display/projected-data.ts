@@ -195,6 +195,8 @@ export type TablePayload = Readonly<{
   pageCount?: number;
   hasNextPage?: boolean;
   nextContinuationToken?: string;
+  /** The read's scan budget ran out before the page filled: more records may match on the next page. */
+  scanLimited?: boolean;
   hasPreviousPage?: boolean;
   previousContinuationToken?: string;
 }> &
@@ -1206,6 +1208,7 @@ export const parseTablePayload = (
       "pageCount",
       "hasNextPage",
       "nextContinuationToken",
+      "scanLimited",
       "hasPreviousPage",
       "previousContinuationToken",
       "selectionToken",
@@ -1248,6 +1251,9 @@ export const parseTablePayload = (
   if (record.hasPreviousPage !== undefined && typeof record.hasPreviousPage !== "boolean")
     fail("Projected hasPreviousPage must be a boolean", location);
   const hasPreviousPage = record.hasPreviousPage as boolean | undefined;
+  if (record.scanLimited !== undefined && typeof record.scanLimited !== "boolean")
+    fail("Projected scanLimited must be a boolean", location);
+  const scanLimited = record.scanLimited as boolean | undefined;
   let nextContinuationToken: string | undefined;
   if (record.nextContinuationToken !== undefined) {
     nextContinuationToken = requireNonEmptyString(
@@ -1258,6 +1264,8 @@ export const parseTablePayload = (
     if (nextContinuationToken.length > 65_536)
       fail("A table continuation token is too long", location);
   }
+  if (scanLimited === true && !hasNextPage)
+    fail("A scan-limited page requires a next page", location);
   if (
     (hasNextPage === true) !== (nextContinuationToken !== undefined) ||
     ((hasNextPage !== undefined || nextContinuationToken !== undefined) && page === undefined)
@@ -1323,6 +1331,7 @@ export const parseTablePayload = (
     ...(pageCount === undefined ? {} : { pageCount }),
     ...(hasNextPage === undefined ? {} : { hasNextPage }),
     ...(nextContinuationToken === undefined ? {} : { nextContinuationToken }),
+    ...(scanLimited === undefined ? {} : { scanLimited }),
     ...(hasPreviousPage === undefined ? {} : { hasPreviousPage }),
     ...(previousContinuationToken === undefined ? {} : { previousContinuationToken }),
   });
