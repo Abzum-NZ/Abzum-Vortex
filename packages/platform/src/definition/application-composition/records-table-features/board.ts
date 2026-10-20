@@ -41,6 +41,19 @@ export type RecordsTableBoardMode = Extract<
   { enabled: true }
 >;
 
+const aggregateOperationLabels: Readonly<Record<string, string>> = {
+  count: "Count",
+  sum: "Sum",
+  minimum: "Lowest",
+  maximum: "Highest",
+  average: "Average",
+  distinct_count: "Distinct count",
+};
+
+/** The business label a query total is offered under, such as "Sum of Value" or "Count of records". */
+export const boardAggregateLabel = (operation: string, fieldLabel: string | undefined): string =>
+  `${aggregateOperationLabels[operation] ?? operation} of ${fieldLabel ?? "records"}`;
+
 const code = "definition_records_table_board" as const;
 const refuse = (reason: string): Extract<RecordsTableFeatureCheck, { kind: "not_possible" }> =>
   Object.freeze({ kind: "not_possible", code, reason });
@@ -145,7 +158,7 @@ export const boardProblem = (
   const aliases = state.totals.map((total) => total.alias);
   if (new Set(aliases).size !== aliases.length) return refuse("Show each total once.");
   for (const alias of aliases)
-    if (!board.aggregates.includes(alias))
+    if (!board.aggregates.some((aggregate) => aggregate.alias === alias))
       return refuse(`${alias} is not a total of ${board.queryLabel}.`);
   if (
     state.wipLimit !== undefined &&
@@ -188,12 +201,6 @@ export const recordsTableBoardFactsOf = (
   const selected = strings(query["selectedFieldIds"]);
   const groupBy = strings(query["groupByFieldIds"]);
   if (selected === undefined || groupBy === undefined) return undefined;
-  const aggregates: string[] = [];
-  for (const aggregate of query["aggregates"]) {
-    const alias = record(aggregate)?.["alias"];
-    if (typeof alias !== "string") return undefined;
-    aggregates.push(alias);
-  }
   const fields: RecordsTableBoardFacts["fields"][number][] = [];
   for (const candidate of fieldsCandidate) {
     const field = record(candidate);
@@ -207,6 +214,24 @@ export const recordsTableBoardFactsOf = (
       ...(field["type"] === "choice" && Array.isArray(options)
         ? { choiceCount: options.length }
         : {}),
+    });
+  }
+  const aggregates: RecordsTableBoardFacts["aggregates"][number][] = [];
+  for (const aggregate of query["aggregates"]) {
+    const held = record(aggregate);
+    if (typeof held?.["alias"] !== "string" || typeof held["operation"] !== "string")
+      return undefined;
+    const fieldId = held["fieldId"];
+    aggregates.push({
+      alias: held["alias"],
+      operation: held["operation"],
+      ...(typeof fieldId === "string" ? { field: fieldId } : {}),
+      label: boardAggregateLabel(
+        held["operation"],
+        typeof fieldId === "string"
+          ? fields.find((field) => field.field === fieldId)?.label
+          : undefined,
+      ),
     });
   }
   const stageFields: string[] = [];

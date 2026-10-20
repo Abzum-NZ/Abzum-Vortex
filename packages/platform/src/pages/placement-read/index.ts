@@ -188,6 +188,59 @@ export const readRecordsTableTreeLevel = async (
   }
 };
 
+/** One page of the open group of a grouped table, in the same shape as a tree level. */
+export type GroupMembersResult = TreeLevelResult;
+
+/** Whether a placement is a Records table the viewer may group by its authored choice field. */
+export const isGroupingTablePlacement = (placement: PlacementReadEntry): boolean =>
+  readRecordsTableContract(placementSettingsOf(placement))?.features.grouping.enabled === true;
+
+/**
+ * Reads one page of one group of a grouped table, a page at a time, through the table's own read:
+ * the members show the table's columns and formatting and obey the viewer's search, filters and
+ * sort, and every member is decided under the viewer's current access as any row of the table is.
+ * The grouping field comes from the address and is checked against the authored one; groups are
+ * not counted again. Undefined when the placement is not a grouped table.
+ */
+export const readRecordsTableGroupMembers = async (
+  read: PlacementReadInput,
+  placement: PlacementReadEntry,
+  request: Readonly<{
+    groupKey: string;
+    continuationToken?: string;
+    direction?: "forward" | "backward";
+  }>,
+): Promise<GroupMembersResult | undefined> => {
+  if (!isGroupingTablePlacement(placement)) return undefined;
+  const { placementId } = placement;
+  const data: Record<string, PageDataState> = {};
+  await readQueryPlacement(
+    {
+      ...read,
+      data,
+      groupMembers: {
+        placementId,
+        groupKey: request.groupKey,
+        ...(request.continuationToken === undefined
+          ? {}
+          : { continuationToken: request.continuationToken }),
+        ...(request.direction === undefined ? {} : { direction: request.direction }),
+      },
+    },
+    placement,
+  );
+  const state = data[placementId];
+  switch (state?.status) {
+    case "ready":
+      return { status: "ready", values: state.values };
+    case "empty":
+    case "refused":
+      return { status: state.status };
+    default:
+      return { status: "error" };
+  }
+};
+
 export { pageQueryBindingContext, placementParameterDependencies } from "./bindings";
 export {
   findModuleQuery,

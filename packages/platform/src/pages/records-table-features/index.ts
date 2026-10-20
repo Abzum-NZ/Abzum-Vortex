@@ -61,6 +61,11 @@ export type RecordsTableFeatureProjection = Readonly<{
   masterDetail?: Readonly<{ pageSize: number }>;
   /** Rows expand to the records that name them as their parent, read this many at a time. */
   tree?: Readonly<{ pageSize: number }>;
+  /**
+   * The viewer may group the table by the authored choice field: it is readable on every record
+   * the viewer may read, so the grouped read never needs a withheld value.
+   */
+  grouping?: Readonly<{ fieldId: string; label: string; unassignedLabel: string }>;
   /** The styles the page's rows name and the numeric columns drawn as bars or scales. */
   conditionalFormatting?: ConditionalFormattingProjection;
   /**
@@ -118,7 +123,8 @@ export type RecordsTableRequestPart =
   | "row_action"
   | "row_clicked"
   | "row_detail"
-  | "tree_level";
+  | "tree_level"
+  | "group";
 
 /**
  * Why the server refused a Records table request: the part and the cause. The viewer only ever
@@ -210,6 +216,7 @@ export const projectRecordsTableFeatures = (
   editors: Readonly<Record<string, RecordsTableInlineEditor>> | undefined,
   conditionalFormatting?: ConditionalFormattingProjection,
   pivotView?: Readonly<{ cursor?: string }>,
+  fieldLabels?: Readonly<Record<string, string>>,
 ): RecordsTableFeatureProjection | undefined => {
   const { features } = contract;
   const readable = (field: string): boolean =>
@@ -255,6 +262,20 @@ export const projectRecordsTableFeatures = (
           ...(pivotView === undefined ? {} : { view: pivotView }),
         }
       : undefined;
+  // Grouping is offered only for a field the viewer is guaranteed to see on every record; a
+  // withheld field is never grouped by, so no group ever stands for a value the viewer cannot read.
+  const groupingSettings = features.grouping;
+  const grouping =
+    groupingSettings.enabled &&
+    groupingSettings.field !== undefined &&
+    groupingSettings.unassignedLabel !== undefined &&
+    readable(groupingSettings.field)
+      ? {
+          fieldId: groupingSettings.field.toLowerCase(),
+          label: fieldLabels?.[groupingSettings.field.toLowerCase()] ?? "",
+          unassignedLabel: groupingSettings.unassignedLabel,
+        }
+      : undefined;
   const projection: RecordsTableFeatureProjection = {
     ...(rowEdit.enabled &&
     rowEdit.eventId !== undefined &&
@@ -291,6 +312,7 @@ export const projectRecordsTableFeatures = (
     readable(tree.parentField)
       ? { tree: { pageSize: tree.childPageSize } }
       : {}),
+    ...(grouping === undefined || grouping.label === "" ? {} : { grouping }),
     ...(conditionalFormatting === undefined || !features.conditionalFormatting.enabled
       ? {}
       : { conditionalFormatting }),
