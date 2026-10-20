@@ -3,7 +3,11 @@
 import type { ReactElement } from "react";
 import { useMemo } from "react";
 import { useRouter } from "next/navigation";
-import type { ApplicationShell, PageDefinition, PlatformBlockRelease } from "@vortex/platform/schema";
+import type {
+  ApplicationShell,
+  PageDefinition,
+  PlatformBlockRelease,
+} from "@vortex/platform/schema";
 import {
   ApplicationAccountActionsProvider,
   type ApplicationAccount,
@@ -88,7 +92,7 @@ export function OrganizationLauncherPage({
                   data: {
                     status: "ready",
                     values: {
-                      kind: "list",
+                      kind: "launcher_rows",
                       headingKey: "label",
                       rows: [
                         {

@@ -531,6 +531,7 @@ export function applicationPageRules(scope: ApplicationScope): void {
         for (const feature of checkRecordsTableFeatures(
           table.features,
           recordsTableQueryFacts(bound, bindingFacts, page.type !== "public"),
+          table.presentation,
         ))
           if (feature.enabled && feature.check.kind === "not_possible")
             failures.push(

@@ -1,6 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactElement,
+} from "react";
 import {
   readRecordsTableContract,
   type RecordsTableActionContract,
@@ -30,11 +39,13 @@ import type {
   TablePayload,
 } from "./projected-data";
 import { useRowExpansion } from "./row-expansion";
-import { RecordsCards, type CardRenderers } from "./table-cards";
+import type { CardRenderers } from "./table-cards";
 import { columnWidth, useTablePresentation } from "./table-geometry";
 import { RecordsGrid, type GridRenderers } from "./table-grid";
 import { useGridLayout, type GridColumn } from "./table-layout";
 import { TableLoadingState, useLoadingReveal } from "./table-loading";
+
+const RecordsCards = lazy(async () => ({ default: (await import("./table-cards")).RecordsCards }));
 
 /** Field identities compare without regard to case, as the Query engine keys them. */
 const sameFieldKey = (left: string, right: string): boolean =>
@@ -444,6 +455,7 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
     <TableLoadingState
       accessibleName={accessibleName}
       contract={contract}
+      density={layout.density}
       presentation={presentation ?? "grid"}
       selectionColumn={selectable}
       actionsColumn={showActions}
@@ -509,18 +521,21 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
     // skeleton stands in until the one presentation that fits is known.
     if (presentation === undefined) return loading;
     return presentation === "cards" ? (
-      <RecordsCards
-        accessibleName={accessibleName}
-        columns={layout.shown}
-        rows={rows}
-        selectedRecordIds={selectedRecordIds}
-        selectable={selectable}
-        showActions={showActions}
-        activateRow={activateRow}
-        renderers={renderers}
-        expansion={expansion}
-        fill={fullScreen.active}
-      />
+      <Suspense fallback={loading}>
+        <RecordsCards
+          accessibleName={accessibleName}
+          columns={layout.shown}
+          rows={rows}
+          selectedRecordIds={selectedRecordIds}
+          selectable={selectable}
+          showActions={showActions}
+          activateRow={activateRow}
+          renderers={renderers}
+          expansion={expansion}
+          fill={fullScreen.active}
+          density={layout.density}
+        />
+      </Suspense>
     ) : (
       <RecordsGrid
         accessibleName={accessibleName}
@@ -548,6 +563,7 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
       data-vortex-display="table"
       data-vortex-placement-id={placementId}
       data-vortex-table-density={layout.density}
+      data-vortex-table-presentation={presentation}
       {...(fullScreen.active ? { "data-vortex-full-screen": "" } : {})}
       className={cn(fullScreen.active && FULL_SCREEN_CLASS)}
       {...(revealed ? { "data-vortex-display-revealed": "" } : {})}
