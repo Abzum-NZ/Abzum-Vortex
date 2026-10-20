@@ -507,16 +507,22 @@ export function useRuntimeInputs({
               filter: event.value,
             });
           };
-        // A link filter's picker reads one bounded page of the field's target records under the
-        // person's access, only when it opens or is searched; nothing is preloaded.
-        if (supportsEvent("filter_changed"))
-          events.filter_records_requested = (event: DisplaySemanticEvent) => {
-            if (event.event !== "filter_records_requested") return;
+        // A link picker (a column filter, or an edited cell) reads one bounded page of the field's
+        // target records under the person's access, only when it opens, is searched or continues;
+        // nothing is preloaded. The server decides per purpose whether the field may be offered.
+        if (
+          supportsEvent("filter_changed") ||
+          supportsEvent("inline_edit") ||
+          supportsEvent("row_edit")
+        )
+          events.table_records_requested = (event: DisplaySemanticEvent) => {
+            if (event.event !== "table_records_requested") return;
             return requestRecordChoices(
               model,
               placementId,
               {
                 fieldId: event.field,
+                purpose: event.purpose,
                 ...(event.search === undefined ? {} : { search: event.search }),
                 ...(event.continuationToken === undefined
                   ? {}

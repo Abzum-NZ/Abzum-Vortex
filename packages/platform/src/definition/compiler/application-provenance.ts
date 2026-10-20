@@ -153,6 +153,19 @@ function applicationFlowProvenance(
   }));
   // The canonical bindings are the authored ones that compile, in authored order.
   const compiled = compiledSourceFlowBindings(source.body as unknown as JsonObject);
+  const included = new Set(compiled);
+  source.body.flow_bindings.forEach((binding, index) => {
+    if (included.has(binding as unknown as JsonObject)) return;
+    // A disabled feature deliberately removes its binding. Trace that transformation to the
+    // binding collection, so strict provenance still accounts for every authored input leaf.
+    for (const leaf of leafPaths(binding))
+      entries.push({
+        canonicalPath: ["content", "flowBindings"],
+        sourcePath: ["body", "flow_bindings", index, ...leaf],
+        origin: "source",
+        ruleCode: TRANSFORM_RULE,
+      });
+  });
   canonical.content.flowBindings.forEach((binding, index) => {
     const authored = compiled[index]! as unknown as (typeof source.body.flow_bindings)[number];
     const authoredIndex = source.body.flow_bindings.indexOf(authored);

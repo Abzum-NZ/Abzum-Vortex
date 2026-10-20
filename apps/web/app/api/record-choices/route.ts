@@ -19,8 +19,8 @@ export const dynamic = "force-dynamic";
 const maximumRequestBodyLength = 131_072;
 
 /**
- * One page of the records a link field, or a Records table's link filter, on the person's current
- * page may point at.
+ * One page of the records a link field, or a Records table's link picker (a column filter or a
+ * cell editor), on the person's current page may point at.
  */
 const requestSchema = z
   .object({
@@ -29,8 +29,10 @@ const requestSchema = z
     applicationKey: z.string().min(1).max(200),
     pageKey: z.string().min(1).max(200),
     placementId: containedComponentIdSchema,
-    /** For a Records table's link filter: the filter field whose target records are offered. */
+    /** For a Records table's link picker: the field whose target records are offered. */
     fieldId: recordIdSchema.optional(),
+    /** Why a Records table's link picker reads: to filter by the records or to edit a cell. */
+    purpose: z.enum(["filter", "edit"]).optional(),
     installationRevision: revisionSchema,
     releaseKey: z.string().min(1).max(512),
     subjectRecordId: recordIdSchema.optional(),
@@ -38,7 +40,10 @@ const requestSchema = z
     pageSize: z.number().int().min(1).max(200).optional(),
     continuationToken: z.string().min(1).max(65_536).optional(),
   })
-  .strict();
+  .strict()
+  .refine((body) => (body.fieldId === undefined) === (body.purpose === undefined), {
+    message: "A table link picker names its field and its purpose together",
+  });
 
 const refusedResponse = (code: string, cause?: unknown): NextResponse => {
   logRefusal("record-choices", "record choice page", code, cause);
@@ -94,7 +99,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     const result = await loadRecordChoicePage(identity.session, address, {
       placementId: body.placementId,
-      ...(body.fieldId === undefined ? {} : { fieldId: body.fieldId }),
+      ...(body.fieldId === undefined || body.purpose === undefined
+        ? {}
+        : { fieldId: body.fieldId, purpose: body.purpose }),
       installationRevision: body.installationRevision,
       releaseKey: body.releaseKey,
       ...(body.subjectRecordId === undefined ? {} : { subjectRecordId: body.subjectRecordId }),
