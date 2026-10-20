@@ -49,6 +49,7 @@ import { StudioModuleActions } from "./studio-module-actions";
 import { StudioRecordPipelines } from "./studio-record-pipelines";
 import { StudioRecordRules } from "./studio-record-rules";
 import { StudioRecordStorageOwnership } from "./studio-record-storage-ownership";
+import { StudioRecordStandardActions } from "./studio-record-standard-actions";
 import { useStudioDraftText } from "./use-studio-draft-text";
 import type { StudioDraft } from "./use-studio-draft";
 import {
@@ -281,6 +282,13 @@ function RecordTypeInspector({
           )}
         </StudioField>
       </StudioInspectorGroup>
+      <StudioRecordStandardActions
+        source={source}
+        moduleKey={moduleKey}
+        recordKey={recordKey}
+        disabled={disabled}
+        edit={edit}
+      />
       <StudioRecordStorageOwnership
         source={source}
         moduleKey={moduleKey}

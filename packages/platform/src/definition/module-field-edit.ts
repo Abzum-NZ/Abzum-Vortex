@@ -8,7 +8,7 @@ import {
   deriveFieldAlias,
   deriveFieldKey,
   includeFieldInStandardPermissions,
-  standardPermissionKeys,
+  isStandardRecordPermission,
 } from "./module-field-shape";
 import { applicationUses, describeSourcePlace, type ApplicationUsePlace } from "./application-uses";
 import { moduleFieldTypeLabels, type ModuleFieldType } from "./module-field-settings";
@@ -470,9 +470,13 @@ export const deleteInlineModuleField = (
   (record as { relationships: Relationship[] }).relationships = record.relationships.filter(
     (item) => item.from_field !== fieldKey,
   );
-  const standard = standardPermissionKeys(moduleKey, recordKey);
   for (const permission of module.permissions) {
-    if (!standard.has(permission.key) || permission.field_policy === undefined) continue;
+    if (
+      permission.record_type !== recordKey ||
+      !isStandardRecordPermission(module, permission) ||
+      permission.field_policy === undefined
+    )
+      continue;
     const policy = permission.field_policy as {
       readable_fields: string[];
       changeable_fields: string[];
