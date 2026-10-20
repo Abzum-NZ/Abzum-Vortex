@@ -195,6 +195,19 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
     contract !== undefined &&
     features?.bulkActions !== undefined;
   const selectedRecordIds = values?.selectedRecordIds ?? [];
+  // The selection beyond the page: the read's sealed descriptor and what the page runtime holds.
+  const selectionToken = values?.selectionToken;
+  const selectionScope = values?.selectionScope;
+  const bulkRun = values?.bulkRun;
+  const selectionParts = useMemo(
+    () => ({
+      ...(selectionToken === undefined ? {} : { selectionToken }),
+      ...(selectionScope === undefined ? {} : { selectionScope }),
+      ...(bulkRun === undefined ? {} : { bulkRun }),
+    }),
+    [selectionToken, selectionScope, bulkRun],
+  );
+  const paged = values?.hasNextPage === true || values?.hasPreviousPage === true;
   const narrowing = values?.narrowing;
   const [message, announce] = useAnnouncer();
   const [clearCount, setClearCount] = useState(0);
@@ -213,6 +226,8 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
             columns: layout.shown,
             rows,
             selectedRecordIds,
+            selection: selectionParts,
+            paged,
             narrowing,
             events,
           },
@@ -224,6 +239,8 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
       layout.shown,
       rows,
       selectedRecordIds,
+      selectionParts,
+      paged,
       narrowing,
       events,
     ],
@@ -334,12 +351,16 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
   const allSelected =
     pageRecordIds.length > 0 &&
     pageRecordIds.every((recordId) => selectedRecordIds.includes(recordId));
+  // Some but not all rows of the page selected: the header checkbox shows the mixed state.
+  const someSelected =
+    !allSelected && pageRecordIds.some((recordId) => selectedRecordIds.includes(recordId));
   const gridRenderers = useMemo(
     (): GridRenderers => ({
       ...renderers,
       selectAll: () => (
         <SelectAllControl
           allSelected={allSelected}
+          someSelected={someSelected}
           recordIds={pageRecordIds}
           accessibleName={accessibleName}
           events={events}
@@ -347,7 +368,7 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
       ),
     }),
     // The page's record identities are part of `allSelected` and the rows' own identity.
-    [renderers, allSelected, pageRecordIds.join("\u0000"), accessibleName, events],
+    [renderers, allSelected, someSelected, pageRecordIds.join("\u0000"), accessibleName, events],
   );
 
   // Announcements: a new order or page of rows, and the selection count.
@@ -435,7 +456,9 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
         accessibleName={accessibleName}
         featureItems={state.status === "empty" ? null : gridFeatures.toolbarItems()}
         selectionBanner={
-          layoutControls !== undefined && selectable ? gridFeatures.selectionBanner() : null
+          selectable && (layoutControls !== undefined || bulkRun !== undefined)
+            ? gridFeatures.selectionBanner()
+            : null
         }
         layoutControls={layoutControls}
         fullScreen={allowFullScreen ? fullScreen : undefined}

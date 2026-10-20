@@ -100,6 +100,7 @@ function compileModule(
     const recordKey = String(recordType.key);
     const qualified = `${definitionKey}:${recordKey}`;
     const projection = recordType.system_projection as JsonObject | undefined;
+    const refresh = projection?.refresh_while as JsonObject | undefined;
     const registeredWritableUpdate =
       projection !== undefined &&
       isRegisteredWritableSystemProjection(
@@ -184,6 +185,15 @@ function compileModule(
         : {
             systemProjection: {
               protectedView: projection.protected_view,
+              ...(refresh === undefined
+                ? {}
+                : {
+                    refreshWhile: {
+                      fieldId: resolution.field(qualified, String(refresh.field)),
+                      values: refresh.values,
+                      intervalMilliseconds: refresh.interval_milliseconds,
+                    },
+                  }),
               organizationFieldId: resolution.field(
                 qualified,
                 String(projection.organization_field),

@@ -16,9 +16,11 @@ function Checkbox({ className, ...props }: CheckboxPrimitive.Root.Props) {
     >
       <CheckboxPrimitive.Indicator
         data-slot="checkbox-indicator"
-        className="cn-checkbox-indicator grid place-content-center text-current transition-none"
+        className="cn-checkbox-indicator group/indicator grid place-content-center text-current transition-none"
       >
-        <Icon name="check" />
+        {/* A mixed state (some, not all, selected) draws a minus instead of the check. */}
+        <Icon name="check" className="group-data-[indeterminate]/indicator:hidden" />
+        <Icon name="minus" className="hidden group-data-[indeterminate]/indicator:block" />
       </CheckboxPrimitive.Indicator>
     </CheckboxPrimitive.Root>
   );

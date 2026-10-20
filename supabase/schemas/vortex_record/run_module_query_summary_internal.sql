@@ -66,6 +66,9 @@ declare
   group_by_terms text[] := array[]::text[];
   group_presence_terms text[] := array[]::text[];
   group_values_sql text;
+  group_value_sql text;
+  group_page_limit integer;
+  group_after text := p_user_inputs ->> 'groupAfter';
   group_by_sql text;
   group_presence_sql text;
   aggregate_object_sql text := '';
@@ -109,14 +112,16 @@ begin
   context_organization_id := (prepared_plan #>> '{scope,organizationId}')::uuid;
   context_application_root_id := (prepared_plan #>> '{scope,applicationRootId}')::uuid;
 
-  if p_user_inputs ? 'groupingFieldId' then
+  if p_user_inputs ? 'grouping' then
     query_item := vortex_record.grouping_query_internal(
-      query_item, record_type_item, pg_catalog.lower(p_user_inputs ->> 'groupingFieldId')
+      query_item, record_type_item, p_user_inputs -> 'grouping'
     );
     if query_item is null then
       return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
     end if;
   end if;
+  group_page_limit := case when p_user_inputs ? 'grouping'
+    then ((p_user_inputs #>> '{grouping,limit}')::numeric)::integer else summary_candidate_limit end;
   if pg_catalog.jsonb_typeof(declared_searchable_ids) is distinct from 'array' then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
   end if;
@@ -297,8 +302,8 @@ begin
   into readable_field_ids
   from pg_catalog.jsonb_array_elements_text(prepared_plan -> 'readableFieldIds') as item(value);
 
-  if p_user_inputs ? 'groupingFieldId' and not (
-    pg_catalog.lower(p_user_inputs ->> 'groupingFieldId') = any (readable_field_ids)
+  if p_user_inputs ? 'grouping' and not (
+    pg_catalog.lower(p_user_inputs #>> '{grouping,fieldId}') = any (readable_field_ids)
   ) then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'field_unbounded');
   end if;
@@ -647,13 +652,14 @@ begin
       aggregate_object_sql) end;
 
   foreach field_key in array group_ids loop
+    group_value_sql := pg_catalog.format(
+      'vortex_record.grouping_value_internal(candidate.projected_values -> %L, %L, %L::jsonb)',
+      field_key, fields_by_id -> field_key ->> 'type', (p_user_inputs #> '{grouping,dateBucket}')::text
+    );
     group_value_pairs := pg_catalog.array_append(
-      group_value_pairs,
-      pg_catalog.format('%L, candidate.projected_values -> %L', field_key, field_key)
+      group_value_pairs, pg_catalog.format('%L, %s', field_key, group_value_sql)
     );
-    group_by_terms := pg_catalog.array_append(
-      group_by_terms, pg_catalog.format('(candidate.projected_values -> %L)', field_key)
-    );
+    group_by_terms := pg_catalog.array_append(group_by_terms, group_value_sql);
     group_presence_terms := pg_catalog.array_append(
       group_presence_terms, pg_catalog.format('(candidate.projected_values ? %L)', field_key)
     );
@@ -943,7 +949,7 @@ begin
            ''rowCount'', grouped.row_count,
            ''aggregates'', grouped.aggregates
          ) order by grouped.group_values::text collate "C"
-       ), ''[]''::jsonb) from grouped)'
+       ), ''[]''::jsonb) from visible_groups as grouped)'
     );
     summary_sql := pg_catalog.format(
       'with candidate as materialized (%s),
@@ -958,6 +964,14 @@ begin
          from selected as candidate
          where %s
          group by %s
+       ),
+       paged_groups as materialized (
+         select * from grouped
+         where %L::text is null or group_values::text collate "C" > %L::text collate "C"
+         order by group_values::text collate "C" limit %s
+       ),
+       visible_groups as materialized (
+         select * from paged_groups order by group_values::text collate "C" limit %s
        )
        select case when candidate_count.value > %s
          then pg_catalog.jsonb_build_object(''outcome'', ''refused'', ''reasonCode'', ''dataset_limit_exceeded'')
@@ -969,7 +983,10 @@ begin
            ''groupByFieldIds'', %L::jsonb,
            ''totalRowCount'', selected_count.value,
            ''groups'', %s,
-           ''aggregates'', totals.aggregate_values
+           ''aggregates'', totals.aggregate_values,
+           ''nextGroupKey'', case when (select pg_catalog.count(*) from paged_groups) > %s
+             then (select group_values::text from visible_groups order by group_values::text collate "C" desc limit 1)
+             else null end
          ) end
        from candidate_count cross join selected_count cross join totals',
       candidate_sql,
@@ -979,12 +996,14 @@ begin
       aggregate_object_sql,
       group_presence_sql,
       group_by_sql,
+      group_after, group_after, group_page_limit + 1, group_page_limit,
       summary_candidate_limit,
       p_module_root_id::text,
       resolved ->> 'moduleReleaseVersion',
       p_query_id::text,
       pg_catalog.to_jsonb(group_ids)::text,
-      groups_json_sql
+      groups_json_sql,
+      group_page_limit
     );
   else
     summary_sql := pg_catalog.format(

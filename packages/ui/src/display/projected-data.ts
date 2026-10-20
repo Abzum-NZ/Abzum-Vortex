@@ -1,5 +1,6 @@
 import {
   builderKeySchema,
+  moduleFieldValueSchemas,
   fieldIdSchema,
   richTextDocumentSchema,
   timestampSchema,
@@ -21,7 +22,12 @@ import {
 } from "@vortex/platform/schema";
 import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "../definition-error";
 import { parseRowFormat } from "./projected-format";
-import { parseTableFeatures, parseTableNarrowing } from "./projected-grid-features";
+import {
+  parseTableFeatures,
+  parseTableNarrowing,
+  parseTableSelectionParts,
+  type TableSelectionParts,
+} from "./projected-grid-features";
 
 /**
  * Validated structured rich-text document from the shared closed rich-text contract.
@@ -193,7 +199,8 @@ export type TablePayload = Readonly<{
   nextContinuationToken?: string;
   hasPreviousPage?: boolean;
   previousContinuationToken?: string;
-}>;
+}> &
+  TableSelectionParts;
 
 export type CalendarView = "month" | "week" | "agenda";
 
@@ -337,9 +344,10 @@ export type DisplaySemanticEventName =
     >
   /**
    * A Records table's link filter asks the page for one bounded page of the field's target
-   * records. It is the Column filters feature's own read, not a flow event.
+   * records, and its Bulk actions widen or clear the selection; neither is a flow event.
    */
-  | "filter_records_requested";
+  | "filter_records_requested"
+  | "selection_scope_changed";
 
 /**
  * One declared semantic event. Row and item events always carry stable identity;
@@ -410,7 +418,10 @@ export type DisplaySemanticEvent =
       column: BoardColumnSelector;
       continuationToken: string;
     }>
-  | Readonly<{ event: "bulk_action"; eventId: string; recordIds: readonly string[] }>
+  /** Runs a declared bulk named action over the selection the page holds for the table. */
+  | Readonly<{ event: "bulk_action"; action: string }>
+  /** Widens the selection to every matching record, or clears it (and a finished run's summary). */
+  | Readonly<{ event: "selection_scope_changed"; scope: "matching" | "cleared" }>
   | Readonly<{
       event: "inline_edit";
       eventId: string;
@@ -470,6 +481,7 @@ export const DISPLAY_EVENT_NAMES: readonly DisplaySemanticEventName[] = Object.f
   "columns_changed",
   "page_changed",
   "bulk_action",
+  "selection_scope_changed",
   "inline_edit",
   "card_moved",
   "row_expanded",
@@ -653,17 +665,20 @@ const parseCellValue = (
         ? Object.freeze({ kind: "date", iso })
         : fail("A date display value must be an ISO date or offset timestamp", location);
     }
-    case "choice":
+    case "choice": {
       requireExactKeys(record, ["kind", "key", "label"], location);
+      const key = moduleFieldValueSchemas.choice.safeParse(record.key);
+      if (!key.success) return fail("A choice display value requires a valid stored value", location);
       return Object.freeze({
         kind: "choice",
-        key: requireBuilderKey(record.key, "A choice display value requires a key", location),
+        key: key.data,
         label: requireNonEmptyString(
           record.label,
           "A choice display value requires a label",
           location,
         ),
       });
+    }
     case "link": {
       requireExactKeys(record, ["kind", "address", "label"], location);
       return isSafeLinkAddress(record.address)
@@ -1166,6 +1181,9 @@ export const parseTablePayload = (
       "nextContinuationToken",
       "hasPreviousPage",
       "previousContinuationToken",
+      "selectionToken",
+      "selectionScope",
+      "bulkRun",
     ],
     location,
   );
@@ -1258,6 +1276,7 @@ export const parseTablePayload = (
     record.narrowing === undefined ? undefined : parseTableNarrowing(record.narrowing, location);
   const features =
     record.features === undefined ? undefined : parseTableFeatures(record.features, location);
+  const selectionParts = parseTableSelectionParts(record, location);
   return Object.freeze({
     kind: "table",
     columns,
@@ -1265,6 +1284,7 @@ export const parseTablePayload = (
     layout: layout.data,
     rows,
     ...(features === undefined ? {} : { features }),
+    ...selectionParts,
     ...(selection === undefined ? {} : { selectedRecordIds: selection }),
     ...(sort === undefined ? {} : { sort }),
     ...(narrowing === undefined ? {} : { narrowing }),

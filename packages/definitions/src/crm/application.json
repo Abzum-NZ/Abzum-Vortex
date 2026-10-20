@@ -958,6 +958,17 @@
                   "props": {
                     "id": "content_4",
                     "features": {
+                      "bulk_actions": {
+                        "enabled": true,
+                        "actions": [
+                          {
+                            "action": "vortex.crm.opportunities.opportunity.mark_won",
+                            "label": "Mark won",
+                            "confirm": true,
+                            "max_records": 5000
+                          }
+                        ]
+                      },
                       "conditional_formatting": {
                         "enabled": true,
                         "rules": [

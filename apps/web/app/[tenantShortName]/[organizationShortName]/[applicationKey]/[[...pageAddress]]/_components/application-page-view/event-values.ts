@@ -38,7 +38,7 @@ const cellToJson = (value: unknown): unknown => {
 
 /**
  * What a component event supplies to its bound flow, by the caller input names the flow declares.
- * The vocabulary is closed and event-shaped: `record_id`, `record_ids`, `revision`, `field`,
+ * The vocabulary is closed and event-shaped: `record_id`, `revision`, `field`,
  * `value` and `values` (the one changed field of a moved board card, named by its field key). A
  * binding receives only the names it declares, and the endpoint refuses anything else.
  *
@@ -55,8 +55,6 @@ export const suppliedValues = (event: DisplaySemanticEvent): Record<string, unkn
         record_id: event.recordId,
         ...(event.revision === undefined ? {} : { revision: event.revision }),
       };
-    case "bulk_action":
-      return { record_ids: [...event.recordIds] };
     case "inline_edit":
       return {
         record_id: event.recordId,
