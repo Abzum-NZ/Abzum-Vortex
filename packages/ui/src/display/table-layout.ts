@@ -77,6 +77,8 @@ type Local = Readonly<{
   /** The stored layout state this local copy started from; a new page read starts it again. */
   base: GridLayoutState;
   layout: GridLayout;
+  /** The last completed gesture; a pending write never captures an in-progress resize. */
+  committedLayout: GridLayout;
   revision: number | null;
   /** Bumped by every change the person committed; each bump schedules one coalesced store. */
   commits: number;
@@ -88,6 +90,7 @@ type Local = Readonly<{
 const startFrom = (base: GridLayoutState): Local => ({
   base,
   layout: base.layout,
+  committedLayout: base.layout,
   revision: base.revision,
   commits: base.reset && base.persisted ? 1 : 0,
   savedCommits: 0,
@@ -215,7 +218,7 @@ export const useGridLayout = ({
         return {
           ...held,
           layout: next,
-          ...(commit ? { commits: held.commits + 1, resetting: false } : {}),
+          ...(commit ? { committedLayout: next, commits: held.commits + 1, resetting: false } : {}),
         };
       }),
     [updateLocal],
@@ -256,7 +259,9 @@ export const useGridLayout = ({
   const commit = useCallback(
     () =>
       updateLocal((held) =>
-        held === undefined ? held : { ...held, commits: held.commits + 1, resetting: false },
+        held === undefined
+          ? held
+          : { ...held, committedLayout: held.layout, commits: held.commits + 1, resetting: false },
       ),
     [updateLocal],
   );
@@ -324,7 +329,13 @@ export const useGridLayout = ({
       updateLocal((held) =>
         held === undefined
           ? held
-          : { ...held, layout: held.base.authored, commits: held.commits + 1, resetting: true },
+          : {
+              ...held,
+              layout: held.base.authored,
+              committedLayout: held.base.authored,
+              commits: held.commits + 1,
+              resetting: true,
+            },
       ),
     [updateLocal],
   );
@@ -351,7 +362,7 @@ export const useGridLayout = ({
     try {
       const outcome = await onColumns({
         event: "columns_changed",
-        layout: snapshot.resetting ? null : snapshot.layout,
+        layout: snapshot.resetting ? null : snapshot.committedLayout,
         expectedRevision: snapshot.revision,
         queryId: snapshot.base.queryId,
       });
@@ -386,6 +397,7 @@ export const useGridLayout = ({
           : {
               ...latestLocal,
               layout: adopted,
+              committedLayout: adopted,
               revision: result.stored?.revision ?? null,
               savedCommits: latestLocal.commits,
               resetting: false,
