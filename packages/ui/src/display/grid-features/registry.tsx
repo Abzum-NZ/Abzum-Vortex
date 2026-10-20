@@ -31,6 +31,8 @@ import type { GridColumn, GridLayoutControls } from "../table-layout";
  */
 export type GridFeatureContext = Readonly<{
   accessibleName: string;
+  /** The presentation already selected by the parent Data grid. */
+  presentation: "grid" | "cards";
   features: RecordsTableFeatureProjection;
   /** The columns the page carries, in display order. */
   columns: readonly GridColumn[];

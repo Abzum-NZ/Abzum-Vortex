@@ -124,6 +124,7 @@ function RelatedRecords({ context, row }: GridFeatureRowProps): ReactElement {
   if (pageSize === undefined) fail("Related records require their feature projection", location);
   const [state, setState] = useState<PanelState>({ kind: "loading" });
   const mounted = useRef(true);
+  const panelRef = useRef<HTMLDivElement>(null);
   const recordId = row.recordId;
 
   const readPage = useCallback(
@@ -158,11 +159,17 @@ function RelatedRecords({ context, row }: GridFeatureRowProps): ReactElement {
 
   useEffect(() => {
     mounted.current = true;
+    panelRef.current?.focus();
     void open();
     return () => {
       mounted.current = false;
     };
   }, [open]);
+
+  useEffect(() => {
+    if (state.kind !== "loading" && document.activeElement === document.body)
+      panelRef.current?.focus();
+  }, [state.kind]);
 
   const showMore = async (): Promise<void> => {
     if (state.kind !== "ready" || state.page.next === undefined || state.more === "reading") return;
@@ -196,7 +203,13 @@ function RelatedRecords({ context, row }: GridFeatureRowProps): ReactElement {
 
   if (state.kind === "loading")
     return (
-      <div role="status" aria-label="Reading related records" className="flex flex-col gap-2 py-1">
+      <div
+        ref={panelRef}
+        tabIndex={-1}
+        role="status"
+        aria-label="Reading related records"
+        className="flex flex-col gap-2 py-1"
+      >
         {Array.from({ length: Math.min(pageSize, 5) }, (_, index) => (
           <Skeleton key={index} className="h-5 w-full" />
         ))}
@@ -204,13 +217,23 @@ function RelatedRecords({ context, row }: GridFeatureRowProps): ReactElement {
     );
   if (state.kind === "refused")
     return (
-      <p role="status" className="m-0 py-1 text-sm text-muted-foreground">
+      <div
+        ref={panelRef}
+        tabIndex={-1}
+        role="status"
+        className="py-1 text-sm text-muted-foreground"
+      >
         You do not have access to these records
-      </p>
+      </div>
     );
   if (state.kind === "error")
     return (
-      <div role="alert" className="flex flex-wrap items-center gap-2 py-1 text-sm">
+      <div
+        ref={panelRef}
+        tabIndex={-1}
+        role="alert"
+        className="flex flex-wrap items-center gap-2 py-1 text-sm"
+      >
         <span className="text-muted-foreground">The related records could not be read.</span>
         <Button variant="outline" size="sm" onClick={() => void open()}>
           Try again
@@ -219,17 +242,88 @@ function RelatedRecords({ context, row }: GridFeatureRowProps): ReactElement {
     );
   if (state.kind === "empty")
     return (
-      <Empty role="status" className="p-2 md:p-2">
-        <EmptyHeader>
-          <EmptyTitle className="text-sm font-normal text-muted-foreground">
-            No related records
-          </EmptyTitle>
-        </EmptyHeader>
-      </Empty>
+      <div ref={panelRef} tabIndex={-1} role="status">
+        <Empty className="p-2 md:p-2">
+          <EmptyHeader>
+            <EmptyTitle className="text-sm font-normal text-muted-foreground">
+              No related records
+            </EmptyTitle>
+          </EmptyHeader>
+        </Empty>
+      </div>
     );
   const { page, more } = state;
+  if (context.presentation === "cards")
+    return (
+      <div ref={panelRef} tabIndex={-1} className="min-w-0 text-sm">
+        <ul className="m-0 flex min-w-0 list-none flex-col divide-y divide-border p-0">
+          {page.rows.map((related) => {
+            const [titleColumn, ...detailColumns] = page.columns;
+            const titleValue = titleColumn === undefined ? undefined : cellOf(related, titleColumn);
+            return (
+              <li
+                key={related.recordId}
+                data-vortex-related-record-id={related.recordId}
+                className="min-w-0 py-2 first:pt-0 last:pb-0"
+              >
+                {titleColumn === undefined ? null : (
+                  <h4 className="m-0 min-w-0 font-medium">
+                    {titleValue === undefined || related.href === undefined ? (
+                      titleValue === undefined ? null : (
+                        <DisplayCellView value={titleValue} />
+                      )
+                    ) : (
+                      <a
+                        href={related.href}
+                        className="underline-offset-4 hover:underline focus-visible:underline focus-visible:outline-none"
+                      >
+                        {titleValue.kind === "empty" ? (
+                          "Open"
+                        ) : (
+                          <DisplayCellView value={titleValue} />
+                        )}
+                      </a>
+                    )}
+                  </h4>
+                )}
+                {detailColumns.length === 0 ? null : (
+                  <dl className="m-0 mt-1 grid min-w-0 grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-x-3 gap-y-1">
+                    {detailColumns.map((column) => (
+                      <div key={column.key} className="contents">
+                        <dt className="min-w-0 break-words text-muted-foreground">
+                          {column.label}
+                        </dt>
+                        <dd className="m-0 min-w-0 break-words text-end">
+                          <DisplayCellView value={cellOf(related, column)} />
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+        {page.next === undefined ? null : (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="mt-1"
+            disabled={more === "reading"}
+            onClick={() => void showMore()}
+          >
+            {more === "reading" ? "Reading…" : "Show more"}
+          </Button>
+        )}
+        {more === "failed" ? (
+          <p role="alert" className="m-0 text-sm text-muted-foreground">
+            More related records could not be read.
+          </p>
+        ) : null}
+      </div>
+    );
   return (
-    <div className="flex flex-col items-start gap-1">
+    <div ref={panelRef} tabIndex={-1} className="flex flex-col items-start gap-1">
       <Table className="text-sm" containerClassName="border-0 bg-transparent">
         <TableHeader>
           <TableRow className="hover:bg-transparent">
