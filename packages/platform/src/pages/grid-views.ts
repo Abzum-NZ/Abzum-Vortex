@@ -19,6 +19,7 @@ import {
 } from "../definition/application-composition/records-display";
 import {
   conditionalFormatFactsOf,
+  conditionalFormatRuleFields,
   conditionalFormatRuleIssue,
 } from "../definition/application-composition/records-table-features/conditional-formatting";
 import type { ModuleField } from "../definition/module-contracts";
@@ -501,7 +502,8 @@ export const saveGridView = async (
   )
     throw new Error("GRID_VIEW_PLACEMENT_INVALID");
   if (document?.formatting !== undefined) {
-    const features = gridViewPlacement(save.page, save.placementId)?.contract.features;
+    const contract = gridViewPlacement(save.page, save.placementId)?.contract;
+    const features = contract?.features;
     if (
       features === undefined ||
       !features.savedViews.enabled ||
@@ -514,7 +516,15 @@ export const saveGridView = async (
         "Personal formatting is not turned on for this table.",
       );
     const facts = conditionalFormatFactsOf(save.recordFields);
+    // A rule reads only the table's own columns: the query reads no other field for it.
+    const columns = new Set(contract?.columns.map((column) => column.field.toLowerCase()));
     for (const rule of document.formatting) {
+      if (!conditionalFormatRuleFields(rule).every((fieldId) => columns.has(fieldId.toLowerCase())))
+        return refuseFormatting(
+          save.placementId,
+          `field_not_in_table rule=${rule.id}`,
+          "A rule reads a field this table does not show.",
+        );
       const issue = conditionalFormatRuleIssue(rule, facts);
       if (issue !== undefined)
         return refuseFormatting(save.placementId, `rule_invalid rule=${rule.id}`, issue);

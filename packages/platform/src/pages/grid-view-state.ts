@@ -446,8 +446,12 @@ export const resolveSelectedGridView = (
   if (filters.some((entry) => decodeRecordsTableFieldFilter(entry.filter) === undefined))
     return { selected: null, notice: "needs_fixing" };
   const sort = (document.sort ?? []).filter((entry) => readableField(entry.fieldId));
+  // A rule stays only while every field it reads is one of the table's columns (the query reads
+  // no other field for it, even after a release removes one) and one this viewer can read.
   const formatting = (document.formatting ?? []).filter((rule) =>
-    conditionalFormatRuleFields(rule).every((fieldId) => readableField(fieldId.toLowerCase())),
+    conditionalFormatRuleFields(rule).every(
+      (fieldId) => permitted.has(fieldId.toLowerCase()) && readableField(fieldId.toLowerCase()),
+    ),
   );
   const applied: GridViewDocument = {
     // A view that would show no column of this viewer's falls back to the authored arrangement.
