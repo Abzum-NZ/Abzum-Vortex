@@ -1,7 +1,6 @@
 import {
   getAccessibleName,
   placementSettings,
-  type FieldInputControlReleaseMap,
   type createPlatformComponentRegistryForReleases,
   type RenderedPage,
 } from "@vortex/ui";
@@ -33,8 +32,13 @@ const surfacePlacement = (
   const releaseVersion = String(block.releaseVersion);
   const release = registry.get(blockId, releaseVersion)?.metadata;
   if (release === undefined)
-    throw new Error(`Placement '${placementId}' names unregistered block release '${blockId}:${releaseVersion}'`);
-  return { vortex, settings: placementSettings(props, release, { placementId, blockId, releaseVersion }) };
+    throw new Error(
+      `Placement '${placementId}' names unregistered block release '${blockId}:${releaseVersion}'`,
+    );
+  return {
+    vortex,
+    settings: placementSettings(props, release, { placementId, blockId, releaseVersion }),
+  };
 };
 
 /** Finds the form ancestor that owns each placement in the rendered page tree. */
@@ -43,7 +47,11 @@ export const isPlatformRelease = (
   block: unknown,
   identity: Readonly<{ key: string; releaseVersion: string }>,
 ): boolean => {
-  if (!isRecord(block) || typeof block.blockId !== "string" || typeof block.releaseVersion !== "string")
+  if (
+    !isRecord(block) ||
+    typeof block.blockId !== "string" ||
+    typeof block.releaseVersion !== "string"
+  )
     return false;
   const release = registry.get(block.blockId, block.releaseVersion)?.metadata;
   return release?.key === identity.key && release.releaseVersion === identity.releaseVersion;
@@ -61,7 +69,9 @@ export const formOwnersByPlacement = (
         registry,
         vortex.block,
         PLATFORM_BLOCK_RELEASE_IDENTITIES.FORM_CONTAINER_BLOCK_RELEASE,
-      ) ? placementId : formOwner;
+      )
+        ? placementId
+        : formOwner;
       if (owner !== undefined) owners[placementId] = owner;
       return owner;
     },
@@ -75,11 +85,13 @@ export const formSurfaceComposition = (
   pageId: string,
   formId: string,
   registry: ReturnType<typeof createPlatformComponentRegistryForReleases>,
-): Readonly<{
-  composition: RenderedPage;
-  placementIds: readonly string[];
-  placements: Readonly<Record<string, FormSurfacePlacement>>;
-}> | undefined => {
+):
+  | Readonly<{
+      composition: RenderedPage;
+      placementIds: readonly string[];
+      placements: Readonly<Record<string, FormSurfacePlacement>>;
+    }>
+  | undefined => {
   let match: VisitedPlacement | undefined;
   let matchId: string | undefined;
   let matchUsable = false;
@@ -119,12 +131,7 @@ export const formSurfaceComposition = (
   const tablet = sourceResponsive.tablet;
   const phone = sourceResponsive.phone;
   const responsive = responsivePlacementSchema.safeParse(sourceResponsive);
-  if (
-    !responsive.success ||
-    !isRecord(desktop) ||
-    !isRecord(tablet) ||
-    !isRecord(phone)
-  )
+  if (!responsive.success || !isRecord(desktop) || !isRecord(tablet) || !isRecord(phone))
     return undefined;
   // The modal shows the form whatever its page layout hides at a breakpoint.
   const modalVortex: Record<string, unknown> = {
@@ -153,7 +160,9 @@ export const formSurfaceComposition = (
     composition: {
       pageId,
       composition: {
-        root: { props: { vortex: { slotOrders: { content: { tablet: [matchId], phone: [matchId] } } } } },
+        root: {
+          props: { vortex: { slotOrders: { content: { tablet: [matchId], phone: [matchId] } } } },
+        },
         content: [modalRoot],
       } as unknown as Extract<RenderedPage["composition"], { content: unknown }>,
     },
@@ -164,7 +173,11 @@ export const formSurfaceComposition = (
 
 const isVisibleInCurrentDocument = (element: HTMLElement): boolean => {
   if (!element.isConnected || element.getClientRects().length === 0) return false;
-  for (let current: HTMLElement | null = element; current !== null; current = current.parentElement) {
+  for (
+    let current: HTMLElement | null = element;
+    current !== null;
+    current = current.parentElement
+  ) {
     const style = window.getComputedStyle(current);
     if (
       current.hidden ||
@@ -192,7 +205,11 @@ export const visibleOwningFormFieldLabel = (
   const ownerForm = surface.placements[formId];
   const ownerBlock = ownerForm?.vortex.block;
   if (
-    !isPlatformRelease(registry, ownerBlock, PLATFORM_BLOCK_RELEASE_IDENTITIES.FORM_CONTAINER_BLOCK_RELEASE)
+    !isPlatformRelease(
+      registry,
+      ownerBlock,
+      PLATFORM_BLOCK_RELEASE_IDENTITIES.FORM_CONTAINER_BLOCK_RELEASE,
+    )
   )
     return undefined;
   const matchingPlacements = surface.placementIds.flatMap((placementId) => {
@@ -223,11 +240,9 @@ export const visibleOwningFormFieldLabel = (
   });
   if (matchingPlacements.length !== 1) return undefined;
 
-  const forms = [...document.querySelectorAll<HTMLFormElement>(
-    'form[data-vortex-control="form-container"]',
-  )].filter(
-    (form) => form.dataset.vortexPlacementId === formId && isVisibleInCurrentDocument(form),
-  );
+  const forms = [
+    ...document.querySelectorAll<HTMLFormElement>('form[data-vortex-control="form-container"]'),
+  ].filter((form) => form.dataset.vortexPlacementId === formId && isVisibleInCurrentDocument(form));
   if (forms.length !== 1) return undefined;
   const fieldNodes = [...forms[0]!.querySelectorAll<HTMLElement>("[data-vortex-field-key]")].filter(
     (element) =>
@@ -244,23 +259,35 @@ export const runtimeInputWithFormDefault = (
   placement: FormSurfacePlacement,
   value: unknown,
   registry: ReturnType<typeof createPlatformComponentRegistryForReleases>,
-  fieldInputControlReleases: FieldInputControlReleaseMap,
 ): Record<string, unknown> => {
   const block = placement.vortex.block;
   if (!isRecord(block) || typeof block.blockId !== "string") return input;
   const blockId = block.blockId.toLowerCase();
+  const releaseVersion = String(block.releaseVersion);
   const settings = placement.settings;
-  let control = Object.entries(fieldInputControlReleases).find(
-    ([, release]) => release.blockId.toLowerCase() === blockId,
-  )?.[0];
-  const releaseKey = registry.get(blockId, String(block.releaseVersion))?.metadata.key;
-  if (releaseKey === PLATFORM_BLOCK_RELEASE_IDENTITIES.FIELD_INPUT_BLOCK_RELEASE.key) {
+  const release = registry.get(blockId, releaseVersion)?.metadata;
+  if (release === undefined)
+    throw new Error(
+      `Show form default names unregistered block release '${blockId}:${releaseVersion}'`,
+    );
+  const identities = PLATFORM_BLOCK_RELEASE_IDENTITIES;
+  let control: string | undefined;
+  if (release.key === identities.FIELD_INPUT_BLOCK_RELEASE.key) {
     const selected = settings.control;
-    control = isRecord(selected) && selected.kind === "choice" && typeof selected.value === "string"
-      ? selected.value
-      : undefined;
-  } else if (releaseKey === PLATFORM_BLOCK_RELEASE_IDENTITIES.CHOICE_INPUT_BLOCK_RELEASE.key) {
+    control =
+      isRecord(selected) && selected.kind === "choice" && typeof selected.value === "string"
+        ? selected.value
+        : undefined;
+  } else if (release.key === identities.CHOICE_INPUT_BLOCK_RELEASE.key) {
     control = "choice";
+  } else if (release.key === identities.TEXT_INPUT_BLOCK_RELEASE.key) {
+    control = "text";
+  } else if (release.key === identities.NUMBER_INPUT_BLOCK_RELEASE.key) {
+    control = "number";
+  } else if (release.key === identities.BOOLEAN_INPUT_BLOCK_RELEASE.key) {
+    control = "boolean";
+  } else if (release.key === identities.DATE_INPUT_BLOCK_RELEASE.key) {
+    control = "date";
   }
   const payloadKind: Readonly<Record<string, string>> = {
     text: "text_input",
@@ -272,7 +299,11 @@ export const runtimeInputWithFormDefault = (
   const kind = control === undefined ? undefined : payloadKind[control];
   if (kind === undefined) return input;
   if (control === "text" && typeof value !== "string") return input;
-  if (control === "number" && value !== null && (typeof value !== "number" || !Number.isFinite(value)))
+  if (
+    control === "number" &&
+    value !== null &&
+    (typeof value !== "number" || !Number.isFinite(value))
+  )
     return input;
   if (control === "boolean" && typeof value !== "boolean") return input;
   if (
@@ -286,12 +317,12 @@ export const runtimeInputWithFormDefault = (
     const data = input.data;
     const projectedValues =
       isRecord(data) && data.status === "ready" && isRecord(data.values) ? data.values : undefined;
-    const projectedOptions = Array.isArray(projectedValues?.options)
-      ? projectedValues.options
-      : [];
+    const projectedOptions = Array.isArray(projectedValues?.options) ? projectedValues.options : [];
     const authoredOptions = settings.options;
     const authoredKeys =
-      isRecord(authoredOptions) && authoredOptions.kind === "list" && Array.isArray(authoredOptions.items)
+      isRecord(authoredOptions) &&
+      authoredOptions.kind === "list" &&
+      Array.isArray(authoredOptions.items)
         ? authoredOptions.items.flatMap((item) =>
             isRecord(item) &&
             isRecord(item.properties) &&

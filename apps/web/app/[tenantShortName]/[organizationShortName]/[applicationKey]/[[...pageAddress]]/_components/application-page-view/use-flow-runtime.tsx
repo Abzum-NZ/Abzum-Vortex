@@ -326,7 +326,6 @@ export function useFlowRuntime({
             placement,
             form.inputs[name],
             platformComponentRegistry,
-            fieldInputControlReleases,
           );
           if (
             choiceField?.dependency !== undefined &&
