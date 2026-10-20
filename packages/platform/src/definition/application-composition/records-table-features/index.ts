@@ -28,6 +28,7 @@ export {
   recordsTableFilterKinds,
   type RecordsTableFilterKind,
 } from "./column-filters";
+import { recordsTableRowEditFeature, type RecordsTableRowEditSettings } from "./row-edit";
 import { recordsTableInlineEditFeature, type RecordsTableInlineEditSettings } from "./inline-edit";
 import {
   recordsTableMasterDetailFeature,
@@ -109,6 +110,7 @@ export type {
   RecordsTableBulkActionsSettings,
   RecordsTableColumnFiltersSettings,
   RecordsTableInlineEditSettings,
+  RecordsTableRowEditSettings,
   RecordsTableMasterDetailSettings,
   RecordsTableTreeSettings,
   RecordsTableSavedViewsSettings,
@@ -132,6 +134,7 @@ export type RecordsTableFeatures = Readonly<{
   savedViews: RecordsTableFeatureState<RecordsTableSavedViewsSettings>;
   bulkActions: RecordsTableFeatureState<RecordsTableBulkActionsSettings>;
   inlineEdit: RecordsTableFeatureState<RecordsTableInlineEditSettings>;
+  rowEdit: RecordsTableFeatureState<RecordsTableRowEditSettings>;
   masterDetail: RecordsTableFeatureState<RecordsTableMasterDetailSettings>;
   tree: RecordsTableFeatureState<RecordsTableTreeSettings>;
   conditionalFormatting: RecordsTableFeatureState<RecordsTableConditionalFormattingSettings>;
@@ -149,6 +152,7 @@ const registry = {
   saved_views: { property: "savedViews", definition: recordsTableSavedViewsFeature },
   bulk_actions: { property: "bulkActions", definition: recordsTableBulkActionsFeature },
   inline_edit: { property: "inlineEdit", definition: recordsTableInlineEditFeature },
+  row_edit: { property: "rowEdit", definition: recordsTableRowEditFeature },
   master_detail: { property: "masterDetail", definition: recordsTableMasterDetailFeature },
   tree: { property: "tree", definition: recordsTableTreeFeature },
   conditional_formatting: {
@@ -174,6 +178,7 @@ export const recordsTableFeatureKeys = [
   "saved_views",
   "bulk_actions",
   "inline_edit",
+  "row_edit",
   "master_detail",
   "tree",
   "conditional_formatting",
@@ -218,6 +223,7 @@ export const readRecordsTableFeatures = (
   const savedViews = read("saved_views");
   const bulkActions = read("bulk_actions");
   const inlineEdit = read("inline_edit");
+  const rowEdit = read("row_edit");
   const masterDetail = read("master_detail");
   const tree = read("tree");
   const conditionalFormatting = read("conditional_formatting");
@@ -231,6 +237,7 @@ export const readRecordsTableFeatures = (
     savedViews === undefined ||
     bulkActions === undefined ||
     inlineEdit === undefined ||
+    rowEdit === undefined ||
     masterDetail === undefined ||
     tree === undefined ||
     conditionalFormatting === undefined ||
@@ -247,6 +254,7 @@ export const readRecordsTableFeatures = (
     savedViews: savedViews as RecordsTableFeatures["savedViews"],
     bulkActions: bulkActions as RecordsTableFeatures["bulkActions"],
     inlineEdit: inlineEdit as RecordsTableFeatures["inlineEdit"],
+    rowEdit: rowEdit as RecordsTableFeatures["rowEdit"],
     masterDetail: masterDetail as RecordsTableFeatures["masterDetail"],
     tree: tree as RecordsTableFeatures["tree"],
     conditionalFormatting: conditionalFormatting as RecordsTableFeatures["conditionalFormatting"],
@@ -339,6 +347,7 @@ const featureEvents: Readonly<Record<string, RecordsTableFeatureKey>> = {
   search_changed: "search",
   filter_changed: "column_filters",
   inline_edit: "inline_edit",
+  row_edit: "row_edit",
   card_moved: "board",
 };
 

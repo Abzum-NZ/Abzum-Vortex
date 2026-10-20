@@ -409,11 +409,13 @@ const surfaceDiagnostic = (
   const corrections =
     parsed.data.corrections === undefined ||
     binding === undefined ||
-    (binding.event !== "form_submit" && binding.event !== "card_moved") ||
+    (binding.event !== "form_submit" &&
+      binding.event !== "card_moved" &&
+      binding.event !== "row_edit") ||
     taskId === undefined ||
     !saveValuesComeFromForm(taskId, flowId, binding, installation)
       ? []
-      : binding.event === "card_moved"
+      : binding.event === "card_moved" || binding.event === "row_edit"
         ? parsed.data.corrections
         : parsed.data.corrections.filter((correction) =>
             hasVisibleOwningFormField(installation, binding.controlId, correction.field),

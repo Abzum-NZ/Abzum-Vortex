@@ -582,7 +582,10 @@ export const projectRecordsTableData = (
     formatting?.projection,
     input.pivotView,
   );
-  const editableFields = features?.inlineEdit?.fields ?? [];
+  const editableFields = [
+    ...(features?.inlineEdit?.fields ?? []),
+    ...(features?.rowEdit?.fields ?? []),
+  ];
 
   return {
     status: "ready",

@@ -243,6 +243,7 @@ export type RecordsTableFeatureRefusalCode = Extract<
   | "definition_records_table_saved_views"
   | "definition_records_table_bulk_actions"
   | "definition_records_table_inline_edit"
+  | "definition_records_table_row_edit"
   | "definition_records_table_master_detail"
   | "definition_records_table_tree"
   | "definition_records_table_conditional_formatting"

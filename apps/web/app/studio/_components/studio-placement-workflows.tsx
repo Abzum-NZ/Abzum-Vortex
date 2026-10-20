@@ -19,6 +19,7 @@ const eventNames: Readonly<Record<string, string>> = {
   row_action: "Row action",
   card_moved: "When a card is moved",
   form_submit: "When submitted",
+  row_edit: "When a row is saved",
   inline_edit: "When a value is edited",
 };
 

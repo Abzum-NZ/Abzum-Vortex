@@ -298,6 +298,8 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
     cellClassName,
     headerAdornment,
     columnMenuItems,
+    rowCommands,
+    rowEditor,
   } = gridFeatures;
   // Full screen keeps this same tree and changes only the container classes.
   const containerRef = useRef<HTMLDivElement>(null);
@@ -316,7 +318,9 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
             onRowClick({ event: "row_clicked", eventId: rowClickEventId, recordId }),
     [onRowClick, rowClickEventId],
   );
-  const showActions = (behaviours?.rowActions.length ?? 0) > 0 && events?.row_action !== undefined;
+  const showActions =
+    features?.rowEdit !== undefined ||
+    ((behaviours?.rowActions.length ?? 0) > 0 && events?.row_action !== undefined);
   const headingKey = layout.shown[0]?.key;
   // Rows expand to a panel a projected feature draws (their related records); the panel reads only
   // while its row is open.
@@ -372,14 +376,18 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
         />
       ),
       selectAll: () => null,
+      rowEditor,
       actions: (row) => (
-        <RowActionsMenu
-          recordId={row.recordId}
-          {...(row.revision === undefined ? {} : { revision: row.revision })}
-          name={rowName(row, headingKey)}
-          actions={rowActions.filter((action) => rowShowsAction(row, action))}
-          events={events}
-        />
+        <span className="flex items-center gap-1">
+          {rowCommands(row)}
+          <RowActionsMenu
+            recordId={row.recordId}
+            {...(row.revision === undefined ? {} : { revision: row.revision })}
+            name={rowName(row, headingKey)}
+            actions={rowActions.filter((action) => rowShowsAction(row, action))}
+            events={events}
+          />
+        </span>
       ),
     };
   }, [
@@ -392,6 +400,8 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
     cellClassName,
     headerAdornment,
     columnMenuItems,
+    rowCommands,
+    rowEditor,
   ]);
 
   const pageRecordIds = rows.map((row) => row.recordId);
@@ -620,6 +630,7 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
         activateRow={activateRow}
         renderers={gridRenderers}
         interaction={gridFeatures.interaction}
+        retainedRecordIds={gridFeatures.retainedRecordIds}
         announce={announce}
         expansion={expansion}
         rowName={nameOfRow}
@@ -629,63 +640,69 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
   })();
 
   return (
-    <div
-      ref={containerRef}
-      data-vortex-display="table"
-      data-vortex-placement-id={placementId}
-      data-vortex-table-density={layout.density}
-      data-vortex-table-presentation={presentation}
-      {...(fullScreen.active ? { "data-vortex-full-screen": "" } : {})}
-      className={cn(fullScreen.active && FULL_SCREEN_CLASS)}
-      {...(revealed ? { "data-vortex-display-revealed": "" } : {})}
-    >
-      <DisplayHeader
-        title={title}
-        accessibleName={accessibleName}
-        events={state.status === "empty" ? undefined : events}
-      />
-      {state.status === "refused" || state.status === "error" || state.status === "awaiting_input"
-        ? null
-        : toolbar}
-      <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
-        {message}
-      </div>
-      {ready && availability === "unavailable" ? (
-        <DisplayStateContainer
-          accessibleName={accessibleName}
-          availability={availability}
-          projectedData={state}
-          emptyMessage={emptyMessage}
+    <>
+      {gridFeatures.scope(
+        <div
+          ref={containerRef}
+          data-vortex-display="table"
+          data-vortex-placement-id={placementId}
+          data-vortex-table-density={layout.density}
+          data-vortex-table-presentation={presentation}
+          {...(fullScreen.active ? { "data-vortex-full-screen": "" } : {})}
+          className={cn(fullScreen.active && FULL_SCREEN_CLASS)}
+          {...(revealed ? { "data-vortex-display-revealed": "" } : {})}
         >
-          {body}
-        </DisplayStateContainer>
-      ) : (
-        body
-      )}
-      {!ready || values === undefined || pivotOpen ? null : (
-        <div className="mt-2 flex shrink-0 flex-wrap items-center justify-between gap-2">
-          <p className="m-0 text-xs text-muted-foreground tabular-nums">
-            {values.page === undefined ? "" : `Page ${values.page} · `}
-            {rows.length === 1 ? "1 row" : `${rows.length} rows`}
-          </p>
-          <PaginationControl
-            page={values.page}
-            pageCount={values.pageCount}
-            {...(values.hasNextPage === undefined ? {} : { hasNextPage: values.hasNextPage })}
-            {...(values.nextContinuationToken === undefined
-              ? {}
-              : { nextContinuationToken: values.nextContinuationToken })}
-            {...(values.hasPreviousPage === undefined
-              ? {}
-              : { hasPreviousPage: values.hasPreviousPage })}
-            {...(values.previousContinuationToken === undefined
-              ? {}
-              : { previousContinuationToken: values.previousContinuationToken })}
+          <DisplayHeader
+            title={title}
             accessibleName={accessibleName}
-            events={events}
+            events={state.status === "empty" ? undefined : events}
           />
-        </div>
+          {state.status === "refused" ||
+          state.status === "error" ||
+          state.status === "awaiting_input"
+            ? null
+            : toolbar}
+          <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
+            {message}
+          </div>
+          {ready && availability === "unavailable" ? (
+            <DisplayStateContainer
+              accessibleName={accessibleName}
+              availability={availability}
+              projectedData={state}
+              emptyMessage={emptyMessage}
+            >
+              {body}
+            </DisplayStateContainer>
+          ) : (
+            body
+          )}
+          {!ready || values === undefined || pivotOpen ? null : (
+            <div className="mt-2 flex shrink-0 flex-wrap items-center justify-between gap-2">
+              <p className="m-0 text-xs text-muted-foreground tabular-nums">
+                {values.page === undefined ? "" : `Page ${values.page} · `}
+                {rows.length === 1 ? "1 row" : `${rows.length} rows`}
+              </p>
+              <PaginationControl
+                page={values.page}
+                pageCount={values.pageCount}
+                {...(values.hasNextPage === undefined ? {} : { hasNextPage: values.hasNextPage })}
+                {...(values.nextContinuationToken === undefined
+                  ? {}
+                  : { nextContinuationToken: values.nextContinuationToken })}
+                {...(values.hasPreviousPage === undefined
+                  ? {}
+                  : { hasPreviousPage: values.hasPreviousPage })}
+                {...(values.previousContinuationToken === undefined
+                  ? {}
+                  : { previousContinuationToken: values.previousContinuationToken })}
+                accessibleName={accessibleName}
+                events={events}
+              />
+            </div>
+          )}
+        </div>,
       )}
-    </div>
+    </>
   );
 }

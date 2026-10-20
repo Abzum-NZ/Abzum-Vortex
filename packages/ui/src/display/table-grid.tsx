@@ -111,6 +111,7 @@ export type RecordsGridProps = Readonly<{
   selection: "single" | "multiple" | undefined;
   selectedRecordIds: readonly string[];
   showActions: boolean;
+  retainedRecordIds?: readonly string[];
   events: DisplayEventHandlers | undefined;
   activateRow: ((recordId: string) => unknown) | undefined;
   renderers: GridRenderers;
@@ -303,6 +304,7 @@ export function RecordsGrid({
   selection,
   selectedRecordIds,
   showActions,
+  retainedRecordIds,
   events,
   activateRow,
   renderers,
@@ -1112,7 +1114,10 @@ export function RecordsGrid({
               fallback={<div role="rowgroup" style={{ height: rows.length * rowHeight }} />}
             >
               <VirtualRows
-                expandedRecordIds={expansion?.expandedRecordIds}
+                expandedRecordIds={[
+                  ...(expansion?.expandedRecordIds ?? []),
+                  ...(retainedRecordIds ?? []),
+                ]}
                 rows={rows}
                 rowHeight={rowHeight}
                 activeRow={activeRow}
