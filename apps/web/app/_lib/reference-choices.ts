@@ -22,8 +22,7 @@ import {
   type VisitedPlacement,
 } from "@vortex/platform/schema";
 import {
-  CHOICE_INPUT_BLOCK_RELEASE_1_1_0,
-  CHOICE_INPUT_BLOCK_RELEASE_1_2_0,
+  CHOICE_INPUT_BLOCK_RELEASE,
   FORM_CONTAINER_BLOCK_RELEASE,
   placementSettings as typedPlacementSettings,
 } from "@vortex/platform/server";
@@ -39,14 +38,12 @@ type ChoicePlacementSettings = Readonly<{
   fieldKey: string;
   queryId: string;
   labelFieldId: string;
-  releaseVersion: "1.1.0" | "1.2.0";
   dependency?: Readonly<{ key: string; fromField: string }>;
 }>;
 
 export type ReferenceChoiceFormField = Readonly<{
   fieldKey: string;
   command: RecordReferenceChoiceCommand;
-  releaseVersion: "1.1.0" | "1.2.0";
   dependency?: Readonly<{ key: string; fromField: string }>;
 }>;
 
@@ -74,9 +71,8 @@ export const hasReferenceChoiceSource = (placement: PlacedParts): boolean => {
   return (
     block !== undefined &&
     typeof block.blockId === "string" &&
-    sameId(block.blockId, CHOICE_INPUT_BLOCK_RELEASE_1_1_0.blockId) &&
-    (block.releaseVersion === CHOICE_INPUT_BLOCK_RELEASE_1_1_0.releaseVersion ||
-      block.releaseVersion === CHOICE_INPUT_BLOCK_RELEASE_1_2_0.releaseVersion) &&
+    sameId(block.blockId, CHOICE_INPUT_BLOCK_RELEASE.blockId) &&
+    block.releaseVersion === CHOICE_INPUT_BLOCK_RELEASE.releaseVersion &&
     Object.hasOwn(settings, "choice_source")
   );
 };
@@ -94,9 +90,8 @@ const placementSettings = (placement: PlacedParts): ChoicePlacementSettings | un
   )
     return undefined;
   const fieldKey = builderKeySchema.safeParse(name.value);
-  const releaseVersion = blockOf(placement)?.releaseVersion as "1.1.0" | "1.2.0";
   let dependency: ChoicePlacementSettings["dependency"];
-  if (releaseVersion === "1.2.0" && source.properties.input !== undefined) {
+  if (source.properties.input !== undefined) {
     const input = source.properties.input;
     if (
       input.kind !== "group" ||
@@ -115,7 +110,6 @@ const placementSettings = (placement: PlacedParts): ChoicePlacementSettings | un
         fieldKey: fieldKey.data,
         queryId: source.properties.query.queryId,
         labelFieldId: source.properties.label_field.fieldId,
-        releaseVersion,
         ...(dependency === undefined ? {} : { dependency }),
       }
     : undefined;
@@ -169,7 +163,6 @@ const referenceChoiceFieldForPlacement = (
   return {
     fieldKey: settings.fieldKey,
     command,
-    releaseVersion: settings.releaseVersion,
     ...(settings.dependency === undefined ? {} : { dependency: settings.dependency }),
   };
 };

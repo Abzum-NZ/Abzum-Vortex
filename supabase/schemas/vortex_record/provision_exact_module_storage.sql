@@ -261,7 +261,7 @@ begin
                      else pg_catalog.jsonb_build_array(
                        previous.rows -> -1 -> ''attribute_values'' -> %L
                      ) end
-                 ) end, 40
+                 ) end, 40, null::jsonb
              ) with ordinality as projected(
                organization_id, record_id, revision, attribute_values, ordinality
              )

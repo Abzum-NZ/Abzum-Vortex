@@ -2,7 +2,7 @@
 
 import { lazy, Suspense, useEffect, useRef, useState, type ReactElement } from "react";
 import type { GridFeatureInteractionProps, GridFeatureModule } from "./registry";
-import { isInteractiveGridTarget } from "../table-interaction";
+import { GRID_ROOT, isInteractiveGridTarget } from "../table-interaction";
 
 const Find = lazy(() => import("./find"));
 type Point = Readonly<{ row: number; column: number }>;
@@ -23,7 +23,7 @@ function RangeSelection({ context, surface }: GridFeatureInteractionProps): Reac
   const range = useRef<Range | undefined>(undefined);
   const dragging = useRef(false);
   // Replacing rows or columns invalidates a rectangle; it never follows a different query/page.
-  const page = context.rows;
+  const page = context.lines;
   const columns = context.columns;
   useEffect(() => {
     const root = surface.rootRef.current;
@@ -37,10 +37,11 @@ function RangeSelection({ context, surface }: GridFeatureInteractionProps): Reac
     const pointOf = (target: EventTarget | null): Point | undefined => {
       if (!(target instanceof Element)) return;
       const cell = target.closest<HTMLElement>("[data-grid-cell]");
-      if (cell === null || !root.contains(cell) || cell.closest("[role='grid']") !== root) return;
+      if (cell === null || !root.contains(cell) || cell.closest(GRID_ROOT) !== root) return;
       const row = Number(cell.dataset.row);
       const column = columnIds.indexOf(cell.dataset.col ?? "");
-      if (row < 0 || row >= page.length || column < 0) return;
+      // A notice beneath a row spans every column: it holds no values to select.
+      if (row < 0 || row >= page.length || column < 0 || page[row]?.kind !== "row") return;
       return { row, column };
     };
     const paint = (): void => {
@@ -79,8 +80,7 @@ function RangeSelection({ context, surface }: GridFeatureInteractionProps): Reac
       if (event.altKey || event.isComposing) return;
       const control = event.ctrlKey || event.metaKey;
       if (control && event.key.toLowerCase() === "a" && page.length > 0 && columns.length > 0) {
-        if (!(event.target instanceof Element) || event.target.closest("[role='grid']") !== root)
-          return;
+        if (!(event.target instanceof Element) || event.target.closest(GRID_ROOT) !== root) return;
         event.preventDefault();
         event.stopPropagation();
         select({ row: 0, column: 0 }, { row: page.length - 1, column: columns.length - 1 });
@@ -206,7 +206,7 @@ function RangeSelection({ context, surface }: GridFeatureInteractionProps): Reac
       window.removeEventListener("pointercancel", pointerup);
       range.current = undefined;
       for (const cell of root.querySelectorAll<HTMLElement>("[data-grid-cell][aria-selected]")) {
-        if (cell.closest("[role='grid']") !== root) continue;
+        if (cell.closest(GRID_ROOT) !== root) continue;
         cell.removeAttribute("aria-selected");
         cell.classList.remove(...selectionClasses);
       }

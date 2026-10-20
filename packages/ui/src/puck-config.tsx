@@ -522,42 +522,25 @@ function PlacementBlock(props: {
 // The config
 // ---------------------------------------------------------------------------------------------
 
-const versionParts = (version: string): readonly number[] =>
-  version.split(".").map((part) => Number.parseInt(part, 10) || 0);
-
-const compareVersions = (first: string, second: string): number => {
-  const a = versionParts(first);
-  const b = versionParts(second);
-  for (let index = 0; index < Math.max(a.length, b.length); index += 1) {
-    const delta = (a[index] ?? 0) - (b[index] ?? 0);
-    if (delta !== 0) return delta;
-  }
-  return 0;
-};
-
 type VortexComponentConfig = ComponentConfig<Record<string, unknown>>;
 
 /**
  * Builds the Puck config for every release in the registry: one component per renderer key, typed
- * from that key's newest release. Every registered release renders through its key's component;
- * the placement's own `vortex.block` selects the exact release at render time.
+ * from that key's one release.
  */
 export function createVortexPuckConfig(
   registry: PlatformComponentRegistry,
   fieldInputControlReleases: FieldInputControlReleases,
 ): Config {
-  const newestByKey = new Map<string, PlatformBlockRelease>();
+  const releaseByKey = new Map<string, PlatformBlockRelease>();
   for (const { metadata } of registry.list()) {
-    const current = newestByKey.get(metadata.rendererKey);
-    if (
-      current === undefined ||
-      compareVersions(metadata.releaseVersion, current.releaseVersion) > 0
-    )
-      newestByKey.set(metadata.rendererKey, metadata);
+    if (releaseByKey.has(metadata.rendererKey))
+      throw new Error(`Renderer '${metadata.rendererKey}' has more than one registered release`);
+    releaseByKey.set(metadata.rendererKey, metadata);
   }
 
   const keysByCategory = new Map<string, string[]>();
-  for (const [key, release] of newestByKey) {
+  for (const [key, release] of releaseByKey) {
     const keys = keysByCategory.get(release.paletteGroup) ?? [];
     keys.push(key);
     keysByCategory.set(release.paletteGroup, keys);
@@ -589,7 +572,7 @@ export function createVortexPuckConfig(
   };
 
   const components: Record<string, VortexComponentConfig> = {};
-  for (const [rendererKey, release] of newestByKey) {
+  for (const [rendererKey, release] of releaseByKey) {
     implementationFor(release);
     const defaults = defaultSettingsFor(release);
     const hasRepeatableSlot = release.slots.some((slot) => slot.repeats !== undefined);

@@ -358,9 +358,13 @@ export const fieldFilterTargetsOf = (
 /**
  * How a cell edits every field of one module that people may change in a cell (field identity to
  * editor), from the installed field definition alone. A calculation, total, generated number,
- * money, link, table, attachment or several-choices field has none, so it is never offered.
+ * money, table, attachment, several-choices or several-target link field has none, so it is never
+ * offered. A single-target link names its installed target record type, found among `modules`.
  */
-export const fieldEditorsOf = (module: PlacementModule): Record<string, RecordsTableInlineEditor> =>
+export const fieldEditorsOf = (
+  module: PlacementModule,
+  modules: readonly PlacementModule[],
+): Record<string, RecordsTableInlineEditor> =>
   Object.fromEntries(
     module.content.recordTypes.flatMap((recordType) =>
       recordType.fields.flatMap((field): [string, RecordsTableInlineEditor][] => {
@@ -451,6 +455,28 @@ export const fieldEditorsOf = (module: PlacementModule): Record<string, RecordsT
             ];
           case "date_time":
             return [[id, { kind: "date_time", required }]];
+          case "link": {
+            if (field.settings.target.state !== "resolved") return [];
+            const { moduleRootId, recordTypeId } = field.settings.target;
+            const target = modules
+              .find((candidate) => sameId(String(candidate.rootId), String(moduleRootId)))
+              ?.content.recordTypes.find((candidate) =>
+                sameId(String(candidate.recordTypeId), String(recordTypeId)),
+              );
+            return target === undefined
+              ? []
+              : [
+                  [
+                    id,
+                    {
+                      kind: "link",
+                      required,
+                      recordTypeId: String(recordTypeId),
+                      targetLabel: target.singularLabel,
+                    },
+                  ],
+                ];
+          }
           default:
             return [];
         }

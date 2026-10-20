@@ -5,25 +5,36 @@ import { projectedRecordPinTargetSchema } from "../records/record-links";
 
 const openBehaviour = z.enum(["replace", "new_page"]);
 
-/** LinkTiles1.2 has distinct App/Page evidence; it never manufactures Record identity. */
-export const applicationPageLinkTileTargetSchema = z.union([
+/** One typed target per tile, discriminated by kind; application and page evidence never manufactures Record identity. */
+export const projectedLinkTileTargetSchema = z.union([
   projectedRecordPinTargetSchema,
   applicationPageLinkTargetSchema.options[0].extend({ openBehaviour }).strict(),
   applicationPageLinkTargetSchema.options[1].extend({ openBehaviour }).strict(),
 ]);
 
 /** A neutral target retains only its protected source row's removal identity. */
-export const projectedApplicationPageLinkTilesSchema = z.object({
-  kind: z.literal("application_page_link_tiles"),
-  rows: z.array(z.object({
-    sourceRecordId: recordIdSchema,
-    sourceRevision: revisionSchema,
-    target: applicationPageLinkTileTargetSchema,
-  }).strict()).max(200),
-}).strict().superRefine((value, context) => {
-  if (new Set(value.rows.map((row) => row.sourceRecordId.toLowerCase())).size !== value.rows.length)
-    context.addIssue({ code: "custom", message: "Each source tile must occur once" });
-});
+export const projectedLinkTilesSchema = z
+  .object({
+    kind: z.literal("link_tiles"),
+    rows: z
+      .array(
+        z
+          .object({
+            sourceRecordId: recordIdSchema,
+            sourceRevision: revisionSchema,
+            target: projectedLinkTileTargetSchema,
+          })
+          .strict(),
+      )
+      .max(200),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (
+      new Set(value.rows.map((row) => row.sourceRecordId.toLowerCase())).size !== value.rows.length
+    )
+      context.addIssue({ code: "custom", message: "Each source tile must occur once" });
+  });
 
-export type ApplicationPageLinkTileTarget = z.infer<typeof applicationPageLinkTileTargetSchema>;
-export type ProjectedApplicationPageLinkTiles = z.infer<typeof projectedApplicationPageLinkTilesSchema>;
+export type ProjectedLinkTileTarget = z.infer<typeof projectedLinkTileTargetSchema>;
+export type ProjectedLinkTiles = z.infer<typeof projectedLinkTilesSchema>;

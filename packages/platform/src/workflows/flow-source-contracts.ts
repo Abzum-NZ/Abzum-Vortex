@@ -2,7 +2,17 @@ import { z } from "zod";
 import { workflowValueTypeSchema } from "../catalogue/catalogues";
 import { descriptionSchema, jsonValueSchema, retryPolicySchema } from "../catalogue/common";
 import { definitionProvenanceEntrySchema } from "../definition/definition-provenance";
-import { flowContractVersion, flowExecutionKindSchema, flowMaximumTaskCount, flowReadFieldsProjectionSchema, flowRegisteredTaskTypeSchema, flowScheduleRecurrenceSchema, flowSchema, flowStandardEventKindSchema, flowTaskTimeoutSchema } from "./flow-contracts";
+import {
+  flowContractVersion,
+  flowExecutionKindSchema,
+  flowMaximumTaskCount,
+  flowReadFieldsProjectionSchema,
+  flowRegisteredTaskTypeSchema,
+  flowScheduleRecurrenceSchema,
+  flowSchema,
+  flowStandardEventKindSchema,
+  flowTaskTimeoutSchema,
+} from "./flow-contracts";
 import { flowFormulaSchema, flowLiteralSchema, flowValueSchema } from "./flow-values";
 import type { FlowFormula, FlowLiteral, FlowValue } from "./flow-values";
 import {
@@ -124,9 +134,7 @@ export type SourceFlowTrigger = z.infer<typeof sourceFlowTriggerSchema>;
 export const sourceFlowRunAsSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("initiator") }).strict(),
   z.object({ kind: z.literal("saver") }).strict(),
-  z
-    .object({ kind: z.literal("specified_account"), executionBindingId: flowAliasSchema })
-    .strict(),
+  z.object({ kind: z.literal("specified_account"), executionBindingId: flowAliasSchema }).strict(),
   z.object({ kind: z.literal("system"), executionBindingId: flowAliasSchema }).strict(),
 ]);
 
@@ -140,7 +148,12 @@ type SourceFlowTaskCommon = {
 };
 export type SourceFlowTask = SourceFlowTaskCommon &
   (
-    | { type: "if"; condition: FlowFormula; then: SourceFlowTask[]; else?: SourceFlowTask[] | undefined }
+    | {
+        type: "if";
+        condition: FlowFormula;
+        then: SourceFlowTask[];
+        else?: SourceFlowTask[] | undefined;
+      }
     | {
         type: "switch";
         value: FlowValue;
@@ -373,7 +386,8 @@ const refineRecordLinkTask = (
     context.addIssue({
       code: "custom",
       path: [...taskPath, "properties", "record_type"],
-      message: "Build record link value requires one literal record type alias, not a canonical identity",
+      message:
+        "Build record link value requires one literal record type alias, not a canonical identity",
     });
   }
 
@@ -402,11 +416,7 @@ const refineRecordLinkTask = (
     }
   }
 
-  if (
-    targetAlias !== undefined &&
-    inputTypeAlias !== undefined &&
-    targetAlias !== inputTypeAlias
-  ) {
+  if (targetAlias !== undefined && inputTypeAlias !== undefined && targetAlias !== inputTypeAlias) {
     context.addIssue({
       code: "custom",
       path: [...taskPath, "properties", "record"],
@@ -500,9 +510,17 @@ export const sourceFlowCollectionSchema = z
     const keys = new Set<string>();
     flows.forEach((flow, index) => {
       if (ids.has(flow.id))
-        context.addIssue({ code: "custom", path: [index, "id"], message: "Flow ids must be unique" });
+        context.addIssue({
+          code: "custom",
+          path: [index, "id"],
+          message: "Flow ids must be unique",
+        });
       if (keys.has(flow.key))
-        context.addIssue({ code: "custom", path: [index, "key"], message: "Flow keys must be unique" });
+        context.addIssue({
+          code: "custom",
+          path: [index, "key"],
+          message: "Flow keys must be unique",
+        });
       ids.add(flow.id);
       keys.add(flow.key);
     });
@@ -522,10 +540,9 @@ export const flowDependencyManifestContributionSchema = z
     definitionKeys: z
       .array(namespacedKeySchema)
       .max(1_000)
-      .refine(
-        (keys) => keys.every((key, index) => index === 0 || keys[index - 1]! < key),
-        { message: "Dependency definition keys must be unique and in ascending order" },
-      ),
+      .refine((keys) => keys.every((key, index) => index === 0 || keys[index - 1]! < key), {
+        message: "Dependency definition keys must be unique and in ascending order",
+      }),
   })
   .strict();
 export type FlowDependencyManifestContribution = z.infer<
@@ -534,7 +551,7 @@ export type FlowDependencyManifestContribution = z.infer<
 
 export const compiledFlowSetSchema = z
   .object({
-    /** In ascending permanent flow identity, so unchanged source always compiles identically. */
+    /** BeforeSave flows use priority and source order; other flows use permanent identity order. */
     flows: z.array(flowSchema).max(100),
     dependencyManifest: flowDependencyManifestContributionSchema,
     /** Paths begin with the flow's index in `flows` and, for the source path, in the source set. */
@@ -543,11 +560,11 @@ export const compiledFlowSetSchema = z
   .strict()
   .superRefine((value, context) => {
     const ids = value.flows.map((flow) => flow.id);
-    if (ids.some((id, index) => index > 0 && ids[index - 1]! >= id))
+    if (new Set(ids).size !== ids.length)
       context.addIssue({
         code: "custom",
         path: ["flows"],
-        message: "Compiled flows must be unique and in ascending permanent identity order",
+        message: "Compiled flows must have unique permanent identities",
       });
   });
 export type CompiledFlowSet = z.infer<typeof compiledFlowSetSchema>;

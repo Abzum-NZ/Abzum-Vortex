@@ -42,7 +42,7 @@ export function OrganizationLauncherPage({
   organizationName: string;
   account: ApplicationAccount;
   openApplication: (event: DisplaySemanticEvent) => Promise<void>;
-  studio?: Readonly<{ href: string; placementId: string }>;
+  studio?: Readonly<{ href: string; tileId: string }>;
   launcherHref: string;
   platformBlockReleases: readonly PlatformBlockRelease[];
   fieldInputControlReleases: FieldInputControlReleaseMap;
@@ -83,36 +83,20 @@ export function OrganizationLauncherPage({
         runtimeInputs={{
           [placementId]: {
             data: { status: "ready", values },
-            events: { row_action: openApplication },
+            events: {
+              row_action: (event: DisplaySemanticEvent) => {
+                if (
+                  studio !== undefined &&
+                  event.event === "row_action" &&
+                  event.recordId === studio.tileId
+                ) {
+                  router.push(studio.href);
+                  return;
+                }
+                return openApplication(event);
+              },
+            },
           },
-          ...(studio === undefined
-            ? {}
-            : {
-                [studio.placementId]: {
-                  data: {
-                    status: "ready",
-                    values: {
-                      kind: "launcher_rows",
-                      headingKey: "label",
-                      rows: [
-                        {
-                          recordId: studio.placementId,
-                          cells: {
-                            label: { kind: "text", text: "Studio" },
-                            description: { kind: "text", text: "Build applications and modules" },
-                          },
-                        },
-                      ],
-                    },
-                  },
-                  events: {
-                    row_action: (event: DisplaySemanticEvent) => {
-                      if (event.event === "row_action" && event.recordId === studio.placementId)
-                        router.push(studio.href);
-                    },
-                  },
-                },
-              }),
         }}
       />
     </ApplicationAccountActionsProvider>
