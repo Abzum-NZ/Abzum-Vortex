@@ -36,6 +36,8 @@ export const suppliedValues = (event: DisplaySemanticEvent): Record<string, unkn
         record_id: event.recordId,
         ...(event.revision === undefined ? {} : { revision: event.revision }),
       };
+    case "row_edit":
+      return { record_id: event.recordId, values: event.values };
     case "inline_edit":
       return { record_id: event.recordId, values: { [event.field]: event.value } };
     case "card_moved":

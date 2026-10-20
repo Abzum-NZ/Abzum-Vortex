@@ -45,7 +45,13 @@ type SourceBinding = ApplicationSourceDocument["body"]["flow_bindings"][number];
 export type StudioFlowControlEvent = SourceBinding["event"];
 export type StudioFlowAuthoringEvent = Extract<
   StudioFlowControlEvent,
-  "action" | "card_moved" | "form_submit" | "row_clicked" | "row_action" | "inline_edit"
+  | "action"
+  | "card_moved"
+  | "form_submit"
+  | "row_clicked"
+  | "row_action"
+  | "inline_edit"
+  | "row_edit"
 >;
 
 export const studioFlowEventLabels: Readonly<Record<StudioFlowAuthoringEvent, string>> = {
@@ -55,6 +61,7 @@ export const studioFlowEventLabels: Readonly<Record<StudioFlowAuthoringEvent, st
   row_clicked: "When a row is clicked",
   row_action: "Row action",
   inline_edit: "When a value is edited",
+  row_edit: "When a row is saved",
 };
 
 /** Tables expose row actions through declared menu entries; other row surfaces use their own activation. */
@@ -76,7 +83,12 @@ const controlEventRecordType = (
       ? choiceField.slice(0, choiceField.lastIndexOf("."))
       : undefined;
   if (event === "card_moved") return boardRecord;
-  if (event === "row_clicked" || event === "row_action" || event === "inline_edit") {
+  if (
+    event === "row_clicked" ||
+    event === "row_action" ||
+    event === "inline_edit" ||
+    event === "row_edit"
+  ) {
     const queryRef = item?.props.vortex.query;
     // A query-bound row belongs to that query, even on a page of another record type.
     if (queryRef !== undefined)
@@ -194,9 +206,8 @@ export const projectStudioFlowCreateChoices = (
         bound.has(`${alias} ${event}`) ||
         (event === "action" && node.settings.action_kind === "submit") ||
         // The action that saves an inline edit belongs to the feature, so it is offered while on.
-        (event === "inline_edit" &&
-          (placed === undefined ||
-            !authoredRecordsTableFeatureEnabled(placed.props, "inline_edit")))
+        ((event === "inline_edit" || event === "row_edit") &&
+          (placed === undefined || !authoredRecordsTableFeatureEnabled(placed.props, event)))
       )
         continue;
       const recordType = controlEventRecordType(event, placements.get(alias), pageRecord, queries);
@@ -361,13 +372,13 @@ const bindControl = (
   if (event === "row_clicked") {
     if (item !== undefined) item.props.row_click = { mode: "flow", event_id: eventId };
   }
-  if (event === "inline_edit") {
+  if (event === "inline_edit" || event === "row_edit") {
     if (item === undefined) return refuse("The table is no longer on the page.");
     // The table names the action that saves a change in its Inline editing feature.
     const props = item.props as Record<string, unknown>;
     const features = isPlainRecord(props.features) ? props.features : {};
-    const feature = isPlainRecord(features.inline_edit) ? features.inline_edit : {};
-    props.features = { ...features, inline_edit: { ...feature, event_id: eventId } };
+    const feature = isPlainRecord(features[event]) ? features[event] : {};
+    props.features = { ...features, [event]: { ...feature, event_id: eventId } };
   }
   if (rowActionMenu && item !== undefined) {
     item.props.row_actions = [
@@ -520,7 +531,11 @@ export const applyStudioFlowCreate = (
     }
     if (command.kind === "action" && command.event === "card_moved" && command.recordType === null)
       return { kind: "refused", reason: "Choose the board's choice field first." };
-    if (command.kind === "action" && command.event === "inline_edit" && command.recordType === null)
+    if (
+      command.kind === "action" &&
+      (command.event === "inline_edit" || command.event === "row_edit") &&
+      command.recordType === null
+    )
       return { kind: "refused", reason: "Choose the table's query first." };
     const key = keyFrom(name, new Set(body.flows.flatMap((entry) => [entry.id, entry.key])));
     if (key === undefined)
@@ -532,7 +547,9 @@ export const applyStudioFlowCreate = (
     let binding: Readonly<{ id: string; eventId: string }>;
     if (
       command.kind === "action" &&
-      (command.event === "card_moved" || command.event === "inline_edit") &&
+      (command.event === "card_moved" ||
+        command.event === "inline_edit" ||
+        command.event === "row_edit") &&
       command.recordType !== null
     ) {
       // A board's card move and a table's inline edit each save the changed value of one record

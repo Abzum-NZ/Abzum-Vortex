@@ -1,7 +1,11 @@
 import { z } from "zod";
 import { workflowValueTypeSchema } from "../catalogue/catalogues";
 import { sourceAliasSchema } from "./definition-source-common";
-import { flowBindingInputSchema, flowBindingSchema, flowIdSchema } from "../workflows/flow-contracts";
+import {
+  flowBindingInputSchema,
+  flowBindingSchema,
+  flowIdSchema,
+} from "../workflows/flow-contracts";
 import { flowAliasSchema } from "../workflows/flow-source-contracts";
 import {
   actorIdSchema,
@@ -60,6 +64,7 @@ export const componentSemanticEventKindSchema = z.enum([
   "row_action",
   "bulk_action",
   "inline_edit",
+  "row_edit",
   "card_moved",
   "load",
   "refresh",
@@ -149,16 +154,19 @@ export const canonicalizeProtectedOperationReferences = (
         reference.owner.kind === "application"
           ? {
               kind: "application",
-              applicationRootId: reference.owner.applicationRootId.toLowerCase() as typeof reference.owner.applicationRootId,
+              applicationRootId:
+                reference.owner.applicationRootId.toLowerCase() as typeof reference.owner.applicationRootId,
             }
           : reference.owner.kind === "module"
             ? {
                 kind: "module",
-                moduleRootId: reference.owner.moduleRootId.toLowerCase() as typeof reference.owner.moduleRootId,
+                moduleRootId:
+                  reference.owner.moduleRootId.toLowerCase() as typeof reference.owner.moduleRootId,
               }
             : {
                 kind: "platform_service",
-                serviceId: reference.owner.serviceId.toLowerCase() as typeof reference.owner.serviceId,
+                serviceId:
+                  reference.owner.serviceId.toLowerCase() as typeof reference.owner.serviceId,
               },
       operationId: reference.operationId.toLowerCase() as typeof reference.operationId,
     };
@@ -198,7 +206,7 @@ const refineFlowNodeGrantability = (
   value: { operations: readonly ProtectedOperationReference[]; grantable: boolean },
   context: z.RefinementCtx,
 ) => {
-  if (value.grantable !== (value.operations.length > 0))
+  if (value.grantable !== value.operations.length > 0)
     context.addIssue({
       code: "custom",
       path: ["grantable"],
@@ -578,10 +586,8 @@ export const flowExecutionBindingStateSchema = z.enum(["active", "revoked"]);
 
 export const flowExecutionBindingEffectiveStateSchema = z.enum(["active", "revoked", "expired"]);
 
-const uniqueBy = <Value>(
-  values: readonly Value[],
-  identify: (value: Value) => string,
-): boolean => new Set(values.map(identify)).size === values.length;
+const uniqueBy = <Value>(values: readonly Value[], identify: (value: Value) => string): boolean =>
+  new Set(values.map(identify)).size === values.length;
 
 export const flowExecutionPermittedInvokersSchema = z
   .array(flowExecutionInvokerSchema)
@@ -697,9 +703,7 @@ export type ProtectedOperationEffectKind = z.infer<typeof protectedOperationEffe
 export type ComponentFlowBinding = z.infer<typeof componentFlowBindingSchema>;
 export type ProtectedOperationChannel = z.infer<typeof protectedOperationChannelSchema>;
 export type ProtectedOperationReference = z.infer<typeof protectedOperationReferenceSchema>;
-export type PlatformServiceOperationRelease = z.infer<
-  typeof platformServiceOperationReleaseSchema
->;
+export type PlatformServiceOperationRelease = z.infer<typeof platformServiceOperationReleaseSchema>;
 export type SafeFlowResultKind = z.infer<typeof safeFlowResultKindSchema>;
 export type SafeFlowResultDescriptor = z.infer<typeof safeFlowResultDescriptorSchema>;
 export type ProtectedOperationDescriptor = z.infer<typeof protectedOperationDescriptorSchema>;

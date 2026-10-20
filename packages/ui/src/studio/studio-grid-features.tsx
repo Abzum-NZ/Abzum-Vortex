@@ -33,6 +33,7 @@ import {
   type StudioRelatedRecordsChoices,
 } from "./grid-features";
 import { StudioSpreadsheetEditor } from "./grid-features/spreadsheet";
+import { StudioRowEditEditor } from "./grid-features/row-edit";
 import { StudioInlineEditEditor } from "./grid-features/inline-edit";
 import type { StudioBoardPipeline } from "./board-source";
 import { StudioBoardEditor } from "./grid-features/board";
@@ -281,6 +282,15 @@ export function StudioGridFeatures({
               {enabled && key === "spreadsheet" ? (
                 <StudioSpreadsheetEditor
                   value={current}
+                  disabled={disabled}
+                  onChange={(next) => write(key, next)}
+                />
+              ) : null}
+              {enabled && key === "row_edit" ? (
+                <StudioRowEditEditor
+                  value={current}
+                  facts={facts}
+                  columns={tableColumnFields(tableSettings)}
                   disabled={disabled}
                   onChange={(next) => write(key, next)}
                 />
