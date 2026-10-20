@@ -513,7 +513,13 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
       return refused;
     }
     try {
-      const tree = request.tree;
+      // The viewer's own search or filters list the matching records flat: a level narrowed on its
+      // own would hide a matching record whose parent does not match, and no ancestor walk is run.
+      const tree =
+        request.tree?.parentRecordId === null &&
+        (built.narrowing.search !== null || built.narrowing.filters.length > 0)
+          ? undefined
+          : request.tree;
       const treeCommand =
         tree === undefined
           ? undefined
@@ -525,7 +531,13 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
             });
       if (treeCommand !== undefined && !treeCommand.success) {
         logRecordsTableRequestRefusal(
-          recordsTableRequestRefusal("tree_level", "tree_command_invalid"),
+          // The cause stays in the log: which parts of the tree command failed and how.
+          recordsTableRequestRefusal(
+            "tree_level",
+            `tree_command_invalid:${treeCommand.error.issues
+              .map((issue) => `${issue.path.join(".")}/${issue.code}`)
+              .join(",")}`,
+          ),
           "table_read",
         );
         return refused;
@@ -537,12 +549,18 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
           ? await runner.run(session, selection, built.command)
           : await runner.treeLevel(session, selection, treeCommand.data);
       // A viewer who may not see the parent link on every record it may read has no tree: the
-      // table lists its records flat, as a table without the feature does.
+      // table lists its records flat, as a table without the feature does. That viewer's next page
+      // carries a flat position, which the tree read refuses as stale before it reaches the field
+      // check, so a refused position of the roots is read flat once as well; a flat read refuses a
+      // tree position the same way.
       if (
         tree?.parentRecordId === null &&
         result.kind === "available" &&
         result.value.outcome === "refused" &&
-        result.value.reasonCode === "field_unbounded"
+        (result.value.reasonCode === "field_unbounded" ||
+          (built.command.continuationToken !== undefined &&
+            (result.value.reasonCode === "cursor_stale" ||
+              result.value.reasonCode === "cursor_invalid")))
       )
         result = await runner.run(session, selection, built.command);
       if (result.kind === "temporarily_unavailable") return unavailableResult;

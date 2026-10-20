@@ -12,13 +12,13 @@ set search_path = ''
 as $function$
 declare
   pending uuid[] := p_record_ids;
+  pending_after uuid[] := pg_catalog.array_fill(null::uuid, array[pg_catalog.cardinality(p_record_ids)]);
   found_ids uuid[] := array[]::uuid[];
   candidates uuid[];
   owners uuid[];
   decided_ids uuid[];
   outcomes text[];
   candidate_index integer;
-  round_number integer := 0;
   examined integer := 0;
   outcome text;
   access_sql text := p_storage_plan #>> '{access,predicate}';
@@ -38,23 +38,28 @@ begin
   select coalesce(pg_catalog.array_agg(item.value::uuid), array[]::uuid[]) into shared_records
   from pg_catalog.jsonb_array_elements_text(p_storage_plan #> '{access,sharedRecordIds}') as item(value);
   -- Keep the protected scan's parameter slots; only slots 1,2,6,7,8,10 occur in access predicates.
+  -- Each round reads, for every undecided owner, its next candidate after the one it last examined
+  -- (keyset by record id), so the work is bounded by the candidates examined.
   while examined < 500 and pg_catalog.cardinality(pending) > 0 loop
-    round_number := round_number + 1;
     execute pg_catalog.format(
-      'select pg_catalog.array_agg(candidate.record_id order by candidate.owner_id),
-         pg_catalog.array_agg(candidate.owner_id order by candidate.owner_id)
-       from (
-         select stored.record_id, edge.%1$I as owner_id,
-           pg_catalog.row_number() over (partition by edge.%1$I order by stored.record_id) as rank
+      'select pg_catalog.array_agg(candidate.record_id order by pending_item.owner_id),
+         pg_catalog.array_agg(pending_item.owner_id order by pending_item.owner_id)
+       from pg_catalog.unnest($11::uuid[], $12::uuid[]) as pending_item(owner_id, after_id)
+       cross join lateral (
+         select stored.record_id
          from vortex_record.relationship_edges as edge
          join record_data.%2$I as stored on stored.organisation_id = edge.from_organisation_id
            and stored.record_id = edge.%3$I
          where edge.relationship_id = %4$L::uuid and edge.from_organisation_id = $1
            and edge.to_organisation_id = $1
            and edge.from_storage_contract_id = %5$L::uuid and edge.to_storage_contract_id = %5$L::uuid
-           and edge.%1$I = any ($11) and stored.lifecycle_state = ''active''
+           and edge.%1$I = pending_item.owner_id
+           and (pending_item.after_id is null or stored.record_id > pending_item.after_id)
+           and stored.lifecycle_state = ''active''
            and %6$s and (%7$s)
-       ) as candidate where candidate.rank = $12',
+         order by stored.record_id
+         limit 1
+       ) as candidate',
       owner_column, p_storage_plan #>> '{storage,physicalTableToken}', candidate_column,
       p_relationship_id, storage_contract_id,
       case when p_storage_plan #>> '{storage,storageScope}' = 'application_contained'
@@ -63,7 +68,7 @@ begin
     into candidates, owners
     using p_organization_id, p_application_root_id, null::text[], null::uuid, 501,
       (p_storage_plan #>> '{access,ownerAccountId}')::uuid, owner_groups, shared_records,
-      null::jsonb, p_storage_plan #> '{access,parameters}', pending, round_number;
+      null::jsonb, p_storage_plan #> '{access,parameters}', pending, pending_after;
     exit when candidates is null;
     examined := examined + pg_catalog.cardinality(candidates);
     select coalesce(pg_catalog.array_agg(decided.record_id), array[]::uuid[]),
@@ -88,9 +93,12 @@ begin
       end if;
     end loop;
     exit when p_parents;
-    select coalesce(pg_catalog.array_agg(item.id), array[]::uuid[]) into pending
-    from pg_catalog.unnest(pending) as item(id)
-    where item.id <> all (found_ids) and item.id = any (owners);
+    -- An owner with an allowed candidate is decided; one whose candidates ran out drops out.
+    select coalesce(pg_catalog.array_agg(item.owner_id order by item.owner_id), array[]::uuid[]),
+      coalesce(pg_catalog.array_agg(item.record_id order by item.owner_id), array[]::uuid[])
+    into pending, pending_after
+    from pg_catalog.unnest(owners, candidates) as item(owner_id, record_id)
+    where item.owner_id <> all (found_ids);
   end loop;
   if not p_parents and examined >= 500 and pg_catalog.cardinality(pending) > 0 then
     raise warning 'Tree child visibility examination budget exhausted';

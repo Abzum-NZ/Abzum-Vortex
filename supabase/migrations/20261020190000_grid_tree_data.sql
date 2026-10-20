@@ -24,13 +24,12 @@ begin
     raise exception using errcode = '22023', message = 'Relationship cycle check is invalid';
   end if;
   -- Serialize parent changes for this relationship and organisation. Participant locks alone
-  -- cannot prevent two disjoint edges from closing the same cycle concurrently. Refuse rather
-  -- than wait while holding participant locks; the caller can retry the atomic command.
-  if not pg_catalog.pg_try_advisory_xact_lock(pg_catalog.hashtextextended(
+  -- cannot prevent two disjoint edges from closing the same cycle concurrently. A concurrent
+  -- change waits for the other save to finish; the walk below then reads with a new snapshot, so
+  -- it sees the committed edge and refuses a loop the two would close together.
+  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(
     'parent:' || p_organisation_id::text || ':' || p_relationship_id::text, 0
-  )) then
-    raise exception using errcode = '40001', message = 'Concurrent parent change; retry the command';
-  end if;
+  ));
   -- A record linking to its own record type with one record per link is a parent link. Linking a
   -- record to itself, or to any record that already sits below it, would make it its own ancestor.
   -- The constraint name carries the field so the save can name it; the walk follows the chain
@@ -136,13 +135,13 @@ set search_path = ''
 as $function$
 declare
   pending uuid[] := p_record_ids;
+  pending_after uuid[] := pg_catalog.array_fill(null::uuid, array[pg_catalog.cardinality(p_record_ids)]);
   found_ids uuid[] := array[]::uuid[];
   candidates uuid[];
   owners uuid[];
   decided_ids uuid[];
   outcomes text[];
   candidate_index integer;
-  round_number integer := 0;
   examined integer := 0;
   outcome text;
   access_sql text := p_storage_plan #>> '{access,predicate}';
@@ -162,23 +161,28 @@ begin
   select coalesce(pg_catalog.array_agg(item.value::uuid), array[]::uuid[]) into shared_records
   from pg_catalog.jsonb_array_elements_text(p_storage_plan #> '{access,sharedRecordIds}') as item(value);
   -- Keep the protected scan's parameter slots; only slots 1,2,6,7,8,10 occur in access predicates.
+  -- Each round reads, for every undecided owner, its next candidate after the one it last examined
+  -- (keyset by record id), so the work is bounded by the candidates examined.
   while examined < 500 and pg_catalog.cardinality(pending) > 0 loop
-    round_number := round_number + 1;
     execute pg_catalog.format(
-      'select pg_catalog.array_agg(candidate.record_id order by candidate.owner_id),
-         pg_catalog.array_agg(candidate.owner_id order by candidate.owner_id)
-       from (
-         select stored.record_id, edge.%1$I as owner_id,
-           pg_catalog.row_number() over (partition by edge.%1$I order by stored.record_id) as rank
+      'select pg_catalog.array_agg(candidate.record_id order by pending_item.owner_id),
+         pg_catalog.array_agg(pending_item.owner_id order by pending_item.owner_id)
+       from pg_catalog.unnest($11::uuid[], $12::uuid[]) as pending_item(owner_id, after_id)
+       cross join lateral (
+         select stored.record_id
          from vortex_record.relationship_edges as edge
          join record_data.%2$I as stored on stored.organisation_id = edge.from_organisation_id
            and stored.record_id = edge.%3$I
          where edge.relationship_id = %4$L::uuid and edge.from_organisation_id = $1
            and edge.to_organisation_id = $1
            and edge.from_storage_contract_id = %5$L::uuid and edge.to_storage_contract_id = %5$L::uuid
-           and edge.%1$I = any ($11) and stored.lifecycle_state = ''active''
+           and edge.%1$I = pending_item.owner_id
+           and (pending_item.after_id is null or stored.record_id > pending_item.after_id)
+           and stored.lifecycle_state = ''active''
            and %6$s and (%7$s)
-       ) as candidate where candidate.rank = $12',
+         order by stored.record_id
+         limit 1
+       ) as candidate',
       owner_column, p_storage_plan #>> '{storage,physicalTableToken}', candidate_column,
       p_relationship_id, storage_contract_id,
       case when p_storage_plan #>> '{storage,storageScope}' = 'application_contained'
@@ -187,7 +191,7 @@ begin
     into candidates, owners
     using p_organization_id, p_application_root_id, null::text[], null::uuid, 501,
       (p_storage_plan #>> '{access,ownerAccountId}')::uuid, owner_groups, shared_records,
-      null::jsonb, p_storage_plan #> '{access,parameters}', pending, round_number;
+      null::jsonb, p_storage_plan #> '{access,parameters}', pending, pending_after;
     exit when candidates is null;
     examined := examined + pg_catalog.cardinality(candidates);
     select coalesce(pg_catalog.array_agg(decided.record_id), array[]::uuid[]),
@@ -212,9 +216,12 @@ begin
       end if;
     end loop;
     exit when p_parents;
-    select coalesce(pg_catalog.array_agg(item.id), array[]::uuid[]) into pending
-    from pg_catalog.unnest(pending) as item(id)
-    where item.id <> all (found_ids) and item.id = any (owners);
+    -- An owner with an allowed candidate is decided; one whose candidates ran out drops out.
+    select coalesce(pg_catalog.array_agg(item.owner_id order by item.owner_id), array[]::uuid[]),
+      coalesce(pg_catalog.array_agg(item.record_id order by item.owner_id), array[]::uuid[])
+    into pending, pending_after
+    from pg_catalog.unnest(owners, candidates) as item(owner_id, record_id)
+    where item.owner_id <> all (found_ids);
   end loop;
   if not p_parents and examined >= 500 and pg_catalog.cardinality(pending) > 0 then
     raise warning 'Tree child visibility examination budget exhausted';
@@ -600,7 +607,7 @@ begin
   end if;
 
   if mapping_row.cardinality = 'many_to_one' and target_type_id = p_source_record_type_id then
-    -- A record type's one-record link to itself is a parent link: it never makes a cycle.
+    -- A record type's one-record link to itself is a parent link: it must never make a cycle.
     perform vortex_record.assert_relationship_acyclic_internal(
       p_relationship_id, (source_context ->> 'organizationId')::uuid,
       (source_meta ->> 'storageContractId')::uuid, (field_value ->> 'fieldId')::uuid,
@@ -879,7 +886,7 @@ begin
   end if;
 
   if mapping_row.cardinality = 'many_to_one' and target_type_id = p_source_record_type_id then
-    -- A record type's one-record link to itself is a parent link: it never makes a cycle.
+    -- A record type's one-record link to itself is a parent link: it must never make a cycle.
     perform vortex_record.assert_relationship_acyclic_internal(
       p_relationship_id, (source_context ->> 'organizationId')::uuid,
       (source_meta ->> 'storageContractId')::uuid, (field_value ->> 'fieldId')::uuid,
@@ -1266,7 +1273,8 @@ begin
   end if;
   if board_member_mode and (
     pg_catalog.jsonb_array_length(user_sort) <> 0
-    or user_search is not null
+    -- The search plan is read further down; a board member read carries no search term at all.
+    or (p_exact_record_id is null and nullif(pg_catalog.btrim(p_user_inputs ->> 'search'), '') is not null)
     or pg_catalog.cardinality(declared_sortable_ids) <> 0
     or pg_catalog.cardinality(declared_searchable_ids) <> 0
   ) then

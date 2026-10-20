@@ -3,12 +3,15 @@
 import {
   useCallback,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
   type CSSProperties,
   type ReactElement,
+  type ReactNode,
 } from "react";
+import { RECORDS_TABLE_TREE_MAXIMUM_PAGE_SIZE } from "@vortex/platform/schema";
 import { Button } from "../../components/button";
 import { Skeleton } from "../../components/skeleton";
 import { cellValueToText, DisplayCellView } from "../cell";
@@ -24,7 +27,7 @@ import { RowExpansionToggle } from "../row-expansion-toggle";
 import type { GridFeatureModule, GridFeatureRowProps } from "./registry";
 
 /** The rows a tree table holds at once: its page and every level opened beneath it. */
-const TREE_ROW_BUDGET = 200;
+const TREE_ROW_BUDGET = RECORDS_TABLE_TREE_MAXIMUM_PAGE_SIZE;
 const INDENT_REM = 1.25;
 
 type Level = Readonly<{
@@ -40,7 +43,7 @@ type LevelState =
       kind: "ready";
       level: Level;
       more: "idle" | "reading" | "failed";
-      /** Rows the shared budget left out: further levels wait until a branch is closed. */
+      /** The shared budget has no room for the next page: it waits until a branch is closed. */
       capped: boolean;
     }>
   | Readonly<{ kind: "empty" | "refused" | "error" | "budget" }>;
@@ -130,10 +133,16 @@ function TreeLevel({
   const [state, setState] = useState<LevelState>({ kind: "loading" });
   const [open, setOpen] = useState<readonly string[]>([]);
   const mounted = useRef(true);
+  // The latest first-page read of this level: an older one's reply never decides its state.
+  const latestLoad = useRef(0);
+  // The page's own row count is read when a request is sized, so a refreshed page never re-reads
+  // every opened level.
+  const shownPageRows = useRef(pageRows);
+  shownPageRows.current = pageRows;
 
   const remaining = useCallback(
-    (): number => TREE_ROW_BUDGET - pageRows - usedExcept(budget, nodeKey),
-    [budget, nodeKey, pageRows],
+    (): number => TREE_ROW_BUDGET - shownPageRows.current - usedExcept(budget, nodeKey),
+    [budget, nodeKey],
   );
 
   const readPage = useCallback(
@@ -156,42 +165,43 @@ function TreeLevel({
     [readLevel, parentRecordId],
   );
 
-  const keep = useCallback(
-    (rows: readonly DisplayRow[]): Readonly<{ rows: readonly DisplayRow[]; capped: boolean }> => {
-      const room = Math.max(remaining(), 0);
-      return { rows: rows.slice(0, room), capped: rows.length > room };
-    },
-    [remaining],
-  );
-
+  // A read's rows are reserved in the budget before it starts, so every returned row (at most the
+  // requested size) fits and the level's next position is never lost.
   const load = useCallback(async () => {
+    const request = latestLoad.current + 1;
+    latestLoad.current = request;
     const requestedRows = Math.min(pageSize, Math.max(remaining(), 0));
     if (requestedRows === 0) {
+      budget.delete(nodeKey);
       setState({ kind: "budget" });
       return;
     }
     budget.set(nodeKey, requestedRows);
     setState({ kind: "loading" });
-    const outcome = await readPage(undefined, requestedRows);
-    if (!mounted.current || outcome === undefined) return;
-    if (outcome.status !== "ready") {
+    let outcome = await readPage(undefined, requestedRows);
+    // A reply the host dropped (the page's search or address moved on while it was read) is read
+    // again once under the page as it is now.
+    if (outcome === undefined && mounted.current && latestLoad.current === request)
+      outcome = await readPage(undefined, requestedRows);
+    if (!mounted.current || latestLoad.current !== request) return;
+    if (outcome === undefined || outcome.status !== "ready") {
       budget.delete(nodeKey);
-      setState({ kind: outcome.status });
+      setState({ kind: outcome?.status ?? "error" });
       return;
     }
-    const { rows, capped } = keep(outcome.level.rows);
+    const rows = outcome.level.rows.slice(0, requestedRows);
     budget.set(nodeKey, rows.length);
     setState({
       kind: "ready",
       level: {
         columns: outcome.level.columns,
         rows,
-        ...(capped || outcome.level.next === undefined ? {} : { next: outcome.level.next }),
+        ...(outcome.level.next === undefined ? {} : { next: outcome.level.next }),
       },
       more: "idle",
-      capped,
+      capped: false,
     });
-  }, [budget, keep, nodeKey, pageSize, readPage, remaining]);
+  }, [budget, nodeKey, pageSize, readPage, remaining]);
 
   useEffect(() => {
     mounted.current = true;
@@ -221,9 +231,16 @@ function TreeLevel({
       setState({ kind: "ready", level: shown, more: "idle", capped: state.capped });
       return;
     }
+    // A refused or expired position keeps the rows already shown, which were read under the
+    // viewer's access; the level offers no further page.
     if (outcome.status === "refused") {
-      budget.delete(nodeKey);
-      setState({ kind: "refused" });
+      budget.set(nodeKey, shown.rows.length);
+      setState({
+        kind: "ready",
+        level: { columns: shown.columns, rows: shown.rows },
+        more: "failed",
+        capped: false,
+      });
       return;
     }
     if (outcome.status === "error") {
@@ -234,20 +251,20 @@ function TreeLevel({
     const known = new Set(shown.rows.map((row) => row.recordId));
     const added =
       outcome.status === "ready"
-        ? outcome.level.rows.filter((row) => !known.has(row.recordId))
+        ? outcome.level.rows.filter((row) => !known.has(row.recordId)).slice(0, requestedRows)
         : [];
-    const { rows: fitting, capped } = keep([...shown.rows, ...added]);
-    budget.set(nodeKey, fitting.length);
+    const rows = [...shown.rows, ...added];
+    budget.set(nodeKey, rows.length);
     const next = outcome.status === "ready" ? outcome.level.next : undefined;
     setState({
       kind: "ready",
       level: {
         columns: shown.columns,
-        rows: fitting,
-        ...(capped || next === undefined ? {} : { next }),
+        rows,
+        ...(next === undefined ? {} : { next }),
       },
       more: "idle",
-      capped,
+      capped: false,
     });
   };
 
@@ -258,8 +275,14 @@ function TreeLevel({
         : [...current, recordId],
     );
 
+  // The panel's id is on an element that exists in every state, for the toggle's aria-controls.
+  const panel = (children: ReactNode): ReactElement => (
+    <div id={panelId} role="none">
+      {children}
+    </div>
+  );
   if (state.kind === "loading")
-    return (
+    return panel(
       <div
         role="status"
         aria-label={`Reading child records of ${parentName}`}
@@ -269,37 +292,37 @@ function TreeLevel({
         {Array.from({ length: 3 }, (_, index) => (
           <Skeleton key={index} className="h-5 w-full" />
         ))}
-      </div>
+      </div>,
     );
   if (state.kind === "refused")
-    return (
+    return panel(
       <p role="status" className="m-0 py-1 text-sm text-muted-foreground">
         You do not have access to these records
-      </p>
+      </p>,
     );
   if (state.kind === "budget")
-    return (
+    return panel(
       <div role="status" className="flex items-center gap-2 py-1 text-sm text-muted-foreground">
         <span>Close another branch to make room for this page of child records.</span>
         <Button variant="ghost" size="sm" onClick={() => void load()}>
           Try again
         </Button>
-      </div>
+      </div>,
     );
   if (state.kind === "error")
-    return (
+    return panel(
       <div role="alert" className="flex flex-wrap items-center gap-2 py-1 text-sm">
         <span className="text-muted-foreground">The child records could not be read.</span>
         <Button variant="outline" size="sm" onClick={() => void load()}>
           Try again
         </Button>
-      </div>
+      </div>,
     );
   if (state.kind === "empty")
-    return (
+    return panel(
       <p role="status" className="m-0 py-1 text-sm text-muted-foreground">
         No child records
-      </p>
+      </p>,
     );
 
   if (state.kind !== "ready") return fail("A tree level has an unhandled state", location);
@@ -311,7 +334,8 @@ function TreeLevel({
   return (
     <div
       id={panelId}
-      role="treegrid"
+      // The first level beneath a table row is one tree grid; deeper levels are row groups of it.
+      role={depth === 2 ? "treegrid" : "rowgroup"}
       aria-label={`Child records of ${parentName}`}
       className="flex flex-col text-sm"
     >
@@ -403,7 +427,7 @@ function TreeLevel({
           </Button>
         </div>
       )}
-      {capped ? (
+      {capped && level.next !== undefined ? (
         <p role="status" className="m-0 py-1 text-xs text-muted-foreground">
           This table shows at most {TREE_ROW_BUDGET} rows at once. Close a branch to see more.
         </p>
@@ -426,6 +450,9 @@ function Beneath({ context, row }: GridFeatureRowProps): ReactElement {
   const readLevel = context.events?.row_expanded;
   if (context.features.tree === undefined) fail("A tree requires its feature projection", location);
   const budget = useMemo(() => budgetOf(readLevel ?? context), [readLevel, context]);
+  const ownId = useId();
+  // A level is read in the table's order: a new order reads every opened level again.
+  const order = JSON.stringify(context.sort ?? null);
   const heading = context.columns[0]?.key;
   const name =
     heading === undefined
@@ -433,6 +460,7 @@ function Beneath({ context, row }: GridFeatureRowProps): ReactElement {
       : cellValueToText(row.cells[heading] ?? { kind: "empty" }) || "this record";
   return (
     <TreeLevel
+      key={order}
       readLevel={readLevel}
       budget={budget}
       pageRows={context.rows.length}
@@ -442,7 +470,7 @@ function Beneath({ context, row }: GridFeatureRowProps): ReactElement {
       depth={2}
       columns={undefined}
       parentName={name}
-      panelId={`tree-${row.recordId}`}
+      panelId={`${ownId}-tree-${row.recordId}`}
     />
   );
 }

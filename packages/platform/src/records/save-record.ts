@@ -532,7 +532,7 @@ const persist = async (
  * concurrent writes; the failed statement rolled the whole save back, so nothing was written. A
  * field the caller neither reads nor submitted is never named.
  */
-const uniqueValueCorrection = (
+const constraintCorrection = (
   error: unknown,
   prepared: PreparedSave | undefined,
   command: SaveRecordCommand,
@@ -998,7 +998,7 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
               backgroundDelivery: stored.backgroundDelivery,
             });
           },
-          (_code, error) => uniqueValueCorrection(error, attempted.prepared, command.data),
+          (_code, error) => constraintCorrection(error, attempted.prepared, command.data),
         );
 
         if (result.kind !== "available") return result;

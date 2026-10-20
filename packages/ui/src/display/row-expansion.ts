@@ -44,8 +44,8 @@ export type RowExpansionControls = Readonly<{
 
 /**
  * The expanded rows of one table, oldest first. Expanding a row beyond the kind's maximum collapses
- * the oldest and says so; a row that leaves the page collapses with it, so a new page starts with
- * none expanded.
+ * the oldest and says so; a row that leaves the page or has nothing left to open collapses, so a
+ * new page starts with none expanded.
  */
 export const useRowExpansion = (
   input: Readonly<{
@@ -62,7 +62,12 @@ export const useRowExpansion = (
   const { enabled, kind, placementId, rows, rowName, announce, panel } = input;
   const { noun, maximum, expandable, tree } = kind ?? closedKind;
   const [expanded, setExpanded] = useState<readonly string[]>([]);
-  const pageSignature = rows.map((row) => row.recordId).join("\u0000");
+  // A row that leaves the page, or no longer has anything to open (a searched tree lists its
+  // records flat), collapses.
+  const pageSignature = rows
+    .filter((row) => expandable(row))
+    .map((row) => row.recordId)
+    .join("\u0000");
   useEffect(() => {
     const onPage = new Set(pageSignature.split("\u0000"));
     setExpanded((current) =>

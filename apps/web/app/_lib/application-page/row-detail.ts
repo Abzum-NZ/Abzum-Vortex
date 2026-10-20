@@ -11,11 +11,6 @@ import {
   type TreeLevelResult,
 } from "@vortex/platform/server";
 import {
-  applicationLauncherQueryRowsToListValues,
-  parseBoardPayload,
-  parseDisplayData,
-} from "@vortex/ui";
-import {
   describeFailure,
   recordIdSchema,
   sameId,
@@ -179,18 +174,10 @@ export const loadApplicationRowDetail = async (
               parameters,
               bindings,
               data: {},
-              services: {
-                queries: services.queries,
-                linkTiles: services.linkTiles,
-                queryNotices: services.queryNotices,
-                tables: services.tables,
-                resolveRecordLinks: services.recordLinkResolver(context),
-                readCalendarSettings: services.readCalendarSettings,
+              services: services.placementServices(
+                services.recordLinkResolver(context),
                 readSubject,
-                launcherValues: applicationLauncherQueryRowsToListValues,
-                boardData: (values) =>
-                  parseDisplayData({ status: "ready", values }, parseBoardPayload),
-              },
+              ),
               permittedApplicationKeys: undefined,
               permittedApplicationsUnavailable: false,
               gridLayouts: await readPageGridLayouts(

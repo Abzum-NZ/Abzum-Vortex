@@ -124,6 +124,8 @@ export function StudioGridFeatures({
     properties: Object.fromEntries(recordsTableFeatureKeys.map((key) => [key, featureValue(key)])),
   };
   const features = readRecordsTableFeatures(whole);
+  const authoredPageSize = tableSettings["page_size"];
+  const tablePageSize = authoredPageSize?.kind === "number" ? authoredPageSize.value : undefined;
   const facts = studioRecordsTableQueryFacts(
     query,
     signedIn,
@@ -197,6 +199,7 @@ export function StudioGridFeatures({
                   facts,
                   presentation,
                   features,
+                  tablePageSize,
                 );
           const switchId = `${idPrefix}-${ownId}-${key}`;
           const settings =

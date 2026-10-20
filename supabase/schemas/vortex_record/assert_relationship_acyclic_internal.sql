@@ -22,13 +22,12 @@ begin
     raise exception using errcode = '22023', message = 'Relationship cycle check is invalid';
   end if;
   -- Serialize parent changes for this relationship and organisation. Participant locks alone
-  -- cannot prevent two disjoint edges from closing the same cycle concurrently. Refuse rather
-  -- than wait while holding participant locks; the caller can retry the atomic command.
-  if not pg_catalog.pg_try_advisory_xact_lock(pg_catalog.hashtextextended(
+  -- cannot prevent two disjoint edges from closing the same cycle concurrently. A concurrent
+  -- change waits for the other save to finish; the walk below then reads with a new snapshot, so
+  -- it sees the committed edge and refuses a loop the two would close together.
+  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(
     'parent:' || p_organisation_id::text || ':' || p_relationship_id::text, 0
-  )) then
-    raise exception using errcode = '40001', message = 'Concurrent parent change; retry the command';
-  end if;
+  ));
   -- A record linking to its own record type with one record per link is a parent link. Linking a
   -- record to itself, or to any record that already sits below it, would make it its own ancestor.
   -- The constraint name carries the field so the save can name it; the walk follows the chain

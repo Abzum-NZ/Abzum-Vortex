@@ -334,7 +334,8 @@ begin
   end if;
   if board_member_mode and (
     pg_catalog.jsonb_array_length(user_sort) <> 0
-    or user_search is not null
+    -- The search plan is read further down; a board member read carries no search term at all.
+    or (p_exact_record_id is null and nullif(pg_catalog.btrim(p_user_inputs ->> 'search'), '') is not null)
     or pg_catalog.cardinality(declared_sortable_ids) <> 0
     or pg_catalog.cardinality(declared_searchable_ids) <> 0
   ) then

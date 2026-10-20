@@ -89,11 +89,6 @@ import {
   placementParameterDependencies,
   resolvedQueryRecordTypeId,
 } from "@vortex/platform/server";
-import {
-  applicationLauncherQueryRowsToListValues,
-  parseBoardPayload,
-  parseDisplayData,
-} from "@vortex/ui";
 import { projectAttachmentInputs } from "./attachment-inputs";
 import { projectEditField } from "./reference-choice";
 import { projectInitialLinkInputs, titleLinkInputs } from "./link-input";
@@ -476,16 +471,7 @@ const loadApplicationPageJoined = async (
     tenantShortName: address.tenantShortName,
     organizationShortName: address.organizationShortName,
   });
-  const {
-    queries,
-    referenceChoices,
-    tables,
-    queryNotices,
-    linkTiles,
-    readCalendarSettings,
-    subjects,
-    readConcurrently,
-  } = services;
+  const { referenceChoices, readCalendarSettings, subjects, readConcurrently } = services;
 
   // The page subject: the one record the page's own address names, of the page's declared record
   // type, read once through the record read path under the viewer's own authority. Nothing here
@@ -789,17 +775,7 @@ const loadApplicationPageJoined = async (
     parameters,
     bindings: bindingContext,
     data,
-    services: {
-      queries,
-      linkTiles,
-      queryNotices,
-      tables,
-      resolveRecordLinks,
-      readCalendarSettings,
-      readSubject,
-      launcherValues: applicationLauncherQueryRowsToListValues,
-      boardData: (values) => parseDisplayData({ status: "ready", values }, parseBoardPayload),
-    },
+    services: services.placementServices(resolveRecordLinks, readSubject),
     permittedApplicationKeys,
     permittedApplicationsUnavailable: permittedApplicationsRead?.kind === "temporarily_unavailable",
     ...(boardContinuation === undefined ? {} : { boardContinuation }),

@@ -33,7 +33,11 @@ import {
   recordsTableMasterDetailFeature,
   type RecordsTableMasterDetailSettings,
 } from "./master-detail";
-import { recordsTableTreeFeature, type RecordsTableTreeSettings } from "./tree";
+import {
+  RECORDS_TABLE_TREE_MAXIMUM_PAGE_SIZE,
+  recordsTableTreeFeature,
+  type RecordsTableTreeSettings,
+} from "./tree";
 import {
   recordsTableConditionalFormattingFeature,
   type RecordsTableConditionalFormattingSettings,
@@ -261,6 +265,8 @@ export const checkRecordsTableFeature = (
   facts: RecordsTableQueryFacts,
   presentation: "grid" | "cards",
   features: RecordsTableFeatures,
+  /** The table's own page size; the tree's opened levels share one row budget with it. */
+  tablePageSize: number | undefined,
 ): RecordsTableFeatureCheck => {
   if (presentation === "cards" && key === "spreadsheet")
     return featureNotPossible(
@@ -288,7 +294,24 @@ export const checkRecordsTableFeature = (
       "definition_records_table_tree",
       "A row shows either its related records or the records beneath it; turn Related records off to use a tree.",
     );
-  return (registry[key].definition as RecordsTableFeatureDefinition<object>).check(state, facts);
+  const check = (registry[key].definition as RecordsTableFeatureDefinition<object>).check(
+    state,
+    facts,
+  );
+  // The table's page and one page of child records must fit the rows a tree table holds at once.
+  const childPageSize = features.tree.enabled ? features.tree.childPageSize : undefined;
+  if (
+    key === "tree" &&
+    check.kind !== "not_possible" &&
+    childPageSize !== undefined &&
+    tablePageSize !== undefined &&
+    tablePageSize + childPageSize > RECORDS_TABLE_TREE_MAXIMUM_PAGE_SIZE
+  )
+    return featureNotPossible(
+      "definition_records_table_tree",
+      `A tree table shows at most ${RECORDS_TABLE_TREE_MAXIMUM_PAGE_SIZE} rows at once: its ${tablePageSize} records a page and ${childPageSize} child records at a time do not fit. Lower one of them.`,
+    );
+  return check;
 };
 
 /** Every feature's state and check, in Studio's order. */
@@ -296,6 +319,7 @@ export const checkRecordsTableFeatures = (
   features: RecordsTableFeatures,
   facts: RecordsTableQueryFacts,
   presentation: "grid" | "cards",
+  tablePageSize: number | undefined,
 ): readonly Readonly<{
   key: RecordsTableFeatureKey;
   enabled: boolean;
@@ -306,7 +330,7 @@ export const checkRecordsTableFeatures = (
     return {
       key,
       enabled: state.enabled,
-      check: checkRecordsTableFeature(key, state, facts, presentation, features),
+      check: checkRecordsTableFeature(key, state, facts, presentation, features, tablePageSize),
     };
   });
 

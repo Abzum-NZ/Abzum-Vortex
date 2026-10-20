@@ -125,7 +125,7 @@ export function applicationPageRules(scope: ApplicationScope): void {
     return {
       signedIn,
       recordTypeLabel: String(record?.singularLabel ?? ""),
-      maximumPageSize: Number(bound.pageSize),
+      maximumPageSize: typeof bound.pageSize === "number" ? bound.pageSize : undefined,
       fields: array(record?.fields)
         .filter((field) => offered.has(String(field.fieldId).toLowerCase()))
         .map((field) => {
@@ -530,6 +530,7 @@ export function applicationPageRules(scope: ApplicationScope): void {
           table.features,
           recordsTableQueryFacts(bound, bindingFacts, page.type !== "public"),
           table.presentation,
+          table.pageSize,
         ))
           // A grid in Board mode shows none of the table's other features, so only the board is judged.
           if (
