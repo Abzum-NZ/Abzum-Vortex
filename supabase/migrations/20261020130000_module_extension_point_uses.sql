@@ -1,4 +1,3 @@
-begin;
 set local role vortex_owner;
 
 create or replace function vortex_definition.read_owned_module_publication(
@@ -147,4 +146,3 @@ grant execute on function vortex_definition.read_owned_module_publication(uuid) 
 alter function vortex_definition.read_owned_module_publication(uuid) owner to vortex_owner;
 
 reset role;
-commit;
