@@ -116,7 +116,7 @@ export default async function OrganizationPage({ params }: OrganizationPageProps
               recordId: studio.tileId,
               cells: {
                 name: { kind: "text" as const, text: "Studio" },
-                icon: { kind: "text" as const, text: "layout-dashboard" },
+                icon: { kind: "text" as const, text: "blocks" },
                 description: { kind: "text" as const, text: "Build applications and modules" },
               },
             },
