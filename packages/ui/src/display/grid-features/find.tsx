@@ -9,8 +9,15 @@ import { useDateFormatOptions } from "../date-format-context";
 import type { GridFeatureInteractionProps } from "./registry";
 
 type Match = Readonly<{ row: number; field: string }>;
-const matchClasses = ["underline", "decoration-primary", "decoration-2"];
-const currentClasses = ["outline", "outline-primary", "-outline-offset-2"];
+const matchClasses = [
+  "underline",
+  "decoration-primary",
+  "decoration-2",
+  "[&_*]:underline",
+  "[&_*]:decoration-primary",
+  "[&_*]:decoration-2",
+];
+const currentClasses = ["outline-solid!", "outline-2", "outline-primary", "-outline-offset-2"];
 
 /** Page-local find scans only projected, visible cells. Search all records uses the server event. */
 export default function Find({ context, surface }: GridFeatureInteractionProps): ReactElement {
