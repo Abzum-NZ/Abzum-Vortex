@@ -3,7 +3,11 @@
 import type { ReactElement } from "react";
 import {
   calendarAddDays as addDays,
+  calendarDaysInMonth,
+  calendarDaysSinceMonday,
   calendarLocalDate,
+  calendarMonthStart,
+  calendarShiftMonth,
   calendarStartOfDay,
 } from "@vortex/platform/schema";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -19,35 +23,8 @@ import type { CalendarPayload, CalendarView } from "./projected-data";
 const calendarViews: readonly CalendarView[] = ["month", "week", "agenda"];
 const datePattern = /^\d{4}-\d{2}-\d{2}$/;
 type DayBoundaries = Readonly<{ start: number; end: number }>;
-const dateAtUtc = (year: number, month: number, day: number): Date => {
-  const result = new Date(0);
-  result.setUTCFullYear(year, month, day);
-  result.setUTCHours(0, 0, 0, 0);
-  return result;
-};
-
-const toIsoDate = (date: Date): string =>
-  `${String(date.getUTCFullYear()).padStart(4, "0")}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
 
 const localToday = (timeZone: string): string => calendarLocalDate(Date.now(), timeZone);
-
-const weekdayIndex = (date: string): number => {
-  const [year, month, day] = date.split("-").map(Number) as [number, number, number];
-  return dateAtUtc(year, month - 1, day).getUTCDay();
-};
-
-const daysInMonth = (date: string): number => {
-  const [year, month] = date.split("-").map(Number) as [number, number];
-  return dateAtUtc(year, month, 0).getUTCDate();
-};
-
-const shiftMonth = (date: string, offset: number): string => {
-  const [year, month, day] = date.split("-").map(Number) as [number, number, number];
-  const first = dateAtUtc(year, month - 1 + offset, 1);
-  const boundedDay = Math.min(day, daysInMonth(toIsoDate(first)));
-  first.setUTCDate(boundedDay);
-  return toIsoDate(first);
-};
 
 const itemIntersectsDay = (
   item: CalendarPayload["items"][number],
@@ -94,10 +71,10 @@ const periodDays = (values: CalendarPayload): readonly string[] => {
     return Array.from({ length: 7 }, (_, index) => addDays(values.windowStart, index));
   if (values.view === "agenda")
     return Array.from({ length: 30 }, (_, index) => addDays(values.windowStart, index));
-  const firstOfMonth = `${values.date.slice(0, 7)}-01`;
-  const leadingDays = (weekdayIndex(firstOfMonth) + 6) % 7;
+  const firstOfMonth = calendarMonthStart(values.date);
+  const leadingDays = calendarDaysSinceMonday(firstOfMonth);
   const gridStart = addDays(firstOfMonth, -leadingDays);
-  const gridLength = Math.ceil((leadingDays + daysInMonth(values.date)) / 7) * 7;
+  const gridLength = Math.ceil((leadingDays + calendarDaysInMonth(values.date)) / 7) * 7;
   return Array.from({ length: gridLength }, (_, index) => addDays(gridStart, index));
 };
 
@@ -176,7 +153,7 @@ export function CalendarDisplay(props: DisplayRenderProps<CalendarPayload>): Rea
                   replaceParameters((parameters) => {
                     const amount = values.view === "week" ? -7 : values.view === "agenda" ? -30 : 0;
                     const date =
-                      amount === 0 ? shiftMonth(values.date, -1) : addDays(values.date, amount);
+                      amount === 0 ? calendarShiftMonth(values.date, -1) : addDays(values.date, amount);
                     parameters.set(`date.${placementId}`, date);
                   })
                 }
@@ -202,7 +179,7 @@ export function CalendarDisplay(props: DisplayRenderProps<CalendarPayload>): Rea
                   replaceParameters((parameters) => {
                     const amount = values.view === "week" ? 7 : values.view === "agenda" ? 30 : 0;
                     const date =
-                      amount === 0 ? shiftMonth(values.date, 1) : addDays(values.date, amount);
+                      amount === 0 ? calendarShiftMonth(values.date, 1) : addDays(values.date, amount);
                     parameters.set(`date.${placementId}`, date);
                   })
                 }

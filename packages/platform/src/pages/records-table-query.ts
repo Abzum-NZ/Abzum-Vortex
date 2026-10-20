@@ -46,7 +46,7 @@ import {
   type ConditionalFormattingContext,
   type RecordsTableRequestRefusal,
 } from "./records-table-features";
-import { calendarAddDays, calendarStartOfDay } from "./calendar-query";
+import { CalendarEndpointError, calendarAddDays, calendarStartOfDay } from "./calendar-date";
 import { recordLinkLabelKey } from "../definition/app-index";
 
 /**
@@ -394,7 +394,13 @@ export const buildRecordsTableQueryCommand = (
     const target = request.filterTargets?.[fieldId];
     if (filter === undefined) return recordsTableRequestRefusal("filter", "value_malformed");
     if (target === undefined) return recordsTableRequestRefusal("filter", "field_not_installed");
-    const condition = typedFilterCondition(target, fieldId, filter, request.timeZone);
+    let condition: JsonValue | undefined;
+    try {
+      condition = typedFilterCondition(target, fieldId, filter, request.timeZone);
+    } catch (error) {
+      if (!(error instanceof CalendarEndpointError)) throw error;
+      return recordsTableRequestRefusal("filter", "value_out_of_range");
+    }
     if (condition === undefined) return recordsTableRequestRefusal("filter", "value_not_for_field");
     conditions.push(condition);
     appliedFilters.push({ fieldId, filter });

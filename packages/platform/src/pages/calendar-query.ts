@@ -3,10 +3,13 @@ import "server-only";
 import {
   CalendarEndpointError,
   calendarAddDays,
+  calendarDateIsValid,
+  calendarDaysInMonth,
+  calendarDaysSinceMonday,
   calendarLocalDate,
+  calendarMonthStart,
   calendarStartOfDay,
 } from "./calendar-date";
-export { calendarAddDays, calendarStartOfDay } from "./calendar-date";
 
 import {
   type CalendarMapping,
@@ -81,31 +84,6 @@ export const readCalendarPlacementContract = (
   return { calendarMapping: mapping.data, itemTitleFieldId, defaultView };
 };
 
-const calendarDateIsValid = (candidate: string | undefined): candidate is string => {
-  if (candidate === undefined || !/^\d{4}-\d{2}-\d{2}$/.test(candidate)) return false;
-  const [year, month, day] = candidate.split("-").map(Number) as [number, number, number];
-  const date = new Date(0);
-  date.setUTCFullYear(year, month - 1, day);
-  date.setUTCHours(0, 0, 0, 0);
-  return (
-    year >= 1 &&
-    year <= 9999 &&
-    date.getUTCFullYear() === year &&
-    date.getUTCMonth() === month - 1 &&
-    date.getUTCDate() === day
-  );
-};
-
-const calendarUtcDate = (year: number, month: number, day: number): Date => {
-  const date = new Date(0);
-  date.setUTCFullYear(year, month, day);
-  date.setUTCHours(0, 0, 0, 0);
-  return date;
-};
-
-const calendarIsoDate = (date: Date): string =>
-  `${String(date.getUTCFullYear()).padStart(4, "0")}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
-
 const calendarToday = (timeZone: string): string => calendarLocalDate(Date.now(), timeZone);
 
 const calendarPeriod = (
@@ -114,14 +92,11 @@ const calendarPeriod = (
 ): Readonly<{ startDate: string; endDate: string }> => {
   if (view === "agenda") return { startDate: date, endDate: calendarAddDays(date, 30) };
   if (view === "week") {
-    const [year, month, day] = date.split("-").map(Number) as [number, number, number];
-    const mondayOffset = (calendarUtcDate(year, month - 1, day).getUTCDay() + 6) % 7;
-    const startDate = calendarAddDays(date, -mondayOffset);
+    const startDate = calendarAddDays(date, -calendarDaysSinceMonday(date));
     return { startDate, endDate: calendarAddDays(startDate, 7) };
   }
-  const [year, month] = date.split("-").map(Number) as [number, number];
-  const startDate = calendarIsoDate(calendarUtcDate(year, month - 1, 1));
-  const endDate = calendarAddDays(startDate, calendarUtcDate(year, month, 0).getUTCDate());
+  const startDate = calendarMonthStart(date);
+  const endDate = calendarAddDays(startDate, calendarDaysInMonth(date));
   return { startDate, endDate };
 };
 
