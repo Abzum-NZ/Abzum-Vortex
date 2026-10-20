@@ -375,6 +375,7 @@ export function ModuleFieldsEditor({
   const defaultModel = moduleFieldDefaultDeclaration(form.type, plainSettings);
   const compiledOf = (recordType: string) => context.compiledFields?.recordTypes[recordType];
   const choices: StudioSettingChoices = {
+    roles: [],
     fields: [],
     queries: [],
     pages: [],

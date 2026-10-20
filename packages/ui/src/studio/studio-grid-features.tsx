@@ -36,6 +36,7 @@ import { StudioSpreadsheetEditor } from "./grid-features/spreadsheet";
 import type { StudioBoardPipeline } from "./board-source";
 import { StudioBoardEditor } from "./grid-features/board";
 import { StudioConditionalFormattingEditor } from "./grid-features/conditional-formatting";
+import { StudioSavedViewsEditor } from "./grid-features/saved-views";
 import { StudioInspectorGroup } from "./studio-inspector-group";
 import { StudioQueryBindings } from "./studio-query-bindings";
 import {
@@ -77,6 +78,8 @@ export function StudioGridFeatures({
   presentation,
   query,
   compiledFields,
+  tableSettings,
+  signedIn,
   choices,
   boardChoices,
   related,
@@ -95,6 +98,8 @@ export function StudioGridFeatures({
   /** The saved draft's compiled fields of the record type the query reads; undefined before a save. */
   compiledFields: readonly ModuleField[] | undefined;
   /** The block's choices: the bound query's fields by business name. */
+  tableSettings: StudioSettingValues;
+  signedIn: boolean;
   choices: StudioSettingChoices;
   /** Real fields of the selected pipeline's record type, including fields not yet queried. */
   boardChoices: StudioSettingChoices;
@@ -121,6 +126,7 @@ export function StudioGridFeatures({
   const features = readRecordsTableFeatures(whole);
   const facts = studioRecordsTableQueryFacts(
     query,
+    signedIn,
     choices.actions,
     choices.relationships,
     related,
@@ -266,6 +272,17 @@ export function StudioGridFeatures({
                     query={query}
                     facts={facts}
                     compiledFields={compiledFields}
+                    disabled={disabled}
+                    onChange={(next) => write(key, next)}
+                  />
+                </div>
+              ) : null}
+              {enabled && key === "saved_views" ? (
+                <div className="pb-2">
+                  <StudioSavedViewsEditor
+                    value={current}
+                    tableSettings={tableSettings}
+                    roles={choices.roles}
                     disabled={disabled}
                     onChange={(next) => write(key, next)}
                   />

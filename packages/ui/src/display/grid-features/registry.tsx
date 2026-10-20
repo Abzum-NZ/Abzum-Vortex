@@ -14,8 +14,11 @@ import {
   type RefObject,
 } from "react";
 import type {
+  GridLayout,
+  GridViewsState,
   RecordsTableFeatureKey,
   RecordsTableFeatureProjection,
+  RecordsTableSortState,
 } from "@vortex/platform/schema";
 import type { DisplayEventHandlers, DisplayRow, TableNarrowing } from "../projected-data";
 import type { RowExpansionKind } from "../row-expansion";
@@ -41,6 +44,12 @@ export type GridFeatureContext = Readonly<{
   selection: TableSelectionParts;
   paged: boolean;
   narrowing: TableNarrowing | undefined;
+  /** The order the page was read in, when it is the viewer's own or the authored default. */
+  sort: RecordsTableSortState | undefined;
+  /** The layout as the person has it now, including a change not yet stored. */
+  arrangement: GridLayout;
+  /** The saved views of this grid; absent when the grid is not stored for the person. */
+  views: GridViewsState | undefined;
   events: DisplayEventHandlers | undefined;
   /** The person's pin per lower-cased field identity, and the one way to change it. */
   pins: GridLayoutControls["state"]["pins"];
@@ -206,8 +215,7 @@ const featurePoints: Readonly<Record<GridExtensionKey, readonly ComponentPoint[]
   spreadsheet: ["GridInteraction"],
   search: ["ToolbarItems"],
   column_filters: ["ToolbarItems", "HeaderAdornment"],
-  // Saved views add their toolbar menu with the views store (#3020); the switch already gates them.
-  saved_views: [],
+  saved_views: ["ToolbarItems"],
   bulk_actions: ["SelectionBanner"],
   inline_edit: ["CellEditor"],
   master_detail: ["RowExpansion"],
