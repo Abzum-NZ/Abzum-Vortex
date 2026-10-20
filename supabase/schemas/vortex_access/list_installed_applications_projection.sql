@@ -1,7 +1,7 @@
 -- The ordered indexes must drive each page; join estimates otherwise favor a full sort.
 create or replace function vortex_access.list_installed_applications_projection(
   p_record_ids uuid[], p_sort_key text, p_direction text,
-  p_after jsonb, p_limit integer
+  p_after jsonb, p_limit integer, p_predicate jsonb
 )
 returns table (
   organization_id uuid, record_id uuid, revision bigint, attribute_values jsonb
@@ -24,6 +24,7 @@ declare
   after_revision bigint;
   after_record_id uuid;
   comparison text;
+  predicate_plan jsonb;
 begin
   if p_sort_key not in ('record_id', 'key', 'name', 'release_revision')
     or p_direction not in ('ascending', 'descending')
@@ -61,6 +62,15 @@ begin
     end if;
   end if;
 
+  predicate_plan := vortex_record.compile_projection_predicate_internal(
+    p_predicate,
+    $declared${
+      "key": {"sql": "root.key", "database": "text", "filter": true, "search": true},
+      "name": {"sql": "(release.application_address ->> 'name')", "database": "text", "filter": true, "search": true},
+      "is_default": {"sql": "(root.root_id is not distinct from $7)", "database": "boolean", "filter": true}
+    }$declared$::jsonb,
+    8
+  );
   begin
     context_value := vortex_access.validated_human_request_context();
   exception when insufficient_privilege then
@@ -166,18 +176,18 @@ begin
           and binding.application_release_revision = registration.source_revision
           and binding.state = 'active'
       )
-  $scan$ || keyset_sql || pg_catalog.format(' order by %s limit $6', sort_sql)
+  $scan$ || coalesce(' and ' || (predicate_plan ->> 'predicate'), '') || keyset_sql || pg_catalog.format(' order by %s limit $6', sort_sql)
   using visible_organization_id, p_record_ids, after_text, after_record_id,
-    after_revision, p_limit, default_application_root_id;
+    after_revision, p_limit, default_application_root_id, predicate_plan -> 'parameters';
 end
 $function$;
 
 revoke all on function vortex_access.list_installed_applications_projection(
-  uuid[], text, text, jsonb, integer
+  uuid[], text, text, jsonb, integer, jsonb
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_access.list_installed_applications_projection(
-  uuid[], text, text, jsonb, integer
+  uuid[], text, text, jsonb, integer, jsonb
 ) to vortex_owner, vortex_record_adapter, postgres;
 alter function vortex_access.list_installed_applications_projection(
-  uuid[], text, text, jsonb, integer
+  uuid[], text, text, jsonb, integer, jsonb
 ) owner to vortex_owner;

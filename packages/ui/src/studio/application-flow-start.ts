@@ -1,6 +1,7 @@
 import {
   builderKeySchema,
   flowLiteralSchema,
+  flowScheduleRecurrenceSchema,
   workflowValueTypeSchema,
   type ApplicationSourceDocument,
   type FlowLiteral,
@@ -54,10 +55,15 @@ export type StudioFlowTriggerDraft =
       create: boolean;
       update: boolean;
       priority: number;
+      actions: readonly string[];
     }>
   | Readonly<{ kind: "event"; recordType: string; eventKind: string }>
-  /** A trigger the Start inspector shows but does not change (a schedule, an incoming message, an action transition). */
-  | Readonly<{ kind: "kept"; description: string }>;
+  | Readonly<{ kind: "declared_event"; recordType: string; eventKey: string }>
+  | Readonly<{
+      kind: "schedule";
+      recurrence: Extract<FlowTrigger, { type: "Schedule" }>["recurrence"];
+    }>
+  | Readonly<{ kind: "incoming_message"; messageName: string }>;
 
 /** A control that starts the flow; `inputs` is keyed by the input's form identity (`StudioFlowInputDraft.id`). */
 export type StudioFlowBindingDraft = Readonly<{
@@ -81,6 +87,9 @@ export type StudioFlowStartProjection =
       kind: "available";
       draft: StudioFlowStartDraft;
       execution: SourceFlow["execution"];
+      /** Declared events and named actions, each with its record type as this flow's triggers name it. */
+      events: readonly Readonly<{ key: string; label: string; recordType: string }>[];
+      actions: readonly Readonly<{ key: string; label: string; recordType: string }>[];
       /** For each binding, the values its control supplies by name. */
       callerNames: Readonly<Record<string, readonly Readonly<{ name: string; label: string }>[]>>;
     }>
@@ -129,30 +138,29 @@ export const studioFlowCallerNames = (
 };
 
 const triggerDraft = (trigger: FlowTrigger): StudioFlowTriggerDraft => {
-  if (
-    trigger.type === "BeforeSave" &&
-    trigger.operations.every((operation) => operation.kind !== "transition")
-  )
+  if (trigger.type === "BeforeSave")
     return {
       kind: "before_save",
       recordType: trigger.recordTypeId,
       create: trigger.operations.some((operation) => operation.kind === "create"),
       update: trigger.operations.some((operation) => operation.kind === "update"),
       priority: trigger.priority,
+      actions: trigger.operations.flatMap((operation) =>
+        operation.kind === "transition" ? [operation.actionId] : [],
+      ),
     };
   if (trigger.type === "Event" && trigger.event.kind === "standard")
     return { kind: "event", recordType: trigger.recordTypeId, eventKind: trigger.event.eventKind };
-  return {
-    kind: "kept",
-    description:
-      trigger.type === "Schedule"
-        ? "On a schedule"
-        : trigger.type === "IncomingMessage"
-          ? "When a message arrives"
-          : trigger.type === "Event"
-            ? "After a declared event"
-            : "Before a named action moves a record on",
-  };
+  if (trigger.type === "Event" && trigger.event.kind === "declared")
+    return {
+      kind: "declared_event",
+      recordType: trigger.recordTypeId,
+      eventKey: trigger.event.eventKey,
+    };
+  if (trigger.type === "Schedule") return { kind: "schedule", recurrence: trigger.recurrence };
+  if (trigger.type === "IncomingMessage")
+    return { kind: "incoming_message", messageName: studioWords(trigger.messageKey) };
+  throw new TypeError("The flow contains an unknown start type.");
 };
 
 const bindingInputDraft = (
@@ -192,6 +200,18 @@ const flowOf = (
   );
 
 /** The Start inspector's form for a flow. */
+/** A record type as a trigger of this flow names it: bare inside its own Module, else `module:record`. */
+const triggerRecordType = (
+  selection: StudioFlowSelection,
+  moduleKey: string,
+  record: string,
+): string | undefined =>
+  selection.moduleKey === null
+    ? `${moduleKey}:${record}`
+    : selection.moduleKey === moduleKey
+      ? record
+      : undefined;
+
 export const projectStudioFlowStart = (
   source: Readonly<ApplicationSourceDocument>,
   selection: StudioFlowSelection,
@@ -216,6 +236,20 @@ export const projectStudioFlowStart = (
   return {
     kind: "available",
     execution: flow.execution,
+    events: source.body.modules.flatMap((module) =>
+      module.events.flatMap((event) => {
+        const recordType = triggerRecordType(selection, module.key, event.record_type);
+        return recordType === undefined ? [] : [{ key: event.key, label: event.label, recordType }];
+      }),
+    ),
+    actions: source.body.modules.flatMap((module) =>
+      module.actions.flatMap((action) => {
+        const recordType = triggerRecordType(selection, module.key, action.record_type);
+        return recordType === undefined
+          ? []
+          : [{ key: action.key, label: action.label, recordType }];
+      }),
+    ),
     draft: {
       name: flow.labels?.name ?? studioWords(flow.key),
       inputs,
@@ -351,6 +385,21 @@ export const applyStudioFlowStart = (
   }
   if (draft.triggers.length !== (flow.triggers ?? []).length)
     return { kind: "stale", reason: "The triggers of this flow changed. Open the flow again." };
+  for (const trigger of draft.triggers) {
+    if (
+      trigger.kind === "schedule" &&
+      !flowScheduleRecurrenceSchema.safeParse(trigger.recurrence).success
+    )
+      return {
+        kind: "invalid",
+        reason: "How it starts: choose a complete schedule with a valid time and repeat interval.",
+      };
+    if (trigger.kind === "declared_event" && trigger.eventKey === "")
+      return {
+        kind: "invalid",
+        reason: "How it starts: choose the event of this record type that starts the flow.",
+      };
+  }
   flow.triggers = (flow.triggers ?? []).map((trigger, index): FlowTrigger => {
     const edited = draft.triggers[index]!;
     if (edited.kind === "before_save" && trigger.type === "BeforeSave")
@@ -361,6 +410,7 @@ export const applyStudioFlowStart = (
         operations: [
           ...(edited.create ? [{ kind: "create" as const }] : []),
           ...(edited.update ? [{ kind: "update" as const }] : []),
+          ...edited.actions.map((actionId) => ({ kind: "transition" as const, actionId })),
         ],
       };
     if (edited.kind === "event" && trigger.type === "Event")
@@ -369,6 +419,14 @@ export const applyStudioFlowStart = (
         recordTypeId: edited.recordType,
         event: { kind: "standard", eventKind: edited.eventKind as never },
       };
+    if (edited.kind === "declared_event" && trigger.type === "Event")
+      return {
+        ...trigger,
+        recordTypeId: edited.recordType,
+        event: { kind: "declared", eventKey: edited.eventKey },
+      };
+    if (edited.kind === "schedule" && trigger.type === "Schedule")
+      return { ...trigger, recurrence: edited.recurrence };
     return trigger;
   });
   for (const [index, trigger] of (flow.triggers ?? []).entries())

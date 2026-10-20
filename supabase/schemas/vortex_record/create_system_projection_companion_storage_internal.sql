@@ -104,7 +104,7 @@ begin
     '%I.%I', 'record_data', catalogue_row.physical_table_token
   ))::oid;
   reader_function_oid := pg_catalog.to_regprocedure(pg_catalog.format(
-    '%I.%I(uuid[],text,text,jsonb,integer)', reader_schema_value, reader_function_value
+    '%I.%I(uuid[],text,text,jsonb,integer,jsonb)', reader_schema_value, reader_function_value
   ))::oid;
   if view_oid is null
     or reader_function_oid is null

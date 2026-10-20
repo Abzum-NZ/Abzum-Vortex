@@ -299,7 +299,7 @@
                       "vortex": {
                         "block": {
                           "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
-                          "release_version": "1.2.0"
+                          "release_version": "1.3.0"
                         },
                         "responsive": {
                           "desktop": {
@@ -378,7 +378,7 @@
                     "vortex": {
                       "block": {
                         "block_id": "addfad00-1b11-4674-83fa-913667f87e79",
-                        "release_version": "1.0.0"
+                        "release_version": "1.1.0"
                       },
                       "responsive": {
                         "desktop": {
@@ -657,7 +657,7 @@
                           "vortex": {
                             "block": {
                               "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
-                              "release_version": "1.1.0"
+                              "release_version": "1.2.0"
                             },
                             "responsive": {
                               "desktop": {
@@ -708,7 +708,7 @@
                           "vortex": {
                             "block": {
                               "block_id": "addfad00-1b11-4674-83fa-913667f87e79",
-                              "release_version": "1.0.0"
+                              "release_version": "1.1.0"
                             },
                             "responsive": {
                               "desktop": {
@@ -912,7 +912,7 @@
                           "vortex": {
                             "block": {
                               "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
-                              "release_version": "1.0.0"
+                              "release_version": "1.2.0"
                             },
                             "responsive": {
                               "desktop": {
@@ -956,7 +956,7 @@
                           "vortex": {
                             "block": {
                               "block_id": "2bd013f9-48ad-43d3-a6eb-7fc3c130cf87",
-                              "release_version": "1.0.0"
+                              "release_version": "1.2.0"
                             },
                             "responsive": {
                               "desktop": {
@@ -1089,7 +1089,7 @@
                     "vortex": {
                       "block": {
                         "block_id": "addfad00-1b11-4674-83fa-913667f87e79",
-                        "release_version": "1.0.0"
+                        "release_version": "1.1.0"
                       },
                       "responsive": {
                         "desktop": {

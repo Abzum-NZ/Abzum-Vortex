@@ -13,7 +13,6 @@ const {
   APPLICATION_NAVIGATION_BLOCK_RELEASE,
   BUTTON_BLOCK_RELEASE,
   CONTAINER_BLOCK_RELEASE,
-  CONTAINER_BLOCK_RELEASE_1_2_0,
   FORM_CONTAINER_BLOCK_RELEASE,
   TABLE_BLOCK_RELEASE,
   TEXT_INPUT_BLOCK_RELEASE,
@@ -105,7 +104,7 @@ const shell = {
           header: slot({}),
           content: slot({
             shell_body: placement(
-              CONTAINER_BLOCK_RELEASE_1_2_0,
+              CONTAINER_BLOCK_RELEASE,
               {
                 direction: "row",
                 gap: "medium",

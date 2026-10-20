@@ -366,7 +366,7 @@ const functionPattern = /\bcreate\s+(?:or\s+replace\s+)?function\s+(?:"?\w+"?\.)
 const dropFunctionPattern =
   /^\s*drop\s+function\s+(?:if\s+exists\s+)?(?:"?\w+"?\.)?"?\w+"?\s*\(/gim;
 const renameFunctionPattern = /^\s*alter\s+function\s+(?:"?\w+"?\.)?"?\w+"?\s*\(/gim;
-const functionNamePattern = /\bfunction\s+((?:"?\w+"?\.)?"?\w+"?)\s*\(/i;
+const functionNamePattern = /\bfunction\s+(?:if\s+exists\s+)?((?:"?\w+"?\.)?"?\w+"?)\s*\(/i;
 const typeHeadPattern =
   /^(?:smallint|int2|int|integer|int4|bigint|int8|numeric|decimal|real|float4|float8|double\s+precision|smallserial|serial|bigserial|money|character\s+varying|character|varchar|text|bytea|timestamp|timestamptz|time|date|interval|bool|boolean|uuid|json|jsonb|xml|record|void|trigger|event_trigger|anyarray|anyelement|anyenum|anynonarray|anyrange|name|oid|regclass|regtype|inet|cidr|macaddr|tsvector|tsquery|pg_lsn|bit|varbit|vector|geometry|geography)\b/i;
 function closingParenthesis(content: string, open: number): number {

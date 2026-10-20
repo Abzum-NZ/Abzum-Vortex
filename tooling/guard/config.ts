@@ -56,7 +56,7 @@ export const guardRules = {
     owner: "lead",
     reviewBy: "2027-01-15",
     description:
-      "Functions a forward migration leaves live without a canonical file (the generated baseline is exempt)",
+      "Functions a forward migration leaves live without a canonical file, excluding signatures removed by DROP FUNCTION [IF EXISTS] (the generated baseline is exempt)",
   },
   "sql-identifier-length": {
     tier: "blocking",

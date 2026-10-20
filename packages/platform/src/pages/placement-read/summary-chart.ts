@@ -252,7 +252,14 @@ export const readSummaryOrChart = async (
           : "summary_query_refused",
       refusal?.reasonCode ?? summaryResult.kind,
     );
-    data[placementId] = { status: "refused", reason: "not_permitted" };
+    data[placementId] = {
+      status: "refused",
+      reason:
+        refusal?.reasonCode === "dataset_limit_exceeded" ||
+        refusal?.reasonCode === "value_out_of_range"
+          ? refusal.reasonCode
+          : "not_permitted",
+    };
     return;
   }
 

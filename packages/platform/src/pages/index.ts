@@ -19,8 +19,6 @@ export {
   organizationLauncherPage,
   organizationLauncherPlacementId,
   organizationLauncherShell,
-  organizationLauncherStudioPage,
-  organizationLauncherStudioPlacementId,
 } from "./organization-launcher-page";
 
 export {
@@ -215,7 +213,6 @@ export {
   createLinkTilesQueryResolver,
   type LinkTilesQueryBinding,
   type LinkTilesQueryResolution,
-  type ProjectedLinkTilesValues,
 } from "./link-tiles-query";
 export {
   projectCalendarPlacement,

@@ -14,14 +14,6 @@ import { useSeededState } from "./field-parts";
 
 export type TabsProps = ControlRenderProps<TabsPayload>;
 
-/** Declared tab slots in the tabs 1.0.0 release, in order, each with its label property. */
-const TAB_SLOTS = [
-  { key: "tab_one", labelKey: "tab_one_label", fallback: "Tab 1" },
-  { key: "tab_two", labelKey: "tab_two_label", fallback: "Tab 2" },
-  { key: "tab_three", labelKey: "tab_three_label", fallback: "Tab 3" },
-  { key: "tab_four", labelKey: "tab_four_label", fallback: "Tab 4" },
-] as const;
-
 /** One rendered tab: its semantic key, its label and the child slot its panel content lives in. */
 type Tab = Readonly<{ key: string; label: string; slotKey: string }>;
 
@@ -30,54 +22,46 @@ type Tab = Readonly<{ key: string; label: string; slotKey: string }>;
  * tablist owns the arrow key, Home and End keyboard behaviour, a tab activates as soon as it takes
  * focus, and every tab is a native button.
  * Every panel stays mounted while inactive panels are hidden, so switching tabs never loses
- * entered values. The semantic tab key is the declared slot key in the 1.0.0 release and the
- * stable item identity in the 2.0.0 release; only a change of tab emits the declared
- * `tab_changed` event.
+ * entered values. The semantic tab key is the item's stable identity; only a change of tab emits
+ * the declared `tab_changed` event.
  */
 export function Tabs(props: TabsProps): ReactElement {
   const context = resolveControlContext<TabsPayload>(props, ["tab_changed"]);
   const settings = readControlSettings(props, context.location);
 
-  // A repeatable release declares its tabs as items keyed by a stable identity, so it has no fixed
-  // slot list and may carry any number of tabs. A fixed release keeps its declared four slots.
+  // The tabs release declares its tabs as items keyed by a stable identity, each naming one child slot.
   const repeatableSlot = props.metadata.slots.find((slot) => slot.repeats !== undefined);
   const repeats = repeatableSlot?.repeats;
-  let tabs: readonly Tab[];
-  if (repeatableSlot !== undefined && repeats !== undefined) {
-    const seen = new Set<string>();
-    tabs = settings.groups(repeats.items).map((item): Tab => {
-      const identityValue = item[repeats.identity];
-      const identity = identityValue?.kind === "text" ? identityValue.value : "";
-      if (!isRepeatableSlotIdentity(repeatableSlot.key, identity) || seen.has(identity))
-        throw new DefinitionRenderError(
-          "INVALID_COMPOSITION",
-          "Every tab needs its own stable key of lowercase words separated by underscores",
-          context.location,
-        );
-      seen.add(identity);
-      const labelValue = item.label;
-      const label =
-        labelValue?.kind === "text" && labelValue.value.trim().length > 0
-          ? labelValue.value
-          : identity;
-      return { key: identity, label, slotKey: repeatableSlotKey(repeatableSlot.key, identity) };
-    });
-    if (tabs.length === 0)
+  if (repeatableSlot === undefined || repeats === undefined)
+    throw new DefinitionRenderError(
+      "INVALID_COMPOSITION",
+      "A tabs block release must declare its tabs as repeatable items",
+      context.location,
+    );
+  const seen = new Set<string>();
+  const tabs: readonly Tab[] = settings.groups(repeats.items).map((item): Tab => {
+    const identityValue = item[repeats.identity];
+    const identity = identityValue?.kind === "text" ? identityValue.value : "";
+    if (!isRepeatableSlotIdentity(repeatableSlot.key, identity) || seen.has(identity))
       throw new DefinitionRenderError(
         "INVALID_COMPOSITION",
-        "A tabs block must declare at least one item",
+        "Every tab needs its own stable key of lowercase words separated by underscores",
         context.location,
       );
-  } else {
-    const present = TAB_SLOTS.filter(
-      (tab) => props.slots[tab.key] !== undefined && props.slots[tab.key] !== null,
+    seen.add(identity);
+    const labelValue = item.label;
+    const label =
+      labelValue?.kind === "text" && labelValue.value.trim().length > 0
+        ? labelValue.value
+        : identity;
+    return { key: identity, label, slotKey: repeatableSlotKey(repeatableSlot.key, identity) };
+  });
+  if (tabs.length === 0)
+    throw new DefinitionRenderError(
+      "INVALID_COMPOSITION",
+      "A tabs block must declare at least one item",
+      context.location,
     );
-    tabs = (present.length > 0 ? present : TAB_SLOTS.slice(0, 1)).map((tab) => ({
-      key: tab.key,
-      label: settings.text(tab.labelKey) ?? tab.fallback,
-      slotKey: tab.key,
-    }));
-  }
 
   const isTab = (key: string | undefined): key is string =>
     key !== undefined && tabs.some((tab) => tab.key === key);
