@@ -145,8 +145,10 @@ function BulkActionsMenu({
                     ? `${numberFormat.format(availability.eligible)} of ${numberFormat.format(count)} can use this action. All selected records must be eligible.`
                     : `Unavailable: ${availability.reason}`;
             return (
+              // Only the label dims when unavailable; the reason stays readable in both modes.
               <DropdownMenuItem
                 key={action.action}
+                className="data-disabled:opacity-100"
                 disabled={
                   !ready ||
                   (!matching &&
@@ -160,7 +162,9 @@ function BulkActionsMenu({
                 }}
               >
                 <span className="flex max-w-72 flex-col gap-1 whitespace-normal">
-                  <span>{action.label}</span>
+                  <span className="group-data-disabled/dropdown-menu-item:opacity-50">
+                    {action.label}
+                  </span>
                   <span className="text-xs text-muted-foreground">
                     {!matching && count > action.maxRecords
                       ? `Select at most ${records(action.maxRecords)}`
