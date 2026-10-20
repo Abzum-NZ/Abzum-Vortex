@@ -1,5 +1,7 @@
 set local role vortex_record_adapter;
 
+drop function if exists vortex_record.resolve_installation_access_plan_internal(jsonb);
+
 create or replace function vortex_record.with_installed_record_contributions_internal(
   p_content jsonb,
   p_organization_id uuid,
@@ -68,7 +70,8 @@ comment on function vortex_record.with_installed_record_contributions_internal(j
   'Private installed Module content with each record type''s fields extended by the fields other installed Modules of the organisation contributed to it. The one effective field list every record reader and writer builds from.';
 
 create or replace function vortex_record.resolve_installation_access_plan_internal(
-  p_installation jsonb
+  p_installation jsonb,
+  p_include_contributions boolean default true
 )
 returns jsonb
 language plpgsql
@@ -154,8 +157,9 @@ begin
 
   -- The fields other installed Modules contributed to the pinned Modules' record types are part
   -- of what the plan holds, so their exact pins are part of its key. A preview runs its own
-  -- storage and receives no contributions.
-  if preview_installation_id_value is null then
+  -- storage and receives no contributions, and the plan an installation prepares is the exact
+  -- plan of its release set alone (p_include_contributions false).
+  if preview_installation_id_value is null and p_include_contributions then
     contribution_pins := vortex_record.installed_contribution_pins_internal(
       organization_id_value,
       array(
@@ -233,7 +237,7 @@ begin
       raise exception using errcode = '55000',
         message = 'Installed Module definition is unavailable';
     end if;
-    if preview_installation_id_value is null then
+    if preview_installation_id_value is null and p_include_contributions then
       release_content := vortex_record.with_installed_record_contributions_internal(
         release_content, organization_id_value, module_root_value
       );
@@ -537,15 +541,167 @@ exception
 end
 $function$;
 
-alter function vortex_record.resolve_installation_access_plan_internal(jsonb) owner to vortex_record_adapter;
+alter function vortex_record.resolve_installation_access_plan_internal(jsonb, boolean) owner to vortex_record_adapter;
 
-revoke all on function vortex_record.resolve_installation_access_plan_internal(jsonb)
+revoke all on function vortex_record.resolve_installation_access_plan_internal(jsonb, boolean)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-grant execute on function vortex_record.resolve_installation_access_plan_internal(jsonb)
+grant execute on function vortex_record.resolve_installation_access_plan_internal(jsonb, boolean)
   to vortex_record_adapter, vortex_owner;
 
-comment on function vortex_record.resolve_installation_access_plan_internal(jsonb) is
+comment on function vortex_record.resolve_installation_access_plan_internal(jsonb, boolean) is
   'Private installation access plan builder and cache: resolves definitions, column maps, permission alternatives and saved conditions once per all-active installation binding revision; a detached pin set is resolved afresh.';
+
+create or replace function vortex_record.resolve_prepared_record_access_plan_internal(
+  p_application_root_id uuid,
+  p_application_release_revision bigint,
+  p_expected_module_bindings jsonb
+)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  organization_id_value uuid;
+  application_root_id_value uuid;
+  application_release_revision_value bigint;
+  pin_fingerprint_value text;
+  current_mapping jsonb;
+  current_bindings jsonb;
+  resolved_plan jsonb;
+  mapping_fingerprint_value text;
+  plan_key_value text;
+  prepared_plan jsonb;
+  stored_plan vortex_record.installation_access_plans%rowtype;
+  inserted_rows bigint;
+begin
+  if p_application_root_id is null
+    or p_application_root_id = '00000000-0000-0000-0000-000000000000'::uuid
+    or p_application_release_revision is null
+    or p_application_release_revision not between 1 and 9007199254740991
+    or pg_catalog.jsonb_typeof(p_expected_module_bindings) is distinct from 'array'
+    or pg_catalog.jsonb_array_length(p_expected_module_bindings) < 1 then
+    raise exception using errcode = '22023',
+      message = 'Prepared Record access plan command is invalid';
+  end if;
+
+  select locked.* into current_mapping
+  from vortex_definition.lock_prepared_installation_runtime_mapping_internal(
+    p_application_root_id,
+    p_application_release_revision,
+    p_expected_module_bindings
+  ) as locked;
+  organization_id_value := (current_mapping ->> 'organizationId')::uuid;
+  application_root_id_value := (current_mapping ->> 'applicationRootId')::uuid;
+  application_release_revision_value :=
+    (current_mapping ->> 'applicationReleaseRevision')::bigint;
+  pin_fingerprint_value := current_mapping ->> 'pinFingerprint';
+  if current_mapping is null
+    or application_root_id_value is distinct from p_application_root_id
+    or application_release_revision_value is distinct from p_application_release_revision
+    or pin_fingerprint_value is null
+    or pin_fingerprint_value !~ '^sha256:[a-f0-9]{64}$' then
+    raise exception using errcode = '40001',
+      message = 'Prepared Record access plan mapping changed';
+  end if;
+  current_bindings := current_mapping -> 'moduleBindings';
+  resolved_plan := vortex_record.resolve_installation_access_plan_internal(
+    pg_catalog.jsonb_build_object(
+      'organizationId', organization_id_value,
+      'applicationRootId', application_root_id_value,
+      'applicationReleaseRevision', application_release_revision_value,
+      'moduleBindings', current_bindings
+    ),
+    false
+  );
+  if resolved_plan is null
+    or (resolved_plan ->> 'organizationId')::uuid is distinct from organization_id_value
+    or (resolved_plan ->> 'applicationRootId')::uuid is distinct from application_root_id_value
+    or (resolved_plan ->> 'applicationReleaseRevision')::bigint
+      is distinct from application_release_revision_value then
+    raise exception using errcode = '55000',
+      message = 'Prepared Record access plan is unavailable';
+  end if;
+
+  -- The projection kind is private access-loader metadata. Runtime bundles
+  -- retain their existing prepared plan contract and mapping fingerprint.
+  resolved_plan := pg_catalog.jsonb_set(
+    resolved_plan, '{recordTypes}', coalesce((
+      select pg_catalog.jsonb_object_agg(meta.key, meta.value - 'isSystemProjection')
+      from pg_catalog.jsonb_each(resolved_plan -> 'recordTypes') as meta(key, value)
+    ), '{}'::jsonb)
+  );
+
+  mapping_fingerprint_value := 'sha256:' || pg_catalog.encode(
+    pg_catalog.sha256(pg_catalog.convert_to(
+      (pg_catalog.jsonb_build_object(
+        'recordTypes', resolved_plan -> 'recordTypes',
+        'relationships', resolved_plan -> 'relationships',
+        'sharingConditions', resolved_plan -> 'sharingConditions',
+        'permissions', resolved_plan -> 'permissions'
+      ))::text,
+      'UTF8'
+    )),
+    'hex'
+  );
+  plan_key_value := 'sha256:' || pg_catalog.encode(
+    pg_catalog.sha256(pg_catalog.convert_to(
+      'vortex.installation-runtime-bundle.prepared-record-access-plan.v2|' ||
+        organization_id_value::text || '|' || application_root_id_value::text || '|' ||
+        application_release_revision_value::text || '|2|' || pin_fingerprint_value,
+      'UTF8'
+    )),
+    'hex'
+  );
+  prepared_plan := pg_catalog.jsonb_build_object(
+    'planKey', plan_key_value,
+    'mappingFingerprint', mapping_fingerprint_value,
+    'plan', resolved_plan
+  );
+
+  insert into vortex_record.installation_access_plans (
+    plan_key, organization_id, application_root_id, application_release_revision, plan
+  ) values (
+    plan_key_value, organization_id_value, application_root_id_value,
+    application_release_revision_value, prepared_plan
+  ) on conflict (plan_key) do nothing;
+  get diagnostics inserted_rows = row_count;
+  if inserted_rows = 0 then
+    select stored.* into strict stored_plan
+    from vortex_record.installation_access_plans as stored
+    where stored.plan_key = plan_key_value
+    for update;
+    if stored_plan.organization_id is distinct from organization_id_value
+      or stored_plan.application_root_id is distinct from application_root_id_value
+      or stored_plan.application_release_revision is distinct from application_release_revision_value
+      or stored_plan.plan is distinct from prepared_plan then
+      raise exception using errcode = '23505',
+        message = 'Prepared Record access plan immutable identity differs';
+    end if;
+    prepared_plan := stored_plan.plan;
+  end if;
+  return prepared_plan;
+exception
+  when no_data_found then
+    raise exception using errcode = '55000',
+      message = 'Prepared Record access plan evidence is unavailable';
+  when too_many_rows then
+    raise exception using errcode = '55000',
+      message = 'Prepared Record access plan evidence is ambiguous';
+end
+$function$;
+alter function vortex_record.resolve_prepared_record_access_plan_internal(uuid,bigint,jsonb) owner to vortex_record_adapter;
+
+
+alter function vortex_record.resolve_prepared_record_access_plan_internal(uuid,bigint,jsonb)
+  owner to vortex_record_adapter;
+revoke all on function vortex_record.resolve_prepared_record_access_plan_internal(uuid,bigint,jsonb)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+grant execute on function vortex_record.resolve_prepared_record_access_plan_internal(uuid,bigint,jsonb)
+  to vortex_owner;
+comment on function vortex_record.resolve_prepared_record_access_plan_internal(uuid,bigint,jsonb) is
+  'Resolves and immutably stores the exact prepared Record access plan for a first-install provisioned Module mapping.';
 
 create or replace function vortex_record.resolve_record_action_context_internal(
   p_record_type_id uuid,
@@ -1605,6 +1761,10 @@ begin
         from pg_catalog.jsonb_array_elements(effective_type -> 'fields') as field(value)
         where pg_catalog.lower(field.value ->> 'fieldId') = pg_catalog.lower(entry.value ->> 'contributionId')
       );
+      contributions := contributions || vortex_record.installed_record_type_action_contributions_internal(
+        organization_id_value, (binding_item ->> 'moduleRootId')::uuid,
+        (record_type_item ->> 'recordTypeId')::uuid
+      );
       if contributions <> '[]'::jsonb then
         result := result || pg_catalog.jsonb_build_array(
           pg_catalog.jsonb_build_object(
@@ -1633,7 +1793,388 @@ grant execute on function vortex_record.read_installed_record_contributions() to
 grant execute on function vortex_record.read_installed_record_contributions() to vortex_owner;
 
 comment on function vortex_record.read_installed_record_contributions() is
-  'The fields other installed Modules of the organisation contributed to the record types of the Modules the current application binds, as the record paths serve them: owner Module, owner record type and each contributing Module with its exact field definition. Reads under the validated human request context; a preview receives none.';
+  'The fields and actions other installed Modules of the organisation contributed to the record types of the Modules the current application binds, as the record paths serve them: owner Module, owner record type and each contributing Module with its exact field or action definition. Reads under the validated human request context; a preview receives none.';
+
+create or replace function vortex_record.resolve_contributed_named_action_context_internal(
+  p_base_context jsonb,
+  p_action_owner_id uuid,
+  p_action_release_revision bigint,
+  p_action_id uuid,
+  p_record_type_id uuid
+)
+returns jsonb
+language plpgsql
+volatile
+security invoker
+set search_path = ''
+as $function$
+declare
+  contribution jsonb;
+  action_content jsonb;
+  permission_keys jsonb;
+  set_field_ids jsonb;
+  declaration jsonb;
+begin
+  -- A contributed action belongs to a Module installed beside this application, so it is found
+  -- only among the installed contributions of this exact record type, by the contributor's exact
+  -- release and the action's permanent identity.
+  select entry.value into contribution
+  from pg_catalog.jsonb_array_elements(
+    vortex_record.installed_record_type_action_contributions_internal(
+      (p_base_context #>> '{context,organizationId}')::uuid,
+      (p_base_context ->> 'moduleRootId')::uuid,
+      p_record_type_id
+    )
+  ) as entry(value)
+  where (entry.value ->> 'contributorModuleRootId')::uuid = p_action_owner_id
+    and (entry.value ->> 'contributorReleaseRevision')::bigint = p_action_release_revision
+    and (entry.value ->> 'contributionId')::uuid = p_action_id;
+  if contribution is null then
+    raise exception using errcode = '55000', message = 'Named action owner is not installed';
+  end if;
+
+  -- The owner's own update declaration is the target authority: the person must be allowed to
+  -- change this exact owner record. The contributor's named permission is a second requirement,
+  -- decided by the same eligibility core.
+  declaration := p_base_context -> 'declaration';
+  if declaration is null or declaration #>> '{authority,kind}' is distinct from 'permission' then
+    raise exception using errcode = '55000', message = 'Named action permission is unavailable';
+  end if;
+  action_content := (contribution -> 'action')
+    || pg_catalog.jsonb_build_object('subjectRecordTypeId', p_record_type_id);
+  permission_keys := case when action_content ? 'permissionKeys'
+    then action_content -> 'permissionKeys'
+    else pg_catalog.jsonb_build_array(action_content -> 'permissionKey') end;
+  if pg_catalog.jsonb_typeof(permission_keys) <> 'array'
+    or pg_catalog.jsonb_array_length(permission_keys) = 0 then
+    raise exception using errcode = '55000', message = 'Named action permission is unavailable';
+  end if;
+  select coalesce(pg_catalog.jsonb_agg(distinct pg_catalog.lower(set_key.value)), '[]'::jsonb)
+  into set_field_ids
+  from pg_catalog.jsonb_array_elements(action_content -> 'tasks') as task(value)
+  cross join lateral pg_catalog.jsonb_object_keys(task.value #> '{properties,values}') as set_key(value);
+
+  return p_base_context || pg_catalog.jsonb_build_object(
+    'actionOwner', pg_catalog.jsonb_build_object(
+      'ownerKind', 'module',
+      'ownerId', p_action_owner_id,
+      'releaseRevision', p_action_release_revision
+    ),
+    'action', action_content,
+    'validationContractVersion', (
+      select release.validation_contract_version
+      from vortex_definition.releases as release
+      where release.root_id = (p_base_context ->> 'moduleRootId')::uuid
+        and release.release_revision = (p_base_context ->> 'moduleReleaseRevision')::bigint
+    ),
+    'eventDescriptors', '[]'::jsonb,
+    'declaration', declaration || pg_catalog.jsonb_build_object(
+      'contributorRequirements', pg_catalog.jsonb_build_array(
+        pg_catalog.jsonb_build_object(
+          'moduleRootId', p_action_owner_id,
+          'applicationRootIds', contribution -> 'contributorApplicationRootIds',
+          'recordTypeId', action_content ->> 'subjectRecordTypeId',
+          'permissionKeys', permission_keys,
+          'changeableFieldIds', set_field_ids
+        )
+      )
+    )
+  );
+end
+$function$;
+
+alter function vortex_record.resolve_contributed_named_action_context_internal(jsonb,uuid,bigint,uuid,uuid) owner to vortex_record_adapter;
+
+revoke all on function vortex_record.resolve_contributed_named_action_context_internal(
+  jsonb, uuid, bigint, uuid, uuid
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+grant execute on function vortex_record.resolve_contributed_named_action_context_internal(
+  jsonb, uuid, bigint, uuid, uuid
+) to vortex_record_adapter;
+
+comment on function vortex_record.resolve_contributed_named_action_context_internal(
+  jsonb, uuid, bigint, uuid, uuid
+) is
+  'Private exact installed contributed-action resolver for protected named actions: the contributor''s action re-bound to the owner record type under the owner''s own update declaration, with the contributor''s named permission as a second requirement.';
+
+create or replace function vortex_record.resolve_named_action_context_internal(
+  p_action_owner_kind text,
+  p_action_owner_id uuid,
+  p_action_release_revision bigint,
+  p_action_id uuid,
+  p_record_type_id uuid
+)
+returns jsonb
+language plpgsql
+volatile
+security invoker
+set search_path = ''
+as $function$
+declare
+  nil_uuid constant uuid := '00000000-0000-0000-0000-000000000000'::uuid;
+  base_context jsonb;
+  context_value jsonb;
+  installation jsonb;
+  binding_value jsonb;
+  release_content jsonb;
+  release_validation_version text;
+  application_content jsonb;
+  action_content jsonb;
+  action_owner_content jsonb;
+  permission_candidates jsonb := '[]'::jsonb;
+  permission_keys jsonb;
+  permission_key text;
+  matched_permission jsonb;
+  required_permissions jsonb := '[]'::jsonb;
+  named_action_value text;
+  event_value jsonb;
+  event_descriptor jsonb;
+  event_descriptors jsonb := '[]'::jsonb;
+  task_value jsonb;
+  matched_count integer;
+begin
+  if p_action_owner_kind is null
+    or p_action_owner_kind not in ('application', 'module')
+    or p_action_owner_id is null or p_action_owner_id = nil_uuid
+    or p_action_release_revision is null
+    or p_action_release_revision not between 1 and 9007199254740991
+    or p_action_id is null or p_action_id = nil_uuid
+    or p_record_type_id is null or p_record_type_id = nil_uuid then
+    raise exception using errcode = '22023', message = 'Named action selector is invalid';
+  end if;
+
+  -- This existing fixed resolver owns active installation, target Module,
+  -- storage/provision and field-map agreement. It decides no update authority.
+  base_context := vortex_record.resolve_record_action_context_internal(
+    p_record_type_id, 'update'
+  );
+  context_value := base_context -> 'context';
+  installation := vortex_definition.read_current_active_installation();
+
+  -- A Module this installation does not bind owns the action only as a contribution to this
+  -- record type; it is resolved from the installed contributions or not at all.
+  if p_action_owner_kind = 'module' and not exists (
+    select 1
+    from pg_catalog.jsonb_array_elements(installation -> 'moduleBindings') as item(value)
+    where (item.value ->> 'moduleRootId')::uuid = p_action_owner_id
+  ) then
+    return vortex_record.resolve_contributed_named_action_context_internal(
+      base_context, p_action_owner_id, p_action_release_revision, p_action_id, p_record_type_id
+    );
+  end if;
+
+  if p_action_owner_kind = 'application' then
+    if p_action_owner_id <> (context_value ->> 'applicationRootId')::uuid
+      or p_action_release_revision <>
+        (installation ->> 'applicationReleaseRevision')::bigint then
+      raise exception using errcode = '55000', message = 'Named action owner is not installed';
+    end if;
+    select release.record_content,
+      release.validation_contract_version
+    into strict action_owner_content, release_validation_version
+    from vortex_definition.releases as release
+    where release.root_id = p_action_owner_id
+      and release.release_revision = p_action_release_revision;
+  else
+    select item.value into strict binding_value
+    from pg_catalog.jsonb_array_elements(installation -> 'moduleBindings') as item(value)
+    where (item.value ->> 'moduleRootId')::uuid = p_action_owner_id
+      and (item.value ->> 'moduleReleaseRevision')::bigint = p_action_release_revision;
+    select release.record_content,
+      release.validation_contract_version
+    into strict action_owner_content, release_validation_version
+    from vortex_definition.releases as release
+    where release.root_id = p_action_owner_id
+      and release.release_revision = p_action_release_revision;
+  end if;
+
+  select item.value into strict action_content
+  from pg_catalog.jsonb_array_elements(
+    coalesce(action_owner_content -> 'actions', '[]'::jsonb)
+  ) as item(value)
+  where (item.value ->> 'actionId')::uuid = p_action_id
+    and (item.value ->> 'subjectRecordTypeId')::uuid = p_record_type_id;
+
+  permission_keys := case when action_content ? 'permissionKeys'
+    then action_content -> 'permissionKeys'
+    else pg_catalog.jsonb_build_array(action_content -> 'permissionKey') end;
+  if pg_catalog.jsonb_typeof(permission_keys) <> 'array'
+    or pg_catalog.jsonb_array_length(permission_keys) = 0 then
+    raise exception using errcode = '55000', message = 'Named action permission is unavailable';
+  end if;
+
+  -- Collect the exact permission declarations of the active pin set that carry
+  -- one of the action's permission keys; only those can match below. Access
+  -- remains authoritative for current registrations, assignments and scopes.
+  for binding_value in
+    select item.value
+    from pg_catalog.jsonb_array_elements(installation -> 'moduleBindings') as item(value)
+  loop
+    select release.record_content into strict release_content
+    from vortex_definition.releases as release
+    where release.root_id = (binding_value ->> 'moduleRootId')::uuid
+      and release.release_revision = (binding_value ->> 'moduleReleaseRevision')::bigint;
+    permission_candidates := permission_candidates || coalesce((
+      select pg_catalog.jsonb_agg(
+        item.value || pg_catalog.jsonb_build_object(
+          'ownerKind', 'module',
+          'ownerId', (binding_value ->> 'moduleRootId')::uuid
+        )
+        order by item.ordinality
+      )
+      from pg_catalog.jsonb_array_elements(
+        coalesce(release_content -> 'permissions', '[]'::jsonb)
+      ) with ordinality as item(value, ordinality)
+      where pg_catalog.jsonb_typeof(item.value -> 'recordScope') = 'object'
+        and item.value ->> 'key' in (
+          select declared.value #>> '{}'
+          from pg_catalog.jsonb_array_elements(permission_keys) as declared(value)
+        )
+    ), '[]'::jsonb);
+  end loop;
+
+  select release.record_content into strict application_content
+  from vortex_definition.releases as release
+  where release.root_id = (context_value ->> 'applicationRootId')::uuid
+    and release.release_revision = (installation ->> 'applicationReleaseRevision')::bigint;
+  permission_candidates := permission_candidates || coalesce((
+    select pg_catalog.jsonb_agg(
+      item.value || pg_catalog.jsonb_build_object(
+        'ownerKind', 'application',
+        'ownerId', (context_value ->> 'applicationRootId')::uuid
+      )
+      order by item.ordinality
+    )
+    from pg_catalog.jsonb_array_elements(
+      coalesce(application_content -> 'permissions', '[]'::jsonb)
+    ) with ordinality as item(value, ordinality)
+    where pg_catalog.jsonb_typeof(item.value -> 'recordScope') = 'object'
+      and item.value ->> 'key' in (
+        select declared.value #>> '{}'
+        from pg_catalog.jsonb_array_elements(permission_keys) as declared(value)
+      )
+  ), '[]'::jsonb);
+  for permission_key in
+    select item.value #>> '{}'
+    from pg_catalog.jsonb_array_elements(permission_keys) as item(value)
+  loop
+    select pg_catalog.count(*), pg_catalog.min(item.value::text)::jsonb
+    into matched_count, matched_permission
+    from pg_catalog.jsonb_array_elements(permission_candidates) as item(value)
+    where item.value ->> 'key' = permission_key;
+    if matched_count <> 1
+      or matched_permission ->> 'actionKind' <> 'named'
+      or (matched_permission ->> 'recordTypeId')::uuid <> p_record_type_id
+      or (matched_permission ->> 'namedAction') is null then
+      raise exception using errcode = '55000', message = 'Named action permission is ambiguous';
+    end if;
+    if named_action_value is null then
+      named_action_value := matched_permission ->> 'namedAction';
+    elsif named_action_value is distinct from matched_permission ->> 'namedAction' then
+      raise exception using errcode = '55000', message = 'Named action permission alternatives disagree';
+    end if;
+    required_permissions := required_permissions || pg_catalog.jsonb_build_array(
+      pg_catalog.jsonb_build_object(
+        'applicationRootId', (context_value ->> 'applicationRootId')::uuid,
+        'ownerKind', matched_permission ->> 'ownerKind',
+        'ownerId', (matched_permission ->> 'ownerId')::uuid,
+        'permissionId', (matched_permission ->> 'permissionId')::uuid
+      )
+    );
+  end loop;
+  select pg_catalog.jsonb_agg(item.value order by
+    item.value ->> 'ownerKind' collate "C",
+    item.value ->> 'ownerId' collate "C",
+    item.value ->> 'permissionId' collate "C")
+  into required_permissions
+  from pg_catalog.jsonb_array_elements(required_permissions) as item(value);
+
+  for task_value in
+    select item.value from pg_catalog.jsonb_array_elements(action_content -> 'tasks')
+      with ordinality as item(value, ordinality)
+    order by item.ordinality
+  loop
+    if task_value ->> 'type' <> 'event.announce' then continue; end if;
+    select item.value into strict event_value
+    from pg_catalog.jsonb_array_elements(
+      coalesce(action_owner_content -> 'events', '[]'::jsonb)
+    ) as item(value)
+    where item.value ->> 'key' = task_value #>> '{properties,eventKey}'
+      and (item.value ->> 'recordTypeId')::uuid = p_record_type_id;
+    event_descriptor := pg_catalog.jsonb_build_object(
+      'kind', 'declared',
+      'owner', case when p_action_owner_kind = 'application'
+        then pg_catalog.jsonb_build_object(
+          'kind', 'application', 'applicationRootId', p_action_owner_id
+        )
+        else pg_catalog.jsonb_build_object(
+          'kind', 'module', 'moduleRootId', p_action_owner_id
+        ) end,
+      'declarationId', event_value -> 'eventId',
+      'key', event_value -> 'key',
+      'recordTypeId', event_value -> 'recordTypeId',
+      'carriedFieldIds', event_value -> 'carriedFieldIds'
+    );
+    event_descriptors := event_descriptors || pg_catalog.jsonb_build_array(event_descriptor);
+  end loop;
+
+  return base_context || pg_catalog.jsonb_build_object(
+    'actionOwner', pg_catalog.jsonb_build_object(
+      'ownerKind', p_action_owner_kind,
+      'ownerId', p_action_owner_id,
+      'releaseRevision', p_action_release_revision
+    ),
+    'action', action_content,
+    -- Action values follow the subject Record's owning Module contract. An
+    -- Application version cannot reinterpret exact Module field values.
+    'validationContractVersion', (
+      select release.validation_contract_version
+      from vortex_definition.releases as release
+      where release.root_id = (base_context ->> 'moduleRootId')::uuid
+        and release.release_revision = (base_context ->> 'moduleReleaseRevision')::bigint
+    ),
+    'eventDescriptors', event_descriptors,
+    'declaration', pg_catalog.jsonb_build_object(
+      'operationKey', action_content -> 'key',
+      'action', pg_catalog.jsonb_build_object(
+        'actionKind', 'named', 'namedAction', named_action_value
+      ),
+      'target', pg_catalog.jsonb_build_object(
+        'kind', 'application',
+        'applicationRootId', (context_value ->> 'applicationRootId')::uuid
+      ),
+      'requiredPermissions', required_permissions,
+      'recordBinding', pg_catalog.jsonb_build_object(
+        'moduleRootId', (base_context ->> 'moduleRootId')::uuid,
+        'recordTypeId', p_record_type_id,
+        'storageContractId', (base_context ->> 'storageContractId')::uuid,
+        'storageScope', base_context ->> 'storageScope'
+      ),
+      'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
+      'authority', pg_catalog.jsonb_build_object('kind', 'permission')
+    )
+  );
+exception
+  when no_data_found then
+    raise exception using errcode = '55000', message = 'Installed named action is unavailable';
+  when too_many_rows then
+    raise exception using errcode = '55000', message = 'Installed named action is ambiguous';
+end
+$function$;
+
+alter function vortex_record.resolve_named_action_context_internal(text,uuid,bigint,uuid,uuid) owner to vortex_record_adapter;
+
+revoke all on function vortex_record.resolve_named_action_context_internal(
+  text, uuid, bigint, uuid, uuid
+) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+grant execute on function vortex_record.resolve_named_action_context_internal(
+  text, uuid, bigint, uuid, uuid
+) to vortex_record_adapter;
+
+comment on function vortex_record.resolve_named_action_context_internal(
+  text, uuid, bigint, uuid, uuid
+) is
+  'Private exact active installed action, permission-alternative and declared-Event resolver for protected named actions.';
 
 reset role;
 
@@ -1763,6 +2304,175 @@ grant execute on function vortex_record.installed_contribution_pins_internal(uui
 
 comment on function vortex_record.installed_contribution_pins_internal(uuid, uuid[]) is
   'Private canonical pin string of the installed field contributions on the given Modules'' storage in one organisation; part of the installation access plan key. Owner-only except for the fixed record adapter.';
+
+create or replace function vortex_record.installed_record_type_action_contributions_internal(
+  p_organization_id uuid,
+  p_target_module_root_id uuid,
+  p_target_record_type_id uuid
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $function$
+declare
+  target_content jsonb;
+  target_storage_contract_id uuid;
+  contributor record;
+  contributor_content jsonb;
+  contribution jsonb;
+  point jsonb;
+  action_definition jsonb;
+  action_flow jsonb;
+  contributed_field_ids text[];
+  result jsonb := '[]'::jsonb;
+begin
+  if p_organization_id is null
+    or not vortex_platform.is_non_nil_uuid(p_organization_id::text)
+    or p_target_module_root_id is null
+    or not vortex_platform.is_non_nil_uuid(p_target_module_root_id::text)
+    or p_target_record_type_id is null
+    or not vortex_platform.is_non_nil_uuid(p_target_record_type_id::text) then
+    raise exception using errcode = '22023',
+      message = 'Installed contribution selector is invalid';
+  end if;
+
+  -- The owner Module's installed release declares the extension points; the newest release the
+  -- organisation has bound is the one a contribution must still resolve against.
+  select release.compilation_output #> '{canonical,content}' into target_content
+  from vortex_definition.installation_bindings as binding
+  join vortex_definition.releases as release
+    on release.root_id = binding.module_root_id
+    and release.release_revision = binding.module_release_revision
+  where binding.organization_id = p_organization_id
+    and binding.module_root_id = p_target_module_root_id
+    and binding.state = 'active'
+  order by binding.module_release_revision desc
+  limit 1;
+  if target_content is null then
+    return result;
+  end if;
+  select (record_type.value ->> 'storageContractId')::uuid into target_storage_contract_id
+  from pg_catalog.jsonb_array_elements(target_content -> 'recordTypes') as record_type(value)
+  where pg_catalog.lower(record_type.value ->> 'recordTypeId')
+    = pg_catalog.lower(p_target_record_type_id::text)
+    and not record_type.value ? 'systemProjection';
+  if target_storage_contract_id is null then
+    return result;
+  end if;
+
+  -- Only Modules that depend on the owner can contribute to it, so only their releases are read.
+  for contributor in
+    select binding.module_root_id,
+      pg_catalog.max(binding.module_release_revision) as release_revision,
+      pg_catalog.jsonb_agg(distinct binding.application_root_id) as application_root_ids
+    from vortex_definition.installation_bindings as binding
+    where binding.organization_id = p_organization_id
+      and binding.state = 'active'
+      and binding.module_root_id <> p_target_module_root_id
+      and exists (
+        select 1
+        from vortex_definition.release_dependencies as dependency
+        where dependency.root_id = binding.module_root_id
+          and dependency.release_revision = binding.module_release_revision
+          and dependency.dependency_kind = 'module'
+          and dependency.target_root_id = p_target_module_root_id
+      )
+    group by binding.module_root_id
+    order by binding.module_root_id
+  loop
+    select release.compilation_output #> '{canonical,content}' into contributor_content
+    from vortex_definition.releases as release
+    where release.root_id = contributor.module_root_id
+      and release.release_revision = contributor.release_revision;
+    if contributor_content is null then
+      continue;
+    end if;
+    select coalesce(pg_catalog.array_agg(pg_catalog.lower(field_entry.value ->> 'contributionId')), array[]::text[])
+    into contributed_field_ids
+    from pg_catalog.jsonb_array_elements(
+      vortex_record.installed_record_type_contributions_internal(
+        p_organization_id, p_target_module_root_id, target_storage_contract_id
+      )
+    ) as field_entry(value)
+    where (field_entry.value ->> 'contributorModuleRootId')::uuid = contributor.module_root_id;
+
+    for contribution in
+      select item.value
+      from pg_catalog.jsonb_array_elements(coalesce(contributor_content -> 'contributions', '[]'::jsonb))
+        as item(value)
+      where item.value ->> 'kind' = 'action'
+        and pg_catalog.lower(item.value #>> '{targetModule,moduleRootId}')
+          = pg_catalog.lower(p_target_module_root_id::text)
+    loop
+      select extension_point.value into point
+      from pg_catalog.jsonb_array_elements(target_content -> 'extensionPoints') as extension_point(value)
+      where pg_catalog.lower(extension_point.value ->> 'extensionPointId')
+        = pg_catalog.lower(contribution ->> 'targetExtensionPointId');
+      if point is null
+        or pg_catalog.lower(point ->> 'recordTypeId') <> pg_catalog.lower(p_target_record_type_id::text)
+        or not (point -> 'accepts') ? 'action' then
+        continue;
+      end if;
+      select action.value into action_definition
+      from pg_catalog.jsonb_array_elements(contributor_content -> 'actions') as action(value)
+      where pg_catalog.lower(action.value ->> 'actionId') = pg_catalog.lower(contribution ->> 'actionId');
+      if action_definition is null then
+        continue;
+      end if;
+      -- The action's behaviour is its compiled transaction flow, which the record service runs.
+      select flow.value into action_flow
+      from pg_catalog.jsonb_array_elements(coalesce(contributor_content -> 'flows', '[]'::jsonb)) as flow(value)
+      where pg_catalog.lower(flow.value ->> 'id') = pg_catalog.lower(contribution ->> 'actionId')
+        and flow.value ->> 'execution' = 'transaction';
+      if action_flow is null then
+        continue;
+      end if;
+      -- A contributed action is a plain value change: it takes no inputs, runs only
+      -- record.set_fields tasks, and sets only fields its own Module contributed to this record
+      -- type. Anything else would act on the owner's record beyond what the owner admitted.
+      if pg_catalog.jsonb_array_length(coalesce(action_definition -> 'inputs', '[]'::jsonb)) <> 0
+        or pg_catalog.jsonb_typeof(action_definition -> 'tasks') is distinct from 'array'
+        or pg_catalog.jsonb_array_length(action_definition -> 'tasks') = 0
+        or exists (
+          select 1
+          from pg_catalog.jsonb_array_elements(action_definition -> 'tasks') as task(value)
+          where task.value ->> 'type' <> 'record.set_fields'
+            or pg_catalog.jsonb_typeof(task.value #> '{properties,values}') is distinct from 'object'
+            or exists (
+              select 1
+              from pg_catalog.jsonb_object_keys(task.value #> '{properties,values}') as set_key(value)
+              where pg_catalog.lower(set_key.value) <> all (contributed_field_ids)
+            )
+        ) then
+        continue;
+      end if;
+      result := result || pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+        'kind', 'action',
+        'contributionId', contribution ->> 'actionId',
+        'extensionPointId', contribution ->> 'targetExtensionPointId',
+        'contributorModuleRootId', contributor.module_root_id,
+        'contributorReleaseRevision', contributor.release_revision,
+        'contributorApplicationRootIds', contributor.application_root_ids,
+        'action', action_definition,
+        'flow', action_flow
+      ));
+    end loop;
+  end loop;
+  return result;
+end
+$function$;
+
+alter function vortex_record.installed_record_type_action_contributions_internal(uuid,uuid,uuid) owner to vortex_owner;
+
+revoke all on function vortex_record.installed_record_type_action_contributions_internal(uuid, uuid, uuid)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+grant execute on function vortex_record.installed_record_type_action_contributions_internal(uuid, uuid, uuid)
+  to vortex_record_adapter, vortex_owner;
+
+comment on function vortex_record.installed_record_type_action_contributions_internal(uuid, uuid, uuid) is
+  'Private exact installed action contributions of one owner record type in one organisation: the contributor Module''s declared actions, resolved against the owner''s installed extension point, that take no inputs and only set fields the contributor itself contributed to that record type. Owner-only except for the fixed record adapter; it decides no access.';
 
 create or replace function vortex_access.contributed_field_bounds_internal(
   p_decision jsonb
@@ -2075,5 +2785,550 @@ comment on function vortex_access.resolve_record_field_bounds_internal(jsonb) is
 
 alter function vortex_access.resolve_record_field_bounds_internal(jsonb)
   owner to vortex_owner;
+
+CREATE OR REPLACE FUNCTION vortex_access.evaluate_organization_record_permission_eligibility_internal(p_declaration jsonb, p_context jsonb, p_checked_at timestamp with time zone) RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $_$
+declare
+  declaration_action jsonb;
+  declaration_target jsonb;
+  declaration_permissions jsonb;
+  declaration_binding jsonb;
+  declaration_authentication jsonb;
+  declaration_authority jsonb;
+  permission_candidate jsonb;
+  previous_identity text;
+  candidate_identity text;
+  operation_value text;
+  action_kind_value text;
+  target_application_value uuid;
+  binding_record_type_value uuid;
+  context_value jsonb;
+  context_organization_value uuid;
+  context_account_value uuid;
+  context_access_version_value bigint;
+  context_application_value uuid;
+  context_expires_value timestamptz;
+  context_correlation_value uuid;
+  authentication_deadline timestamptz;
+  authentication_satisfied boolean := true;
+  context_current boolean := true;
+  target_context_satisfied boolean := true;
+  unsupported_context boolean := false;
+  decision_checked_at timestamptz;
+  catalogue_available boolean := false;
+  scoped_available boolean := false;
+  path_effective boolean := false;
+  eligible_permissions jsonb;
+  eligible_valid_until timestamptz;
+  refusal_reason text;
+  evidence jsonb;
+  requirement jsonb;
+  requirement_candidate record;
+  requirement_granted record;
+  requirement_valid_until timestamptz;
+begin
+  if p_declaration is null
+    or pg_catalog.jsonb_typeof(p_declaration) <> 'object'
+    or not p_declaration ?& array[
+      'operationKey', 'action', 'target', 'requiredPermissions',
+      'recordBinding', 'recentAuthentication', 'authority'
+    ]
+    or exists (
+      select 1
+      from pg_catalog.jsonb_object_keys(p_declaration) as supplied(key)
+      where supplied.key <> all (array[
+        'operationKey', 'action', 'target', 'requiredPermissions',
+        'recordBinding', 'recentAuthentication', 'authority', 'contributorRequirements'
+      ])
+    )
+    or (
+      p_declaration ? 'contributorRequirements'
+      and (
+        pg_catalog.jsonb_typeof(p_declaration -> 'contributorRequirements') <> 'array'
+        or pg_catalog.jsonb_array_length(p_declaration -> 'contributorRequirements') not between 1 and 10
+        or exists (
+          select 1
+          from pg_catalog.jsonb_array_elements(p_declaration -> 'contributorRequirements') as item(value)
+          where pg_catalog.jsonb_typeof(item.value) <> 'object'
+            or not item.value ?& array[
+              'moduleRootId', 'applicationRootIds', 'recordTypeId', 'permissionKeys', 'changeableFieldIds'
+            ]
+            or exists (
+              select 1
+              from pg_catalog.jsonb_object_keys(item.value) as supplied(key)
+              where supplied.key <> all (array[
+                'moduleRootId', 'applicationRootIds', 'recordTypeId', 'permissionKeys', 'changeableFieldIds'
+              ])
+            )
+            or not vortex_platform.is_non_nil_uuid(item.value ->> 'moduleRootId')
+            or not vortex_platform.is_non_nil_uuid(item.value ->> 'recordTypeId')
+            or pg_catalog.jsonb_typeof(item.value -> 'applicationRootIds') <> 'array'
+            or pg_catalog.jsonb_typeof(item.value -> 'permissionKeys') <> 'array'
+            or pg_catalog.jsonb_typeof(item.value -> 'changeableFieldIds') <> 'array'
+        )
+      )
+    )
+    or pg_catalog.jsonb_typeof(p_declaration -> 'operationKey') <> 'string'
+    or pg_catalog.char_length(p_declaration ->> 'operationKey') not between 3 and 120
+    or (p_declaration ->> 'operationKey') !~
+      '^[a-z][a-z0-9]*(?:_[a-z0-9]+)*(?:\.[a-z][a-z0-9]*(?:_[a-z0-9]+)*)+$'
+    or (p_declaration ->> 'operationKey') ~ '(^|\.)[^.]{41,}(\.|$)' then
+    raise exception using errcode = '22023',
+      message = 'Organization record permission declaration is invalid';
+  end if;
+
+  declaration_action := p_declaration -> 'action';
+  declaration_target := p_declaration -> 'target';
+  declaration_permissions := p_declaration -> 'requiredPermissions';
+  declaration_binding := p_declaration -> 'recordBinding';
+  declaration_authentication := p_declaration -> 'recentAuthentication';
+  declaration_authority := p_declaration -> 'authority';
+
+  if pg_catalog.jsonb_typeof(declaration_action) <> 'object'
+    or not declaration_action ? 'actionKind'
+    or exists (
+      select 1
+      from pg_catalog.jsonb_object_keys(declaration_action) as supplied(key)
+      where supplied.key <> all (array['actionKind', 'namedAction'])
+    )
+    or pg_catalog.jsonb_typeof(declaration_action -> 'actionKind') <> 'string'
+    or declaration_action ->> 'actionKind' not in (
+      'create', 'read', 'update', 'delete', 'restore', 'export', 'share', 'manage', 'transfer', 'named'
+    )
+    or (
+      (declaration_action ->> 'actionKind') = 'named'
+      and (
+        not declaration_action ? 'namedAction'
+        or pg_catalog.jsonb_typeof(declaration_action -> 'namedAction') <> 'string'
+        or pg_catalog.char_length(declaration_action ->> 'namedAction') not between 1 and 40
+        or (declaration_action ->> 'namedAction') !~
+          '^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$'
+      )
+    )
+    or (
+      (declaration_action ->> 'actionKind') <> 'named'
+      and declaration_action ? 'namedAction'
+    ) then
+    raise exception using errcode = '22023',
+      message = 'Organization record permission declaration is invalid';
+  end if;
+
+  if pg_catalog.jsonb_typeof(declaration_target) <> 'object'
+    or not declaration_target ?& array['kind', 'applicationRootId']
+    or exists (
+      select 1
+      from pg_catalog.jsonb_object_keys(declaration_target) as supplied(key)
+      where supplied.key <> all (array['kind', 'applicationRootId'])
+    )
+    or pg_catalog.jsonb_typeof(declaration_target -> 'kind') <> 'string'
+    or declaration_target ->> 'kind' <> 'application'
+    or not vortex_platform.is_non_nil_uuid(
+      declaration_target ->> 'applicationRootId'
+    ) then
+    raise exception using errcode = '22023',
+      message = 'Organization record permission declaration is invalid';
+  end if;
+
+  if pg_catalog.jsonb_typeof(declaration_binding) <> 'object'
+    or not declaration_binding ?& array[
+      'moduleRootId', 'recordTypeId', 'storageContractId', 'storageScope'
+    ]
+    or exists (
+      select 1
+      from pg_catalog.jsonb_object_keys(declaration_binding) as supplied(key)
+      where supplied.key <> all (array[
+        'moduleRootId', 'recordTypeId', 'storageContractId', 'storageScope'
+      ])
+    )
+    or not vortex_platform.is_non_nil_uuid(declaration_binding ->> 'moduleRootId')
+    or not vortex_platform.is_non_nil_uuid(declaration_binding ->> 'recordTypeId')
+    or not vortex_platform.is_non_nil_uuid(
+      declaration_binding ->> 'storageContractId'
+    )
+    or pg_catalog.jsonb_typeof(declaration_binding -> 'storageScope') <> 'string'
+    or declaration_binding ->> 'storageScope' not in (
+      'organization_shared', 'application_contained'
+    ) then
+    raise exception using errcode = '22023',
+      message = 'Organization record permission declaration is invalid';
+  end if;
+
+  if pg_catalog.jsonb_typeof(declaration_authentication) <> 'object'
+    or not declaration_authentication ? 'kind'
+    or pg_catalog.jsonb_typeof(declaration_authentication -> 'kind') <> 'string'
+    or declaration_authentication ->> 'kind' not in ('none', 'primary', 'multi_factor')
+    or (
+      declaration_authentication ->> 'kind' = 'none'
+      and exists (
+        select 1
+        from pg_catalog.jsonb_object_keys(declaration_authentication) as supplied(key)
+        where supplied.key <> 'kind'
+      )
+    )
+    or (
+      declaration_authentication ->> 'kind' in ('primary', 'multi_factor')
+      and (
+        not declaration_authentication ? 'maximumAgeSeconds'
+        or pg_catalog.jsonb_typeof(
+          declaration_authentication -> 'maximumAgeSeconds'
+        ) <> 'number'
+        or exists (
+          select 1
+          from pg_catalog.jsonb_object_keys(declaration_authentication) as supplied(key)
+          where supplied.key <> all (array['kind', 'maximumAgeSeconds'])
+        )
+      )
+    ) then
+    raise exception using errcode = '22023',
+      message = 'Organization record permission declaration is invalid';
+  end if;
+
+  if declaration_authentication ->> 'kind' in ('primary', 'multi_factor')
+    and (
+      (declaration_authentication ->> 'maximumAgeSeconds')::numeric < 1
+      or (declaration_authentication ->> 'maximumAgeSeconds')::numeric >
+        9007199254740991
+      or (declaration_authentication ->> 'maximumAgeSeconds')::numeric <>
+        pg_catalog.trunc(
+          (declaration_authentication ->> 'maximumAgeSeconds')::numeric
+        )
+    ) then
+    raise exception using errcode = '22023',
+      message = 'Organization record permission declaration is invalid';
+  end if;
+
+  -- A record operation carries ordinary permission authority only; delegated
+  -- management scopes stay on the existing non-record path.
+  if pg_catalog.jsonb_typeof(declaration_authority) <> 'object'
+    or not declaration_authority ? 'kind'
+    or pg_catalog.jsonb_typeof(declaration_authority -> 'kind') <> 'string'
+    or declaration_authority ->> 'kind' <> 'permission'
+    or exists (
+      select 1
+      from pg_catalog.jsonb_object_keys(declaration_authority) as supplied(key)
+      where supplied.key <> 'kind'
+    ) then
+    raise exception using errcode = '22023',
+      message = 'Organization record permission declaration is invalid';
+  end if;
+
+  if pg_catalog.jsonb_typeof(declaration_permissions) <> 'array'
+    or pg_catalog.jsonb_array_length(declaration_permissions) = 0 then
+    raise exception using errcode = '22023',
+      message = 'Organization record permission declaration is invalid';
+  end if;
+
+  previous_identity := null;
+  for permission_candidate in
+    select item.value
+    from pg_catalog.jsonb_array_elements(declaration_permissions) as item(value)
+  loop
+    if pg_catalog.jsonb_typeof(permission_candidate) <> 'object'
+      or not permission_candidate ?& array[
+        'applicationRootId', 'ownerKind', 'ownerId', 'permissionId'
+      ]
+      or exists (
+        select 1
+        from pg_catalog.jsonb_object_keys(permission_candidate) as supplied(key)
+        where supplied.key <> all (array[
+          'applicationRootId', 'ownerKind', 'ownerId', 'permissionId'
+        ])
+      )
+      or pg_catalog.jsonb_typeof(permission_candidate -> 'ownerKind') <> 'string'
+      or permission_candidate ->> 'ownerKind' not in ('application', 'module')
+      or not vortex_platform.is_non_nil_uuid(
+        permission_candidate ->> 'applicationRootId'
+      )
+      or not vortex_platform.is_non_nil_uuid(permission_candidate ->> 'ownerId')
+      or not vortex_platform.is_non_nil_uuid(permission_candidate ->> 'permissionId')
+      or pg_catalog.lower(permission_candidate ->> 'applicationRootId') <>
+        pg_catalog.lower(declaration_target ->> 'applicationRootId')
+      or (
+        permission_candidate ->> 'ownerKind' = 'application'
+        and pg_catalog.lower(permission_candidate ->> 'ownerId') <>
+          pg_catalog.lower(permission_candidate ->> 'applicationRootId')
+      )
+      or (
+        permission_candidate ->> 'ownerKind' = 'module'
+        and pg_catalog.lower(permission_candidate ->> 'ownerId') <>
+          pg_catalog.lower(declaration_binding ->> 'moduleRootId')
+      ) then
+      raise exception using errcode = '22023',
+        message = 'Organization record permission declaration is invalid';
+    end if;
+
+    candidate_identity := pg_catalog.concat_ws(
+      ':',
+      pg_catalog.lower(permission_candidate ->> 'applicationRootId'),
+      permission_candidate ->> 'ownerKind',
+      pg_catalog.lower(permission_candidate ->> 'ownerId'),
+      pg_catalog.lower(permission_candidate ->> 'permissionId')
+    );
+    if previous_identity is not null
+      and previous_identity collate "C" >= candidate_identity then
+      raise exception using errcode = '22023',
+        message = 'Organization record permission declaration is invalid';
+    end if;
+    previous_identity := candidate_identity;
+  end loop;
+
+  operation_value := p_declaration ->> 'operationKey';
+  action_kind_value := declaration_action ->> 'actionKind';
+  target_application_value := (declaration_target ->> 'applicationRootId')::uuid;
+  binding_record_type_value := (declaration_binding ->> 'recordTypeId')::uuid;
+
+  if action_kind_value = 'named'
+    and exists (
+      select 1
+      from pg_catalog.jsonb_array_elements(declaration_permissions) as item(value)
+      where item.value ->> 'ownerKind' <>
+          declaration_permissions -> 0 ->> 'ownerKind'
+        or pg_catalog.lower(item.value ->> 'ownerId') <>
+          pg_catalog.lower(declaration_permissions -> 0 ->> 'ownerId')
+    ) then
+    raise exception using errcode = '22023',
+      message = 'Organization record permission declaration is invalid';
+  end if;
+
+  context_value := p_context;
+  context_organization_value := (context_value ->> 'organizationId')::uuid;
+  context_account_value := (context_value ->> 'organizationAccountId')::uuid;
+  context_access_version_value := (context_value ->> 'accessVersion')::bigint;
+  context_application_value := case
+    when context_value ? 'applicationRootId'
+      then (context_value ->> 'applicationRootId')::uuid
+    else null
+  end;
+  context_expires_value := (context_value ->> 'expiresAt')::timestamptz;
+  context_correlation_value := (context_value ->> 'correlationId')::uuid;
+  decision_checked_at := p_checked_at;
+  context_current := context_expires_value > decision_checked_at;
+
+  unsupported_context := context_value ? 'delegatedContext'
+    or context_value ? 'supportContext';
+  target_context_satisfied := coalesce(
+    context_application_value = target_application_value, false
+  );
+
+  authentication_deadline := vortex_access.recent_authentication_deadline_internal(
+    context_value, decision_checked_at, declaration_authentication
+  );
+  authentication_satisfied := authentication_deadline is not null;
+
+  -- Every declared alternative is evaluated against its exact record type by the
+  -- shared role-path helper under this one context and checked time. A candidate
+  -- keeps its own catalogue record scope, immutable source release and path
+  -- deadline; an alternative never lends authority to another. Keeping
+  -- path_valid_until separate from authentication_deadline here (instead of
+  -- combining them per row) is what lets the three existence flags below tell
+  -- "no catalogue entry", "entry without record scope" and "scoped entry
+  -- without a live path" apart as distinct refusal reasons.
+  with candidate as (
+    select declared.ordinality as alternative_ordinal,
+      -- A preview's system projection uses the builder's live registration. Keep that
+      -- registration's permission address with its accepted meaning for every later reader.
+      pg_catalog.jsonb_build_object(
+        'applicationRootId', (evaluated.permission_entry).application_root_id,
+        'ownerKind', (evaluated.permission_entry).owner_kind,
+        'ownerId', (evaluated.permission_entry).owner_id,
+        'permissionId', (evaluated.permission_entry).permission_id
+      ) as permission_value,
+      (evaluated.permission_entry).registration_revision as registration_revision,
+      (evaluated.permission_entry).record_scope as record_scope,
+      pg_catalog.jsonb_build_object(
+        'kind', (evaluated.permission_entry).source_kind,
+        'definitionKey', (evaluated.permission_entry).source_definition_key,
+        'rootId', (evaluated.permission_entry).source_root_id,
+        'releaseRevision', (evaluated.permission_entry).source_revision,
+        'releaseVersion', (evaluated.permission_entry).source_version,
+        'validationContractVersion',
+          (evaluated.permission_entry).source_validation_contract_version
+      ) as source_release,
+      evaluated.path_valid_until as path_valid_until
+    from pg_catalog.jsonb_array_elements(declaration_permissions)
+      with ordinality as declared(value, ordinality)
+    cross join lateral vortex_access.evaluate_permission_role_path_internal(
+      context_value, decision_checked_at, declared.value, declaration_action,
+      binding_record_type_value
+    ) as evaluated
+  )
+  select pg_catalog.count(*) > 0,
+    pg_catalog.count(*) filter (where candidate.record_scope is not null) > 0,
+    pg_catalog.count(*) filter (
+      where candidate.record_scope is not null
+        and candidate.path_valid_until is not null
+    ) > 0,
+    pg_catalog.jsonb_agg(
+      pg_catalog.jsonb_build_object(
+        'permission', candidate.permission_value,
+        'registrationRevision', candidate.registration_revision,
+        'recordScope', candidate.record_scope,
+        'source', candidate.source_release,
+        'validUntil', pg_catalog.to_char(
+          pg_catalog.timezone(
+            'UTC', least(candidate.path_valid_until, authentication_deadline)
+          ),
+          'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
+        )
+      ) order by candidate.alternative_ordinal
+    ) filter (
+      where candidate.record_scope is not null
+        and candidate.path_valid_until is not null
+        and authentication_deadline is not null
+    ),
+    pg_catalog.min(least(candidate.path_valid_until, authentication_deadline))
+      filter (
+        where candidate.record_scope is not null
+          and candidate.path_valid_until is not null
+          and authentication_deadline is not null
+      )
+  into catalogue_available, scoped_available, path_effective, eligible_permissions,
+    eligible_valid_until
+  from candidate;
+
+  evidence := pg_catalog.jsonb_build_object(
+    'operationKey', operation_value,
+    'target', declaration_target,
+    'organizationId', context_organization_value,
+    'organizationAccountId', context_account_value,
+    'accessVersion', context_access_version_value,
+    'checkedAt', pg_catalog.to_char(
+      pg_catalog.timezone('UTC', decision_checked_at),
+      'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
+    ),
+    'correlationId', context_correlation_value,
+    'recordBinding', declaration_binding
+  );
+
+  -- Refusal precedence keeps each cause distinguishable: an unsupported
+  -- context always wins; then "no candidate has any catalogue entry"; then
+  -- "entries exist but none carries record_scope"; then "scoped entries exist
+  -- but none has a live role path"; only then does recent-authentication
+  -- refuse an otherwise-complete set of alternatives.
+  refusal_reason := case
+    when not context_current
+      or unsupported_context or not target_context_satisfied
+      then 'target_policy_unavailable'
+    when not catalogue_available then 'permission_unavailable'
+    when not scoped_available then 'target_policy_unavailable'
+    when not path_effective then 'permission_not_effective'
+    when not authentication_satisfied then 'authentication_unsatisfied'
+    else null
+  end;
+
+  if refusal_reason is not null then
+    return evidence || pg_catalog.jsonb_build_object(
+      'outcome', 'refused',
+      'reasonCode', refusal_reason
+    );
+  end if;
+
+  -- Another installed Module that contributed what this operation acts on adds its own
+  -- requirement to the owner's: the person must also hold, through a current role path, a
+  -- permission that Module declared for the operation, whose record scope is unconditional and
+  -- whose field policy lets the person change every field the operation changes. The owner's
+  -- permissions above still decide the record; this only narrows who may use the contribution.
+  if p_declaration ? 'contributorRequirements' then
+    for requirement in
+      select item.value
+      from pg_catalog.jsonb_array_elements(p_declaration -> 'contributorRequirements') as item(value)
+    loop
+      requirement_valid_until := null;
+      for requirement_candidate in
+        select distinct entry.application_root_id, entry.owner_kind, entry.owner_id,
+          entry.permission_id, entry.record_type_id, entry.named_action
+        from vortex_access.permission_catalogue_entries as entry
+        where entry.organization_id = context_organization_value
+          and entry.registration_kind = 'application'
+          and entry.owner_kind = 'module'
+          and entry.owner_id = (requirement ->> 'moduleRootId')::uuid
+          and entry.record_type_id = (requirement ->> 'recordTypeId')::uuid
+          and entry.action_kind = 'named'
+          and entry.application_root_id in (
+            select pg_catalog.lower(application.value)::uuid
+            from pg_catalog.jsonb_array_elements_text(requirement -> 'applicationRootIds') as application(value)
+          )
+          and entry.permission_key in (
+            select permission_key.value
+            from pg_catalog.jsonb_array_elements_text(requirement -> 'permissionKeys') as permission_key(value)
+          )
+        order by entry.application_root_id, entry.permission_id
+      loop
+        for requirement_granted in
+          select path.permission_entry, path.path_valid_until
+          from vortex_access.evaluate_permission_role_path_internal(
+            context_value, decision_checked_at,
+            pg_catalog.jsonb_build_object(
+              'applicationRootId', requirement_candidate.application_root_id,
+              'ownerKind', requirement_candidate.owner_kind,
+              'ownerId', requirement_candidate.owner_id,
+              'permissionId', requirement_candidate.permission_id
+            ),
+            pg_catalog.jsonb_build_object(
+              'actionKind', 'named', 'namedAction', requirement_candidate.named_action
+            ),
+            requirement_candidate.record_type_id
+          ) as path
+        loop
+          if requirement_granted.path_valid_until is null
+            or requirement_granted.path_valid_until <= decision_checked_at
+            or pg_catalog.jsonb_typeof((requirement_granted.permission_entry).record_scope) is distinct from 'object'
+            or (requirement_granted.permission_entry).record_scope ? 'savedCondition'
+            or not coalesce(
+              (requirement_granted.permission_entry).record_scope -> 'routes' @> '[{"kind":"all_records"}]'::jsonb,
+              false
+            )
+            or pg_catalog.jsonb_typeof((requirement_granted.permission_entry).field_policy) is distinct from 'object'
+            or exists (
+              select 1
+              from pg_catalog.jsonb_array_elements_text(requirement -> 'changeableFieldIds') as required_field(value)
+              where not exists (
+                select 1
+                from pg_catalog.jsonb_array_elements_text(
+                  (requirement_granted.permission_entry).field_policy -> 'changeableFieldIds'
+                ) as allowed_field(value)
+                where pg_catalog.lower(allowed_field.value) = pg_catalog.lower(required_field.value)
+              )
+            ) then
+            continue;
+          end if;
+          requirement_valid_until := greatest(
+            coalesce(requirement_valid_until, requirement_granted.path_valid_until),
+            requirement_granted.path_valid_until
+          );
+        end loop;
+      end loop;
+      if requirement_valid_until is null then
+        return evidence || pg_catalog.jsonb_build_object(
+          'outcome', 'refused',
+          'reasonCode', 'permission_not_effective'
+        );
+      end if;
+      eligible_valid_until := least(eligible_valid_until, requirement_valid_until);
+    end loop;
+  end if;
+
+  return evidence || pg_catalog.jsonb_build_object(
+    'outcome', 'eligible',
+    'validUntil', pg_catalog.to_char(
+      pg_catalog.timezone('UTC', eligible_valid_until),
+      'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
+    ),
+    'eligiblePermissions', eligible_permissions
+  );
+end
+$_$;
+
+ALTER FUNCTION vortex_access.evaluate_organization_record_permission_eligibility_internal(p_declaration jsonb, p_context jsonb, p_checked_at timestamp with time zone) OWNER TO vortex_owner;
+
+COMMENT ON FUNCTION vortex_access.evaluate_organization_record_permission_eligibility_internal(p_declaration jsonb, p_context jsonb, p_checked_at timestamp with time zone) IS 'Private record-permission eligibility evidence per declared alternative; carries the declared record binding as context and is never a record allow result. The caller supplies one Access-bound context and checked time.';
+
+REVOKE ALL ON FUNCTION vortex_access.evaluate_organization_record_permission_eligibility_internal(p_declaration jsonb, p_context jsonb, p_checked_at timestamp with time zone) FROM PUBLIC;
+GRANT ALL ON FUNCTION vortex_access.evaluate_organization_record_permission_eligibility_internal(p_declaration jsonb, p_context jsonb, p_checked_at timestamp with time zone) TO vortex_owner;
+
+grant execute on function vortex_access.evaluate_organization_record_permission_eligibility_internal(p_declaration jsonb, p_context jsonb, p_checked_at timestamp with time zone) to postgres;
+grant execute on function vortex_access.evaluate_organization_record_permission_eligibility_internal(p_declaration jsonb, p_context jsonb, p_checked_at timestamp with time zone) to vortex_record_adapter;
 
 reset role;

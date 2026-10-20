@@ -110,6 +110,9 @@ import { platformPermissionSource } from "../platform-permission-source";
 import {
   contributedFieldIdsOf,
   omitUnreadableContributedFields,
+  pageHasContributions,
+  readContributedActionAvailability,
+  withContributedActionButtons,
   withContributedPlacements,
 } from "./contributed-placements";
 import {
@@ -356,6 +359,7 @@ const loadApplicationPageJoined = async (
   const projectedPlacements = collectPlacements(contributedPage);
   const editsProjection =
     contributedPage !== projectedPage.value ||
+    pageHasContributions(context, pageDefinition) ||
     pageDefinition.type === "form" ||
     projectedPlacements.some(
       (placement) => isEditFieldPlacement(placement) || fieldControl(placement) !== undefined,
@@ -614,6 +618,17 @@ const loadApplicationPageJoined = async (
       );
       allPlacements = collectPlacements(page);
     }
+    // A contributed action the viewer may run on this record gets its button, decided by the
+    // same preview the named action path uses when the person runs it.
+    const availableActions = await readContributedActionAvailability(
+      session,
+      selection,
+      context,
+      pageDefinition,
+      subjectId.data,
+    );
+    if (withContributedActionButtons(page, context, pageDefinition, availableActions))
+      allPlacements = collectPlacements(page);
   }
 
   if (

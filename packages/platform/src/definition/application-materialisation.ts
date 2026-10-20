@@ -567,6 +567,17 @@ const applyFieldInputDerivation = (
       reject("vortex.definition.unsupported_field_type", "unsupported_choice");
 };
 
+/** The plain value of every setting a block release declares a default for. */
+export const plainReleaseDefaults = (release: PlatformBlockRelease): Record<string, unknown> =>
+  Object.fromEntries(
+    releaseSettingDeclarations(release)
+      .filter((declaration) => declaration.defaultValue !== undefined)
+      .map((declaration) => [
+        declaration.key,
+        plainSettingValue(declaration.defaultValue as BlockPropertyValueContract),
+      ]),
+  );
+
 /**
  * The plain settings the compiler would put on the automatic field input of one module field: the
  * release defaults, the field reference, and everything derived from the field's type. The runtime

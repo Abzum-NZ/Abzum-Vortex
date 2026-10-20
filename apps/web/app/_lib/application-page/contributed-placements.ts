@@ -1,13 +1,27 @@
 import { createHash } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import {
+  BUTTON_BLOCK_RELEASE,
   FIELD_INPUT_BLOCK_RELEASE,
   FORM_CONTAINER_BLOCK_RELEASE,
   RECORD_DETAIL_BLOCK_RELEASE,
   automaticFieldInputSettings,
+  collectActionFlowTasks,
+  contributedActionControlIds,
   fieldInputSourceField,
+  flowLibraryOf,
+  plainReleaseDefaults,
+  readSubjectWithNamedActionAvailability,
   type InstalledRuntimeContext,
 } from "@vortex/platform/server";
-import { isRecord, sameId } from "@vortex/platform/schema";
+import {
+  type IdentitySession,
+  type OrganizationSelectionCandidate,
+  installedNamedActionReferenceSchema,
+  isRecord,
+  sameId,
+} from "@vortex/platform/schema";
+import { humanOrganizationRequests } from "../server-composition";
 import { collectPlacements, isEditFieldPlacement } from "./placement-helpers";
 
 type Application = InstalledRuntimeContext["releaseSet"]["application"];
@@ -69,6 +83,71 @@ const blockIdOf = (vortex: Record<string, unknown>): string | undefined =>
   isRecord(vortex.block) && typeof vortex.block.blockId === "string"
     ? vortex.block.blockId
     : undefined;
+
+/**
+ * Places `item` directly after the placement `anchorId` in the item list that holds it, and in the
+ * tablet and phone orders of that list's owner, so the new item takes the anchor's place in every
+ * layout. False when no list holds the anchor.
+ */
+const insertAfterPlacement = (
+  page: Record<string, unknown>,
+  anchorId: string,
+  item: Record<string, unknown>,
+): boolean => {
+  const insertInto = (
+    items: unknown[],
+    owner: Record<string, unknown>,
+    slotKey: string,
+  ): boolean => {
+    const at = items.findIndex(
+      (entry) => isRecord(entry) && isRecord(entry.props) && sameId(String(entry.props.id), anchorId),
+    );
+    if (at >= 0) {
+      items.splice(at + 1, 0, item);
+      const orders =
+        isRecord(owner.vortex) && isRecord(owner.vortex.slotOrders)
+          ? owner.vortex.slotOrders[slotKey]
+          : undefined;
+      if (isRecord(orders))
+        for (const breakpoint of ["tablet", "phone"] as const) {
+          const order = orders[breakpoint];
+          if (Array.isArray(order)) {
+            const position = order.findIndex((entry) => sameId(String(entry), anchorId));
+            order.splice(position < 0 ? order.length : position + 1, 0, String((item.props as Record<string, unknown>).id));
+          }
+        }
+      return true;
+    }
+    return items.some(
+      (entry) =>
+        isRecord(entry) &&
+        isRecord(entry.props) &&
+        Object.entries(entry.props).some(
+          ([key, value]) => Array.isArray(value) && insertInto(value, entry.props as Record<string, unknown>, key),
+        ),
+    );
+  };
+  const visitData = (data: unknown): boolean => {
+    if (!isRecord(data)) return false;
+    const root = isRecord(data.root) && isRecord(data.root.props) ? data.root.props : undefined;
+    if (
+      root !== undefined &&
+      Object.entries(root).some(
+        ([key, value]) => key !== "vortex" && Array.isArray(value) && insertInto(value, root, key),
+      )
+    )
+      return true;
+    return (
+      Array.isArray(data.content) &&
+      insertInto(data.content, root ?? {}, "content")
+    );
+  };
+  const composition = page.composition;
+  if (!isRecord(composition)) return false;
+  return isRecord(composition.stepContent)
+    ? Object.values(composition.stepContent).some(visitData)
+    : visitData(composition);
+};
 
 /**
  * The page the viewer's projection becomes once the fields other installed Modules contributed to
@@ -169,7 +248,6 @@ export const withContributedPlacements = (
         ? form.vortex.slotOrders.content
         : undefined;
       let anchor = String(last.props.id);
-      let insertAt = content.indexOf(last) + 1;
       for (const field of contributed) {
         const fieldId = String(field.fieldId);
         if (shownFields.has(fieldId.toLowerCase())) continue;
@@ -187,7 +265,7 @@ export const withContributedPlacements = (
           continue;
         }
         const id = contributedPlacementId(form.placementId, fieldId);
-        content.splice(insertAt, 0, {
+        const placed = insertAfterPlacement(page, anchor, {
           type: FIELD_INPUT_BLOCK_RELEASE.rendererKey,
           props: {
             id,
@@ -202,15 +280,7 @@ export const withContributedPlacements = (
             },
           },
         });
-        insertAt += 1;
-        if (orders !== undefined)
-          for (const breakpoint of ["tablet", "phone"] as const) {
-            const order = orders[breakpoint];
-            if (Array.isArray(order)) {
-              const at = order.indexOf(anchor);
-              order.splice(at < 0 ? order.length : at + 1, 0, id);
-            }
-          }
+        if (!placed) continue;
         anchor = id;
         changed = true;
       }
@@ -248,3 +318,131 @@ export const omitUnreadableContributedFields = (
     );
   }
 };
+
+/** The contributed actions on the record type a detail page is about. */
+const contributedActionsOf = (context: InstalledRuntimeContext, pageDefinition: PageDefinition) => {
+  if (pageDefinition.type !== "detail" || pageDefinition.recordType?.state !== "resolved") return [];
+  const subject = pageDefinition.recordType;
+  return (
+    context.recordContributions.find(
+      (entry) =>
+        sameId(entry.moduleRootId, String(subject.moduleRootId)) &&
+        sameId(entry.recordTypeId, String(subject.recordTypeId)),
+    )?.actions ?? []
+  );
+};
+
+/**
+ * The identities of the contributed actions the viewer may run now on the page's record: the same
+ * preview the named action path decides for the person on this exact record (their own permission
+ * on the record, the contributor's permission for the action and the action's precondition). A
+ * record the viewer cannot read previews nothing. A failure is not "unavailable": it propagates.
+ */
+export const readContributedActionAvailability = async (
+  session: IdentitySession,
+  selection: OrganizationSelectionCandidate,
+  context: InstalledRuntimeContext,
+  pageDefinition: PageDefinition,
+  recordId: string,
+): Promise<ReadonlySet<string>> => {
+  const actions = contributedActionsOf(context, pageDefinition);
+  if (
+    actions.length === 0 ||
+    pageDefinition.type !== "detail" ||
+    pageDefinition.recordType?.state !== "resolved"
+  )
+    return new Set();
+  const recordTypeId = String(pageDefinition.recordType.recordTypeId);
+  const flows = new Map<string, unknown>();
+  for (const flow of [
+    ...context.releaseSet.application.content.flows,
+    ...context.releaseSet.modules.flatMap((module) => module.content.flows),
+  ])
+    flows.set(String(flow.id), flow);
+  const library = flowLibraryOf(flows);
+  const references = actions.map((action) =>
+    installedNamedActionReferenceSchema.parse({
+      ownerKind: "module",
+      ownerId: action.contributorModuleRootId,
+      releaseRevision: action.contributorReleaseRevision,
+      actionId: action.actionId,
+    }),
+  );
+  const result = await humanOrganizationRequests().run(session, selection, (transaction) =>
+    readSubjectWithNamedActionAvailability(
+      transaction,
+      { recordTypeId, recordId, requestedFieldIds: null },
+      references,
+      new Date().toISOString(),
+      (action) => (seed) => collectActionFlowTasks(library, action.actionId, randomUUID(), seed),
+    ),
+  );
+  if (result.kind !== "available") throw new Error(`CONTRIBUTED_ACTION_AVAILABILITY_${result.kind}`);
+  return new Set(
+    [...result.value.availability]
+      .filter(([, availability]) => availability.kind === "available")
+      .map(([actionId]) => actionId.toLowerCase()),
+  );
+};
+
+/**
+ * Places a button after the page's record detail for each contributed action the viewer may run
+ * on the record. The control is the one the compiled binding of that action on this page names,
+ * so a click starts the flow the flow endpoint runs, and the named action path decides again.
+ */
+export const withContributedActionButtons = (
+  page: Record<string, unknown>,
+  context: InstalledRuntimeContext,
+  pageDefinition: PageDefinition,
+  available: ReadonlySet<string>,
+): boolean => {
+  const actions = contributedActionsOf(context, pageDefinition).filter((action) =>
+    available.has(action.actionId.toLowerCase()),
+  );
+  if (actions.length === 0) return false;
+  const detail = collectPlacements(page).find(
+    ({ vortex }) =>
+      blockIdOf(vortex) !== undefined &&
+      sameId(blockIdOf(vortex)!, RECORD_DETAIL_BLOCK_RELEASE.blockId) &&
+      vortex.queryId === undefined,
+  );
+  if (detail === undefined || !isRecord(detail.vortex.responsive)) return false;
+  let anchor = detail.placementId;
+  let placed = false;
+  for (const action of actions) {
+    const ids = contributedActionControlIds(String(pageDefinition.pageId), action.actionId);
+    if (collectPlacements(page).some((entry) => sameId(entry.placementId, ids.controlId))) continue;
+    if (
+      insertAfterPlacement(page, anchor, {
+        type: BUTTON_BLOCK_RELEASE.rendererKey,
+        props: {
+          id: ids.controlId,
+          ...plainReleaseDefaults(BUTTON_BLOCK_RELEASE),
+          label: action.label,
+          action_kind: "action",
+          variant: "secondary",
+          vortex: {
+            block: {
+              blockId: BUTTON_BLOCK_RELEASE.blockId,
+              releaseVersion: BUTTON_BLOCK_RELEASE.releaseVersion,
+            },
+            responsive: structuredClone(detail.vortex.responsive),
+            slotOrders: {},
+          },
+        },
+      })
+    ) {
+      anchor = ids.controlId;
+      placed = true;
+    }
+  }
+  return placed;
+};
+
+/** Whether anything is contributed to the record type this page is about. */
+export const pageHasContributions = (
+  context: InstalledRuntimeContext,
+  pageDefinition: PageDefinition,
+): boolean =>
+  contributedFieldsOf(context, pageDefinition) !== undefined ||
+  contributedActionsOf(context, pageDefinition).length > 0;

@@ -66,6 +66,10 @@ begin
         from pg_catalog.jsonb_array_elements(effective_type -> 'fields') as field(value)
         where pg_catalog.lower(field.value ->> 'fieldId') = pg_catalog.lower(entry.value ->> 'contributionId')
       );
+      contributions := contributions || vortex_record.installed_record_type_action_contributions_internal(
+        organization_id_value, (binding_item ->> 'moduleRootId')::uuid,
+        (record_type_item ->> 'recordTypeId')::uuid
+      );
       if contributions <> '[]'::jsonb then
         result := result || pg_catalog.jsonb_build_array(
           pg_catalog.jsonb_build_object(
@@ -94,4 +98,4 @@ grant execute on function vortex_record.read_installed_record_contributions() to
 grant execute on function vortex_record.read_installed_record_contributions() to vortex_owner;
 
 comment on function vortex_record.read_installed_record_contributions() is
-  'The fields other installed Modules of the organisation contributed to the record types of the Modules the current application binds, as the record paths serve them: owner Module, owner record type and each contributing Module with its exact field definition. Reads under the validated human request context; a preview receives none.';
+  'The fields and actions other installed Modules of the organisation contributed to the record types of the Modules the current application binds, as the record paths serve them: owner Module, owner record type and each contributing Module with its exact field or action definition. Reads under the validated human request context; a preview receives none.';

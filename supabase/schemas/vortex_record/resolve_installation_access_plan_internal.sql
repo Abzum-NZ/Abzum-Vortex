@@ -1,5 +1,6 @@
 create or replace function vortex_record.resolve_installation_access_plan_internal(
-  p_installation jsonb
+  p_installation jsonb,
+  p_include_contributions boolean default true
 )
 returns jsonb
 language plpgsql
@@ -85,8 +86,9 @@ begin
 
   -- The fields other installed Modules contributed to the pinned Modules' record types are part
   -- of what the plan holds, so their exact pins are part of its key. A preview runs its own
-  -- storage and receives no contributions.
-  if preview_installation_id_value is null then
+  -- storage and receives no contributions, and the plan an installation prepares is the exact
+  -- plan of its release set alone (p_include_contributions false).
+  if preview_installation_id_value is null and p_include_contributions then
     contribution_pins := vortex_record.installed_contribution_pins_internal(
       organization_id_value,
       array(
@@ -164,7 +166,7 @@ begin
       raise exception using errcode = '55000',
         message = 'Installed Module definition is unavailable';
     end if;
-    if preview_installation_id_value is null then
+    if preview_installation_id_value is null and p_include_contributions then
       release_content := vortex_record.with_installed_record_contributions_internal(
         release_content, organization_id_value, module_root_value
       );
@@ -468,12 +470,12 @@ exception
 end
 $function$;
 
-alter function vortex_record.resolve_installation_access_plan_internal(jsonb) owner to vortex_record_adapter;
+alter function vortex_record.resolve_installation_access_plan_internal(jsonb, boolean) owner to vortex_record_adapter;
 
-revoke all on function vortex_record.resolve_installation_access_plan_internal(jsonb)
+revoke all on function vortex_record.resolve_installation_access_plan_internal(jsonb, boolean)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-grant execute on function vortex_record.resolve_installation_access_plan_internal(jsonb)
+grant execute on function vortex_record.resolve_installation_access_plan_internal(jsonb, boolean)
   to vortex_record_adapter, vortex_owner;
 
-comment on function vortex_record.resolve_installation_access_plan_internal(jsonb) is
+comment on function vortex_record.resolve_installation_access_plan_internal(jsonb, boolean) is
   'Private installation access plan builder and cache: resolves definitions, column maps, permission alternatives and saved conditions once per all-active installation binding revision; a detached pin set is resolved afresh.';
