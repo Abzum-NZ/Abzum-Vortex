@@ -1,6 +1,16 @@
 "use client";
 
 import type { ReactElement } from "react";
+import {
+  calendarAddDays as addDays,
+  calendarDaysInMonth,
+  calendarDaysSinceMonday,
+  calendarLocalDate,
+  calendarMonthStart,
+  calendarPeriodSupported,
+  calendarShiftMonth,
+  calendarStartOfDay,
+} from "@vortex/platform/schema";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Button } from "../components/button";
 import { Card, CardContent, CardDescription, CardHeader } from "../components/card";
@@ -14,83 +24,8 @@ import type { CalendarPayload, CalendarView } from "./projected-data";
 const calendarViews: readonly CalendarView[] = ["month", "week", "agenda"];
 const datePattern = /^\d{4}-\d{2}-\d{2}$/;
 type DayBoundaries = Readonly<{ start: number; end: number }>;
-const calendarDateFormatters = new Map<string, Intl.DateTimeFormat>();
 
-const calendarDateFormatter = (timeZone: string): Intl.DateTimeFormat => {
-  let formatter = calendarDateFormatters.get(timeZone);
-  if (formatter === undefined) {
-    formatter = new Intl.DateTimeFormat("en", {
-      timeZone,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    });
-    calendarDateFormatters.set(timeZone, formatter);
-  }
-  return formatter;
-};
-
-const dateAtUtc = (year: number, month: number, day: number): Date => {
-  const result = new Date(0);
-  result.setUTCFullYear(year, month, day);
-  result.setUTCHours(0, 0, 0, 0);
-  return result;
-};
-
-const toIsoDate = (date: Date): string =>
-  `${String(date.getUTCFullYear()).padStart(4, "0")}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
-
-const addDays = (date: string, count: number): string => {
-  const [year, month, day] = date.split("-").map(Number) as [number, number, number];
-  return toIsoDate(dateAtUtc(year, month - 1, day + count));
-};
-
-const localToday = (timeZone: string): string => {
-  const parts = calendarDateFormatter(timeZone).formatToParts(new Date());
-  const values = new Map(parts.map((part) => [part.type, part.value]));
-  return `${values.get("year")}-${values.get("month")}-${values.get("day")}`;
-};
-
-const weekdayIndex = (date: string): number => {
-  const [year, month, day] = date.split("-").map(Number) as [number, number, number];
-  return dateAtUtc(year, month - 1, day).getUTCDay();
-};
-
-const daysInMonth = (date: string): number => {
-  const [year, month] = date.split("-").map(Number) as [number, number];
-  return dateAtUtc(year, month, 0).getUTCDate();
-};
-
-const shiftMonth = (date: string, offset: number): string => {
-  const [year, month, day] = date.split("-").map(Number) as [number, number, number];
-  const first = dateAtUtc(year, month - 1 + offset, 1);
-  const boundedDay = Math.min(day, daysInMonth(toIsoDate(first)));
-  first.setUTCDate(boundedDay);
-  return toIsoDate(first);
-};
-
-const localDateOf = (instant: string, timeZone: string): string => {
-  const parts = calendarDateFormatter(timeZone).formatToParts(new Date(instant));
-  const values = new Map(parts.map((part) => [part.type, part.value]));
-  return `${values.get("year")}-${values.get("month")}-${values.get("day")}`;
-};
-
-const localDayStart = (date: string, timeZone: string): number => {
-  const [year, month, day] = date.split("-").map(Number) as [number, number, number];
-  const estimate = dateAtUtc(year, month - 1, day).getTime();
-  let lower = estimate - 48 * 60 * 60 * 1_000;
-  let upper = estimate + 48 * 60 * 60 * 1_000;
-  const localDateAt = (instant: number): string =>
-    localDateOf(new Date(instant).toISOString(), timeZone);
-  if (localDateAt(lower) >= date) return lower;
-  if (localDateAt(upper) < date) return upper;
-  while (upper - lower > 1) {
-    const middle = Math.floor((lower + upper) / 2);
-    if (localDateAt(middle) >= date) upper = middle;
-    else lower = middle;
-  }
-  return upper;
-};
+const localToday = (timeZone: string): string => calendarLocalDate(Date.now(), timeZone);
 
 const itemIntersectsDay = (
   item: CalendarPayload["items"][number],
@@ -137,10 +72,10 @@ const periodDays = (values: CalendarPayload): readonly string[] => {
     return Array.from({ length: 7 }, (_, index) => addDays(values.windowStart, index));
   if (values.view === "agenda")
     return Array.from({ length: 30 }, (_, index) => addDays(values.windowStart, index));
-  const firstOfMonth = `${values.date.slice(0, 7)}-01`;
-  const leadingDays = (weekdayIndex(firstOfMonth) + 6) % 7;
+  const firstOfMonth = calendarMonthStart(values.date);
+  const leadingDays = calendarDaysSinceMonday(firstOfMonth);
   const gridStart = addDays(firstOfMonth, -leadingDays);
-  const gridLength = Math.ceil((leadingDays + daysInMonth(values.date)) / 7) * 7;
+  const gridLength = Math.ceil((leadingDays + calendarDaysInMonth(values.date)) / 7) * 7;
   return Array.from({ length: gridLength }, (_, index) => addDays(gridStart, index));
 };
 
@@ -168,7 +103,7 @@ export function CalendarDisplay(props: DisplayRenderProps<CalendarPayload>): Rea
     const boundaryStart = (day: string): number => {
       let start = boundaryStarts.get(day);
       if (start === undefined) {
-        start = localDayStart(day, values.timeZone);
+        start = Date.parse(calendarStartOfDay(day, values.timeZone));
         boundaryStarts.set(day, start);
       }
       return start;
@@ -181,6 +116,16 @@ export function CalendarDisplay(props: DisplayRenderProps<CalendarPayload>): Rea
       });
     }
   }
+
+  const periodStep = values?.view === "week" ? 7 : values?.view === "agenda" ? 30 : 0;
+  const shiftedDate = (direction: 1 | -1): string =>
+    values === undefined
+      ? ""
+      : periodStep === 0
+        ? calendarShiftMonth(values.date, direction)
+        : addDays(values.date, direction * periodStep);
+  const previousDate = shiftedDate(-1);
+  const nextDate = shiftedDate(1);
 
   const replaceParameters = (change: (parameters: URLSearchParams) => void): void => {
     const parameters = new URLSearchParams(searchParams.toString());
@@ -215,13 +160,11 @@ export function CalendarDisplay(props: DisplayRenderProps<CalendarPayload>): Rea
                 type="button"
                 variant="outline"
                 aria-label="Previous period"
+                disabled={!calendarPeriodSupported(values.view, previousDate, values.timeZone)}
                 onClick={() =>
-                  replaceParameters((parameters) => {
-                    const amount = values.view === "week" ? -7 : values.view === "agenda" ? -30 : 0;
-                    const date =
-                      amount === 0 ? shiftMonth(values.date, -1) : addDays(values.date, amount);
-                    parameters.set(`date.${placementId}`, date);
-                  })
+                  replaceParameters((parameters) =>
+                    parameters.set(`date.${placementId}`, previousDate),
+                  )
                 }
               >
                 Previous
@@ -241,13 +184,9 @@ export function CalendarDisplay(props: DisplayRenderProps<CalendarPayload>): Rea
                 type="button"
                 variant="outline"
                 aria-label="Next period"
+                disabled={!calendarPeriodSupported(values.view, nextDate, values.timeZone)}
                 onClick={() =>
-                  replaceParameters((parameters) => {
-                    const amount = values.view === "week" ? 7 : values.view === "agenda" ? 30 : 0;
-                    const date =
-                      amount === 0 ? shiftMonth(values.date, 1) : addDays(values.date, amount);
-                    parameters.set(`date.${placementId}`, date);
-                  })
+                  replaceParameters((parameters) => parameters.set(`date.${placementId}`, nextDate))
                 }
               >
                 Next
@@ -266,6 +205,7 @@ export function CalendarDisplay(props: DisplayRenderProps<CalendarPayload>): Rea
                   size="sm"
                   variant={values.view === view ? "default" : "outline"}
                   aria-pressed={values.view === view}
+                  disabled={!calendarPeriodSupported(view, values.date, values.timeZone)}
                   onClick={() =>
                     replaceParameters((parameters) => parameters.set(`view.${placementId}`, view))
                   }
