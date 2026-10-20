@@ -60,9 +60,9 @@ begin
   if exists (select 1 from vortex_platform.grid_views as selected
     where selected.organization_id = scope.organization_id
       and selected.application_root_id = scope.application_root_id
-      and selected.view_id = any(p_selected_view_ids) and selected.document ? 'filters')
+      and selected.view_id = any(p_selected_view_ids) and (selected.document ? 'filters' or selected.document ? 'sort'))
     or exists (select 1 from pg_catalog.jsonb_array_elements(p_default_views) as supplied(value)
-      where supplied.value -> 'document' ? 'filters') then
+      where supplied.value -> 'document' ? 'filters' or supplied.value -> 'document' ? 'sort') then
     access_plan := vortex_record.resolve_installation_access_plan_internal(installation);
   end if;
 

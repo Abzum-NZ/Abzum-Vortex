@@ -14,11 +14,13 @@ declare
   eligibility jsonb;
   readable text[] := '{}'::text[];
   filters jsonb;
+  sorts jsonb;
   omitted integer;
+  omitted_sorts integer;
   document jsonb := p_document;
 begin
-  if not (p_document ? 'filters') then
-    return pg_catalog.jsonb_build_object('document', document, 'hiddenFilters', 0);
+  if not (p_document ? 'filters' or p_document ? 'sort') then
+    return pg_catalog.jsonb_build_object('document', document, 'hiddenFilters', 0, 'hiddenSorts', 0);
   end if;
   context_value := vortex_access.validated_human_request_context();
   -- Resolve only releases pinned by this validated installation, including record-type listings.
@@ -51,15 +53,27 @@ begin
   end if;
   select coalesce(pg_catalog.jsonb_agg(filter.value order by filter.ordinal), '[]'::jsonb)
   into filters
-  from pg_catalog.jsonb_array_elements(p_document -> 'filters')
+  from pg_catalog.jsonb_array_elements(coalesce(p_document -> 'filters', '[]'::jsonb))
     with ordinality as filter(value, ordinal)
   where pg_catalog.lower(filter.value ->> 'fieldId') = any(readable);
-  omitted := pg_catalog.jsonb_array_length(p_document -> 'filters') - pg_catalog.jsonb_array_length(filters);
-  document := document - 'filters';
+  omitted := pg_catalog.jsonb_array_length(coalesce(p_document -> 'filters', '[]'::jsonb)) - pg_catalog.jsonb_array_length(filters);
+  select coalesce(pg_catalog.jsonb_agg(sort.value order by sort.ordinal), '[]'::jsonb)
+  into sorts
+  from pg_catalog.jsonb_array_elements(coalesce(p_document -> 'sort', '[]'::jsonb))
+    with ordinality as sort(value, ordinal)
+  where pg_catalog.lower(sort.value ->> 'fieldId') = any(readable);
+  omitted_sorts := pg_catalog.jsonb_array_length(coalesce(p_document -> 'sort', '[]'::jsonb)) - pg_catalog.jsonb_array_length(sorts);
+  document := document - 'filters' - 'sort';
   if pg_catalog.jsonb_array_length(filters) > 0 then
     document := document || pg_catalog.jsonb_build_object('filters', filters);
   end if;
-  return pg_catalog.jsonb_build_object('document', document, 'hiddenFilters', omitted);
+  if pg_catalog.jsonb_array_length(sorts) > 0 then
+    document := document || pg_catalog.jsonb_build_object('sort', sorts);
+  end if;
+  if omitted > 0 or omitted_sorts > 0 then
+    raise log 'Grid view state omitted code=GRID_VIEW_FIELDS_WITHHELD filters=% sorts=%', omitted, omitted_sorts;
+  end if;
+  return pg_catalog.jsonb_build_object('document', document, 'hiddenFilters', omitted, 'hiddenSorts', omitted_sorts);
 end
 $function$;
 
@@ -68,4 +82,4 @@ revoke all on function vortex_platform.grid_view_document_for_viewer_internal(uu
 alter function vortex_platform.grid_view_document_for_viewer_internal(uuid, jsonb, jsonb, jsonb)
   owner to vortex_owner;
 comment on function vortex_platform.grid_view_document_for_viewer_internal(uuid, jsonb, jsonb, jsonb) is
-  'Removes saved filter values outside the current reader permission field policy before a selected document leaves the database; owner-only, with a count for the omission notice.';
+  'Removes saved filters and sorts outside conservative current query field bounds before a selected document leaves the database; owner-only, with counts for the omission notice.';

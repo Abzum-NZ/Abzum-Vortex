@@ -1,0 +1,21 @@
+import "server-only";
+
+import { z } from "zod";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
+
+/** Fields readable on any currently eligible record, including exact share field bounds. */
+export const readRecordTypeVisibleFieldIds = async (
+  transaction: RequestDatabaseTransaction,
+  recordTypeId: string,
+): Promise<ReadonlySet<string>> => {
+  const rows = await transaction.query<DatabaseRow & { field_ids: unknown }>`
+    select vortex_record.read_record_type_visible_field_ids(${recordTypeId}::uuid) as field_ids
+  `;
+  if (rows.length !== 1) throw new Error("RECORD_FIELD_VISIBILITY_RESULT_INVALID");
+  const parsed = z.array(z.uuid()).safeParse(rows[0]?.field_ids);
+  if (!parsed.success) {
+    console.error("[record-fields] code=RECORD_FIELD_VISIBILITY_RESULT_INVALID", parsed.error);
+    throw new Error("RECORD_FIELD_VISIBILITY_RESULT_INVALID", { cause: parsed.error });
+  }
+  return new Set(parsed.data.map((id) => id.toLowerCase()));
+};

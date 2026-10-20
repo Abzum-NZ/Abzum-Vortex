@@ -65,6 +65,7 @@ const storedViewRowsSchema = z
         shareGroupIds: z.array(idSchema),
         document: z.unknown().optional(),
         hiddenFilters: z.number().int().min(0).optional(),
+        hiddenSorts: z.number().int().min(0).optional(),
       })
       .strict(),
   )
@@ -79,6 +80,7 @@ const storedReadSchema = z
             viewId: idSchema,
             document: z.unknown(),
             hiddenFilters: z.number().int().min(0),
+            hiddenSorts: z.number().int().min(0),
           })
           .strict(),
       )
@@ -130,6 +132,7 @@ export type StoredNamedGridView = Readonly<{
   sharing: GridViewSharing;
   document: GridViewDocument | undefined;
   hiddenFilters: number;
+  hiddenSorts: number;
 }>;
 
 /** Everything one page read returns of the store: layouts keyed by placement, views by placement. */
@@ -137,7 +140,7 @@ export type StoredGridViews = Readonly<{
   /** Authored documents narrowed by the same current field bounds as stored shared views. */
   defaultDocuments: ReadonlyMap<
     string,
-    Readonly<{ document: GridViewDocument; hiddenFilters: number }>
+    Readonly<{ document: GridViewDocument; hiddenFilters: number; hiddenSorts: number }>
   >;
   roleKeys: ReadonlySet<string>;
   /** The placements (lower-cased) whose tables name a share permission the person holds now. */
@@ -239,6 +242,7 @@ export const readGridViews = async (
         groupIds: row.shareGroupIds.map((id) => id.toLowerCase()),
       },
       hiddenFilters: row.hiddenFilters ?? 0,
+      hiddenSorts: row.hiddenSorts ?? 0,
       document:
         row.document === undefined
           ? undefined
@@ -253,6 +257,7 @@ export const readGridViews = async (
         {
           document: stored("default view", row.viewId, gridViewDocumentSchema, row.document),
           hiddenFilters: row.hiddenFilters,
+          hiddenSorts: row.hiddenSorts,
         },
       ]),
     ),
@@ -298,6 +303,7 @@ export const addressedGridView = (
     },
     document: view.document,
     hiddenFilters: view.hiddenFilters,
+    hiddenSorts: view.hiddenSorts,
     sharing: view.mine || canShare ? view.sharing : null,
   };
 };
