@@ -1,5 +1,10 @@
 import type { ComponentSettingValue } from "../block-property-schema";
 import {
+  recordsTableBoardFeature,
+  type RecordsTableBoardMode,
+  type RecordsTableBoardSettings,
+} from "./board";
+import {
   recordsTableBulkActionsFeature,
   type RecordsTableBulkActionsSettings,
 } from "./bulk-actions";
@@ -33,6 +38,7 @@ import { recordsTableSearchFeature, type RecordsTableSearchSettings } from "./se
 import { recordsTablePinningFeature, type RecordsTablePinningSettings } from "./pinning";
 import { recordsTablePivotFeature, type RecordsTablePivotSettings } from "./pivot";
 import {
+  featureNotPossible,
   settingGroup,
   type RecordsTableFeatureCheck,
   type RecordsTableFeatureDefinition,
@@ -46,6 +52,7 @@ export {
   recordsTableEditableFieldTypes,
   type RecordsTableActionCapability,
   type RecordsTableActionContract,
+  type RecordsTableBoardFacts,
   type RecordsTableFeatureCheck,
   type RecordsTableFeatureRefusalCode,
   type RecordsTableFeatureState,
@@ -55,6 +62,7 @@ export {
   type RecordsTableRelatedRecordsFacts,
 } from "./shared";
 export { RECORDS_TABLE_RELATED_RECORDS_MAXIMUM_PAGE_SIZE } from "./master-detail";
+export { boardProblem, recordsTableBoardFactsOf } from "./board";
 export {
   RECORDS_TABLE_PIVOT_MAXIMUM_COLUMNS,
   RECORDS_TABLE_PIVOT_MAXIMUM_ROW_PAGE_SIZE,
@@ -84,6 +92,8 @@ export {
   type ConditionalFormattingDateParameter,
 } from "./conditional-formatting";
 export type {
+  RecordsTableBoardMode,
+  RecordsTableBoardSettings,
   RecordsTableConditionalFormattingSettings,
   RecordsTableBulkActionsSettings,
   RecordsTableColumnFiltersSettings,
@@ -113,6 +123,7 @@ export type RecordsTableFeatures = Readonly<{
   conditionalFormatting: RecordsTableFeatureState<RecordsTableConditionalFormattingSettings>;
   pinning: RecordsTableFeatureState<RecordsTablePinningSettings>;
   pivot: RecordsTableFeatureState<RecordsTablePivotSettings>;
+  board: RecordsTableFeatureState<RecordsTableBoardSettings>;
 }>;
 
 const registry = {
@@ -128,6 +139,7 @@ const registry = {
     definition: recordsTableConditionalFormattingFeature,
   },
   pivot: { property: "pivot", definition: recordsTablePivotFeature },
+  board: { property: "board", definition: recordsTableBoardFeature },
 } as const satisfies Record<
   string,
   Readonly<{
@@ -147,6 +159,7 @@ export const recordsTableFeatureKeys = [
   "master_detail",
   "conditional_formatting",
   "pivot",
+  "board",
 ] as const satisfies readonly (keyof typeof registry)[];
 export type RecordsTableFeatureKey = (typeof recordsTableFeatureKeys)[number];
 
@@ -189,6 +202,7 @@ export const readRecordsTableFeatures = (
   const conditionalFormatting = read("conditional_formatting");
   const pinning = read("pinning");
   const pivot = read("pivot");
+  const board = read("board");
   if (
     search === undefined ||
     columnFilters === undefined ||
@@ -198,7 +212,8 @@ export const readRecordsTableFeatures = (
     masterDetail === undefined ||
     conditionalFormatting === undefined ||
     pinning === undefined ||
-    pivot === undefined
+    pivot === undefined ||
+    board === undefined
   )
     return undefined;
   return {
@@ -211,6 +226,7 @@ export const readRecordsTableFeatures = (
     masterDetail: masterDetail as RecordsTableFeatures["masterDetail"],
     conditionalFormatting: conditionalFormatting as RecordsTableFeatures["conditionalFormatting"],
     pivot: pivot as RecordsTableFeatures["pivot"],
+    board: board as RecordsTableFeatures["board"],
   };
 };
 
@@ -223,13 +239,26 @@ export const checkRecordsTableFeature = (
   key: RecordsTableFeatureKey,
   state: RecordsTableFeatureState<object>,
   facts: RecordsTableQueryFacts,
-): RecordsTableFeatureCheck =>
-  (registry[key].definition as RecordsTableFeatureDefinition<object>).check(state, facts);
+  presentation: "grid" | "cards",
+): RecordsTableFeatureCheck => {
+  if (presentation === "cards" && key === "inline_edit")
+    return featureNotPossible(
+      "definition_records_table_inline_edit",
+      "Inline editing needs the Table preset. Open a record to edit it from a List.",
+    );
+  if (presentation === "cards" && key === "pinning")
+    return featureNotPossible(
+      "definition_records_table_pinning",
+      "Column pinning needs the Table preset. Lists have no scrolling columns.",
+    );
+  return (registry[key].definition as RecordsTableFeatureDefinition<object>).check(state, facts);
+};
 
 /** Every feature's state and check, in Studio's order. */
 export const checkRecordsTableFeatures = (
   features: RecordsTableFeatures,
   facts: RecordsTableQueryFacts,
+  presentation: "grid" | "cards",
 ): readonly Readonly<{
   key: RecordsTableFeatureKey;
   enabled: boolean;
@@ -237,13 +266,18 @@ export const checkRecordsTableFeatures = (
 }>[] =>
   recordsTableFeatureKeys.map((key) => {
     const state = recordsTableFeatureState(features, key);
-    return { key, enabled: state.enabled, check: checkRecordsTableFeature(key, state, facts) };
+    return {
+      key,
+      enabled: state.enabled,
+      check: checkRecordsTableFeature(key, state, facts, presentation),
+    };
   });
 
 const featureEvents: Readonly<Record<string, RecordsTableFeatureKey>> = {
   search_changed: "search",
   filter_changed: "column_filters",
   inline_edit: "inline_edit",
+  card_moved: "board",
 };
 
 /** The feature whose controls raise this Records table event, for the events a feature owns. */

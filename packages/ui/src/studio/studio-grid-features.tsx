@@ -32,6 +32,8 @@ import {
   studioRecordsTableQueryFacts,
   type StudioRelatedRecordsChoices,
 } from "./grid-features";
+import type { StudioBoardPipeline } from "./board-source";
+import { StudioBoardEditor } from "./grid-features/board";
 import { StudioConditionalFormattingEditor } from "./grid-features/conditional-formatting";
 import { StudioInspectorGroup } from "./studio-inspector-group";
 import { StudioQueryBindings } from "./studio-query-bindings";
@@ -71,10 +73,13 @@ export function StudioGridFeatures({
   idPrefix,
   property,
   value,
+  presentation,
   query,
   compiledFields,
   choices,
+  boardChoices,
   related,
+  pipelines,
   disabled,
   onChange,
 }: Readonly<{
@@ -83,14 +88,19 @@ export function StudioGridFeatures({
   property: Extract<BlockPropertySchemaContract, { kind: "group" }>;
   /** The authored features group; unset uses the catalogue default (every feature off). */
   value: SourceBlockPropertyValueContract | undefined;
+  presentation: "grid" | "cards";
   /** The query the table reads, or undefined until one is chosen. */
   query: StudioQueryChoice | undefined;
   /** The saved draft's compiled fields of the record type the query reads; undefined before a save. */
   compiledFields: readonly ModuleField[] | undefined;
   /** The block's choices: the bound query's fields by business name. */
   choices: StudioSettingChoices;
+  /** Real fields of the selected pipeline's record type, including fields not yet queried. */
+  boardChoices: StudioSettingChoices;
   /** What the draft offers the rows' related records. */
   related: StudioRelatedRecordsChoices;
+  /** The pipelines of the draft's record types, which a board takes its columns from. */
+  pipelines: readonly StudioBoardPipeline[];
   disabled: boolean;
   onChange: (next: SourceBlockPropertyValueContract) => void;
 }>): ReactElement {
@@ -170,10 +180,16 @@ export function StudioGridFeatures({
           const declaration = property.properties.find((feature) => feature.key === key);
           const { label, description } = recordsTableFeatureDescription(key);
           const enabled = features !== undefined && recordsTableFeatureState(features, key).enabled;
+          // In Board mode the grid shows none of the table's other features: only the board is judged.
           const check =
-            features === undefined
+            features === undefined || (features.board.enabled && key !== "board")
               ? undefined
-              : checkRecordsTableFeature(key, recordsTableFeatureState(features, key), facts);
+              : checkRecordsTableFeature(
+                  key,
+                  recordsTableFeatureState(features, key),
+                  facts,
+                  presentation,
+                );
           const switchId = `${idPrefix}-${ownId}-${key}`;
           const settings =
             declaration?.kind === "group"
@@ -245,6 +261,17 @@ export function StudioGridFeatures({
                     onChange={(next) => write(key, next)}
                   />
                 </div>
+              ) : null}
+              {enabled && key === "board" ? (
+                <StudioBoardEditor
+                  idPrefix={`${switchId}-editor`}
+                  value={current}
+                  declarations={settings}
+                  pipelines={pipelines}
+                  choices={boardChoices}
+                  disabled={disabled}
+                  onChange={(next) => write(key, next)}
+                />
               ) : null}
               {!enabled || settings.length === 0 || editor.kind !== "settings" ? null : (
                 <div className="space-y-3 pb-2">

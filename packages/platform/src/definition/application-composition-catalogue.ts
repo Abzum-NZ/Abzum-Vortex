@@ -111,17 +111,9 @@ export const RICH_TEXT_BLOCK_RELEASE: PlatformBlockRelease = release(
   sources.RICH_TEXT_BLOCK_RELEASE,
 );
 
-/** Exact immutable metadata release for the list display block. */
-export const LIST_BLOCK_RELEASE: PlatformBlockRelease = release(sources.LIST_BLOCK_RELEASE);
-
 /** Exact immutable metadata release for the record detail display block. */
 export const RECORD_DETAIL_BLOCK_RELEASE: PlatformBlockRelease = release(
   sources.RECORD_DETAIL_BLOCK_RELEASE,
-);
-
-/** Exact immutable metadata release for the grouped data display block. */
-export const GROUPED_DATA_BLOCK_RELEASE: PlatformBlockRelease = release(
-  sources.GROUPED_DATA_BLOCK_RELEASE,
 );
 
 /** Exact immutable metadata release for the summary values display block. */
@@ -167,16 +159,8 @@ export const RICH_TEXT_BLOCK_RELEASE_1_1_0: PlatformBlockRelease = release(
   sources.RICH_TEXT_BLOCK_RELEASE_1_1_0,
 );
 
-export const LIST_BLOCK_RELEASE_1_1_0: PlatformBlockRelease = release(
-  sources.LIST_BLOCK_RELEASE_1_1_0,
-);
-
 export const RECORD_DETAIL_BLOCK_RELEASE_1_1_0: PlatformBlockRelease = release(
   sources.RECORD_DETAIL_BLOCK_RELEASE_1_1_0,
-);
-
-export const GROUPED_DATA_BLOCK_RELEASE_1_1_0: PlatformBlockRelease = release(
-  sources.GROUPED_DATA_BLOCK_RELEASE_1_1_0,
 );
 
 export const SUMMARY_VALUES_BLOCK_RELEASE_1_1_0: PlatformBlockRelease = release(
@@ -202,17 +186,6 @@ export const RECORD_DETAIL_BLOCK_RELEASE_1_2_0: PlatformBlockRelease = release(
 
 /** Exact immutable metadata release for the query-bound calendar display block. */
 export const CALENDAR_BLOCK_RELEASE: PlatformBlockRelease = release(sources.CALENDAR_BLOCK_RELEASE);
-
-/** Exact immutable metadata release for the installed query-bound board display block. */
-export const BOARD_BLOCK_RELEASE: PlatformBlockRelease = release(sources.BOARD_BLOCK_RELEASE);
-
-/**
- * Release 1.1.0 of the board adds the `card_moved` event: moving a card to another column is held as
- * a binding to a flow that saves the record. Release 1.0.0 stays published unchanged.
- */
-export const BOARD_BLOCK_RELEASE_1_1_0: PlatformBlockRelease = release(
-  sources.BOARD_BLOCK_RELEASE_1_1_0,
-);
 
 /** Exact immutable metadata release for the text input block. */
 export const TEXT_INPUT_BLOCK_RELEASE: PlatformBlockRelease = release(
@@ -432,9 +405,7 @@ export const APPLICATION_PAGE_LINK_TILES_BLOCK_RELEASE: PlatformBlockRelease = r
 export const DISPLAY_BLOCK_RELEASES: readonly PlatformBlockRelease[] = Object.freeze([
   TEXT_BLOCK_RELEASE,
   RICH_TEXT_BLOCK_RELEASE,
-  LIST_BLOCK_RELEASE,
   RECORD_DETAIL_BLOCK_RELEASE,
-  GROUPED_DATA_BLOCK_RELEASE,
   SUMMARY_VALUES_BLOCK_RELEASE,
   NOTICE_BLOCK_RELEASE,
   NOTICE_BLOCK_RELEASE_1_1_0,
@@ -442,15 +413,11 @@ export const DISPLAY_BLOCK_RELEASES: readonly PlatformBlockRelease[] = Object.fr
   QUERY_NOTICE_BLOCK_RELEASE,
   TEXT_BLOCK_RELEASE_1_1_0,
   RICH_TEXT_BLOCK_RELEASE_1_1_0,
-  LIST_BLOCK_RELEASE_1_1_0,
   RECORD_DETAIL_BLOCK_RELEASE_1_1_0,
-  GROUPED_DATA_BLOCK_RELEASE_1_1_0,
   SUMMARY_VALUES_BLOCK_RELEASE_1_1_0,
   TABLE_BLOCK_RELEASE,
   RECORD_DETAIL_BLOCK_RELEASE_1_2_0,
   CALENDAR_BLOCK_RELEASE,
-  BOARD_BLOCK_RELEASE,
-  BOARD_BLOCK_RELEASE_1_1_0,
   CHART_BLOCK_RELEASE,
 ]);
 

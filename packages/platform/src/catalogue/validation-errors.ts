@@ -64,6 +64,7 @@ export const definitionValidationErrorCodes = [
   "definition_records_table_conditional_formatting",
   "definition_records_table_pinning",
   "definition_records_table_pivot",
+  "definition_records_table_board",
   "definition_query_binding",
   "definition_unknown_property",
   "definition_too_few_items",
@@ -178,6 +179,14 @@ const definitionValidationErrorCatalogueSource = {
     message: "A pivot needs two choice or date fields and a number to total.",
     guidance:
       "Choose the field for the rows, the field for the columns (at most 50 values) and what to total, or turn Pivot off.",
+  },
+  // Board names its own part (the stage field, a card field, a total) in its sentence; the
+  // catalogue message is what a reader without that sentence sees.
+  definition_records_table_board: {
+    order: 39,
+    message: "Board needs a stage field.",
+    guidance:
+      "Choose a query grouped by a stage field of a pipeline, and the card title and card fields it selects, or turn Board off.",
   },
   // A query binding refusal carries its own sentence (the input, the source and the types); the
   // catalogue message is what a reader without that sentence sees.

@@ -78,7 +78,6 @@ import {
 } from "./navigation/application-search-block";
 import { Container } from "./layout/container";
 import { Heading } from "./layout/heading";
-import { ListDisplay } from "./display/list";
 import { NoticeBlock } from "./display/notice";
 import { QueryNoticeDisplay } from "./display/query-notice";
 import { RecordDetailDisplay } from "./display/record-detail";
@@ -242,13 +241,8 @@ const IMPLEMENTATIONS: ReadonlyMap<string, PlatformComponentRenderer> = new Map<
   ["platform.renderer.drawer", Drawer],
   ["platform.renderer.text", PlainTextDisplay],
   ["platform.renderer.rich_text", RichTextDisplay],
-  ["platform.renderer.list", ListDisplay],
   ["platform.renderer.table", TableDisplay],
   ["platform.renderer.record_detail", RecordDetailDisplay],
-  [
-    "platform.renderer.grouped_data",
-    lazyBlock(async () => (await import("./display/grouped-data")).GroupedDataDisplay),
-  ],
   ["platform.renderer.summary_values", SummaryValuesDisplay],
   ["platform.renderer.chart", ChartDisplay],
   ["platform.renderer.notice", NoticeBlock],
@@ -256,10 +250,6 @@ const IMPLEMENTATIONS: ReadonlyMap<string, PlatformComponentRenderer> = new Map<
   [
     "platform.renderer.calendar",
     lazyBlock(async () => (await import("./display/calendar")).CalendarDisplay),
-  ],
-  [
-    "platform.renderer.board",
-    lazyBlock(async () => (await import("./display/board")).BoardDisplay),
   ],
   ["platform.renderer.attachment_list", SearchAttachmentDisplay],
   ["platform.renderer.form_container", FormContainer],

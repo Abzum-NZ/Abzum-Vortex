@@ -11,8 +11,6 @@ import {
   parseCalendarPayload,
   parseDisplayData,
   parseDisplayEventHandlers,
-  parseGroupedPayload,
-  parseListPayload,
   parseRecordDetailPayload,
   parseRichTextPayload,
   parseSummaryPayload,
@@ -20,8 +18,6 @@ import {
   parseTextPayload,
   type CalendarPayload,
   type BoardPayload,
-  type GroupedPayload,
-  type ListPayload,
   type RecordDetailPayload,
   type RichTextPayload,
   type SummaryPayload,
@@ -45,13 +41,21 @@ const displayPayloadParser = <Payload>(
 
 const TEXT_PAYLOAD_PARSER = displayPayloadParser<TextPayload>(parseTextPayload);
 const RICH_TEXT_PAYLOAD_PARSER = displayPayloadParser<RichTextPayload>(parseRichTextPayload);
-const LIST_PAYLOAD_PARSER = displayPayloadParser<ListPayload>(parseListPayload);
-const TABLE_PAYLOAD_PARSER = displayPayloadParser<TablePayload>(parseTablePayload);
+/**
+ * The Data grid's one payload parser: the rows of a table, or the columns of a board when the
+ * grid's Board feature is on. The projected `kind` says which; each kind has its own strict parser.
+ */
+const parseGridPayload = (
+  value: unknown,
+  location: DefinitionRenderErrorLocation,
+): TablePayload | BoardPayload =>
+  typeof value === "object" && value !== null && (value as { kind?: unknown }).kind === "board"
+    ? parseBoardPayload(value, location)
+    : parseTablePayload(value, location);
+const TABLE_PAYLOAD_PARSER = displayPayloadParser<TablePayload | BoardPayload>(parseGridPayload);
 const CALENDAR_PAYLOAD_PARSER = displayPayloadParser<CalendarPayload>(parseCalendarPayload);
-const BOARD_PAYLOAD_PARSER = displayPayloadParser<BoardPayload>(parseBoardPayload);
 const RECORD_DETAIL_PAYLOAD_PARSER =
   displayPayloadParser<RecordDetailPayload>(parseRecordDetailPayload);
-const GROUPED_DATA_PAYLOAD_PARSER = displayPayloadParser<GroupedPayload>(parseGroupedPayload);
 const SUMMARY_VALUES_PAYLOAD_PARSER = displayPayloadParser<SummaryPayload>(parseSummaryPayload);
 
 /** Exact registrations pairing each display block release with its React renderer. */
@@ -66,16 +70,8 @@ export const DISPLAY_COMPONENT_REGISTRATIONS: readonly PlatformComponentRegistra
       parsePayload: RICH_TEXT_PAYLOAD_PARSER,
     }),
     Object.freeze({
-      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.LIST_BLOCK_RELEASE,
-      parsePayload: LIST_PAYLOAD_PARSER,
-    }),
-    Object.freeze({
       releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.RECORD_DETAIL_BLOCK_RELEASE,
       parsePayload: RECORD_DETAIL_PAYLOAD_PARSER,
-    }),
-    Object.freeze({
-      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.GROUPED_DATA_BLOCK_RELEASE,
-      parsePayload: GROUPED_DATA_PAYLOAD_PARSER,
     }),
     Object.freeze({
       releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.SUMMARY_VALUES_BLOCK_RELEASE,
@@ -104,22 +100,14 @@ export const DISPLAY_COMPONENT_REGISTRATIONS: readonly PlatformComponentRegistra
       parsePayload: RICH_TEXT_PAYLOAD_PARSER,
     }),
     Object.freeze({
-      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.LIST_BLOCK_RELEASE_1_1_0,
-      parsePayload: LIST_PAYLOAD_PARSER,
-    }),
-    Object.freeze({
       releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.RECORD_DETAIL_BLOCK_RELEASE_1_1_0,
       parsePayload: RECORD_DETAIL_PAYLOAD_PARSER,
-    }),
-    Object.freeze({
-      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.GROUPED_DATA_BLOCK_RELEASE_1_1_0,
-      parsePayload: GROUPED_DATA_PAYLOAD_PARSER,
     }),
     Object.freeze({
       releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.SUMMARY_VALUES_BLOCK_RELEASE_1_1_0,
       parsePayload: SUMMARY_VALUES_PAYLOAD_PARSER,
     }),
-    // The one Records table release: its data contract, row behaviours and interactive controls.
+    // The one Data grid release: its data contract, row behaviours, interactive controls and Board mode.
     Object.freeze({
       releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.TABLE_BLOCK_RELEASE,
       parsePayload: TABLE_PAYLOAD_PARSER,
@@ -132,14 +120,5 @@ export const DISPLAY_COMPONENT_REGISTRATIONS: readonly PlatformComponentRegistra
     Object.freeze({
       releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.CALENDAR_BLOCK_RELEASE,
       parsePayload: CALENDAR_PAYLOAD_PARSER,
-    }),
-    Object.freeze({
-      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.BOARD_BLOCK_RELEASE,
-      parsePayload: BOARD_PAYLOAD_PARSER,
-    }),
-    // Release 1.1.0 adds the card-moved event; the same parser reads the same payload.
-    Object.freeze({
-      releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.BOARD_BLOCK_RELEASE_1_1_0,
-      parsePayload: BOARD_PAYLOAD_PARSER,
     }),
   ]);

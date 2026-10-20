@@ -92,40 +92,6 @@
     "supportedEvents": ["refresh"],
     "supportedStateOperations": []
   },
-  "LIST_BLOCK_RELEASE": {
-    "blockId": "4881c816-e4ce-4c39-b0b7-20958b947748",
-    "key": "platform.display.list",
-    "releaseVersion": "1.0.0",
-    "name": "List",
-    "description": "A simple list of records from a query.",
-    "icon": "list",
-    "paletteGroup": "data",
-    "rendererKey": "platform.renderer.list",
-    "properties": [
-      {
-        "kind": "text",
-        "key": "title",
-        "presentation": true,
-        "label": "Title",
-        "help": "Accessible name shown as the block heading",
-        "required": false,
-        "minLength": 1,
-        "maxLength": 120
-      }
-    ],
-    "slots": [],
-    "capabilities": {
-      "responsiveVisibility": true,
-      "responsiveOrder": true,
-      "gridWidth": true,
-      "height": "content_or_bounded",
-      "publicSurface": "allowed",
-      "accessibleName": "optional",
-      "accessibleNamePropertyPath": ["title"]
-    },
-    "supportedEvents": ["refresh", "row_action", "selection_changed", "page_changed"],
-    "supportedStateOperations": []
-  },
   "RECORD_DETAIL_BLOCK_RELEASE": {
     "blockId": "e2569df0-2f10-4b20-b41d-177b66cd136c",
     "key": "platform.display.record_detail",
@@ -164,40 +130,6 @@
       "accessibleNamePropertyPath": ["title"]
     },
     "supportedEvents": ["refresh", "row_action"],
-    "supportedStateOperations": []
-  },
-  "GROUPED_DATA_BLOCK_RELEASE": {
-    "blockId": "6c27a0c2-ad91-4a5a-ab1d-54d337bebe36",
-    "key": "platform.display.grouped_data",
-    "releaseVersion": "1.0.0",
-    "name": "Grouped data",
-    "description": "Records from a query, grouped under headings.",
-    "icon": "layers",
-    "paletteGroup": "data",
-    "rendererKey": "platform.renderer.grouped_data",
-    "properties": [
-      {
-        "kind": "text",
-        "key": "title",
-        "presentation": true,
-        "label": "Title",
-        "help": "Accessible name shown as the block heading",
-        "required": false,
-        "minLength": 1,
-        "maxLength": 120
-      }
-    ],
-    "slots": [],
-    "capabilities": {
-      "responsiveVisibility": true,
-      "responsiveOrder": true,
-      "gridWidth": true,
-      "height": "content_or_bounded",
-      "publicSurface": "allowed",
-      "accessibleName": "optional",
-      "accessibleNamePropertyPath": ["title"]
-    },
-    "supportedEvents": ["refresh", "row_action", "selection_changed"],
     "supportedStateOperations": []
   },
   "SUMMARY_VALUES_BLOCK_RELEASE": {
@@ -597,50 +529,6 @@
     "supportedEvents": ["refresh"],
     "supportedStateOperations": []
   },
-  "LIST_BLOCK_RELEASE_1_1_0": {
-    "blockId": "4881c816-e4ce-4c39-b0b7-20958b947748",
-    "key": "platform.display.list",
-    "releaseVersion": "1.1.0",
-    "name": "List",
-    "description": "A simple list of records from a query.",
-    "icon": "list",
-    "paletteGroup": "data",
-    "rendererKey": "platform.renderer.list",
-    "properties": [
-      {
-        "kind": "text",
-        "key": "title",
-        "presentation": true,
-        "label": "Title",
-        "help": "Accessible name shown as the block heading",
-        "required": false,
-        "minLength": 1,
-        "maxLength": 120
-      },
-      {
-        "kind": "text",
-        "key": "empty_message",
-        "presentation": true,
-        "label": "Empty message",
-        "help": "Text shown when there are no records to display",
-        "required": false,
-        "minLength": 1,
-        "maxLength": 200
-      }
-    ],
-    "slots": [],
-    "capabilities": {
-      "responsiveVisibility": true,
-      "responsiveOrder": true,
-      "gridWidth": true,
-      "height": "content_or_bounded",
-      "publicSurface": "allowed",
-      "accessibleName": "optional",
-      "accessibleNamePropertyPath": ["title"]
-    },
-    "supportedEvents": ["refresh", "row_action", "selection_changed", "page_changed"],
-    "supportedStateOperations": []
-  },
   "RECORD_DETAIL_BLOCK_RELEASE_1_1_0": {
     "blockId": "e2569df0-2f10-4b20-b41d-177b66cd136c",
     "key": "platform.display.record_detail",
@@ -689,50 +577,6 @@
       "accessibleNamePropertyPath": ["title"]
     },
     "supportedEvents": ["refresh", "row_action"],
-    "supportedStateOperations": []
-  },
-  "GROUPED_DATA_BLOCK_RELEASE_1_1_0": {
-    "blockId": "6c27a0c2-ad91-4a5a-ab1d-54d337bebe36",
-    "key": "platform.display.grouped_data",
-    "releaseVersion": "1.1.0",
-    "name": "Grouped data",
-    "description": "Records from a query, grouped under headings.",
-    "icon": "layers",
-    "paletteGroup": "data",
-    "rendererKey": "platform.renderer.grouped_data",
-    "properties": [
-      {
-        "kind": "text",
-        "key": "title",
-        "presentation": true,
-        "label": "Title",
-        "help": "Accessible name shown as the block heading",
-        "required": false,
-        "minLength": 1,
-        "maxLength": 120
-      },
-      {
-        "kind": "text",
-        "key": "empty_message",
-        "presentation": true,
-        "label": "Empty message",
-        "help": "Text shown when there are no groups to display",
-        "required": false,
-        "minLength": 1,
-        "maxLength": 200
-      }
-    ],
-    "slots": [],
-    "capabilities": {
-      "responsiveVisibility": true,
-      "responsiveOrder": true,
-      "gridWidth": true,
-      "height": "content_or_bounded",
-      "publicSurface": "allowed",
-      "accessibleName": "optional",
-      "accessibleNamePropertyPath": ["title"]
-    },
-    "supportedEvents": ["refresh", "row_action", "selection_changed"],
     "supportedStateOperations": []
   },
   "SUMMARY_VALUES_BLOCK_RELEASE_1_1_0": {
@@ -3713,7 +3557,7 @@
         "key": "maximum_size_mb",
         "label": "Maximum size (MiB)",
         "required": true,
-        "minimum": 0.000001,
+        "minimum": 1e-6,
         "maximum": 5000,
         "integer": false
       },
@@ -4600,6 +4444,28 @@
         "defaultValue": {
           "kind": "number",
           "value": 40
+        }
+      },
+      {
+        "kind": "choice",
+        "key": "presentation",
+        "presentation": true,
+        "label": "Preset",
+        "help": "Table shows columns; List shows the same records as cards at every screen size",
+        "required": true,
+        "options": [
+          {
+            "key": "grid",
+            "label": "Table"
+          },
+          {
+            "key": "cards",
+            "label": "List"
+          }
+        ],
+        "defaultValue": {
+          "kind": "choice",
+          "value": "grid"
         }
       },
       {
@@ -5624,6 +5490,113 @@
           },
           {
             "kind": "group",
+            "key": "board",
+            "label": "Board",
+            "help": "Show the records as cards in columns, one for each stage of a pipeline",
+            "required": false,
+            "defaultValue": {
+              "kind": "group",
+              "properties": {
+                "enabled": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            },
+            "properties": [
+              {
+                "kind": "boolean",
+                "key": "enabled",
+                "label": "On",
+                "help": "Show the grid as a board",
+                "required": false,
+                "defaultValue": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              },
+              {
+                "kind": "field_reference",
+                "key": "column_field",
+                "label": "Column field",
+                "help": "The stage field of a pipeline: each of its stages is a column and moving a card changes its stage",
+                "required": false,
+                "fieldTypes": ["choice"]
+              },
+              {
+                "kind": "field_reference",
+                "key": "card_title_field",
+                "label": "Card title",
+                "help": "The field shown as each card's title",
+                "required": false
+              },
+              {
+                "kind": "list",
+                "key": "card_fields",
+                "label": "Card fields",
+                "help": "Up to three more fields shown on each card",
+                "required": false,
+                "minimumItems": 0,
+                "maximumItems": 3,
+                "item": {
+                  "kind": "field_reference",
+                  "key": "field",
+                  "label": "Field",
+                  "help": "Field of the bound query shown on each card",
+                  "required": true
+                }
+              },
+              {
+                "kind": "list",
+                "key": "totals",
+                "label": "Column totals",
+                "help": "Totals of the bound query shown in every column header, computed on the server",
+                "required": false,
+                "minimumItems": 0,
+                "maximumItems": 6,
+                "item": {
+                  "kind": "group",
+                  "key": "total",
+                  "label": "Total",
+                  "help": "One total of the bound query and its label",
+                  "required": true,
+                  "properties": [
+                    {
+                      "kind": "text",
+                      "key": "alias",
+                      "label": "Query total",
+                      "help": "Alias of a total declared by the bound query",
+                      "required": true,
+                      "minLength": 1,
+                      "maxLength": 80
+                    },
+                    {
+                      "kind": "text",
+                      "key": "label",
+                      "presentation": true,
+                      "label": "Label",
+                      "help": "Label shown for this total",
+                      "required": true,
+                      "minLength": 1,
+                      "maxLength": 60
+                    }
+                  ]
+                }
+              },
+              {
+                "kind": "number",
+                "key": "wip_limit",
+                "label": "Cards per column",
+                "help": "A column warns when it holds more cards than this",
+                "required": false,
+                "integer": true,
+                "minimum": 1,
+                "maximum": 1000
+              }
+            ]
+          },
+          {
+            "kind": "group",
             "key": "pivot",
             "label": "Pivot",
             "help": "Show records as rows crossed with columns, totalled on the server",
@@ -5664,11 +5637,26 @@
                 "help": "The calendar unit when the rows are a date field",
                 "required": false,
                 "options": [
-                  { "key": "day", "label": "Day" },
-                  { "key": "week", "label": "Week" },
-                  { "key": "month", "label": "Month" },
-                  { "key": "quarter", "label": "Quarter" },
-                  { "key": "year", "label": "Year" }
+                  {
+                    "key": "day",
+                    "label": "Day"
+                  },
+                  {
+                    "key": "week",
+                    "label": "Week"
+                  },
+                  {
+                    "key": "month",
+                    "label": "Month"
+                  },
+                  {
+                    "key": "quarter",
+                    "label": "Quarter"
+                  },
+                  {
+                    "key": "year",
+                    "label": "Year"
+                  }
                 ]
               },
               {
@@ -5686,11 +5674,26 @@
                 "help": "The calendar unit when the columns are a date field",
                 "required": false,
                 "options": [
-                  { "key": "day", "label": "Day" },
-                  { "key": "week", "label": "Week" },
-                  { "key": "month", "label": "Month" },
-                  { "key": "quarter", "label": "Quarter" },
-                  { "key": "year", "label": "Year" }
+                  {
+                    "key": "day",
+                    "label": "Day"
+                  },
+                  {
+                    "key": "week",
+                    "label": "Week"
+                  },
+                  {
+                    "key": "month",
+                    "label": "Month"
+                  },
+                  {
+                    "key": "quarter",
+                    "label": "Quarter"
+                  },
+                  {
+                    "key": "year",
+                    "label": "Year"
+                  }
                 ]
               },
               {
@@ -5700,11 +5703,26 @@
                 "help": "A count of records, or a total, average, lowest or highest of a number or money field",
                 "required": false,
                 "options": [
-                  { "key": "count", "label": "Count of records" },
-                  { "key": "sum", "label": "Total" },
-                  { "key": "average", "label": "Average" },
-                  { "key": "minimum", "label": "Lowest" },
-                  { "key": "maximum", "label": "Highest" }
+                  {
+                    "key": "count",
+                    "label": "Count of records"
+                  },
+                  {
+                    "key": "sum",
+                    "label": "Total"
+                  },
+                  {
+                    "key": "average",
+                    "label": "Average"
+                  },
+                  {
+                    "key": "minimum",
+                    "label": "Lowest"
+                  },
+                  {
+                    "key": "maximum",
+                    "label": "Highest"
+                  }
                 ]
               },
               {
@@ -5810,6 +5828,15 @@
                 }
               }
             },
+            "board": {
+              "kind": "group",
+              "properties": {
+                "enabled": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            },
             "pivot": {
               "kind": "group",
               "properties": {
@@ -5853,7 +5880,8 @@
       "page_changed",
       "bulk_action",
       "inline_edit",
-      "row_expanded"
+      "row_expanded",
+      "card_moved"
     ],
     "supportedStateOperations": []
   },
@@ -6291,350 +6319,6 @@
       "accessibleNamePropertyPath": ["title"]
     },
     "supportedEvents": ["refresh", "row_action"],
-    "supportedStateOperations": []
-  },
-  "BOARD_BLOCK_RELEASE": {
-    "blockId": "626c1ff5-ae7b-47da-b0d4-370e3a262444",
-    "key": "platform.display.board",
-    "releaseVersion": "1.0.0",
-    "name": "Board",
-    "description": "A kanban board: records as cards in columns by a choice field, such as a stage.",
-    "icon": "grid",
-    "paletteGroup": "data",
-    "rendererKey": "platform.renderer.board",
-    "studioSetup": {
-      "kind": "pipeline",
-      "fieldProperty": "choice_field",
-      "titleFieldProperty": "card_title_field",
-      "label": "Pipeline",
-      "moveFlowName": "Move card",
-      "help": "Cards show every record in the column for its current stage. Moves follow the pipeline's rules and permissions.",
-      "emptyLabel": "No pipelines are available. Create one in Data, or make an existing pipeline stage field filterable.",
-      "fieldHasNoPipeline": "Create a pipeline for this field in Data before using it for board columns.",
-      "stageFilterError": "Make this pipeline's stage field filterable in Data to use it for board columns.",
-      "queryUnavailable": "This record type has reached its query limit. Remove an unused query in Data before adding the board."
-    },
-    "properties": [
-      {
-        "kind": "text",
-        "key": "title",
-        "presentation": true,
-        "label": "Title",
-        "help": "Accessible name shown as the board heading",
-        "required": false,
-        "minLength": 1,
-        "maxLength": 120
-      },
-      {
-        "kind": "field_reference",
-        "key": "choice_field",
-        "label": "Column field",
-        "help": "The pipeline stage that determines the column for each record",
-        "required": true
-      },
-      {
-        "kind": "field_reference",
-        "key": "card_title_field",
-        "label": "Card title field",
-        "help": "The field shown as each card's title",
-        "required": true
-      },
-      {
-        "kind": "list",
-        "key": "detail_fields",
-        "presentation": true,
-        "presentationIdentity": "field",
-        "label": "Card details",
-        "help": "Optional ordered query fields shown below each card title",
-        "required": false,
-        "minimumItems": 0,
-        "maximumItems": 20,
-        "item": {
-          "kind": "group",
-          "key": "detail_field",
-          "label": "Card detail",
-          "help": "One optional labelled field shown on each card",
-          "required": true,
-          "properties": [
-            {
-              "kind": "field_reference",
-              "key": "field",
-              "label": "Field",
-              "help": "Readable field to show on each card",
-              "required": true
-            },
-            {
-              "kind": "text",
-              "key": "label",
-              "presentation": true,
-              "label": "Label",
-              "help": "Optional label for this card field",
-              "required": false,
-              "minLength": 1,
-              "maxLength": 60
-            }
-          ]
-        }
-      },
-      {
-        "kind": "list",
-        "key": "aggregates",
-        "presentation": true,
-        "presentationIdentity": "alias",
-        "label": "Board totals",
-        "help": "Optional ordered protected query totals shown above every column",
-        "required": false,
-        "minimumItems": 0,
-        "maximumItems": 20,
-        "item": {
-          "kind": "group",
-          "key": "aggregate",
-          "label": "Aggregate",
-          "help": "One declared query aggregate and its display label",
-          "required": true,
-          "properties": [
-            {
-              "kind": "text",
-              "key": "alias",
-              "label": "Query aggregate",
-              "help": "Alias of a declared aggregate in the installed Query",
-              "required": true,
-              "minLength": 1,
-              "maxLength": 80
-            },
-            {
-              "kind": "text",
-              "key": "label",
-              "presentation": true,
-              "label": "Label",
-              "help": "Safe display label for this aggregate",
-              "required": true,
-              "minLength": 1,
-              "maxLength": 60
-            }
-          ]
-        }
-      },
-      {
-        "kind": "text",
-        "key": "empty_message",
-        "presentation": true,
-        "label": "Empty message",
-        "help": "Neutral text shown when a fetched board bucket has no cards",
-        "required": false,
-        "minLength": 1,
-        "maxLength": 500
-      },
-      {
-        "kind": "text",
-        "key": "refused_message",
-        "presentation": true,
-        "label": "Refused message",
-        "help": "Text shown when the viewer may not read this board",
-        "required": false,
-        "minLength": 1,
-        "maxLength": 200
-      },
-      {
-        "kind": "text",
-        "key": "error_message",
-        "presentation": true,
-        "label": "Error message",
-        "help": "Text shown when the board could not be read",
-        "required": false,
-        "minLength": 1,
-        "maxLength": 200
-      },
-      {
-        "shared": "query_parameters"
-      },
-      {
-        "shared": "awaiting_message"
-      }
-    ],
-    "slots": [],
-    "capabilities": {
-      "responsiveVisibility": true,
-      "responsiveOrder": true,
-      "gridWidth": true,
-      "height": "content_or_bounded",
-      "publicSurface": "refused",
-      "accessibleName": "optional",
-      "accessibleNamePropertyPath": ["title"]
-    },
-    "supportedEvents": ["refresh", "row_action", "page_changed"],
-    "supportedStateOperations": []
-  },
-  "BOARD_BLOCK_RELEASE_1_1_0": {
-    "blockId": "626c1ff5-ae7b-47da-b0d4-370e3a262444",
-    "key": "platform.display.board",
-    "releaseVersion": "1.1.0",
-    "name": "Board",
-    "description": "A kanban board: records as cards in columns by a choice field, such as a stage.",
-    "icon": "grid",
-    "paletteGroup": "data",
-    "rendererKey": "platform.renderer.board",
-    "studioSetup": {
-      "kind": "pipeline",
-      "fieldProperty": "choice_field",
-      "titleFieldProperty": "card_title_field",
-      "label": "Pipeline",
-      "moveFlowName": "Move card",
-      "help": "Cards show every record in the column for its current stage. Moves follow the pipeline's rules and permissions.",
-      "emptyLabel": "No pipelines are available. Create one in Data, or make an existing pipeline stage field filterable.",
-      "fieldHasNoPipeline": "Create a pipeline for this field in Data before using it for board columns.",
-      "stageFilterError": "Make this pipeline's stage field filterable in Data to use it for board columns.",
-      "queryUnavailable": "This record type has reached its query limit. Remove an unused query in Data before adding the board."
-    },
-    "properties": [
-      {
-        "kind": "text",
-        "key": "title",
-        "presentation": true,
-        "label": "Title",
-        "help": "Accessible name shown as the board heading",
-        "required": false,
-        "minLength": 1,
-        "maxLength": 120
-      },
-      {
-        "kind": "field_reference",
-        "key": "choice_field",
-        "label": "Column field",
-        "help": "The pipeline stage that determines the column for each record",
-        "required": true
-      },
-      {
-        "kind": "field_reference",
-        "key": "card_title_field",
-        "label": "Card title field",
-        "help": "The field shown as each card's title",
-        "required": true
-      },
-      {
-        "kind": "list",
-        "key": "detail_fields",
-        "presentation": true,
-        "presentationIdentity": "field",
-        "label": "Card details",
-        "help": "Optional ordered query fields shown below each card title",
-        "required": false,
-        "minimumItems": 0,
-        "maximumItems": 20,
-        "item": {
-          "kind": "group",
-          "key": "detail_field",
-          "label": "Card detail",
-          "help": "One optional labelled field shown on each card",
-          "required": true,
-          "properties": [
-            {
-              "kind": "field_reference",
-              "key": "field",
-              "label": "Field",
-              "help": "Readable field to show on each card",
-              "required": true
-            },
-            {
-              "kind": "text",
-              "key": "label",
-              "presentation": true,
-              "label": "Label",
-              "help": "Optional label for this card field",
-              "required": false,
-              "minLength": 1,
-              "maxLength": 60
-            }
-          ]
-        }
-      },
-      {
-        "kind": "list",
-        "key": "aggregates",
-        "presentation": true,
-        "presentationIdentity": "alias",
-        "label": "Board totals",
-        "help": "Optional ordered protected query totals shown above every column",
-        "required": false,
-        "minimumItems": 0,
-        "maximumItems": 20,
-        "item": {
-          "kind": "group",
-          "key": "aggregate",
-          "label": "Aggregate",
-          "help": "One declared query aggregate and its display label",
-          "required": true,
-          "properties": [
-            {
-              "kind": "text",
-              "key": "alias",
-              "label": "Query aggregate",
-              "help": "Alias of a declared aggregate in the installed Query",
-              "required": true,
-              "minLength": 1,
-              "maxLength": 80
-            },
-            {
-              "kind": "text",
-              "key": "label",
-              "presentation": true,
-              "label": "Label",
-              "help": "Safe display label for this aggregate",
-              "required": true,
-              "minLength": 1,
-              "maxLength": 60
-            }
-          ]
-        }
-      },
-      {
-        "kind": "text",
-        "key": "empty_message",
-        "presentation": true,
-        "label": "Empty message",
-        "help": "Neutral text shown when a fetched board bucket has no cards",
-        "required": false,
-        "minLength": 1,
-        "maxLength": 500
-      },
-      {
-        "kind": "text",
-        "key": "refused_message",
-        "presentation": true,
-        "label": "Refused message",
-        "help": "Text shown when the viewer may not read this board",
-        "required": false,
-        "minLength": 1,
-        "maxLength": 200
-      },
-      {
-        "kind": "text",
-        "key": "error_message",
-        "presentation": true,
-        "label": "Error message",
-        "help": "Text shown when the board could not be read",
-        "required": false,
-        "minLength": 1,
-        "maxLength": 200
-      },
-      {
-        "shared": "query_parameters"
-      },
-      {
-        "shared": "awaiting_message"
-      }
-    ],
-    "slots": [],
-    "capabilities": {
-      "responsiveVisibility": true,
-      "responsiveOrder": true,
-      "gridWidth": true,
-      "height": "content_or_bounded",
-      "publicSurface": "refused",
-      "accessibleName": "optional",
-      "accessibleNamePropertyPath": ["title"]
-    },
-    "supportedEvents": ["refresh", "row_action", "page_changed", "card_moved"],
     "supportedStateOperations": []
   },
   "CONTAINER_BLOCK_RELEASE_1_3_0": {
@@ -7659,7 +7343,7 @@
         "key": "maximum_size_mb",
         "label": "Maximum size (MiB)",
         "required": true,
-        "minimum": 0.000001,
+        "minimum": 1e-6,
         "maximum": 5000,
         "integer": false
       },

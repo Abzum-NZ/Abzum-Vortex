@@ -30,6 +30,9 @@ import {
   studioRecordBindingFields,
   StudioSettingFields,
   StudioGridFeatures,
+  boardModeOf,
+  boardSettingChoices,
+  studioBoardPipelines,
   studioGridFeaturesProperty,
   type StudioCompositionBreakpoint,
   type StudioCompositionCommand,
@@ -233,15 +236,37 @@ export function ApplicationCompositionEditor(props: Props) {
   };
   const changeSettings = (next: SettingsInputs) => {
     if (settingsModel.kind !== "available") return;
+    const board = boardModeOf(next.settings);
+    const featureGroup = next.settings.features;
+    const boardValue = featureGroup?.kind === "group" ? featureGroup.properties.board : undefined;
+    const boardDeclaration = featuresProperty?.properties.find(
+      (property) => property.key === "board",
+    );
+    // A pipeline selection writes its query in the same composition command. Check its real
+    // record fields before that write, rather than the previous query's selected fields.
+    // Dormant table mappings retain structural validation, as they do at publication.
+    const mappingProblems =
+      board !== undefined && boardDeclaration !== undefined && boardValue !== undefined
+        ? [
+            ...studioSettingProblems(next.settings, settingsModel.properties),
+            ...studioSettingProblems(
+              { board: boardValue },
+              [boardDeclaration],
+              boardSettingChoices(props.choices, board),
+            ),
+          ]
+        : studioSettingProblems(
+            next.settings,
+            settingsModel.properties,
+            studioBlockChoices(props.choices, next.query),
+          );
     const problems = [
-      ...(settingsModel.readsQuery && next.query === null
+      ...(settingsModel.readsQuery &&
+      next.query === null &&
+      (board?.columnField === undefined || board.cardTitleField === undefined)
         ? ["Choose the data this block shows."]
         : []),
-      ...studioSettingProblems(
-        next.settings,
-        settingsModel.properties,
-        studioBlockChoices(props.choices, next.query),
-      ),
+      ...mappingProblems,
     ];
     if (problems.length > 0) {
       settings.hold(next, problems.join(" "));
@@ -401,6 +426,20 @@ export function ApplicationCompositionEditor(props: Props) {
           idPrefix={`${settingsId}-features`}
           property={featuresProperty}
           value={settingsInputs.settings[featuresProperty.key]}
+          presentation={(() => {
+            const setting =
+              settingsInputs.settings.presentation ??
+              (settingsModel.kind === "available"
+                ? settingsModel.properties.find((property) => property.key === "presentation")
+                    ?.defaultValue
+                : undefined);
+            if (
+              setting?.kind !== "choice" ||
+              (setting.value !== "grid" && setting.value !== "cards")
+            )
+              throw new Error("Data grid preset is missing its declared setting");
+            return setting.value;
+          })()}
           query={props.choices.queries.find((query) => query.reference === settingsInputs.query)}
           compiledFields={(() => {
             const query = props.choices.queries.find(
@@ -411,6 +450,11 @@ export function ApplicationCompositionEditor(props: Props) {
               : props.compiledFields?.recordTypes[query.recordType];
           })()}
           choices={choices}
+          boardChoices={boardSettingChoices(props.choices, boardModeOf(settingsInputs.settings))}
+          pipelines={studioBoardPipelines(
+            props.context.source,
+            settingsModel.kind === "available" ? settingsModel.placementAlias : undefined,
+          )}
           related={{
             queries: props.choices.queries,
             relationships: props.choices.relationships,

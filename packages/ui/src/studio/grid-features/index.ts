@@ -63,6 +63,7 @@ export const studioGridFeatureEditors: Readonly<
   // The catalogue restricts the row and column pickers to choice and date fields and the measure
   // picker to number and money fields, so Studio offers only fields a pivot can use.
   pivot: { kind: "settings" },
+  board: { kind: "custom" },
 };
 
 /**
@@ -131,6 +132,7 @@ export const studioRecordsTableQueryFacts = (
       acceptsSelection: action.acceptsSelection,
     })),
   grouped: query?.grouped === true,
+  board: query?.board,
   relatedRecords: {
     recordType: query?.recordType ?? "",
     links:

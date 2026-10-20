@@ -105,7 +105,7 @@ and its real storage path, not to a browser-only correction after rows are paged
 
 ## Records table grid features
 
-The Records table grid itself (columns, sorting, density, sticky headings, resizing, reordering and showing or hiding columns) is always available. Everything else is an optional **grid feature**, authored in the table's one `features` setting group as `{ enabled, ...its settings }` and off by default: search, column filters, saved views, bulk actions, inline editing, related records (master/detail), column pinning, conditional formatting and pivot. Later features (grouping, totals, conditional formatting, export) join the same gate.
+The Records table grid itself (columns, sorting, density, sticky headings, resizing, reordering and showing or hiding columns) is always available. Everything else is an optional **grid feature**, authored in the table's one `features` setting group as `{ enabled, ...its settings }` and off by default: search, column filters, saved views, bulk actions, inline editing, related records (master/detail), column pinning, conditional formatting, pivot and board. Later features (grouping, totals, conditional formatting, export) join the same gate.
 
 One gate decides every feature, in three places that cannot disagree:
 
@@ -114,6 +114,10 @@ One gate decides every feature, in three places that cannot disagree:
 3. **Lazy code.** The browser downloads a feature's code only when the projection turns it on; a table with every feature off loads none of it.
 
 A feature that is off holds only its switch, so it compiles to nothing: its flow bindings are not compiled and its controls never render.
+
+### Board
+
+The Board feature turns the Data grid into a board: one column for each stage of a pipeline, a card for each record. There is no separate board block; the grid reads the one board engine below. The feature names the **column field** (the stage field of a pipeline), the **card title** field, up to **three card fields**, optional **column totals** (the bound query's own aggregates, computed on the server) and an optional **card limit** that warns when a column holds more cards. The bound query must be grouped by exactly the column field, read no linked records, select every card field and read 1 to 200 cards at a time; Studio binds the grid to such a query when the pipeline is chosen. The capability check refuses with the part that does not fit: "Board needs a stage field", a field with no pipeline, one that is not filterable, a query not grouped by the column field, a card field the query does not select, or a total the query does not declare. Each column loads its first page of cards and "Show more" reads the next; counts and totals come from the server. Dragging a card, or its Move to menu, saves the card's new stage through the board's `card_moved` flow, so the pipeline's moves, the stage's named action and the viewer's permissions apply and a refused move returns the card to its column with the rule's message. A board is never shown on a public page. On a phone one column shows at a time with a column switcher.
 
 ### Related records (master/detail)
 
@@ -193,7 +197,7 @@ contribute, while their readable rows still count. The operation is uncached,
 refuses neutrally above the 100,000-candidate ceiling, and returns no records,
 raw groups or option permission identifiers. It does not promise an atomic
 snapshot across separate member and summary requests, and it does not compose
-board blocks.
+boards.
 
 A protected grouped-member page reads one exact group of an installed grouped
 Query in record-identity order. Its selector supplies every installed grouping
@@ -323,7 +327,10 @@ Current person supplies a record reference to the signed-in viewer's directory p
 
 Grid grouping is state of the Data grid, executed by `run_module_query_summary` and the protected
 `groupedMembers` reader. Query-authored grouping and totals supply defaults; they are not a second
-grid engine. The separate `grouped_data` block converges to a Data grid preset in #3085.
+grid engine. Data grid is the only record-table block. Its List preset renders the same bounded
+record page as cards at every screen size; Table can use those same cards on phones. Presets write
+ordinary grid settings and never select a second query or renderer. The former standalone list
+and grouped-data blocks have been removed; grouped preset authoring follows the grid grouping feature.
 
 The protected readers accept `grouping: { fieldId, limit, dateBucket? }` to replace those defaults
 with one query-selected, filterable dimension. A choice field has at most 50 options; a lifecycle

@@ -7,6 +7,7 @@ import {
   type PlatformBlockRelease,
   type PlatformBlockReleaseSummary,
   type ModuleQueryExposure,
+  type RecordsTableBoardFacts,
 } from "@vortex/platform/schema";
 import { PALETTE_GROUP_TITLES } from "../palette-groups";
 import { studioHasSlotStarter } from "./composition-starters";
@@ -34,8 +35,6 @@ export type StudioPaletteChoice = Readonly<{
   needsQuery: boolean;
   /** Required settings without a catalogue default, asked for when the block is added. */
   setup: readonly BlockPropertySchemaContract[];
-  /** A declared selector that derives initial settings and, when needed, a source query. */
-  studioSetup?: PlatformBlockRelease["studioSetup"];
   /** Why the block cannot be added yet; absent when it can. */
   unavailable?: string;
 }>;
@@ -100,6 +99,11 @@ const choiceFor = (
   const setup: BlockPropertySchemaContract[] = [];
   let unavailable: string | undefined;
   for (const property of release.properties) {
+    // A preset is selected inside the one Data grid tile. It writes ordinary grid settings.
+    if (release.key === "platform.display.table" && property.key === "presentation") {
+      setup.push(property);
+      continue;
+    }
     if (!property.required || property.defaultValue !== undefined) continue;
     if (studioSettingEditable(property)) setup.push(property);
     else unavailable ??= `It needs its ${property.label} setting, which Studio can't set yet.`;
@@ -125,7 +129,6 @@ const choiceFor = (
     groupLabel: PALETTE_GROUP_TITLES[release.paletteGroup],
     needsQuery: studioReleaseReadsQuery(release),
     setup: Object.freeze(setup),
-    ...(release.studioSetup === undefined ? {} : { studioSetup: release.studioSetup }),
     ...(unavailable === undefined ? {} : { unavailable }),
   });
 };
@@ -286,6 +289,8 @@ export type StudioQueryChoice = Readonly<{
   grouped: boolean;
   /** The values the query asks for. */
   inputs: readonly StudioQueryInput[];
+  /** What a Board needs of the query; absent for a query of a Module the application only uses. */
+  board?: RecordsTableBoardFacts;
   /** Whether the Applications that use its Module may read it. A borrowed query is always exposed. */
   exposure: ModuleQueryExposure;
   /**
@@ -341,6 +346,41 @@ const borrowedFor = (
 export const studioUsesSignature = (source: ApplicationSourceDocument): string =>
   JSON.stringify(source.body.uses.map((use) => `${use.application}/${use.module}`).sort());
 
+type DraftModule = ApplicationSourceDocument["body"]["modules"][number];
+
+/**
+ * What a Board needs of one draft query and its record type, in the spelling the table's settings
+ * use (qualified field references), so Studio runs the check publication runs.
+ */
+export const studioBoardFacts = (
+  moduleKey: string,
+  query: DraftModule["queries"][number],
+  record: DraftModule["record_types"][number],
+): RecordsTableBoardFacts => {
+  const reference = (key: string): string => `${moduleKey}:${record.key}.${key}`;
+  return {
+    queryLabel: query.label ?? query.key,
+    fields: record.fields.map((field) => ({
+      field: reference(field.key),
+      label: field.label,
+      type: field.type,
+      filterable: field.filterable,
+      ...(studioFieldFacts(field).choiceCount === undefined
+        ? {}
+        : { choiceCount: studioFieldFacts(field).choiceCount! }),
+    })),
+    selected: (query.select.length === 0
+      ? record.fields.map((field) => field.key)
+      : query.select
+    ).map(reference),
+    groupBy: query.group_by.map(reference),
+    aggregates: query.aggregates.map((aggregate) => aggregate.alias),
+    relationshipHops: query.relationship_hops,
+    pageSize: query.page_size,
+    stageFields: record.pipelines.map((pipeline) => reference(pipeline.stage_field)),
+  };
+};
+
 /** The queries of the application's own Modules: they are in its source. */
 const ownQueries = (source: ApplicationSourceDocument): StudioQueryChoice[] =>
   (source.body.modules ?? []).flatMap((module) =>
@@ -392,6 +432,7 @@ const ownQueries = (source: ApplicationSourceDocument): StudioQueryChoice[] =>
         grouped: query.group_by.length > 0 || query.aggregates.length > 0,
         inputs: Object.freeze(inputs),
         exposure: query.exposure,
+        ...(record === undefined ? {} : { board: studioBoardFacts(module.key, query, record) }),
       });
     }),
   );

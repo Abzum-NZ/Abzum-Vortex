@@ -1,6 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactElement,
+} from "react";
 import {
   readRecordsTableContract,
   type RecordsTableActionContract,
@@ -19,6 +28,7 @@ import {
   SelectionControl,
 } from "./controls";
 import {
+  GridBoardView,
   useGridFeatures,
   type GridFeatureContext,
   type GridPivotView,
@@ -27,6 +37,7 @@ import { FULL_SCREEN_CLASS, GridToolbar, useGridFullScreen } from "./grid-featur
 import { resolveDisplayContext, rowName, type DisplayRenderProps } from "./context";
 import { DisplayStateContainer } from "./display-state-container";
 import type {
+  BoardPayload,
   DisplayCellValue,
   DisplayColumn,
   DisplayRow,
@@ -34,11 +45,13 @@ import type {
   TablePayload,
 } from "./projected-data";
 import { useRowExpansion } from "./row-expansion";
-import { RecordsCards, type CardRenderers } from "./table-cards";
+import type { CardRenderers } from "./table-cards";
 import { columnWidth, useTablePresentation } from "./table-geometry";
 import { RecordsGrid, type GridRenderers } from "./table-grid";
 import { useGridLayout, type GridColumn } from "./table-layout";
 import { TableLoadingState, useLoadingReveal } from "./table-loading";
+
+const RecordsCards = lazy(async () => ({ default: (await import("./table-cards")).RecordsCards }));
 
 /** Field identities compare without regard to case, as the Query engine keys them. */
 const sameFieldKey = (left: string, right: string): boolean =>
@@ -97,14 +110,38 @@ const useAnnouncer = (): [string, (message: string) => void] => {
 };
 
 /**
- * Shared browser-safe display component for tabular data: the one Records table block. It shows
+ * The Data grid: the one block that shows a set of records. Its Board feature turns the same grid
+ * into a board of cards in columns; every other grid shows the table below. The server projects
+ * the payload that mode needs, so a payload of the other kind is a definition error.
+ */
+export function TableDisplay(props: DisplayRenderProps<TablePayload | BoardPayload>): ReactElement {
+  const boardMode = readRecordsTableContract(props.settings)?.features.board.enabled === true;
+  const data = props.data;
+  const mismatched = data?.status === "ready" && (data.values.kind === "board") !== boardMode;
+  if (mismatched)
+    console.error("[display] The Data grid's projected values do not match its mode", {
+      placementId: props.placementId,
+    });
+  const checked = (mismatched ? { ...props, data: { status: "error" } } : props) as
+    DisplayRenderProps<BoardPayload> | DisplayRenderProps<TablePayload>;
+  return boardMode ? (
+    <Suspense fallback={null}>
+      <GridBoardView {...(checked as DisplayRenderProps<BoardPayload>)} />
+    </Suspense>
+  ) : (
+    <RecordsTableView {...(checked as DisplayRenderProps<TablePayload>)} />
+  );
+}
+
+/**
+ * Shared browser-safe display component for tabular data: the Data grid's table mode. It shows
  * exactly the permitted page the host read, as an accessible data grid on wide screens and, when
  * the definition asks for it, as cards on a phone; only the active presentation is mounted. Every
  * control reports a declared data event, and the host reads a new page on the server; the
  * component never sorts, filters, pages or fetches rows itself. Loading, empty, no-match, refused
  * and error states stay distinct, and search and filters stay usable when nothing matched.
  */
-export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElement {
+function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement {
   const { placementId, availability, settings } = props;
   const {
     title,
@@ -472,6 +509,7 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
     <TableLoadingState
       accessibleName={accessibleName}
       contract={contract}
+      density={layout.density}
       presentation={presentation ?? "grid"}
       selectionColumn={selectable}
       actionsColumn={showActions}
@@ -538,18 +576,21 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
     // skeleton stands in until the one presentation that fits is known.
     if (presentation === undefined) return loading;
     return presentation === "cards" ? (
-      <RecordsCards
-        accessibleName={accessibleName}
-        columns={layout.shown}
-        rows={rows}
-        selectedRecordIds={selectedRecordIds}
-        selectable={selectable}
-        showActions={showActions}
-        activateRow={activateRow}
-        renderers={renderers}
-        expansion={expansion}
-        fill={fullScreen.active}
-      />
+      <Suspense fallback={loading}>
+        <RecordsCards
+          accessibleName={accessibleName}
+          columns={layout.shown}
+          rows={rows}
+          selectedRecordIds={selectedRecordIds}
+          selectable={selectable}
+          showActions={showActions}
+          activateRow={activateRow}
+          renderers={renderers}
+          expansion={expansion}
+          fill={fullScreen.active}
+          density={layout.density}
+        />
+      </Suspense>
     ) : (
       <RecordsGrid
         accessibleName={accessibleName}
@@ -577,6 +618,7 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload>): ReactElem
       data-vortex-display="table"
       data-vortex-placement-id={placementId}
       data-vortex-table-density={layout.density}
+      data-vortex-table-presentation={presentation}
       {...(fullScreen.active ? { "data-vortex-full-screen": "" } : {})}
       className={cn(fullScreen.active && FULL_SCREEN_CLASS)}
       {...(revealed ? { "data-vortex-display-revealed": "" } : {})}

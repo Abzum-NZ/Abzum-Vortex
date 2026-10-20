@@ -1,3 +1,4 @@
+export { parseCalendarPayload } from "./calendar-payload";
 import {
   builderKeySchema,
   moduleFieldValueSchemas,
@@ -114,29 +115,11 @@ export type DisplayColumn = Readonly<{ key: string; label: string }>;
 /** One labelled record-detail field. */
 export type DisplayField = Readonly<{ key: string; label: string; value: DisplayCellValue }>;
 
-/** One labelled summary value. */
-export type DisplaySummaryValue = Readonly<{
-  key: string;
-  label: string;
-  value: DisplayCellValue;
-}>;
-
 /** One summary-block aggregate, which may be unavailable on its own. */
 export type DisplaySummaryMetric = Readonly<{
   key: string;
   label: string;
   value: DisplayCellValue | Readonly<{ kind: "unavailable" }>;
-}>;
-
-/** One permission-projected group with stable group identity and its own rows. */
-export type DisplayGroup = Readonly<{
-  groupId: string;
-  label: string;
-  headingKey: string;
-  secondaryKey?: string;
-  rows: readonly DisplayRow[];
-  selectedRecordIds?: readonly string[];
-  summary?: readonly DisplaySummaryValue[];
 }>;
 
 /** The ready values a plain-text block renders. */
@@ -145,15 +128,12 @@ export type TextPayload = Readonly<{ kind: "text"; value: DisplayCellValue }>;
 /** The ready values a structured rich-text block renders. */
 export type RichTextPayload = Readonly<{ kind: "rich_text"; document: DisplayRichTextDocument }>;
 
-/** The ready values a list block renders. */
-export type ListPayload = Readonly<{
-  kind: "list";
+/** The ready rows a launcher or link-tile block renders. */
+export type LauncherRowsPayload = Readonly<{
+  kind: "launcher_rows";
   rows: readonly DisplayRow[];
   headingKey: string;
   secondaryKey?: string;
-  selectedRecordIds?: readonly string[];
-  page?: number;
-  pageCount?: number;
 }>;
 
 /** The viewer's search and filters one table page was read with. */
@@ -233,9 +213,6 @@ export type RecordDetailPayload = Readonly<{
   heading?: DisplayCellValue;
 }>;
 
-/** The ready values a grouped-data block renders. */
-export type GroupedPayload = Readonly<{ kind: "grouped_data"; groups: readonly DisplayGroup[] }>;
-
 /** The ready values a summary-values block renders. */
 export type SummaryPayload = Readonly<{
   kind: "summary_values";
@@ -274,10 +251,9 @@ export type BoardColumnPayload = BoardBucketPayload &
     gatedBy?: string;
   }>;
 
-/** The ready values a query-bound board block renders. */
+/** The ready values a Data grid in Board mode renders. */
 export type BoardPayload = Readonly<{
   kind: "board";
-  title?: string;
   plan: Readonly<{
     moduleRootId: string;
     moduleReleaseVersion: string;
@@ -287,6 +263,8 @@ export type BoardPayload = Readonly<{
   /** The key a card move names the choice field by when it asks for the record to be saved. */
   choiceFieldKey: string;
   choiceFieldRequired: boolean;
+  /** The cards a column should not exceed; a column holding more warns. */
+  wipLimit?: number;
   cardTitleFieldId: string;
   /** The only field identities a card may carry; readable values and labels may be omitted. */
   cardFieldIds: readonly string[];
@@ -299,10 +277,9 @@ export type BoardPayload = Readonly<{
 
 export type TextData = DisplayDataState<TextPayload>;
 export type RichTextData = DisplayDataState<RichTextPayload>;
-export type ListData = DisplayDataState<ListPayload>;
+export type LauncherRowsData = DisplayDataState<LauncherRowsPayload>;
 export type TableData = DisplayDataState<TablePayload>;
 export type RecordDetailData = DisplayDataState<RecordDetailPayload>;
-export type GroupedData = DisplayDataState<GroupedPayload>;
 export type SummaryData = DisplayDataState<SummaryPayload>;
 export type BoardData = DisplayDataState<BoardPayload>;
 
@@ -528,17 +505,6 @@ export const isInternalAddress = (value: unknown): value is string =>
 export const isWebLinkAddress = (value: string): boolean => /^https?:/i.test(value);
 const EMPTY_HANDLERS: DisplayEventHandlers = Object.freeze({});
 const ISO_CALENDAR_DATE = /^\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])$/;
-const isValidIsoCalendarDate = (text: string): boolean => {
-  if (!ISO_CALENDAR_DATE.test(text)) return false;
-  const [year, month, day] = text.split("-").map(Number) as [number, number, number];
-  const date = new Date(0);
-  date.setUTCFullYear(year, month - 1, day);
-  date.setUTCHours(0, 0, 0, 0);
-  return (
-    date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day
-  );
-};
-
 /** @internal Shared with the board payload parser. */
 export function fail(
   message: string,
@@ -693,7 +659,8 @@ const parseCellValue = (
     case "choice": {
       requireExactKeys(record, ["kind", "key", "label"], location);
       const key = moduleFieldValueSchemas.choice.safeParse(record.key);
-      if (!key.success) return fail("A choice display value requires a valid stored value", location);
+      if (!key.success)
+        return fail("A choice display value requires a valid stored value", location);
       return Object.freeze({
         kind: "choice",
         key: key.data,
@@ -944,29 +911,6 @@ const parseSelection = (
   );
 };
 
-const parsePagination = (
-  page: unknown,
-  pageCount: unknown,
-  location: DefinitionRenderErrorLocation,
-): Readonly<{ page: number; pageCount: number }> | undefined => {
-  if (page === undefined && pageCount === undefined) return undefined;
-  if (page === undefined || pageCount === undefined)
-    fail("Projected pagination requires both page and pageCount", location);
-  const parsedPage = requirePositiveInteger(
-    page,
-    "Projected page must be a positive integer",
-    location,
-  );
-  const parsedCount = requirePositiveInteger(
-    pageCount,
-    "Projected pageCount must be a positive integer",
-    location,
-  );
-  if (parsedPage > parsedCount)
-    fail("Projected page cannot exceed the projected pageCount", location);
-  return Object.freeze({ page: parsedPage, pageCount: parsedCount });
-};
-
 /** @internal Shared with the pivot feature, whose cells are summary values. */
 export const parseSummaryValue = (
   value: unknown,
@@ -1017,11 +961,6 @@ export const parseSummaryMetrics = (
   location: DefinitionRenderErrorLocation,
 ): readonly DisplaySummaryMetric[] => parseSummaryEntries(value, location, parseSummaryValue);
 
-const parseSummaryValues = (
-  value: unknown,
-  location: DefinitionRenderErrorLocation,
-): readonly DisplaySummaryValue[] => parseSummaryEntries(value, location, parseCellValue);
-
 /**
  * @internal Shared with the board payload parser. A board card's fields are scalar; only a record
  * detail passes the detail value parser that also accepts a table field's rows.
@@ -1061,61 +1000,6 @@ export const parseFields = (
   );
 };
 
-const parseGroups = (
-  value: unknown,
-  location: DefinitionRenderErrorLocation,
-): readonly DisplayGroup[] => {
-  const items = requireArray(value, "Projected groups must be an array", location);
-  const seen = new Set<string>();
-  return Object.freeze(
-    items.map((item, index) => {
-      const groupLocation = { ...location, propertyPath: [`groups[${index}]`] };
-      const record = requireRecord(item, "A projected group must be an object", groupLocation);
-      requireExactKeys(
-        record,
-        ["groupId", "label", "headingKey", "secondaryKey", "rows", "selectedRecordIds", "summary"],
-        groupLocation,
-      );
-      const groupId = requireNonEmptyString(
-        record.groupId,
-        "A projected group requires a stable identity",
-        groupLocation,
-      );
-      if (seen.has(groupId)) fail(`Duplicate projected group identity '${groupId}'`, groupLocation);
-      seen.add(groupId);
-      const rows = parseRows(record.rows, groupLocation);
-      const selection = parseSelection(record.selectedRecordIds, rows, groupLocation);
-      return Object.freeze({
-        groupId,
-        label: requireNonEmptyString(
-          record.label,
-          "A projected group requires a label",
-          groupLocation,
-        ),
-        headingKey: requireBuilderKey(
-          record.headingKey,
-          "A projected group requires a heading key",
-          groupLocation,
-        ),
-        ...(record.secondaryKey === undefined
-          ? {}
-          : {
-              secondaryKey: requireBuilderKey(
-                record.secondaryKey,
-                "A projected group secondary key is invalid",
-                groupLocation,
-              ),
-            }),
-        rows,
-        ...(selection === undefined ? {} : { selectedRecordIds: selection }),
-        ...(record.summary === undefined
-          ? {}
-          : { summary: parseSummaryValues(record.summary, groupLocation) }),
-      });
-    }),
-  );
-};
-
 /** The ready values a plain-text block accepts. */
 export const parseTextPayload = (
   value: unknown,
@@ -1143,28 +1027,25 @@ export const parseRichTextPayload = (
   });
 };
 
-/** The ready values a list block accepts. */
-export const parseListPayload = (
+/** The ready rows a launcher or link-tile block accepts. */
+export const parseLauncherRowsPayload = (
   value: unknown,
   location: DefinitionRenderErrorLocation = {},
-): ListPayload => {
+): LauncherRowsPayload => {
   const record = requireRecord(value, "Projected display values must be an object", location);
-  if (record.kind !== "list")
-    return fail(`Expected 'list' projected values, got '${String(record.kind)}'`, location);
-  requireExactKeys(
-    record,
-    ["kind", "rows", "headingKey", "secondaryKey", "selectedRecordIds", "page", "pageCount"],
-    location,
-  );
+  if (record.kind !== "launcher_rows")
+    return fail(
+      `Expected 'launcher_rows' projected values, got '${String(record.kind)}'`,
+      location,
+    );
+  requireExactKeys(record, ["kind", "rows", "headingKey", "secondaryKey"], location);
   const rows = parseRows(record.rows, location);
-  const selection = parseSelection(record.selectedRecordIds, rows, location);
-  const pagination = parsePagination(record.page, record.pageCount, location);
   return Object.freeze({
-    kind: "list",
+    kind: "launcher_rows",
     rows,
     headingKey: requireBuilderKey(
       record.headingKey,
-      "A projected list requires a heading key",
+      "Projected launcher rows require a heading key",
       location,
     ),
     ...(record.secondaryKey === undefined
@@ -1172,12 +1053,10 @@ export const parseListPayload = (
       : {
           secondaryKey: requireBuilderKey(
             record.secondaryKey,
-            "A projected list secondary key is invalid",
+            "The projected launcher secondary key is invalid",
             location,
           ),
         }),
-    ...(selection === undefined ? {} : { selectedRecordIds: selection }),
-    ...(pagination === undefined ? {} : pagination),
   });
 };
 
@@ -1323,101 +1202,6 @@ export const parseTablePayload = (
   });
 };
 
-/** The ready values a calendar block accepts. */
-export const parseCalendarPayload = (
-  value: unknown,
-  location: DefinitionRenderErrorLocation = {},
-): CalendarPayload => {
-  const record = requireRecord(value, "Projected display values must be an object", location);
-  if (record.kind !== "calendar")
-    return fail(`Expected 'calendar' projected values, got '${String(record.kind)}'`, location);
-  requireExactKeys(
-    record,
-    [
-      "kind",
-      "view",
-      "date",
-      "windowStart",
-      "windowEnd",
-      "timeZone",
-      "endExclusive",
-      "truncated",
-      "items",
-    ],
-    location,
-  );
-  const calendarDate = (candidate: unknown, message: string): string => {
-    const text = requireNonEmptyString(candidate, message, location);
-    if (!isValidIsoCalendarDate(text)) return fail(message, location);
-    return text;
-  };
-  const dateOrTimestamp = (candidate: unknown, message: string): string => {
-    const text = requireNonEmptyString(candidate, message, location);
-    const date = isValidIsoCalendarDate(text);
-    if (!date && !timestampSchema.safeParse(text).success) return fail(message, location);
-    return text;
-  };
-  const view = record.view;
-  if (view !== "month" && view !== "week" && view !== "agenda")
-    return fail("A calendar view must be month, week or agenda", location);
-  const date = calendarDate(record.date, "A calendar requires an ISO date");
-  const windowStart = calendarDate(record.windowStart, "A calendar requires a window start date");
-  const windowEnd = calendarDate(record.windowEnd, "A calendar requires a window end date");
-  if (windowStart >= windowEnd)
-    return fail("A calendar window must have positive length", location);
-  const timeZone = requireNonEmptyString(
-    record.timeZone,
-    "A calendar requires a time zone",
-    location,
-  );
-  try {
-    new Intl.DateTimeFormat("en", { timeZone }).format(0);
-  } catch {
-    return fail("A calendar time zone must be supported", location);
-  }
-  if (typeof record.truncated !== "boolean")
-    return fail("A calendar requires a truncation flag", location);
-  if (typeof record.endExclusive !== "boolean")
-    return fail("A calendar requires an end boundary rule", location);
-  const seen = new Set<string>();
-  const items = requireArray(record.items, "Calendar items must be an array", location).map(
-    (candidate): CalendarItemPayload => {
-      const item = requireRecord(candidate, "A calendar item must be an object", location);
-      requireExactKeys(item, ["recordId", "start", "end", "title"], location);
-      const recordId = requireNonEmptyString(
-        item.recordId,
-        "A calendar item requires a record identity",
-        location,
-      );
-      const normalizedRecordId = recordId.toLowerCase();
-      if (seen.has(normalizedRecordId)) fail("Each calendar record appears once", location);
-      seen.add(normalizedRecordId);
-      const start = dateOrTimestamp(item.start, "A calendar item requires a valid start");
-      const end =
-        item.end === null ? null : dateOrTimestamp(item.end, "A calendar item end must be valid");
-      if (end !== null && isValidIsoCalendarDate(start) !== isValidIsoCalendarDate(end))
-        fail("A calendar item start and end must use the same date precision", location);
-      return Object.freeze({
-        recordId,
-        start,
-        end,
-        title: requireString(item.title, "A calendar item requires a title", location),
-      });
-    },
-  );
-  return Object.freeze({
-    kind: "calendar",
-    view,
-    date,
-    windowStart,
-    windowEnd,
-    timeZone,
-    endExclusive: record.endExclusive,
-    truncated: record.truncated,
-    items: Object.freeze(items),
-  });
-};
-
 /** The ready values a record-detail block accepts. */
 export const parseRecordDetailPayload = (
   value: unknown,
@@ -1440,18 +1224,6 @@ export const parseRecordDetailPayload = (
     fields: parseFields(record.fields, location, parseDetailFieldValue),
     ...(record.heading === undefined ? {} : { heading: parseCellValue(record.heading, location) }),
   });
-};
-
-/** The ready values a grouped-data block accepts. */
-export const parseGroupedPayload = (
-  value: unknown,
-  location: DefinitionRenderErrorLocation = {},
-): GroupedPayload => {
-  const record = requireRecord(value, "Projected display values must be an object", location);
-  if (record.kind !== "grouped_data")
-    return fail(`Expected 'grouped_data' projected values, got '${String(record.kind)}'`, location);
-  requireExactKeys(record, ["kind", "groups"], location);
-  return Object.freeze({ kind: "grouped_data", groups: parseGroups(record.groups, location) });
 };
 
 /** The ready values a summary-values block accepts. */

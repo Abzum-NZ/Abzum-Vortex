@@ -429,7 +429,6 @@ export function ApplicationDraftAgentTools({
                       group: choice.groupLabel,
                       needsQuery: choice.needsQuery,
                       setup: choice.setup,
-                      studioSetup: choice.studioSetup,
                       ...(choice.unavailable === undefined
                         ? {}
                         : { unavailable: choice.unavailable }),

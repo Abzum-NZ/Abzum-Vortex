@@ -585,6 +585,7 @@
                 {
                   "type": "platform.renderer.table",
                   "props": {
+                    "presentation": "grid",
                     "id": "content_1",
                     "row_click": {
                       "event_id": "event_sd_open_case",
@@ -834,6 +835,7 @@
                 {
                   "type": "platform.renderer.table",
                   "props": {
+                    "presentation": "grid",
                     "id": "comments_sd_case",
                     "title": "Comments",
                     "empty_message": "This case has no comments yet.",
@@ -1389,6 +1391,7 @@
                 {
                   "type": "platform.renderer.table",
                   "props": {
+                    "presentation": "grid",
                     "id": "content_4",
                     "row_click": {
                       "event_id": "event_sd_open_article",
@@ -1738,6 +1741,7 @@
                 {
                   "type": "platform.renderer.table",
                   "props": {
+                    "presentation": "grid",
                     "id": "content_7",
                     "row_click": {
                       "event_id": "event_sd_open_service_level",
@@ -2071,6 +2075,7 @@
                 {
                   "type": "platform.renderer.table",
                   "props": {
+                    "presentation": "grid",
                     "id": "list_sd_customers",
                     "row_click": {
                       "event_id": "event_sd_open_customer",
@@ -2223,6 +2228,7 @@
                 {
                   "type": "platform.renderer.table",
                   "props": {
+                    "presentation": "grid",
                     "id": "cases_sd_customer",
                     "title": "Cases",
                     "empty_message": "This company has no cases.",
@@ -2336,6 +2342,7 @@
                 {
                   "type": "platform.renderer.table",
                   "props": {
+                    "presentation": "grid",
                     "id": "list_sd_requesters",
                     "row_click": {
                       "event_id": "event_sd_open_requester",
@@ -3004,31 +3011,41 @@
             "props": {
               "slot_primary": [
                 {
-                  "type": "platform.renderer.board",
+                  "type": "platform.renderer.table",
                   "props": {
                     "id": "board_sd_cases",
                     "title": "Case board",
-                    "choice_field": "vortex.service_desk.cases:case.status",
-                    "card_title_field": "vortex.service_desk.cases:case.subject",
-                    "detail_fields": [
+                    "columns": [
                       {
-                        "field": "vortex.service_desk.cases:case.case_number",
-                        "label": "Case number"
-                      },
-                      {
-                        "field": "vortex.service_desk.cases:case.priority",
-                        "label": "Priority"
-                      },
-                      {
-                        "field": "vortex.service_desk.cases:case.resolution_due_at",
-                        "label": "Resolution due"
+                        "field": "vortex.service_desk.cases:case.subject",
+                        "label": "Subject",
+                        "visible": true,
+                        "pin": "unpinned"
                       }
                     ],
+                    "row_actions": [
+                      {
+                        "event_id": "event_sd_case_board_open_case",
+                        "label": "Open"
+                      }
+                    ],
+                    "features": {
+                      "board": {
+                        "enabled": true,
+                        "column_field": "vortex.service_desk.cases:case.status",
+                        "card_title_field": "vortex.service_desk.cases:case.subject",
+                        "card_fields": [
+                          "vortex.service_desk.cases:case.case_number",
+                          "vortex.service_desk.cases:case.priority",
+                          "vortex.service_desk.cases:case.resolution_due_at"
+                        ]
+                      }
+                    },
                     "empty_message": "No cases in this status.",
                     "vortex": {
                       "block": {
-                        "block_id": "626c1ff5-ae7b-47da-b0d4-370e3a262444",
-                        "release_version": "1.1.0"
+                        "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
+                        "release_version": "2.0.0"
                       },
                       "query": "vortex.service_desk.cases:service_desk_case_board",
                       "responsive": {
