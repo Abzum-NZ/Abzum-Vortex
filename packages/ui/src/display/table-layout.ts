@@ -477,6 +477,12 @@ export const useGridLayout = ({
   const commits = current?.commits ?? 0;
   useEffect(() => {
     if (commits === 0) return;
+    // Capture must see the completed canvas gesture before the next click; only personal writes
+    // need the coalescing delay. Both hosts still receive the same committed-layout event.
+    if (latest.current.current?.base.persisted === false) {
+      void store();
+      return;
+    }
     const held = writer.current;
     if (held.timer !== undefined) clearTimeout(held.timer);
     held.timer = setTimeout(() => {
