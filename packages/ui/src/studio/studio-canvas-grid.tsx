@@ -268,12 +268,13 @@ export function useStudioCanvasGridEvents(
     report === undefined || compiled === undefined || release === undefined
       ? undefined
       : gridSetup(props, compiled, release);
-  const key = setup?.key;
+  // Source settings invalidate held reads before the next compilation/row response arrives.
+  const key = release === undefined ? undefined : gridSource(props, release).key;
   const alias = String(props.id);
   // The held state follows the settings the grid has now.
   useEffect(() => {
-    if (report !== undefined && setup !== undefined)
-      report({ kind: "sync", placementAlias: alias, key: setup.key, fields: setup.fields });
+    if (report !== undefined && key !== undefined)
+      report({ kind: "sync", placementAlias: alias, key, fields: new Map() });
   }, [report, alias, key]);
   if (report === undefined || setup === undefined || !interactive) return undefined;
   const { contract, fields } = setup;
@@ -327,7 +328,30 @@ export function useStudioCanvasGridEvents(
   };
 }
 
-/** The grid's table contract and field names, or undefined for a block that offers no saved views. */
+/** The authored settings identify held state even while its compiled rows are being replaced. */
+const gridSource = (props: Readonly<Record<string, unknown>>, release: PlatformBlockRelease) => {
+  const declarations = release.properties.filter(
+    ({ key }) => key === "columns" || key === "density" || key === "features",
+  );
+  const normalized = typedSourceSettings(
+    Object.fromEntries(
+      declarations.flatMap(({ key }) => (props[key] === undefined ? [] : [[key, props[key]]])),
+    ),
+    declarations,
+  );
+  if (normalized.failures.length > 0) throw new Error("STUDIO_CANVAS_GRID_SETTINGS_INVALID");
+  const plain = (key: string) =>
+    normalized.settings[key] === undefined
+      ? undefined
+      : plainSourceSettingValue(normalized.settings[key]);
+  const vortex = isRecord(props.vortex) ? props.vortex : {};
+  return {
+    settings: normalized.settings,
+    key: studioCanvasGridKey(vortex.query, plain("columns"), plain("density"), plain("features")),
+  };
+};
+
+/** The grid's table contract and field names, or undefined for a non-table block. */
 const gridSetup = (
   props: Readonly<Record<string, unknown>>,
   compiled: Readonly<Record<string, unknown>>,
@@ -346,27 +370,13 @@ const gridSetup = (
       return [column.field.toLowerCase(), source.field] as const;
     }),
   );
-  const vortex = isRecord(props.vortex) ? props.vortex : {};
   // The inspector reads catalogue defaults too, including defaults inside each column group.
-  const declarations = release.properties.filter(
-    ({ key }) => key === "columns" || key === "density" || key === "features",
-  );
-  const normalized = typedSourceSettings(
-    Object.fromEntries(
-      declarations.flatMap(({ key }) => (props[key] === undefined ? [] : [[key, props[key]]])),
-    ),
-    declarations,
-  );
-  if (normalized.failures.length > 0) throw new Error("STUDIO_CANVAS_GRID_SETTINGS_INVALID");
-  const plain = (key: string) =>
-    normalized.settings[key] === undefined
-      ? undefined
-      : plainSourceSettingValue(normalized.settings[key]);
+  const source = gridSource(props, release);
   // A filter may name a field the table does not show; the feature lists its fields in the same order.
   const filterFields = contract.features.columnFilters.enabled
     ? contract.features.columnFilters.fields
     : [];
-  const features = normalized.settings.features;
+  const features = source.settings.features;
   const sourceFilters =
     features?.kind === "group" && features.properties.column_filters?.kind === "group"
       ? features.properties.column_filters.properties.fields
@@ -383,6 +393,6 @@ const gridSetup = (
   return {
     contract,
     fields,
-    key: studioCanvasGridKey(vortex.query, plain("columns"), plain("density"), plain("features")),
+    key: source.key,
   };
 };
