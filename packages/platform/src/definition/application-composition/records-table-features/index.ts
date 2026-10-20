@@ -25,6 +25,7 @@ import {
 } from "./conditional-formatting";
 import { recordsTableSavedViewsFeature, type RecordsTableSavedViewsSettings } from "./saved-views";
 import { recordsTableSearchFeature, type RecordsTableSearchSettings } from "./search";
+import { recordsTablePinningFeature, type RecordsTablePinningSettings } from "./pinning";
 import {
   settingGroup,
   type RecordsTableFeatureCheck,
@@ -75,6 +76,7 @@ export type {
   RecordsTableMasterDetailSettings,
   RecordsTableSavedViewsSettings,
   RecordsTableSearchSettings,
+  RecordsTablePinningSettings,
 };
 
 /**
@@ -93,9 +95,11 @@ export type RecordsTableFeatures = Readonly<{
   inlineEdit: RecordsTableFeatureState<RecordsTableInlineEditSettings>;
   masterDetail: RecordsTableFeatureState<RecordsTableMasterDetailSettings>;
   conditionalFormatting: RecordsTableFeatureState<RecordsTableConditionalFormattingSettings>;
+  pinning: RecordsTableFeatureState<RecordsTablePinningSettings>;
 }>;
 
 const registry = {
+  pinning: { property: "pinning", definition: recordsTablePinningFeature },
   search: { property: "search", definition: recordsTableSearchFeature },
   column_filters: { property: "columnFilters", definition: recordsTableColumnFiltersFeature },
   saved_views: { property: "savedViews", definition: recordsTableSavedViewsFeature },
@@ -116,6 +120,7 @@ const registry = {
 
 /** The feature keys in the order Studio lists them; each is a key of the `features` setting group. */
 export const recordsTableFeatureKeys = [
+  "pinning",
   "search",
   "column_filters",
   "saved_views",
@@ -163,6 +168,7 @@ export const readRecordsTableFeatures = (
   const inlineEdit = read("inline_edit");
   const masterDetail = read("master_detail");
   const conditionalFormatting = read("conditional_formatting");
+  const pinning = read("pinning");
   if (
     search === undefined ||
     columnFilters === undefined ||
@@ -170,11 +176,13 @@ export const readRecordsTableFeatures = (
     bulkActions === undefined ||
     inlineEdit === undefined ||
     masterDetail === undefined ||
-    conditionalFormatting === undefined
+    conditionalFormatting === undefined ||
+    pinning === undefined
   )
     return undefined;
   return {
     search,
+    pinning,
     columnFilters: columnFilters as RecordsTableFeatures["columnFilters"],
     savedViews,
     bulkActions: bulkActions as RecordsTableFeatures["bulkActions"],

@@ -62,6 +62,7 @@ export const definitionValidationErrorCodes = [
   "definition_records_table_inline_edit",
   "definition_records_table_master_detail",
   "definition_records_table_conditional_formatting",
+  "definition_records_table_pinning",
   "definition_query_binding",
   "definition_unknown_property",
   "definition_too_few_items",
@@ -163,6 +164,11 @@ const definitionValidationErrorCatalogueSource = {
     message: "Formatting needs rules over fields of the bound query.",
     guidance:
       "Build each rule's condition from fields of the bound query, give a status an icon or a label, or turn Formatting off.",
+  },
+  definition_records_table_pinning: {
+    order: 39,
+    message: "Column pinning needs a field from the bound query.",
+    guidance: "Choose a query with fields, then set each column's pin position in Columns.",
   },
   // A query binding refusal carries its own sentence (the input, the source and the types); the
   // catalogue message is what a reader without that sentence sees.

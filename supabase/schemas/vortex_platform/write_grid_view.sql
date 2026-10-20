@@ -23,7 +23,7 @@ begin
     or (p_expected_revision is not null
       and p_expected_revision not between 1 and 9007199254740990)
     or p_layout is null or pg_catalog.jsonb_typeof(p_layout) <> 'object'
-    or pg_catalog.octet_length(p_layout::text) > 16384 then
+    or pg_catalog.octet_length(p_layout::text) > 32768 then
     raise exception using errcode = '22023', message = 'Grid layout write is invalid';
   end if;
 
@@ -38,10 +38,12 @@ begin
     or exists (
       select 1 from pg_catalog.jsonb_array_elements(p_layout -> 'columns') as entry(value)
       where pg_catalog.jsonb_typeof(entry.value) <> 'object'
-        or entry.value - array['fieldId', 'visible', 'width'] <> '{}'::jsonb
+        or entry.value - array['fieldId', 'visible', 'width', 'pin'] <> '{}'::jsonb
         or pg_catalog.jsonb_typeof(entry.value -> 'fieldId') is distinct from 'string'
         or not vortex_platform.is_non_nil_uuid(entry.value ->> 'fieldId')
         or pg_catalog.jsonb_typeof(entry.value -> 'visible') is distinct from 'boolean'
+        or pg_catalog.jsonb_typeof(entry.value -> 'pin') is distinct from 'string'
+        or entry.value ->> 'pin' not in ('start', 'end', 'unpinned')
         or (entry.value ? 'width' and case
           when pg_catalog.jsonb_typeof(entry.value -> 'width') = 'number' then
             (entry.value ->> 'width')::numeric not between 64 and 640

@@ -26,6 +26,7 @@ export {
  * viewer is absent, and a table with every feature off carries no projection at all.
  */
 export type RecordsTableFeatureProjection = Readonly<{
+  pinning?: true;
   search?: true;
   /**
    * The filterable fields the viewer may filter by, each with its canonical type, filter kind and
@@ -135,6 +136,7 @@ export const projectRecordsTableFeatures = (
   // rows expand; a viewer who cannot read the related records sees the panel's neutral refusal.
   const masterDetail = features.masterDetail;
   const projection: RecordsTableFeatureProjection = {
+    ...(features.pinning.enabled ? { pinning: true as const } : {}),
     ...(features.search.enabled ? { search: true as const } : {}),
     ...(columnFilters.length === 0 ? {} : { columnFilters }),
     ...(features.savedViews.enabled ? { savedViews: true as const } : {}),

@@ -34,6 +34,7 @@ export type StudioGridFeatureEditor =
 export const studioGridFeatureEditors: Readonly<
   Record<RecordsTableFeatureKey, StudioGridFeatureEditor>
 > = {
+  pinning: { kind: "settings" },
   search: { kind: "settings" },
   // Only fields people can filter by: stored, filterable and of a type a filter fits.
   column_filters: {
