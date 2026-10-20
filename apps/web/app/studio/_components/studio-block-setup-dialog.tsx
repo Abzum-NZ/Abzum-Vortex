@@ -12,21 +12,15 @@ import {
 import {
   StudioQueryPicker,
   StudioSettingFields,
-  StudioOptionControl,
   studioBlockChoices,
   studioSettingProblems,
-  studioBoardPipelines,
   type StudioCompositionAddTarget,
   type StudioCompositionSettings,
   type StudioPaletteChoice,
   type StudioSettingChoices,
 } from "@vortex/ui/studio";
-import {
-  plainSettingValue,
-  typedSourceSettingValue,
-  type ApplicationSourceDocument,
-} from "@vortex/platform/schema";
-import { Label } from "@vortex/ui/components/label";
+
+import { plainSettingValue, typedSourceSettingValue } from "@vortex/platform/schema";
 
 /** A new block whose required settings or query the person gives before it is added. */
 export type StudioBlockSetupRequest = Readonly<{
@@ -59,12 +53,10 @@ const setupDefaults = (choice: StudioPaletteChoice | undefined): StudioCompositi
  */
 export function StudioBlockSetupDialog({
   request,
-  source,
   choices: draftChoices,
   onClose,
 }: Readonly<{
   request: StudioBlockSetupRequest | null;
-  source: ApplicationSourceDocument;
   /** What reference settings can point at, read from the draft being edited. */
   choices: StudioSettingChoices;
   onClose: () => void;
@@ -74,25 +66,6 @@ export function StudioBlockSetupDialog({
   const [values, setValues] = useState<StudioCompositionSettings>({});
   const [problem, setProblem] = useState("");
   const formId = useId();
-  const pipelineSetup =
-    request?.choice.studioSetup?.kind === "pipeline" ? request.choice.studioSetup : undefined;
-  const pipelines = useMemo(
-    () => (pipelineSetup === undefined ? [] : studioBoardPipelines(source, pipelineSetup)),
-    [source, pipelineSetup],
-  );
-  const stage = pipelineSetup === undefined ? undefined : values[pipelineSetup.fieldProperty];
-  const pipeline =
-    stage?.kind === "field_reference"
-      ? pipelines.find((candidate) => candidate.reference === stage.field)
-      : undefined;
-  const pipelineUnset =
-    pipelineSetup === undefined
-      ? "Choose a pipeline"
-      : pipelines.length === 0
-        ? pipelineSetup.emptyLabel
-        : pipelines.every((candidate) => !candidate.selectable)
-          ? pipelineSetup.stageFilterError
-          : "Choose a pipeline";
   useEffect(() => {
     setValues(setupDefaults(request?.choice));
     setProblem("");
@@ -106,22 +79,15 @@ export function StudioBlockSetupDialog({
   }, [request, queries]);
   // A block without a query picks any field of the draft; one with a query, only that query's fields.
   const choices = useMemo(
-    () =>
-      pipelineSetup === undefined
-        ? studioBlockChoices(draftChoices, query === "" ? null : query)
-        : { ...draftChoices, fields: pipeline?.fields ?? [] },
-    [draftChoices, query, pipelineSetup, pipeline],
+    () => studioBlockChoices(draftChoices, query === "" ? null : query),
+    [draftChoices, query],
   );
   if (request === null) return null;
   const { choice, target } = request;
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (pipelineSetup !== undefined && pipeline?.selectable !== true) {
-      setProblem(pipeline?.unavailableReason ?? pipelineUnset);
-      return;
-    }
-    if (pipelineSetup === undefined && choice.needsQuery && query === "") {
+    if (choice.needsQuery && query === "") {
       setProblem("Choose the data this block shows.");
       return;
     }
@@ -130,10 +96,7 @@ export function StudioBlockSetupDialog({
       setProblem(problems.join(" "));
       return;
     }
-    const outcome = request.add(
-      values,
-      pipelineSetup === undefined && choice.needsQuery ? query : null,
-    );
+    const outcome = request.add(values, choice.needsQuery ? query : null);
     if (outcome === true) onClose();
     else setProblem(outcome);
   };
@@ -153,67 +116,25 @@ export function StudioBlockSetupDialog({
           </DialogDescription>
         </DialogHeader>
         <form id={formId} className="space-y-4" onSubmit={submit}>
-          {pipelineSetup !== undefined ? (
-            <div className="space-y-2">
-              <Label htmlFor={`${formId}-pipeline`}>{pipelineSetup.label}</Label>
-              <StudioOptionControl
-                id={`${formId}-pipeline`}
-                disabled={false}
-                value={pipeline?.reference ?? ""}
-                unset={pipelineUnset}
-                options={pipelines.map((entry) => ({
-                  value: entry.reference,
-                  label: entry.selectable
-                    ? entry.label
-                    : `${entry.label} (${entry.unavailableReason})`,
-                  disabled: !entry.selectable,
-                }))}
-                onChange={(next) => {
-                  const chosen = pipelines.find((entry) => entry.reference === next);
-                  setValues(
-                    chosen?.selectable !== true || chosen.titleField === undefined
-                      ? {}
-                      : {
-                          [pipelineSetup.fieldProperty]: {
-                            kind: "field_reference",
-                            field: chosen.reference,
-                          },
-                          [pipelineSetup.titleFieldProperty]: {
-                            kind: "field_reference",
-                            field: chosen.titleField,
-                          },
-                        },
-                  );
-                  setProblem("");
-                }}
-              />
-              <p className="text-sm text-muted-foreground">{pipelineSetup.help}</p>
-            </div>
-          ) : (
-            choice.needsQuery && (
-              <StudioQueryPicker
-                id={`${formId}-query`}
-                queries={queries}
-                value={query}
-                disabled={false}
-                onChange={(next) => {
-                  setQuery(next);
-                  setValues(setupDefaults(choice));
-                  setProblem("");
-                }}
-              />
-            )
+          {choice.needsQuery && (
+            <StudioQueryPicker
+              id={`${formId}-query`}
+              queries={queries}
+              value={query}
+              disabled={false}
+              onChange={(next) => {
+                setQuery(next);
+                setValues(setupDefaults(choice));
+                setProblem("");
+              }}
+            />
           )}
           <StudioSettingFields
             idPrefix={formId}
-            properties={
-              pipelineSetup === undefined
-                ? choice.setup
-                : choice.setup.filter((property) => property.key !== pipelineSetup.fieldProperty)
-            }
+            properties={choice.setup}
             values={values}
             choices={choices}
-            disabled={pipelineSetup !== undefined && pipeline?.selectable !== true}
+            disabled={false}
             onChange={(next) => {
               setValues(next);
               setProblem("");
@@ -229,11 +150,7 @@ export function StudioBlockSetupDialog({
           <Button type="button" variant="ghost" onClick={onClose}>
             Cancel
           </Button>
-          <Button
-            type="submit"
-            form={formId}
-            disabled={pipelineSetup !== undefined && pipeline?.selectable !== true}
-          >
+          <Button type="submit" form={formId}>
             Add {choice.name}
           </Button>
         </DialogFooter>

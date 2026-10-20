@@ -236,7 +236,7 @@ The application supports six page types:
 | Guided form | Coordinate input and configured operations through two to twenty steps.  |
 | Public      | Show approved public content or submit one narrowly defined public form. |
 
-A list can use table, board, calendar, or summary arrangement. Board movement invokes its bound flow, whose task calls the named action and rechecks its permission. Each calendar page explicitly selects start/end fields or a start field plus a whole-number duration field and unit; it never guesses missing duration meaning.
+A list can use table, board (the Data grid's Board feature), calendar, or summary arrangement. Board movement invokes its bound flow, whose task calls the named action and rechecks its permission. Each calendar page explicitly selects start/end fields or a start field plus a whole-number duration field and unit; it never guesses missing duration meaning.
 
 Page states are normal, loading, empty, not found, validation, refused, access ended, conflict, failure, and recovery. Access ended is distinct from an ordinary empty result: previously shared values disappear immediately and the affected component explains that its source grant no longer permits the view.
 
