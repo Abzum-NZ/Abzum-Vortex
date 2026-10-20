@@ -1,6 +1,14 @@
 import "server-only";
 
 import {
+  type CalendarView,
+  calendarLocalDate,
+  calendarPeriod,
+  calendarPeriodSupported,
+  calendarStartOfDay,
+} from "./calendar-date";
+
+import {
   type CalendarMapping,
   type BlockPropertyValueContract,
   calendarMappingSchema,
@@ -23,8 +31,6 @@ import {
 
 type ModuleRelease = InstalledRuntimeContext["releaseSet"]["modules"][number];
 type ModuleQuery = ModuleRelease["content"]["queries"][number];
-
-export type CalendarView = "month" | "week" | "agenda";
 
 export type CalendarPlacementContract = Readonly<{
   calendarMapping: CalendarMapping;
@@ -73,96 +79,7 @@ export const readCalendarPlacementContract = (
   return { calendarMapping: mapping.data, itemTitleFieldId, defaultView };
 };
 
-const calendarDateIsValid = (candidate: string | undefined): candidate is string => {
-  if (candidate === undefined || !/^\d{4}-\d{2}-\d{2}$/.test(candidate)) return false;
-  const [year, month, day] = candidate.split("-").map(Number) as [number, number, number];
-  const date = new Date(0);
-  date.setUTCFullYear(year, month - 1, day);
-  date.setUTCHours(0, 0, 0, 0);
-  return (
-    year >= 1 &&
-    year <= 9999 &&
-    date.getUTCFullYear() === year &&
-    date.getUTCMonth() === month - 1 &&
-    date.getUTCDate() === day
-  );
-};
-
-const calendarUtcDate = (year: number, month: number, day: number): Date => {
-  const date = new Date(0);
-  date.setUTCFullYear(year, month, day);
-  date.setUTCHours(0, 0, 0, 0);
-  return date;
-};
-
-const calendarIsoDate = (date: Date): string =>
-  `${String(date.getUTCFullYear()).padStart(4, "0")}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
-
-export const calendarAddDays = (date: string, count: number): string => {
-  const [year, month, day] = date.split("-").map(Number) as [number, number, number];
-  return calendarIsoDate(calendarUtcDate(year, month - 1, day + count));
-};
-
-const calendarToday = (timeZone: string): string => {
-  const values = new Map(
-    new Intl.DateTimeFormat("en", {
-      timeZone,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    })
-      .formatToParts(new Date())
-      .map((part) => [part.type, part.value]),
-  );
-  return `${values.get("year")}-${values.get("month")}-${values.get("day")}`;
-};
-
-const calendarLocalDate = (instant: number, timeZone: string): string => {
-  const values = new Map(
-    new Intl.DateTimeFormat("en", {
-      timeZone,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    })
-      .formatToParts(new Date(instant))
-      .map((part) => [part.type, part.value]),
-  );
-  return `${values.get("year")}-${values.get("month")}-${values.get("day")}`;
-};
-
-/** First instant of an organisation-local day, including offset changes around daylight saving. */
-export const calendarStartOfDay = (date: string, timeZone: string): string => {
-  const [year, month, day] = date.split("-").map(Number) as [number, number, number];
-  const estimate = calendarUtcDate(year, month - 1, day).getTime();
-  let lower = estimate - 48 * 60 * 60 * 1_000;
-  let upper = estimate + 48 * 60 * 60 * 1_000;
-  if (calendarLocalDate(lower, timeZone) >= date) return new Date(lower).toISOString();
-  if (calendarLocalDate(upper, timeZone) < date) return new Date(upper).toISOString();
-  while (upper - lower > 1) {
-    const middle = Math.floor((lower + upper) / 2);
-    if (calendarLocalDate(middle, timeZone) >= date) upper = middle;
-    else lower = middle;
-  }
-  return new Date(upper).toISOString();
-};
-
-const calendarPeriod = (
-  view: CalendarView,
-  date: string,
-): Readonly<{ startDate: string; endDate: string }> => {
-  if (view === "agenda") return { startDate: date, endDate: calendarAddDays(date, 30) };
-  if (view === "week") {
-    const [year, month, day] = date.split("-").map(Number) as [number, number, number];
-    const mondayOffset = (calendarUtcDate(year, month - 1, day).getUTCDay() + 6) % 7;
-    const startDate = calendarAddDays(date, -mondayOffset);
-    return { startDate, endDate: calendarAddDays(startDate, 7) };
-  }
-  const [year, month] = date.split("-").map(Number) as [number, number];
-  const startDate = calendarIsoDate(calendarUtcDate(year, month - 1, 1));
-  const endDate = calendarAddDays(startDate, calendarUtcDate(year, month, 0).getUTCDate());
-  return { startDate, endDate };
-};
+const calendarToday = (timeZone: string): string => calendarLocalDate(Date.now(), timeZone);
 
 const calendarWindowFilter = (
   mapping: CalendarMapping,
@@ -276,6 +193,7 @@ export type CalendarPlacementProjectionInput = Readonly<{
 
 export type CalendarPlacementFailureCause =
   | "calendar_settings_invalid"
+  | "calendar_range_unsupported"
   | "calendar_query_invalid"
   | "calendar_query_unavailable"
   | "calendar_query_refused"
@@ -363,18 +281,23 @@ export const projectCalendarPlacement = async (
     rawView === "week" || rawView === "agenda" || rawView === "month"
       ? rawView
       : calendarContract.defaultView;
-  const rawDate = input.requestedDate;
-  const candidateDate = calendarDateIsValid(rawDate) ? rawDate : calendarToday(timeZone);
-  const candidateWindow = calendarPeriod(view, candidateDate);
-  const date =
-    calendarDateIsValid(candidateWindow.startDate) && calendarDateIsValid(candidateWindow.endDate)
-      ? candidateDate
-      : calendarToday(timeZone);
+  const date = input.requestedDate ?? calendarToday(timeZone);
+  if (!calendarPeriodSupported(view, date, timeZone)) return refused("calendar_range_unsupported");
   const window = calendarPeriod(view, date);
-  const filterableFieldIds =
-    mapping.kind === "start_end"
-      ? [mapping.startFieldId, mapping.endFieldId].map((fieldId) => fieldId.toLowerCase())
-      : [mapping.startFieldId.toLowerCase()];
+  const filter = calendarWindowFilter(
+    mapping,
+    dateFieldType as "date" | "date_time",
+    window,
+    timeZone,
+  );
+  const filterableFieldIds = [
+    ...new Set(
+      (mapping.kind === "start_end"
+        ? [mapping.startFieldId, mapping.endFieldId]
+        : [mapping.startFieldId]
+      ).map((fieldId) => fieldId.toLowerCase()),
+    ),
+  ];
   const command = protectedQueryCommandSchema.safeParse({
     moduleRootId: bound.module.rootId,
     queryId: bound.query.queryId,
@@ -382,7 +305,7 @@ export const projectCalendarPlacement = async (
     requestedFieldIds: [...new Set(requestedFieldIds.map((fieldId) => fieldId.toLowerCase()))],
     requestedSystemFieldKeys: [],
     sort: [],
-    filter: calendarWindowFilter(mapping, dateFieldType as "date" | "date_time", window, timeZone),
+    filter,
     sortableFieldIds: [],
     filterableFieldIds,
     searchableFieldIds: [],
