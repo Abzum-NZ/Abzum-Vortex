@@ -5631,6 +5631,48 @@
                 "maximum": 1000
               }
             ]
+          },
+          {
+            "kind": "group",
+            "key": "spreadsheet",
+            "label": "Spreadsheet controls",
+            "help": "Select ranges and find values within the loaded page",
+            "required": true,
+            "properties": [
+              {
+                "kind": "boolean",
+                "key": "enabled",
+                "label": "Spreadsheet controls",
+                "required": true,
+                "defaultValue": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              },
+              {
+                "kind": "boolean",
+                "key": "range_select",
+                "label": "Range selection",
+                "help": "Shift and arrows, Shift and click, or drag; Ctrl+A selects this page",
+                "required": false
+              },
+              {
+                "kind": "boolean",
+                "key": "find",
+                "label": "Find on page",
+                "help": "Find values on this page; Ctrl+F opens the finder",
+                "required": false
+              }
+            ],
+            "defaultValue": {
+              "kind": "group",
+              "properties": {
+                "enabled": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            }
           }
         ],
         "defaultValue": {
@@ -5718,6 +5760,15 @@
               }
             },
             "board": {
+              "kind": "group",
+              "properties": {
+                "enabled": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            },
+            "spreadsheet": {
               "kind": "group",
               "properties": {
                 "enabled": {

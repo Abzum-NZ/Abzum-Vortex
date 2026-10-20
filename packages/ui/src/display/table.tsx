@@ -213,6 +213,10 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
 
   // The optional grid features draw through their extension points; each feature's code loads only
   // when the projection turns it on.
+  const featureColumns = useMemo(
+    () => layout.state.order.flatMap((key) => layout.shown.filter((column) => column.key === key)),
+    [layout.state.order, layout.shown],
+  );
   const featureContext = useMemo(
     (): GridFeatureContext | undefined =>
       features === undefined
@@ -222,7 +226,7 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
             features,
             pins: layout.state.pins,
             setPin: layout.setPin,
-            columns: layout.shown,
+            columns: featureColumns,
             rows,
             selectedRecordIds,
             selection: selectionParts,
@@ -235,7 +239,7 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
       features,
       layout.state.pins,
       layout.setPin,
-      layout.shown,
+      featureColumns,
       rows,
       selectedRecordIds,
       selectionParts,
@@ -569,6 +573,7 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
         events={events}
         activateRow={activateRow}
         renderers={gridRenderers}
+        interaction={gridFeatures.interaction}
         announce={announce}
         expansion={expansion}
         rowName={nameOfRow}
