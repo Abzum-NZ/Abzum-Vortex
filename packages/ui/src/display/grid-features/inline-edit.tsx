@@ -14,6 +14,7 @@ import type { JsonValue, RecordsTableInlineEditor } from "@vortex/platform/schem
 import { Button } from "../../components/button";
 import { Checkbox } from "../../components/checkbox";
 import { Input } from "../../components/input";
+import { Popover, PopoverContent, PopoverTrigger } from "../../components/popover";
 import { NativeSelect, NativeSelectOption } from "../../components/native-select";
 import { Spinner } from "../../components/spinner";
 import { Textarea } from "../../components/textarea";
@@ -244,7 +245,7 @@ function EditableCell({
       <span
         id={messageId}
         role="alert"
-        className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs whitespace-normal text-destructive"
+        className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs whitespace-normal text-destructive"
       >
         <span>{message}</span>
         {changedFrom === undefined ? null : (
@@ -267,6 +268,22 @@ function EditableCell({
         )}
       </span>
     );
+  // A refusal is told beside the control, in a popover anchored to it: the row keeps its height and
+  // focus stays in the control. It is announced as an alert and goes with the edit, never the page.
+  const withNotice = (control: ReactElement): ReactElement => (
+    <Popover open={message !== undefined}>
+      <PopoverTrigger
+        nativeButton={false}
+        render={<span className="flex min-w-0 items-center gap-2" />}
+      >
+        {control}
+        {phase === "saving" ? <Spinner /> : null}
+      </PopoverTrigger>
+      <PopoverContent align="start" initialFocus={false} finalFocus={false} className="w-80">
+        {notice}
+      </PopoverContent>
+    </Popover>
+  );
   const status = (
     <span role="status" className="sr-only">
       {saved ? `${label} saved.` : phase === "saving" ? `Saving ${label}.` : ""}
@@ -283,21 +300,22 @@ function EditableCell({
           if (event.key !== "Escape") event.stopPropagation();
         }}
       >
-        <Checkbox
-          aria-label={`Edit ${label}`}
-          aria-invalid={message === undefined ? undefined : true}
-          aria-describedby={describedBy}
-          aria-busy={phase === "saving" ? true : undefined}
-          checked={checked}
-          disabled={phase === "saving"}
-          onClick={(event) => event.stopPropagation()}
-          onCheckedChange={(next) => {
-            setSaved(false);
-            setDraft(next);
-            void commit(next);
-          }}
-        />
-        {notice}
+        {withNotice(
+          <Checkbox
+            aria-label={`Edit ${label}`}
+            aria-invalid={message === undefined ? undefined : true}
+            aria-describedby={describedBy}
+            aria-busy={phase === "saving" ? true : undefined}
+            checked={checked}
+            disabled={phase === "saving"}
+            onClick={(event) => event.stopPropagation()}
+            onCheckedChange={(next) => {
+              setSaved(false);
+              setDraft(next);
+              void commit(next);
+            }}
+          />,
+        )}
         {status}
       </span>
     );
@@ -310,7 +328,7 @@ function EditableCell({
           ref={trigger}
           type="button"
           data-inline-edit={field}
-          className="block w-full min-w-0 cursor-text truncate text-start outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+          className="block w-full min-w-0 cursor-text truncate [text-align:inherit] outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
           onClick={(event) => {
             event.stopPropagation();
             start();
@@ -418,11 +436,7 @@ function EditableCell({
   }
   return (
     <span className="flex min-w-0 flex-col">
-      <span className="flex items-center gap-2">
-        {control}
-        {phase === "saving" ? <Spinner /> : null}
-      </span>
-      {notice}
+      {withNotice(control)}
       {status}
     </span>
   );
