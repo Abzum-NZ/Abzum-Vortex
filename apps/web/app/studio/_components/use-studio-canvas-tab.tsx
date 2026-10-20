@@ -162,19 +162,17 @@ export function useStudioCanvasTab({
   const [blockSetup, setBlockSetup] = useState<StudioBlockSetupRequest | null>(null);
   const [notice, setNotice] = useState("");
   const [arrangeGrid, setArrangeGrid] = useState(false);
+  const gridRevision = `${rootId}:${view.draftRevision}:${view.sourceFingerprint}`;
   const [gridArrangements, setGridArrangements] = useState<
-    ReadonlyMap<
-      string,
-      Readonly<{ source: ApplicationSourceDocument; arrangement: StudioCanvasGridArrangement }>
-    >
+    ReadonlyMap<string, Readonly<{ revision: string; arrangement: StudioCanvasGridArrangement }>>
   >(new Map());
   const onGridArrangement = useCallback(
     (arrangement: StudioCanvasGridArrangement) => {
       setGridArrangements((held) =>
-        new Map(held).set(arrangement.placementAlias, { source: view.source, arrangement }),
+        new Map(held).set(arrangement.placementAlias, { revision: gridRevision, arrangement }),
       );
     },
-    [view.source],
+    [gridRevision],
   );
 
   // Resolving validates the whole source: once per source and selection, not on every render.
@@ -762,7 +760,7 @@ export function useStudioCanvasTab({
           choices={draftChoices}
           compiledFields={view.compiledFields}
           canvasArrangement={
-            gridArrangements.get(selected.placementAlias)?.source === view.source
+            gridArrangements.get(selected.placementAlias)?.revision === gridRevision
               ? gridArrangements.get(selected.placementAlias)?.arrangement
               : undefined
           }
