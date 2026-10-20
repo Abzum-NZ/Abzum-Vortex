@@ -1,4 +1,3 @@
-begin;
 set local role vortex_owner;
 
 create or replace function vortex_record.provision_exact_module_storage(
@@ -730,4 +729,3 @@ comment on function vortex_record.provision_exact_module_storage(uuid, bigint) i
   'Private exact-release Module storage provisioner: creates or evolves the generated record_data storage, or the read-only record_data view over one registered protected projection reader for a system projection record type, for one published Module release and records its immutable provision evidence.';
 
 reset role;
-commit;
