@@ -71,7 +71,8 @@ export const readCalendar = async (
   if (projection.cause === "calendar_range_unsupported") {
     data[placementId] = {
       status: "awaiting_input",
-      message: "Choose a calendar period whose endpoints have UTC years from 0000 to 9999",
+      message:
+        "This period extends beyond the supported calendar range. Choose a different period.",
     };
     return;
   }

@@ -343,10 +343,14 @@ export const projectCalendarPlacement = async (
     if (!(error instanceof CalendarEndpointError)) throw error;
     return refused("calendar_range_unsupported");
   }
-  const filterableFieldIds =
-    mapping.kind === "start_end"
-      ? [mapping.startFieldId, mapping.endFieldId].map((fieldId) => fieldId.toLowerCase())
-      : [mapping.startFieldId.toLowerCase()];
+  const filterableFieldIds = [
+    ...new Set(
+      (mapping.kind === "start_end"
+        ? [mapping.startFieldId, mapping.endFieldId]
+        : [mapping.startFieldId]
+      ).map((fieldId) => fieldId.toLowerCase()),
+    ),
+  ];
   const command = protectedQueryCommandSchema.safeParse({
     moduleRootId: bound.module.rootId,
     queryId: bound.query.queryId,
