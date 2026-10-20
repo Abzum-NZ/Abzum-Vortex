@@ -1,5 +1,10 @@
 import type { ComponentSettingValue } from "../block-property-schema";
 import {
+  recordsTableBoardFeature,
+  type RecordsTableBoardMode,
+  type RecordsTableBoardSettings,
+} from "./board";
+import {
   recordsTableBulkActionsFeature,
   type RecordsTableBulkActionsSettings,
 } from "./bulk-actions";
@@ -47,6 +52,7 @@ export {
   recordsTableEditableFieldTypes,
   type RecordsTableActionCapability,
   type RecordsTableActionContract,
+  type RecordsTableBoardFacts,
   type RecordsTableFeatureCheck,
   type RecordsTableFeatureRefusalCode,
   type RecordsTableFeatureState,
@@ -57,6 +63,7 @@ export {
 } from "./shared";
 export { RECORDS_TABLE_RELATED_RECORDS_MAXIMUM_PAGE_SIZE } from "./master-detail";
 export { RECORDS_TABLE_TREE_MAXIMUM_PAGE_SIZE } from "./tree";
+export { boardProblem, recordsTableBoardFactsOf } from "./board";
 export {
   conditionalColumnFormatFieldTypes,
   conditionalColumnFormatIssue,
@@ -77,6 +84,8 @@ export {
   type ConditionalFormattingDateParameter,
 } from "./conditional-formatting";
 export type {
+  RecordsTableBoardMode,
+  RecordsTableBoardSettings,
   RecordsTableConditionalFormattingSettings,
   RecordsTableBulkActionsSettings,
   RecordsTableColumnFiltersSettings,
@@ -106,6 +115,7 @@ export type RecordsTableFeatures = Readonly<{
   tree: RecordsTableFeatureState<RecordsTableTreeSettings>;
   conditionalFormatting: RecordsTableFeatureState<RecordsTableConditionalFormattingSettings>;
   pinning: RecordsTableFeatureState<RecordsTablePinningSettings>;
+  board: RecordsTableFeatureState<RecordsTableBoardSettings>;
 }>;
 
 const registry = {
@@ -121,6 +131,7 @@ const registry = {
     property: "conditionalFormatting",
     definition: recordsTableConditionalFormattingFeature,
   },
+  board: { property: "board", definition: recordsTableBoardFeature },
 } as const satisfies Record<
   string,
   Readonly<{
@@ -140,6 +151,7 @@ export const recordsTableFeatureKeys = [
   "master_detail",
   "tree",
   "conditional_formatting",
+  "board",
 ] as const satisfies readonly (keyof typeof registry)[];
 export type RecordsTableFeatureKey = (typeof recordsTableFeatureKeys)[number];
 
@@ -182,6 +194,7 @@ export const readRecordsTableFeatures = (
   const tree = read("tree");
   const conditionalFormatting = read("conditional_formatting");
   const pinning = read("pinning");
+  const board = read("board");
   if (
     search === undefined ||
     columnFilters === undefined ||
@@ -191,7 +204,8 @@ export const readRecordsTableFeatures = (
     masterDetail === undefined ||
     tree === undefined ||
     conditionalFormatting === undefined ||
-    pinning === undefined
+    pinning === undefined ||
+    board === undefined
   )
     return undefined;
   return {
@@ -204,6 +218,7 @@ export const readRecordsTableFeatures = (
     masterDetail: masterDetail as RecordsTableFeatures["masterDetail"],
     tree: tree as RecordsTableFeatures["tree"],
     conditionalFormatting: conditionalFormatting as RecordsTableFeatures["conditionalFormatting"],
+    board: board as RecordsTableFeatures["board"],
   };
 };
 
@@ -261,6 +276,7 @@ const featureEvents: Readonly<Record<string, RecordsTableFeatureKey>> = {
   search_changed: "search",
   filter_changed: "column_filters",
   inline_edit: "inline_edit",
+  card_moved: "board",
 };
 
 /** The feature whose controls raise this Records table event, for the events a feature owns. */

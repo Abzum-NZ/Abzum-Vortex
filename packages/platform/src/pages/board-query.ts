@@ -6,7 +6,6 @@ import {
   requireInstalledRuntimeContext,
   type InstalledRuntimeContext,
 } from "../definition/app-index";
-import { placementSettings } from "../definition/application-composition-catalogue";
 import {
   arrangeProtectedBoard,
   type createProtectedQueryService,
@@ -16,18 +15,18 @@ import {
   type ProtectedQuerySummaryAggregateResult,
 } from "../queries/index";
 import {
-  boardBlockSourceIsSupported,
   boardColumnContinuationRequestSchema,
+  boardProblem,
   describeFailure,
   exactDecimalTextSchema,
   moneyValueSchema,
   pipelineMovesFrom,
-  readBoardPlacementContract,
+  recordsTableBoardFactsOf,
   richTextDocumentSchema,
   sameId,
   type ProjectedItem,
   type BoardColumnSelector,
-  type BoardPlacementContract,
+  type RecordsTableBoardMode,
   type IdentitySession,
   type JsonValue,
   type OrganizationSelectionCandidate,
@@ -127,23 +126,20 @@ const displayFieldValue = (field: ModuleField, value: JsonValue): BoardCellValue
 
 const projectBoardRow = (
   row: ProtectedQueryPageRow,
-  contract: BoardPlacementContract,
+  requestedFieldIds: readonly string[],
   fieldsById: ReadonlyMap<string, ModuleField>,
 ): BoardCardRow => {
-  const declared = [
-    { fieldId: contract.cardTitleField, label: undefined },
-    ...contract.detailFields.map((entry) => ({ fieldId: entry.field, label: entry.label })),
-  ];
+  const declared = requestedFieldIds.map((fieldId) => ({ fieldId }));
   const valuesById = new Map(
     Object.entries(row.values).map(([fieldId, value]) => [lower(fieldId), value] as const),
   );
-  const displayFields = declared.flatMap(({ fieldId, label }) => {
+  const displayFields = declared.flatMap(({ fieldId }) => {
     const field = fieldsById.get(lower(fieldId));
     const stored = valuesById.get(lower(fieldId));
     if (field === undefined || stored === undefined) return [];
     const value = displayFieldValue(field, stored);
     if (value === undefined) return [];
-    return [{ key: String(field.fieldId), label: label ?? field.label, value }];
+    return [{ key: String(field.fieldId), label: field.label, value }];
   });
   return {
     recordId: row.recordId,
@@ -155,13 +151,13 @@ const projectBoardRow = (
 
 const projectPage = (
   page: ProtectedBoardArrangementPage | null,
-  contract: BoardPlacementContract,
+  requestedFieldIds: readonly string[],
   fieldsById: ReadonlyMap<string, ModuleField>,
 ): BoardPagePayload | null =>
   page === null
     ? null
     : {
-        rows: page.rows.map((row) => projectBoardRow(row, contract, fieldsById)),
+        rows: page.rows.map((row) => projectBoardRow(row, requestedFieldIds, fieldsById)),
         ...(page.nextContinuationToken === undefined
           ? {}
           : { nextContinuationToken: page.nextContinuationToken }),
@@ -230,7 +226,7 @@ const metricValue = (
 
 const projectMetrics = (
   definitions: ModuleQuery["aggregates"],
-  declared: BoardPlacementContract["aggregateMetrics"],
+  declared: RecordsTableBoardMode["totals"],
   results: ProtectedBoardArrangementResult["aggregates"],
   fieldsById: ReadonlyMap<string, ModuleField>,
 ): readonly BoardMetric[] | undefined => {
@@ -289,12 +285,13 @@ type BoardStageValues = Readonly<{
 /** The board's ready values; the caller validates them with the board payload parser. */
 export type BoardPlacementValues = Readonly<{
   kind: "board";
-  title?: string;
   plan: Extract<ProtectedBoardArrangementResult, { arrangement: "board" }>["plan"];
   choiceFieldId: string;
   /** The key the record save names the choice field by when a card moves to another column. */
   choiceFieldKey: string;
   choiceFieldRequired: boolean;
+  /** The cards a column should not exceed; a column over it warns. */
+  wipLimit?: number;
   cardTitleFieldId: string;
   cardFieldIds: readonly string[];
   totalRowCount: number;
@@ -346,6 +343,8 @@ export const projectBoardPlacement = async (
     /** The query inputs the placement's bindings resolved on the server for this request. */
     inputValues: Readonly<Record<string, JsonValue>>;
     queries: BoardQueries;
+    /** The placement's Board feature, as the one Records table reader read it. */
+    board: RecordsTableBoardMode;
     continuation?: unknown;
   }>,
 ): Promise<BoardPlacementProjection> => {
@@ -370,26 +369,32 @@ export const projectBoardPlacement = async (
     if (input.placement.props.vortex.queryId === undefined)
       return unavailable("board_query_not_bound");
 
-    const contract = readBoardPlacementContract(placementSettings(input.placement.props));
+    const board = input.board;
     const binding = findInstalledQuery(context, String(input.placement.props.vortex.queryId));
-    if (contract === undefined || binding === undefined)
+    if (
+      board.columnField === undefined ||
+      board.cardTitleField === undefined ||
+      binding === undefined
+    )
       return unavailable("board_settings_invalid");
     const recordType = recordTypeFor(binding.module, binding.query);
-    if (
-      recordType === undefined ||
-      !boardBlockSourceIsSupported(binding.query, recordType.fields, recordType.pipelines, contract)
-    )
-      return unavailable("board_query_unsupported");
+    const sourceFacts =
+      recordType === undefined
+        ? undefined
+        : recordsTableBoardFactsOf(binding.query, recordType.fields, recordType.pipelines);
+    // The one capability check publication and Studio run decides whether the installed query can
+    // back this board; a refusal logs its sentence as the cause.
+    const problem = sourceFacts === undefined ? undefined : boardProblem(board, sourceFacts);
+    if (recordType === undefined || sourceFacts === undefined || problem !== undefined)
+      return unavailable("board_query_unsupported", problem?.reason);
+    const choiceFieldId = board.columnField;
     const fields = recordType.fields;
     const pipeline = recordType.pipelines.find((candidate) =>
-      sameId(String(candidate.stageFieldId), String(contract.choiceField)),
+      sameId(String(candidate.stageFieldId), choiceFieldId),
     )!;
 
     const fieldsById = installedFieldMap(fields);
-    const requestedFieldIds = [
-      contract.cardTitleField,
-      ...contract.detailFields.map((field) => field.field),
-    ];
+    const requestedFieldIds = [board.cardTitleField, ...board.cardFields];
     const inputValues = input.inputValues;
 
     let pageRequest:
@@ -405,7 +410,7 @@ export const projectBoardPlacement = async (
       pageRequest = {
         kind: "continue",
         selector: {
-          choiceFieldId: String(contract.choiceField),
+          choiceFieldId,
           column: continuation.data.column,
         },
         continuationToken: continuation.data.continuationToken,
@@ -419,32 +424,32 @@ export const projectBoardPlacement = async (
       requestedFieldIds,
       requestedSystemFieldKeys: [],
       filterableFieldIds: [],
-      choiceFieldId: contract.choiceField,
+      choiceFieldId,
       pageSize: binding.query.pageSize,
       pageRequest,
     });
     if (result.kind !== "available") return unavailable("board_query_unavailable");
     if (result.value.outcome === "refused") return refused("board_query_refused");
 
-    const board = result.value;
+    const arranged = result.value;
     if (
-      board.arrangement !== "board" ||
-      !sameId(String(board.plan.moduleRootId), String(binding.module.rootId)) ||
-      board.plan.moduleReleaseVersion !== binding.module.releaseVersion ||
-      !sameId(String(board.plan.queryId), String(binding.query.queryId)) ||
-      !sameId(String(board.choiceFieldId), String(contract.choiceField)) ||
-      board.declaredSystemFieldKeys.length !== 0 ||
-      board.declaredFieldIds.length !== requestedFieldIds.length ||
+      arranged.arrangement !== "board" ||
+      !sameId(String(arranged.plan.moduleRootId), String(binding.module.rootId)) ||
+      arranged.plan.moduleReleaseVersion !== binding.module.releaseVersion ||
+      !sameId(String(arranged.plan.queryId), String(binding.query.queryId)) ||
+      !sameId(String(arranged.choiceFieldId), choiceFieldId) ||
+      arranged.declaredSystemFieldKeys.length !== 0 ||
+      arranged.declaredFieldIds.length !== requestedFieldIds.length ||
       requestedFieldIds.some(
-        (fieldId, index) => !sameId(String(board.declaredFieldIds[index]), fieldId),
+        (fieldId, index) => !sameId(String(arranged.declaredFieldIds[index]), fieldId),
       )
     )
       return unavailable("board_arrangement_mismatch");
 
     const aggregates = projectMetrics(
       binding.query.aggregates,
-      contract.aggregateMetrics,
-      board.aggregates,
+      board.totals,
+      arranged.aggregates,
       fieldsById,
     );
     // Columns follow the pipeline's stage order; each carries its colour role, the stages a card
@@ -454,9 +459,9 @@ export const projectBoardPlacement = async (
       (action) =>
         sameId(String(action.subjectRecordTypeId), String(recordType.recordTypeId)) &&
         action.setsChoiceFieldId !== undefined &&
-        sameId(String(action.setsChoiceFieldId), String(contract.choiceField)),
+        sameId(String(action.setsChoiceFieldId), choiceFieldId),
     );
-    const columns = [...board.columns]
+    const columns = [...arranged.columns]
       .sort(
         (left, right) =>
           (stageOrder.get(left.value) ?? Number.MAX_SAFE_INTEGER) -
@@ -466,7 +471,7 @@ export const projectBoardPlacement = async (
         const stage = pipeline.stages.find((candidate) => candidate.option === column.value);
         const bucketAggregates = projectMetrics(
           binding.query.aggregates,
-          contract.aggregateMetrics,
+          board.totals,
           column.aggregates,
           fieldsById,
         );
@@ -478,52 +483,52 @@ export const projectBoardPlacement = async (
             label: column.label,
             tone: stage.tone,
             moves: pipelineMovesFrom(pipeline, column.value).filter((target) =>
-              board.columns.some((candidate) => candidate.value === target),
+              arranged.columns.some((candidate) => candidate.value === target),
             ),
             ...(owner === undefined ? {} : { gatedBy: owner.label }),
             rowCount: column.rowCount,
             aggregates: bucketAggregates,
-            page: projectPage(column.page, contract, fieldsById),
+            page: projectPage(column.page, requestedFieldIds, fieldsById),
           },
         ];
       });
     const unassignedAggregates = projectMetrics(
       binding.query.aggregates,
-      contract.aggregateMetrics,
-      board.unassigned.aggregates,
+      board.totals,
+      arranged.unassigned.aggregates,
       fieldsById,
     );
     if (
       aggregates === undefined ||
       unassignedAggregates === undefined ||
-      columns.length !== board.columns.length
+      columns.length !== arranged.columns.length
     )
       return unavailable("board_metrics_invalid");
 
-    const choiceField = fieldsById.get(lower(String(contract.choiceField)));
+    const choiceField = fieldsById.get(lower(choiceFieldId));
     if (choiceField === undefined) return unavailable("board_arrangement_mismatch");
 
     return {
       outcome: "ready",
       values: {
         kind: "board",
-        ...(contract.title === undefined ? {} : { title: contract.title }),
-        plan: board.plan,
-        choiceFieldId: contract.choiceField,
+        plan: arranged.plan,
+        choiceFieldId,
         choiceFieldKey: String(choiceField.key),
         choiceFieldRequired: choiceField.required,
-        cardTitleFieldId: contract.cardTitleField,
+        ...(board.wipLimit === undefined ? {} : { wipLimit: board.wipLimit }),
+        cardTitleFieldId: board.cardTitleField,
         cardFieldIds: requestedFieldIds,
-        totalRowCount: board.totalRowCount,
+        totalRowCount: arranged.totalRowCount,
         aggregates,
         columns,
         unassigned: {
           moves: pipelineMovesFrom(pipeline, undefined).filter((target) =>
-            board.columns.some((candidate) => candidate.value === target),
+            arranged.columns.some((candidate) => candidate.value === target),
           ),
-          rowCount: board.unassigned.rowCount,
+          rowCount: arranged.unassigned.rowCount,
           aggregates: unassignedAggregates,
-          page: projectPage(board.unassigned.page, contract, fieldsById),
+          page: projectPage(arranged.unassigned.page, requestedFieldIds, fieldsById),
         },
       },
     };

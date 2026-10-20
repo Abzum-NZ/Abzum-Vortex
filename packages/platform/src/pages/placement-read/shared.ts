@@ -2,6 +2,7 @@ import "server-only";
 
 import {
   isRecord,
+  readRecordsTableContract,
   sameId,
   tableColumnLabel,
   type BlockPropertyValueContract,
@@ -11,8 +12,6 @@ import {
 } from "../../schema";
 import {
   APPLICATION_LAUNCHER_BLOCK_RELEASE,
-  BOARD_BLOCK_RELEASE,
-  BOARD_BLOCK_RELEASE_1_1_0,
   type InstalledRuntimeContext,
 } from "../../definition/index";
 import type { ProtectedQueryRow } from "../../queries/index";
@@ -141,10 +140,9 @@ export const isApplicationLauncherPlacement = (
   placement: Pick<PlacementReadEntry, "vortex">,
 ): boolean => placementBlockIs(placement, APPLICATION_LAUNCHER_BLOCK_RELEASE);
 
-export const isBoardPlacement = (placement: Pick<PlacementReadEntry, "vortex">): boolean =>
-  placementBlockIs(placement, BOARD_BLOCK_RELEASE) &&
-  (placementReleaseVersion(placement) === BOARD_BLOCK_RELEASE.releaseVersion ||
-    placementReleaseVersion(placement) === BOARD_BLOCK_RELEASE_1_1_0.releaseVersion);
+/** Whether a Records table placement shows its records as a board (its Board feature is on). */
+export const isBoardPlacement = (placement: Pick<PlacementReadEntry, "settings">): boolean =>
+  readRecordsTableContract(placementSettingsOf(placement))?.features.board.enabled === true;
 
 /** A placement's use: available, unavailable by its operation, or a malformed availability. */
 export const projectedUseAvailability = ({

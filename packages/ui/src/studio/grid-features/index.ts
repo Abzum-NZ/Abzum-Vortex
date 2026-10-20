@@ -63,6 +63,7 @@ export const studioGridFeatureEditors: Readonly<
   // Only the links from a record type to itself can name a record's parent.
   tree: { kind: "settings", offers: (field) => field.parentLink === true },
   conditional_formatting: { kind: "custom" },
+  board: { kind: "custom" },
 };
 
 /**
@@ -128,6 +129,7 @@ export const studioRecordsTableQueryFacts = (
       acceptsSelection: action.acceptsSelection,
     })),
   grouped: query?.grouped === true,
+  board: query?.board,
   relatedRecords: {
     recordType: query?.recordType ?? "",
     links:

@@ -8,8 +8,7 @@ import { registeredBlockReleases, type JsonObject } from "./context";
 import {
   readRecordsTableContract,
   readRecordDetailContract,
-  readBoardPlacementContract,
-  boardBlockSourceIsSupported,
+  recordsTableBoardFactsOf,
   calendarMappingSchema,
   calendarBlockSourceIsSupported,
   moduleQueryDefinitionSchema,
@@ -174,6 +173,10 @@ export function applicationPageRules(scope: ApplicationScope): void {
         })),
       grouped,
       relatedRecords: relatedRecordsFacts(recordTypeId, page),
+      board:
+        record === undefined
+          ? undefined
+          : recordsTableBoardFactsOf(bound, array(record.fields), array(record.pipelines)),
     };
   };
 
@@ -347,7 +350,7 @@ export function applicationPageRules(scope: ApplicationScope): void {
       );
       const blockKey = release?.key;
       if (bound === undefined) {
-        if (blockKey === "platform.display.calendar" || blockKey === "platform.display.board")
+        if (blockKey === "platform.display.calendar")
           failures.push(
             failure(output, "vortex.definition.application_block_settings", "broken_reference"),
           );
@@ -394,23 +397,6 @@ export function applicationPageRules(scope: ApplicationScope): void {
             `${release?.name ?? "This block"} needs every column to state its format, width, alignment, responsive priority, whether it shows by default and where it is pinned, and a page size`,
           ),
         );
-      if (blockKey === "platform.display.board") {
-        const board = readBoardPlacementContract(settings);
-        const boardRecordType = records.get(String(object(bound.recordType).recordTypeId));
-        if (
-          board === undefined ||
-          boardRecordType === undefined ||
-          !boardBlockSourceIsSupported(
-            bound,
-            array(boardRecordType.fields),
-            array(boardRecordType.pipelines),
-            board,
-          )
-        )
-          failures.push(
-            failure(output, "vortex.definition.application_block_settings", "broken_reference"),
-          );
-      }
       if (blockKey === "platform.display.calendar") {
         const settingFieldId = (value: unknown): string | undefined => {
           // An optional property the placement leaves out is absent, not an error.
@@ -540,7 +526,12 @@ export function applicationPageRules(scope: ApplicationScope): void {
           recordsTableQueryFacts(bound, bindingFacts),
           table.presentation,
         ))
-          if (feature.enabled && feature.check.kind === "not_possible")
+          // A grid in Board mode shows none of the table's other features, so only the board is judged.
+          if (
+            feature.enabled &&
+            feature.check.kind === "not_possible" &&
+            (!table.features.board.enabled || feature.key === "board")
+          )
             failures.push(
               failure(
                 output,
@@ -575,8 +566,11 @@ export function applicationPageRules(scope: ApplicationScope): void {
       const orderable = grouped ? lower(array(bound.groupByFieldIds)) : selected;
       const mapped = (fields: readonly string[], allowed: ReadonlySet<string>): boolean =>
         fields.every((field) => allowed.has(field.toLowerCase()));
+      // A table in Board mode shows no columns, sort or column filters, so only the Board feature's
+      // own check (above) judges its fields; the table's own mappings are not read.
       if (
         (table !== undefined &&
+          !table.features.board.enabled &&
           (!mapped(
             table.columns.map((column) => column.field),
             selected,
@@ -633,6 +627,9 @@ export function applicationPageRules(scope: ApplicationScope): void {
           if (entry.source === "field" && !pagePublicFields.has(String(entry.fieldId)))
             publicBlockReferencesSafe = false;
         });
+        // A board reads its cards under the viewer's own record access, which a public page has none of.
+        if (readRecordsTableContract(object(placement.settings) as never)?.features.board.enabled)
+          publicBlockReferencesSafe = false;
         const inspectPublicSetting = (setting: JsonObject) => {
           if (setting.kind === "field_reference" && !pagePublicFields.has(String(setting.fieldId)))
             publicBlockReferencesSafe = false;
