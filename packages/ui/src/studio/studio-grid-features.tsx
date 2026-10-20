@@ -254,8 +254,6 @@ export function StudioGridFeatures({
                     onCheckedChange={(on: boolean) => {
                       // A disabled feature holds only its catalogue default. Its workflow stays
                       // in the draft; the settings command restores that binding when enabled.
-                      const bound = current.properties["event_id"];
-                      const kept = bound === undefined ? {} : { event_id: bound };
                       write(
                         key,
                         on
@@ -263,7 +261,6 @@ export function StudioGridFeatures({
                               kind: "group",
                               properties: {
                                 ...studioGridFeatureStartSettings[key],
-                                ...kept,
                                 enabled: { kind: "boolean", value: true },
                               },
                             }
