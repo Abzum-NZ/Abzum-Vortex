@@ -1250,8 +1250,12 @@ begin
         access_shared_record_ids, filter_parameters, access_parameters, null::jsonb,
         filter_condition, filter_types, parameter_types, parameter_values,
         filter_ids, summary_field_ids, search_field_ids, user_search;
-  exception when invalid_parameter_value then
-    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'filter_invalid');
+  exception
+    when invalid_parameter_value then
+      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'filter_invalid');
+    when sqlstate 'V3187' then
+      -- A readable date bucket left the supported year domain (grouping_value_internal).
+      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'value_out_of_range');
   end;
   -- A grid's grouped read carries the reader's field bound, as its plain page read does, so the
   -- collapsed table offers the same controls without reading a member page.
@@ -1987,10 +1991,15 @@ begin
     if not found or mapping_row.state <> 'active' then
       return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'field_unbounded');
     end if;
-    group_scan_predicate := vortex_record.grouping_member_predicate_internal(
-      mapping_row.physical_column_token, mapping_row.database_value_type,
-      fields_by_id -> group_key ->> 'type', p_user_inputs -> 'grouping', group_selector_values -> group_key
-    );
+    begin
+      group_scan_predicate := vortex_record.grouping_member_predicate_internal(
+        mapping_row.physical_column_token, mapping_row.database_value_type,
+        fields_by_id -> group_key ->> 'type', p_user_inputs -> 'grouping', group_selector_values -> group_key
+      );
+    exception when sqlstate 'V3187' then
+      -- The forged or stale selector's date bucket is outside the supported year domain.
+      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'value_out_of_range');
+    end;
     if group_scan_predicate is null then
       return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
     end if;
