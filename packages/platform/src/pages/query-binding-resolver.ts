@@ -12,6 +12,7 @@ import {
 } from "../definition/schema";
 import type { JsonValue } from "../catalogue/common";
 import type { InstalledRuntimeContext } from "../definition/installed-runtime-context";
+import { recordIdSchema } from "../catalogue/identifiers";
 import { recordLinkValueSchema } from "../records/module-field-values";
 
 type DeclaredInput =
@@ -46,6 +47,8 @@ export type QueryBindingContext = Readonly<{
   row?: QueryBindingRecordRead;
   /** The directory record of the viewer, derived only from the verified request and installation. */
   viewerPerson: Readonly<{ recordTypeId: string; recordId: string }> | undefined;
+  /** The organisation the verified request runs in; the same server-derived scope as the page. */
+  viewerOrganisation: string;
   /** The organisation's time zone, read only when a relative date needs it. */
   timeZone: () => Promise<string | undefined>;
   now: Date;
@@ -143,7 +146,22 @@ const resolveOne = async (
   };
   const source = binding.source;
   switch (source.kind) {
+    case "fixed_record": {
+      const recordId = recordIdSchema.safeParse(source.recordId);
+      return type.kind === "record" &&
+        recordId.success &&
+        type.recordTypes.some(
+          (accepted) => accepted.toLowerCase() === source.recordType.toLowerCase(),
+        )
+        ? {
+            kind: "value",
+            value: { recordTypeId: source.recordType, recordId: String(recordId.data) },
+          }
+        : { kind: "refused", reason: "fixed_record_invalid" };
+    }
     case "fixed": {
+      // A record is chosen as a record, with its type, never written as text.
+      if (type.kind === "record") return { kind: "refused", reason: "fixed_record_required" };
       const value = parseQueryBindingText(source.value, type);
       return value === undefined
         ? { kind: "refused", reason: "fixed_value_invalid" }
@@ -170,6 +188,10 @@ const resolveOne = async (
       return fieldValue(held?.[1], type);
     }
     case "current_person":
+      if (source.part === "organisation")
+        return type.kind === "text"
+          ? { kind: "value", value: context.viewerOrganisation }
+          : { kind: "refused", reason: "current_organisation_type_mismatch" };
       return context.viewerPerson === undefined
         ? { kind: "refused", reason: "viewer_person_unavailable" }
         : !queryBindingTypesFit(type, {

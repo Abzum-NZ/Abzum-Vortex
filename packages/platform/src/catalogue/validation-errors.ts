@@ -152,9 +152,9 @@ const definitionValidationErrorCatalogueSource = {
   },
   definition_records_table_inline_edit: {
     order: 39,
-    message: "Inline editing needs fields people may change.",
+    message: "Inline editing needs at least one stored field that people may change.",
     guidance:
-      "Choose editable fields shown as columns and the flow that saves a change, or turn Inline editing off.",
+      "Choose stored fields shown as columns (calculated and system fields cannot be edited here) and add the workflow that saves a change, or turn Inline editing off.",
   },
   // Master/detail names its own part (the link, the query, a column or an input) in its sentence;
   // the catalogue message is what a reader without that sentence sees.

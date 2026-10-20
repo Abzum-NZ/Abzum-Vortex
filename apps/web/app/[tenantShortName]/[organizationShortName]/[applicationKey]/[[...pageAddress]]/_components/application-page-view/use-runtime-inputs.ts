@@ -5,6 +5,7 @@ import {
   equalFormValue,
   type ControlSemanticEvent,
   type ChoiceInputPayload,
+  type DisplayInlineEditResult,
   type DisplaySemanticEvent,
   type FlowDispatchResult,
   type FormFlowFeedback,
@@ -31,7 +32,13 @@ import type {
   applicationLauncherPlacementIds,
 } from "./placement-helpers";
 import { boardPayloadFor, tablePayloadFor, compatibleBoardRowAction } from "./placement-helpers";
-import type { TableContinuationTarget, Notice, SubmittedForm, EventHandlers } from "./types";
+import type {
+  DispatchOutcome,
+  TableContinuationTarget,
+  Notice,
+  SubmittedForm,
+  EventHandlers,
+} from "./types";
 import { bindingFor, suppliedValues, bindingOfEvent, asComponentBinding } from "./event-values";
 import { cancelledMoveNotice, unavailableNotice } from "./notices";
 import {
@@ -57,7 +64,7 @@ export function useRuntimeInputs({
   unsavedWork,
   onOpenApplication,
   runBinding,
-  continueBoardColumn,
+  readBoardColumns,
   continueTablePage,
   refreshPlacements,
   setSelection,
@@ -117,8 +124,10 @@ export function useRuntimeInputs({
     selectedRecordId?: string,
     gestureSubject?: Readonly<{ recordId: string; revision: number }>,
     afterAccepted?: () => Promise<Notice | undefined>,
-  ) => Promise<void>;
-  continueBoardColumn: (placementId: string, event: DisplaySemanticEvent) => Promise<boolean>;
+    clickId?: string,
+    reportOnControl?: true,
+  ) => Promise<DispatchOutcome>;
+  readBoardColumns: (placementId: string, event: DisplaySemanticEvent) => Promise<boolean>;
   continueTablePage: (
     placementId: string,
     event: DisplaySemanticEvent,
@@ -127,6 +136,7 @@ export function useRuntimeInputs({
   refreshPlacements: (
     placementIds: readonly string[],
     tableContinuation?: TableContinuationTarget,
+    options?: Readonly<{ content?: true }>,
   ) => Promise<void>;
   setSelection: Dispatch<SetStateAction<Readonly<Record<string, readonly string[]>>>>;
   changeTableQuery: (
@@ -187,7 +197,7 @@ export function useRuntimeInputs({
     formPlacementId?: string,
     afterAccepted?: () => Promise<Notice | undefined>,
     sourceBindingId?: string,
-  ) => Promise<void>;
+  ) => Promise<unknown>;
   formBlock: ReturnType<typeof createFormBlockRuntime>;
   initializeChoiceForm: (
     formId: string,
@@ -315,7 +325,7 @@ export function useRuntimeInputs({
               return;
             await onOpenApplication(event);
           };
-        for (const kind of ["row_clicked", "row_action", "inline_edit"] as const)
+        for (const kind of ["row_clicked", "row_action"] as const)
           if (
             supportsEvent(kind) &&
             (kind !== "row_action" ||
@@ -335,13 +345,58 @@ export function useRuntimeInputs({
                   placementId,
                   binding,
                   suppliedValues(event),
-                  event.event === "row_clicked" ||
-                    event.event === "row_action" ||
-                    event.event === "inline_edit"
+                  event.event === "row_clicked" || event.event === "row_action"
                     ? event.recordId
                     : undefined,
                 );
             };
+        // An inline edit commits one stored value through the bound flow at the revision the row
+        // was displayed at. The cell shows what came of it: nothing is called saved until the
+        // server confirmed the write, and a record that changed keeps the person's draft.
+        if (
+          tableData !== undefined &&
+          supportsEvent("inline_edit") &&
+          bindings.some((binding) => binding.event === "inline_edit")
+        )
+          events.inline_edit = async (
+            event: DisplaySemanticEvent,
+          ): Promise<DisplayInlineEditResult> => {
+            if (event.event !== "inline_edit")
+              return { kind: "refused", message: unavailableNotice.text, changed: false };
+            const binding = bindingFor(bindings, event);
+            if (binding === undefined) {
+              console.error("[page] inline edit has no binding: INLINE_EDIT_BINDING_MISSING");
+              return { kind: "refused", message: unavailableNotice.text, changed: false };
+            }
+            if (busy)
+              return {
+                kind: "refused",
+                message: "Another change is still saving. Try again in a moment.",
+                changed: false,
+              };
+            const outcome = await runBinding(
+              placementId,
+              binding,
+              suppliedValues(event),
+              event.recordId,
+              { recordId: event.recordId, revision: event.revision },
+              undefined,
+              event.commandId,
+              true,
+            );
+            // A neutral refusal may mean the viewer's access to the field ended: the table is read once more
+            // so a field no longer editable, or no longer readable, loses its editor and its draft.
+            // A changed record is already read again by the dispatch. Nothing here writes.
+            if (!outcome.confirmed && !outcome.changed && outcome.notice === unavailableNotice)
+              void refreshPlacements([placementId], undefined, { content: true });
+            return outcome.confirmed
+              ? { kind: "saved" }
+              : {
+                  kind: "refused",
+                  message: outcome.notice?.text ?? unavailableNotice.text,
+                  changed: outcome.changed,
+                };
+          };
         if (
           boardData !== undefined &&
           boardRowActionBinding !== undefined &&
@@ -394,7 +449,7 @@ export function useRuntimeInputs({
           };
         if (boardData !== undefined && supportsEvent("page_changed"))
           events.page_changed = (event: DisplaySemanticEvent) =>
-            continueBoardColumn(placementId, event);
+            readBoardColumns(placementId, event);
         if (tableData !== undefined && supportsEvent("page_changed"))
           events.page_changed = (event: DisplaySemanticEvent) =>
             continueTablePage(placementId, event, tableData);
@@ -917,7 +972,7 @@ export function useRuntimeInputs({
     subject,
     onOpenApplication,
     unsavedWork,
-    continueBoardColumn,
+    readBoardColumns,
     continueTablePage,
     bulk,
   ]);

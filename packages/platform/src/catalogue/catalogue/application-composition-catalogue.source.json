@@ -5148,7 +5148,7 @@
                 "kind": "text",
                 "key": "event_id",
                 "label": "Event identity",
-                "help": "Stable identity of the flow binding an inline-edit commit runs",
+                "help": "The action that saves a change; it is set when the workflow for an edited value is added",
                 "required": false,
                 "minLength": 1,
                 "maxLength": 60
@@ -5172,8 +5172,10 @@
                     "long_text",
                     "whole_number",
                     "decimal_number",
-                    "money",
                     "yes_no",
+                    "choice",
+                    "date",
+                    "date_time",
                     "email_address",
                     "phone_number",
                     "web_address"

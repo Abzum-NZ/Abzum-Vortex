@@ -1,4 +1,6 @@
 import {
+  type RecordsTableInlineEditField,
+  type RecordsTableInlineEditor,
   type RecordsTableBulkActionContract,
   type RecordsTableBulkRefusalReason,
   type RecordsTableFeatureProjection,
@@ -227,17 +229,129 @@ export const parseTableSelectionParts = (
   });
 };
 
-const parseFieldKeys = (
+const optionalText = (
   value: unknown,
   message: string,
   location: DefinitionRenderErrorLocation,
-): readonly string[] => {
-  const fields = requireArray(value, message, location).map((field) =>
-    requireFieldKey(field, message, location),
-  );
+): string | undefined =>
+  value === undefined ? undefined : requireNonEmptyString(value, message, location);
+
+const optionalInteger = (
+  value: unknown,
+  message: string,
+  location: DefinitionRenderErrorLocation,
+): number | undefined => {
+  if (value === undefined) return undefined;
+  if (typeof value !== "number" || !Number.isSafeInteger(value)) fail(message, location);
+  return value as number;
+};
+
+/** The closed editor description of one editable field; any other shape is refused whole. */
+const parseInlineEditor = (
+  value: unknown,
+  location: DefinitionRenderErrorLocation,
+): RecordsTableInlineEditor => {
+  const message = "A projected cell editor is invalid";
+  const editor = requireRecord(value, message, location);
+  if (typeof editor.required !== "boolean") fail(message, location);
+  const required = editor.required as boolean;
+  switch (editor.kind) {
+    case "text": {
+      requireExactKeys(editor, ["kind", "required", "input", "maxLength"], location);
+      if (!["text", "long_text", "email", "phone", "web"].includes(editor.input as string))
+        fail(message, location);
+      const maxLength = optionalInteger(editor.maxLength, message, location);
+      return Object.freeze({
+        kind: "text",
+        required,
+        input: editor.input as "text" | "long_text" | "email" | "phone" | "web",
+        ...(maxLength === undefined ? {} : { maxLength }),
+      });
+    }
+    case "whole_number": {
+      requireExactKeys(editor, ["kind", "required", "minimum", "maximum", "step"], location);
+      const minimum = optionalInteger(editor.minimum, message, location);
+      const maximum = optionalInteger(editor.maximum, message, location);
+      const step = optionalInteger(editor.step, message, location);
+      return Object.freeze({
+        kind: "whole_number",
+        required,
+        ...(minimum === undefined ? {} : { minimum }),
+        ...(maximum === undefined ? {} : { maximum }),
+        ...(step === undefined ? {} : { step }),
+      });
+    }
+    case "decimal": {
+      requireExactKeys(
+        editor,
+        ["kind", "required", "digitsBeforeDecimal", "decimalPlaces", "minimum", "maximum"],
+        location,
+      );
+      const digitsBeforeDecimal = optionalInteger(editor.digitsBeforeDecimal, message, location);
+      const decimalPlaces = optionalInteger(editor.decimalPlaces, message, location);
+      if (digitsBeforeDecimal === undefined || decimalPlaces === undefined) fail(message, location);
+      const minimum = optionalText(editor.minimum, message, location);
+      const maximum = optionalText(editor.maximum, message, location);
+      return Object.freeze({
+        kind: "decimal",
+        required,
+        digitsBeforeDecimal: digitsBeforeDecimal as number,
+        decimalPlaces: decimalPlaces as number,
+        ...(minimum === undefined ? {} : { minimum }),
+        ...(maximum === undefined ? {} : { maximum }),
+      });
+    }
+    case "yes_no":
+      requireExactKeys(editor, ["kind", "required"], location);
+      return Object.freeze({ kind: "yes_no", required });
+    case "choice": {
+      requireExactKeys(editor, ["kind", "required", "options"], location);
+      const options = requireArray(editor.options, message, location).map((option) => {
+        const entry = requireRecord(option, message, location);
+        requireExactKeys(entry, ["value", "label"], location);
+        return Object.freeze({
+          value: requireNonEmptyString(entry.value, message, location),
+          label: requireNonEmptyString(entry.label, message, location),
+        });
+      });
+      if (options.length === 0) fail(message, location);
+      return Object.freeze({ kind: "choice", required, options: Object.freeze(options) });
+    }
+    case "date": {
+      requireExactKeys(editor, ["kind", "required", "earliest", "latest"], location);
+      const earliest = optionalText(editor.earliest, message, location);
+      const latest = optionalText(editor.latest, message, location);
+      return Object.freeze({
+        kind: "date",
+        required,
+        ...(earliest === undefined ? {} : { earliest }),
+        ...(latest === undefined ? {} : { latest }),
+      });
+    }
+    case "date_time":
+      requireExactKeys(editor, ["kind", "required"], location);
+      return Object.freeze({ kind: "date_time", required });
+    default:
+      return fail(message, location);
+  }
+};
+
+const parseInlineEditFields = (
+  value: unknown,
+  location: DefinitionRenderErrorLocation,
+): readonly RecordsTableInlineEditField[] => {
+  const message = "Projected editable fields are invalid";
+  const fields = requireArray(value, message, location).map((entry) => {
+    const record = requireRecord(entry, message, location);
+    requireExactKeys(record, ["field", "editor"], location);
+    return Object.freeze({
+      field: requireFieldKey(record.field, message, location),
+      editor: parseInlineEditor(record.editor, location),
+    });
+  });
   if (
     fields.length === 0 ||
-    new Set(fields.map((field) => field.toLowerCase())).size !== fields.length
+    new Set(fields.map((field) => field.field.toLowerCase())).size !== fields.length
   )
     fail(message, location);
   return Object.freeze(fields);
@@ -348,7 +462,7 @@ export const parseTableFeatures = (
     requireExactKeys(inline, ["eventId", "fields"], location);
     inlineEdit = Object.freeze({
       eventId: requireNonEmptyString(inline.eventId, "Inline editing needs its event", location),
-      fields: parseFieldKeys(inline.fields, "Projected editable fields are invalid", location),
+      fields: parseInlineEditFields(inline.fields, location),
     });
   }
   let masterDetail: RecordsTableFeatureProjection["masterDetail"];

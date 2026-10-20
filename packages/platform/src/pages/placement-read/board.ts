@@ -6,8 +6,7 @@ import { logPlacementFailure, type PlacementReadEntry } from "./shared";
 import type { PlacementReadInput } from "./types";
 
 /**
- * A Records table placement in Board mode: its columns for its resolved inputs, or the next page of
- * one column.
+ * A Records table in Board mode: only requested columns carry counts, totals and member pages.
  */
 export const readBoard = async (
   read: PlacementReadInput,
@@ -16,10 +15,9 @@ export const readBoard = async (
   inputValues: Readonly<Record<string, JsonValue>>,
 ): Promise<void> => {
   const { placementId } = placement;
-  const continuation =
-    read.boardContinuation !== undefined && sameId(read.boardContinuation.placementId, placementId)
-      ? read.boardContinuation.request
-      : undefined;
+  const columnRead = read.boardReads?.find((target) =>
+    sameId(target.placementId, placementId),
+  )?.request;
   const projection = await projectBoardPlacement({
     context: read.context,
     session: read.session,
@@ -30,7 +28,7 @@ export const readBoard = async (
     inputValues,
     queries: read.services.queries,
     board,
-    ...(continuation === undefined ? {} : { continuation }),
+    ...(columnRead === undefined ? {} : { read: columnRead }),
   });
   if (projection.outcome === "ready") {
     try {

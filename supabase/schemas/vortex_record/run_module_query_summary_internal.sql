@@ -104,6 +104,9 @@ declare
   board_option jsonb;
   board_option_values text[] := array[]::text[];
   board_bucket_sql text;
+  board_requested_columns jsonb := p_user_inputs #> '{boardSummary,columns}';
+  board_requested_positions integer[] := array[]::integer[];
+  board_requested_column jsonb;
   board_option_position integer;
   board_totals_sql text;
   board_empty_aggregates_sql text;
@@ -682,6 +685,16 @@ begin
         'pg_catalog.jsonb_build_object(''outcome'', ''completed'', ''valueCount'', pg_catalog.count(*), ''value'', pg_catalog.to_jsonb(pg_catalog.count(*)))'
       );
     end if;
+    -- A missing projected key is withheld, whereas a readable empty field remains JSON null.
+    -- Never present a partial total (or an empty total) as the aggregate of the whole bucket.
+    if aggregate_field_id is not null then
+      aggregate_result_sql := pg_catalog.format(
+        'case when coalesce(pg_catalog.bool_or(not (candidate.projected_values ? %L)), false)
+           then pg_catalog.jsonb_build_object(''outcome'', ''refused'', ''reasonCode'', ''read_forbidden'')
+           else %s end',
+        aggregate_field_id, aggregate_result_sql
+      );
+    end if;
     if aggregate_object_sql <> '' then
       aggregate_object_sql := aggregate_object_sql || ', ';
     end if;
@@ -819,6 +832,22 @@ begin
       );
     end loop;
     board_bucket_sql := board_bucket_sql || 'else 0 end else 0 end';
+    -- Requested buckets are data, validated against the installed options. Only these buckets
+    -- enter the existing capped aggregate path; unread columns retain navigation metadata only.
+    for board_requested_column in
+      select item.value from pg_catalog.jsonb_array_elements(board_requested_columns) as item(value)
+    loop
+      if board_requested_column ->> 'kind' = 'unassigned' then
+        board_requested_positions := pg_catalog.array_append(board_requested_positions, 0);
+      else
+        board_option_position := pg_catalog.array_position(board_option_values, board_requested_column ->> 'value');
+        if board_option_position is null then
+          return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
+        end if;
+        board_requested_positions := pg_catalog.array_append(board_requested_positions, board_option_position);
+      end if;
+    end loop;
+
     if aggregate_object_sql = '' then
       board_totals_sql := 'select ''{}''::jsonb as aggregate_values';
       board_empty_aggregates_sql := 'select ''{}''::jsonb as aggregates';
@@ -842,8 +871,10 @@ begin
          candidate_count as (select pg_catalog.count(*)::integer as value from candidate),
          selected as (%s),
          normalized as (
-           select candidate.projected_values, %s as bucket_index
-           from selected as candidate
+           select bucket.projected_values, bucket.bucket_index
+           from (select candidate.projected_values, %s as bucket_index
+             from selected as candidate) as bucket
+           where bucket.bucket_index = any (%L::integer[])
          ),
          aggregate_rows as materialized (
            select grouping(candidate.bucket_index) as is_total,
@@ -866,8 +897,8 @@ begin
              pg_catalog.jsonb_build_object(
                ''value'', installed.value ->> ''value'',
                ''label'', installed.value ->> ''label'',
-               ''rowCount'', coalesce(grouped.row_count, 0),
-               ''aggregates'', coalesce(grouped.aggregates, empty_aggregates.aggregates)
+               ''rowCount'', case when installed.position = any (%L::integer[]) then coalesce(grouped.row_count, 0) else null end,
+               ''aggregates'', case when installed.position = any (%L::integer[]) then coalesce(grouped.aggregates, empty_aggregates.aggregates) else ''{}''::jsonb end
              ) order by installed.position
            ), ''[]''::jsonb) as value
            from installed_options as installed
@@ -876,8 +907,8 @@ begin
          ),
          unassigned_result as (
            select pg_catalog.jsonb_build_object(
-             ''rowCount'', coalesce(grouped.row_count, 0),
-             ''aggregates'', coalesce(grouped.aggregates, empty_aggregates.aggregates)
+             ''rowCount'', case when 0 = any (%L::integer[]) then coalesce(grouped.row_count, 0) else null end,
+             ''aggregates'', case when 0 = any (%L::integer[]) then coalesce(grouped.aggregates, empty_aggregates.aggregates) else ''{}''::jsonb end
            ) as value
            from (select 0::integer as bucket_index) as unassigned
            left join grouped on grouped.bucket_index = unassigned.bucket_index
@@ -901,10 +932,13 @@ begin
         candidate_sql,
         selected_sql,
         board_bucket_sql,
+        board_requested_positions::text,
         case when aggregate_object_sql = '' then '''{}''::jsonb'
           else pg_catalog.format('pg_catalog.jsonb_build_object(%s)', aggregate_object_sql) end,
         board_options::text,
         board_empty_aggregates_sql,
+        board_requested_positions::text, board_requested_positions::text,
+        board_requested_positions::text, board_requested_positions::text,
         summary_candidate_limit,
         p_module_root_id::text,
         resolved ->> 'moduleReleaseVersion',
@@ -917,8 +951,10 @@ begin
        candidate_count as (select pg_catalog.count(*)::integer as value from candidate),
        selected as materialized (%s),
        normalized as materialized (
-         select candidate.projected_values, %s as bucket_index
-         from selected as candidate
+         select bucket.projected_values, bucket.bucket_index
+         from (select candidate.projected_values, %s as bucket_index
+           from selected as candidate) as bucket
+         where bucket.bucket_index = any (%L::integer[])
        ),
        selected_count as (select pg_catalog.count(*)::integer as value from normalized),
        installed_options as (
@@ -940,8 +976,8 @@ begin
            pg_catalog.jsonb_build_object(
              ''value'', installed.value ->> ''value'',
              ''label'', installed.value ->> ''label'',
-             ''rowCount'', coalesce(grouped.row_count, 0),
-             ''aggregates'', coalesce(grouped.aggregates, empty_aggregates.aggregates)
+             ''rowCount'', case when installed.position = any (%L::integer[]) then coalesce(grouped.row_count, 0) else null end,
+             ''aggregates'', case when installed.position = any (%L::integer[]) then coalesce(grouped.aggregates, empty_aggregates.aggregates) else ''{}''::jsonb end
            ) order by installed.position
          ), ''[]''::jsonb) as value
          from installed_options as installed
@@ -950,8 +986,8 @@ begin
        ),
        unassigned_result as (
          select pg_catalog.jsonb_build_object(
-           ''rowCount'', coalesce(grouped.row_count, 0),
-           ''aggregates'', coalesce(grouped.aggregates, empty_aggregates.aggregates)
+           ''rowCount'', case when 0 = any (%L::integer[]) then coalesce(grouped.row_count, 0) else null end,
+           ''aggregates'', case when 0 = any (%L::integer[]) then coalesce(grouped.aggregates, empty_aggregates.aggregates) else ''{}''::jsonb end
          ) as value
          from (select 0::integer as bucket_index) as unassigned
          left join grouped on grouped.bucket_index = unassigned.bucket_index
@@ -975,10 +1011,13 @@ begin
       candidate_sql,
       selected_sql,
       board_bucket_sql,
+      board_requested_positions::text,
       board_options::text,
       board_totals_sql,
       aggregate_object_sql,
       board_empty_aggregates_sql,
+      board_requested_positions::text, board_requested_positions::text,
+      board_requested_positions::text, board_requested_positions::text,
       summary_candidate_limit,
       p_module_root_id::text,
       resolved ->> 'moduleReleaseVersion',

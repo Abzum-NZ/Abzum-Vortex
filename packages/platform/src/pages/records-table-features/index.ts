@@ -47,8 +47,11 @@ export type RecordsTableFeatureProjection = Readonly<{
    * permission and precondition for the visible selection; execution rechecks current authority.
    */
   bulkActions?: readonly RecordsTableBulkActionContract[];
-  /** The fields the viewer may change on at least one row, and the flow binding that commits a change. */
-  inlineEdit?: Readonly<{ eventId: string; fields: readonly string[] }>;
+  /**
+   * The fields the viewer may change on at least one row, each with how a cell edits it, and the
+   * flow binding that commits a change.
+   */
+  inlineEdit?: Readonly<{ eventId: string; fields: readonly RecordsTableInlineEditField[] }>;
   /** Rows expand to their related records, read this many at a time. */
   masterDetail?: Readonly<{ pageSize: number }>;
   /** Rows expand to the records that name them as their parent, read this many at a time. */
@@ -65,6 +68,39 @@ export type RecordsTableFeatureProjection = Readonly<{
    * `view` is present when the address opens the table as a pivot, with its row position.
    */
   pivot?: Readonly<{ rowPageSize: number; totals: boolean; view?: Readonly<{ cursor?: string }> }>;
+}>;
+
+/**
+ * How one cell edits one field, from the installed field definition alone: the control to draw and
+ * the limits that stop obviously wrong input. It grants nothing; the protected writer validates
+ * every value again. `required` says the field cannot be emptied.
+ */
+export type RecordsTableInlineEditor = Readonly<{ required: boolean }> &
+  (
+    | Readonly<{
+        kind: "text";
+        /** Which text control: a line, several lines, or an email, phone or web address. */
+        input: "text" | "long_text" | "email" | "phone" | "web";
+        maxLength?: number;
+      }>
+    | Readonly<{ kind: "whole_number"; minimum?: number; maximum?: number; step?: number }>
+    | Readonly<{
+        kind: "decimal";
+        digitsBeforeDecimal: number;
+        decimalPlaces: number;
+        minimum?: string;
+        maximum?: string;
+      }>
+    | Readonly<{ kind: "yes_no" }>
+    | Readonly<{ kind: "choice"; options: readonly Readonly<{ value: string; label: string }>[] }>
+    | Readonly<{ kind: "date"; earliest?: string; latest?: string }>
+    | Readonly<{ kind: "date_time" }>
+  );
+
+/** One field a viewer may edit in a cell, as the field identity the table's columns use. */
+export type RecordsTableInlineEditField = Readonly<{
+  field: string;
+  editor: RecordsTableInlineEditor;
 }>;
 
 /** The part of a Records table request a refusal names, kept only in the server log. */
@@ -112,21 +148,35 @@ export const logRecordsTableRequestRefusal = (
 const sameField = (left: string, right: string): boolean =>
   left.toLowerCase() === right.toLowerCase();
 
-/** The inline-edit fields some row lets the viewer change now; none when inline editing is off. */
+/** Whether one row lets the viewer change this field now: the update action and the field's own policy. */
+export const rowMayChangeField = (
+  row: Pick<ProtectedQueryRow, "capabilities">,
+  field: string,
+): boolean =>
+  row.capabilities?.actions.includes("update") === true &&
+  row.capabilities.changeableFieldIds.some((fieldId) => sameField(fieldId, field));
+
+/**
+ * The inline-edit fields some row lets the viewer change now, which the viewer may read and the
+ * installed definition describes an editor for; none when inline editing is off. The authored
+ * allowlist only narrows what the definition and the viewer's access already allow.
+ */
 export const recordsTableEditableFields = (
   contract: RecordsTableContract,
   rows: readonly ProtectedQueryRow[],
-): readonly string[] => {
+  bounds: ProtectedQueryFieldBounds,
+  editors: Readonly<Record<string, RecordsTableInlineEditor>> | undefined,
+): readonly RecordsTableInlineEditField[] => {
   const inlineEdit = contract.features.inlineEdit;
-  return inlineEdit.enabled && inlineEdit.eventId !== undefined
-    ? inlineEdit.fields.filter((field) =>
-        rows.some(
-          (row) =>
-            row.capabilities?.actions.includes("update") === true &&
-            row.capabilities.changeableFieldIds.some((fieldId) => sameField(fieldId, field)),
-        ),
-      )
-    : [];
+  if (!inlineEdit.enabled || inlineEdit.eventId === undefined) return [];
+  return inlineEdit.fields.flatMap((field): RecordsTableInlineEditField[] => {
+    const editor = editors?.[field.toLowerCase()];
+    return editor !== undefined &&
+      bounds.readableFieldIds.some((fieldId) => sameField(fieldId, field)) &&
+      rows.some((row) => rowMayChangeField(row, field))
+      ? [{ field, editor }]
+      : [];
+  });
 };
 
 /** The one bulk-action projection; a disabled feature offers neither actions nor availability reads. */
@@ -148,6 +198,7 @@ export const projectRecordsTableFeatures = (
   bounds: ProtectedQueryFieldBounds,
   rows: readonly ProtectedQueryRow[],
   filterFields: Readonly<Record<string, RecordsTableFilterField>> | undefined,
+  editors: Readonly<Record<string, RecordsTableInlineEditor>> | undefined,
   conditionalFormatting?: ConditionalFormattingProjection,
   pivotView?: Readonly<{ cursor?: string }>,
   fieldLabels?: Readonly<Record<string, string>>,
@@ -170,7 +221,7 @@ export const projectRecordsTableFeatures = (
     (columnFilters.length > 0 || contract.sortableFields.some((field) => readable(field)));
   const bulkActions = recordsTableBulkActions(contract);
   const inlineEdit = features.inlineEdit;
-  const editableFields = recordsTableEditableFields(contract, rows);
+  const editableFields = recordsTableEditableFields(contract, rows, bounds, editors);
   // Every expanded row is read again under the viewer's current access: the projection only says
   // rows expand; a viewer who cannot read the related records sees the panel's neutral refusal.
   const masterDetail = features.masterDetail;
