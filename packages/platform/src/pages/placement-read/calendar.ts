@@ -71,8 +71,7 @@ export const readCalendar = async (
   if (projection.cause === "calendar_range_unsupported") {
     data[placementId] = {
       status: "awaiting_input",
-      message:
-        "This period is outside the supported calendar range. Choose a different period.",
+      message: "This period is outside the supported calendar range. Choose a different period.",
     };
     return;
   }
