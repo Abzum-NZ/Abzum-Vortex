@@ -86,6 +86,7 @@ export type PlacementFailureReason =
   | "summary_query_unavailable"
   | "summary_query_refused"
   | "summary_dataset_limit_exceeded"
+  | "summary_value_out_of_range"
   | "summary_result_invalid"
   | "chart_settings_invalid"
   | "chart_group_invalid"
