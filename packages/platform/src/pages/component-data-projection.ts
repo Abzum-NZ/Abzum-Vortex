@@ -49,6 +49,7 @@ export type ProjectedTableField = Readonly<{
 /** One display value that is not itself a table. */
 export type ProjectedScalarCellValue =
   | Readonly<{ kind: "text"; text: string }>
+  | Readonly<{ kind: "choice"; key: string; label: string }>
   | Readonly<{ kind: "number"; value: number; formatted: string }>
   | Readonly<{ kind: "boolean"; value: boolean }>
   | Readonly<{ kind: "date"; iso: string }>
@@ -334,7 +335,9 @@ const projectCell = (
   // One selected choice shows its label; a value the field no longer offers shows no value.
   if (typeof value === "string" && choiceLabels !== undefined) {
     const option = choiceLabels.find((candidate) => candidate.value === value);
-    return option === undefined ? empty : { kind: "text", text: option.label };
+    return option === undefined
+      ? empty
+      : { kind: "choice", key: option.value, label: option.label };
   }
   // A formatted-text value is shown as its document, never flattened or dropped.
   const document = richTextDocumentSchema.safeParse(value);
