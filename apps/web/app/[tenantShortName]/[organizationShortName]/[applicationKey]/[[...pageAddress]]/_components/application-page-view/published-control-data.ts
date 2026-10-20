@@ -38,8 +38,7 @@ export function publishedControlData(
         value: value ?? (kind === "text_input" ? "" : null),
       },
     };
-  // A field input of a text or choice field starts with the published value. The server still
-  // checks the value when the form is saved, so an address that names no option is refused there.
+  // A field input starts with the published value only when the protected projection offers it.
   if (kind === "field_input") {
     const payload = ready?.values;
     if (
@@ -48,6 +47,12 @@ export function publishedControlData(
       (payload?.kind !== "text_input" && payload?.kind !== "choice_input")
     )
       return data;
+    if (
+      payload.kind === "choice_input" &&
+      Array.isArray(payload.options) &&
+      !payload.options.some((option: { key: string }) => option.key === value)
+    )
+      return { status: "ready", values: { ...payload, value: null } };
     return { status: "ready", values: { ...payload, value } };
   }
   if (kind !== "link_input") return data;

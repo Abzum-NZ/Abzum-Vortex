@@ -983,6 +983,7 @@ export function useRuntimeInputs({
     readBoardColumns,
     continueTablePage,
     bulk,
+    exported,
   ]);
 
   runtimeInputsRef.current = runtimeInputs;
