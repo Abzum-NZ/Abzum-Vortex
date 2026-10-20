@@ -175,8 +175,9 @@ export function StudioGridFeatures({
           const declaration = property.properties.find((feature) => feature.key === key);
           const { label, description } = recordsTableFeatureDescription(key);
           const enabled = features !== undefined && recordsTableFeatureState(features, key).enabled;
+          // In Board mode the grid shows none of the table's other features: only the board is judged.
           const check =
-            features === undefined
+            features === undefined || (features.board.enabled && key !== "board")
               ? undefined
               : checkRecordsTableFeature(key, recordsTableFeatureState(features, key), facts);
           const switchId = `${idPrefix}-${ownId}-${key}`;

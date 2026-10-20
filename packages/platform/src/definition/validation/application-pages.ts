@@ -509,7 +509,12 @@ export function applicationPageRules(scope: ApplicationScope): void {
           table.features,
           recordsTableQueryFacts(bound, bindingFacts),
         ))
-          if (feature.enabled && feature.check.kind === "not_possible")
+          // A grid in Board mode shows none of the table's other features, so only the board is judged.
+          if (
+            feature.enabled &&
+            feature.check.kind === "not_possible" &&
+            (!table.features.board.enabled || feature.key === "board")
+          )
             failures.push(
               failure(
                 output,
