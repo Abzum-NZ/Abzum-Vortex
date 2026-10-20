@@ -1,47 +1,30 @@
 "use client";
 
-import {
-  useCallback,
-  useEffect,
-  useId,
-  useMemo,
-  useRef,
-  useState,
-  type CSSProperties,
-  type ReactElement,
-  type ReactNode,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { RECORDS_TABLE_TREE_MAXIMUM_PAGE_SIZE } from "@vortex/platform/schema";
-import { Button } from "../../components/button";
-import { Skeleton } from "../../components/skeleton";
-import { cellValueToText, DisplayCellView } from "../cell";
+import { cellValueToText } from "../cell";
 import {
   fail,
   parseTablePayload,
   requireExactKeys,
   requireRecord,
-  type DisplayColumn,
   type DisplayRow,
 } from "../projected-data";
-import { RowExpansionToggle } from "../row-expansion-toggle";
-import type { GridFeatureModule, GridFeatureRowProps } from "./registry";
+import type { SubRowEntry, SubRowsBeneath } from "../sub-rows";
+import type { GridFeatureModule, GridFeatureSubRowsProps } from "./registry";
 
 /** The rows a tree table holds at once: its page and every level opened beneath it. */
 const TREE_ROW_BUDGET = RECORDS_TABLE_TREE_MAXIMUM_PAGE_SIZE;
-const INDENT_REM = 1.25;
 
-type Level = Readonly<{
-  columns: readonly DisplayColumn[];
-  rows: readonly DisplayRow[];
-  next?: string;
-}>;
+type Level = Readonly<{ rows: readonly DisplayRow[]; next?: string }>;
 type Outcome =
   Readonly<{ status: "ready"; level: Level }> | Readonly<{ status: "empty" | "refused" | "error" }>;
-type LevelState =
+type NodeState =
   | Readonly<{ kind: "loading" }>
   | Readonly<{
       kind: "ready";
-      level: Level;
+      rows: readonly DisplayRow[];
+      next?: string;
       more: "idle" | "reading" | "failed";
       /** The shared budget has no room for the next page: it waits until a branch is closed. */
       capped: boolean;
@@ -70,7 +53,6 @@ const parseOutcome = (value: unknown): Outcome | undefined => {
       return {
         status: "ready",
         level: {
-          columns: payload.columns,
           rows: payload.rows,
           ...(payload.nextContinuationToken === undefined
             ? {}
@@ -84,75 +66,92 @@ const parseOutcome = (value: unknown): Outcome | undefined => {
 };
 
 /** The rows each opened branch holds, so the whole table stays within one row budget. */
-const budgets = new WeakMap<object, Map<string, number>>();
-const budgetOf = (key: object): Map<string, number> => {
-  const held = budgets.get(key);
-  if (held !== undefined) return held;
-  const created = new Map<string, number>();
-  budgets.set(key, created);
-  return created;
-};
-const usedExcept = (budget: ReadonlyMap<string, number>, nodeKey: string): number => {
+const usedExcept = (budget: ReadonlyMap<string, number>, nodeId: string): number => {
   let used = 0;
-  for (const [key, rows] of budget) if (key !== nodeKey) used += rows;
+  for (const [id, rows] of budget) if (id !== nodeId) used += rows;
   return used;
 };
 
-type LevelProps = Readonly<{
-  readLevel: NonNullable<GridFeatureRowProps["context"]["events"]>["row_expanded"];
-  budget: Map<string, number>;
-  /** Rows the table's own page already holds. */
-  pageRows: number;
-  pageSize: number;
-  parentRecordId: string;
-  nodeKey: string;
-  depth: number;
-  columns: readonly DisplayColumn[] | undefined;
-  parentName: string;
-  panelId: string;
-}>;
+/**
+ * The opened records that can be read: those of the page, and those listed by an opened record
+ * whose level is loaded. A record whose parent closes, or whose level is read again, is no longer
+ * one of them, and gives its rows back to the budget.
+ */
+const reachableOpen = (
+  expanded: readonly string[],
+  pageRows: readonly DisplayRow[],
+  nodes: ReadonlyMap<string, NodeState>,
+): readonly string[] => {
+  const open = new Set(expanded);
+  const reachable: string[] = [];
+  const visit = (rows: readonly DisplayRow[]): void => {
+    for (const row of rows) {
+      if (!open.has(row.recordId)) continue;
+      reachable.push(row.recordId);
+      const node = nodes.get(row.recordId);
+      if (node?.kind === "ready") visit(node.rows);
+    }
+  };
+  visit(pageRows);
+  return reachable;
+};
 
 /**
- * The records beneath one row: read only while the row is open (one read when it opens, one per
- * "Show more"; nothing when it closes, which also gives its rows back to the shared budget). Each
- * record shows the table's columns with the table's own cell renderer; a record the viewer may
- * read a child of offers its own toggle, so levels open to any depth.
+ * The levels of a tree table: one read when a row opens, one per "Show more" (nothing when it
+ * closes, which also gives its rows back to the shared budget). It draws nothing; the entries it
+ * reports are rows and notices of the table's own grid, so every level looks and acts like the page.
  */
-function TreeLevel({
-  readLevel,
-  budget,
-  pageRows,
-  pageSize,
-  parentRecordId,
-  nodeKey,
-  depth,
-  columns: inherited,
-  parentName,
-  panelId,
-}: LevelProps): ReactElement {
-  const [state, setState] = useState<LevelState>({ kind: "loading" });
-  const [open, setOpen] = useState<readonly string[]>([]);
+function Levels({ context, expandedRecordIds, publish }: GridFeatureSubRowsProps): null {
+  const tree = context.features.tree;
+  if (tree === undefined) fail("A tree requires its feature projection", location);
+  const pageSize = tree.pageSize;
+  const readLevel = context.events?.row_expanded;
+  const pageRows = context.rows;
+  const heading = context.columns[0]?.key;
+  const [nodes, setNodes] = useState<ReadonlyMap<string, NodeState>>(() => new Map());
+  const nodesRef = useRef(nodes);
+  nodesRef.current = nodes;
+  const budget = useRef(new Map<string, number>());
   const mounted = useRef(true);
-  // The latest first-page read of this level: an older one's reply never decides its state.
-  const latestLoad = useRef(0);
+  // The latest read of each opened row: an older one's reply never decides its state.
+  const requests = useRef(new Map<string, number>());
+  const sequence = useRef(0);
   // The page's own row count is read when a request is sized, so a refreshed page never re-reads
   // every opened level.
-  const shownPageRows = useRef(pageRows);
-  shownPageRows.current = pageRows;
+  const shownPageRows = useRef(pageRows.length);
+  shownPageRows.current = pageRows.length;
 
+  const patch = useCallback((id: string, state: NodeState | undefined): void => {
+    setNodes((current) => {
+      const next = new Map(current);
+      if (state === undefined) next.delete(id);
+      else next.set(id, state);
+      return next;
+    });
+  }, []);
+  const live = useCallback(
+    (id: string, request: number): boolean =>
+      mounted.current && requests.current.get(id) === request,
+    [],
+  );
   const remaining = useCallback(
-    (): number => TREE_ROW_BUDGET - shownPageRows.current - usedExcept(budget, nodeKey),
-    [budget, nodeKey],
+    (id: string): number =>
+      TREE_ROW_BUDGET - shownPageRows.current - usedExcept(budget.current, id),
+    [],
   );
 
   const readPage = useCallback(
-    async (token: string | undefined, requestedRows: number): Promise<Outcome | undefined> => {
+    async (
+      recordId: string,
+      token: string | undefined,
+      requestedRows: number,
+    ): Promise<Outcome | undefined> => {
       if (readLevel === undefined) return { status: "error" };
       try {
         return parseOutcome(
           await readLevel({
             event: "row_expanded",
-            recordId: parentRecordId,
+            recordId,
             pageSize: requestedRows,
             ...(token === undefined ? {} : { continuationToken: token }),
           }),
@@ -162,317 +161,243 @@ function TreeLevel({
         return { status: "error" };
       }
     },
-    [readLevel, parentRecordId],
+    [readLevel],
   );
 
   // A read's rows are reserved in the budget before it starts, so every returned row (at most the
   // requested size) fits and the level's next position is never lost.
-  const load = useCallback(async () => {
-    const request = latestLoad.current + 1;
-    latestLoad.current = request;
-    const requestedRows = Math.min(pageSize, Math.max(remaining(), 0));
-    if (requestedRows === 0) {
-      budget.delete(nodeKey);
-      setState({ kind: "budget" });
-      return;
-    }
-    budget.set(nodeKey, requestedRows);
-    setState({ kind: "loading" });
-    let outcome = await readPage(undefined, requestedRows);
-    // A reply the host dropped (the page's search or address moved on while it was read) is read
-    // again once under the page as it is now.
-    if (outcome === undefined && mounted.current && latestLoad.current === request)
-      outcome = await readPage(undefined, requestedRows);
-    if (!mounted.current || latestLoad.current !== request) return;
-    if (outcome === undefined || outcome.status !== "ready") {
-      budget.delete(nodeKey);
-      setState({ kind: outcome?.status ?? "error" });
-      return;
-    }
-    const rows = outcome.level.rows.slice(0, requestedRows);
-    budget.set(nodeKey, rows.length);
-    setState({
-      kind: "ready",
-      level: {
-        columns: outcome.level.columns,
+  const load = useCallback(
+    async (id: string): Promise<void> => {
+      sequence.current += 1;
+      const request = sequence.current;
+      requests.current.set(id, request);
+      const requestedRows = Math.min(pageSize, Math.max(remaining(id), 0));
+      if (requestedRows === 0) {
+        budget.current.delete(id);
+        patch(id, { kind: "budget" });
+        return;
+      }
+      budget.current.set(id, requestedRows);
+      patch(id, { kind: "loading" });
+      let outcome = await readPage(id, undefined, requestedRows);
+      // A reply the host dropped (the page's search or address moved on while it was read) is read
+      // again once under the page as it is now.
+      if (outcome === undefined && live(id, request))
+        outcome = await readPage(id, undefined, requestedRows);
+      if (!live(id, request)) return;
+      if (outcome === undefined || outcome.status !== "ready") {
+        budget.current.delete(id);
+        patch(id, { kind: outcome?.status ?? "error" });
+        return;
+      }
+      const rows = outcome.level.rows.slice(0, requestedRows);
+      budget.current.set(id, rows.length);
+      patch(id, {
+        kind: "ready",
         rows,
         ...(outcome.level.next === undefined ? {} : { next: outcome.level.next }),
-      },
-      more: "idle",
-      capped: false,
-    });
-  }, [budget, nodeKey, pageSize, readPage, remaining]);
+        more: "idle",
+        capped: false,
+      });
+    },
+    [pageSize, remaining, patch, readPage, live],
+  );
+
+  const showMore = useCallback(
+    async (id: string): Promise<void> => {
+      const state = nodesRef.current.get(id);
+      if (state?.kind !== "ready" || state.next === undefined || state.more === "reading") return;
+      const request = requests.current.get(id) ?? 0;
+      const requestedRows = Math.min(pageSize, Math.max(remaining(id) - state.rows.length, 0));
+      if (requestedRows === 0) {
+        patch(id, { ...state, capped: true });
+        return;
+      }
+      budget.current.set(id, state.rows.length + requestedRows);
+      patch(id, { ...state, more: "reading" });
+      const outcome = await readPage(id, state.next, requestedRows);
+      if (!live(id, request)) return;
+      // A dropped reply leaves the shown rows as they were.
+      if (outcome === undefined) {
+        budget.current.set(id, state.rows.length);
+        patch(id, { ...state, more: "idle" });
+        return;
+      }
+      // A refused or expired position keeps the rows already shown, which were read under the
+      // viewer's access; the level offers no further page.
+      if (outcome.status === "refused") {
+        budget.current.set(id, state.rows.length);
+        patch(id, { kind: "ready", rows: state.rows, more: "failed", capped: false });
+        return;
+      }
+      if (outcome.status === "error") {
+        budget.current.set(id, state.rows.length);
+        patch(id, { ...state, more: "failed" });
+        return;
+      }
+      const known = new Set(state.rows.map((row) => row.recordId));
+      const added =
+        outcome.status === "ready"
+          ? outcome.level.rows.filter((row) => !known.has(row.recordId)).slice(0, requestedRows)
+          : [];
+      const rows = [...state.rows, ...added];
+      budget.current.set(id, rows.length);
+      const next = outcome.status === "ready" ? outcome.level.next : undefined;
+      patch(id, {
+        kind: "ready",
+        rows,
+        ...(next === undefined ? {} : { next }),
+        more: "idle",
+        capped: false,
+      });
+    },
+    [pageSize, remaining, patch, readPage, live],
+  );
+
+  const wanted = useMemo(
+    () => reachableOpen(expandedRecordIds, pageRows, nodes),
+    [expandedRecordIds, pageRows, nodes],
+  );
 
   useEffect(() => {
     mounted.current = true;
-    void load();
+    const held = requests.current;
+    const heldBudget = budget.current;
     return () => {
       mounted.current = false;
-      budget.delete(nodeKey);
+      held.clear();
+      heldBudget.clear();
     };
-  }, [budget, load, nodeKey]);
+  }, []);
 
-  const showMore = async (): Promise<void> => {
-    if (state.kind !== "ready" || state.level.next === undefined || state.more === "reading")
-      return;
-    const shown = state.level;
-    const requestedRows = Math.min(pageSize, Math.max(remaining() - shown.rows.length, 0));
-    if (requestedRows === 0) {
-      setState({ ...state, capped: true });
-      return;
+  // Opening a row reads its level once; closing it (or closing a parent, or reading the parent
+  // again) drops the level and gives its rows back to the budget.
+  useEffect(() => {
+    const open = new Set(wanted);
+    for (const id of wanted) if (!requests.current.has(id)) void load(id);
+    for (const id of [...requests.current.keys()]) {
+      if (open.has(id)) continue;
+      requests.current.delete(id);
+      budget.current.delete(id);
+      patch(id, undefined);
     }
-    budget.set(nodeKey, shown.rows.length + requestedRows);
-    setState({ ...state, more: "reading" });
-    const outcome = await readPage(shown.next, requestedRows);
-    if (!mounted.current) return;
-    // A dropped reply leaves the shown rows as they were.
-    if (outcome === undefined) {
-      budget.set(nodeKey, shown.rows.length);
-      setState({ kind: "ready", level: shown, more: "idle", capped: state.capped });
-      return;
-    }
-    // A refused or expired position keeps the rows already shown, which were read under the
-    // viewer's access; the level offers no further page.
-    if (outcome.status === "refused") {
-      budget.set(nodeKey, shown.rows.length);
-      setState({
-        kind: "ready",
-        level: { columns: shown.columns, rows: shown.rows },
-        more: "failed",
-        capped: false,
-      });
-      return;
-    }
-    if (outcome.status === "error") {
-      budget.set(nodeKey, shown.rows.length);
-      setState({ kind: "ready", level: shown, more: "failed", capped: state.capped });
-      return;
-    }
-    const known = new Set(shown.rows.map((row) => row.recordId));
-    const added =
-      outcome.status === "ready"
-        ? outcome.level.rows.filter((row) => !known.has(row.recordId)).slice(0, requestedRows)
-        : [];
-    const rows = [...shown.rows, ...added];
-    budget.set(nodeKey, rows.length);
-    const next = outcome.status === "ready" ? outcome.level.next : undefined;
-    setState({
-      kind: "ready",
-      level: {
-        columns: shown.columns,
-        rows,
-        ...(next === undefined ? {} : { next }),
-      },
-      more: "idle",
-      capped: false,
-    });
-  };
+  }, [wanted, load, patch]);
 
-  const toggle = (recordId: string): void =>
-    setOpen((current) =>
-      current.includes(recordId)
-        ? current.filter((candidate) => candidate !== recordId)
-        : [...current, recordId],
-    );
+  const beneath = useMemo((): SubRowsBeneath => {
+    const named = new Map<string, DisplayRow>();
+    for (const row of pageRows) named.set(row.recordId, row);
+    for (const node of nodes.values())
+      if (node.kind === "ready") for (const row of node.rows) named.set(row.recordId, row);
+    const nameOf = (id: string): string => {
+      const row = named.get(id);
+      return row === undefined || heading === undefined
+        ? "this record"
+        : cellValueToText(row.cells[heading] ?? { kind: "empty" }) || "this record";
+    };
+    const retry = (id: string) => ({ label: "Try again", run: () => void load(id) });
+    const result = new Map<
+      string,
+      Readonly<{ entries: readonly SubRowEntry[]; complete: boolean }>
+    >();
+    for (const id of wanted) {
+      const state = nodes.get(id);
+      if (state === undefined) continue;
+      const notice = (
+        suffix: string,
+        tone: "info" | "alert",
+        message: string,
+        extra: Partial<Extract<SubRowEntry, { kind: "notice" }>> = {},
+      ): SubRowEntry => ({ kind: "notice", id: `${id}:${suffix}`, tone, message, ...extra });
+      switch (state.kind) {
+        case "loading":
+          result.set(id, {
+            entries: [
+              notice("loading", "info", `Reading child records of ${nameOf(id)}`, { busy: true }),
+            ],
+            complete: false,
+          });
+          break;
+        case "refused":
+          result.set(id, {
+            entries: [notice("refused", "info", "You do not have access to these records")],
+            complete: true,
+          });
+          break;
+        case "budget":
+          result.set(id, {
+            entries: [
+              notice(
+                "budget",
+                "info",
+                "Close another branch to make room for this page of child records.",
+                { action: retry(id) },
+              ),
+            ],
+            complete: false,
+          });
+          break;
+        case "error":
+          result.set(id, {
+            entries: [
+              notice("error", "alert", "The child records could not be read.", {
+                action: retry(id),
+              }),
+            ],
+            complete: false,
+          });
+          break;
+        case "empty":
+          result.set(id, {
+            entries: [notice("empty", "info", "No child records")],
+            complete: true,
+          });
+          break;
+        case "ready": {
+          const entries: SubRowEntry[] = state.rows.map((row) => ({ kind: "row", row }));
+          if (state.next !== undefined)
+            entries.push({
+              kind: "notice",
+              id: `${id}:more`,
+              tone: "info",
+              action: {
+                label: state.more === "reading" ? "Reading…" : "Show more",
+                disabled: state.more === "reading",
+                run: () => void showMore(id),
+              },
+            });
+          if (state.capped && state.next !== undefined)
+            entries.push(
+              notice(
+                "capped",
+                "info",
+                `This table shows at most ${TREE_ROW_BUDGET} rows at once. Close a branch to see more.`,
+              ),
+            );
+          if (state.more === "failed")
+            entries.push(notice("failed", "alert", "More child records could not be read."));
+          result.set(id, { entries, complete: state.next === undefined });
+          break;
+        }
+      }
+    }
+    return result;
+  }, [wanted, nodes, pageRows, heading, load, showMore]);
 
-  // The panel's id is on an element that exists in every state, for the toggle's aria-controls.
-  const panel = (children: ReactNode): ReactElement => (
-    <div id={panelId} role="none">
-      {children}
-    </div>
-  );
-  if (state.kind === "loading")
-    return panel(
-      <div
-        role="status"
-        aria-label={`Reading child records of ${parentName}`}
-        className="flex flex-col gap-2 py-1"
-        style={{ paddingInlineStart: `${(depth - 2) * INDENT_REM}rem` }}
-      >
-        {Array.from({ length: 3 }, (_, index) => (
-          <Skeleton key={index} className="h-5 w-full" />
-        ))}
-      </div>,
-    );
-  if (state.kind === "refused")
-    return panel(
-      <p role="status" className="m-0 py-1 text-sm text-muted-foreground">
-        You do not have access to these records
-      </p>,
-    );
-  if (state.kind === "budget")
-    return panel(
-      <div role="status" className="flex items-center gap-2 py-1 text-sm text-muted-foreground">
-        <span>Close another branch to make room for this page of child records.</span>
-        <Button variant="ghost" size="sm" onClick={() => void load()}>
-          Try again
-        </Button>
-      </div>,
-    );
-  if (state.kind === "error")
-    return panel(
-      <div role="alert" className="flex flex-wrap items-center gap-2 py-1 text-sm">
-        <span className="text-muted-foreground">The child records could not be read.</span>
-        <Button variant="outline" size="sm" onClick={() => void load()}>
-          Try again
-        </Button>
-      </div>,
-    );
-  if (state.kind === "empty")
-    return panel(
-      <p role="status" className="m-0 py-1 text-sm text-muted-foreground">
-        No child records
-      </p>,
-    );
+  useEffect(() => {
+    publish(beneath);
+  }, [beneath, publish]);
 
-  if (state.kind !== "ready") return fail("A tree level has an unhandled state", location);
-  const { level, more, capped } = state;
-  const shownColumns = inherited ?? level.columns;
-  const template: CSSProperties = {
-    gridTemplateColumns: `repeat(${Math.max(shownColumns.length, 1)}, minmax(0, 1fr))`,
-  };
-  return (
-    <div
-      id={panelId}
-      // The first level beneath a table row is one tree grid; deeper levels are row groups of it.
-      role={depth === 2 ? "treegrid" : "rowgroup"}
-      aria-label={`Child records of ${parentName}`}
-      className="flex flex-col text-sm"
-    >
-      {depth === 2 ? (
-        <div
-          role="row"
-          className="grid gap-2 border-b py-1 text-xs text-muted-foreground"
-          style={template}
-        >
-          {shownColumns.map((column) => (
-            <div key={column.key} role="columnheader" className="min-w-0 truncate px-2">
-              {column.label}
-            </div>
-          ))}
-        </div>
-      ) : null}
-      {level.rows.map((child) => {
-        const childKey = `${nodeKey}/${child.recordId}`;
-        const expanded = open.includes(child.recordId);
-        const name =
-          cellValueToText(child.cells[shownColumns[0]?.key ?? ""] ?? { kind: "empty" }) ||
-          "this record";
-        const childPanelId = `${panelId}-${child.recordId}`;
-        return (
-          <div key={child.recordId} role="none" data-vortex-tree-record-id={child.recordId}>
-            <div
-              role="row"
-              aria-level={depth}
-              {...(child.hasChildren === true ? { "aria-expanded": expanded } : {})}
-              className="grid items-center gap-2 border-b py-1 hover:bg-muted/60"
-              style={template}
-            >
-              {shownColumns.map((column, index) => (
-                <div
-                  key={column.key}
-                  role="gridcell"
-                  className="flex min-w-0 items-center gap-1 truncate px-2"
-                  style={
-                    index === 0
-                      ? { paddingInlineStart: `${(depth - 2) * INDENT_REM + 0.5}rem` }
-                      : undefined
-                  }
-                >
-                  {index === 0 ? (
-                    child.hasChildren === true ? (
-                      <RowExpansionToggle
-                        name={name}
-                        noun="child records"
-                        expanded={expanded}
-                        panelId={childPanelId}
-                        onToggle={() => toggle(child.recordId)}
-                      />
-                    ) : (
-                      <span aria-hidden="true" className="inline-block size-7 shrink-0" />
-                    )
-                  ) : null}
-                  <span className="min-w-0 truncate">
-                    <DisplayCellView value={child.cells[column.key] ?? { kind: "empty" }} />
-                  </span>
-                </div>
-              ))}
-            </div>
-            {expanded && child.hasChildren === true ? (
-              <TreeLevel
-                readLevel={readLevel}
-                budget={budget}
-                pageRows={pageRows}
-                pageSize={pageSize}
-                parentRecordId={child.recordId}
-                nodeKey={childKey}
-                depth={depth + 1}
-                columns={shownColumns}
-                parentName={name}
-                panelId={childPanelId}
-              />
-            ) : null}
-          </div>
-        );
-      })}
-      {level.next === undefined ? null : (
-        <div className="py-1">
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={more === "reading"}
-            onClick={() => void showMore()}
-          >
-            {more === "reading" ? "Reading…" : "Show more"}
-          </Button>
-        </div>
-      )}
-      {capped && level.next !== undefined ? (
-        <p role="status" className="m-0 py-1 text-xs text-muted-foreground">
-          This table shows at most {TREE_ROW_BUDGET} rows at once. Close a branch to see more.
-        </p>
-      ) : null}
-      {more === "failed" ? (
-        <p role="alert" className="m-0 py-1 text-xs text-muted-foreground">
-          More child records could not be read.
-        </p>
-      ) : null}
-    </div>
-  );
+  return null;
 }
 
 /**
- * The records beneath one row of a tree table. The table's own page is the first level; every level
+ * The records beneath the rows of a tree table. The table's own page is the first level; every level
  * below is read on the server only when its row is opened, within one budget of rows for the whole
- * table, and given back when it is closed.
+ * table, and given back when it is closed. A level is read in the table's order: a new order reads
+ * every opened level again.
  */
-function Beneath({ context, row }: GridFeatureRowProps): ReactElement {
-  const readLevel = context.events?.row_expanded;
-  if (context.features.tree === undefined) fail("A tree requires its feature projection", location);
-  const budget = useMemo(() => budgetOf(readLevel ?? context), [readLevel, context]);
-  const ownId = useId();
-  // A level is read in the table's order: a new order reads every opened level again.
-  const order = JSON.stringify(context.sort ?? null);
-  const heading = context.columns[0]?.key;
-  const name =
-    heading === undefined
-      ? "this record"
-      : cellValueToText(row.cells[heading] ?? { kind: "empty" }) || "this record";
-  return (
-    <TreeLevel
-      key={order}
-      readLevel={readLevel}
-      budget={budget}
-      pageRows={context.rows.length}
-      pageSize={context.features.tree!.pageSize}
-      parentRecordId={row.recordId}
-      nodeKey={row.recordId}
-      depth={2}
-      columns={undefined}
-      parentName={name}
-      panelId={`${ownId}-tree-${row.recordId}`}
-    />
-  );
+function SubRows(props: GridFeatureSubRowsProps) {
+  return <Levels key={JSON.stringify(props.context.sort ?? null)} {...props} />;
 }
 
-export const gridFeature: GridFeatureModule = { RowExpansion: Beneath };
+export const gridFeature: GridFeatureModule = { SubRows };

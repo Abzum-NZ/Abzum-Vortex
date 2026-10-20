@@ -21,6 +21,7 @@ import type {
 } from "@vortex/platform/schema";
 import type { DisplayEventHandlers, DisplayRow, TableNarrowing } from "../projected-data";
 import type { RowExpansionKind } from "../row-expansion";
+import type { SubRowsBeneath, SubRowsKind } from "../sub-rows";
 import type { TableSelectionParts } from "../projected-grid-features";
 import type { GridColumn, GridLayoutControls } from "../table-layout";
 
@@ -90,6 +91,16 @@ export type GridFeatureRowProps = Readonly<{
   row: DisplayRow;
   memory: RowPanelMemory;
 }>;
+/**
+ * What the controller of a feature that contributes sub-rows receives: the record identities the
+ * person has opened, and `publish`, through which it reports the entries beneath each open record.
+ * The table draws those entries as rows of its own grid (or cards of its own list).
+ */
+export type GridFeatureSubRowsProps = Readonly<{
+  context: GridFeatureContext;
+  expandedRecordIds: readonly string[];
+  publish: (beneath: SubRowsBeneath) => void;
+}>;
 /** A cell a feature may draw instead of the plain value; `children` is the plain value. */
 export type GridFeatureCellProps = Readonly<{
   context: GridFeatureContext;
@@ -133,8 +144,10 @@ export const GridBoardView = lazy(async () => ({
  * the projection turns on, so a later feature adds its module here and never edits the table:
  * `ToolbarItems` beside the search box, `ColumnMenuItems` in a column's menu, `HeaderAdornment`
  * after a column heading, `cellDecoration` as tokens per cell, `CellAdornment` around a value (an
- * icon, a badge or a bar), `CellEditor` in place of a value, `RowExpansion` as a panel below a row
- * and `SelectionBanner` over the selected rows.
+ * icon, a badge or a bar), `CellEditor` in place of a value, `RowExpansion` as a panel below a row,
+ * `SubRows` as the controller of rows the table draws beneath an open row (it draws nothing itself:
+ * it reports entries, and the grid draws them as its own rows) and `SelectionBanner` over the
+ * selected rows.
  */
 export type GridFeatureModule = Readonly<{
   GridInteraction?: ComponentType<GridFeatureInteractionProps>;
@@ -149,6 +162,7 @@ export type GridFeatureModule = Readonly<{
   CellAdornment?: ComponentType<GridFeatureCellProps>;
   CellEditor?: ComponentType<GridFeatureCellProps>;
   RowExpansion?: ComponentType<GridFeatureRowProps>;
+  SubRows?: ComponentType<GridFeatureSubRowsProps>;
   SelectionBanner?: ComponentType<GridFeaturePointProps>;
   /** The view that takes the place of the rows while the feature's view is open (the pivot). */
   ViewBody?: ComponentType<GridFeaturePointProps>;
@@ -244,27 +258,28 @@ const featurePoints: Readonly<Record<GridExtensionKey, readonly ComponentPoint[]
   bulk_actions: ["SelectionBanner"],
   inline_edit: ["CellEditor"],
   master_detail: ["RowExpansion"],
-  tree: ["RowExpansion"],
+  tree: ["SubRows"],
   conditional_formatting: ["CellAdornment", "HeaderAdornment"],
   pivot: ["ToolbarItems", "ViewBody"],
 };
 
-/**
- * What a row opens to for each feature that fills the row panel. A row's related records open at
- * most three at a time; a tree's rows are bounded by the tree's shared row budget, so any number
- * of them may be open, and only a row the server says has children offers the toggle.
- */
+/** What a row opens to for each feature that fills the row panel: its related records, at most three. */
 const expansionKinds: Readonly<Partial<Record<RecordsTableFeatureKey, RowExpansionKind>>> = {
   master_detail: {
     noun: "related records",
     maximum: 3,
-    tree: false,
     expandable: () => true,
   },
+};
+
+/**
+ * What a row opens to for each feature that contributes sub-rows. The rows beneath a row are
+ * bounded by the feature's shared row budget, so any number of rows may be open, and only a row the
+ * server says has children offers the toggle.
+ */
+const subRowsKinds: Readonly<Partial<Record<RecordsTableFeatureKey, SubRowsKind>>> = {
   tree: {
     noun: "child records",
-    maximum: Number.MAX_SAFE_INTEGER,
-    tree: true,
     expandable: (row) => row.hasChildren === true,
   },
 };
@@ -301,6 +316,13 @@ export function useGridFeatures(context: GridFeatureContext | undefined): Readon
   expands: boolean;
   /** What that panel holds and how many may be open; undefined when no feature draws one. */
   expansionKind: RowExpansionKind | undefined;
+  /** What a projected feature's sub-rows hold; undefined when no feature contributes any. */
+  subRowsKind: SubRowsKind | undefined;
+  /** The controller of the sub-rows, drawn once; it draws nothing and reports through `publish`. */
+  subRowsController: (
+    expandedRecordIds: readonly string[],
+    publish: (beneath: SubRowsBeneath) => void,
+  ) => ReactNode;
   toolbarItems: () => ReactNode;
   interaction: (surface: GridInteractionSurface) => ReactNode;
   selectionBanner: () => ReactNode;
@@ -402,6 +424,10 @@ export function useGridFeatures(context: GridFeatureContext | undefined): Readon
       columnMenuItems: (column: GridColumn) => drawAt("ColumnMenuItems", { column }),
       rowExpansion: (row: DisplayRow, memory: RowPanelMemory) =>
         drawAt("RowExpansion", { row, memory }),
+      subRowsController: (
+        expandedRecordIds: readonly string[],
+        publish: (beneath: SubRowsBeneath) => void,
+      ) => drawAt("SubRows", { expandedRecordIds, publish }),
       decorate: (row: DisplayRow, column: GridColumn, plain: ReactNode): ReactNode => {
         const decoration = classNameOf(row, column);
         return adorn(
@@ -436,6 +462,7 @@ export function useGridFeatures(context: GridFeatureContext | undefined): Readon
     keys: active,
     expands: active.some((key) => featurePoints[key].includes("RowExpansion")),
     expansionKind: active.map((key) => expansionKinds[key]).find((kind) => kind !== undefined),
+    subRowsKind: active.map((key) => subRowsKinds[key]).find((kind) => kind !== undefined),
     toolbarItems: () =>
       context === undefined ? null : drawPoint(active, "ToolbarItems", context, {}),
     selectionBanner: () =>

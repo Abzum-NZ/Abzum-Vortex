@@ -45,6 +45,7 @@ import type {
   TablePayload,
 } from "./projected-data";
 import { useRowExpansion } from "./row-expansion";
+import { useRowLines } from "./sub-rows";
 import type { CardRenderers } from "./table-cards";
 import { columnWidth, useTablePresentation } from "./table-geometry";
 import { RecordsGrid, type GridRenderers } from "./table-grid";
@@ -330,6 +331,20 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
     announce,
     panel: gridFeatures.rowExpansion,
   });
+  // The rows drawn: the page's, and the rows a projected feature contributes beneath the open ones.
+  const {
+    lines,
+    subRows,
+    controller: subRowsController,
+  } = useRowLines({
+    kind: gridFeatures.subRowsKind,
+    enabled: events?.row_expanded !== undefined,
+    rows,
+    paged,
+    rowName: nameOfRow,
+    announce,
+    controller: gridFeatures.subRowsController,
+  });
 
   // Cell, selection and command renderers shared by the grid and the cards. They change only with
   // the bindings and the heading column, so the grid's memoized rows keep their identity.
@@ -595,13 +610,14 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
         <RecordsCards
           accessibleName={accessibleName}
           columns={layout.shown}
-          rows={rows}
+          lines={lines}
           selectedRecordIds={selectedRecordIds}
           selectable={selectable}
           showActions={showActions}
           activateRow={activateRow}
           renderers={renderers}
           expansion={expansion}
+          subRows={subRows}
           fill={fullScreen.active}
           density={layout.density}
         />
@@ -612,6 +628,7 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
         contract={contract}
         layout={layout}
         rows={rows}
+        lines={lines}
         sort={values.sort}
         selection={selectable ? "multiple" : undefined}
         selectedRecordIds={selectedRecordIds}
@@ -622,6 +639,7 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
         interaction={gridFeatures.interaction}
         announce={announce}
         expansion={expansion}
+        subRows={subRows}
         rowName={nameOfRow}
         fill={fullScreen.active}
       />
@@ -650,6 +668,7 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
       <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
         {message}
       </div>
+      {subRowsController}
       {ready && availability === "unavailable" ? (
         <DisplayStateContainer
           accessibleName={accessibleName}

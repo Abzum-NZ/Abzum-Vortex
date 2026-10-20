@@ -5,16 +5,13 @@ import type { RowPanelMemory } from "./grid-features/registry";
 import type { DisplayRow } from "./projected-data";
 
 /**
- * What a row opens to and how many rows of a page may be open at once. The related records of a
- * row open at most three at a time; the rows beneath a row are bounded by the table's shared row
- * budget instead, which its panel keeps.
+ * What a row opens to and how many rows of a page may be open at once: the related records of a
+ * row open at most three at a time.
  */
 export type RowExpansionKind = Readonly<{
-  /** What the panel holds, in a sentence: "related records" or "child records". */
+  /** What the panel holds, in a sentence: "related records". */
   noun: string;
   maximum: number;
-  /** The rows form a tree: the grid is a tree grid and each row says its level. */
-  tree: boolean;
   /** Whether a row has anything to open; a row with nothing shows no toggle. */
   expandable: (row: DisplayRow) => boolean;
 }>;
@@ -22,7 +19,6 @@ export type RowExpansionKind = Readonly<{
 const closedKind: RowExpansionKind = {
   noun: "related records",
   maximum: 0,
-  tree: false,
   expandable: () => false,
 };
 
@@ -32,7 +28,6 @@ const closedKind: RowExpansionKind = {
  */
 export type RowExpansionControls = Readonly<{
   noun: string;
-  tree: boolean;
   expandedRecordIds: readonly string[];
   isExpanded: (recordId: string) => boolean;
   /** Whether a row has anything to open. */
@@ -61,7 +56,7 @@ export const useRowExpansion = (
   }>,
 ): RowExpansionControls | undefined => {
   const { enabled, kind, placementId, rows, rowName, announce, panel } = input;
-  const { noun, maximum, expandable, tree } = kind ?? closedKind;
+  const { noun, maximum, expandable } = kind ?? closedKind;
   const [expanded, setExpanded] = useState<readonly string[]>([]);
   // What each open row's panel keeps; an entry lives exactly as long as its row stays expanded.
   const kept = useRef(new Map<string, unknown>());
@@ -69,8 +64,7 @@ export const useRowExpansion = (
     for (const recordId of [...kept.current.keys()])
       if (!expanded.includes(recordId)) kept.current.delete(recordId);
   }, [expanded]);
-  // A row that leaves the page, or no longer has anything to open (a searched tree lists its
-  // records flat), collapses.
+  // A row that leaves the page, or no longer has anything to open, collapses.
   const pageSignature = rows
     .filter((row) => expandable(row))
     .map((row) => row.recordId)
@@ -126,7 +120,6 @@ export const useRowExpansion = (
       enabled && kind !== undefined
         ? {
             noun,
-            tree,
             expandedRecordIds: expanded,
             isExpanded: (recordId: string) => expanded.includes(recordId),
             isExpandable: expandable,
@@ -135,6 +128,6 @@ export const useRowExpansion = (
             panelId: (recordId: string) => `${placementId}-related-${recordId}`,
           }
         : undefined,
-    [enabled, kind, noun, tree, expandable, expanded, toggle, drawPanel, placementId],
+    [enabled, kind, noun, expandable, expanded, toggle, drawPanel, placementId],
   );
 };

@@ -2,6 +2,7 @@
 
 import { useState, type MouseEvent, type ReactElement, type ReactNode } from "react";
 import type { RecordsTableColumnContract, RecordsTableDensity } from "@vortex/platform/schema";
+import { Button } from "../components/button";
 import { Card } from "../components/card";
 import { cn } from "../lib/utils";
 import type { DisplayRow } from "./projected-data";
@@ -9,6 +10,7 @@ import { cellValueToText } from "./cell";
 import { useRowEntrance } from "./row-entrance";
 import type { RowExpansionControls } from "./row-expansion";
 import { RowExpansionToggle } from "./row-expansion-toggle";
+import type { RowLine, SubRowsControls } from "./sub-rows";
 import type { GridColumn } from "./table-layout";
 import { CARD_SPACING } from "./table-geometry";
 
@@ -18,6 +20,9 @@ const PRIORITY_ORDER: Readonly<Record<RecordsTableColumnContract["priority"], nu
   medium: 2,
   low: 3,
 };
+
+/** How far each level beneath a page card is indented. */
+const INDENT_REM = 1.25;
 
 const INTERACTIVE_IN_CARD =
   "a,button,input,select,textarea,label,summary,[role='button'],[role='checkbox'],[role='radio'],[role='menuitem'],[role='switch']";
@@ -36,24 +41,27 @@ export type CardRenderers = Readonly<{
  * page carries. The first shown column is the card's heading; the others follow as labelled values,
  * essential and high priority first. A card opens through the same declared row click, and its
  * selection and row commands send the same events as the grid's. A card that expands shows its
- * related records below it. Only this presentation is mounted.
+ * related records below it, or the cards of the records beneath it, indented. Only this
+ * presentation is mounted.
  */
 export function RecordsCards({
   accessibleName,
   columns,
-  rows,
+  lines,
   selectedRecordIds,
   selectable,
   showActions,
   activateRow,
   renderers,
   expansion,
+  subRows,
   fill,
   density,
 }: Readonly<{
   accessibleName: string;
   columns: readonly GridColumn[];
-  rows: readonly DisplayRow[];
+  /** Every card drawn, in order: the page's records and the records beneath the open ones. */
+  lines: readonly RowLine[];
   selectedRecordIds: readonly string[];
   selectable: boolean;
   showActions: boolean;
@@ -61,6 +69,8 @@ export function RecordsCards({
   renderers: CardRenderers;
   /** Cards expand to a panel of related records; undefined when no projected feature draws one. */
   expansion: RowExpansionControls | undefined;
+  /** Cards open to the cards beneath them; undefined when no feature contributes any. */
+  subRows: SubRowsControls | undefined;
   fill: boolean;
   density: RecordsTableDensity;
 }>): ReactElement {
@@ -88,7 +98,7 @@ export function RecordsCards({
     }
   };
   const listRef = useRowEntrance<HTMLUListElement>(
-    rows.map((row) => row.recordId),
+    lines.map((line) => line.id),
     "li[data-vortex-record-id]",
   );
   return (
@@ -100,7 +110,38 @@ export function RecordsCards({
         fill && "min-h-0 flex-1 overflow-auto",
       )}
     >
-      {rows.map((row) => {
+      {lines.map((line) => {
+        if (line.kind === "notice") {
+          const notice = line.notice;
+          return (
+            <li
+              key={line.id}
+              data-vortex-sub-rows-of={line.parentId}
+              style={{ marginInlineStart: `${(line.level - 1) * INDENT_REM}rem` }}
+            >
+              <div
+                role={notice.tone === "alert" ? "alert" : "status"}
+                {...(notice.busy === true ? { "aria-busy": true } : {})}
+                className="flex flex-wrap items-center gap-2 text-sm"
+              >
+                {notice.message === undefined ? null : (
+                  <span className="text-muted-foreground">{notice.message}</span>
+                )}
+                {notice.action === undefined ? null : (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={notice.action.disabled === true}
+                    onClick={notice.action.run}
+                  >
+                    {notice.action.label}
+                  </Button>
+                )}
+              </div>
+            </li>
+          );
+        }
+        const row = line.row;
         const selected = selectedRecordIds.includes(row.recordId);
         const headingId = `record-${row.recordId}-heading`;
         const expanded = expansion?.isExpanded(row.recordId) === true;
@@ -129,6 +170,11 @@ export function RecordsCards({
             data-vortex-record-id={row.recordId}
             data-state={selected ? "selected" : undefined}
             aria-labelledby={headingId}
+            style={
+              subRows === undefined
+                ? undefined
+                : { marginInlineStart: `${(line.level - 1) * INDENT_REM}rem` }
+            }
             aria-busy={pending === row.recordId ? true : undefined}
             className={cn(
               activateRow !== undefined && "cursor-pointer",
@@ -171,6 +217,14 @@ export function RecordsCards({
                   )}
                 </h3>
                 {showActions ? renderers.actions(row) : null}
+                {subRows === undefined || !line.expandable ? null : (
+                  <RowExpansionToggle
+                    name={name}
+                    noun={subRows.noun}
+                    expanded={line.expanded}
+                    onToggle={() => subRows.toggle(row.recordId)}
+                  />
+                )}
                 {expansion === undefined || !expandable ? null : (
                   <RowExpansionToggle
                     name={name}
