@@ -20,6 +20,8 @@ import {
   type StudioSettingChoices,
 } from "@vortex/ui/studio";
 
+import { plainSettingValue, typedSourceSettingValue } from "@vortex/platform/schema";
+
 /** A new block whose required settings or query the person gives before it is added. */
 export type StudioBlockSetupRequest = Readonly<{
   choice: StudioPaletteChoice;
@@ -28,6 +30,21 @@ export type StudioBlockSetupRequest = Readonly<{
   pageQuery: string | undefined;
   add: (settings: StudioCompositionSettings, query: string | null) => string | true;
 }>;
+
+const setupDefaults = (choice: StudioPaletteChoice | undefined): StudioCompositionSettings =>
+  Object.fromEntries(
+    (choice?.setup ?? []).flatMap((property) => {
+      if (property.defaultValue === undefined) return [];
+      const value = typedSourceSettingValue(
+        plainSettingValue(property.defaultValue),
+        property,
+        [property.key],
+        [],
+      );
+      if (value === undefined) throw new Error(`Invalid setup default for ${property.label}`);
+      return [[property.key, value]];
+    }),
+  );
 
 /**
  * Sets up a new block before it is added: the query a data block reads, and each required setting
@@ -50,7 +67,7 @@ export function StudioBlockSetupDialog({
   const [problem, setProblem] = useState("");
   const formId = useId();
   useEffect(() => {
-    setValues({});
+    setValues(setupDefaults(request?.choice));
     setProblem("");
     setQuery(
       request?.choice.needsQuery !== true
@@ -107,7 +124,7 @@ export function StudioBlockSetupDialog({
               disabled={false}
               onChange={(next) => {
                 setQuery(next);
-                setValues({});
+                setValues(setupDefaults(choice));
                 setProblem("");
               }}
             />

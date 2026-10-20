@@ -111,17 +111,9 @@ export const RICH_TEXT_BLOCK_RELEASE: PlatformBlockRelease = release(
   sources.RICH_TEXT_BLOCK_RELEASE,
 );
 
-/** Exact immutable metadata release for the list display block. */
-export const LIST_BLOCK_RELEASE: PlatformBlockRelease = release(sources.LIST_BLOCK_RELEASE);
-
 /** Exact immutable metadata release for the record detail display block. */
 export const RECORD_DETAIL_BLOCK_RELEASE: PlatformBlockRelease = release(
   sources.RECORD_DETAIL_BLOCK_RELEASE,
-);
-
-/** Exact immutable metadata release for the grouped data display block. */
-export const GROUPED_DATA_BLOCK_RELEASE: PlatformBlockRelease = release(
-  sources.GROUPED_DATA_BLOCK_RELEASE,
 );
 
 /** Exact immutable metadata release for the summary values display block. */
@@ -167,16 +159,8 @@ export const RICH_TEXT_BLOCK_RELEASE_1_1_0: PlatformBlockRelease = release(
   sources.RICH_TEXT_BLOCK_RELEASE_1_1_0,
 );
 
-export const LIST_BLOCK_RELEASE_1_1_0: PlatformBlockRelease = release(
-  sources.LIST_BLOCK_RELEASE_1_1_0,
-);
-
 export const RECORD_DETAIL_BLOCK_RELEASE_1_1_0: PlatformBlockRelease = release(
   sources.RECORD_DETAIL_BLOCK_RELEASE_1_1_0,
-);
-
-export const GROUPED_DATA_BLOCK_RELEASE_1_1_0: PlatformBlockRelease = release(
-  sources.GROUPED_DATA_BLOCK_RELEASE_1_1_0,
 );
 
 export const SUMMARY_VALUES_BLOCK_RELEASE_1_1_0: PlatformBlockRelease = release(
@@ -421,9 +405,7 @@ export const APPLICATION_PAGE_LINK_TILES_BLOCK_RELEASE: PlatformBlockRelease = r
 export const DISPLAY_BLOCK_RELEASES: readonly PlatformBlockRelease[] = Object.freeze([
   TEXT_BLOCK_RELEASE,
   RICH_TEXT_BLOCK_RELEASE,
-  LIST_BLOCK_RELEASE,
   RECORD_DETAIL_BLOCK_RELEASE,
-  GROUPED_DATA_BLOCK_RELEASE,
   SUMMARY_VALUES_BLOCK_RELEASE,
   NOTICE_BLOCK_RELEASE,
   NOTICE_BLOCK_RELEASE_1_1_0,
@@ -431,9 +413,7 @@ export const DISPLAY_BLOCK_RELEASES: readonly PlatformBlockRelease[] = Object.fr
   QUERY_NOTICE_BLOCK_RELEASE,
   TEXT_BLOCK_RELEASE_1_1_0,
   RICH_TEXT_BLOCK_RELEASE_1_1_0,
-  LIST_BLOCK_RELEASE_1_1_0,
   RECORD_DETAIL_BLOCK_RELEASE_1_1_0,
-  GROUPED_DATA_BLOCK_RELEASE_1_1_0,
   SUMMARY_VALUES_BLOCK_RELEASE_1_1_0,
   TABLE_BLOCK_RELEASE,
   RECORD_DETAIL_BLOCK_RELEASE_1_2_0,

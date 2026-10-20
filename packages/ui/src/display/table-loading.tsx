@@ -1,12 +1,13 @@
 "use client";
 
 import { useLayoutEffect, useRef, useState, type ReactElement } from "react";
-import type { RecordsTableContract } from "@vortex/platform/schema";
+import type { RecordsTableContract, RecordsTableDensity } from "@vortex/platform/schema";
 import { Card } from "../components/card";
 import { Skeleton } from "../components/skeleton";
 import { cn } from "../lib/utils";
 import {
   BOUNDED_VIEWPORT_CLASS,
+  CARD_SPACING,
   GRID_CONTROL_COLUMN_WIDTH,
   GRID_ROW_HEIGHT,
   columnWidth,
@@ -50,20 +51,22 @@ export const useLoadingReveal = (loading: boolean): boolean => {
 export function TableLoadingState({
   accessibleName,
   contract,
+  density,
   presentation,
   selectionColumn,
   actionsColumn,
 }: Readonly<{
   accessibleName: string;
   contract: RecordsTableContract;
+  density: RecordsTableDensity;
   presentation: "grid" | "cards";
   selectionColumn: boolean;
   actionsColumn: boolean;
 }>): ReactElement {
-  const rowHeight = GRID_ROW_HEIGHT[contract.density];
+  const rowHeight = GRID_ROW_HEIGHT[density];
   const windowed = virtualizesRows(contract.pageSize);
   const drawnRows = windowed
-    ? Math.min(contract.pageSize, skeletonWindowRows(contract.density))
+    ? Math.min(contract.pageSize, skeletonWindowRows(density))
     : contract.pageSize;
   const columns = contract.columns.filter((column) => column.visible);
   const state = {
@@ -77,7 +80,7 @@ export function TableLoadingState({
     return (
       <div {...state} className="flex flex-col gap-2">
         {Array.from({ length: drawnRows }, (_, card) => (
-          <Card key={card} size="sm" className="gap-2 p-3">
+          <Card key={card} size="sm" className={CARD_SPACING[density]}>
             <Skeleton className="h-[0.875em] w-2/3" />
             {columns.slice(1).map((column) => (
               <div key={column.field} className="flex items-center justify-between gap-4">

@@ -5,7 +5,7 @@ import { getAccessibleName } from "../display/display-state-container";
 import type {
   DisplayDataState,
   DisplayEventHandlers,
-  ListPayload,
+  LauncherRowsPayload,
 } from "../display/projected-data";
 import type { PlatformBlockRenderProps } from "../registry";
 
@@ -17,14 +17,14 @@ const fail = (message: string, location: DefinitionRenderErrorLocation): never =
 
 /**
  * The props a launcher or tile block's renderer receives: the base props every block has, plus the
- * one closed `list` payload and its semantic callbacks its own registration validated fail-closed.
+ * one closed `launcher_rows` payload and its semantic callbacks its own registration validated fail-closed.
  */
 export type LauncherRenderProps = PlatformBlockRenderProps &
-  Readonly<{ data?: DisplayDataState<ListPayload>; events?: DisplayEventHandlers }>;
+  Readonly<{ data?: DisplayDataState<LauncherRowsPayload>; events?: DisplayEventHandlers }>;
 
 /**
  * Resolved context shared by the launcher and tile blocks. Each is a read-only display surface: it
- * renders a closed projected `list` of rows and never fetches data.
+ * renders a closed projected `launcher_rows` of rows and never fetches data.
  */
 export type LauncherListContext = Readonly<{
   location: DefinitionRenderErrorLocation;
@@ -32,10 +32,10 @@ export type LauncherListContext = Readonly<{
   title: string | undefined;
   /** Authored name, or the block's palette name when the optional name is absent. */
   accessibleName: string;
-  /** Ready `list` values, or undefined for any other projected state. */
-  values: ListPayload | undefined;
+  /** Ready `launcher_rows` values, or undefined for any other projected state. */
+  values: LauncherRowsPayload | undefined;
   /** State passed to the state container; a ready-but-empty list becomes the empty state. */
-  state: DisplayDataState<ListPayload>;
+  state: DisplayDataState<LauncherRowsPayload>;
   /** Declared callbacks; always absent while the placement's use is unavailable. */
   events: DisplayEventHandlers | undefined;
 }>;
@@ -44,9 +44,7 @@ export type LauncherListContext = Readonly<{
  * Resolves one launcher or tile block's props. It never requests data: an absent projection renders
  * the empty state, and any value its own registration does not accept was already refused there.
  */
-export function resolveLauncherListContext(
-  props: LauncherRenderProps,
-): LauncherListContext {
+export function resolveLauncherListContext(props: LauncherRenderProps): LauncherListContext {
   const { metadata, placementId, data, availability } = props;
   const location: DefinitionRenderErrorLocation = {
     placementId,
@@ -62,9 +60,7 @@ export function resolveLauncherListContext(
     accessibleName: title ?? metadata.name,
     values,
     state:
-      data === undefined || (values !== undefined && values.rows.length === 0)
-        ? EMPTY_STATE
-        : data,
+      data === undefined || (values !== undefined && values.rows.length === 0) ? EMPTY_STATE : data,
     events: availability === "available" ? props.events : undefined,
   };
 }

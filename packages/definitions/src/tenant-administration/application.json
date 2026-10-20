@@ -397,6 +397,7 @@
                 {
                   "type": "platform.renderer.table",
                   "props": {
+                    "presentation": "grid",
                     "id": "overview_organizations_region",
                     "title": "Organisations in this tenant",
                     "row_click": {
@@ -472,6 +473,7 @@
                 {
                   "type": "platform.renderer.table",
                   "props": {
+                    "presentation": "grid",
                     "id": "structure_region",
                     "title": "Tenant structure",
                     "row_click": {
@@ -1081,6 +1083,7 @@
                 {
                   "type": "platform.renderer.table",
                   "props": {
+                    "presentation": "grid",
                     "id": "administrators_region",
                     "title": "Tenant administrators",
                     "row_click": {

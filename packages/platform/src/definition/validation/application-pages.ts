@@ -513,6 +513,7 @@ export function applicationPageRules(scope: ApplicationScope): void {
         for (const feature of checkRecordsTableFeatures(
           table.features,
           recordsTableQueryFacts(bound, bindingFacts),
+          table.presentation,
         ))
           // A grid in Board mode shows none of the table's other features, so only the board is judged.
           if (

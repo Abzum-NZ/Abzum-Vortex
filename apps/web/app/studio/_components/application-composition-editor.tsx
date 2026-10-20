@@ -426,6 +426,20 @@ export function ApplicationCompositionEditor(props: Props) {
           idPrefix={`${settingsId}-features`}
           property={featuresProperty}
           value={settingsInputs.settings[featuresProperty.key]}
+          presentation={(() => {
+            const setting =
+              settingsInputs.settings.presentation ??
+              (settingsModel.kind === "available"
+                ? settingsModel.properties.find((property) => property.key === "presentation")
+                    ?.defaultValue
+                : undefined);
+            if (
+              setting?.kind !== "choice" ||
+              (setting.value !== "grid" && setting.value !== "cards")
+            )
+              throw new Error("Data grid preset is missing its declared setting");
+            return setting.value;
+          })()}
           query={props.choices.queries.find((query) => query.reference === settingsInputs.query)}
           compiledFields={(() => {
             const query = props.choices.queries.find(

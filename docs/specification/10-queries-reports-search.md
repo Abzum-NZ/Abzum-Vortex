@@ -317,7 +317,10 @@ Current person supplies a record reference to the signed-in viewer's directory p
 
 Grid grouping is state of the Data grid, executed by `run_module_query_summary` and the protected
 `groupedMembers` reader. Query-authored grouping and totals supply defaults; they are not a second
-grid engine. The separate `grouped_data` block converges to a Data grid preset in #3085.
+grid engine. Data grid is the only record-table block. Its List preset renders the same bounded
+record page as cards at every screen size; Table can use those same cards on phones. Presets write
+ordinary grid settings and never select a second query or renderer. The former standalone list
+and grouped-data blocks have been removed; grouped preset authoring follows the grid grouping feature.
 
 The protected readers accept `grouping: { fieldId, limit, dateBucket? }` to replace those defaults
 with one query-selected, filterable dimension. A choice field has at most 50 options; a lifecycle
