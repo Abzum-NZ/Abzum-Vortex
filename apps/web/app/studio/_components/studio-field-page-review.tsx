@@ -39,7 +39,7 @@ function FieldOffer({
         const placed = applyStudioFieldPlacements(
           { ...context, source },
           field,
-          places.filter((place) => place.unavailable === undefined).map((place) => place.id),
+          places.map((place) => place.id),
         );
         return placed.kind === "applied"
           ? { kind: "changed", source: placed.source }
@@ -55,18 +55,13 @@ function FieldOffer({
       <p className="text-muted-foreground">Not included in:</p>
       <ul className="space-y-1">
         {places.map((place) => (
-          <li key={place.id}>
-            {place.label}
-            {place.unavailable === undefined ? null : ` (${place.unavailable})`}
-          </li>
+          <li key={place.id}>{place.label}</li>
         ))}
       </ul>
-      {places.some((place) => place.unavailable === undefined) && (
-        <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={add}>
-          <Icon name="plus" />
-          Add {field.label} to these pages
-        </Button>
-      )}
+      <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={add}>
+        <Icon name="plus" />
+        Add {field.label} to these pages
+      </Button>
       {problem === undefined ? null : (
         <p role="alert" className="text-destructive">
           {problem}
@@ -100,7 +95,7 @@ export function StudioFieldPageReview({
           record.key,
           field.type,
           field.key,
-        ).filter((place) => place.shown !== true);
+        ).filter((place) => place.shown !== true && place.unavailable === undefined);
         return places.length === 0
           ? []
           : [

@@ -240,7 +240,7 @@ export const sortSchema = z
   .strict();
 export const aggregateSchema = z
   .object({
-    operation: z.enum(["count", "sum", "minimum", "maximum", "average"]),
+    operation: z.enum(["count", "sum", "minimum", "maximum", "average", "distinct_count"]),
     fieldId: fieldIdSchema.optional(),
     alias: builderKeySchema,
   })

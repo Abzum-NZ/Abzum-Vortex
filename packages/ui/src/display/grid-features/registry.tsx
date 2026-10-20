@@ -102,6 +102,7 @@ const loaders: Readonly<
   saved_views: () => import("./saved-views"),
   bulk_actions: () => import("./bulk-actions"),
   inline_edit: () => import("./inline-edit"),
+  master_detail: () => import("./master-detail"),
   conditional_formatting: () => import("./conditional-format"),
 };
 
@@ -114,6 +115,7 @@ const projectionKeys: Readonly<
   savedViews: "saved_views",
   bulkActions: "bulk_actions",
   inlineEdit: "inline_edit",
+  masterDetail: "master_detail",
   conditionalFormatting: "conditional_formatting",
 };
 
@@ -170,6 +172,7 @@ const featurePoints: Readonly<Record<RecordsTableFeatureKey, readonly ComponentP
   saved_views: [],
   bulk_actions: ["SelectionBanner"],
   inline_edit: ["CellEditor"],
+  master_detail: ["RowExpansion"],
   conditional_formatting: ["CellAdornment", "HeaderAdornment"],
 };
 
@@ -201,6 +204,8 @@ const drawPoint = (
  */
 export function useGridFeatures(context: GridFeatureContext | undefined): Readonly<{
   keys: readonly RecordsTableFeatureKey[];
+  /** A projected feature draws a panel below an expanded row, so rows offer an expand toggle. */
+  expands: boolean;
   toolbarItems: () => ReactNode;
   selectionBanner: () => ReactNode;
   headerAdornment: (column: GridColumn) => ReactNode;
@@ -320,6 +325,7 @@ export function useGridFeatures(context: GridFeatureContext | undefined): Readon
   const active = activeKeys(signature);
   return {
     keys: active,
+    expands: active.some((key) => featurePoints[key].includes("RowExpansion")),
     toolbarItems: () =>
       context === undefined ? null : drawPoint(active, "ToolbarItems", context, {}),
     selectionBanner: () =>

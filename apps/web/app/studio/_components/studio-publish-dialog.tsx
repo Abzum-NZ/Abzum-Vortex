@@ -131,12 +131,17 @@ export function StudioPublishDialog(props: StudioPublishDialogProps) {
               <Label htmlFor="studio-release-note">What changed in this version?</Label>
               <Textarea
                 id="studio-release-note"
+                required
+                aria-describedby="studio-release-note-help"
                 value={props.note}
                 maxLength={2000}
                 disabled={publishing || prepared === null}
                 placeholder="A short note for the people who read the version history"
                 onChange={(event) => props.onNoteChange(event.target.value)}
               />
+              <p id="studio-release-note-help" className="text-sm text-muted-foreground">
+                Add a short note about what changed to enable Publish (up to 2,000 characters).
+              </p>
             </div>
           </div>
         )}
