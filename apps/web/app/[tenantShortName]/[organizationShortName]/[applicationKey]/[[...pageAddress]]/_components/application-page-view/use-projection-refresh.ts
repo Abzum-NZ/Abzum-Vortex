@@ -1,18 +1,27 @@
-import { useEffect, type RefObject } from "react";
+import { useEffect, useRef, type RefObject } from "react";
 import { isRecord } from "@vortex/platform/schema";
 import type { ApplicationPageModel, PageDataState } from "../../../../../../_lib/application-page";
 
 const onScreen = (element: Element | null): boolean => {
   if (element === null || !element.checkVisibility({ checkVisibilityCSS: true })) return false;
   const bounds = element.getBoundingClientRect();
-  return (
-    bounds.width > 0 &&
-    bounds.height > 0 &&
-    bounds.bottom > 0 &&
-    bounds.right > 0 &&
-    bounds.top < window.innerHeight &&
-    bounds.left < window.innerWidth
-  );
+  let top = Math.max(0, bounds.top);
+  let left = Math.max(0, bounds.left);
+  let bottom = Math.min(window.innerHeight, bounds.bottom);
+  let right = Math.min(window.innerWidth, bounds.right);
+  for (let parent = element.parentElement; parent !== null; parent = parent.parentElement) {
+    const style = getComputedStyle(parent);
+    const clip = parent.getBoundingClientRect();
+    if (style.overflowX !== "visible") {
+      left = Math.max(left, clip.left);
+      right = Math.min(right, clip.right);
+    }
+    if (style.overflowY !== "visible") {
+      top = Math.max(top, clip.top);
+      bottom = Math.min(bottom, clip.bottom);
+    }
+  }
+  return right > left && bottom > top;
 };
 
 /** A projected choice retains its key; labels never decide whether background work is pending. */
@@ -29,6 +38,10 @@ export function useProjectionRefresh(
   root: RefObject<HTMLDivElement | null>,
   refresh: (ids: readonly string[]) => Promise<void>,
 ): void {
+  const refreshRef = useRef(refresh);
+  refreshRef.current = refresh;
+  // A payload update may replace the effect before an earlier read settles.
+  const inFlight = useRef(new Set<string>());
   useEffect(() => {
     const timers = new Map<string, ReturnType<typeof setTimeout>>();
     let disposed = false;
@@ -61,9 +74,14 @@ export function useProjectionRefresh(
           root.current?.querySelector(`[data-vortex-placement-id="${CSS.escape(placementId)}"]`) ??
           null;
         if (
+          !inFlight.current.has(placementId) &&
           document.visibilityState === "visible" &&
           onScreen(placement) &&
-          (pendingDetail ||
+          ((pendingDetail &&
+            onScreen(
+              placement?.querySelector(`[data-vortex-field-key="${CSS.escape(policy.fieldId)}"]`) ??
+                null,
+            )) ||
             pendingRows.some(
               (row) =>
                 typeof row.recordId === "string" &&
@@ -74,7 +92,12 @@ export function useProjectionRefresh(
                 ),
             ))
         ) {
-          await refresh([placementId]);
+          inFlight.current.add(placementId);
+          try {
+            await refreshRef.current([placementId]);
+          } finally {
+            inFlight.current.delete(placementId);
+          }
         }
         // Serial reads: a slow response never builds a queue. A new payload or navigation
         // disposes this policy, and a terminal state schedules no further work.
@@ -96,5 +119,5 @@ export function useProjectionRefresh(
       disposed = true;
       for (const timer of timers.values()) clearTimeout(timer);
     };
-  }, [policies, data, root, refresh]);
+  }, [policies, data, root]);
 }
