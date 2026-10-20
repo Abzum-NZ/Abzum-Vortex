@@ -191,6 +191,7 @@ export const parseBoardPayload = (
       "choiceFieldKey",
       "choiceFieldRequired",
       "wipLimit",
+      "quickAdd",
       "cardTitleFieldId",
       "cardFieldIds",
       "columns",
@@ -213,6 +214,7 @@ export const parseBoardPayload = (
   const cardTitleFieldId = fieldIdSchema.safeParse(record.cardTitleFieldId);
   const choiceFieldKey = builderKeySchema.safeParse(record.choiceFieldKey);
   if (!choiceFieldKey.success) fail("A board requires the key of its choice field", location);
+  if (typeof record.quickAdd !== "boolean") fail("A board's quick add is not a boolean", location);
   if (typeof record.choiceFieldRequired !== "boolean")
     fail("A board requires its stage field's required setting", location);
   let wipLimit: number | undefined;
@@ -372,6 +374,7 @@ export const parseBoardPayload = (
     choiceFieldKey: choiceFieldKey.data,
     choiceFieldRequired: record.choiceFieldRequired as boolean,
     ...(wipLimit === undefined ? {} : { wipLimit }),
+    quickAdd: record.quickAdd as boolean,
     cardTitleFieldId: cardTitleFieldId.data,
     cardFieldIds: Object.freeze(cardFieldIds),
     columns: Object.freeze(columns),

@@ -128,6 +128,7 @@ function BoardColumn({
   mover,
   choiceFieldId,
   onRetry,
+  onAdd,
 }: Readonly<{
   bucket: BoardBucket;
   /** The cards the column should not exceed; undefined when the board sets no limit. */
@@ -144,6 +145,8 @@ function BoardColumn({
   mover: BoardMover | undefined;
   choiceFieldId: string;
   onRetry: (bucket: BoardBucket) => void;
+  /** Adds a card with this column's stage chosen; absent unless the board offers quick add. */
+  onAdd: ((bucket: BoardBucket) => void) | undefined;
 }>): ReactElement {
   const page = bucket.values.page;
   const canContinue =
@@ -186,6 +189,19 @@ function BoardColumn({
             />
           )}
           {bucket.label}
+          {onAdd === undefined || bucket.selector.kind !== "option" ? null : (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className="ml-auto"
+              aria-label={`Add a card to ${bucket.label}`}
+              data-vortex-board-add={bucket.key}
+              onClick={() => onAdd(bucket)}
+            >
+              <Icon name="plus" />
+            </Button>
+          )}
         </h3>
         {bucket.stage?.gatedBy === undefined ? null : (
           <Badge variant="outline" title={`Moving a card here runs ${bucket.stage.gatedBy}`}>
@@ -443,6 +459,8 @@ export function BoardView(props: DisplayRenderProps<BoardPayload>): ReactElement
     ((event: DisplaySemanticEvent) => void | boolean | Promise<void | boolean>) | undefined;
   const cardMoved = events?.card_moved as
     ((event: DisplaySemanticEvent) => void | boolean | Promise<void | boolean>) | undefined;
+  const cardAdded = events?.card_added as
+    ((event: DisplaySemanticEvent) => void | boolean | Promise<void | boolean>) | undefined;
   const [moving, setMoving] = useState<BoardMoveCard>();
   const movingRef = useRef(false);
   const focusAfterMoveRef = useRef<string | undefined>(undefined);
@@ -629,6 +647,20 @@ export function BoardView(props: DisplayRenderProps<BoardPayload>): ReactElement
     };
   });
 
+  const addCard = (bucket: BoardBucket): void => {
+    if (cardAdded === undefined || values === undefined || bucket.selector.kind !== "option")
+      return;
+    void Promise.resolve(
+      cardAdded({
+        event: "card_added",
+        field: values.choiceFieldKey,
+        value: bucket.selector.value,
+      }),
+    ).catch((error: unknown) =>
+      console.error(`[board] card add failed: ${describeFailure(error)}`),
+    );
+  };
+
   const continueBucket = (bucket: BoardBucket, continuationToken: string): Promise<void> =>
     readBuckets([bucket], continuationToken);
 
@@ -690,6 +722,7 @@ export function BoardView(props: DisplayRenderProps<BoardPayload>): ReactElement
                   failed={failedKeys.has(bucket.key)}
                   onContinue={continueBucket}
                   onRetry={(bucket) => void readBuckets([bucket])}
+                  onAdd={values.quickAdd && cardAdded !== undefined ? addCard : undefined}
                   mover={mover}
                   choiceFieldId={values.choiceFieldId}
                 />

@@ -25,7 +25,7 @@ import {
 type GroupValue = Extract<SourceBlockPropertyValueContract, { kind: "group" }>;
 
 /** The settings the pipeline choice and the totals picker leave to the usual typed controls. */
-const cardSettings = ["card_title_field", "card_fields", "wip_limit"] as const;
+const cardSettings = ["card_title_field", "card_fields", "wip_limit", "quick_add"] as const;
 
 type TotalRow = Readonly<{ alias: string; label: string }>;
 

@@ -290,7 +290,7 @@ const takenIds = (source: Source): Set<string> => {
 };
 
 /** Which existing page of the record type each companion kind is, judged by its type and its Save flow. */
-const companions = (source: Source, qualified: string) => {
+export const companions = (source: Source, qualified: string) => {
   const pages = source.body.pages.filter(
     (page) => "record_type" in page && page.record_type === qualified,
   );

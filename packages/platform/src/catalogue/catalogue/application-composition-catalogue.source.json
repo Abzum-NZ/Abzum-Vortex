@@ -4599,6 +4599,13 @@
                 "integer": true,
                 "minimum": 1,
                 "maximum": 1000
+              },
+              {
+                "kind": "boolean",
+                "key": "quick_add",
+                "label": "Add from a column",
+                "help": "Each column offers adding a card there; the flow bound to a card being added opens the create form with the column's stage chosen",
+                "required": false
               }
             ]
           },
@@ -4983,7 +4990,8 @@
       "inline_edit",
       "row_edit",
       "row_expanded",
-      "card_moved"
+      "card_moved",
+      "card_added"
     ],
     "supportedStateOperations": []
   },

@@ -441,6 +441,7 @@ const eventWords: Readonly<Record<string, string>> = {
   row_edit: "row is saved",
   inline_edit: "value is edited",
   card_moved: "card is moved",
+  card_added: "card is added to a column",
   load: "loads",
   refresh: "is refreshed",
   filter_changed: "filter changes",

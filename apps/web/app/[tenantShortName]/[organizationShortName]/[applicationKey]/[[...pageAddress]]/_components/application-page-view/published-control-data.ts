@@ -38,6 +38,18 @@ export function publishedControlData(
         value: value ?? (kind === "text_input" ? "" : null),
       },
     };
+  // A field input of a text or choice field starts with the published value. The server still
+  // checks the value when the form is saved, so an address that names no option is refused there.
+  if (kind === "field_input") {
+    const payload = ready?.values;
+    if (
+      value === null ||
+      ready?.status !== "ready" ||
+      (payload?.kind !== "text_input" && payload?.kind !== "choice_input")
+    )
+      return data;
+    return { status: "ready", values: { ...payload, value } };
+  }
   if (kind !== "link_input") return data;
   const seed = ready?.values?.value as { recordTypeId: string; recordId: string } | undefined;
   if (seed?.recordId !== undefined && typeof ready?.values?.title === "string")
