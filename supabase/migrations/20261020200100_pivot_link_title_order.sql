@@ -54,12 +54,14 @@ begin
     with readable as materialized (
       select distinct id from pg_catalog.unnest(readable_ids) as permitted(id)
     )
-    -- Order: named targets by readable title, then Not set, then Not available last.
+    -- Order: named targets by readable title, then Not set, then Not available last. The title's
+    -- first 512 characters sort it, so the row key stays within the 4,096-character key contract;
+    -- titles that share that prefix follow record identity.
     select item.value, normalized.value,
       case when normalized.value = 'null'::jsonb then 1
         when normalized.value = '"not_available"'::jsonb then 2 else 0 end,
       case when normalized.value ->> 'recordId' is null then ''
-        else readable_titles ->> (normalized.value ->> 'recordId') end
+        else pg_catalog.left(readable_titles ->> (normalized.value ->> 'recordId'), 512) end
     from pg_catalog.unnest(p_values) as item(value)
     left join readable on readable.id = (item.value ->> 'recordId')::uuid
     cross join lateral (select case
