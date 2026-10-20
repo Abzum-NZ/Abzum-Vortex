@@ -251,10 +251,6 @@ const IMPLEMENTATIONS: ReadonlyMap<string, PlatformComponentRenderer> = new Map<
     "platform.renderer.calendar",
     lazyBlock(async () => (await import("./display/calendar")).CalendarDisplay),
   ],
-  [
-    "platform.renderer.board",
-    lazyBlock(async () => (await import("./display/board")).BoardDisplay),
-  ],
   ["platform.renderer.attachment_list", SearchAttachmentDisplay],
   ["platform.renderer.form_container", FormContainer],
   ["platform.renderer.field_input", FieldInput],

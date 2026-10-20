@@ -19,11 +19,7 @@ import {
 } from "@vortex/platform/schema";
 import type { collectPlacements } from "./placement-helpers";
 import type { PlacementFlowBinding } from "./types";
-import {
-  isBoardPlacement,
-  isEditFieldPlacement,
-  selectedReadInputTypes,
-} from "./placement-helpers";
+import { isEditFieldPlacement, selectedReadInputTypes } from "./placement-helpers";
 import { resolvedQueryRecordTypeId } from "@vortex/platform/server";
 
 export const projectPlacementRecordTypes = (input: {
@@ -75,7 +71,6 @@ export const projectPlacementRecordTypes = (input: {
     const tableContract = readRecordsTableContract(settings);
     const detailContract =
       tableContract === undefined ? readRecordDetailContract(settings) : undefined;
-    const isBoardBlock = isBoardPlacement(placement);
     const isQueryNoticeBlock =
       isRecord(block) &&
       typeof block.blockId === "string" &&
@@ -91,7 +86,6 @@ export const projectPlacementRecordTypes = (input: {
     if (
       tableContract === undefined &&
       detailContract === undefined &&
-      !isBoardBlock &&
       !isQueryNoticeBlock &&
       !isLinkTilesBlock
     )
