@@ -64,10 +64,8 @@ export function useReferenceChoices({
 
   const parseChoicePage = useCallback(
     (placementId: string, values: unknown): ChoiceInputPayload =>
-      parseChoiceInputPayload(values, { pageId: model.pageId, placementId },
-        model.referenceChoiceInputs.find((field) => field.placementId === placementId)?.releaseVersion,
-      ),
-    [model.pageId, model.referenceChoiceInputs],
+      parseChoiceInputPayload(values, { pageId: model.pageId, placementId }),
+    [model.pageId],
   );
 
   const choicePayloadFor = useCallback(
