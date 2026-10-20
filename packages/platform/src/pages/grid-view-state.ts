@@ -5,6 +5,13 @@ import {
   RECORDS_TABLE_MAXIMUM_SORT_KEYS,
 } from "./records-table-state";
 import { decodeRecordsTableFieldFilter } from "./records-table-filters";
+import { conditionNodeSchema } from "../definition/module-foundation-contracts";
+import { moduleFieldSchema } from "../definition/module-contracts";
+import {
+  conditionalFormatIcons,
+  conditionalFormatRuleFields,
+  conditionalFormatTokens,
+} from "../definition/application-composition/records-table-features/conditional-formatting";
 import {
   RECORDS_TABLE_COLUMN_MAXIMUM_WIDTH,
   RECORDS_TABLE_COLUMN_MINIMUM_WIDTH,
@@ -89,13 +96,60 @@ const fieldIdSchema = z
 export const GRID_VIEW_MAXIMUM_FILTERS = 50;
 /** The longest address spelling of one stored filter. */
 export const GRID_VIEW_MAXIMUM_FILTER_LENGTH = 4000;
+/** The most personal formatting rules one view stores. */
+export const GRID_VIEW_MAXIMUM_FORMAT_RULES = 20;
+/** The most cells one personal rule may target. */
+export const GRID_VIEW_MAXIMUM_FORMAT_TARGETS = 20;
+/** The longest badge label a personal rule shows. */
+export const GRID_VIEW_MAXIMUM_BADGE_LENGTH = 40;
 /** The longest view name. */
 export const GRID_VIEW_MAXIMUM_NAME_LENGTH = 80;
 
 /**
+ * One personal formatting rule: the authored `ConditionalFormatRule` shape (a canonical condition
+ * tree over field identities, a row or cell target, a semantic style) with an identity of its own.
+ * It is evaluated by the same server evaluator as an authored rule, so it holds no colour and no
+ * value the viewer cannot read.
+ */
+export const gridViewFormatRuleSchema = z
+  .object({
+    id: fieldIdSchema,
+    enabled: z.boolean(),
+    condition: conditionNodeSchema,
+    target: z.discriminatedUnion("kind", [
+      z.object({ kind: z.literal("row") }).strict(),
+      z
+        .object({
+          kind: z.literal("cells"),
+          fields: z.array(fieldIdSchema).min(1).max(GRID_VIEW_MAXIMUM_FORMAT_TARGETS),
+        })
+        .strict(),
+    ]),
+    style: z
+      .object({
+        token: z.enum(conditionalFormatTokens),
+        tint: z.boolean(),
+        text: z.boolean(),
+        bold: z.boolean(),
+        strike: z.boolean(),
+        icon: z.enum(conditionalFormatIcons).optional(),
+        badgeLabel: z.string().min(1).max(GRID_VIEW_MAXIMUM_BADGE_LENGTH).optional(),
+      })
+      .strict()
+      .refine(
+        (style) =>
+          !(style.tint || style.text) || style.icon !== undefined || style.badgeLabel !== undefined,
+        "Add an icon or label so the meaning is not shown by colour alone",
+      ),
+    stopIfTrue: z.boolean(),
+  })
+  .strict();
+export type GridViewFormatRule = z.output<typeof gridViewFormatRuleSchema>;
+
+/**
  * Everything a view stores: the layout (column order, visibility, widths, density) and the query
- * state (ordered sort, one typed filter per field in its address spelling, and the search).
- * It never holds row data, a cursor, a page or a permission.
+ * state (ordered sort, one typed filter per field in its address spelling, and the search), and
+ * the person's own formatting rules. It never holds row data, a cursor, a page or a permission.
  */
 export const gridViewDocumentSchema = z
   .object({
@@ -122,10 +176,20 @@ export const gridViewDocumentSchema = z
       .max(GRID_VIEW_MAXIMUM_FILTERS)
       .optional(),
     search: z.string().min(1).max(RECORDS_TABLE_MAXIMUM_SEARCH_LENGTH).optional(),
+    formatting: z
+      .array(gridViewFormatRuleSchema)
+      .min(1)
+      .max(GRID_VIEW_MAXIMUM_FORMAT_RULES)
+      .optional(),
   })
   .strict()
   .superRefine((document, context) => {
     refineColumns(document, context);
+    if (
+      new Set(document.formatting?.map((rule) => rule.id)).size !==
+      (document.formatting?.length ?? 0)
+    )
+      context.addIssue({ code: "custom", path: ["formatting"], message: "A rule is named twice" });
     for (const part of ["sort", "filters"] as const)
       if (
         new Set(document[part]?.map((entry) => entry.fieldId)).size !==
@@ -175,6 +239,7 @@ export const gridViewHiddenSchema = z
     columns: z.number().int().min(0),
     filters: z.number().int().min(0),
     sort: z.number().int().min(0),
+    formatting: z.number().int().min(0),
   })
   .strict();
 export type GridViewHidden = z.output<typeof gridViewHiddenSchema>;
@@ -202,6 +267,11 @@ export const gridViewsStateSchema = z
     basedOnViewId: fieldIdSchema.nullable(),
     selected: selectedGridViewSchema.nullable(),
     notice: z.enum(gridViewNotices).nullable(),
+    /**
+     * The definitions of the fields this person may build a rule on: the columns they can read,
+     * never a withheld field. Present only where personal formatting is on.
+     */
+    formattingFields: z.array(moduleFieldSchema).max(GRID_LAYOUT_MAXIMUM_COLUMNS).optional(),
   })
   .strict();
 export type GridViewsState = z.output<typeof gridViewsStateSchema>;
@@ -342,6 +412,7 @@ export type GridLayoutCommitResult =
 /** The stored view the address selected, as the store listed it for the viewer. */
 export type AddressedGridView = Readonly<{
   hiddenFilters: number;
+  hiddenFormatting: number;
   item: GridViewItem;
   document: GridViewDocument;
   sharing: GridViewSharing | null;
@@ -351,7 +422,7 @@ export type AddressedGridView = Readonly<{
  * The selected view as it applies to this viewer. A view stores configuration only, so it is
  * re-evaluated under the viewer's current access: a column the viewer cannot see, and a filter or
  * sort key on a field they cannot read, are left out and counted, never shown and never failing
- * the view. A filter whose stored value is malformed cannot be applied without widening the rows,
+ * the view; so is a formatting rule that reads a field they cannot read. A filter whose stored value is malformed cannot be applied without widening the rows,
  * so the view is not applied and the viewer is told it needs fixing. `readable` is the viewer's
  * field policy (undefined in a preview, whose builder sees every field).
  */
@@ -375,6 +446,9 @@ export const resolveSelectedGridView = (
   if (filters.some((entry) => decodeRecordsTableFieldFilter(entry.filter) === undefined))
     return { selected: null, notice: "needs_fixing" };
   const sort = (document.sort ?? []).filter((entry) => readableField(entry.fieldId));
+  const formatting = (document.formatting ?? []).filter((rule) =>
+    conditionalFormatRuleFields(rule).every((fieldId) => readableField(fieldId.toLowerCase())),
+  );
   const applied: GridViewDocument = {
     // A view that would show no column of this viewer's falls back to the authored arrangement.
     columns: arranged.some((column) => column.visible) ? arranged : authored.columns,
@@ -382,6 +456,7 @@ export const resolveSelectedGridView = (
     ...(sort.length === 0 ? {} : { sort }),
     ...(filters.length === 0 ? {} : { filters }),
     ...(document.search === undefined ? {} : { search: document.search }),
+    ...(formatting.length === 0 ? {} : { formatting }),
   };
   return {
     selected: {
@@ -391,6 +466,8 @@ export const resolveSelectedGridView = (
         columns: document.columns.length - kept.length,
         filters: addressed.hiddenFilters + (document.filters ?? []).length - filters.length,
         sort: (document.sort ?? []).length - sort.length,
+        formatting:
+          addressed.hiddenFormatting + (document.formatting ?? []).length - formatting.length,
       },
       sharing,
     },
@@ -409,9 +486,20 @@ export type GridViewCommand =
   /** Opens a view (null leaves it); the host changes the address, nothing is stored. */
   | Readonly<{ kind: "select"; viewId: string | null }>
   /** Saves the grid as it is now (layout and query state) as a new personal view. */
-  | Readonly<{ kind: "create"; name: string; layout: GridLayout }>
-  /** Replaces the document of a view with the grid as it is now. */
-  | Readonly<{ kind: "save"; viewId: string; expectedRevision: number; layout: GridLayout }>
+  | Readonly<{
+      kind: "create";
+      name: string;
+      layout: GridLayout;
+      formatting?: readonly GridViewFormatRule[];
+    }>
+  /** Replaces the document of a view with the grid as it is now and the given formatting rules. */
+  | Readonly<{
+      kind: "save";
+      viewId: string;
+      expectedRevision: number;
+      layout: GridLayout;
+      formatting?: readonly GridViewFormatRule[];
+    }>
   | Readonly<{ kind: "rename"; viewId: string; expectedRevision: number; name: string }>
   | Readonly<{
       kind: "share";
@@ -439,6 +527,8 @@ export type GridViewCommandResult =
   | Readonly<{ outcome: "conflict" }>
   | Readonly<{ outcome: "forbidden" }>
   | Readonly<{ outcome: "limit" }>
+  /** A formatting rule reads a field the person cannot read or compares values that do not fit. */
+  | Readonly<{ outcome: "formatting_refused"; reason: string }>
   | Readonly<{ outcome: "unavailable" }>;
 
 /** Default views use the same document and projection as stored views. */
@@ -447,7 +537,7 @@ export const addressedDefaultGridViews = (
   roleKeys: ReadonlySet<string>,
   defaultDocuments: ReadonlyMap<
     string,
-    Readonly<{ document: GridViewDocument; hiddenFilters: number }>
+    Readonly<{ document: GridViewDocument; hiddenFilters: number; hiddenFormatting: number }>
   >,
 ) =>
   views
@@ -468,6 +558,7 @@ export const addressedDefaultGridViews = (
         },
         document: sanitized.document,
         hiddenFilters: sanitized.hiddenFilters,
+        hiddenFormatting: sanitized.hiddenFormatting,
         sharing: null,
       };
     });

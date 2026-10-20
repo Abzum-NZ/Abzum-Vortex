@@ -8,6 +8,7 @@ import {
   semanticTypeForLiteral,
   type OperandInfo,
 } from "../../../rules/condition-types";
+import type { ModuleField } from "../../module-contracts";
 import type { ComponentSettingValue } from "../block-property-schema";
 import {
   factsOf,
@@ -23,7 +24,7 @@ import {
   settingText,
   type RecordsTableFeatureCheck,
   type RecordsTableFeatureDefinition,
-  type RecordsTableQueryFacts,
+  type RecordsTableFieldFacts,
 } from "./shared";
 
 /** The semantic tokens a format may use; each is a theme colour every app theme preset defines. */
@@ -74,9 +75,9 @@ export type ConditionalFormatStyle = Readonly<{
   text: boolean;
   bold: boolean;
   strike: boolean;
-  icon?: ConditionalFormatIcon;
+  icon?: ConditionalFormatIcon | undefined;
   /** A short label shown as a badge, and read out with the value. */
-  badgeLabel?: string;
+  badgeLabel?: string | undefined;
 }>;
 
 /**
@@ -276,8 +277,38 @@ const operatorWords: Readonly<Record<string, string>> = {
 };
 const dateTypes = new Set(["date"]);
 
+/**
+ * The fields a rule is checked against: the bound query's fields at publication and in Studio, a
+ * record type's fields when a person saves a personal rule.
+ */
+export type ConditionalFormatFacts = Readonly<{
+  fields: readonly Pick<
+    RecordsTableFieldFacts,
+    "field" | "label" | "type" | "resultType" | "choiceValues"
+  >[];
+}>;
+
+/** A record type's fields as a rule is checked against them: a person's rule is, as an authored one. */
+export const conditionalFormatFactsOf = (
+  fields: readonly ModuleField[],
+): ConditionalFormatFacts => ({
+  fields: fields.map((field) => {
+    const settings = (field as { settings?: Readonly<Record<string, unknown>> }).settings ?? {};
+    const options = settings["options"];
+    return {
+      field: String(field.fieldId),
+      label: field.label,
+      type: field.type,
+      ...(typeof settings["resultType"] === "string" ? { resultType: settings["resultType"] } : {}),
+      ...(field.type === "choice" && Array.isArray(options)
+        ? { choiceValues: options.map((option: { value: string }) => String(option.value)) }
+        : {}),
+    };
+  }),
+});
+
 /** A field's business name, or the last part of its reference when the query does not offer it. */
-const fieldName = (facts: RecordsTableQueryFacts, field: string): string =>
+const fieldName = (facts: ConditionalFormatFacts, field: string): string =>
   factsOf(facts, field)?.label ?? field.split(/[.:]/).at(-1) ?? field;
 
 /** A rule whose style colours a value conveys status, so it needs an icon or a label as well. */
@@ -289,7 +320,7 @@ const showsStatusByColour = (style: ConditionalFormatStyle): boolean => style.ti
  */
 export const conditionalFormatRuleIssue = (
   rule: ConditionalFormatRule,
-  facts: RecordsTableQueryFacts,
+  facts: ConditionalFormatFacts,
 ): string | undefined => {
   for (const field of conditionalFormatRuleFields(rule))
     if (factsOf(facts, field) === undefined)
@@ -374,7 +405,7 @@ export const conditionalFormatRuleIssue = (
 /** What stops one numeric column format, or undefined when it fits the bound query. */
 export const conditionalColumnFormatIssue = (
   format: ConditionalColumnFormat,
-  facts: RecordsTableQueryFacts,
+  facts: ConditionalFormatFacts,
 ): string | undefined => {
   const field = factsOf(facts, format.field);
   if (field === undefined) return `${fieldName(facts, format.field)} is not in the bound query.`;

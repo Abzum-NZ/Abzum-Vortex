@@ -103,6 +103,7 @@ export {
   conditionalColumnFormatFieldTypes,
   conditionalColumnFormatIssue,
   conditionalFormatComparisons,
+  conditionalFormatFactsOf,
   conditionalFormatIcons,
   conditionalFormatRuleFields,
   conditionalFormatRuleIssue,
@@ -111,6 +112,7 @@ export {
   type ConditionalColumnFormat,
   type ConditionalFormatComparison,
   type ConditionalFormatCondition,
+  type ConditionalFormatFacts,
   type ConditionalFormatIcon,
   type ConditionalFormatOperand,
   type ConditionalFormatRule,
@@ -337,6 +339,17 @@ export const checkRecordsTableFeature = (
     return featureNotPossible(
       "definition_records_table_tree",
       "A row shows either its related records or the records beneath it; turn Related records off to use a tree.",
+    );
+  // Personal rules are evaluated by the table's own formatting, so they need it on.
+  if (
+    key === "saved_views" &&
+    state.enabled &&
+    (state as Extract<RecordsTableFeatures["savedViews"], { enabled: true }>).personalFormatting &&
+    !features.conditionalFormatting.enabled
+  )
+    return featureNotPossible(
+      "definition_records_table_saved_views",
+      "People can only add their own formatting when Formatting is on for this table. Turn Formatting on, or turn personal formatting off.",
     );
   // Groups, a board's columns, a tree's levels and a pivot's cells each arrange the records
   // their own way, so the table shows one of them at a time.

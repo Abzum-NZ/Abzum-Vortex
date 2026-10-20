@@ -79,8 +79,9 @@ export type RecordsTableFieldFacts = Readonly<{
 }>;
 
 /** The type of value a field holds: a calculation's or total's result type, else its own type. */
-export const factsValueType = (field: RecordsTableFieldFacts): string =>
-  field.resultType ?? field.type;
+export const factsValueType = (
+  field: Pick<RecordsTableFieldFacts, "type" | "resultType">,
+): string => field.resultType ?? field.type;
 
 /**
  * One query the application may read, as a row's related records see it: the record type it reads,
@@ -253,10 +254,10 @@ export const featureNotPossible = (
 ): RecordsTableFeatureCheck => Object.freeze({ kind: "not_possible", code, reason });
 
 /** The facts of a field the settings name, compared without regard to case. */
-export const factsOf = (
-  facts: RecordsTableQueryFacts,
+export const factsOf = <Field extends Readonly<{ field: string }>>(
+  facts: Readonly<{ fields: readonly Field[] }>,
   field: string,
-): RecordsTableFieldFacts | undefined =>
+): Field | undefined =>
   facts.fields.find((candidate) => candidate.field.toLowerCase() === field.toLowerCase());
 
 /**

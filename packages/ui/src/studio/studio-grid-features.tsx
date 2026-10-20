@@ -261,6 +261,9 @@ export function StudioGridFeatures({
                           ? {
                               kind: "group",
                               properties: {
+                                ...(declaration?.defaultValue?.kind === "group"
+                                  ? declaration.defaultValue.properties
+                                  : {}),
                                 ...studioGridFeatureStartSettings[key],
                                 enabled: { kind: "boolean", value: true },
                               },
