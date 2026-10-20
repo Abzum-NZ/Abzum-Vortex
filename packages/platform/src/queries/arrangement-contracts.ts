@@ -2,6 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 import {
+  boardColumnReadLimit,
   builderKeySchema,
   calendarMappingSchema,
   exactDecimalTextSchema,
@@ -211,9 +212,17 @@ export type ArrangementCommand = z.input<typeof arrangementCommandSchema>;
 export const summaryArrangementCommandSchema = protectedQuerySummaryCommandSchema;
 export type SummaryArrangementCommand = z.infer<typeof summaryArrangementCommandSchema>;
 
-/** One initial set of board pages, or one column page to continue. */
+/** The first page of each named column, or the next page of one column. */
 export const protectedBoardArrangementPageRequestSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("initial") }).strict(),
+  z
+    .object({
+      kind: z.literal("read"),
+      columns: z
+        .array(protectedQueryBoardSelectorSchema.shape.column)
+        .min(1)
+        .max(boardColumnReadLimit),
+    })
+    .strict(),
   z
     .object({
       kind: z.literal("continue"),

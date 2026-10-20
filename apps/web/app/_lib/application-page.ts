@@ -27,7 +27,7 @@ import type {
   ApplicationPageLoaderAddress,
   SearchParameters,
   ApplicationPageResult,
-  BoardContinuationTarget,
+  BoardReadTarget,
   TableContinuationTarget,
   ApplicationPagePlacementReadResult,
   PageDataState,
@@ -218,18 +218,17 @@ export const loadApplicationPagePlacements = async (
   parameters: SearchParameters,
   placementIds: readonly string[],
   expectedInstallationRevision: number,
-  boardContinuation?: BoardContinuationTarget,
+  boardReads?: readonly BoardReadTarget[],
   tableContinuation?: TableContinuationTarget,
   includeContent?: boolean,
 ): Promise<ApplicationPagePlacementReadResult> => {
   const requestedIds = new Set(placementIds.map((placementId) => placementId.toLowerCase()));
   if (
-    (boardContinuation !== undefined || tableContinuation !== undefined) &&
-    (placementIds.length !== 1 ||
-      (boardContinuation !== undefined &&
-        !sameId(placementIds[0] ?? "", boardContinuation.placementId)) ||
-      (tableContinuation !== undefined &&
-        !sameId(placementIds[0] ?? "", tableContinuation.placementId)))
+    boardReads?.some(
+      (read) => !placementIds.some((placementId) => sameId(placementId, read.placementId)),
+    ) === true ||
+    (tableContinuation !== undefined &&
+      (placementIds.length !== 1 || !sameId(placementIds[0] ?? "", tableContinuation.placementId)))
   )
     return { kind: "unavailable" };
   const loaded = await loadApplicationPageInternal(
@@ -237,7 +236,7 @@ export const loadApplicationPagePlacements = async (
     address,
     parameters,
     requestedIds,
-    boardContinuation,
+    boardReads,
     expectedInstallationRevision,
     tableContinuation,
   );

@@ -11,8 +11,8 @@ import type {
 } from "../schema";
 import {
   boardMembersCommand,
-  boardInitialPagesCommandSchema,
-  boardFirstPagesCommand,
+  boardColumnPagesCommandSchema,
+  boardColumnPagesCommand,
 } from "./protected-query-board";
 import {
   type ProtectedQueryResult,
@@ -91,7 +91,7 @@ export const createProtectedQueryService = (dependencies: ProtectedQueryServiceD
         boardMembersCommand(transaction, scope, command.data, continuationKey),
       );
     },
-    async boardInitialPages(
+    async boardColumnPages(
       caller: IdentitySession | ExecutionAuthorityContext,
       selection: OrganizationSelectionCandidate,
       commandCandidate: unknown,
@@ -103,12 +103,12 @@ export const createProtectedQueryService = (dependencies: ProtectedQueryServiceD
     > {
       if (caller !== null && typeof caller === "object" && "kind" in caller)
         return { kind: "unavailable" };
-      const command = boardInitialPagesCommandSchema.safeParse(commandCandidate);
+      const command = boardColumnPagesCommandSchema.safeParse(commandCandidate);
       if (!command.success)
         return { kind: "available", value: { outcome: "refused", reasonCode: "request_invalid" } };
       if (selection.applicationRootId === undefined) return { kind: "unavailable" };
       return requests.run(caller, selection, (transaction, scope) =>
-        boardFirstPagesCommand(transaction, scope, command.data, continuationKey),
+        boardColumnPagesCommand(transaction, scope, command.data, continuationKey),
       );
     },
     async groupedMembers(

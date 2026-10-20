@@ -28,6 +28,31 @@ import type { StudioQueryChoice } from "./contextual-palette";
 
 type Value = SourceBlockPropertyValueContract;
 const text = (value: string): Value => ({ kind: "text", value });
+const personParts = ["person", "organisation"] as const;
+const partLabels: Record<(typeof personParts)[number], string> = {
+  person: "Person",
+  organisation: "Organisation",
+};
+/**
+ * A date and time is written in UTC, as `2026-10-20T09:30`, and kept as an exact instant. An instant
+ * stored with another offset is shown as its UTC time, so the next edit keeps the same instant.
+ */
+const instantToInput = (instant: string): string => {
+  const parsed = new Date(instant);
+  return Number.isNaN(parsed.getTime()) ? instant.slice(0, 16) : parsed.toISOString().slice(0, 16);
+};
+/** A fixed source keeps one value: a chosen `record`, or a written `value`, never both. */
+const fixedWith = (
+  props: Readonly<Record<string, Value>>,
+  key: "record" | "value",
+  value: Value | undefined,
+): Record<string, Value> => ({
+  ...Object.fromEntries(
+    Object.entries(props).filter(([existing]) => existing !== "record" && existing !== "value"),
+  ),
+  ...(value === undefined ? {} : { [key]: value }),
+});
+const inputToInstant = (written: string): string => (written === "" ? "" : `${written}:00Z`);
 const choice = (value: string): Value => ({ kind: "choice", value });
 const labels: Record<QueryBindingSourceKind, string> = {
   fixed: "Fixed value",
@@ -108,15 +133,17 @@ export function StudioQueryBindings({
         const rowFields = (facts.rowFields ?? []).filter(
           (field) => field.type !== undefined && fit(field.type),
         );
+        // The person's directory record fills a record input; their organisation fills a text one.
+        const personFits =
+          facts.currentPersonRecordType !== undefined &&
+          fit({ kind: "record", recordTypes: [facts.currentPersonRecordType] });
+        const organisationFits = fit({ kind: "text" });
         const sources: QueryBindingSourceKind[] = [
           "fixed",
           ...(parameters.length ? ["page_parameter" as const] : []),
           ...(fields.length ? ["record_field" as const] : []),
           ...(controls.length ? ["control" as const] : []),
-          ...(facts.currentPersonRecordType !== undefined &&
-          fit({ kind: "record", recordTypes: [facts.currentPersonRecordType] })
-            ? ["current_person" as const]
-            : []),
+          ...(personFits || organisationFits ? ["current_person" as const] : []),
           ...(input.type?.kind === "date" || input.type?.kind === "date_time"
             ? ["relative_date" as const]
             : []),
@@ -152,7 +179,9 @@ export function StudioQueryBindings({
           }
           const details: Record<string, Value> =
             kind === "fixed"
-              ? { value: text(input.type?.kind === "yes_no" ? "false" : "") }
+              ? input.type?.kind === "record"
+                ? {}
+                : { value: text(input.type?.kind === "yes_no" ? "false" : "") }
               : kind === "page_parameter"
                 ? { name: text(parameters[0]!.name) }
                 : kind === "record_field"
@@ -160,7 +189,7 @@ export function StudioQueryBindings({
                   : kind === "control"
                     ? { control_placement: text(controls[0]!.placement) }
                     : kind === "current_person"
-                      ? { part: choice("person") }
+                      ? { part: choice(personFits ? "person" : "organisation") }
                       : kind === "this_row"
                         ? rowItself
                           ? {}
@@ -254,8 +283,32 @@ export function StudioQueryBindings({
                 }
               />
             )}
+            {source === "current_person" && personFits && organisationFits && (
+              <Select
+                disabled={disabled}
+                value={props.part?.kind === "choice" ? props.part.value : "person"}
+                onValueChange={(value) => change({ ...props, part: choice(value ?? "person") })}
+              >
+                <SelectTrigger aria-label={`${input.label} part`}>
+                  <SelectValue>
+                    {partLabels[
+                      (props.part?.kind === "choice"
+                        ? props.part.value
+                        : "person") as (typeof personParts)[number]
+                    ] ?? partLabels.person}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {personParts.map((part) => (
+                    <SelectItem key={part} value={part}>
+                      {partLabels[part]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
             {source === "fixed" &&
-              (input.type?.kind === "record" && input.type.recordTypes.length === 1 ? (
+              (input.type?.kind === "record" ? (
                 <StudioRecordReferenceControl
                   id={`${id}-${input.key}-record`}
                   recordTypes={choices.recordTypes.filter(
@@ -265,17 +318,31 @@ export function StudioQueryBindings({
                   read={choices.records}
                   disabled={disabled}
                   value={
-                    props.value?.kind === "text" && props.value.value !== ""
-                      ? { recordType: input.type.recordTypes[0]!, recordId: props.value.value }
+                    props.record?.kind === "record_reference"
+                      ? { recordType: props.record.record_type, recordId: props.record.record_id }
                       : undefined
                   }
-                  onChange={(value) => change({ ...props, value: text(value?.recordId ?? "") })}
+                  onChange={(value) =>
+                    change(
+                      fixedWith(
+                        props,
+                        "record",
+                        value === undefined
+                          ? undefined
+                          : {
+                              kind: "record_reference",
+                              record_type: value.recordType,
+                              record_id: value.recordId,
+                            },
+                      ),
+                    )
+                  }
                 />
               ) : input.type?.kind === "yes_no" ? (
                 <Select
                   value={props.value?.kind === "text" ? props.value.value : "false"}
                   disabled={disabled}
-                  onValueChange={(value) => change({ ...props, value: text(value ?? "") })}
+                  onValueChange={(value) => change(fixedWith(props, "value", text(value ?? "")))}
                 >
                   <SelectTrigger aria-label={`${input.label} value`}>
                     <SelectValue>
@@ -291,16 +358,43 @@ export function StudioQueryBindings({
                 <Input
                   aria-label={`${input.label} value`}
                   disabled={disabled}
-                  type={input.type?.kind === "date" ? "date" : "text"}
+                  type={
+                    input.type?.kind === "date"
+                      ? "date"
+                      : input.type?.kind === "date_time"
+                        ? "datetime-local"
+                        : "text"
+                  }
                   inputMode={
                     input.type?.kind === "whole_number" || input.type?.kind === "decimal_number"
                       ? "decimal"
                       : "text"
                   }
-                  value={props.value?.kind === "text" ? props.value.value : ""}
-                  onChange={(event) => change({ ...props, value: text(event.target.value) })}
+                  value={
+                    props.value?.kind === "text"
+                      ? input.type?.kind === "date_time"
+                        ? instantToInput(props.value.value)
+                        : props.value.value
+                      : ""
+                  }
+                  onChange={(event) =>
+                    change(
+                      fixedWith(
+                        props,
+                        "value",
+                        text(
+                          input.type?.kind === "date_time"
+                            ? inputToInstant(event.target.value)
+                            : event.target.value,
+                        ),
+                      ),
+                    )
+                  }
                 />
               ))}
+            {source === "fixed" && input.type?.kind === "date_time" && (
+              <p className="text-xs text-muted-foreground">Date and time in UTC.</p>
+            )}
             {source === "relative_date" && (
               <>
                 <Select

@@ -64,7 +64,7 @@ export function useRuntimeInputs({
   unsavedWork,
   onOpenApplication,
   runBinding,
-  continueBoardColumn,
+  readBoardColumns,
   continueTablePage,
   refreshPlacements,
   setSelection,
@@ -126,7 +126,7 @@ export function useRuntimeInputs({
     clickId?: string,
     reportOnControl?: true,
   ) => Promise<DispatchOutcome>;
-  continueBoardColumn: (placementId: string, event: DisplaySemanticEvent) => Promise<boolean>;
+  readBoardColumns: (placementId: string, event: DisplaySemanticEvent) => Promise<boolean>;
   continueTablePage: (
     placementId: string,
     event: DisplaySemanticEvent,
@@ -443,7 +443,7 @@ export function useRuntimeInputs({
           };
         if (boardData !== undefined && supportsEvent("page_changed"))
           events.page_changed = (event: DisplaySemanticEvent) =>
-            continueBoardColumn(placementId, event);
+            readBoardColumns(placementId, event);
         if (tableData !== undefined && supportsEvent("page_changed"))
           events.page_changed = (event: DisplaySemanticEvent) =>
             continueTablePage(placementId, event, tableData);
@@ -960,7 +960,7 @@ export function useRuntimeInputs({
     subject,
     onOpenApplication,
     unsavedWork,
-    continueBoardColumn,
+    readBoardColumns,
     continueTablePage,
     bulk,
   ]);
