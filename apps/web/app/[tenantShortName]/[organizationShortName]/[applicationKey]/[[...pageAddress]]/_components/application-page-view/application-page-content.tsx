@@ -53,6 +53,7 @@ import { useTablePageAddress } from "./use-table-page-address";
 import { useTableNextPage, useTableNextPageReadAhead } from "./use-table-next-page";
 import { useRuntimeInputs } from "./use-runtime-inputs";
 import { useGridLayout } from "./use-grid-layout";
+import { useRowDetail } from "./use-row-detail";
 import { WebMcpAdapter } from "../../../../../../_components/webmcp-adapter";
 import {
   useApplicationFrame,
@@ -470,6 +471,12 @@ export function ApplicationPageViewContent({
   });
 
   const { commitLayout } = useGridLayout({ model, currentData });
+  const { readDetail: readRowDetail } = useRowDetail({
+    application,
+    currentPageKey,
+    currentSearch,
+    onReload: router.refresh,
+  });
 
   const { runtimeInputs } = useRuntimeInputs({
     currentData,
@@ -491,6 +498,7 @@ export function ApplicationPageViewContent({
     setSelection,
     changeTableQuery,
     commitLayout,
+    readRowDetail,
     requestChoicePageRef,
     changeChoiceField,
     subject,
