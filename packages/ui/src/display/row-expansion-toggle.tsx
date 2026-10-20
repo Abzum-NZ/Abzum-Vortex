@@ -42,6 +42,19 @@ export function RowExpansionToggle({
               ) {
                 event.preventDefault();
                 onToggle();
+                return;
+              }
+              // F2 moves into the open panel, as it does from the toggle's cell.
+              if (event.key === "F2" && expanded) {
+                const inner = document
+                  .getElementById(panelId)
+                  ?.querySelector<HTMLElement>(
+                    'a[href], button:not([disabled]), input, select, textarea, [tabindex]:not([tabindex="-1"])',
+                  );
+                if (inner === null || inner === undefined) return;
+                event.preventDefault();
+                event.stopPropagation();
+                inner.focus();
               }
             }}
           />
