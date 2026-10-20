@@ -5717,6 +5717,52 @@
           },
           {
             "kind": "group",
+            "key": "tree",
+            "label": "Tree",
+            "help": "Expand a row to the records that name it as their parent",
+            "required": false,
+            "defaultValue": {
+              "kind": "group",
+              "properties": {
+                "enabled": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            },
+            "properties": [
+              {
+                "kind": "boolean",
+                "key": "enabled",
+                "label": "On",
+                "help": "Let people expand a row to the records beneath it",
+                "required": false,
+                "defaultValue": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              },
+              {
+                "kind": "field_reference",
+                "key": "parent_field",
+                "label": "Parent link",
+                "help": "The link from each record to its parent record",
+                "required": false
+              },
+              {
+                "kind": "number",
+                "key": "child_page_size",
+                "label": "Child records at a time",
+                "help": "How many records an expanded row reads at a time, at most 200",
+                "required": false,
+                "integer": true,
+                "minimum": 1,
+                "maximum": 200
+              }
+            ]
+          },
+          {
+            "kind": "group",
             "key": "pinning",
             "label": "Column pinning",
             "help": "Keep columns in view while scrolling; set each column's default pin in Columns",
@@ -6109,6 +6155,15 @@
               }
             },
             "master_detail": {
+              "kind": "group",
+              "properties": {
+                "enabled": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            },
+            "tree": {
               "kind": "group",
               "properties": {
                 "enabled": {

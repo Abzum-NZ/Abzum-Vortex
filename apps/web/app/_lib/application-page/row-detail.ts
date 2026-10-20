@@ -3,7 +3,12 @@ import "server-only";
 import {
   pageQueryBindingContext,
   readRecordsTableRowDetail,
+  isTreeTablePlacement,
+  readRecordsTableTreeLevel,
+  resolvedQueryRecordTypeId,
+  type PlacementReadInput,
   type RowDetailResult,
+  type TreeLevelResult,
 } from "@vortex/platform/server";
 import {
   describeFailure,
@@ -14,6 +19,7 @@ import {
 } from "@vortex/platform/schema";
 import { getQueryContinuationKey } from "../query-continuation-key";
 import { loadInstalledContext, readPageProjections, requestDependencies } from "./load";
+import { pageGridLayoutRequest, readPageGridLayouts } from "./grid-layouts";
 import {
   collectPlacements,
   first,
@@ -25,7 +31,7 @@ import { createPlacementReadServices } from "./placement-services";
 import type { ApplicationPageLoaderAddress, SearchParameters } from "./types";
 
 export type RowDetailLoadResult =
-  | Readonly<{ kind: "available"; detail: RowDetailResult }>
+  | Readonly<{ kind: "available"; detail: RowDetailResult | TreeLevelResult }>
   | Readonly<{ kind: "reload" }>
   | Readonly<{ kind: "unavailable" }>
   | Readonly<{ kind: "temporarily_unavailable" }>;
@@ -45,6 +51,7 @@ export const loadApplicationRowDetail = async (
     placementId: string;
     recordId: string;
     continuationToken?: string;
+    pageSize?: number;
     installationRevision: number;
   }>,
 ): Promise<RowDetailLoadResult> => {
@@ -140,6 +147,66 @@ export const loadApplicationRowDetail = async (
         }
       },
     });
+    const recordTypeId =
+      typeof placement.vortex.queryId === "string"
+        ? resolvedQueryRecordTypeId(context, placement.vortex.queryId)
+        : undefined;
+    const readSubject = (subjectRecordTypeId: string, recordId: string) =>
+      services.subjects.read(session, selection, { recordTypeId: subjectRecordTypeId, recordId });
+    // A tree table opens the records beneath the row through the table's own read, which takes the
+    // person's stored layout and field policy as the page read does.
+    const level =
+      recordTypeId === undefined || !isTreeTablePlacement(placement)
+        ? undefined
+        : await readRecordsTableTreeLevel(
+            {
+              context,
+              session,
+              selection,
+              address: { application: { key: address.application.key }, pageKey: address.pageKey },
+              pageDefinition,
+              accessVersion:
+                typeof projectedPage.value.accessVersion === "number"
+                  ? projectedPage.value.accessVersion
+                  : undefined,
+              subjectType,
+              subjectId: subjectRecordId.success ? subjectRecordId.data : undefined,
+              parameters,
+              bindings,
+              data: {},
+              services: services.placementServices(
+                services.recordLinkResolver(context),
+                readSubject,
+              ),
+              permittedApplicationKeys: undefined,
+              permittedApplicationsUnavailable: false,
+              gridLayouts: await readPageGridLayouts(
+                session,
+                dependencies,
+                selection,
+                context,
+                String(pageDefinition.pageId),
+                [
+                  pageGridLayoutRequest(
+                    pageDefinition,
+                    placement.placementId,
+                    recordTypeId,
+                    parameters,
+                  ),
+                ],
+              ),
+              markSubjectUnreadable: () => undefined,
+            } satisfies PlacementReadInput,
+            placement,
+            {
+              parentRecordId: parentRecordId.data,
+              ...(request.pageSize === undefined ? {} : { pageSize: request.pageSize }),
+              ...(request.continuationToken === undefined
+                ? {}
+                : { continuationToken: request.continuationToken }),
+            },
+          );
+    if (level !== undefined) return { kind: "available", detail: level };
     const detail = await readRecordsTableRowDetail({
       context,
       session,
@@ -151,8 +218,7 @@ export const loadApplicationRowDetail = async (
         : { continuationToken: request.continuationToken }),
       bindings,
       queries: services.queries,
-      readRecord: (recordTypeId, recordId) =>
-        services.subjects.read(session, selection, { recordTypeId, recordId }),
+      readRecord: readSubject,
       resolveRecordLinks: services.recordLinkResolver(context),
     });
     return { kind: "available", detail };

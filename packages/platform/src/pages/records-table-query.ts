@@ -25,10 +25,13 @@ import {
 import type { HumanOrganizationRequestResult } from "../access/index";
 import {
   protectedQueryCommandSchema,
+  protectedQueryTreeLevelCommandSchema,
   type ProtectedQueryCommand,
   type ProtectedQueryRefusalReasonCode,
   type ProtectedQueryResult,
   type ProtectedQueryRow,
+  type ProtectedQueryTreeLevelCommand,
+  type ProtectedQueryTreeLevelResult,
 } from "../queries/index";
 import {
   collectRecordLinks,
@@ -62,6 +65,12 @@ export type RecordsTableQueryRunner = Readonly<{
     selection: OrganizationSelectionCandidate,
     command: ProtectedQueryCommand,
   ): Promise<HumanOrganizationRequestResult<ProtectedQueryResult>>;
+  /** One level of a tree: the roots or the children of one parent record. */
+  treeLevel(
+    session: IdentitySession,
+    selection: OrganizationSelectionCandidate,
+    command: ProtectedQueryTreeLevelCommand,
+  ): Promise<HumanOrganizationRequestResult<ProtectedQueryTreeLevelResult>>;
 }>;
 
 /**
@@ -113,6 +122,11 @@ export type RecordsTableQueryRequest = Readonly<{
   formatting?: ConditionalFormattingContext;
   /** How a cell edits each field of the installed definition; supplied only when inline editing is on. */
   fieldEditors?: Readonly<Record<string, RecordsTableInlineEditor>>;
+  /**
+   * Set when the table is a tree: the read is one level of it, the roots (no parent) or the
+   * children of one record, `pageSize` at a time, over the link that names each record's parent.
+   */
+  tree?: Readonly<{ parentFieldId: string; parentRecordId: string | null; pageSize: number }>;
 }>;
 
 /**
@@ -508,7 +522,56 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
       return refused;
     }
     try {
-      const result = await runner.run(session, selection, built.command);
+      // The viewer's own search or filters list the matching records flat: a level narrowed on its
+      // own would hide a matching record whose parent does not match, and no ancestor walk is run.
+      const tree =
+        request.tree?.parentRecordId === null &&
+        (built.narrowing.search !== null || built.narrowing.filters.length > 0)
+          ? undefined
+          : request.tree;
+      const treeCommand =
+        tree === undefined
+          ? undefined
+          : protectedQueryTreeLevelCommandSchema.safeParse({
+              ...built.command,
+              pageSize: tree.pageSize,
+              parentFieldId: tree.parentFieldId,
+              parentRecordId: tree.parentRecordId,
+            });
+      if (treeCommand !== undefined && !treeCommand.success) {
+        logRecordsTableRequestRefusal(
+          // The cause stays in the log: which parts of the tree command failed and how.
+          recordsTableRequestRefusal(
+            "tree_level",
+            `tree_command_invalid:${treeCommand.error.issues
+              .map((issue) => `${issue.path.join(".")}/${issue.code}`)
+              .join(",")}`,
+          ),
+          "table_read",
+        );
+        return refused;
+      }
+      let result: HumanOrganizationRequestResult<
+        ProtectedQueryResult | ProtectedQueryTreeLevelResult
+      > =
+        treeCommand === undefined
+          ? await runner.run(session, selection, built.command)
+          : await runner.treeLevel(session, selection, treeCommand.data);
+      // A viewer who may not see the parent link on every record it may read has no tree: the
+      // table lists its records flat, as a table without the feature does. That viewer's next page
+      // carries a flat position, which the tree read refuses as stale before it reaches the field
+      // check, so a refused position of the roots is read flat once as well; a flat read refuses a
+      // tree position the same way.
+      if (
+        tree?.parentRecordId === null &&
+        result.kind === "available" &&
+        result.value.outcome === "refused" &&
+        (result.value.reasonCode === "field_unbounded" ||
+          (built.command.continuationToken !== undefined &&
+            (result.value.reasonCode === "cursor_stale" ||
+              result.value.reasonCode === "cursor_invalid")))
+      )
+        result = await runner.run(session, selection, built.command);
       if (result.kind === "temporarily_unavailable") return unavailableResult;
       if (result.kind !== "available") return refused;
       if (result.value.outcome === "refused")
@@ -598,7 +661,7 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
         kind: "available",
         fieldIds: built.fieldIds,
         display,
-        pageSize: built.command.pageSize,
+        pageSize: request.tree?.pageSize ?? built.command.pageSize,
         rows: projectedRows,
         ...(nextContinuationToken === undefined ? {} : { nextContinuationToken }),
         ...(previousContinuationToken === undefined ? {} : { previousContinuationToken }),

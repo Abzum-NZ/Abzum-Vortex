@@ -115,6 +115,8 @@ export type DisplayRow = Readonly<{
   cells: Readonly<Record<string, DisplayCellValue>>;
   /** The style keys and measures the table's formatting gives the row, decided on the server. */
   format?: RecordsTableRowFormat;
+  /** A tree row the viewer may read a child of, decided on the server. */
+  hasChildren?: true;
 }>;
 
 /** One declared table column; only declared columns are ever rendered. */
@@ -473,6 +475,8 @@ export type DisplaySemanticEvent =
       recordId: string;
       /** The token of the page before, to read the next page; absent for the first page. */
       continuationToken?: string;
+      /** Remaining room in the shared row budget; can only narrow the authored page size. */
+      pageSize?: number;
     }>;
 
 /**
@@ -848,9 +852,11 @@ const parseRows = (
       const record = requireRecord(item, "A projected row must be an object", rowLocation);
       requireExactKeys(
         record,
-        ["recordId", "revision", "capabilities", "edit", "cells", "format"],
+        ["recordId", "revision", "capabilities", "edit", "cells", "format", "hasChildren"],
         rowLocation,
       );
+      if (record.hasChildren !== undefined && record.hasChildren !== true)
+        fail("A projected row can only say it has children", rowLocation);
       const recordId = requireNonEmptyString(
         record.recordId,
         "A projected row requires a stable record identity",
@@ -906,6 +912,7 @@ const parseRows = (
         ...(edit === undefined ? {} : { edit }),
         cells: Object.freeze(cells),
         ...(format === undefined ? {} : { format }),
+        ...(record.hasChildren === true ? { hasChildren: true as const } : {}),
       });
     }),
   );

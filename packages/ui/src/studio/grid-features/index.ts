@@ -54,12 +54,15 @@ export const studioGridFeatureEditors: Readonly<
         filterable: field.filterable,
         searchable: field.searchable,
         editable: false,
+        parentLink: false,
       }),
   },
   saved_views: { kind: "custom" },
   bulk_actions: { kind: "settings", boundRecordTypeActions: true },
   inline_edit: { kind: "custom" },
   master_detail: { kind: "settings" },
+  // Only the links from a record type to itself can name a record's parent.
+  tree: { kind: "settings", offers: (field) => field.parentLink === true },
   conditional_formatting: { kind: "custom" },
   // The catalogue restricts the row and column pickers to choice, link and date fields and the measure
   // picker to number and money fields, so Studio offers only fields a pivot can use.
@@ -82,6 +85,8 @@ export const studioGridFeatureStartSettings: Readonly<
   },
   // Related records read ten at a time unless the builder chooses otherwise.
   master_detail: { child_page_size: { kind: "number", value: 10 } },
+  // A tree reads forty records of a level at a time unless the builder chooses otherwise.
+  tree: { child_page_size: { kind: "number", value: 40 } },
   // A pivot starts as a count of records, 40 rows at a time, with totals.
   pivot: {
     measure_function: { kind: "choice", value: "count" },
@@ -116,6 +121,7 @@ export const studioRecordsTableQueryFacts = (
 ): RecordsTableQueryFacts => ({
   signedIn,
   recordTypeLabel: query?.label ?? "",
+  maximumPageSize: query?.pageSize,
   fields: (query?.fields ?? []).map((field) => ({
     field: field.reference,
     label: field.label,
@@ -124,6 +130,7 @@ export const studioRecordsTableQueryFacts = (
     filterable: field.filterable,
     searchable: field.searchable,
     editable: query?.grouped !== true && recordsTableEditableFieldTypes.includes(field.type),
+    parentLink: field.parentLink === true,
     ...(field.choiceCount === undefined ? {} : { choiceCount: field.choiceCount }),
     ...(field.choiceValues === undefined ? {} : { choiceValues: field.choiceValues }),
     ...(field.resultType === undefined ? {} : { resultType: field.resultType }),

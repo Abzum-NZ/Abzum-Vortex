@@ -143,12 +143,17 @@ export type ProjectedTableRow = Readonly<{
   edit?: Readonly<Record<string, JsonValue>>;
   /** The style keys and measures the table's formatting gives this row; absent when none. */
   format?: RecordsTableRowFormat;
+  /** A tree row the viewer may read a child of; absent on every other row. */
+  hasChildren?: true;
 }>;
 
-/** A query row proven to carry the revision and capabilities the engine decided for a list row. */
-type ListRow = ProtectedQueryRow & Pick<ProjectedTableRow, "revision" | "capabilities">;
+/** A row of a table read: a tree level's rows also say whether the viewer may read a child. */
+type TableSourceRow = ProtectedQueryRow & Readonly<{ hasChildren?: boolean }>;
 
-const isListRow = (row: ProtectedQueryRow): row is ListRow =>
+/** A query row proven to carry the revision and capabilities the engine decided for a list row. */
+type ListRow = TableSourceRow & Pick<ProjectedTableRow, "revision" | "capabilities">;
+
+const isListRow = (row: TableSourceRow): row is ListRow =>
   row.revision !== undefined && row.capabilities !== undefined;
 
 export type ProjectedTableValues = Readonly<{
@@ -523,7 +528,7 @@ const editValuesOf = (
 export const projectRecordsTableData = (
   layout: GridLayoutState,
   input: ComponentDataProjectionInput,
-  rows: readonly ProtectedQueryRow[],
+  rows: readonly TableSourceRow[],
   fieldBounds: ProtectedQueryFieldBounds,
 ): ProjectedComponentData<ProjectedTableValues> | undefined => {
   const contract = readRecordsTableContract(input.settings);
@@ -618,6 +623,7 @@ export const projectRecordsTableData = (
             }),
           ),
           ...(format === undefined ? {} : { format }),
+          ...(row.hasChildren === true ? { hasChildren: true as const } : {}),
         };
       }),
     },
