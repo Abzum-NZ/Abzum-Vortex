@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { tenantOrganizationMutationRefusalCodeSchema } from "../identity/tenant-governance";
-import { builderKeySchema, namespacedKeySchema } from "../catalogue/identifiers";
+import { builderKeySchema, fieldIdSchema, namespacedKeySchema } from "../catalogue/identifiers";
 
 /** Stable, public reasons a protected operation can confirm. */
 export const flowRefusalFeedbackCodeSchema = z.enum([
@@ -34,10 +34,10 @@ export const flowFieldCorrectionCodeSchema = z.enum([
   "field_refused",
 ]);
 
-/** One submitted form field that needs correcting: its form field key and why, never a value. A rule's authored message may accompany it. */
+/** One submitted form field that needs correcting: its submitted control key or canonical field identity and why, never a value. A rule's authored message may accompany it. */
 export const flowFieldCorrectionSchema = z
   .object({
-    field: builderKeySchema,
+    field: builderKeySchema.or(fieldIdSchema),
     code: flowFieldCorrectionCodeSchema,
     message: z.string().min(1).max(300).optional(),
   })
@@ -90,7 +90,8 @@ export const flowRefusalFeedbackSchema = z
       context.addIssue({
         code: "custom",
         path: ["code"],
-        message: "Only invalid command feedback may identify an input, a field correction or a rule refusal",
+        message:
+          "Only invalid command feedback may identify an input, a field correction or a rule refusal",
       });
   });
 

@@ -298,7 +298,14 @@ function RowEditScope({ context, children, retainRow }: GridFeatureScopeProps): 
       void context.events?.refresh?.({ event: "refresh" });
     },
   };
-  return <RowEditingContext.Provider value={editing}>{children}</RowEditingContext.Provider>;
+  return (
+    <RowEditingContext.Provider value={editing}>
+      {children}
+      <span role="status" aria-live="polite" className="sr-only">
+        {message}
+      </span>
+    </RowEditingContext.Provider>
+  );
 }
 
 /** Controls are shadcn primitives; the shared edit-values module owns every type conversion. */
