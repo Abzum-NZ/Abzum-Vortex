@@ -1,5 +1,7 @@
 import {
   queryInputValueType,
+  recordsTableFeatureOfEvent,
+  type BlockPropertySchemaContract,
   recordsTableEditableFieldTypes,
   recordsTableFieldFilterable,
   type QueryBindingField,
@@ -183,3 +185,42 @@ export const studioRecordsTableQueryFacts = (
     page: related.page,
   },
 });
+
+/** Restore enabled grid features from their one authored workflow binding. */
+export const restoreStudioGridFeatureBindings = (
+  settings: Record<string, SourceBlockPropertyValueContract>,
+  declarations: readonly BlockPropertySchemaContract[],
+  bindings: readonly Readonly<{ control: string; event: string; event_id: string }>[],
+  alias: string,
+): void => {
+  // Disabled features contain only their defaults, while their workflows remain authored in the
+  // draft. Restore the event from the existing binding when a feature is enabled again.
+  const features = settings.features;
+  const featureDeclarations = declarations.find((property) => property.key === "features");
+  if (features?.kind === "group" && featureDeclarations?.kind === "group") {
+    const properties = { ...features.properties };
+    for (const binding of bindings) {
+      if (binding.control !== alias) continue;
+      const key = recordsTableFeatureOfEvent(binding.event);
+      if (key === undefined) continue;
+      const feature = features.properties[key];
+      const declaration = featureDeclarations.properties.find((property) => property.key === key);
+      if (
+        feature?.kind !== "group" ||
+        feature.properties.enabled?.kind !== "boolean" ||
+        !feature.properties.enabled.value ||
+        declaration?.kind !== "group" ||
+        !declaration.properties.some((property) => property.key === "event_id")
+      )
+        continue;
+      properties[key] = {
+        ...feature,
+        properties: {
+          ...feature.properties,
+          event_id: { kind: "text", value: binding.event_id },
+        },
+      };
+    }
+    settings.features = { ...features, properties };
+  }
+};
