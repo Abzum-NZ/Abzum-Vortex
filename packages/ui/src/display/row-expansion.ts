@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import type { RowPanelMemory } from "./grid-features/registry";
 import type { DisplayRow } from "./projected-data";
 
 /** At most this many rows of one table show their related records at once. */
@@ -30,11 +31,17 @@ export const useRowExpansion = (
     rows: readonly DisplayRow[];
     rowName: (row: DisplayRow) => string;
     announce: (message: string) => void;
-    panel: (row: DisplayRow) => ReactNode;
+    panel: (row: DisplayRow, memory: RowPanelMemory) => ReactNode;
   }>,
 ): RowExpansionControls | undefined => {
   const { enabled, placementId, rows, rowName, announce, panel } = input;
   const [expanded, setExpanded] = useState<readonly string[]>([]);
+  // What each open row's panel keeps; an entry lives exactly as long as its row stays expanded.
+  const kept = useRef(new Map<string, unknown>());
+  useEffect(() => {
+    for (const recordId of [...kept.current.keys()])
+      if (!expanded.includes(recordId)) kept.current.delete(recordId);
+  }, [expanded]);
   const pageSignature = rows.map((row) => row.recordId).join("\u0000");
   useEffect(() => {
     const onPage = new Set(pageSignature.split("\u0000"));
@@ -72,6 +79,16 @@ export const useRowExpansion = (
     },
     [expanded, announce, nameOf],
   );
+  const drawPanel = useCallback(
+    (row: DisplayRow) =>
+      panel(row, {
+        kept: () => kept.current.get(row.recordId),
+        keep: (value: unknown) => {
+          kept.current.set(row.recordId, value);
+        },
+      }),
+    [panel],
+  );
   return useMemo(
     () =>
       enabled
@@ -79,10 +96,10 @@ export const useRowExpansion = (
             expandedRecordIds: expanded,
             isExpanded: (recordId: string) => expanded.includes(recordId),
             toggle,
-            panel,
+            panel: drawPanel,
             panelId: (recordId: string) => `${placementId}-related-${recordId}`,
           }
         : undefined,
-    [enabled, expanded, toggle, panel, placementId],
+    [enabled, expanded, toggle, drawPanel, placementId],
   );
 };
