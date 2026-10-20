@@ -50,6 +50,7 @@ import {
 } from "./component-data-projection";
 import {
   conditionalFormattingFieldIds,
+  personalFormattingRules,
   logRecordsTableRequestRefusal,
   recordsTableNarrowingRefusal,
   recordsTableRequestRefusal,
@@ -502,7 +503,10 @@ export const buildRecordsTableQueryCommand = (
   // Fields only the formatting rules read are an optional projection: the engine returns each
   // under the viewer's field policy (absent where withheld) and never filters or sorts by it, so
   // the rules never change which rows the page holds. They are stripped after evaluation.
-  const formattingFieldIds = conditionalFormattingFieldIds(contract).filter(
+  const formattingFieldIds = conditionalFormattingFieldIds(
+    contract,
+    personalFormattingRules(contract, request.layout),
+  ).filter(
     (fieldId) => !fieldIds.includes(fieldId),
   );
   const command = protectedQueryCommandSchema.safeParse({

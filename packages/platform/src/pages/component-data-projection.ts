@@ -22,6 +22,7 @@ import { recordLinkLabelKey, type RecordLinkReference } from "../definition/app-
 import { defaultQueryPageSize } from "../definition/module-query-edit";
 import {
   evaluateConditionalFormatting,
+  personalFormattingRules,
   projectRecordsTableFeatures,
   rowMayChangeField,
   type RecordsTableInlineEditor,
@@ -604,6 +605,7 @@ export const projectRecordsTableData = (
                 ),
               })),
           input.formatting,
+          personalFormattingRules(contract, layout),
         );
   // The viewer's grid features, decided from the field bound and per-row capabilities of the same read.
   const features = projectRecordsTableFeatures(

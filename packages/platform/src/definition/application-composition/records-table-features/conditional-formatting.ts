@@ -8,6 +8,7 @@ import {
   semanticTypeForLiteral,
   type OperandInfo,
 } from "../../../rules/condition-types";
+import type { ModuleField } from "../../module-contracts";
 import type { ComponentSettingValue } from "../block-property-schema";
 import {
   factsOf,
@@ -74,9 +75,9 @@ export type ConditionalFormatStyle = Readonly<{
   text: boolean;
   bold: boolean;
   strike: boolean;
-  icon?: ConditionalFormatIcon;
+  icon?: ConditionalFormatIcon | undefined;
   /** A short label shown as a badge, and read out with the value. */
-  badgeLabel?: string;
+  badgeLabel?: string | undefined;
 }>;
 
 /**
@@ -286,6 +287,25 @@ export type ConditionalFormatFacts = Readonly<{
     "field" | "label" | "type" | "resultType" | "choiceValues"
   >[];
 }>;
+
+/** A record type's fields as a rule is checked against them: a person's rule is, as an authored one. */
+export const conditionalFormatFactsOf = (fields: readonly ModuleField[]): ConditionalFormatFacts => ({
+  fields: fields.map((field) => {
+    const settings = (field as { settings?: Readonly<Record<string, unknown>> }).settings ?? {};
+    const options = settings["options"];
+    return {
+      field: String(field.fieldId),
+      label: field.label,
+      type: field.type,
+      ...(typeof settings["resultType"] === "string"
+        ? { resultType: settings["resultType"] }
+        : {}),
+      ...(field.type === "choice" && Array.isArray(options)
+        ? { choiceValues: options.map((option: { value: string }) => String(option.value)) }
+        : {}),
+    };
+  }),
+});
 
 /** A field's business name, or the last part of its reference when the query does not offer it. */
 const fieldName = (facts: ConditionalFormatFacts, field: string): string =>

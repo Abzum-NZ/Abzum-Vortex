@@ -223,9 +223,16 @@ export function useGridLayout({
     }
   }, [currentData]);
 
-  /** The grid as it is now, as a view document: the given layout and the address's query state. */
+  /**
+   * The grid as it is now, as a view document: the given layout, the address's query state and the
+   * given formatting rules (formatting is a part of the view, never of the address).
+   */
   const documentOf = useCallback(
-    (placementId: string, layout: GridLayout): GridViewDocument | undefined => {
+    (
+      placementId: string,
+      layout: GridLayout,
+      formatting?: readonly NonNullable<GridViewDocument["formatting"]>[number][],
+    ): GridViewDocument | undefined => {
       const key = Object.keys(latestData.current).find(
         (key) => key.toLowerCase() === placementId.toLowerCase(),
       );
@@ -245,6 +252,7 @@ export function useGridLayout({
         ...(query.sort.length === 0 ? {} : { sort: [...query.sort] }),
         ...(query.filters.length === 0 ? {} : { filters: [...query.filters] }),
         ...(query.search === null ? {} : { search: query.search }),
+        ...(formatting === undefined || formatting.length === 0 ? {} : { formatting: [...formatting] }),
       };
     },
     [],
@@ -257,6 +265,7 @@ export function useGridLayout({
     else if (result.outcome === "forbidden") toast.error("You may not change this view.");
     else if (result.outcome === "limit")
       toast.error("You have reached the limit of 50 saved views for this table.");
+    else if (result.outcome === "formatting_refused") toast.error(result.reason);
     else toast.error("The view could not be saved.");
   }, []);
 
@@ -400,8 +409,13 @@ export function useGridLayout({
             tellOutcome(opened, "");
             return opened;
           }
-          const current = documentOf(placementId, state.layout);
+          const current = documentOf(
+            placementId,
+            state.layout,
+            state.views.selected?.document.formatting,
+          );
           const selected = opened.selected;
+          // Rows carry the formatting the server evaluated, so a view with other rules is read.
           const queryKey = (document: GridViewDocument) =>
             canonicalJson({
               sort: document.sort ?? [],
@@ -409,6 +423,7 @@ export function useGridLayout({
                 a.fieldId.localeCompare(b.fieldId),
               ),
               search: document.search ?? null,
+              formatting: document.formatting ?? [],
             });
           const visible = new Set(
             current?.columns.filter((column) => column.visible).map((column) => column.fieldId),
@@ -445,7 +460,7 @@ export function useGridLayout({
           openTableView(placementId, null);
           return { outcome: "done" };
         case "create": {
-          const document = documentOf(placementId, command.layout);
+          const document = documentOf(placementId, command.layout, command.formatting);
           if (document === undefined) return VIEW_UNAVAILABLE;
           const result = await send({ kind: "create", name: command.name, document });
           tellOutcome(result, "View saved.");
@@ -485,7 +500,7 @@ export function useGridLayout({
                             ? {
                                 ...item,
                                 document,
-                                hidden: { columns: 0, filters: 0, sort: 0 },
+                                hidden: { columns: 0, filters: 0, sort: 0, formatting: 0 },
                                 sharing: { organization: false, roleIds: [], groupIds: [] },
                               }
                             : layout.views.selected,
@@ -498,7 +513,7 @@ export function useGridLayout({
           return result;
         }
         case "save": {
-          const document = documentOf(placementId, command.layout);
+          const document = documentOf(placementId, command.layout, command.formatting);
           if (document === undefined) return VIEW_UNAVAILABLE;
           const result = await send({
             kind: "save",
@@ -511,9 +526,15 @@ export function useGridLayout({
             patchViewState(placementId, command.viewId, result.revision, (selected) => ({
               ...selected,
               document,
-              hidden: { columns: 0, filters: 0, sort: 0 },
+              hidden: { columns: 0, filters: 0, sort: 0, formatting: 0 },
             }));
             await adoptOwnLayout(placementId, command.viewId, document);
+            // The server evaluates the rules, so the rows are read once when they changed.
+            if (
+              canonicalJson(document.formatting ?? []) !==
+              canonicalJson(state.views.selected?.document.formatting ?? [])
+            )
+              await refreshPlacements([placementId]);
           } else if (result.outcome === "conflict") reopenAfterConflict(placementId);
           return result;
         }
@@ -569,8 +590,11 @@ export function useGridLayout({
           });
           tellOutcome(result, "View deleted.");
           if (result.outcome === "done") {
-            if (state.views.selected?.viewId === command.viewId)
+            if (state.views.selected?.viewId === command.viewId) {
               selectTableViewInPlace(placementId, null, documentOf(placementId, state.layout));
+              if (state.views.selected.document.formatting !== undefined)
+                void refreshPlacements([placementId]);
+            }
             patchViews(
               placementId,
               command.viewId,
@@ -609,6 +633,7 @@ export function useGridLayout({
       openTableView,
       patchViews,
       patchViewState,
+      refreshPlacements,
       reopenAfterConflict,
       selectTableViewInPlace,
       tellOutcome,

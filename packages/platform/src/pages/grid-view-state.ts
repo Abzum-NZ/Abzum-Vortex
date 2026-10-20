@@ -6,6 +6,7 @@ import {
 } from "./records-table-state";
 import { decodeRecordsTableFieldFilter } from "./records-table-filters";
 import { conditionNodeSchema } from "../definition/module-foundation-contracts";
+import { moduleFieldSchema } from "../definition/module-contracts";
 import {
   conditionalFormatIcons,
   conditionalFormatRuleFields,
@@ -262,6 +263,11 @@ export const gridViewsStateSchema = z
     basedOnViewId: fieldIdSchema.nullable(),
     selected: selectedGridViewSchema.nullable(),
     notice: z.enum(gridViewNotices).nullable(),
+    /**
+     * The definitions of the fields this person may build a rule on: the columns they can read,
+     * never a withheld field. Present only where personal formatting is on.
+     */
+    formattingFields: z.array(moduleFieldSchema).max(GRID_LAYOUT_MAXIMUM_COLUMNS).optional(),
   })
   .strict();
 export type GridViewsState = z.output<typeof gridViewsStateSchema>;

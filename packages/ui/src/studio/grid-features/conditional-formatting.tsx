@@ -34,6 +34,13 @@ import { StudioConditionControls } from "../condition-controls";
 import { createInitialStudioCondition, describeCondition } from "../condition-model";
 import type { StudioConditionControlsContext } from "../condition-model";
 import type { StudioQueryChoice } from "../contextual-palette";
+import {
+  ConditionalFormatStyleControls,
+  ConditionalFormatStyleSwatch,
+  ConditionalFormatTokenPicker,
+  conditionalFormatConditionContext,
+  type ConditionalFormatRuleChange,
+} from "../conditional-format-rule-controls";
 import { StudioInspectorActions } from "../studio-inspector-actions";
 import { StudioReferencePicker } from "../studio-reference-picker";
 import { readStudioQueryFilter, writeStudioQueryFilter } from "../studio-query-filter";
@@ -42,64 +49,6 @@ type Value = SourceBlockPropertyValueContract;
 type GroupValue = Extract<Value, { kind: "group" }>;
 type Properties = Readonly<Record<string, Value>>;
 
-const tokenLabels: Readonly<Record<ConditionalFormatToken, string>> = {
-  success: "Success",
-  warning: "Warning",
-  info: "Information",
-  destructive: "Critical",
-  muted: "Muted",
-};
-const tokenSwatches: Readonly<Record<ConditionalFormatToken, string>> = {
-  success: "bg-success",
-  warning: "bg-warning",
-  info: "bg-info",
-  destructive: "bg-destructive",
-  muted: "bg-muted-foreground",
-};
-const tokenTints: Readonly<Record<ConditionalFormatToken, string>> = {
-  success: "bg-success/10",
-  warning: "bg-warning/10",
-  info: "bg-info/10",
-  destructive: "bg-destructive/10",
-  muted: "bg-muted",
-};
-const tokenTexts: Readonly<Record<ConditionalFormatToken, string>> = {
-  success: "text-success",
-  warning: "text-warning",
-  info: "text-info",
-  destructive: "text-[color:color-mix(in_oklab,var(--destructive)_75%,var(--foreground))]",
-  muted: "text-[color:color-mix(in_oklab,var(--muted-foreground)_85%,var(--foreground))]",
-};
-const iconLabels: Readonly<Record<ConditionalFormatIcon, string>> = {
-  alert: "Alert",
-  check: "Check",
-  info: "Information",
-  clock: "Clock",
-  flag: "Flag",
-  star: "Star",
-  x: "Cross",
-  arrow_up: "Arrow up",
-  arrow_down: "Arrow down",
-};
-const iconGlyphs = {
-  alert: "triangle-alert",
-  check: "check",
-  info: "info",
-  clock: "clock",
-  flag: "flag",
-  star: "star",
-  x: "close",
-  arrow_up: "arrow-up",
-  arrow_down: "arrow-down",
-} as const satisfies Readonly<Record<ConditionalFormatIcon, string>>;
-const dateLabels: Readonly<Record<ConditionalFormattingDateParameter, string>> = {
-  today: "Today",
-  start_of_week: "Start of this week",
-  end_of_week: "End of this week",
-  start_of_month: "Start of this month",
-  end_of_month: "End of this month",
-};
-
 const text = (value: string): Value => ({ kind: "text", value });
 const flag = (value: boolean): Value => ({ kind: "boolean", value });
 const choice = (value: string): Value => ({ kind: "choice", value });
@@ -107,26 +56,6 @@ const propertiesOf = (value: Value | undefined): Properties =>
   value?.kind === "group" ? value.properties : {};
 const itemsOf = (value: Value | undefined): readonly Value[] =>
   value?.kind === "list" ? value.items : [];
-
-/** A rule's style as the preview swatch draws it: the same token classes the grid uses. */
-function StyleSwatch({ rule }: Readonly<{ rule: ConditionalFormatRule }>): ReactElement {
-  const { style } = rule;
-  return (
-    <span
-      aria-hidden
-      className={cn(
-        "inline-flex h-6 min-w-10 shrink-0 items-center justify-center gap-1 rounded-md border px-1.5 text-xs",
-        style.tint && tokenTints[style.token],
-        style.text && tokenTexts[style.token],
-        style.bold && "font-semibold",
-        style.strike && "line-through",
-      )}
-    >
-      {style.icon === undefined ? null : <Icon name={iconGlyphs[style.icon]} className="size-3" />}
-      Aa
-    </span>
-  );
-}
 
 /**
  * The Formatting feature's editor: an ordered rule list (drag, or Move up and Move down; a switch
@@ -176,30 +105,7 @@ export function StudioConditionalFormattingEditor({
       ),
     [compiledFields, queryFields, recordType],
   );
-  const context = useMemo(
-    (): StudioConditionControlsContext => ({
-      allowedOperands: [
-        ...shown.map((field) => ({
-          operand: { source: "field" as const, fieldId: field.fieldId },
-          field,
-          label: field.label,
-          role: "current_field" as const,
-        })),
-        ...conditionalFormattingDateParameters.map((key) => ({
-          operand: { source: "parameter" as const, key },
-          label: dateLabels[key],
-          role: "host_context" as const,
-        })),
-      ],
-      declaredFieldIds: shown.map((field) => String(field.fieldId)),
-      parameterDeclarations: conditionalFormattingDateParameters.map((key) => ({
-        key,
-        type: "date" as const,
-      })),
-      allowLiteralValues: true,
-    }),
-    [shown],
-  );
+  const context = useMemo(() => conditionalFormatConditionContext(shown), [shown]);
   const fieldIdOf = (reference: string): string | undefined =>
     shown.find((field) => `${recordType}.${field.key}` === reference)?.fieldId;
   const referenceOf = (fieldId: string): string | undefined => {
@@ -359,7 +265,7 @@ export function StudioConditionalFormattingEditor({
                     name="grip-vertical"
                     className="mt-1 size-4 shrink-0 cursor-grab text-muted-foreground"
                   />
-                  <StyleSwatch rule={rule} />
+                  <ConditionalFormatStyleSwatch style={rule.style} />
                   <button
                     type="button"
                     className="min-w-0 flex-1 text-left text-sm"
@@ -495,61 +401,6 @@ export function StudioConditionalFormattingEditor({
   );
 }
 
-function TokenPicker({
-  label,
-  value,
-  disabled,
-  onChange,
-}: Readonly<{
-  label: string;
-  value: ConditionalFormatToken;
-  disabled: boolean;
-  onChange: (token: ConditionalFormatToken) => void;
-}>): ReactElement {
-  return (
-    <ToggleGroup
-      aria-label={label}
-      variant="outline"
-      size="sm"
-      value={[value]}
-      disabled={disabled}
-      onValueChange={(next) => {
-        const token = conditionalFormatTokens.find((candidate) => candidate === next[0]);
-        if (token !== undefined) onChange(token);
-      }}
-    >
-      {conditionalFormatTokens.map((token) => (
-        <ToggleGroupItem key={token} value={token} aria-label={tokenLabels[token]}>
-          <span aria-hidden className={cn("size-3 rounded-full", tokenSwatches[token])} />
-        </ToggleGroupItem>
-      ))}
-    </ToggleGroup>
-  );
-}
-
-function SwitchRow({
-  id,
-  label,
-  checked,
-  disabled,
-  onChange,
-}: Readonly<{
-  id: string;
-  label: string;
-  checked: boolean;
-  disabled: boolean;
-  onChange: (on: boolean) => void;
-}>): ReactElement {
-  return (
-    <div className="flex items-center justify-between gap-2">
-      <Label htmlFor={id} className="text-sm font-normal">
-        {label}
-      </Label>
-      <Switch id={id} checked={checked} disabled={disabled} onCheckedChange={onChange} />
-    </div>
-  );
-}
-
 /** One rule's condition, target and style. */
 function RuleEditor({
   idPrefix,
@@ -583,9 +434,35 @@ function RuleEditor({
         : undefined;
   if (conditionDraft !== undefined && conditionDraft.saved !== savedCondition)
     setConditionDraft(undefined);
-  const { style } = rule;
-  const cells = rule.target.kind === "cells" ? rule.target.fields : [];
-  const [cellChoice, setCellChoice] = useState("");
+  const writeChange = (change: ConditionalFormatRuleChange): void => {
+    const changes: Record<string, Value> = {};
+    const remove: string[] = [];
+    if (change.target !== undefined) {
+      changes["target"] = choice(change.target.kind);
+      if (change.target.kind === "cells")
+        changes["fields"] = {
+          kind: "list",
+          items: change.target.fields.map((field) => ({
+            kind: "field_reference",
+            field: field as never,
+          })),
+        };
+      else remove.push("fields");
+    }
+    if (change.style !== undefined) {
+      const next = change.style;
+      changes["token"] = choice(next.token);
+      changes["tint"] = flag(next.tint);
+      changes["text_colour"] = flag(next.text);
+      changes["bold"] = flag(next.bold);
+      changes["strike"] = flag(next.strike);
+      changes["icon"] = choice(next.icon ?? "none");
+      if (next.badgeLabel === undefined) remove.push("badge_label");
+      else changes["badge_label"] = text(next.badgeLabel);
+    }
+    if (change.stopIfTrue !== undefined) changes["stop_if_true"] = flag(change.stopIfTrue);
+    onChange(changes, remove);
+  };
   return (
     <section
       aria-label={`Rule ${rule.id}`}
@@ -613,165 +490,14 @@ function RuleEditor({
           />
         </fieldset>
       )}
-      <div className="space-y-1">
-        <Label className="text-sm">Formats</Label>
-        <ToggleGroup
-          aria-label="Formats"
-          variant="outline"
-          size="sm"
-          className="w-full"
-          value={[rule.target.kind]}
-          disabled={disabled}
-          onValueChange={(next) => {
-            if (next[0] === "row") onChange({ target: choice("row") }, ["fields"]);
-            else if (next[0] === "cells")
-              onChange({ target: choice("cells"), fields: { kind: "list", items: [] } });
-          }}
-        >
-          <ToggleGroupItem value="row" className="flex-1">
-            Whole row
-          </ToggleGroupItem>
-          <ToggleGroupItem value="cells" className="flex-1">
-            Chosen cells
-          </ToggleGroupItem>
-        </ToggleGroup>
-      </div>
-      {rule.target.kind === "cells" ? (
-        <div className="space-y-1">
-          <div className="flex flex-wrap gap-1">
-            {cells.map((field) => (
-              <Badge key={field} variant="outline" className="gap-1">
-                {queryFields.find((candidate) => candidate.reference === field)?.label ?? field}
-                <button
-                  type="button"
-                  aria-label={`Remove ${queryFields.find((candidate) => candidate.reference === field)?.label ?? field}`}
-                  disabled={disabled}
-                  onClick={() =>
-                    onChange({
-                      fields: {
-                        kind: "list",
-                        items: cells
-                          .filter((candidate) => candidate !== field)
-                          .map((candidate) => ({
-                            kind: "field_reference",
-                            field: candidate as never,
-                          })),
-                      },
-                    })
-                  }
-                >
-                  <Icon name="close" className="size-3" />
-                </button>
-              </Badge>
-            ))}
-          </div>
-          <StudioReferencePicker
-            aria-label="Add a cell"
-            value={cellChoice}
-            unset="Add a cell"
-            disabled={disabled}
-            options={queryFields
-              .filter((field) => !cells.includes(field.reference))
-              .map((field) => ({ value: field.reference, label: field.label }))}
-            onChange={(reference) => {
-              setCellChoice("");
-              if (reference === "") return;
-              onChange({
-                fields: {
-                  kind: "list",
-                  items: [...cells, reference].map((field) => ({
-                    kind: "field_reference",
-                    field: field as never,
-                  })),
-                },
-              });
-            }}
-          />
-        </div>
-      ) : null}
-      <div className="space-y-1">
-        <Label className="text-sm">Colour</Label>
-        <TokenPicker
-          label="Colour"
-          value={style.token}
-          disabled={disabled}
-          onChange={(token) => onChange({ token: choice(token) })}
-        />
-      </div>
-      <SwitchRow
-        id={`${idPrefix}-tint`}
-        label="Background tint"
-        checked={style.tint}
+      <ConditionalFormatStyleControls
+        idPrefix={idPrefix}
+        target={rule.target}
+        style={rule.style}
+        stopIfTrue={rule.stopIfTrue}
+        cellOptions={queryFields.map((field) => ({ value: field.reference, label: field.label }))}
         disabled={disabled}
-        onChange={(on) => onChange({ tint: flag(on) })}
-      />
-      <SwitchRow
-        id={`${idPrefix}-text`}
-        label="Text colour"
-        checked={style.text}
-        disabled={disabled}
-        onChange={(on) => onChange({ text_colour: flag(on) })}
-      />
-      <SwitchRow
-        id={`${idPrefix}-bold`}
-        label="Bold"
-        checked={style.bold}
-        disabled={disabled}
-        onChange={(on) => onChange({ bold: flag(on) })}
-      />
-      <SwitchRow
-        id={`${idPrefix}-strike`}
-        label="Strike through"
-        checked={style.strike}
-        disabled={disabled}
-        onChange={(on) => onChange({ strike: flag(on) })}
-      />
-      <div className="grid grid-cols-2 gap-2">
-        <div className="space-y-1">
-          <Label htmlFor={`${idPrefix}-icon`} className="text-sm">
-            Icon
-          </Label>
-          <NativeSelect
-            id={`${idPrefix}-icon`}
-            size="sm"
-            className="w-full"
-            value={style.icon ?? "none"}
-            disabled={disabled}
-            onChange={(event) => onChange({ icon: choice(event.target.value) })}
-          >
-            <NativeSelectOption value="none">None</NativeSelectOption>
-            {conditionalFormatIcons.map((icon) => (
-              <NativeSelectOption key={icon} value={icon}>
-                {iconLabels[icon]}
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
-        </div>
-        <div className="space-y-1">
-          <Label htmlFor={`${idPrefix}-badge`} className="text-sm">
-            Label
-          </Label>
-          <Input
-            id={`${idPrefix}-badge`}
-            className="h-8"
-            maxLength={30}
-            defaultValue={style.badgeLabel ?? ""}
-            disabled={disabled}
-            onBlur={(event) => {
-              const label = event.target.value.trim();
-              if (label === (style.badgeLabel ?? "")) return;
-              if (label === "") onChange({}, ["badge_label"]);
-              else onChange({ badge_label: text(label) });
-            }}
-          />
-        </div>
-      </div>
-      <SwitchRow
-        id={`${idPrefix}-stop`}
-        label="Stop if true"
-        checked={rule.stopIfTrue}
-        disabled={disabled}
-        onChange={(on) => onChange({ stop_if_true: flag(on) })}
+        onChange={writeChange}
       />
     </section>
   );
@@ -862,7 +588,7 @@ function ColumnFormatEditor({
         </ToggleGroupItem>
       </ToggleGroup>
       {format.kind === "data_bar" ? (
-        <TokenPicker
+        <ConditionalFormatTokenPicker
           label="Bar colour"
           value={format.token}
           disabled={disabled}
@@ -872,7 +598,7 @@ function ColumnFormatEditor({
         (["Low", "Middle", "High"] as const).map((label, position) => (
           <div key={label} className="flex items-center justify-between gap-2">
             <span className="text-sm">{label}</span>
-            <TokenPicker
+            <ConditionalFormatTokenPicker
               label={`${label} colour`}
               value={format.tokens[position]!}
               disabled={disabled}

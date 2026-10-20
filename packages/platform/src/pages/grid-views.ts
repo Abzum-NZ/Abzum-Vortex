@@ -18,8 +18,8 @@ import {
   type RecordsTableContract,
 } from "../definition/application-composition/records-display";
 import {
+  conditionalFormatFactsOf,
   conditionalFormatRuleIssue,
-  type ConditionalFormatFacts,
 } from "../definition/application-composition/records-table-features/conditional-formatting";
 import type { ModuleField } from "../definition/module-contracts";
 import { placementSettings } from "../definition/application-composition-catalogue";
@@ -432,11 +432,8 @@ const viewResultSchema = z.discriminatedUnion("outcome", [
       queryId: idSchema,
     })
     .strict(),
-  z
-    .object({
-      outcome: z.enum(["not_found", "forbidden", "limit", "target_unknown", "formatting_refused"]),
-    })
-    .strict(),
+  z.object({ outcome: z.enum(["not_found", "forbidden", "limit", "target_unknown"]) }).strict(),
+  z.object({ outcome: z.literal("formatting_refused") }).strict(),
 ]);
 
 /** What a view operation came to; every refusal is a closed outcome, never a database message. */
@@ -456,25 +453,6 @@ const viewOutcome = (rows: readonly ResultRow[]): GridViewOperationOutcome => {
     return { outcome: "formatting_refused", reason: "A rule reads a field you cannot read." };
   return result.outcome === "conflict" ? { outcome: "conflict" } : result;
 };
-
-/** A record type's fields as a rule is checked against them. */
-const formattingFacts = (fields: readonly ModuleField[]): ConditionalFormatFacts => ({
-  fields: fields.map((field) => {
-    const settings = (field as { settings?: Record<string, unknown> }).settings ?? {};
-    const options = settings["options"];
-    return {
-      field: String(field.fieldId),
-      label: field.label,
-      type: field.type,
-      ...(typeof settings["resultType"] === "string"
-        ? { resultType: settings["resultType"] }
-        : {}),
-      ...(field.type === "choice" && Array.isArray(options)
-        ? { choiceValues: options.map((option: { value: string }) => String(option.value)) }
-        : {}),
-    };
-  }),
-});
 
 const refuseFormatting = (
   placementId: string,
@@ -531,7 +509,7 @@ export const saveGridView = async (
         "personal_formatting_off",
         "Personal formatting is not turned on for this table.",
       );
-    const facts = formattingFacts(save.recordFields);
+    const facts = conditionalFormatFactsOf(save.recordFields);
     for (const rule of document.formatting) {
       const issue = conditionalFormatRuleIssue(rule, facts);
       if (issue !== undefined)

@@ -982,6 +982,7 @@
                     "features": {
                       "saved_views": {
                         "enabled": true,
+                        "personal_formatting": true,
                         "default_views": [
                           {
                             "view_id": "d4266be5-35f9-46cf-9614-75b46a6d0673",

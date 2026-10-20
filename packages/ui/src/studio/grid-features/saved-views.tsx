@@ -4,6 +4,7 @@ import type { SourceBlockPropertyValueContract } from "@vortex/platform/schema";
 import { Button } from "../../components/button";
 import { RotateCcw, Trash2 } from "lucide-react";
 import { Input } from "../../components/input";
+import { Label } from "../../components/label";
 import { Checkbox } from "../../components/checkbox";
 import { StudioField } from "../studio-field";
 import { StudioReferencePicker } from "../studio-reference-picker";
@@ -58,6 +59,7 @@ export function StudioSavedViewsEditor({
       ...value,
       properties: { ...value.properties, default_views: { kind: "list", items: [...items] } },
     });
+  const personalFormatting = value.properties["personal_formatting"];
   const capture = (previous?: SourceBlockPropertyValueContract): Group | undefined => {
     if (canvasArrangement === undefined) return undefined;
     return {
@@ -74,6 +76,26 @@ export function StudioSavedViewsEditor({
     <div className="space-y-3">
       <p className="text-sm text-muted-foreground">
         Give roles the Share table views permission in Access to let people share views.
+      </p>
+      <Label className="gap-2 font-normal">
+        <Checkbox
+          disabled={disabled}
+          checked={personalFormatting?.kind === "boolean" && personalFormatting.value}
+          onCheckedChange={(checked) =>
+            onChange({
+              ...value,
+              properties: {
+                ...value.properties,
+                personal_formatting: { kind: "boolean", value: checked === true },
+              },
+            })
+          }
+        />
+        Allow personal formatting
+      </Label>
+      <p className="text-sm text-muted-foreground">
+        People add their own highlighting rules to the views they save, on the fields they can
+        read. It needs Formatting turned on for this table.
       </p>
       <p className="text-sm">
         Turn on Arrange grid columns above the canvas, then move, resize or hide columns and choose

@@ -1,6 +1,15 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState, type ReactElement } from "react";
+import {
+  lazy,
+  Suspense,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type ReactElement,
+} from "react";
 import {
   encodeRecordsTableFieldFilter,
   type GridLayout,
@@ -40,6 +49,11 @@ import type { GridFeatureContext, GridFeatureModule, GridFeaturePointProps } fro
  */
 
 const NAME_LIMIT = 80;
+
+// The rule editor is only needed by someone who opens Formatting, so it loads then.
+const PersonalFormattingDialog = lazy(() =>
+  import("./personal-formatting").then((module) => ({ default: module.PersonalFormattingDialog })),
+);
 
 const sameKey = (left: string, right: string): boolean =>
   left.toLowerCase() === right.toLowerCase();
@@ -102,6 +116,7 @@ const hiddenSentence = (selected: SelectedGridView): string | undefined => {
     [selected.hidden.columns, "column"],
     [selected.hidden.filters, "filter"],
     [selected.hidden.sort, "sort key"],
+    [selected.hidden.formatting, "formatting rule"],
   ].flatMap(([count, noun]) =>
     typeof count === "number" && count > 0
       ? [`${count} ${String(noun)}${count === 1 ? " is" : "s are"} hidden for your role`]
@@ -323,7 +338,7 @@ const viewScopeBadge = (view: GridViewItem): ReactElement | null =>
     </Badge>
   ) : null;
 
-type Prompt = "save_as" | "rename" | "share" | null;
+type Prompt = "save_as" | "rename" | "share" | "formatting" | null;
 
 function ViewSwitcher({
   context,
@@ -455,6 +470,9 @@ function ViewSwitcher({
                       viewId: selected.viewId,
                       expectedRevision: selected.revision,
                       layout: context.arrangement,
+                      ...(selected.document.formatting === undefined
+                        ? {}
+                        : { formatting: selected.document.formatting }),
                     });
                   }}
                 >
@@ -471,6 +489,21 @@ function ViewSwitcher({
               >
                 {selected === null ? "Save view" : "Save as…"}
               </Button>
+              {views.formattingFields === undefined ? null : (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={!canChange}
+                  title={canChange ? undefined : "Save the table as your own view to format it"}
+                  onClick={() => {
+                    close();
+                    setPrompt("formatting");
+                  }}
+                >
+                  <Icon name="palette" aria-hidden="true" />
+                  Format…
+                </Button>
+              )}
               {selected !== null && canChange ? (
                 <Button
                   size="sm"
@@ -548,7 +581,16 @@ function ViewSwitcher({
           description="Saves the table as it is now: columns, sort, filters and search."
           initialName={selected === null ? "" : `${selected.name} copy`.slice(0, NAME_LIMIT)}
           confirmLabel="Save"
-          onSubmit={(name) => request({ kind: "create", name, layout: context.arrangement })}
+          onSubmit={(name) =>
+            request({
+              kind: "create",
+              name,
+              layout: context.arrangement,
+              ...(selected?.document.formatting === undefined
+                ? {}
+                : { formatting: selected.document.formatting }),
+            })
+          }
           onClose={() => setPrompt(null)}
         />
       ) : null}
@@ -568,6 +610,17 @@ function ViewSwitcher({
           }
           onClose={() => setPrompt(null)}
         />
+      ) : null}
+      {prompt === "formatting" && selected !== null && views.formattingFields !== undefined ? (
+        <Suspense fallback={null}>
+          <PersonalFormattingDialog
+            selected={selected}
+            fields={views.formattingFields}
+            arrangement={context.arrangement}
+            request={request}
+            onClose={() => setPrompt(null)}
+          />
+        </Suspense>
       ) : null}
       {prompt === "share" && selected !== null ? (
         <ShareDialog selected={selected} request={request} onClose={() => setPrompt(null)} />
