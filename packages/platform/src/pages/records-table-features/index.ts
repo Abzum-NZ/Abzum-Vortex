@@ -53,6 +53,11 @@ export type RecordsTableFeatureProjection = Readonly<{
   masterDetail?: Readonly<{ pageSize: number }>;
   /** The styles the page's rows name and the numeric columns drawn as bars or scales. */
   conditionalFormatting?: ConditionalFormattingProjection;
+  /**
+   * The viewer can read the pivot's rows, columns and measure: it shows this many rows a page.
+   * `view` is present when the address opens the table as a pivot, with its row position.
+   */
+  pivot?: Readonly<{ rowPageSize: number; totals: boolean; view?: Readonly<{ cursor?: string }> }>;
 }>;
 
 /** The part of a Records table request a refusal names, kept only in the server log. */
@@ -129,6 +134,7 @@ export const projectRecordsTableFeatures = (
   rows: readonly ProtectedQueryRow[],
   filterFields: Readonly<Record<string, RecordsTableFilterField>> | undefined,
   conditionalFormatting?: ConditionalFormattingProjection,
+  pivotView?: Readonly<{ cursor?: string }>,
 ): RecordsTableFeatureProjection | undefined => {
   const { features } = contract;
   const readable = (field: string): boolean =>
@@ -152,6 +158,25 @@ export const projectRecordsTableFeatures = (
   // Every expanded row is read again under the viewer's current access: the projection only says
   // rows expand; a viewer who cannot read the related records sees the panel's neutral refusal.
   const masterDetail = features.masterDetail;
+  // A pivot is offered only when the viewer may read its rows, columns and measure on every
+  // record; the pivot read applies the same field policy again.
+  const pivotSettings = features.pivot;
+  const pivotFields = pivotSettings.enabled
+    ? [pivotSettings.rowField, pivotSettings.columnField, pivotSettings.measureField]
+    : [];
+  const pivot =
+    pivotSettings.enabled &&
+    pivotSettings.rowPageSize !== undefined &&
+    pivotSettings.rowField !== undefined &&
+    pivotSettings.columnField !== undefined &&
+    pivotSettings.measureFunction !== undefined &&
+    pivotFields.every((field) => field === undefined || readable(field))
+      ? {
+          rowPageSize: pivotSettings.rowPageSize,
+          totals: pivotSettings.totals,
+          ...(pivotView === undefined ? {} : { view: pivotView }),
+        }
+      : undefined;
   const projection: RecordsTableFeatureProjection = {
     ...(features.spreadsheet.enabled &&
     typeof features.spreadsheet.rangeSelect === "boolean" &&
@@ -178,6 +203,7 @@ export const projectRecordsTableFeatures = (
     ...(conditionalFormatting === undefined || !features.conditionalFormatting.enabled
       ? {}
       : { conditionalFormatting }),
+    ...(pivot === undefined ? {} : { pivot }),
   };
   return Object.keys(projection).length === 0 ? undefined : projection;
 };
