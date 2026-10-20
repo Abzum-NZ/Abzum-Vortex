@@ -122,7 +122,7 @@ begin
       'outcome', 'refused', 'correlationId', correlation_id_value
     );
   end if;
-    if meta -> 'recordType' ? 'systemProjection' then
+  if meta -> 'recordType' ? 'systemProjection' then
     if p_operation <> 'update'
       or meta #>> '{recordType,key}' <> 'organization_settings'
       or meta #>> '{recordType,systemProjection,protectedView}' <>

@@ -1,6 +1,5 @@
 import type { FlowDefinition, FlowTask, JsonValue } from "../schema";
 import { flowRuntimeValueOf, retypeTasks } from "./action-flow-run";
-import { compareFlowText } from "./flow-formula";
 import { startFlowRun, type FlowRuntimeValues } from "./flow-interpreter";
 
 /**
@@ -29,6 +28,7 @@ export type BeforeSaveRuleRefusal = Readonly<{
   code: string;
   message: string;
   fieldId?: string;
+  cause: Readonly<{ part: string; reason: string }>;
 }>;
 
 /** A flow that cannot be run to its end; the save is refused, never run without its flows. */
@@ -105,11 +105,8 @@ const applicable = (input: EvaluateBeforeSaveFlowsInput) =>
           : [],
       ),
     )
-    .sort(
-      (left, right) =>
-        left.trigger.priority - right.trigger.priority ||
-        compareFlowText(left.flow.id, right.flow.id),
-    );
+    // Stable sort retains the compiler's source order for flows with equal priority.
+    .sort((left, right) => left.trigger.priority - right.trigger.priority);
 
 export const evaluateBeforeSaveFlows = (
   input: EvaluateBeforeSaveFlowsInput,
@@ -134,7 +131,6 @@ export const evaluateBeforeSaveFlows = (
         executionKinds: ["transaction"],
         triggerRecord,
         previousRecord,
-        verifiedInputs: {},
       },
       (flowId) => (flowId === flow.id ? runnable : undefined),
     );
@@ -156,16 +152,18 @@ export const evaluateBeforeSaveFlows = (
     if (step.result.status === "completed") continue;
     const { failure } = step.result;
     if (failure.code === "task_refused" && failure.ruleRefusal !== undefined) {
-      console.info(
-        `[before-save-flow] refused: flow=${flow.id} task=${failure.taskId ?? "(none)"} reason=${failure.ruleRefusal.reason}`,
-      );
+      const cause = { part: flow.id, reason: failure.taskId ?? failure.ruleRefusal.reason };
+      console.info("[before-save-flow] refused", { cause, code: failure.ruleRefusal.reason });
       return {
         success: false,
         refusal: {
           ruleKey: flow.key,
           code: failure.ruleRefusal.reason,
           message: failure.ruleRefusal.message,
-          ...(failure.ruleRefusal.field === undefined ? {} : { fieldId: failure.ruleRefusal.field }),
+          cause,
+          ...(failure.ruleRefusal.field === undefined
+            ? {}
+            : { fieldId: failure.ruleRefusal.field }),
         },
         warnings,
       };

@@ -197,7 +197,7 @@ const compileModule = (
 
 /**
  * Runs the publication checks that need no database over shipped Module sources and reports every
- * failure, not the first: the source schema, the lowering of every BeforeSave flow, the Module
+ * failure, not the first: the source schema, every BeforeSave flow, the Module
  * compile and the publish-stage definition rules. The compiled Modules are returned so Applications
  * that bind them compile against the same outputs.
  */

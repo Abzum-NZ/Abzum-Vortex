@@ -25,8 +25,8 @@ import { flowIssueLocation, validateFlow, validateFlowSet } from "./flow-validat
 /**
  * Compiles the flows one module or application owns from readable aliases to permanent
  * identities. The function is pure and deterministic: the same source, resolver and
- * declared dependencies always give the same canonical flows, in ascending permanent flow
- * identity, so recompiling unchanged source gives an identical result.
+ * declared dependencies always give the same canonical flows. BeforeSave flows retain source
+ * order for equal priorities; other flows use ascending permanent identity.
  *
  * Every alias resolves through the resolver, which the definition compiler backs with the
  * existing resolution snapshot; nothing is generated here. An alias that does not resolve, a task
@@ -63,8 +63,7 @@ export const flowReadFieldsScalarTypeForField = (
   const direct = flowReadFieldsScalarTypeSchema.safeParse(fieldType);
   // Module money and formatted-text values are structured objects, while the Flow scalar
   // evaluator accepts decimal text and a string respectively. Neither can be projected as-is.
-  if (direct.success && fieldType !== "money" && fieldType !== "formatted_text")
-    return direct.data;
+  if (direct.success && fieldType !== "money" && fieldType !== "formatted_text") return direct.data;
   switch (fieldType) {
     case "long_text":
     case "reference_number":
@@ -160,10 +159,7 @@ const resolveAt = (
 };
 
 /** `definition.key:record.member` or `record.member`; the member never contains a dot. */
-const splitMemberReference = (
-  ctx: Context,
-  text: string,
-): { record: string; member: string } => {
+const splitMemberReference = (ctx: Context, text: string): { record: string; member: string } => {
   const dot = text.indexOf(".", text.indexOf(":") + 1);
   if (dot < 1 || dot === text.length - 1)
     throw refusal(ctx, "vortex.definition.invalid_record_type_reference", "broken_reference");
@@ -283,14 +279,10 @@ const resolveProperty = (
   path: Path,
 ): FlowValue => {
   const identity = (resolve: (alias: string) => ResolvedFlowIdentity) =>
-    identityLiteral(
-      resolveAt(ctx, resolve(aliasOf(ctx, value)), [...path, "literal", "value"]),
-    );
+    identityLiteral(resolveAt(ctx, resolve(aliasOf(ctx, value)), [...path, "literal", "value"]));
   const member = (resolve: (record: string, alias: string) => ResolvedFlowIdentity) => {
     const { record, member: alias } = splitMemberReference(ctx, aliasOf(ctx, value));
-    return identityLiteral(
-      resolveAt(ctx, resolve(record, alias), [...path, "literal", "value"]),
-    );
+    return identityLiteral(resolveAt(ctx, resolve(record, alias), [...path, "literal", "value"]));
   };
   switch (type) {
     case "record_type_id":
@@ -306,6 +298,14 @@ const resolveProperty = (
     case "flow_id":
       return identity((alias) => ctx.resolver.flow(alias));
     case "field_id":
+      if (ctx.transaction && ctx.triggerRecordType !== undefined) {
+        const { record } = splitMemberReference(ctx, aliasOf(ctx, value));
+        if (
+          ctx.resolver.recordType(record).identifier !==
+          ctx.resolver.recordType(ctx.triggerRecordType).identifier
+        )
+          throw refusal(ctx, "vortex.definition.workflow_node_references", "broken_reference");
+      }
       return member((record, alias) => ctx.resolver.field(record, alias));
     case "relationship_id":
       return member((record, alias) => ctx.resolver.relationship(record, alias));
@@ -345,9 +345,7 @@ const resolveFileAttachmentField = (
   const { record, member: alias } = splitMemberReference(ctx, aliasOf(ctx, value));
   const field = ctx.resolver.field(record, alias);
   const fieldId = resolveAt(ctx, field, [...path, "literal", "value"]);
-  const recordType = ctx.resolver.recordType(
-    aliasOf(ctx, properties[recordTypeProperty]!),
-  );
+  const recordType = ctx.resolver.recordType(aliasOf(ctx, properties[recordTypeProperty]!));
   const matches = ctx.resolver.fieldMetadata(fieldId);
   if (matches.length === 0)
     throw refusal(ctx, "vortex.definition.workflow_node_references", "broken_reference");
@@ -363,11 +361,8 @@ const resolveFileAttachmentField = (
   return identityLiteral(fieldId);
 };
 
-const resolveTaskList = (
-  ctx: Context,
-  tasks: readonly SourceFlowTask[],
-  path: Path,
-): unknown[] => tasks.map((task, index) => resolveTask(ctx, task, [...path, index]));
+const resolveTaskList = (ctx: Context, tasks: readonly SourceFlowTask[], path: Path): unknown[] =>
+  tasks.map((task, index) => resolveTask(ctx, task, [...path, index]));
 
 const resolveReadFieldsTask = (
   ctx: Context,
@@ -394,14 +389,11 @@ const resolveReadFieldsTask = (
     "literal",
     "value",
   ]);
-  const record = resolveProperty(
-    ctx,
-    "record_reference",
-    recordValue,
-    node.properties,
-    false,
-    [...path, "properties", "record"],
-  );
+  const record = resolveProperty(ctx, "record_reference", recordValue, node.properties, false, [
+    ...path,
+    "properties",
+    "record",
+  ]);
   if (fieldsValue.kind !== "literal" || fieldsValue.literal.type !== "json")
     throw refusal(ctx, "vortex.definition.workflow_node_values", "invalid_value");
   const projection = flowReadFieldsProjectionSchema.safeParse(fieldsValue.literal.value);
@@ -433,10 +425,7 @@ const resolveReadFieldsTask = (
     if (matches.length !== 1)
       throw refusal(ctx, "vortex.definition.ambiguous_identity", "unresolved_reference");
     const metadata = matches[0]!;
-    if (
-      metadata.identifier !== field.identifier ||
-      metadata.recordTypeId !== recordType.identifier
-    )
+    if (metadata.identifier !== field.identifier || metadata.recordTypeId !== recordType.identifier)
       throw refusal(ctx, "vortex.definition.workflow_node_references", "broken_reference");
     if (selectedFieldIds.has(field.identifier))
       throw refusal(ctx, "vortex.definition.duplicate_identity_resolution", "duplicate_key");
@@ -445,15 +434,7 @@ const resolveReadFieldsTask = (
     if (scalarType === undefined)
       throw refusal(ctx, "vortex.definition.unsupported_field_type", "unsupported_choice");
     typeEntries.push([entry.alias, scalarType]);
-    const fieldPath: Path = [
-      ...path,
-      "properties",
-      "fields",
-      "literal",
-      "value",
-      index,
-      "field",
-    ];
+    const fieldPath: Path = [...path, "properties", "fields", "literal", "value", index, "field"];
     const fieldId = resolveAt(ctx, field, fieldPath);
     // The compiler-owned scalar type is resolved from the same exact field identity, so its
     // provenance points back to the selected source field rather than appearing as a default.
@@ -543,8 +524,7 @@ const resolveTask = (ctx: Context, task: SourceFlowTask, path: Path): unknown =>
         : undefined;
       if (definition === undefined)
         throw refusal(ctx, "vortex.definition.unsupported_workflow_node", "unsupported_choice");
-      if (node.type === "record.read_fields")
-        return resolveReadFieldsTask(ctx, node, path);
+      if (node.type === "record.read_fields") return resolveReadFieldsTask(ctx, node, path);
       const properties: Record<string, FlowValue> = {};
       for (const [name, value] of Object.entries(node.properties)) {
         const declared = Object.hasOwn(definition.properties, name)
@@ -570,13 +550,11 @@ const resolveTask = (ctx: Context, task: SourceFlowTask, path: Path): unknown =>
                 definition.transactionScope === "saved_record",
                 [...path, "properties", name],
               )
-            : resolveFileAttachmentField(
-                ctx,
-                value,
-                node.properties,
-                fileRecordTypeProperty,
-                [...path, "properties", name],
-              );
+            : resolveFileAttachmentField(ctx, value, node.properties, fileRecordTypeProperty, [
+                ...path,
+                "properties",
+                name,
+              ]);
       }
       return { ...node, properties };
     }
@@ -633,7 +611,8 @@ const flowProvenance = (
     if (path.length === 1 && path[0] === "namespace")
       return { canonicalPath, origin: "system_metadata", ruleCode: systemRule };
     const sourceValue = valueAt(source, path);
-    if (!sourceValue.found) return { canonicalPath, origin: "fixed_default", ruleCode: defaultRule };
+    if (!sourceValue.found)
+      return { canonicalPath, origin: "fixed_default", ruleCode: defaultRule };
     const canonicalValue = valueAt(canonical, path).value;
     return {
       canonicalPath,
@@ -771,7 +750,15 @@ export function compileFlowSources(input: FlowCompilationInput): CompiledFlowSet
     });
   });
 
-  compiled.sort((left, right) => compareCanonicalStrings(left.flow.id, right.flow.id));
+  compiled.sort((left, right) => {
+    const leftTrigger = left.flow.triggers.find((trigger) => trigger.type === "BeforeSave");
+    const rightTrigger = right.flow.triggers.find((trigger) => trigger.type === "BeforeSave");
+    if (leftTrigger?.type === "BeforeSave" && rightTrigger?.type === "BeforeSave")
+      return leftTrigger.priority - rightTrigger.priority || left.sourceIndex - right.sourceIndex;
+    if (leftTrigger !== undefined || rightTrigger !== undefined)
+      return leftTrigger === undefined ? 1 : -1;
+    return compareCanonicalStrings(left.flow.id, right.flow.id);
+  });
   const compiledFlowsById = new Map<string, FlowDefinition>(
     compiled.map(({ flow }) => [flow.id, flow]),
   );
@@ -785,10 +772,7 @@ export function compileFlowSources(input: FlowCompilationInput): CompiledFlowSet
       throw new DefinitionCompilationError(
         invalid.ruleCode,
         invalid.family,
-        flowIssueLocation(
-          resolver.locate?.(input.flows[entry.sourceIndex]!.key),
-          invalid,
-        ),
+        flowIssueLocation(resolver.locate?.(input.flows[entry.sourceIndex]!.key), invalid),
       );
   }
   // Calls between the flows: no cycle, a bounded depth, and transaction flows calling only their own kind.
@@ -810,6 +794,9 @@ export function compileFlowSources(input: FlowCompilationInput): CompiledFlowSet
     provenance,
   });
   if (!result.success)
-    throw new DefinitionCompilationError("vortex.definition.invalid_compilation_output", "invalid_value");
+    throw new DefinitionCompilationError(
+      "vortex.definition.invalid_compilation_output",
+      "invalid_value",
+    );
   return result.data;
 }

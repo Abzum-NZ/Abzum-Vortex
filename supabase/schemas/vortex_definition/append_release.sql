@@ -1020,7 +1020,7 @@ begin
 
   -- A save runs only the BeforeSave flows, so only those travel with the record content.
   record_content_value := record_content_value || pg_catalog.jsonb_build_object(
-    'beforeSaveFlows', coalesce((
+    'flows', coalesce((
       select pg_catalog.jsonb_agg(flow.value order by flow.ordinality)
       from pg_catalog.jsonb_array_elements(
         coalesce(compilation_output_value #> '{canonical,content,flows}', '[]'::jsonb)

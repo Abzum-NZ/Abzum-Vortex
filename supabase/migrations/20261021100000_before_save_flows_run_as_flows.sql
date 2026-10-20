@@ -21,10 +21,10 @@ begin
     'moduleRootId', p_module_root_id,
     'releaseRevision', p_module_release_revision,
     'flows', coalesce((
-      select pg_catalog.jsonb_agg(item.value order by item.value ->> 'id' collate "C")
+      select pg_catalog.jsonb_agg(item.value order by item.ordinality)
       from pg_catalog.jsonb_array_elements(
-        coalesce(release_content -> 'beforeSaveFlows', '[]'::jsonb)
-      ) as item(value)
+        coalesce(release_content -> 'flows', '[]'::jsonb)
+      ) with ordinality as item(value, ordinality)
       where exists (
         select 1
         from pg_catalog.jsonb_array_elements(
@@ -170,7 +170,7 @@ begin
       'outcome', 'refused', 'correlationId', correlation_id_value
     );
   end if;
-    if meta -> 'recordType' ? 'systemProjection' then
+  if meta -> 'recordType' ? 'systemProjection' then
     if p_operation <> 'update'
       or meta #>> '{recordType,key}' <> 'organization_settings'
       or meta #>> '{recordType,systemProjection,protectedView}' <>
@@ -5053,7 +5053,7 @@ begin
 
   -- A save runs only the BeforeSave flows, so only those travel with the record content.
   record_content_value := record_content_value || pg_catalog.jsonb_build_object(
-    'beforeSaveFlows', coalesce((
+    'flows', coalesce((
       select pg_catalog.jsonb_agg(flow.value order by flow.ordinality)
       from pg_catalog.jsonb_array_elements(
         coalesce(compilation_output_value #> '{canonical,content,flows}', '[]'::jsonb)

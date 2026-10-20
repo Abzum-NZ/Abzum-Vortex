@@ -18,10 +18,10 @@ begin
     'moduleRootId', p_module_root_id,
     'releaseRevision', p_module_release_revision,
     'flows', coalesce((
-      select pg_catalog.jsonb_agg(item.value order by item.value ->> 'id' collate "C")
+      select pg_catalog.jsonb_agg(item.value order by item.ordinality)
       from pg_catalog.jsonb_array_elements(
-        coalesce(release_content -> 'beforeSaveFlows', '[]'::jsonb)
-      ) as item(value)
+        coalesce(release_content -> 'flows', '[]'::jsonb)
+      ) with ordinality as item(value, ordinality)
       where exists (
         select 1
         from pg_catalog.jsonb_array_elements(

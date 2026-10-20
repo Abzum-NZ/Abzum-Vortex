@@ -1,4 +1,5 @@
 import "server-only";
+import { z } from "zod";
 
 import {
   describeFailure,
@@ -64,6 +65,7 @@ type BeforeSaveRuleApplication =
       code: string;
       message: string;
       fieldId?: string;
+      cause: Readonly<{ part: string; reason: string }>;
     }>
   | Readonly<{ success: false; reason: "unavailable" }>;
 
@@ -73,36 +75,43 @@ type BeforeSaveRuleApplication =
  * compiled BeforeSave flow of it, is unreachable and yields `undefined`; the
  * caller must then refuse the save rather than run it without its flows.
  */
+const beforeSaveFlowSetSchema = z
+  .object({
+    moduleRootId: z.uuid(),
+    releaseRevision: z.number().int().positive().safe(),
+    flows: z.array(flowSchema),
+  })
+  .strict();
+
 export const parseBeforeSaveFlowSet = (
   candidate: unknown,
   recordTypeId: string,
 ): BeforeSaveFlowSet | undefined => {
-  if (typeof candidate !== "object" || candidate === null || Array.isArray(candidate))
+  const parsed = beforeSaveFlowSetSchema.safeParse(candidate);
+  if (!parsed.success) {
+    console.error("[before-save-flow] preparation contract failed", {
+      cause: { part: "beforeSaveFlows", reason: "invalid_preparation" },
+      issues: parsed.error.issues.map(({ path, code, message }) => ({ path, code, message })),
+    });
     return undefined;
-  const value = candidate as Record<string, unknown>;
-  if (
-    typeof value.moduleRootId !== "string" ||
-    typeof value.releaseRevision !== "number" ||
-    !Number.isSafeInteger(value.releaseRevision) ||
-    !Array.isArray(value.flows)
-  )
-    return undefined;
-  const flows: FlowDefinition[] = [];
-  for (const entry of value.flows) {
-    const parsed = flowSchema.safeParse(entry);
+  }
+  for (const flow of parsed.data.flows) {
     // A flow for another subject would be silently skipped by the evaluator.
     if (
-      !parsed.success ||
-      !parsed.data.triggers.some(
+      flow.execution !== "transaction" ||
+      !flow.triggers.some(
         (trigger) =>
           trigger.type === "BeforeSave" &&
           trigger.recordTypeId.toLowerCase() === recordTypeId.toLowerCase(),
       )
-    )
+    ) {
+      console.error("[before-save-flow] preparation subject mismatch", {
+        cause: { part: flow.id, reason: "wrong_record_type_or_execution" },
+      });
       return undefined;
-    flows.push(parsed.data);
+    }
   }
-  return { moduleRootId: value.moduleRootId, releaseRevision: value.releaseRevision, flows };
+  return parsed.data;
 };
 
 /**
@@ -133,7 +142,13 @@ export const applyBeforeSaveRules = (input: {
         ? {}
         : { organizationCurrency: input.organizationCurrency }),
     });
-    if (!previous.success) return { success: false, reason: "unavailable" };
+    if (!previous.success) {
+      console.error("[before-save-flow] previous record normalization failed", {
+        cause: { part: recordType.recordTypeId, reason: "invalid_previous_values" },
+        issues: previous.issues.map(({ code, path }) => ({ code, path })),
+      });
+      return { success: false, reason: "unavailable" };
+    }
     previousValues = previous.candidate.candidateValues;
   }
 
@@ -163,6 +178,7 @@ export const applyBeforeSaveRules = (input: {
       ruleKey: result.refusal.ruleKey,
       code: result.refusal.code,
       message: result.refusal.message,
+      cause: result.refusal.cause,
       ...(result.refusal.fieldId === undefined ? {} : { fieldId: result.refusal.fieldId }),
     };
   }

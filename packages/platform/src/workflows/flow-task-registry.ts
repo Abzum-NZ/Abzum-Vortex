@@ -186,9 +186,15 @@ export const flowTaskTypeDefinitionSchema = z
       issue(["runLocations"], "Only pure and interface tasks may run in the browser");
     if (locations.has("transaction")) {
       if (value.effect === "background_start" || value.effect === "interface")
-        issue(["runLocations"], "A transaction task is pure, a read, or a change to the saved record");
+        issue(
+          ["runLocations"],
+          "A transaction task is pure, a read, or a change to the saved record",
+        );
       if (value.effect === "change" && value.transactionScope !== "saved_record")
-        issue(["transactionScope"], "A change may run in a transaction only on the record being saved");
+        issue(
+          ["transactionScope"],
+          "A change may run in a transaction only on the record being saved",
+        );
     }
     if (value.transactionScope !== undefined && !locations.has("transaction"))
       issue(["transactionScope"], "A transaction scope applies only to a transaction task");
@@ -203,34 +209,50 @@ export const flowTaskTypeDefinitionSchema = z
     }
     if (value.transactionScope === "saved_record") {
       if (value.properties.record === undefined)
-        issue(["properties", "record"], "A saved-record task declares the record it changes outside transactions");
+        issue(
+          ["properties", "record"],
+          "A saved-record task declares the record it changes outside transactions",
+        );
       for (const name of flowSavedRecordTargetProperties)
         if (value.properties[name]?.required === true)
-          issue(["properties", name], "A saved-record task's target is optional, named only outside transactions");
+          issue(
+            ["properties", name],
+            "A saved-record task's target is optional, named only outside transactions",
+          );
     }
     const durableCompiled = value.kestra.mode !== "not_compiled";
     if (durableCompiled !== locations.has("durable"))
-      issue(["kestra", "mode"], "A task compiles for Kestra exactly when it can run in a durable flow");
-    const expectedModes: Partial<Record<FlowTaskEffectClass, readonly FlowTaskKestraCompileMode[]>> = {
+      issue(
+        ["kestra", "mode"],
+        "A task compiles for Kestra exactly when it can run in a durable flow",
+      );
+    const expectedModes: Partial<
+      Record<FlowTaskEffectClass, readonly FlowTaskKestraCompileMode[]>
+    > = {
       pure: ["native_control", "evaluator_callback", "native_wait", "not_compiled"],
       read: ["protected_callback", "not_compiled"],
       change: ["protected_callback"],
       background_start: ["protected_callback"],
       interface: ["not_compiled"],
     };
-    if (value.category === "registered" && !expectedModes[value.effect]?.includes(value.kestra.mode))
+    if (
+      value.category === "registered" &&
+      !expectedModes[value.effect]?.includes(value.kestra.mode)
+    )
       issue(["kestra", "mode"], "The Kestra compile mode does not fit the task's effect");
     if (value.category === "registered" && value.kestra.mode === "native_control")
       issue(["kestra", "mode"], "Only control tasks compile to native Kestra control tasks");
-    const protectedEffect =
-      value.effect === "change" || value.effect === "background_start";
+    const protectedEffect = value.effect === "change" || value.effect === "background_start";
     if (protectedEffect !== (value.defaultPolicy.duplicateProtection === "required"))
       issue(
         ["defaultPolicy", "duplicateProtection"],
         "Duplicate protection is required exactly for changes and background starts",
       );
     if (value.defaultPolicy.retry !== undefined && !locations.has("durable"))
-      issue(["defaultPolicy", "retry"], "Retries are allowed only for tasks that run in durable flows");
+      issue(
+        ["defaultPolicy", "retry"],
+        "Retries are allowed only for tasks that run in durable flows",
+      );
     if (
       (locations.size > 1 || !locations.has("durable")) &&
       value.defaultPolicy.timeoutSeconds > flowMaximumServerSeconds
@@ -534,7 +556,8 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
   },
   "record.pin_identity": {
     title: "Acquire record pin identity",
-    summary: "Resolves one permitted installed record and returns only its exact identity for a pin.",
+    summary:
+      "Resolves one permitted installed record and returns only its exact identity for a pin.",
     runLocations: ["server"],
     effect: "read",
     properties: {
@@ -625,7 +648,8 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
   },
   "file.attach": {
     title: "Attach file",
-    summary: "Adds an existing active file to a target record attachment field in its organisation.",
+    summary:
+      "Adds an existing active file to a target record attachment field in its organisation.",
     runLocations: protectedLocations,
     effect: "change",
     properties: {
@@ -909,7 +933,9 @@ export const validateFlowTaskPlacement = (
   const visit = (tasks: readonly FlowTask[], path: (string | number)[]) => {
     tasks.forEach((flowTask, index) => {
       const taskPath = [...path, index];
-      const definition = Object.hasOwn(registry, flowTask.type) ? registry[flowTask.type] : undefined;
+      const definition = Object.hasOwn(registry, flowTask.type)
+        ? registry[flowTask.type]
+        : undefined;
       if (!definition) {
         issues.push({
           path: [...taskPath, "type"],
@@ -917,6 +943,15 @@ export const validateFlowTaskPlacement = (
           message: `${flowTask.type} is not a registered task type`,
         });
       } else {
+        if (
+          beforeSave &&
+          !["if", "stop", "rule.require", "rule.warn", "rule.refuse"].includes(flowTask.type)
+        )
+          issues.push({
+            path: [...taskPath, "type"],
+            code: "wrong_run_location",
+            message: `${definition.title} cannot run before a save`,
+          });
         if (
           !definition.runLocations.some((location) => allowedHere.includes(location)) &&
           !(actionFlow && definition.actionFlowTransaction === true)
@@ -930,13 +965,11 @@ export const validateFlowTaskPlacement = (
           });
         if (!isFlowControlTask(flowTask)) {
           const registered = flowTask as Extract<FlowTask, { properties: unknown }>;
-          // The save evaluates a BeforeSave flow in memory before anything is written, so a task
-          // that reads, changes or starts something outside the flow cannot run there.
-          if (beforeSave && definition.effect !== "pure")
+          if (beforeSave && registered.allowRefusal === true)
             issues.push({
-              path: [...taskPath, "type"],
-              code: "wrong_run_location",
-              message: `${definition.title} acts outside the flow, so a flow that runs before a save cannot place it`,
+              path: [...taskPath, "allowRefusal"],
+              code: "refusal_not_possible",
+              message: "A refusal before a save ends the save instead of continuing the flow",
             });
           if (registered.version !== definition.version)
             issues.push({
@@ -989,7 +1022,8 @@ export const validateFlowTaskPlacement = (
             });
         }
       }
-      for (const child of flowTaskChildLists(flowTask)) visit(child.tasks, [...taskPath, ...child.path]);
+      for (const child of flowTaskChildLists(flowTask))
+        visit(child.tasks, [...taskPath, ...child.path]);
     });
   };
   visit(flow.tasks, ["tasks"]);

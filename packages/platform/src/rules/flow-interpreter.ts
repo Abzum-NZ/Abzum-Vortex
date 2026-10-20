@@ -54,11 +54,7 @@ export const flowRunStateVersion = "1" as const;
 export type FlowFailureOutcome = "refused" | "conflict" | "validation" | "uncertain" | "failed";
 
 /** The safe outcomes one task reports back to the interpreter. */
-export type FlowTaskOutcome =
-  | "completed"
-  | "committed"
-  | "background_pending"
-  | FlowFailureOutcome;
+export type FlowTaskOutcome = "completed" | "committed" | "background_pending" | FlowFailureOutcome;
 
 export type FlowFailureCode =
   | "flow_unavailable"
@@ -139,13 +135,7 @@ type Awaiting =
 
 export type FlowInterfaceIntent = Readonly<{
   kind:
-    | "show_message"
-    | "show_form"
-    | "confirm"
-    | "navigate"
-    | "refresh"
-    | "set_panel"
-    | "set_filter";
+    "show_message" | "show_form" | "confirm" | "navigate" | "refresh" | "set_panel" | "set_filter";
   taskId: string;
   properties: FlowRuntimeValues;
 }>;
@@ -344,7 +334,8 @@ const declaredOutputFieldType = (
 ): string | undefined => {
   const task = findTask([...flow.tasks, ...flow.errors, ...flow.finally], taskId);
   if (task?.type === "operation.call" && outputKey === "result" && path.length === 1) {
-    const operation = (task as Extract<FlowTask, { properties: Record<string, FlowValue> }>).properties.operation;
+    const operation = (task as Extract<FlowTask, { properties: Record<string, FlowValue> }>)
+      .properties.operation;
     const key = operation?.kind === "literal" ? operation.literal.value : undefined;
     const entry = Object.values(PLATFORM_SERVICE_OPERATIONS).find(
       (candidate) => platformOperationKey(candidate.key) === key,
@@ -358,12 +349,11 @@ const declaredOutputFieldType = (
   }
   if (task?.type === "record.read_fields" && path.length === 1) {
     const types = flowReadFieldsTypeMapSchema.safeParse(task.readFieldTypes);
-    return types.success && Object.hasOwn(types.data, path[0]!)
-      ? types.data[path[0]!]
-      : undefined;
+    return types.success && Object.hasOwn(types.data, path[0]!) ? types.data[path[0]!] : undefined;
   }
   if (task?.type !== "interface.show_form") return undefined;
-  const inputs = (task as Extract<FlowTask, { properties: Record<string, FlowValue> }>).properties.inputs;
+  const inputs = (task as Extract<FlowTask, { properties: Record<string, FlowValue> }>).properties
+    .inputs;
   if (inputs?.kind !== "map") return undefined;
   let member: FlowValue = inputs;
   for (const name of path) {
@@ -388,7 +378,11 @@ const declaredOutputFieldType = (
   return evaluateValue(member, state, activation, flow, taskId).type;
 };
 
-const scopeOf = (state: FlowRunState, activation: Activation, flow: FlowDefinition): FlowFormulaScope => ({
+const scopeOf = (
+  state: FlowRunState,
+  activation: Activation,
+  flow: FlowDefinition,
+): FlowFormulaScope => ({
   now: state.now,
   reference: (reference: FlowReference) => {
     switch (reference.source) {
@@ -404,10 +398,7 @@ const scopeOf = (state: FlowRunState, activation: Activation, flow: FlowDefiniti
       case "task_output": {
         const output = activation.outputs[reference.task]?.[reference.key];
         if (output === undefined || reference.path === undefined) return output;
-        if (
-          output.type !== "json" ||
-          reference.path.length > flowMaximumTaskOutputPathDepth
-        )
+        if (output.type !== "json" || reference.path.length > flowMaximumTaskOutputPathDepth)
           return undefined;
         let selected: unknown = output.value;
         for (const name of reference.path) {
@@ -460,8 +451,7 @@ const evaluateValue = (
   const scope = scopeOf(state, activation, flow);
   let result: FlowRuntimeValue | undefined;
   if (value.kind === "literal") result = typed(value.literal.type, value.literal.value);
-  else if (value.kind === "reference")
-    result = scope.reference(value.reference as FlowReference);
+  else if (value.kind === "reference") result = scope.reference(value.reference as FlowReference);
   else if (value.kind === "formula") result = evaluateFlowFormula(value.formula, scope);
   // Constructed values resolve under exactly the same rules as a top-level value, so a
   // nested reference reads the same input, variable or task output it would read on its own.
@@ -471,8 +461,8 @@ const evaluateValue = (
       entries[name] = evaluateValue(entry, state, activation, flow, taskId).value;
     result = typed("json", entries);
   } else if (value.kind === "array") {
-    const items = value.items.map((item) =>
-      evaluateValue(item, state, activation, flow, taskId).value,
+    const items = value.items.map(
+      (item) => evaluateValue(item, state, activation, flow, taskId).value,
     );
     result = typed("json", items);
   }
@@ -507,7 +497,8 @@ const buildInputs = (
   for (const [name, declaration] of Object.entries(flow.inputs)) {
     const candidate = Object.hasOwn(supplied, name) ? supplied[name] : undefined;
     if (candidate === undefined || candidate === null) {
-      if (declaration.default !== undefined) inputs[name] = typed(declaration.type, declaration.default);
+      if (declaration.default !== undefined)
+        inputs[name] = typed(declaration.type, declaration.default);
       else if (declaration.required) invalid(`required input "${name}" is missing`);
       continue;
     }
@@ -551,7 +542,8 @@ type Machine = {
   library: FlowLibrary;
 };
 
-const topOf = (machine: Machine) => machine.state.activations[machine.state.activations.length - 1]!;
+const topOf = (machine: Machine) =>
+  machine.state.activations[machine.state.activations.length - 1]!;
 
 const replaceTop = (machine: Machine, next: Activation): void => {
   machine.state.activations = [...machine.state.activations.slice(0, -1), next];
@@ -568,7 +560,10 @@ const withFrames = (activation: Activation, frames: readonly Frame[]): Activatio
 const advanceFrame = (activation: Activation): Activation =>
   withFrames(activation, [
     ...activation.frames.slice(0, -1),
-    { ...activation.frames[activation.frames.length - 1]!, index: activation.frames[activation.frames.length - 1]!.index + 1 },
+    {
+      ...activation.frames[activation.frames.length - 1]!,
+      index: activation.frames[activation.frames.length - 1]!.index + 1,
+    },
   ]);
 
 const pushFrame = (activation: Activation, frame: Frame): Activation =>
@@ -682,7 +677,8 @@ const validReadFieldsResume = (
     actualAliases.length === declaredAliases.length &&
     declaredAliases.every(
       (alias) =>
-        Object.hasOwn(actual, alias) && typedValueMatchesType(actual[alias], types.data[alias]!, "flow"),
+        Object.hasOwn(actual, alias) &&
+        typedValueMatchesType(actual[alias], types.data[alias]!, "flow"),
     )
   );
 };
@@ -710,9 +706,7 @@ const branch = (
     ? activation
     : pushFrame(activation, { path: [...taskPath, ...key], index: 0 });
 
-type Executed =
-  | Readonly<{ kind: "continue" }>
-  | Readonly<{ kind: "suspend"; step: FlowRunStep }>;
+type Executed = Readonly<{ kind: "continue" }> | Readonly<{ kind: "suspend"; step: FlowRunStep }>;
 
 /** Runs one task of the top activation. Control and pure tasks complete here. */
 const execute = (machine: Machine, task: FlowTask, taskPath: readonly PathSegment[]): Executed => {
@@ -782,7 +776,8 @@ const execute = (machine: Machine, task: FlowTask, taskPath: readonly PathSegmen
     case "run_flow": {
       const node = task as Extract<FlowTask, { type: "run_flow" }>;
       // The root activation plus at most the allowed number of nested calls.
-      if (state.activations.length > flowMaximumRunFlowDepth) failed("run_flow_depth", "failed", taskId);
+      if (state.activations.length > flowMaximumRunFlowDepth)
+        failed("run_flow_depth", "failed", taskId);
       const child = machine.library(node.flowId) ?? failed("flow_unavailable", "failed", taskId);
       if (child.execution !== "interactive") failed("flow_not_runnable", "failed", taskId);
       const supplied = Object.fromEntries(
@@ -918,17 +913,19 @@ const execute = (machine: Machine, task: FlowTask, taskPath: readonly PathSegmen
     const intents = [...machine.state.pendingIntents, intent];
     machine.state.pendingIntents = [];
     const inputs = kind === "show_form" ? registered.properties.inputs : undefined;
-    const answerTypes = inputs?.kind === "map"
-      ? Object.fromEntries(
-          Object.entries(inputs.entries).map(([name, entry]) => [
-            name,
-            evaluateValue(entry, state, activation, flow, taskId).type,
-          ]),
-        )
-      : undefined;
-    machine.state.awaiting = kind === "show_form"
-      ? { kind: "form", taskId, ...(answerTypes === undefined ? {} : { answerTypes }) }
-      : { kind: "confirm", taskId };
+    const answerTypes =
+      inputs?.kind === "map"
+        ? Object.fromEntries(
+            Object.entries(inputs.entries).map(([name, entry]) => [
+              name,
+              evaluateValue(entry, state, activation, flow, taskId).type,
+            ]),
+          )
+        : undefined;
+    machine.state.awaiting =
+      kind === "show_form"
+        ? { kind: "form", taskId, ...(answerTypes === undefined ? {} : { answerTypes }) }
+        : { kind: "confirm", taskId };
     return {
       kind: "suspend",
       step: {
@@ -945,7 +942,12 @@ const execute = (machine: Machine, task: FlowTask, taskPath: readonly PathSegmen
     failed("protected_operation_limit", "failed", taskId);
   machine.state.protectedOperations += 1;
   const allowRefusal = registered.allowRefusal === true;
-  machine.state.awaiting = { kind: "protected_task", taskId, taskType: registered.type, allowRefusal };
+  machine.state.awaiting = {
+    kind: "protected_task",
+    taskId,
+    taskType: registered.type,
+    allowRefusal,
+  };
   replaceTop(machine, next);
   return {
     kind: "suspend",
@@ -1131,7 +1133,8 @@ export const startFlowRun = (
   };
   const machine: Machine = { state: { ...state }, library };
   const flow = library(start.flowId);
-  if (flow === undefined) return failedStep(machine, { outcome: "failed", code: "flow_unavailable" });
+  if (flow === undefined)
+    return failedStep(machine, { outcome: "failed", code: "flow_unavailable" });
   if (!(start.executionKinds ?? ["interactive"]).includes(flow.execution))
     return failedStep(machine, { outcome: "failed", code: "flow_not_runnable" });
   let inputs: FlowRuntimeValues;
@@ -1173,11 +1176,7 @@ export const resumeFlowRun = (
     if (succeeded) {
       if (
         awaiting.taskType === "record.read_fields" &&
-        !validReadFieldsResume(
-          machine.library(activation.flowId),
-          awaiting.taskId,
-          resume.outputs,
-        )
+        !validReadFieldsResume(machine.library(activation.flowId), awaiting.taskId, resume.outputs)
       ) {
         replaceTop(
           machine,
@@ -1235,9 +1234,10 @@ export const resumeFlowRun = (
       values = resume.values;
     }
     if (submitted && awaiting.answerTypes !== undefined) {
-      const answers = values !== null && typeof values === "object" && !Array.isArray(values)
-        ? values
-        : undefined;
+      const answers =
+        values !== null && typeof values === "object" && !Array.isArray(values)
+          ? values
+          : undefined;
       const declared = Object.entries(awaiting.answerTypes);
       const invalidAnswer =
         answers === undefined
@@ -1245,18 +1245,23 @@ export const resumeFlowRun = (
           : Object.keys(answers).length !== declared.length
             ? "the submitted answers do not match the form's declared answers"
             : declared.find(
-                ([name, type]) => !Object.hasOwn(answers, name) || !typedValueMatchesType(answers[name], type, "flow"),
+                ([name, type]) =>
+                  !Object.hasOwn(answers, name) ||
+                  !typedValueMatchesType(answers[name], type, "flow"),
               );
       if (invalidAnswer !== undefined) {
-        replaceTop(machine, failActivation(activation, {
-          outcome: "validation",
-          code: "inputs_invalid",
-          taskId: awaiting.taskId,
-          reason:
-            typeof invalidAnswer === "string"
-              ? invalidAnswer
-              : `answer "${invalidAnswer[0]}" is missing or not a valid ${invalidAnswer[1]} value`,
-        }));
+        replaceTop(
+          machine,
+          failActivation(activation, {
+            outcome: "validation",
+            code: "inputs_invalid",
+            taskId: awaiting.taskId,
+            reason:
+              typeof invalidAnswer === "string"
+                ? invalidAnswer
+                : `answer "${invalidAnswer[0]}" is missing or not a valid ${invalidAnswer[1]} value`,
+          }),
+        );
         return drive(machine, observer);
       }
     }
