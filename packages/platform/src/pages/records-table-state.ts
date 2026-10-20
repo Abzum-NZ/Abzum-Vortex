@@ -55,7 +55,7 @@ export type RecordsTableQueryState = Readonly<{
   /** Undefined requests page one. */
   page: RecordsTablePageRequest | undefined;
   /** Present when the table is shown as a pivot. It is a view, not a query change. */
-  pivot: RecordsTablePivotView | undefined;
+  pivot?: RecordsTablePivotView | undefined;
 }>;
 
 export type RecordsTableQueryStateRead =

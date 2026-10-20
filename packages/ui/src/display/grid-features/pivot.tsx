@@ -335,7 +335,7 @@ function PivotBody({ context }: GridFeaturePointProps): ReactElement | null {
     axis.drill !== undefined && drill !== undefined ? (
       <button
         type="button"
-        className="rounded-sm text-left font-medium underline-offset-4 hover:underline focus-visible:underline focus-visible:outline-none"
+        className="text-left font-medium underline-offset-4 hover:underline focus-visible:underline focus-visible:outline-none"
         aria-label={`Open the records for ${axis.label}${recordCount === undefined ? "" : ` (${recordCount})`}`}
         onClick={open2(filters)}
       >
