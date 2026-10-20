@@ -439,7 +439,9 @@ export const addressedDefaultGridViews = (
   roleKeys: ReadonlySet<string>,
 ) =>
   views
-    .filter((view) => roleKeys.has(view.role))
+    .filter((view) => view.role === "*" || roleKeys.has(view.role))
+    // A role-specific default takes precedence over the application's default.
+    .sort((left, right) => Number(left.role === "*") - Number(right.role === "*"))
     .map((view) => ({
       ...view,
       item: {

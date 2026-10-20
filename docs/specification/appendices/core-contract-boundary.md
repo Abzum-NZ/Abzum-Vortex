@@ -70,6 +70,16 @@ The [core inventory](#core-inventory) retains the platform concepts that cannot 
 
 A system module does not copy protected facts into application records and does not become a second authorisation authority. The projection resolves the protected fact at request time under the viewer's current authority, and the protected operation remains the only write path, re-checking current authority, target revision and the relevant safeguard in its own transaction. Publishing, installing and versioning a system module follow the ordinary [definition lifecycle](../03-composition-and-publication.md). A later [Module contract change](https://github.com/Abzum-NZ/Abzum-Vortex/issues/1029) declares the system projection storage kind, its typed read-only fields, its registered protected view or function and its revision field; this section defines the boundary those contracts must preserve.
 
+A system projection may declare `refresh_while`: a choice field, its pending values and a bounded
+`interval_milliseconds` (1,000–60,000). Publication resolves the field identity and refuses values
+outside its declared choices. A mounted table or record detail rereads through the existing
+permission-checked placement read only while it displays a pending choice on screen. Reads are
+serial, stop in a hidden browser tab and stop when the displayed state completes or fails. No
+hidden field, off-screen placement or later query page is fetched to decide whether to refresh.
+The App Store declares queued, updating and retrying record updates this way and displays the
+records processed beside their status; the upgrade result confirms the installation independently
+of that background work.
+
 ### Concept mapping
 
 | Core concept | Stays protected in the core | Read-only system record type | Protected operations (the only writes) | What becomes ordinary definition |

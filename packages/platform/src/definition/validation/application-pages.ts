@@ -158,7 +158,12 @@ export function applicationPageRules(scope: ApplicationScope): void {
       })),
       actions: [...actions.values()]
         .filter((action) => String(action.subjectRecordTypeId) === recordTypeId)
-        .map((action) => ({ key: String(action.key), label: String(action.label ?? action.key) })),
+        .map((action) => ({
+          key: String(action.key),
+          label: String(action.label ?? action.key),
+          // A run over several records supplies no inputs, so an action that needs one cannot.
+          acceptsSelection: array(action.inputs).every((input) => input.required !== true),
+        })),
       grouped,
       relatedRecords: relatedRecordsFacts(recordTypeId, page),
     };
@@ -552,7 +557,7 @@ export function applicationPageRules(scope: ApplicationScope): void {
                 `${view.name}: This view needs fixing`,
               ),
             );
-          if (!roles.has(view.role))
+          if (view.role !== "*" && !roles.has(view.role))
             failures.push(
               failure(
                 output,

@@ -141,9 +141,9 @@ const definitionValidationErrorCatalogueSource = {
   },
   definition_records_table_bulk_actions: {
     order: 39,
-    message: "Bulk actions need at least one command over the selected records.",
+    message: "Bulk actions need a named action of the record type that accepts several records.",
     guidance:
-      "Add a named command bound to a flow that accepts several records, or turn Bulk actions off.",
+      "Add a named action of the bound record type that needs no input typed for one record, with a limit of at most 5,000 records, or turn Bulk actions off.",
   },
   definition_records_table_inline_edit: {
     order: 39,

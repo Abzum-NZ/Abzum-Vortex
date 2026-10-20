@@ -14,6 +14,7 @@ import {
 export type AuthoredGridView = Readonly<{
   viewId: string;
   name: string;
+  /** A role key, or "*" for everyone who can open the application page. */
   role: string;
   isDefault: boolean;
   document: GridViewDocument;

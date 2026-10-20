@@ -65,8 +65,8 @@ export function StudioSavedViewsEditor({
         Give roles the Share table views permission in Access to let people share views.
       </p>
       <p className="text-sm">
-        Default views capture the table settings shown on the canvas. Personal layouts take
-        precedence.
+        Default views capture the authored columns, density and sort. Personal layouts take
+        precedence. A role default takes precedence over the app default.
       </p>
       {views.map((view, index) => (
         <div key={text(view.properties["view_id"])} className="flex items-center gap-2">
@@ -91,7 +91,9 @@ export function StudioSavedViewsEditor({
             }
           />
           <span className="text-sm">
-            {roles.find((role) => role.key === text(view.properties["role"]))?.label}
+            {text(view.properties["role"]) === "*"
+              ? "Everyone"
+              : roles.find((role) => role.key === text(view.properties["role"]))?.label}
           </span>
           <Checkbox
             aria-label={`Use ${text(view.properties["name"])} by default`}
@@ -156,15 +158,18 @@ export function StudioSavedViewsEditor({
           />
         )}
       </StudioField>
-      <StudioField label="Role">
+      <StudioField label="Who can use it">
         {(control) => (
           <StudioReferencePicker
             {...control}
             value={role}
             disabled={disabled}
-            options={roles.map((role) => ({ value: role.key, label: role.label }))}
+            options={[
+              { value: "*", label: "Everyone in the app" },
+              ...roles.map((role) => ({ value: role.key, label: role.label })),
+            ]}
             onChange={setRole}
-            unset="Choose a role"
+            unset="Choose everyone or a role"
           />
         )}
       </StudioField>

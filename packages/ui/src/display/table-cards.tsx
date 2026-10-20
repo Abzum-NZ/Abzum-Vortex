@@ -144,7 +144,11 @@ export function RecordsCards({
             <Card size="sm" className={cn("gap-2 p-3", selected && "ring-2 ring-primary")}>
               <div className="flex min-w-0 items-center gap-2">
                 {selectable ? renderers.select(row, selected) : null}
-                <h3 id={headingId} className="m-0 min-w-0 flex-1 truncate text-sm font-medium">
+                <h3
+                  id={headingId}
+                  data-vortex-field-key={heading?.key}
+                  className="m-0 min-w-0 flex-1 truncate text-sm font-medium"
+                >
                   {activateRow === undefined || heading === undefined ? (
                     heading === undefined ? null : (
                       renderers.value(row, heading)
@@ -174,7 +178,10 @@ export function RecordsCards({
                   {details.map((column) => (
                     <div key={column.key} className="contents">
                       <dt className="truncate text-muted-foreground">{column.label}</dt>
-                      <dd className="m-0 min-w-0 truncate text-end">
+                      <dd
+                        data-vortex-field-key={column.key}
+                        className="m-0 min-w-0 truncate text-end"
+                      >
                         {renderers.value(row, column)}
                       </dd>
                     </div>

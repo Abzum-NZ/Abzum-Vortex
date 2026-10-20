@@ -20,6 +20,7 @@ import type {
   RecordsTableSortState,
 } from "@vortex/platform/schema";
 import type { DisplayEventHandlers, DisplayRow, TableNarrowing } from "../projected-data";
+import type { TableSelectionParts } from "../projected-grid-features";
 import type { GridColumn, GridLayoutControls } from "../table-layout";
 
 /**
@@ -34,6 +35,12 @@ export type GridFeatureContext = Readonly<{
   columns: readonly GridColumn[];
   rows: readonly DisplayRow[];
   selectedRecordIds: readonly string[];
+  /**
+   * The selection beyond the shown page: the read's sealed descriptor of every matching record and
+   * the scope and bulk run the page holds. `paged` says the query has pages besides this one.
+   */
+  selection: TableSelectionParts;
+  paged: boolean;
   narrowing: TableNarrowing | undefined;
   /** The order the page was read in, when it is the viewer's own or the authored default. */
   sort: RecordsTableSortState | undefined;

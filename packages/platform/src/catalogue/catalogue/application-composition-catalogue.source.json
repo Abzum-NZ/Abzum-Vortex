@@ -5166,7 +5166,7 @@
             "kind": "group",
             "key": "bulk_actions",
             "label": "Bulk actions",
-            "help": "Select rows and run a named command over the selection",
+            "help": "Select rows, or every matching record, and run a named action over them",
             "required": false,
             "defaultValue": {
               "kind": "group",
@@ -5193,7 +5193,7 @@
                 "kind": "list",
                 "key": "actions",
                 "label": "Bulk actions",
-                "help": "Named commands that run one flow over the selected rows",
+                "help": "Named actions of the record type people run over the selection",
                 "required": false,
                 "minimumItems": 0,
                 "maximumItems": 20,
@@ -5201,17 +5201,15 @@
                   "kind": "group",
                   "key": "bulk_action",
                   "label": "Bulk action",
-                  "help": "One named command over the selection",
+                  "help": "One named action over the selection",
                   "required": true,
                   "properties": [
                     {
-                      "kind": "text",
-                      "key": "event_id",
-                      "label": "Event identity",
-                      "help": "Stable identity of the flow binding this command runs",
-                      "required": true,
-                      "minLength": 1,
-                      "maxLength": 60
+                      "kind": "action_reference",
+                      "key": "action",
+                      "label": "Named action",
+                      "help": "The named action of the record type that runs on each selected record",
+                      "required": true
                     },
                     {
                       "kind": "text",
@@ -5224,25 +5222,29 @@
                       "maxLength": 60
                     },
                     {
-                      "kind": "choice",
-                      "key": "capability",
-                      "label": "Required capability",
-                      "help": "Record action the viewer must be permitted on a row for this command to appear; leave unset for an open or custom command",
-                      "required": false,
-                      "options": [
-                        {
-                          "key": "update",
-                          "label": "Update"
-                        },
-                        {
-                          "key": "delete",
-                          "label": "Delete"
-                        },
-                        {
-                          "key": "restore",
-                          "label": "Restore"
-                        }
-                      ]
+                      "kind": "boolean",
+                      "key": "confirm",
+                      "label": "Ask first",
+                      "help": "Ask people to confirm, with the exact number of records, before it runs",
+                      "required": true,
+                      "defaultValue": {
+                        "kind": "boolean",
+                        "value": true
+                      }
+                    },
+                    {
+                      "kind": "number",
+                      "key": "max_records",
+                      "integer": true,
+                      "label": "Most records",
+                      "help": "The most records one run over every matching record may change, up to 5,000",
+                      "required": true,
+                      "minimum": 1,
+                      "maximum": 5000,
+                      "defaultValue": {
+                        "kind": "number",
+                        "value": 5000
+                      }
                     }
                   ]
                 }
