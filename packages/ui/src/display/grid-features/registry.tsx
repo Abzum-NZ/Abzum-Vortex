@@ -206,11 +206,13 @@ const loaders: Readonly<
   bulk_actions: () => import("./bulk-actions"),
   inline_edit: () => import("./inline-edit"),
   row_edit: () => import("./row-editor"),
+  row_actions: () => import("./row-actions"),
   master_detail: () => import("./master-detail"),
   tree: () => import("./tree"),
   grouping: () => import("./grouping"),
   conditional_formatting: () => import("./conditional-format"),
   pivot: () => import("./pivot"),
+  export: () => import("./export"),
 };
 
 const projectionKeys: Readonly<Record<keyof RecordsTableFeatureProjection, GridExtensionKey>> = {
@@ -222,11 +224,13 @@ const projectionKeys: Readonly<Record<keyof RecordsTableFeatureProjection, GridE
   bulkActions: "bulk_actions",
   inlineEdit: "inline_edit",
   rowEdit: "row_edit",
+  rowActions: "row_actions",
   masterDetail: "master_detail",
   tree: "tree",
   grouping: "grouping",
   conditionalFormatting: "conditional_formatting",
   pivot: "pivot",
+  export: "export",
 };
 
 /** The features a projection turns on, in the registry's order. */
@@ -283,11 +287,13 @@ const featurePoints: Readonly<Record<GridExtensionKey, readonly ComponentPoint[]
   bulk_actions: ["SelectionBanner"],
   inline_edit: ["CellEditor"],
   row_edit: ["Scope", "CellEditor", "RowCommands", "RowEditor", "ToolbarItems"],
+  row_actions: ["RowCommands", "GridInteraction"],
   master_detail: ["RowExpansion"],
   tree: ["SubRows"],
   grouping: ["ToolbarItems", "ColumnMenuItems"],
   conditional_formatting: ["CellAdornment", "HeaderAdornment"],
   pivot: ["ToolbarItems", "ViewBody"],
+  export: ["ToolbarItems", "SelectionBanner"],
 };
 
 /** What a row opens to for each feature that fills the row panel: its related records, at most three. */

@@ -419,8 +419,19 @@ export function useBulkSelection({
     [availability, currentData, runs, scopeOf, scopes, selection],
   );
 
+  /** The sealed descriptor and unticked records of "every matching record", once it is counted. */
+  const matchingOf = useCallback(
+    (placementId: string, table: TablePayload) => {
+      const held = scopeOf(placementId, table);
+      return held?.scope.kind === "matching"
+        ? { token: held.token, excluded: held.excluded }
+        : undefined;
+    },
+    [scopeOf],
+  );
+
   return useMemo(
-    () => ({ eventsFor, toggleMatching, decorate }),
-    [eventsFor, toggleMatching, decorate],
+    () => ({ eventsFor, toggleMatching, decorate, matchingOf }),
+    [eventsFor, toggleMatching, decorate, matchingOf],
   );
 }

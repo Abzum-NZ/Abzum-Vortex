@@ -690,15 +690,21 @@
                     "row_actions": [
                       {
                         "event_id": "event_suspend_account",
-                        "label": "Suspend account"
+                        "label": "Suspend account",
+                        "icon": "workflow",
+                        "placement": "menu"
                       },
                       {
                         "event_id": "event_reactivate_account",
-                        "label": "Reactivate account"
+                        "label": "Reactivate account",
+                        "icon": "workflow",
+                        "placement": "menu"
                       },
                       {
                         "event_id": "event_close_account",
-                        "label": "Close account"
+                        "label": "Close account",
+                        "icon": "workflow",
+                        "placement": "menu"
                       }
                     ],
                     "vortex": {
@@ -728,6 +734,9 @@
                       },
                       "spreadsheet": {
                         "enabled": false
+                      },
+                      "row_actions": {
+                        "enabled": true
                       }
                     }
                   }
@@ -812,7 +821,9 @@
                     "row_actions": [
                       {
                         "event_id": "event_revoke_invitation",
-                        "label": "Revoke invitation"
+                        "label": "Revoke invitation",
+                        "icon": "workflow",
+                        "placement": "menu"
                       }
                     ],
                     "vortex": {
@@ -842,6 +853,9 @@
                       },
                       "spreadsheet": {
                         "enabled": false
+                      },
+                      "row_actions": {
+                        "enabled": true
                       }
                     }
                   }

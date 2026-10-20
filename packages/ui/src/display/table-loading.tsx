@@ -9,6 +9,7 @@ import {
   BOUNDED_VIEWPORT_CLASS,
   CARD_SPACING,
   GRID_CONTROL_COLUMN_WIDTH,
+  gridActionsWidth,
   GRID_ROW_HEIGHT,
   columnWidth,
   skeletonWindowRows,
@@ -96,7 +97,7 @@ export function TableLoadingState({
   const widths = [
     ...(selectionColumn ? [GRID_CONTROL_COLUMN_WIDTH] : []),
     ...columns.map(columnWidth),
-    ...(actionsColumn ? [GRID_CONTROL_COLUMN_WIDTH] : []),
+    ...(actionsColumn ? [gridActionsWidth(contract)] : []),
   ];
   const total = widths.reduce((sum, width) => sum + width, 0);
   const row = (key: number, header: boolean): ReactElement => (

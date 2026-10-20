@@ -1,5 +1,7 @@
 import {
   queryInputValueType,
+  recordsTableFeatureOfEvent,
+  type BlockPropertySchemaContract,
   recordsTableEditableFieldTypes,
   recordsTableFieldFilterable,
   type QueryBindingField,
@@ -61,6 +63,7 @@ export const studioGridFeatureEditors: Readonly<
   bulk_actions: { kind: "settings", boundRecordTypeActions: true },
   inline_edit: { kind: "custom" },
   row_edit: { kind: "custom" },
+  row_actions: { kind: "custom" },
   master_detail: { kind: "settings" },
   // Only the links from a record type to itself can name a record's parent.
   tree: { kind: "settings", offers: (field) => field.parentLink === true },
@@ -71,6 +74,7 @@ export const studioGridFeatureEditors: Readonly<
   // picker to number and money fields, so Studio offers only fields a pivot can use.
   pivot: { kind: "settings" },
   board: { kind: "custom" },
+  export: { kind: "custom" },
 };
 
 /**
@@ -93,6 +97,11 @@ export const studioGridFeatureStartSettings: Readonly<
   tree: { child_page_size: { kind: "number", value: 40 } },
   // Records with no value are named "Unassigned" unless the builder chooses otherwise.
   grouping: { unassigned_label: { kind: "text", value: "Unassigned" } },
+  // Export starts as CSV with the authored default row limit.
+  export: {
+    formats: { kind: "list", items: [{ kind: "choice", value: "csv" }] },
+    max_rows: { kind: "number", value: 10000 },
+  },
   // A pivot starts as a count of records, 40 rows at a time, with totals.
   pivot: {
     measure_function: { kind: "choice", value: "count" },
@@ -152,6 +161,7 @@ export const studioRecordsTableQueryFacts = (
       acceptsSelection: action.acceptsSelection,
     })),
   grouped: query?.grouped === true,
+  exportable: query?.exportable === true,
   board: query?.board,
   relatedRecords: {
     recordType: query?.recordType ?? "",
@@ -183,3 +193,42 @@ export const studioRecordsTableQueryFacts = (
     page: related.page,
   },
 });
+
+/** Restore enabled grid features from their one authored workflow binding. */
+export const restoreStudioGridFeatureBindings = (
+  settings: Record<string, SourceBlockPropertyValueContract>,
+  declarations: readonly BlockPropertySchemaContract[],
+  bindings: readonly Readonly<{ control: string; event: string; event_id: string }>[],
+  alias: string,
+): void => {
+  // Disabled features contain only their defaults, while their workflows remain authored in the
+  // draft. Restore the event from the existing binding when a feature is enabled again.
+  const features = settings.features;
+  const featureDeclarations = declarations.find((property) => property.key === "features");
+  if (features?.kind === "group" && featureDeclarations?.kind === "group") {
+    const properties = { ...features.properties };
+    for (const binding of bindings) {
+      if (binding.control !== alias) continue;
+      const key = recordsTableFeatureOfEvent(binding.event);
+      if (key === undefined) continue;
+      const feature = features.properties[key];
+      const declaration = featureDeclarations.properties.find((property) => property.key === key);
+      if (
+        feature?.kind !== "group" ||
+        feature.properties.enabled?.kind !== "boolean" ||
+        !feature.properties.enabled.value ||
+        declaration?.kind !== "group" ||
+        !declaration.properties.some((property) => property.key === "event_id")
+      )
+        continue;
+      properties[key] = {
+        ...feature,
+        properties: {
+          ...feature.properties,
+          event_id: { kind: "text", value: binding.event_id },
+        },
+      };
+    }
+    settings.features = { ...features, properties };
+  }
+};

@@ -45,6 +45,11 @@ export type { StudioCompileFailure } from "./compile-failure";
 export * from "./studio-setting-controls";
 export * from "./studio-grid-features";
 export * from "./grid-features";
+export {
+  StudioRowActionsBindings,
+  applyStudioRowActionChange,
+  type StudioRowAction,
+} from "./grid-features/row-actions";
 export * from "./studio-record-reference-control";
 export * from "./theme-preset";
 export {

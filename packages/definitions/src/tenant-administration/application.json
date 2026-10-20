@@ -521,23 +521,33 @@
                     "row_actions": [
                       {
                         "event_id": "event_suspend_organization",
-                        "label": "Suspend organisation"
+                        "label": "Suspend organisation",
+                        "icon": "workflow",
+                        "placement": "menu"
                       },
                       {
                         "event_id": "event_restore_organization",
-                        "label": "Restore organisation"
+                        "label": "Restore organisation",
+                        "icon": "workflow",
+                        "placement": "menu"
                       },
                       {
                         "event_id": "event_rename_organization",
-                        "label": "Rename organisation"
+                        "label": "Rename organisation",
+                        "icon": "workflow",
+                        "placement": "menu"
                       },
                       {
                         "event_id": "event_move_organization",
-                        "label": "Move organisation"
+                        "label": "Move organisation",
+                        "icon": "workflow",
+                        "placement": "menu"
                       },
                       {
                         "event_id": "event_create_child_organization",
-                        "label": "Create child organisation"
+                        "label": "Create child organisation",
+                        "icon": "workflow",
+                        "placement": "menu"
                       }
                     ],
                     "vortex": {
@@ -568,6 +578,9 @@
                       },
                       "spreadsheet": {
                         "enabled": false
+                      },
+                      "row_actions": {
+                        "enabled": true
                       }
                     }
                   }

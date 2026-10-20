@@ -815,6 +815,7 @@ export const loadStudioApplicationDraft = async (
                       inputs: queryInputs(query),
                       pageSize: query.pageSize,
                       exposure: query.exposure,
+                      exportable: recordType.standardActions.some((action) => action === "export"),
                     });
                   }
                   // Its actions and relationships are chosen as they are too: they belong to its own application.

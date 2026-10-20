@@ -64,6 +64,7 @@ import {
   validateStoredShell,
   validateStoredZone,
 } from "./stored-composition";
+import { restoreStudioGridFeatureBindings } from "./grid-features";
 import { resolveStudioSelectionInspectorContext } from "./selection-inspector";
 import type { StudioSemanticSelection } from "./semantic-selection";
 
@@ -1078,6 +1079,7 @@ const applySettings = (
   if (resolved.kind !== "available") return resolved;
   const { source, target, alias, release } = resolved;
   const settings = commandSettings(input.settings, release.properties);
+  restoreStudioGridFeatureBindings(settings, release.properties, source.body.flow_bindings, alias);
   let query = input.query;
   if (
     query !== null &&

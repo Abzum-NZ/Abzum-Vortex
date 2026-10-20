@@ -6,8 +6,11 @@ import {
   createQueryNoticeQueryResolver,
   createRecordsSelectionSealer,
   createRecordsTableQueryResolver,
+  projectRowActionAvailability,
+  installedNamedActions,
   createReferenceChoiceService,
   createViewerSafeRecordLinkService,
+  decideRecordTypeExport,
   readCurrentOrganizationRuntimeSettingsAfterAuthorization,
   runtimeDatabasePoolSize,
   type HumanOrganizationRequestDependencies,
@@ -49,6 +52,40 @@ export const createPlacementReadServices = (
   const tables = {
     ...createRecordsTableQueryResolver(queries),
     sealSelection: createRecordsSelectionSealer(continuationKey, session, selection),
+    projectRowActions: async (
+      ...args: Parameters<PlacementReadInput["services"]["tables"]["projectRowActions"]>
+    ) => {
+      const [context, placementId, recordTypeId, projection] = args;
+      const application = context.releaseSet.application;
+      const modules = context.releaseSet.modules;
+      const result = await humanOrganizationRequests(dependencies.identityAuthorityId).run(
+        session,
+        selection,
+        async (transaction, _scope, issuedAt) =>
+          projectRowActionAvailability(
+            transaction,
+            {
+              bindings: application.content.flowBindings,
+              flows: new Map(
+                [
+                  ...application.content.flows,
+                  ...modules.flatMap((module) => module.content.flows),
+                ].map((flow) => [String(flow.id), flow]),
+              ),
+              namedActions: installedNamedActions(application, modules),
+            },
+            placementId,
+            recordTypeId,
+            projection,
+            issuedAt,
+          ),
+      );
+      if (result.kind !== "available") {
+        console.error(`[page] row action availability refused: ${result.kind}`);
+        throw new Error("ROW_ACTION_AVAILABILITY_UNAVAILABLE");
+      }
+      return result.value;
+    },
   };
   const queryNotices = createQueryNoticeQueryResolver(queries);
   const recordLinks = createViewerSafeRecordLinkService({
@@ -123,6 +160,24 @@ export const createPlacementReadServices = (
     );
   let calendarSettingsRead: ReturnType<typeof loadCalendarSettings> | undefined;
   const readCalendarSettings = () => (calendarSettingsRead ??= loadCalendarSettings());
+  // Export is offered to a person whose export permission reaches every record of the table's
+  // record type; the export route decides it again on every request. A draft preview offers none.
+  const exportAllowed = async (
+    context: InstalledRuntimeContext,
+    recordTypeId: string,
+  ): Promise<boolean> => {
+    if (selection.previewInstallationId !== undefined) return false;
+    const decided = await humanOrganizationRequests(dependencies.identityAuthorityId).run(
+      session,
+      selection,
+      (transaction, scope) => decideRecordTypeExport(transaction, scope, context, recordTypeId),
+    );
+    if (decided.kind !== "available") {
+      console.error(`[page] export permission unavailable: kind=${decided.kind}`);
+      return false;
+    }
+    return decided.value.kind === "permitted";
+  };
   const subjects = createPageSubjectReader(dependencies);
   // One labelled read per page and link target: a link shows its target's name as the viewer may
   // read it, and a detail address only where the viewer may open that page.
@@ -158,6 +213,7 @@ export const createPlacementReadServices = (
     queryNotices,
     tables,
     resolveRecordLinks,
+    exportAllowed,
     readCalendarSettings,
     readSubject,
     launcherValues: applicationLauncherQueryRowsToListValues,

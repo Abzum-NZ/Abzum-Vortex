@@ -109,6 +109,8 @@ export {
   type SummaryData,
   type SummaryPayload,
   type TableBulkRun,
+  type TableExportRun,
+  type TableExportScope,
   type TableData,
   type TablePayload,
   type TableSelectionScope,

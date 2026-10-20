@@ -10,11 +10,7 @@ import {
   useState,
   type ReactElement,
 } from "react";
-import {
-  readRecordsTableContract,
-  type RecordsTableActionContract,
-  type RecordsTableContract,
-} from "@vortex/platform/schema";
+import { readRecordsTableContract, type RecordsTableContract } from "@vortex/platform/schema";
 import { Alert, AlertDescription } from "../components/alert";
 import { Button } from "../components/button";
 import { Empty, EmptyContent, EmptyHeader, EmptyTitle } from "../components/empty";
@@ -24,7 +20,6 @@ import {
   DisplayHeader,
   PaginationControl,
   RecordsEmptyState,
-  RowActionsMenu,
   SelectAllControl,
   SelectionControl,
 } from "./controls";
@@ -90,18 +85,6 @@ const carriedColumns = (
         ];
   });
 };
-
-/**
- * Whether a row shows a declared command. A command that declares no capability (an open, read or
- * custom command) always shows; a command that declares one shows only when the row's per-row
- * capabilities include it, and never when the payload carries no capabilities. It only hides a
- * control; the server re-checks every action.
- */
-const rowShowsAction = (
-  row: DisplayRow,
-  action: Pick<RecordsTableActionContract, "capability">,
-): boolean =>
-  action.capability === undefined || row.capabilities?.actions.includes(action.capability) === true;
 
 /** A polite live region's message; the same text twice is still announced twice. */
 const useAnnouncer = (): [string, (message: string) => void] => {
@@ -205,25 +188,27 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
   if (grouped?.memberFeatures !== undefined) lastFeatures.current = grouped.memberFeatures;
   else if (values !== undefined) lastFeatures.current = values.features;
   const features = lastFeatures.current;
-  // Rows are selectable only for bulk commands over the selection.
+  // Rows are selectable only for commands over the selection: bulk actions and Export.
   const selectable =
     events?.selection_changed !== undefined &&
     contract !== undefined &&
-    features?.bulkActions !== undefined;
+    (features?.bulkActions !== undefined || features?.export !== undefined);
   const selectedRecordIds = values?.selectedRecordIds ?? [];
   // The selection beyond the page: the read's sealed descriptor and what the page runtime holds.
   const selectionToken = values?.selectionToken;
   const selectionScope = values?.selectionScope;
   const bulkRun = values?.bulkRun;
+  const exportRun = values?.exportRun;
   const actionAvailability = values?.actionAvailability;
   const selectionParts = useMemo(
     () => ({
       ...(selectionToken === undefined ? {} : { selectionToken }),
       ...(selectionScope === undefined ? {} : { selectionScope }),
       ...(bulkRun === undefined ? {} : { bulkRun }),
+      ...(exportRun === undefined ? {} : { exportRun }),
       ...(actionAvailability === undefined ? {} : { actionAvailability }),
     }),
-    [selectionToken, selectionScope, bulkRun, actionAvailability],
+    [selectionToken, selectionScope, bulkRun, exportRun, actionAvailability],
   );
   const paged =
     grouped !== undefined || values?.hasNextPage === true || values?.hasPreviousPage === true;
@@ -369,9 +354,7 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
             onRowClick({ event: "row_clicked", eventId: rowClickEventId, recordId }),
     [onRowClick, rowClickEventId],
   );
-  const showActions =
-    features?.rowEdit !== undefined ||
-    ((behaviours?.rowActions.length ?? 0) > 0 && events?.row_action !== undefined);
+  const showActions = features?.rowEdit !== undefined || features?.rowActions !== undefined;
   // Rows expand to a panel a projected feature draws (their related records); the panel reads only
   // while its row is open.
   const expansion = useRowExpansion({
@@ -387,7 +370,6 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
   // Cell, selection and command renderers shared by the grid and the cards. They change only with
   // the bindings and the heading column, so the grid's memoized rows keep their identity.
   const renderers = useMemo((): GridRenderers & CardRenderers => {
-    const rowActions = behaviours?.rowActions ?? [];
     // Cards show the same formatting as the grid; their labelled details carry the grid's editors.
     const value = (row: DisplayRow, column: GridColumn) => {
       const cell: DisplayCellValue = row.cells[column.key] ?? { kind: "empty" };
@@ -426,18 +408,7 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
       ),
       selectAll: () => null,
       rowEditor,
-      actions: (row) => (
-        <span className="flex items-center gap-1">
-          {rowCommands(row)}
-          <RowActionsMenu
-            recordId={row.recordId}
-            {...(row.revision === undefined ? {} : { revision: row.revision })}
-            name={rowName(row, headingKey)}
-            actions={rowActions.filter((action) => rowShowsAction(row, action))}
-            events={events}
-          />
-        </span>
-      ),
+      actions: (row) => <span className="flex items-center gap-1">{rowCommands(row)}</span>,
     };
   }, [
     behaviours,
