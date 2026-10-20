@@ -33,8 +33,9 @@ const actionOperands = (record: RecordType, inputs: Inputs) => [
   })),
 ];
 
-const parameterType = (fieldType: string): StudioConditionParameterType => {
-  switch (studioFieldValueType(fieldType)) {
+/** A record field's or action input's type as a condition parameter type. */
+const parameterType = (type: string): StudioConditionParameterType => {
+  switch (studioFieldValueType(type) ?? type) {
     case "whole_number":
       return "whole_number";
     case "decimal_number":
@@ -47,6 +48,8 @@ const parameterType = (fieldType: string): StudioConditionParameterType => {
       return "date";
     case "date_time":
       return "date_time";
+    case "record_reference":
+      return "record_reference";
     case "organization_account_reference":
       return "organization_account_reference";
     default:
@@ -104,6 +107,12 @@ export const projectStudioActionCondition = (
     );
     return found === undefined ? undefined : { source: "parameter", key: found.key };
   };
+  const parameterOperand = (parameter: string): Comparison["left"] | undefined => {
+    const found = operands.find(
+      (entry) => entry.source.source === "parameter" && entry.source.parameter === parameter,
+    );
+    return found === undefined ? undefined : { source: "parameter", key: found.key };
+  };
   const node = (part: unknown): ConditionNode | undefined => {
     if (part === null || typeof part !== "object") return undefined;
     const entry = part as Record<string, unknown>;
@@ -125,9 +134,11 @@ export const projectStudioActionCondition = (
       const value = side as Record<string, unknown> | undefined;
       return value?.source === "field" && typeof value.field === "string"
         ? fieldOperand(value.field)
-        : value?.source === "value"
-          ? { source: "value", value: value.value as JsonValue }
-          : undefined;
+        : value?.source === "parameter" && typeof value.parameter === "string"
+          ? parameterOperand(value.parameter)
+          : value?.source === "value"
+            ? { source: "value", value: value.value as JsonValue }
+            : undefined;
     };
     const left = typeof entry.field === "string" ? fieldOperand(entry.field) : operand(entry.left);
     if (left === undefined) return undefined;
@@ -135,15 +146,7 @@ export const projectStudioActionCondition = (
       return { kind: "comparison", operator, left };
     const right =
       typeof entry.parameter === "string"
-        ? (() => {
-            const found = operands.find(
-              (part) =>
-                part.source.source === "parameter" && part.source.parameter === entry.parameter,
-            );
-            return found === undefined
-              ? undefined
-              : { source: "parameter" as const, key: found.key };
-          })()
+        ? parameterOperand(entry.parameter)
         : Object.hasOwn(entry, "value")
           ? { source: "value" as const, value: entry.value as JsonValue }
           : operand(entry.right);
@@ -205,4 +208,39 @@ export const studioActionConditionSource = (
   return built === undefined
     ? { ok: false }
     : { ok: true, condition: built as InlineModuleActionPrecondition };
+};
+
+/**
+ * The edited tree after the action's inputs changed: each input operand follows its input (by key,
+ * through a rename) to its new position. An operand whose input was removed no longer resolves, so
+ * the comparison reads as unfinished until it is replaced.
+ */
+export const remapStudioActionCondition = (
+  condition: ConditionNode | undefined,
+  before: Inputs,
+  after: Inputs,
+  renamed?: Readonly<{ from: string; to: string }>,
+): ConditionNode | undefined => {
+  const keys = new Map(
+    before.map((input, index) => {
+      const key = input.key === renamed?.from ? renamed.to : input.key;
+      const at = after.findIndex((entry) => entry.key === key);
+      return [`input_${index + 1}`, at === -1 ? "input_removed" : `input_${at + 1}`] as const;
+    }),
+  );
+  const side = (operand: Comparison["left"]): Comparison["left"] =>
+    operand.source === "parameter" && keys.has(operand.key)
+      ? { ...operand, key: keys.get(operand.key)! }
+      : operand;
+  const remap = (node: ConditionNode): ConditionNode => {
+    if (node.kind === "all" || node.kind === "any")
+      return { ...node, conditions: node.conditions.map(remap) };
+    if (node.kind === "not") return { ...node, condition: remap(node.condition) };
+    return {
+      ...node,
+      left: side(node.left),
+      ...(node.right === undefined ? {} : { right: side(node.right) }),
+    };
+  };
+  return condition === undefined ? undefined : remap(condition);
 };

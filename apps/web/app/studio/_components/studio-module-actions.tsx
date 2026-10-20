@@ -35,8 +35,10 @@ import { NativeSelect, NativeSelectOption } from "@vortex/ui/components/native-s
 import {
   StudioConditionControls,
   projectStudioActionCondition,
+  remapStudioActionCondition,
   studioActionConditionContext,
   studioActionConditionSource,
+  validateStudioCondition,
   type StudioConditionValidation,
 } from "@vortex/ui/studio";
 import { studioEditProblem, type StudioDataEdit } from "../_lib/studio-data-model";
@@ -109,9 +111,9 @@ export function ActionDialog({
   const [precondition, setPrecondition] = useState<InlineModuleActionPrecondition | undefined>(
     action?.precondition,
   );
-  const projected = useMemo(
-    () => projectStudioActionCondition(action?.precondition, record, inputs),
-    [action, record, inputs],
+  // The saved precondition is projected once, against the saved inputs; later input edits remap it.
+  const [projected] = useState(() =>
+    projectStudioActionCondition(action?.precondition, record, inputs),
   );
   const context = useMemo(() => studioActionConditionContext(record, inputs), [record, inputs]);
   const [condition, setCondition] = useState<ConditionNode | undefined>(
@@ -151,16 +153,51 @@ export function ActionDialog({
       onOpenChange(false);
     }
   };
+  const showCondition = (
+    next: ConditionNode | undefined,
+    nextInputs: Action["inputs"],
+    valid: boolean,
+  ) => {
+    setCondition(next);
+    const built = valid ? studioActionConditionSource(next, record, nextInputs) : { ok: false as const };
+    setConditionProblem(built.ok ? "" : "Finish every comparison, with a value on both sides.");
+    if (built.ok) setPrecondition(built.condition);
+  };
   const changeCondition = (
     next: ConditionNode | undefined,
     validation: StudioConditionValidation,
+  ) => showCondition(next, inputs, validation.isValid);
+  const changeInputs = (
+    next: Action["inputs"],
+    renamed?: Readonly<{ from: string; to: string }>,
   ) => {
-    setCondition(next);
-    const built = validation.isValid
-      ? studioActionConditionSource(next, record, inputs)
-      : { ok: false as const };
-    setConditionProblem(built.ok ? "" : "Finish every comparison, with a value on both sides.");
-    if (built.ok) setPrecondition(built.condition);
+    setInputs(next);
+    // A condition comparing an input follows that input when inputs move, are renamed or removed.
+    if (projected.kind === "condition" || replacing) {
+      const remapped = remapStudioActionCondition(condition, inputs, next, renamed);
+      const valid = validateStudioCondition(
+        remapped,
+        studioActionConditionContext(record, next),
+      ).isValid;
+      showCondition(remapped, next, valid);
+    }
+    if (renamed === undefined) return;
+    // Only unsaved inputs are renamed. Carry their task references along, leaving literal data alone.
+    const rename = (value: unknown): unknown => {
+      if (Array.isArray(value)) return value.map(rename);
+      if (value === null || typeof value !== "object") return value;
+      const entry = value as Record<string, unknown>;
+      if (entry.kind === "literal") return value;
+      if (entry.source === "input" && entry.name === renamed.from)
+        return { ...entry, name: renamed.to };
+      return Object.fromEntries(
+        Object.entries(entry).map(([key, child]) => [
+          key,
+          key === "target_input" && child === renamed.from ? renamed.to : rename(child),
+        ]),
+      );
+    };
+    setTasks((current) => rename(current) as Action["tasks"]);
   };
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -186,29 +223,7 @@ export function ActionDialog({
               onChange={(event) => setLabel(event.target.value)}
             />
           </div>
-          <StudioActionInputs
-            inputs={inputs}
-            source={source}
-            onChange={setInputs}
-            onRename={(before, after) => {
-              // Only unsaved inputs are renamed. Carry their task references along, leaving literal data alone.
-              const rename = (value: unknown): unknown => {
-                if (Array.isArray(value)) return value.map(rename);
-                if (value === null || typeof value !== "object") return value;
-                const entry = value as Record<string, unknown>;
-                if (entry.kind === "literal") return value;
-                if (entry.source === "input" && entry.name === before)
-                  return { ...entry, name: after };
-                return Object.fromEntries(
-                  Object.entries(entry).map(([key, child]) => [
-                    key,
-                    key === "target_input" && child === before ? after : rename(child),
-                  ]),
-                );
-              };
-              setTasks((current) => rename(current) as Action["tasks"]);
-            }}
-          />
+          <StudioActionInputs inputs={inputs} source={source} onChange={changeInputs} />
           <fieldset className="space-y-2">
             <legend className="text-sm font-medium">Runs only when</legend>
             {projected.kind === "unsupported" && !replacing ? (

@@ -113,8 +113,8 @@ function TriggerEditor({
   id: string;
   trigger: StudioFlowTriggerDraft;
   recordTypes: readonly Readonly<{ key: string; label: string }>[];
-  events: readonly Readonly<{ key: string; label: string }>[];
-  actions: readonly Readonly<{ key: string; label: string }>[];
+  events: readonly Readonly<{ key: string; label: string; recordType: string }>[];
+  actions: readonly Readonly<{ key: string; label: string; recordType: string }>[];
   disabled: boolean;
   onChange: (trigger: StudioFlowTriggerDraft, setting?: string) => true | string;
 }>) {
@@ -243,7 +243,9 @@ function TriggerEditor({
           id={`${id}-event`}
           disabled={disabled}
           value={trigger.eventKey}
-          options={events.map((event) => ({ value: event.key, label: event.label }))}
+          options={events
+            .filter((event) => event.recordType === trigger.recordType)
+            .map((event) => ({ value: event.key, label: event.label }))}
           onChange={(eventKey) => onChange({ ...trigger, eventKey })}
         />
       </div>
@@ -277,7 +279,9 @@ function TriggerEditor({
             id={`${id}-action-${index}`}
             disabled={disabled}
             value={action}
-            options={actions.map((entry) => ({ value: entry.key, label: entry.label }))}
+            options={actions
+              .filter((entry) => entry.recordType === trigger.recordType)
+              .map((entry) => ({ value: entry.key, label: entry.label }))}
             onChange={(next) =>
               onChange({
                 ...trigger,

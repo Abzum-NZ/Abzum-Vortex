@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { createContext, useContext, useState, type ReactNode } from "react";
 import { Checkbox } from "@vortex/ui/components/checkbox";
 import { Input } from "@vortex/ui/components/input";
 import { Label } from "@vortex/ui/components/label";
@@ -26,6 +26,18 @@ import {
  */
 
 type LiteralType = FlowLiteral["type"];
+
+/** Nesting depth of built values: only the outermost set of parts is indented, never stacked. */
+const BuiltDepth = createContext(0);
+
+function BuiltParts({ children }: Readonly<{ children: ReactNode }>) {
+  const depth = useContext(BuiltDepth);
+  return (
+    <BuiltDepth.Provider value={depth + 1}>
+      <div className={depth === 0 ? "space-y-3 border-l pl-3" : "space-y-3"}>{children}</div>
+    </BuiltDepth.Provider>
+  );
+}
 
 /** Structured values recurse through the same value control and reference picker as a single value. */
 function BuiltValue({
@@ -62,17 +74,17 @@ function BuiltValue({
   );
   if (value.kind === "map")
     return (
-      <div className="space-y-3 border-l pl-3">
+      <BuiltParts>
         {Object.entries(value.entries).map(([key, entry]) =>
           child(key, studioWords(key), entry, (next) =>
             onChange({ ...value, entries: { ...value.entries, [key]: next } }),
           ),
         )}
-      </div>
+      </BuiltParts>
     );
   if (value.kind === "array")
     return (
-      <div className="space-y-3 border-l pl-3">
+      <BuiltParts>
         {value.items.map((entry, index) =>
           child(String(index), `Item ${index + 1}`, entry, (next) =>
             onChange({
@@ -81,7 +93,7 @@ function BuiltValue({
             }),
           ),
         )}
-      </div>
+      </BuiltParts>
     );
   if (value.kind !== "formula") return null;
   const formula = value.formula;
@@ -117,7 +129,7 @@ function BuiltValue({
       );
     case "join":
       return (
-        <div className="space-y-3 border-l pl-3">
+        <BuiltParts>
           {formula.parts.map((entry, index) =>
             part(String(index), `Text part ${index + 1}`, entry, (next) => ({
               ...formula,
@@ -133,42 +145,42 @@ function BuiltValue({
               onChange({ kind: "formula", formula: { ...formula, separator: event.target.value } })
             }
           />
-        </div>
+        </BuiltParts>
       );
     case "if":
       return (
-        <div className="space-y-3 border-l pl-3">
+        <BuiltParts>
           {part("condition", "When", formula.condition, (condition) => ({ ...formula, condition }))}
           {part("then", "Use this when yes", formula.then, (then) => ({ ...formula, then }))}
           {part("else", "Use this when no", formula.else, (otherwise) => ({
             ...formula,
             else: otherwise,
           }))}
-        </div>
+        </BuiltParts>
       );
     case "record_id":
     case "is_empty":
     case "is_not_empty":
       return (
-        <div className="space-y-3 border-l pl-3">
+        <BuiltParts>
           {part(
             "value",
             formula.op === "record_id" ? "Take the record from" : "Check this value",
             formula.arg,
             (arg) => ({ ...formula, arg }),
           )}
-        </div>
+        </BuiltParts>
       );
     case "gt":
       return (
-        <div className="space-y-3 border-l pl-3">
+        <BuiltParts>
           {part("left", "This value", formula.left, (left) => ({ ...formula, left }))}
           {part("right", "Is greater than", formula.right, (right) => ({ ...formula, right }))}
-        </div>
+        </BuiltParts>
       );
     case "date_add":
       return (
-        <div className="space-y-3 border-l pl-3">
+        <BuiltParts>
           {part("date", "Starting date", formula.date, (date) => ({ ...formula, date }))}
           {part("amount", "Add this many", formula.amount, (amount) => ({ ...formula, amount }))}
           <Label htmlFor={`${id}-unit`}>Time unit</Label>
@@ -186,7 +198,7 @@ function BuiltValue({
               })
             }
           />
-        </div>
+        </BuiltParts>
       );
     case "literal":
       return child(

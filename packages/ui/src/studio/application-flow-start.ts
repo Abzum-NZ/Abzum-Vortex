@@ -87,8 +87,9 @@ export type StudioFlowStartProjection =
       kind: "available";
       draft: StudioFlowStartDraft;
       execution: SourceFlow["execution"];
-      events: readonly Readonly<{ key: string; label: string }>[];
-      actions: readonly Readonly<{ key: string; label: string }>[];
+      /** Declared events and named actions, each with its record type as this flow's triggers name it. */
+      events: readonly Readonly<{ key: string; label: string; recordType: string }>[];
+      actions: readonly Readonly<{ key: string; label: string; recordType: string }>[];
       /** For each binding, the values its control supplies by name. */
       callerNames: Readonly<Record<string, readonly Readonly<{ name: string; label: string }>[]>>;
     }>
@@ -199,6 +200,18 @@ const flowOf = (
   );
 
 /** The Start inspector's form for a flow. */
+/** A record type as a trigger of this flow names it: bare inside its own Module, else `module:record`. */
+const triggerRecordType = (
+  selection: StudioFlowSelection,
+  moduleKey: string,
+  record: string,
+): string | undefined =>
+  selection.moduleKey === null
+    ? `${moduleKey}:${record}`
+    : selection.moduleKey === moduleKey
+      ? record
+      : undefined;
+
 export const projectStudioFlowStart = (
   source: Readonly<ApplicationSourceDocument>,
   selection: StudioFlowSelection,
@@ -224,10 +237,18 @@ export const projectStudioFlowStart = (
     kind: "available",
     execution: flow.execution,
     events: source.body.modules.flatMap((module) =>
-      module.events.map((event) => ({ key: event.key, label: event.label })),
+      module.events.flatMap((event) => {
+        const recordType = triggerRecordType(selection, module.key, event.record_type);
+        return recordType === undefined ? [] : [{ key: event.key, label: event.label, recordType }];
+      }),
     ),
     actions: source.body.modules.flatMap((module) =>
-      module.actions.map((action) => ({ key: action.key, label: action.label })),
+      module.actions.flatMap((action) => {
+        const recordType = triggerRecordType(selection, module.key, action.record_type);
+        return recordType === undefined
+          ? []
+          : [{ key: action.key, label: action.label, recordType }];
+      }),
     ),
     draft: {
       name: flow.labels?.name ?? studioWords(flow.key),

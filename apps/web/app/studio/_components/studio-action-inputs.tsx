@@ -37,12 +37,11 @@ export function StudioActionInputs({
   source,
   inputs,
   onChange,
-  onRename,
 }: Readonly<{
   source: ApplicationSourceDocument;
   inputs: Inputs;
-  onChange: (inputs: Inputs) => void;
-  onRename: (before: string, after: string) => void;
+  /** The changed inputs; `renamed` names the input whose key followed its new label. */
+  onChange: (inputs: Inputs, renamed?: Readonly<{ from: string; to: string }>) => void;
 }>) {
   // Saved keys identify inputs in callers. Only new inputs derive their key as the label is edited.
   const { keys, newKey } = useStudioEntryKeys(inputs.length);
@@ -53,8 +52,11 @@ export function StudioActionInputs({
       label: `${record.name} (${module.name})`,
     })),
   );
-  const replace = (index: number, input: Inputs[number]) =>
-    onChange(inputs.map((entry, at) => (at === index ? input : entry)));
+  const replace = (
+    index: number,
+    input: Inputs[number],
+    renamed?: Readonly<{ from: string; to: string }>,
+  ) => onChange(inputs.map((entry, at) => (at === index ? input : entry)), renamed);
   return (
     <fieldset className="space-y-3">
       <legend className="text-sm font-medium">Inputs</legend>
@@ -98,8 +100,11 @@ export function StudioActionInputs({
                               ...inputs.filter((_, at) => at !== index).map((entry) => entry.key),
                             ]),
                           ) ?? input.key);
-                      replace(index, { ...input, label, key });
-                      if (key !== input.key) onRename(input.key, key);
+                      replace(
+                        index,
+                        { ...input, label, key },
+                        key === input.key ? undefined : { from: input.key, to: key },
+                      );
                     }}
                   />
                 </div>
