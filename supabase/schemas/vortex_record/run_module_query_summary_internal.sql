@@ -58,6 +58,7 @@ declare
   mapping_row vortex_record.field_storage_mappings%rowtype;
   fast_path boolean := false;
   fast_path_fields_valid boolean := true;
+  search_prefilter_sql text := 'true';
   scan_sql text;
   candidate_sql text;
   selected_sql text;
@@ -71,6 +72,7 @@ declare
   group_page_limit integer;
   group_after text := p_user_inputs ->> 'groupAfter';
   pivot_mode boolean := false;
+  pivot_after jsonb;
   pivot_row_field_id text;
   pivot_column_field_id text;
   pivot_measure_field_id text;
@@ -146,6 +148,22 @@ begin
       pivot_row_field_id, p_user_inputs #> '{pivot,rowDateBucket}',
       pivot_column_field_id, p_user_inputs #> '{pivot,columnDateBucket}'
     );
+    -- A pivot row key is the jsonb text [rank, title, canonical value]; anything else is forged.
+    if group_after is not null then
+      begin
+        pivot_after := group_after::jsonb;
+        if pg_catalog.jsonb_typeof(pivot_after) <> 'array'
+          or pg_catalog.jsonb_array_length(pivot_after) <> 3
+          or (pivot_after ->> 0) not in ('0', '1', '2')
+          or pg_catalog.jsonb_typeof(pivot_after -> 0) <> 'number'
+          or pg_catalog.jsonb_typeof(pivot_after -> 1) <> 'string'
+          or pg_catalog.jsonb_typeof(pivot_after -> 2) <> 'string' then
+          raise exception using errcode = '22023', message = 'Pivot cursor is not a row key';
+        end if;
+      exception when others then
+        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
+      end;
+    end if;
   elsif p_user_inputs ? 'grouping' then
     pivot_buckets := pg_catalog.jsonb_build_object(
       pg_catalog.lower(p_user_inputs #>> '{grouping,fieldId}'), p_user_inputs #> '{grouping,dateBucket}'
@@ -483,6 +501,36 @@ begin
     fast_path := fast_path_fields_valid;
   end if;
 
+  -- A search narrows the candidate scan, and so the ceiling, with the authoritative
+  -- search predicate evaluated over the stored values of the searched fields, built
+  -- from the same value expression read_record projects from. A projection only omits
+  -- stored values, so every record whose readable values match also matches here: the
+  -- narrowing is a superset and read_record stays the decision for each counted match.
+  -- A searched field without an active column, or derived (calculation, total), has no
+  -- such proof, so the scan is then not narrowed at all. Nor is it when a searched field
+  -- is not readable on every scanned row: a withheld stored value must never decide
+  -- whether the ceiling refuses, or the refusal would reveal it.
+  if user_search is not null and pg_catalog.cardinality(search_field_ids) > 0 and not exists (
+    select 1
+    from pg_catalog.unnest(search_field_ids) as searched(id)
+    left join vortex_record.field_storage_mappings as mapping
+      on mapping.storage_contract_id = v_storage_contract_id
+      and mapping.field_id = searched.id::uuid
+    where mapping.storage_contract_id is null
+      or mapping.state <> 'active'
+      or fields_by_id -> searched.id ->> 'type' in ('calculation', 'total')
+      or searched.id <> all (readable_field_ids)
+  ) then
+    search_prefilter_sql := pg_catalog.format(
+      'vortex_record.query_search_matches_internal(pg_catalog.jsonb_build_object(%s), $18::text[], $19::text)',
+      vortex_record.named_action_storage_columns_internal(
+        v_storage_contract_id,
+        (select pg_catalog.jsonb_agg(fields_by_id -> searched.id)
+         from pg_catalog.unnest(search_field_ids) as searched(id))
+      ) ->> 'valueExpression'
+    );
+  end if;
+
   for aggregate_item in
     select item.value from pg_catalog.jsonb_array_elements(aggregate_items) as item(value)
   loop
@@ -758,12 +806,14 @@ begin
          and %s
          and (%s)
          and (%s)
+         and (%s)
        limit $5',
       physical_table_token,
       case when storage_scope = 'application_contained'
         then 'stored.application_root_id = $2' else 'stored.application_root_id is null' end,
       access_sql,
-      filter_predicate
+      filter_predicate,
+      search_prefilter_sql
     );
     candidate_sql := scan_sql;
   end if;
@@ -1028,7 +1078,8 @@ begin
   elsif pivot_mode then
     -- One grouping-sets statement yields every cell, each row total, each column total and the
     -- grand total over the full readable filtered set. Averages and extremes are computed for
-    -- each set, never combined from cells. Rows are keyset-paged by their canonical value text.
+    -- each set, never combined from cells. Axis values are ordered by (rank, title, canonical
+    -- text), so link values follow their readable target title; rows are keyset-paged on that tuple.
     summary_sql := pg_catalog.format(
       'with candidate as materialized (%s),
        candidate_count as (select pg_catalog.count(*)::integer as value from candidate),
@@ -1050,20 +1101,25 @@ begin
        ),
        dimensions as materialized (
          select source.projected_values, rows.normalized as row_value,
-           columns.normalized as column_value
+           rows.sort_rank as row_rank, rows.sort_title as row_title,
+           columns.normalized as column_value,
+           columns.sort_rank as column_rank, columns.sort_title as column_title
          from raw_dimensions as source
          join row_values as rows on rows.value = source.row_value
          join column_values as columns on columns.value = source.column_value
        ),
        crossed as materialized (
          select grouping(candidate.row_value, candidate.column_value) as level,
-           candidate.row_value, candidate.column_value,
+           candidate.row_rank, candidate.row_title, candidate.row_value,
+           candidate.column_rank, candidate.column_title, candidate.column_value,
            pg_catalog.count(*)::integer as row_count,
            pg_catalog.jsonb_build_object(%s) as aggregates
          from dimensions as candidate
          group by grouping sets (
-           (candidate.row_value, candidate.column_value), (candidate.row_value),
-           (candidate.column_value), ()
+           (candidate.row_rank, candidate.row_title, candidate.row_value,
+            candidate.column_rank, candidate.column_title, candidate.column_value),
+           (candidate.row_rank, candidate.row_title, candidate.row_value),
+           (candidate.column_rank, candidate.column_title, candidate.column_value), ()
          )
        ),
        column_axis as materialized (
@@ -1071,13 +1127,20 @@ begin
        ),
        column_count as (select pg_catalog.count(*)::integer as value from column_axis),
        row_axis as materialized (
-         select * from crossed
+         select crossed.*, pg_catalog.jsonb_build_array(
+           crossed.row_rank, crossed.row_title, crossed.row_value::text
+         )::text as row_key
+         from crossed
          where level = 1
-           and (%L::text is null or row_value::text collate "C" > %L::text collate "C")
-         order by row_value::text collate "C" limit %s
+           and (%L::text is null or (
+             crossed.row_rank, crossed.row_title collate "C", crossed.row_value::text collate "C"
+           ) > (%L::integer, %L::text collate "C", %L::text collate "C"))
+         order by crossed.row_rank, crossed.row_title collate "C", crossed.row_value::text collate "C"
+         limit %s
        ),
        visible_rows as materialized (
-         select * from row_axis order by row_value::text collate "C" limit %s
+         select * from row_axis
+         order by row_rank, row_title collate "C", row_value::text collate "C" limit %s
        ),
        grand as (select row_count, aggregates from crossed where level = 3)
        select case
@@ -1095,7 +1158,8 @@ begin
            ''groups'', ''[]''::jsonb,
            ''aggregates'', grand.aggregates,
            ''nextGroupKey'', case when (select pg_catalog.count(*) from row_axis) > %s
-             then (select row_value::text from visible_rows order by row_value::text collate "C" desc limit 1)
+             then (select row_key from visible_rows
+               order by row_rank desc, row_title collate "C" desc, row_value::text collate "C" desc limit 1)
              else null end,
            ''pivot'', pg_catalog.jsonb_build_object(
              ''rowFieldId'', %L,
@@ -1104,22 +1168,22 @@ begin
              ''columns'', (
                select coalesce(pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
                  ''value'', axis.column_value, ''rowCount'', axis.row_count, ''aggregates'', axis.aggregates
-               ) order by axis.column_value::text collate "C"), ''[]''::jsonb)
+               ) order by axis.column_rank, axis.column_title collate "C", axis.column_value::text collate "C"), ''[]''::jsonb)
                from column_axis as axis
              ),
              ''rows'', (
                select coalesce(pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
-                 ''key'', visible.row_value::text, ''value'', visible.row_value, ''rowCount'', visible.row_count,
+                 ''key'', visible.row_key, ''value'', visible.row_value, ''rowCount'', visible.row_count,
                  ''aggregates'', visible.aggregates,
                  ''cells'', (
                    select coalesce(pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
                      ''column'', cell.column_value, ''rowCount'', cell.row_count,
                      ''aggregates'', cell.aggregates
-                   ) order by cell.column_value::text collate "C"), ''[]''::jsonb)
+                   ) order by cell.column_rank, cell.column_title collate "C", cell.column_value::text collate "C"), ''[]''::jsonb)
                    from crossed as cell
                    where cell.level = 0 and cell.row_value = visible.row_value
                  )
-               ) order by visible.row_value::text collate "C"), ''[]''::jsonb)
+               ) order by visible.row_rank, visible.row_title collate "C", visible.row_value::text collate "C"), ''[]''::jsonb)
                from visible_rows as visible
              )
            )
@@ -1134,7 +1198,8 @@ begin
       (fields_by_id -> pivot_row_field_id)::text,
       (fields_by_id -> pivot_column_field_id)::text,
       aggregate_object_sql,
-      group_after, group_after, group_page_limit + 1, group_page_limit,
+      group_after, pivot_after ->> 0, pivot_after ->> 1, pivot_after ->> 2,
+      group_page_limit + 1, group_page_limit,
       summary_candidate_limit,
       pivot_column_limit,
       p_module_root_id::text,
