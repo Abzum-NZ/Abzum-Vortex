@@ -329,7 +329,7 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
       installationRevision: placement.installed.applicationReleaseRevision,
       placementId: request.placementId,
     });
-    if (descriptor === undefined) return undefined;
+    if (descriptor === undefined) return refuse("descriptor_unopened");
     if (
       !sameId(descriptor.moduleRootId, String(placement.module.rootId)) ||
       !sameId(descriptor.queryId, String(placement.query.queryId))
@@ -539,17 +539,18 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
           await audit(session, address, recordTypeId, columnIds, "refused");
           return { kind: "refused", reason: "too_many", limit: maxRows };
         }
+        // Only unticked records the read still matches lower the count: one gone or changed since
+        // would otherwise understate it, and near the row limit end the stream short of it.
         let stillExcluded = excluded.size;
-        // Near the row limit, only unticked records the read still matches may bring the count
-        // under it: one gone or changed since would otherwise end the stream short of the limit.
-        if (counted.count > maxRows && counted.count - excluded.size <= maxRows) {
-          if (descriptor.search !== null) {
-            // A single record's read does not apply the search, so its exclusions cannot be
-            // confirmed: the selection is judged by what the read matches.
+        if (excluded.size > 0 && descriptor.search !== null) {
+          // A single record's read does not apply the search, so its exclusions cannot be
+          // confirmed; near the limit the selection is judged by what the read matches.
+          if (counted.count > maxRows && counted.count - excluded.size <= maxRows) {
             refuse("selection_over_row_limit", "exclusions_unconfirmed");
             await audit(session, address, recordTypeId, columnIds, "refused");
             return { kind: "refused", reason: "too_many", limit: maxRows, count: counted.count };
           }
+        } else if (excluded.size > 0) {
           stillExcluded = 0;
           for (const recordId of excluded) {
             const read = await queries.run(session, address.selection, {
