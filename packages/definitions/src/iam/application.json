@@ -1128,6 +1128,9 @@
                     "features": {
                       "pinning": {
                         "enabled": true
+                      },
+                      "pivot": {
+                        "enabled": false
                       }
                     }
                   }
@@ -1337,6 +1340,9 @@
                     "features": {
                       "pinning": {
                         "enabled": true
+                      },
+                      "pivot": {
+                        "enabled": false
                       }
                     }
                   }
@@ -1411,6 +1417,9 @@
                     "features": {
                       "pinning": {
                         "enabled": true
+                      },
+                      "pivot": {
+                        "enabled": false
                       }
                     }
                   }
@@ -1480,6 +1489,9 @@
                     "features": {
                       "pinning": {
                         "enabled": true
+                      },
+                      "pivot": {
+                        "enabled": false
                       }
                     }
                   }
@@ -2225,6 +2237,9 @@
                     "features": {
                       "pinning": {
                         "enabled": true
+                      },
+                      "pivot": {
+                        "enabled": false
                       }
                     }
                   }
@@ -2294,6 +2309,9 @@
                     "features": {
                       "pinning": {
                         "enabled": true
+                      },
+                      "pivot": {
+                        "enabled": false
                       }
                     }
                   }
@@ -2743,6 +2761,9 @@
                     "features": {
                       "pinning": {
                         "enabled": true
+                      },
+                      "pivot": {
+                        "enabled": false
                       }
                     }
                   }
@@ -2838,6 +2859,9 @@
                     "features": {
                       "pinning": {
                         "enabled": true
+                      },
+                      "pivot": {
+                        "enabled": false
                       }
                     }
                   }

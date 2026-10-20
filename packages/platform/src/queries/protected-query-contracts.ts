@@ -555,7 +555,7 @@ export const protectedQuerySummaryGroupSchema = z
   .strict();
 
 /** A pivot axis value: the canonical text of a choice or date bucket, or null for no value. */
-const pivotAxisValueSchema = z.union([z.string(), z.null()]);
+const pivotAxisValueSchema = z.union([z.string(), z.null(), recordLinkValueSchema]);
 const pivotMeasureSchema = z.record(builderKeySchema, protectedQuerySummaryAggregateResultSchema);
 
 export const protectedQueryPivotResultSchema = z
@@ -579,6 +579,7 @@ export const protectedQueryPivotResultSchema = z
       .array(
         z
           .object({
+            key: z.string().min(1).max(4096),
             value: pivotAxisValueSchema,
             rowCount: z.number().int().nonnegative().max(100_000),
             aggregates: pivotMeasureSchema,

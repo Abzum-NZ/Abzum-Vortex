@@ -153,6 +153,7 @@ export const loadApplicationPivot = async (
       bindings,
       queries: services.queries,
       readTimeZone,
+      resolveRecordLinks: services.recordLinkResolver(context),
     });
     return { kind: "available", pivot };
   } finally {

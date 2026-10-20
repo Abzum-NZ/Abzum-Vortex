@@ -40,14 +40,14 @@ begin
       pg_catalog.jsonb_build_object('fieldId', row_field_id, 'limit', p_pivot -> 'rowLimit')
         || case when p_pivot ? 'rowDateBucket'
           then pg_catalog.jsonb_build_object('dateBucket', p_pivot -> 'rowDateBucket')
-          else '{}'::jsonb end
+          else '{}'::jsonb end, 100000
     ) is null
     or vortex_record.grouping_query_internal(
       p_query, p_record_type,
       pg_catalog.jsonb_build_object('fieldId', column_field_id, 'limit', 1)
         || case when p_pivot ? 'columnDateBucket'
           then pg_catalog.jsonb_build_object('dateBucket', p_pivot -> 'columnDateBucket')
-          else '{}'::jsonb end
+          else '{}'::jsonb end, 50
     ) is null then
     return null;
   end if;

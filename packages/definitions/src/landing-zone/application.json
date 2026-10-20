@@ -1192,6 +1192,9 @@
                     "features": {
                       "pinning": {
                         "enabled": true
+                      },
+                      "pivot": {
+                        "enabled": false
                       }
                     }
                   }

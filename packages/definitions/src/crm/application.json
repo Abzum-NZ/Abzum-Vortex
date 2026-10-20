@@ -651,6 +651,9 @@
                     "features": {
                       "pinning": {
                         "enabled": true
+                      },
+                      "pivot": {
+                        "enabled": false
                       }
                     }
                   }
@@ -767,6 +770,9 @@
                     "features": {
                       "pinning": {
                         "enabled": true
+                      },
+                      "pivot": {
+                        "enabled": false
                       }
                     }
                   }
@@ -903,6 +909,9 @@
                     "features": {
                       "pinning": {
                         "enabled": true
+                      },
+                      "pivot": {
+                        "enabled": false
                       }
                     }
                   }
@@ -1057,6 +1066,9 @@
                       },
                       "pinning": {
                         "enabled": true
+                      },
+                      "pivot": {
+                        "enabled": false
                       }
                     },
                     "row_click": {
@@ -1252,6 +1264,9 @@
                     "features": {
                       "pinning": {
                         "enabled": true
+                      },
+                      "pivot": {
+                        "enabled": false
                       }
                     }
                   }
@@ -2775,6 +2790,9 @@
                     "features": {
                       "pinning": {
                         "enabled": true
+                      },
+                      "pivot": {
+                        "enabled": false
                       }
                     }
                   }
@@ -4099,6 +4117,9 @@
                             "label": "Total amount"
                           }
                         ]
+                      },
+                      "pivot": {
+                        "enabled": false
                       }
                     },
                     "empty_message": "No opportunities in this stage.",

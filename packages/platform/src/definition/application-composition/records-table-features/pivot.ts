@@ -53,14 +53,16 @@ export type RecordsTablePivotSettings = Readonly<{
 const code = "definition_records_table_pivot" as const;
 
 /** Whether a field can be a pivot dimension at all (a choice field is also bounded by its options). */
-const dimensionKind = (field: RecordsTableFieldFacts): "choice" | "date" | undefined =>
+const dimensionKind = (field: RecordsTableFieldFacts): "choice" | "date" | "link" | undefined =>
   !field.filterable
     ? undefined
     : field.type === "choice"
       ? "choice"
-      : field.type === "date" || field.type === "date_time"
-        ? "date"
-        : undefined;
+      : field.type === "link"
+        ? "link"
+        : field.type === "date" || field.type === "date_time"
+          ? "date"
+          : undefined;
 
 const dimensionProblem = (
   part: "rows" | "columns",
@@ -70,8 +72,12 @@ const dimensionProblem = (
   if (field === undefined) return `Choose the field for the ${part}.`;
   const kind = dimensionKind(field);
   if (kind === undefined)
-    return `${field.label} cannot be the ${part}: choose a choice or date field people can filter by.`;
-  if (kind === "choice" && (field.choiceCount ?? 0) > RECORDS_TABLE_PIVOT_MAXIMUM_COLUMNS)
+    return `${field.label} cannot be the ${part}: choose a choice, link or date field people can filter by.`;
+  if (
+    part === "columns" &&
+    kind === "choice" &&
+    (field.choiceCount ?? 0) > RECORDS_TABLE_PIVOT_MAXIMUM_COLUMNS
+  )
     return `${field.label} has more than ${RECORDS_TABLE_PIVOT_MAXIMUM_COLUMNS} choices, which is too many for a pivot.`;
   if (kind === "date" && dateUnit === undefined)
     return `Choose whether the ${part} group ${field.label} by day, week, month, quarter or year.`;
@@ -116,16 +122,11 @@ export const recordsTablePivotFeature: RecordsTableFeatureDefinition<RecordsTabl
   check: (state, facts) => {
     if (facts.grouped)
       return featureNotPossible(code, "A query that totals records cannot be pivoted.");
-    const dimensions = facts.fields.filter(
-      (field) =>
-        dimensionKind(field) !== undefined &&
-        (dimensionKind(field) !== "choice" ||
-          (field.choiceCount ?? 0) <= RECORDS_TABLE_PIVOT_MAXIMUM_COLUMNS),
-    );
+    const dimensions = facts.fields.filter((field) => dimensionKind(field) !== undefined);
     if (dimensions.length < 2)
       return featureNotPossible(
         code,
-        `A pivot needs two choice or date fields of ${facts.recordTypeLabel || "this record type"} that people can filter by.`,
+        `A pivot needs two choice, link or date fields of ${facts.recordTypeLabel || "this record type"} that people can filter by.`,
       );
     if (!state.enabled) return featureAvailable;
     const rows = state.rowField === undefined ? undefined : factsOf(facts, state.rowField);

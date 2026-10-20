@@ -203,6 +203,8 @@ const typedFilterCondition = (
   filter: RecordsTableFieldFilter,
   timeZone: string | undefined,
 ): JsonValue | undefined => {
+  if (filter.kind === "empty")
+    return { kind: "comparison", operator: "is_empty", left: { source: "field", fieldId } };
   if (recordsTableFilterKindOf(target.type) !== filter.kind) return undefined;
   switch (filter.kind) {
     case "text":

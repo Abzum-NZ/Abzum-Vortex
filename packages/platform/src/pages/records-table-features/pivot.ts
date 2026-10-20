@@ -3,6 +3,7 @@ import "server-only";
 import {
   describeFailure,
   moneyValueSchema,
+  recordLinkValueSchema,
   readQueryBindings,
   readRecordsTableContract,
   type IdentitySession,
@@ -24,6 +25,12 @@ import {
   type PlacementReadEntry,
 } from "../placement-read/shared";
 import { summaryAggregateCellValue } from "../placement-read/summary-chart";
+import {
+  collectRecordLinkValues,
+  recordLinkPlainText,
+  type ProjectedRecordLinks,
+  type RecordLinkResolver,
+} from "../component-data-projection";
 import { resolveQueryBindings, type QueryBindingContext } from "../query-binding-resolver";
 import { buildRecordsTableNarrowing } from "../records-table-query";
 import { encodeRecordsTableFieldFilter, readRecordsTableQueryState } from "../records-table-state";
@@ -109,6 +116,7 @@ export type PivotRequest = Readonly<{
   queries: RecordsTablePivotQueryRunner;
   /** The organisation's time zone, read only when a date dimension or filter needs it. */
   readTimeZone: () => Promise<string | undefined>;
+  resolveRecordLinks: RecordLinkResolver;
 }>;
 
 const refused = (message: string): PivotResult => Object.freeze({ status: "refused", message });
@@ -201,11 +209,41 @@ type Dimension = Readonly<{
  */
 const axisValue = (
   dimension: Dimension,
-  value: string | null,
+  value: JsonValue,
   timeZone: string | undefined,
+  recordLinks: ProjectedRecordLinks | undefined,
 ): PivotAxisValue => {
   const key = JSON.stringify(value);
-  if (value === null) return { key, label: "Not set" };
+  if (value === null)
+    return {
+      key,
+      label: "Not set",
+      ...(dimension.drillable
+        ? {
+            drill: {
+              fieldId: String(dimension.field.fieldId).toLowerCase(),
+              filter: encodeRecordsTableFieldFilter({ kind: "empty" }),
+            },
+          }
+        : {}),
+    };
+  if (dimension.field.type === "link") {
+    if (value === "not_available") return { key, label: "Not available" };
+    const link = recordLinkValueSchema.parse(value);
+    return {
+      key,
+      label: recordLinkPlainText(link, recordLinks) ?? "Not available",
+      ...(dimension.drillable
+        ? {
+            drill: {
+              fieldId: String(dimension.field.fieldId).toLowerCase(),
+              filter: encodeRecordsTableFieldFilter({ kind: "link", recordIds: [link.recordId] }),
+            },
+          }
+        : {}),
+    };
+  }
+  if (typeof value !== "string") throw new Error("PIVOT_AXIS_VALUE_INVALID");
   if (dimension.field.type === "choice") {
     const label = dimension.field.settings.options.find((option) => option.value === value)?.label;
     return {
@@ -301,8 +339,7 @@ export const readRecordsTablePivot = async (request: PivotRequest): Promise<Pivo
   );
   const filterTargets = fieldFilterTargetsOf(bound.module);
   const usesDates =
-    row.type !== "choice" ||
-    column.type !== "choice" ||
+    [row, column].some((field) => field.type === "date" || field.type === "date_time") ||
     addressed.state.filters.some(
       (filter) => filterTargets[filter.fieldId.toLowerCase()]?.type === "date_time",
     );
@@ -339,7 +376,7 @@ export const readRecordsTablePivot = async (request: PivotRequest): Promise<Pivo
     return refuse(`binding ${resolution.part} ${resolution.reason}`);
 
   const bucket = (field: PlacementField, unit: string | undefined) =>
-    field.type === "choice" || unit === undefined
+    (field.type !== "date" && field.type !== "date_time") || unit === undefined
       ? undefined
       : { unit, timeZone: timeZone ?? "UTC" };
   const rowBucket = bucket(row, feature.rowDateUnit);
@@ -411,7 +448,7 @@ export const readRecordsTablePivot = async (request: PivotRequest): Promise<Pivo
     aggregates: ProtectedQueryPivotResult["rows"][number]["aggregates"],
   ): PivotCell => {
     const measured = aggregates[MEASURE_ALIAS];
-    if (measured === undefined) return { kind: "unavailable" };
+    if (measured === undefined) throw new Error("PIVOT_MEASURE_MISSING");
     // Money shows as the viewer's formatted amount, like every other money value.
     if (measure?.type === "money" && measured.outcome === "completed" && measured.valueCount > 0) {
       const money = moneyValueSchema.safeParse(measured.value);
@@ -419,12 +456,16 @@ export const readRecordsTablePivot = async (request: PivotRequest): Promise<Pivo
     }
     const cell = summaryAggregateCellValue(aggregate, measure, measured);
     if (cell === undefined) {
-      console.error("[records-table] pivot measure invalid where=pivot");
-      return { kind: "unavailable" };
+      throw new Error("PIVOT_MEASURE_INVALID");
     }
     return cell.kind === "number" ? { ...cell, formatted: formatDecimal(cell.value) } : cell;
   };
-  const valueOf = (value: JsonValue): string | null => (typeof value === "string" ? value : null);
+  const links = collectRecordLinkValues([
+    ...pivot.columns.map((entry) => entry.value),
+    ...pivot.rows.map((entry) => entry.value),
+  ]);
+  const recordLinks = links.length === 0 ? undefined : await request.resolveRecordLinks(links);
+  if (links.length > 0 && recordLinks === undefined) return fail("link_labels_unavailable");
 
   const rowDimension: Dimension = {
     field: row,
@@ -437,7 +478,7 @@ export const readRecordsTablePivot = async (request: PivotRequest): Promise<Pivo
     drillable: filterable.has(String(column.fieldId).toLowerCase()),
   };
   const columns = pivot.columns.map((entry) =>
-    axisValue(columnDimension, valueOf(entry.value), timeZone),
+    axisValue(columnDimension, entry.value, timeZone, recordLinks),
   );
   const columnIndex = new Map(columns.map((entry, index) => [entry.key, index] as const));
   const rows: PivotRow[] = pivot.rows.map((entry) => {
@@ -447,7 +488,7 @@ export const readRecordsTablePivot = async (request: PivotRequest): Promise<Pivo
       if (index !== undefined) cells[index] = cellOf(cell.aggregates);
     }
     return {
-      ...axisValue(rowDimension, valueOf(entry.value), timeZone),
+      ...axisValue(rowDimension, entry.value, timeZone, recordLinks),
       count: entry.rowCount,
       cells,
       ...(totals ? { total: cellOf(entry.aggregates) } : {}),

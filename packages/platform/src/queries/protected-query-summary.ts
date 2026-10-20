@@ -117,7 +117,7 @@ export const summariseCommand = async (
       result.pivot.columnFieldId.toLowerCase() !== command.pivot.columnFieldId.toLowerCase() ||
       (result.nextGroupKey !== null &&
         result.nextGroupKey !== undefined &&
-        result.nextGroupKey !== JSON.stringify(result.pivot.rows.at(-1)?.value)))
+        result.nextGroupKey !== result.pivot.rows.at(-1)?.key))
   )
     throw new Error("PROTECTED_QUERY_RESULT_INVALID");
   return result;

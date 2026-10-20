@@ -5626,9 +5626,9 @@
                 "kind": "field_reference",
                 "key": "row_field",
                 "label": "Rows",
-                "help": "A choice or date field people can filter by; each value is one row",
+                "help": "A choice, link or date field people can filter by; each value is one row",
                 "required": false,
-                "fieldTypes": ["choice", "date", "date_time"]
+                "fieldTypes": ["choice", "link", "date", "date_time"]
               },
               {
                 "kind": "choice",
@@ -5663,9 +5663,9 @@
                 "kind": "field_reference",
                 "key": "column_field",
                 "label": "Columns",
-                "help": "A choice or date field people can filter by, with at most 50 values",
+                "help": "A choice, link or date field people can filter by, with at most 50 values",
                 "required": false,
-                "fieldTypes": ["choice", "date", "date_time"]
+                "fieldTypes": ["choice", "link", "date", "date_time"]
               },
               {
                 "kind": "choice",

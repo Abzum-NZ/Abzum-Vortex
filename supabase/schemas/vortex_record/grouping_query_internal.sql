@@ -1,7 +1,8 @@
 create or replace function vortex_record.grouping_query_internal(
   p_query jsonb,
   p_record_type jsonb,
-  p_grouping jsonb
+  p_grouping jsonb,
+  p_maximum_choices integer
 )
 returns jsonb
 language plpgsql
@@ -36,7 +37,7 @@ begin
   select item.value into field_item
   from pg_catalog.jsonb_array_elements(p_record_type -> 'fields') as item(value)
   where pg_catalog.lower(item.value ->> 'fieldId') = p_field_id;
-  if field_item ->> 'type' not in ('choice', 'date', 'date_time')
+  if field_item ->> 'type' not in ('choice', 'date', 'date_time', 'link')
     or field_item is null
     or (field_item ->> 'filterable')::boolean is distinct from true then
     return null;
@@ -45,7 +46,9 @@ begin
     if p_grouping ? 'dateBucket' then return null; end if;
     options := field_item #> '{settings,options}';
     if pg_catalog.jsonb_typeof(options) is distinct from 'array' then return null; end if;
-    if pg_catalog.jsonb_array_length(options) not between 1 and 50 then return null; end if;
+    if pg_catalog.jsonb_array_length(options) not between 1 and p_maximum_choices then return null; end if;
+  elsif field_item ->> 'type' = 'link' then
+    if p_grouping ? 'dateBucket' then return null; end if;
   else
     if pg_catalog.jsonb_typeof(bucket) is distinct from 'object' then return null; end if;
     if bucket - array['unit', 'timeZone']::text[] <> '{}'::jsonb
@@ -63,11 +66,11 @@ begin
 end
 $function$;
 
-alter function vortex_record.grouping_query_internal(jsonb,jsonb,jsonb) owner to vortex_owner;
-revoke all on function vortex_record.grouping_query_internal(jsonb,jsonb,jsonb)
+alter function vortex_record.grouping_query_internal(jsonb,jsonb,jsonb,integer) owner to vortex_owner;
+revoke all on function vortex_record.grouping_query_internal(jsonb,jsonb,jsonb,integer)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-grant execute on function vortex_record.grouping_query_internal(jsonb,jsonb,jsonb)
+grant execute on function vortex_record.grouping_query_internal(jsonb,jsonb,jsonb,integer)
   to vortex_record_adapter;
 
-comment on function vortex_record.grouping_query_internal(jsonb,jsonb,jsonb) is
+comment on function vortex_record.grouping_query_internal(jsonb,jsonb,jsonb,integer) is
   'Owner-only validation of one selected filterable choice or date dimension, an explicit group page cap and an authored date bucket/time zone. Returns the query with its grouping defaults replaced, or null. Each reader checks live field policy before disclosure.';

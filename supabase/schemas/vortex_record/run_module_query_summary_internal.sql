@@ -121,7 +121,7 @@ begin
 
   if p_user_inputs ? 'grouping' then
     query_item := vortex_record.grouping_query_internal(
-      query_item, record_type_item, p_user_inputs -> 'grouping'
+      query_item, record_type_item, p_user_inputs -> 'grouping', 50
     );
     if query_item is null then
       return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
@@ -987,10 +987,27 @@ begin
       'with candidate as materialized (%s),
        candidate_count as (select pg_catalog.count(*)::integer as value from candidate),
        selected as materialized (%s),
-       dimensions as materialized (
-         select candidate.projected_values, %s as row_value, %s as column_value
+       raw_dimensions as materialized (
+         select candidate.projected_values, coalesce(%s, ''null''::jsonb) as row_value, coalesce(%s, ''null''::jsonb) as column_value
          from selected as candidate
-         where %s
+         where %s and (select value from candidate_count) <= %s
+       ),
+       row_values as materialized (
+         select * from vortex_record.pivot_dimension_internal(
+           (select pg_catalog.array_agg(distinct row_value) from raw_dimensions), %L::jsonb
+         )
+       ),
+       column_values as materialized (
+         select * from vortex_record.pivot_dimension_internal(
+           (select pg_catalog.array_agg(distinct column_value) from raw_dimensions), %L::jsonb
+         )
+       ),
+       dimensions as materialized (
+         select source.projected_values, rows.normalized as row_value,
+           columns.normalized as column_value
+         from raw_dimensions as source
+         join row_values as rows on rows.value = source.row_value
+         join column_values as columns on columns.value = source.column_value
        ),
        crossed as materialized (
          select grouping(candidate.row_value, candidate.column_value) as level,
@@ -1046,7 +1063,7 @@ begin
              ),
              ''rows'', (
                select coalesce(pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
-                 ''value'', visible.row_value, ''rowCount'', visible.row_count,
+                 ''key'', visible.row_value::text, ''value'', visible.row_value, ''rowCount'', visible.row_count,
                  ''aggregates'', visible.aggregates,
                  ''cells'', (
                    select coalesce(pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
@@ -1067,6 +1084,9 @@ begin
       group_by_terms[1],
       group_by_terms[2],
       group_presence_sql,
+      summary_candidate_limit,
+      (fields_by_id -> pivot_row_field_id)::text,
+      (fields_by_id -> pivot_column_field_id)::text,
       aggregate_object_sql,
       group_after, group_after, group_page_limit + 1, group_page_limit,
       summary_candidate_limit,
