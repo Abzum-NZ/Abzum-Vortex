@@ -688,13 +688,15 @@ begin
   -- one bounded read. Only the views the address selected carry their document.
   return pg_catalog.jsonb_build_object(
     'roleKeys', coalesce((
-      select pg_catalog.jsonb_agg(distinct revision.role_key)
+      select pg_catalog.jsonb_agg(distinct template.key)
       from vortex_access.organization_roles as role
-      join vortex_access.organization_role_revisions as revision
-        on revision.organization_id = role.organization_id
-        and revision.role_id = role.role_id and revision.revision = role.live_revision
+      join vortex_access.application_role_template_continuities as template
+        on template.organization_id = role.organization_id
+        and template.application_root_id = coalesce(role.application_root_id, role.derived_application_root_id)
+        and template.source_role_id = coalesce(role.source_role_id, role.derived_source_role_id)
+        and template.state = 'available'
       where role.organization_id = scope.organization_id
-        and role.application_root_id = scope.application_root_id
+        and template.application_root_id = scope.application_root_id
         and role.role_id = any(targets.role_ids)
     ), '[]'::jsonb),
     'shareablePlacementIds', pg_catalog.to_jsonb(shareable),
