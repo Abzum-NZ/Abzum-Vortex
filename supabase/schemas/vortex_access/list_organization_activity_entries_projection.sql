@@ -3,7 +3,8 @@ create or replace function vortex_access.list_organization_activity_entries_proj
   p_sort_key text,
   p_direction text,
   p_after jsonb,
-  p_limit integer
+  p_limit integer,
+  p_predicate jsonb
 )
 returns table (
   organization_id uuid,
@@ -35,7 +36,11 @@ declare
   source_sql text;
   order_sql text;
   scan_sql text;
+  predicate_plan jsonb;
 begin
+  -- This reader declares no filterable or searchable key: a filter is refused, and a
+  -- search over no searchable key matches no row.
+  predicate_plan := vortex_record.compile_projection_predicate_internal(p_predicate, '{}'::jsonb, 1);
   if p_sort_key <> 'occurred_at' or p_direction not in ('ascending', 'descending')
     or p_sort_key is null or p_direction is null
     or (p_limit is not null and p_limit < 1) then
@@ -112,7 +117,8 @@ begin
     from vortex_record.organization_activity_entries as entry
     where entry.organization_id = $1
       and entry.occurred_at >= pg_catalog.statement_timestamp() - interval '90 days'
-      and ($2 is null or entry.activity_id = any($2))$scan$;
+      and ($2 is null or entry.activity_id = any($2))$scan$
+    || coalesce(' and ' || (predicate_plan ->> 'predicate'), '');
   if audit_projection then
     source_sql := base_sql || keyset_sql || order_sql;
   else
@@ -162,11 +168,11 @@ end
 $function$;
 
 revoke all on function vortex_access.list_organization_activity_entries_projection(
-  uuid[], text, text, jsonb, integer
+  uuid[], text, text, jsonb, integer, jsonb
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_access.list_organization_activity_entries_projection(
-  uuid[], text, text, jsonb, integer
+  uuid[], text, text, jsonb, integer, jsonb
 ) to vortex_owner, vortex_record_adapter, postgres;
 alter function vortex_access.list_organization_activity_entries_projection(
-  uuid[], text, text, jsonb, integer
+  uuid[], text, text, jsonb, integer, jsonb
 ) owner to vortex_owner;

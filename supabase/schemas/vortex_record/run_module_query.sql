@@ -106,6 +106,11 @@ declare
   projection_batch_exhausted boolean := false;
   projection_last_record_id uuid;
   projection_last_sort_key text[];
+  projection_predicate jsonb;
+  projection_field_keys jsonb;
+  projection_database_types jsonb;
+  projection_search_keys text[];
+  projection_failure text;
   scan_record record;
   scan_cursor refcursor;
   cursor_position integer;
@@ -802,12 +807,64 @@ begin
       end if;
       projection_after := p_after;
       projection_batch_size := least(p_page_size, scan_limit);
-      select coalesce(pg_catalog.jsonb_agg(pg_catalog.to_jsonb(projected) order by projected.ordinality), '[]'::jsonb)
-      into projection_batch
-      from vortex_record.read_system_projection_rows_internal(v_storage_contract_id,
-        null::uuid[], projection_sort_key, scan_directions[1], projection_after,
-        projection_batch_size) with ordinality as projected(organization_id, record_id,
-        revision, attribute_values, ordinality);
+      -- The prepared filter and search are handed to the bounded reader, which
+      -- applies them inside its own indexed keyset scan before the limit. A
+      -- field the reader is not guaranteed to see on every row may not decide
+      -- which rows a page holds, so it is refused rather than filtered per row.
+      if filter_condition is not null then
+        if exists (
+          select 1 from pg_catalog.unnest(filter_ids) as referenced(id)
+          where referenced.id <> all (readable_field_ids)
+        ) then
+          return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'field_unbounded');
+        end if;
+        select coalesce(pg_catalog.jsonb_object_agg(referenced.id, fields_by_id -> referenced.id ->> 'key'),
+          '{}'::jsonb)
+        into projection_field_keys
+        from pg_catalog.unnest(filter_ids) as referenced(id);
+        select coalesce(pg_catalog.jsonb_object_agg(mapping.field_id::text, mapping.database_value_type),
+          '{}'::jsonb)
+        into projection_database_types
+        from vortex_record.field_storage_mappings as mapping
+        where mapping.storage_contract_id = v_storage_contract_id
+          and mapping.state = 'active'
+          and mapping.field_id::text = any (filter_ids);
+        projection_predicate := pg_catalog.jsonb_build_object('filter', pg_catalog.jsonb_build_object(
+          'condition', filter_condition,
+          'fieldKeys', projection_field_keys,
+          'fieldTypes', filter_types,
+          'fieldDatabaseTypes', projection_database_types,
+          'inputTypes', parameter_types,
+          'inputValues', parameter_values));
+      end if;
+      if user_search is not null then
+        select coalesce(pg_catalog.array_agg(fields_by_id -> searched.id ->> 'key' order by searched.position),
+          array[]::text[])
+        into projection_search_keys
+        from pg_catalog.unnest(search_field_ids) with ordinality as searched(id, position)
+        where searched.id = any (readable_field_ids);
+        projection_predicate := coalesce(projection_predicate, '{}'::jsonb) || pg_catalog.jsonb_build_object(
+          'search', pg_catalog.jsonb_build_object(
+            'term', user_search, 'keys', pg_catalog.to_jsonb(projection_search_keys)));
+      end if;
+      -- The one place the predicate is applied is the reader's scan.
+      filter_predicate := 'true';
+      filter_exact := true;
+      filter_expressions := array[]::text[];
+      begin
+        select coalesce(pg_catalog.jsonb_agg(pg_catalog.to_jsonb(projected) order by projected.ordinality), '[]'::jsonb)
+        into projection_batch
+        from vortex_record.read_system_projection_rows_internal(v_storage_contract_id,
+          null::uuid[], projection_sort_key, scan_directions[1], projection_after,
+          projection_batch_size, projection_predicate) with ordinality as projected(organization_id,
+          record_id, revision, attribute_values, ordinality);
+      exception when sqlstate '22023' then
+        get stacked diagnostics projection_failure = message_text;
+        if projection_failure in ('filter_field_not_declared', 'predicate_unsupported') then
+          return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', projection_failure);
+        end if;
+        raise;
+      end;
   end if;
   if projection_page_scan then
       -- The registered view contributes its row type only. The bounded reader
@@ -1312,7 +1369,8 @@ begin
             last_examined_record_id := scan_record.record_id;
             continue;
           end if;
-          if user_search is not null and not vortex_record.query_search_matches_internal(
+          if user_search is not null and not projection_page_scan
+            and not vortex_record.query_search_matches_internal(
             readable_values, search_field_ids, user_search
           ) then
             last_examined_sort_key := scan_record.sort_key;
@@ -1368,8 +1426,8 @@ begin
   into projection_batch
   from vortex_record.read_system_projection_rows_internal(v_storage_contract_id,
     null::uuid[], projection_sort_key, scan_directions[1], projection_after,
-    projection_batch_size) with ordinality as projected(organization_id, record_id,
-    revision, attribute_values, ordinality);
+    projection_batch_size, projection_predicate) with ordinality as projected(organization_id,
+    record_id, revision, attribute_values, ordinality);
   end loop;
   exit when more_rows or budget_exhausted;
   end loop;
