@@ -1,5 +1,3 @@
-begin;
-
 set local role vortex_owner;
 
 create or replace function vortex_record.grouping_query_internal(
@@ -2682,5 +2680,3 @@ comment on function vortex_record.run_module_query_summary_internal(uuid,uuid,bi
 
 
 reset role;
-
-commit;
