@@ -9,6 +9,10 @@ import type {
 } from "@vortex/platform/schema";
 import { materializeStudioPreviewDemand } from "./studio-application-preview";
 
+type FillResult =
+  | Readonly<{ kind: "ready" }>
+  | Exclude<Awaited<ReturnType<typeof materializeStudioPreviewDemand>>, { kind: "ready" }>;
+
 type Work = {
   visible: number;
   listeners: Set<() => void>;
@@ -18,7 +22,7 @@ type Work = {
     controller: AbortController;
     step?: AbortController;
     readers: number;
-    result: Promise<void>;
+    result: Promise<FillResult>;
   };
 };
 const workKey = Symbol.for("vortex.web.studio-preview-work");
@@ -87,13 +91,13 @@ export const fillStudioPreviewWhenIdle = async (
   rootId: ApplicationRootId,
   preview: BuilderPreviewInstallation,
   signal: AbortSignal,
-): Promise<void> => {
+): Promise<FillResult> => {
   signal.throwIfAborted();
   if (
     !preview.seedable ||
     preview.recordTypeIds.every((id) => preview.derivedReadyRecordTypeIds.includes(id))
   )
-    return;
+    return { kind: "ready" };
   const key = keyOf(session, organizationId, rootId);
   const work = workFor(key);
   let fill = work.fill;
@@ -110,7 +114,7 @@ export const fillStudioPreviewWhenIdle = async (
       revision: preview.draftRevision,
       controller,
       readers: 0,
-      result: Promise.resolve(),
+      result: Promise.resolve({ kind: "ready" }),
     };
     fill = started;
     work.fill = started;
@@ -138,7 +142,7 @@ export const fillStudioPreviewWhenIdle = async (
                 },
                 AbortSignal.any([controller.signal, step.signal]),
               );
-              if (result.kind !== "ready") return;
+              if (result.kind !== "ready") return result;
               for (const id of result.readyRecordTypeIds) ready.add(id);
               completed = true;
             } catch (error) {
@@ -151,6 +155,7 @@ export const fillStudioPreviewWhenIdle = async (
             }
           }
         }
+        return { kind: "ready" } as const;
       })
       .finally(() => {
         if (work.fill === started) delete work.fill;
@@ -167,7 +172,7 @@ export const fillStudioPreviewWhenIdle = async (
     signal.addEventListener("abort", leave, { once: true });
   });
   try {
-    await Promise.race([joined.result, cancelled]);
+    return await Promise.race([joined.result, cancelled]);
   } finally {
     if (leave !== undefined) signal.removeEventListener("abort", leave);
     joined.readers -= 1;

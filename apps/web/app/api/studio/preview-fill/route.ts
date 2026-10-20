@@ -67,14 +67,14 @@ export async function POST(request: NextRequest) {
       studioPreviewRunsDraft(state.draft, state.preview) !== "ready"
     )
       return privateJsonResponse({ kind: "following" }, 200);
-    await fillStudioPreviewWhenIdle(
+    const result = await fillStudioPreviewWhenIdle(
       identity.session,
       organizationId,
       rootId,
       state.preview,
       request.signal,
     );
-    return privateJsonResponse({ kind: "ready" }, 200);
+    return privateJsonResponse(result, 200);
   } catch (error) {
     if (request.signal.aborted) return new Response(null, { status: 499 });
     logRefusal("studio/preview-fill", "fill", "STUDIO_PREVIEW_FILL_FAILED", error);
