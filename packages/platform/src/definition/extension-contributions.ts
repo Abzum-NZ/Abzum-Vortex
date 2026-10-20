@@ -1,6 +1,7 @@
 import type {
   ModuleContent,
   ModuleContribution,
+  SystemApplicationBoundReleaseSetResult,
 } from "../schema";
 import {
   canonicalJson,
@@ -317,9 +318,7 @@ export const resolveModuleContributions = (
     });
   }
 
-  bindings.sort((left, right) =>
-    compareCanonicalStrings(bindingOrder(left), bindingOrder(right)),
-  );
+  bindings.sort((left, right) => compareCanonicalStrings(bindingOrder(left), bindingOrder(right)));
   conflicts.sort((left, right) =>
     compareCanonicalStrings(conflictOrder(left), conflictOrder(right)),
   );
@@ -329,5 +328,89 @@ export const resolveModuleContributions = (
   return {
     ...resultWithoutFingerprint,
     fingerprint: fingerprintCanonicalValue(resultWithoutFingerprint),
+  };
+};
+
+/** Exact identities available on one owner record type in this installation's bound release set. */
+export type InstalledRecordTypeContributions = Readonly<{
+  moduleRootId: string;
+  moduleReleaseRevision: number;
+  recordTypeId: string;
+  contributions: readonly Readonly<
+    ResolvedAdditiveContribution & {
+      contributorModuleReleaseRevision: number;
+    }
+  >[];
+}>;
+
+/**
+ * Runtime projection of the same bindings installation resolves. The owner keeps its record
+ * definition, and each contribution keeps its contributor identity and exact revision; this
+ * projection supplies no permission decision and does not merge fields or actions into an owner.
+ */
+export const resolveInstalledRecordTypeContributions = (
+  modules: SystemApplicationBoundReleaseSetResult["modules"],
+):
+  | Readonly<{ outcome: "resolved"; recordTypes: readonly InstalledRecordTypeContributions[] }>
+  | Readonly<{ outcome: "conflicted"; conflicts: readonly ModuleContributionConflict[] }> => {
+  const resolution = resolveModuleContributions(
+    modules.map((module) => ({
+      moduleRootId: module.rootId,
+      definitionKey: module.definitionKey,
+      releaseVersion: module.releaseVersion,
+      content: module.content,
+    })),
+  );
+  if (resolution.outcome === "conflicted")
+    return { outcome: "conflicted", conflicts: resolution.conflicts };
+
+  const revisions = new Map(
+    modules.map((module) => [String(module.rootId), module.releaseRevision]),
+  );
+  const records = new Map<
+    string,
+    {
+      moduleRootId: string;
+      moduleReleaseRevision: number;
+      recordTypeId: string;
+      contributions: Array<
+        Readonly<
+          ResolvedAdditiveContribution & {
+            contributorModuleReleaseRevision: number;
+          }
+        >
+      >;
+    }
+  >();
+  for (const binding of resolution.bindings) {
+    const moduleReleaseRevision = revisions.get(binding.targetModuleRootId);
+    const contributorModuleReleaseRevision = revisions.get(binding.contributorModuleRootId);
+    if (moduleReleaseRevision === undefined || contributorModuleReleaseRevision === undefined)
+      throw new Error("Resolved contribution has no installed Module revision");
+    const key = JSON.stringify([binding.targetModuleRootId, binding.targetRecordTypeId]);
+    let record = records.get(key);
+    if (record === undefined) {
+      record = {
+        moduleRootId: binding.targetModuleRootId,
+        moduleReleaseRevision,
+        recordTypeId: binding.targetRecordTypeId,
+        contributions: [],
+      };
+      records.set(key, record);
+    }
+    record.contributions.push(Object.freeze({ ...binding, contributorModuleReleaseRevision }));
+  }
+  return {
+    outcome: "resolved",
+    recordTypes: Object.freeze(
+      [...records.entries()]
+        .sort(([left], [right]) => compareCanonicalStrings(left, right))
+        .map(([, record]) =>
+          Object.freeze({
+            ...record,
+            contributions: Object.freeze(record.contributions),
+          }),
+        ),
+    ),
   };
 };

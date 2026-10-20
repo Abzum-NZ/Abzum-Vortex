@@ -11,6 +11,10 @@ import {
 } from "../schema";
 import { prepareApplicationPermissionRegistrationForHumanRequest } from "../access/index";
 import {
+  resolveInstalledRecordTypeContributions,
+  type InstalledRecordTypeContributions,
+} from "./extension-contributions";
+import {
   DefinitionError,
   databaseErrorCode,
   unexpectedDefinitionFailure,
@@ -43,6 +47,8 @@ export type InstalledRuntimeContext = Readonly<{
   permissionRegistration: PreparedApplicationPermissionRegistration;
   /** The resolved active installation whose bindings were verified against the release set. */
   installation: ActiveApplicationInstallationEvidence;
+  /** Exact additive identities grouped by owner record type, with no access decision attached. */
+  recordTypeContributions: readonly InstalledRecordTypeContributions[];
   /**
    * The organisation account of the person a human request runs for, from the verified request
    * scope; absent for a system context. The directory projects this account as its person record.
@@ -223,6 +229,26 @@ const assembleContext = (
     throw failure("INSTALLED_RUNTIME_CONTEXT_INTEGRITY_FAILED", error);
   }
 
+  let recordTypeContributions: readonly InstalledRecordTypeContributions[];
+  try {
+    const resolution = resolveInstalledRecordTypeContributions(releaseSet.modules);
+    if (resolution.outcome === "conflicted")
+      throw new DefinitionError("INSTALLED_RUNTIME_CONTEXT_INTEGRITY_FAILED", {
+        cause: {
+          part: "module_contributions",
+          reason: "conflicted",
+          conflicts: resolution.conflicts,
+        },
+      });
+    recordTypeContributions = resolution.recordTypes;
+  } catch (error) {
+    throw unexpectedDefinitionFailure(
+      "INSTALLED_RUNTIME_CONTEXT_INTEGRITY_FAILED",
+      error,
+      "installed runtime contributions",
+    );
+  }
+
   const context: InstalledRuntimeContext = Object.freeze({
     organizationId: application.organizationId,
     applicationRootId: application.rootId,
@@ -231,6 +257,7 @@ const assembleContext = (
     releaseSet,
     permissionRegistration,
     installation,
+    recordTypeContributions,
     ...(viewerOrganizationAccountId === undefined ? {} : { viewerOrganizationAccountId }),
   });
   assembledContexts.add(context);
