@@ -555,6 +555,8 @@ const withoutGrouping = (values: ProjectedTableValues): ProjectedTableValues => 
 type GroupedPage = Readonly<{
   rows: readonly ProtectedQueryRow[];
   fieldBounds: ProtectedQueryFieldBounds;
+  /** The flat read's scan budget ran out before the page filled; a group's members never are. */
+  scanLimited: boolean;
   nextContinuationToken?: string;
   previousContinuationToken?: string;
 }>;
@@ -643,7 +645,7 @@ const readGrouped = async (
     return {
       kind: "read",
       ...(groups === undefined ? {} : { groups }),
-      page: { rows: [], fieldBounds },
+      page: { rows: [], fieldBounds, scanLimited: false },
     };
   }
   const selector = recordsTableGroupSelector(group.fieldId, opened);
@@ -677,6 +679,7 @@ const readGrouped = async (
     page: {
       rows: members.value.rows,
       fieldBounds: members.value.fieldBounds,
+      scanLimited: false,
       ...(members.value.nextContinuationToken === undefined
         ? {}
         : { nextContinuationToken: members.value.nextContinuationToken }),
@@ -772,6 +775,7 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
             ? {
                 rows: result.value.rows,
                 fieldBounds: result.value.fieldBounds,
+                scanLimited: result.value.scanLimited,
                 ...(result.value.nextContinuationToken === undefined
                   ? {}
                   : { nextContinuationToken: result.value.nextContinuationToken }),
@@ -862,6 +866,7 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
                 narrowing,
                 page,
                 hasNextPage: nextContinuationToken !== undefined,
+                scanLimited: read.scanLimited,
                 hasPreviousPage: previousContinuationToken !== undefined,
                 ...(nextContinuationToken === undefined ? {} : { nextContinuationToken }),
                 ...(previousContinuationToken === undefined ? {} : { previousContinuationToken }),

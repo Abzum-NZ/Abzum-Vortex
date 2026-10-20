@@ -52,7 +52,7 @@ import {
 } from "../placement-read/shared";
 import { buildRecordsTableQueryCommand } from "../records-table-query";
 import { openRecordsSelection, type RecordsSelectionDescriptor } from "../records-selection-seal";
-import { createRecordsTableBulkService } from "./bulk-run";
+import { createRecordsTableBulkService, enumerationScanLimitedCeiling } from "./bulk-run";
 import {
   loadRecordsTablePlacement,
   type RecordsTableCommandAddress,
@@ -631,7 +631,13 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
 
       const readPage = async (
         extra: Readonly<{ exactRecordId?: string; continuationToken?: string }>,
-      ): Promise<Readonly<{ rows: readonly ProtectedQueryRow[]; next: string | undefined }>> => {
+      ): Promise<
+        Readonly<{
+          rows: readonly ProtectedQueryRow[];
+          next: string | undefined;
+          scanLimited: boolean;
+        }>
+      > => {
         const result = await queries.run(session, address.selection, {
           ...command,
           pageSize: extra.exactRecordId === undefined ? pageSize : 1,
@@ -644,7 +650,11 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
           throw exportFailure(`read_${result.kind}`, "cause" in result ? result.cause : undefined);
         if (result.value.outcome !== "completed")
           throw exportFailure(`read_refused_${result.value.reasonCode}`);
-        return { rows: result.value.rows, next: result.value.nextContinuationToken };
+        return {
+          rows: result.value.rows,
+          next: result.value.nextContinuationToken,
+          scanLimited: result.value.scanLimited,
+        };
       };
 
       // Shown rows that changed since the person ticked them: exported as they are now, and
@@ -673,6 +683,8 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
         // Every matching record: keyset pages in the table's order, once per record.
         const seen = new Set<string>();
         let continuationToken: string | undefined;
+        // A sparse search reads scan-limited pages; past the count's candidate ceiling it stops.
+        let scanLimitedCount = 0;
         do {
           pageSignal.throwIfAborted();
           await recheck();
@@ -684,6 +696,9 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
             return true;
           });
           continuationToken = read.next;
+          if (read.scanLimited) scanLimitedCount += 1;
+          if (continuationToken !== undefined && scanLimitedCount === enumerationScanLimitedCeiling)
+            throw exportFailure("matching_enumeration_ceiling");
           if (fresh.length > 0) yield await toPage(fresh);
         } while (continuationToken !== undefined);
       }
