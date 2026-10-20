@@ -32,7 +32,7 @@ import {
   QueryInputRefusalError,
 } from "./typed-input-validation";
 
-export const boardInitialPagesCommandSchema = protectedQueryBoardMembersCommandSchema
+export const boardColumnPagesCommandSchema = protectedQueryBoardMembersCommandSchema
   .omit({ selector: true, continuationToken: true })
   .extend({
     selectors: z
@@ -46,8 +46,8 @@ export const boardInitialPagesCommandSchema = protectedQueryBoardMembersCommandS
           ) &&
           new Set(selectors.map((selector) => JSON.stringify(selector.column))).size ===
             selectors.length &&
-          selectors.filter((selector) => selector.column.kind === "unassigned").length === 1,
-        { message: "Board columns must be unique and include unassigned" },
+          selectors.filter((selector) => selector.column.kind === "unassigned").length <= 1,
+        { message: "Board columns must be unique and name unassigned at most once" },
       ),
   })
   .strict();
@@ -230,7 +230,7 @@ const boardMemberResult = (
 /** Every displayed column's first member page, read in one database call. */
 const readBoardColumnPages = async (
   transaction: RequestDatabaseTransaction,
-  command: z.infer<typeof boardInitialPagesCommandSchema>,
+  command: z.infer<typeof boardColumnPagesCommandSchema>,
   releaseRevision: number,
   inputValues: Readonly<Record<string, JsonValue>>,
 ) => {
@@ -264,13 +264,13 @@ const readBoardColumnPages = async (
 };
 
 /**
- * A board's first pages: one bounded member page per displayed column, each with its own
+ * The first pages of the named board columns: one bounded member page per column, each with its own
  * continuation exactly as a member page read would return it.
  */
-export const boardFirstPagesCommand = async (
+export const boardColumnPagesCommand = async (
   transaction: RequestDatabaseTransaction,
   scope: SelectedOrganizationScope,
-  command: z.infer<typeof boardInitialPagesCommandSchema>,
+  command: z.infer<typeof boardColumnPagesCommandSchema>,
   continuationKey: QueryContinuationKey,
 ): Promise<
   | Readonly<{ outcome: "completed"; pages: readonly ProtectedQueryResult[] }>

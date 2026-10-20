@@ -25,8 +25,12 @@ export const queryBindingSourceKinds = [
 ] as const;
 export type QueryBindingSourceKind = (typeof queryBindingSourceKinds)[number];
 
-/** The parts of the person viewing the page a binding may use. */
-export const currentPersonParts = ["person"] as const;
+/**
+ * The parts of the person viewing the page a binding may use: their directory record, and the
+ * organisation they are signed in to (its identity as text). Both come from the verified session
+ * on the server, never from an address, a control or a preview request.
+ */
+export const currentPersonParts = ["person", "organisation"] as const;
 export type CurrentPersonPart = (typeof currentPersonParts)[number];
 
 /** The dates a relative date counts from, each in the organisation's time zone. */
@@ -43,6 +47,8 @@ export type RelativeDateAnchor = (typeof relativeDateAnchors)[number];
 export type QueryBindingSource =
   /** A value written for the input's type: exact decimal text, `true`/`false`, an ISO date. */
   | Readonly<{ kind: "fixed"; value: string }>
+  /** One chosen record, for a record input: its record type and identity, in the caller's space. */
+  | Readonly<{ kind: "fixed_record"; recordType: string; recordId: string }>
   /** A parameter the page declares (its subject `record_id`, or one a control publishes). */
   | Readonly<{ kind: "page_parameter"; name: string }>
   /** A field of the page's subject record, read under the viewer's current field policy. */
@@ -72,11 +78,25 @@ const choiceOf = <Choice extends string>(
     ? (value.value as Choice)
     : undefined;
 
+/** A fixed record as the setting keeps it: the compiled record type identity or the authored reference. */
+const settingRecord = (
+  value: ComponentSettingValue | undefined,
+): Readonly<{ recordType: string; recordId: string }> | undefined => {
+  if (value?.kind !== "record_reference") return undefined;
+  if ("record_type" in value) return { recordType: value.record_type, recordId: value.record_id };
+  return value.recordType.state === "resolved"
+    ? { recordType: String(value.recordType.recordTypeId), recordId: String(value.recordId) }
+    : undefined;
+};
+
 const sourceOf = (item: SettingsRecord): QueryBindingSource | undefined => {
   switch (choiceOf(item["source"], queryBindingSourceKinds)) {
     case "fixed": {
+      const record = settingRecord(item["record"]);
+      if (record !== undefined) return { kind: "fixed_record", ...record };
+      // A fixed source with nothing written yet; the binding check asks for the value.
       const value = item["value"];
-      return value?.kind === "text" ? { kind: "fixed", value: value.value } : undefined;
+      return { kind: "fixed", value: value?.kind === "text" ? value.value : "" };
     }
     case "page_parameter": {
       const name = settingText(item["name"]);

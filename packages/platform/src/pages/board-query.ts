@@ -10,12 +10,13 @@ import {
   arrangeProtectedBoard,
   type createProtectedQueryService,
   type ProtectedBoardArrangementPage,
+  type ProtectedBoardArrangementCommand,
   type ProtectedBoardArrangementResult,
   type ProtectedQueryPageRow,
   type ProtectedQuerySummaryAggregateResult,
 } from "../queries/index";
 import {
-  boardColumnContinuationRequestSchema,
+  boardColumnReadRequestSchema,
   boardProblem,
   describeFailure,
   exactDecimalTextSchema,
@@ -25,7 +26,6 @@ import {
   richTextDocumentSchema,
   sameId,
   type ProjectedItem,
-  type BoardColumnSelector,
   type RecordsTableBoardMode,
   type IdentitySession,
   type JsonValue,
@@ -39,7 +39,7 @@ type ModuleField = ModuleRecordType["fields"][number];
 type ModuleQuery = ModuleRelease["content"]["queries"][number];
 type BoardQueries = Pick<
   ReturnType<typeof createProtectedQueryService>,
-  "boardMembers" | "boardInitialPages" | "boardSummary"
+  "boardMembers" | "boardColumnPages" | "boardSummary"
 >;
 type PermissionProjectedPlacement = ProjectedItem;
 
@@ -169,7 +169,10 @@ const metricValue = (
   result: ProtectedQuerySummaryAggregateResult | undefined,
 ): BoardMetric["value"] | undefined => {
   if (result === undefined) return undefined;
-  if (result.outcome === "refused") return { kind: "unavailable" };
+  if (result.outcome === "refused") {
+    console.error("[board] total refused", { part: "aggregate", reason: result.reasonCode });
+    return { kind: "unavailable" };
+  }
   if (aggregate.operation === "count" || aggregate.operation === "distinct_count")
     return typeof result.value === "number" &&
       Number.isSafeInteger(result.value) &&
@@ -269,7 +272,8 @@ type BoardPagePayload = Readonly<{
   nextContinuationToken?: string;
 }>;
 type BoardBucketValues = Readonly<{
-  rowCount: number;
+  state: "unread" | "read";
+  rowCount: number | null;
   aggregates: readonly BoardMetric[];
   page: BoardPagePayload | null;
 }>;
@@ -294,8 +298,6 @@ export type BoardPlacementValues = Readonly<{
   wipLimit?: number;
   cardTitleFieldId: string;
   cardFieldIds: readonly string[];
-  totalRowCount: number;
-  aggregates: readonly BoardMetric[];
   columns: readonly (BoardBucketValues & BoardStageValues)[];
   /** Cards with no stage yet, and the stages they may move to: the start stage and its moves. */
   unassigned: BoardBucketValues & Readonly<{ moves: readonly string[] }>;
@@ -308,7 +310,7 @@ export type BoardPlacementFailureCause =
   | "board_query_not_bound"
   | "board_settings_invalid"
   | "board_query_unsupported"
-  | "board_continuation_invalid"
+  | "board_read_invalid"
   | "board_query_unavailable"
   | "board_query_refused"
   | "board_arrangement_mismatch"
@@ -345,10 +347,15 @@ export const projectBoardPlacement = async (
     queries: BoardQueries;
     /** The placement's Board feature, as the one Records table reader read it. */
     board: RecordsTableBoardMode;
-    continuation?: unknown;
+    /**
+     * The columns the browser shows (their first pages), or one column's continuation. Without it
+     * the first read covers one leading stage; the browser measures any further visible columns.
+     */
+    read?: unknown;
   }>,
 ): Promise<BoardPlacementProjection> => {
-  const refused = (cause: BoardPlacementFailureCause) => ({ outcome: "refused", cause }) as const;
+  const refused = (cause: BoardPlacementFailureCause, reason: string = cause) =>
+    ({ outcome: "refused", cause, detail: JSON.stringify({ part: "board", reason }) }) as const;
   const unavailable = (cause: BoardPlacementFailureCause, detail?: string) =>
     ({ outcome: "unavailable", cause, ...(detail === undefined ? {} : { detail }) }) as const;
   try {
@@ -397,24 +404,25 @@ export const projectBoardPlacement = async (
     const requestedFieldIds = [board.cardTitleField, ...board.cardFields];
     const inputValues = input.inputValues;
 
-    let pageRequest:
-      | Readonly<{ kind: "initial" }>
-      | Readonly<{
-          kind: "continue";
-          selector: Readonly<{ choiceFieldId: string; column: BoardColumnSelector }>;
-          continuationToken: string;
-        }> = { kind: "initial" };
-    if (input.continuation !== undefined) {
-      const continuation = boardColumnContinuationRequestSchema.safeParse(input.continuation);
-      if (!continuation.success) return unavailable("board_continuation_invalid");
+    let pageRequest: ProtectedBoardArrangementCommand["pageRequest"];
+    if (input.read === undefined) {
       pageRequest = {
-        kind: "continue",
-        selector: {
-          choiceFieldId,
-          column: continuation.data.column,
-        },
-        continuationToken: continuation.data.continuationToken,
+        kind: "read",
+        columns: pipeline.stages
+          .slice(0, 1)
+          .map((stage) => ({ kind: "option" as const, value: stage.option })),
       };
+    } else {
+      const read = boardColumnReadRequestSchema.safeParse(input.read);
+      if (!read.success) return unavailable("board_read_invalid");
+      pageRequest =
+        read.data.continuationToken === undefined
+          ? { kind: "read", columns: read.data.columns }
+          : {
+              kind: "continue",
+              selector: { choiceFieldId, column: read.data.columns[0]! },
+              continuationToken: read.data.continuationToken,
+            };
     }
 
     const result = await arrangeProtectedBoard(input.queries, input.session, input.selection, {
@@ -429,7 +437,8 @@ export const projectBoardPlacement = async (
       pageRequest,
     });
     if (result.kind !== "available") return unavailable("board_query_unavailable");
-    if (result.value.outcome === "refused") return refused("board_query_refused");
+    if (result.value.outcome === "refused")
+      return refused("board_query_refused", result.value.reasonCode);
 
     const arranged = result.value;
     if (
@@ -446,12 +455,6 @@ export const projectBoardPlacement = async (
     )
       return unavailable("board_arrangement_mismatch");
 
-    const aggregates = projectMetrics(
-      binding.query.aggregates,
-      board.totals,
-      arranged.aggregates,
-      fieldsById,
-    );
     // Columns follow the pipeline's stage order; each carries its colour role, the stages a card
     // in it may move to and the named action that owns it, if one does.
     const stageOrder = new Map(pipeline.stages.map((stage, index) => [stage.option, index]));
@@ -469,12 +472,10 @@ export const projectBoardPlacement = async (
       )
       .flatMap((column) => {
         const stage = pipeline.stages.find((candidate) => candidate.option === column.value);
-        const bucketAggregates = projectMetrics(
-          binding.query.aggregates,
-          board.totals,
-          column.aggregates,
-          fieldsById,
-        );
+        const bucketAggregates =
+          column.rowCount === null
+            ? []
+            : projectMetrics(binding.query.aggregates, board.totals, column.aggregates, fieldsById);
         if (stage === undefined || bucketAggregates === undefined) return [];
         const owner = owners.find((action) => action.setsChoiceOption === column.value);
         return [
@@ -486,23 +487,23 @@ export const projectBoardPlacement = async (
               arranged.columns.some((candidate) => candidate.value === target),
             ),
             ...(owner === undefined ? {} : { gatedBy: owner.label }),
+            state: column.rowCount === null ? ("unread" as const) : ("read" as const),
             rowCount: column.rowCount,
             aggregates: bucketAggregates,
             page: projectPage(column.page, requestedFieldIds, fieldsById),
           },
         ];
       });
-    const unassignedAggregates = projectMetrics(
-      binding.query.aggregates,
-      board.totals,
-      arranged.unassigned.aggregates,
-      fieldsById,
-    );
-    if (
-      aggregates === undefined ||
-      unassignedAggregates === undefined ||
-      columns.length !== arranged.columns.length
-    )
+    const unassignedAggregates =
+      arranged.unassigned.rowCount === null
+        ? []
+        : projectMetrics(
+            binding.query.aggregates,
+            board.totals,
+            arranged.unassigned.aggregates,
+            fieldsById,
+          );
+    if (unassignedAggregates === undefined || columns.length !== arranged.columns.length)
       return unavailable("board_metrics_invalid");
 
     const choiceField = fieldsById.get(lower(choiceFieldId));
@@ -519,13 +520,12 @@ export const projectBoardPlacement = async (
         ...(board.wipLimit === undefined ? {} : { wipLimit: board.wipLimit }),
         cardTitleFieldId: board.cardTitleField,
         cardFieldIds: requestedFieldIds,
-        totalRowCount: arranged.totalRowCount,
-        aggregates,
         columns,
         unassigned: {
           moves: pipelineMovesFrom(pipeline, undefined).filter((target) =>
             arranged.columns.some((candidate) => candidate.value === target),
           ),
+          state: arranged.unassigned.rowCount === null ? "unread" : "read",
           rowCount: arranged.unassigned.rowCount,
           aggregates: unassignedAggregates,
           page: projectPage(arranged.unassigned.page, requestedFieldIds, fieldsById),
