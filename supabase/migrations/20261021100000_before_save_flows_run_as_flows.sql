@@ -1,4 +1,5 @@
-set local role vortex_owner;
+-- Record functions retain the restricted adapter owner; publication retains vortex_owner.
+set local role vortex_record_adapter;
 
 -- before_save_flows_for_record_type_internal.sql
 CREATE OR REPLACE FUNCTION vortex_record.before_save_flows_for_record_type_internal(p_module_root_id uuid, p_module_release_revision bigint, p_record_type_id uuid) RETURNS jsonb
@@ -4031,6 +4032,8 @@ comment on function vortex_record.save_base_record_with_relationship_totals(uuid
   'Existing protected base save composed with revision-checked generated parent totals, Activity and standard Events in the same transaction.';
 
 -- append_release.sql
+set local role vortex_owner;
+
 create or replace function vortex_definition.append_release(
   p_root_id uuid,
   p_expected_draft_revision bigint,
@@ -5271,6 +5274,8 @@ comment on function vortex_definition.append_release(uuid, bigint, text, jsonb) 
 alter function vortex_definition.append_release(p_root_id uuid, p_expected_draft_revision bigint, p_expected_source_fingerprint text, p_release jsonb) owner to vortex_owner;
 
 grant execute on function vortex_definition.append_release(p_root_id uuid, p_expected_draft_revision bigint, p_expected_source_fingerprint text, p_release jsonb) to postgres;
+
+set local role vortex_record_adapter;
 
 drop function vortex_record.before_save_rules_for_record_type_internal(uuid, bigint, uuid);
 
