@@ -51,9 +51,11 @@ import { recordsTablePivotFeature, type RecordsTablePivotSettings } from "./pivo
 import { recordsTableGroupingFeature, type RecordsTableGroupingSettings } from "./grouping";
 import { recordsTableExportFeature, type RecordsTableExportSettings } from "./export";
 import {
+  featureAvailable,
   featureNotPossible,
   settingGroup,
   type RecordsTableFeatureCheck,
+  type RecordsTableFeatureRefusalCode,
   type RecordsTableFeatureDefinition,
   type RecordsTableFeatureState,
   type RecordsTableQueryFacts,
@@ -299,6 +301,13 @@ export const readRecordsTableFeatures = (
 };
 
 /**
+ * The features a board view implements beside Board itself. A feature not listed is refused when
+ * it is on together with Board: the board draws cards, not table rows, and never ignores a feature.
+ * A card opens through Row actions, so that feature is the one supported beside Board.
+ */
+const recordsTableBoardSupportedFeatures: readonly RecordsTableFeatureKey[] = ["row_actions"];
+
+/**
  * The one capability check of one feature against the bound query's facts. Publication runs it on
  * the compiled release for every enabled feature and refuses with its sentence; Studio runs it on
  * the draft's facts beside each switch, so the two never disagree.
@@ -354,6 +363,24 @@ export const checkRecordsTableFeature = (
         `Turn ${other} off to group the records.`,
       );
   }
+  // A board draws cards, not table rows, so a feature the board view does not implement is
+  // refused rather than silently ignored. Grouping and tree carry their own sentences above.
+  if (
+    state.enabled &&
+    features.board.enabled &&
+    key !== "board" &&
+    key !== "grouping" &&
+    key !== "tree" &&
+    !recordsTableBoardSupportedFeatures.includes(key)
+  )
+    return featureNotPossible(
+      `definition_records_table_${key}` as RecordsTableFeatureRefusalCode,
+      `${registry[key].definition.label} is not available on a board yet: turn Board off to use it, or turn ${registry[key].definition.label} off.`,
+    );
+  // The board reads its own grouped query, which the board check judges; a table-row check of a
+  // feature the board borrows would refuse that query.
+  if (features.board.enabled && key !== "board" && recordsTableBoardSupportedFeatures.includes(key))
+    return featureAvailable;
   const check = (registry[key].definition as RecordsTableFeatureDefinition<object>).check(
     state,
     facts,

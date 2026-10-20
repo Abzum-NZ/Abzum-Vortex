@@ -539,12 +539,7 @@ export function applicationPageRules(scope: ApplicationScope): void {
           table.presentation,
           table.pageSize,
         ))
-          // A grid in Board mode shows none of the table's other features, so only the board is judged.
-          if (
-            feature.enabled &&
-            feature.check.kind === "not_possible" &&
-            (!table.features.board.enabled || feature.key === "board")
-          )
+          if (feature.enabled && feature.check.kind === "not_possible")
             failures.push(
               failure(
                 output,
