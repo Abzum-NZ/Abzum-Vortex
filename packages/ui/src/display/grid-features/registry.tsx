@@ -77,6 +77,15 @@ export type GridCellDecorationToken = keyof typeof gridCellDecorationClasses;
  */
 type GridExtensionKey = Exclude<RecordsTableFeatureKey, "board">;
 
+/** Whole-grid views share the lazy registry but do not fill table extension points. */
+const viewLoaders = {
+  board: () => import("../board"),
+} satisfies Record<Exclude<RecordsTableFeatureKey, GridExtensionKey>, () => Promise<unknown>>;
+
+export const GridBoardView = lazy(async () => ({
+  default: (await viewLoaders.board()).BoardView,
+}));
+
 /**
  * The extension points a grid feature fills. The table renders each point once for every feature
  * the projection turns on, so a later feature adds its module here and never edits the table:

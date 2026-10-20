@@ -6,6 +6,7 @@ import {
 } from "@vortex/platform/schema";
 import { uniqueKey } from "./application-structure-common";
 import { studioBoardFacts } from "./contextual-palette";
+import type { StudioSettingChoices } from "./studio-setting-controls";
 
 /** Why a pipeline whose stage field people cannot filter by cannot make columns. */
 const stageFilterError =
@@ -23,6 +24,41 @@ export const boardModeOf = (
   return features?.board.enabled ? features.board : undefined;
 };
 
+/** Card fields come from the selected pipeline's record type, before its query is written. */
+export const boardSettingChoices = (
+  choices: StudioSettingChoices,
+  board: RecordsTableBoardMode | undefined,
+): StudioSettingChoices => {
+  const column = board?.columnField;
+  const prefix = column === undefined ? undefined : column.slice(0, column.lastIndexOf(".") + 1);
+  return {
+    ...choices,
+    fields:
+      prefix === undefined
+        ? []
+        : choices.fields.filter((field) => field.reference.startsWith(prefix)),
+  };
+};
+
+/** An existing authored move flow keeps its record type when the grid changes pipeline. */
+export const boardMoveRecordTypeProblem = (
+  source: ApplicationSourceDocument,
+  alias: string,
+  board: RecordsTableBoardMode,
+): string | undefined => {
+  if (board.columnField === undefined) return undefined;
+  const recordType = board.columnField.slice(0, board.columnField.lastIndexOf("."));
+  const bindings = source.body.flow_bindings.filter(
+    (binding) => binding.control === alias && binding.event === "card_moved",
+  );
+  return bindings.some(
+    (binding) =>
+      source.body.events.find((event) => event.id === binding.event_id)?.record_type !== recordType,
+  )
+    ? "This grid has a card-move flow for another record type. Choose a pipeline of that record type, or add a new grid."
+    : undefined;
+};
+
 /** A pipeline the board can take its columns from, with the fields of its record type. */
 export type StudioBoardPipeline = Readonly<{
   /** The stage field, as the qualified reference a block stores. */
@@ -37,19 +73,34 @@ export type StudioBoardPipeline = Readonly<{
 /** Every pipeline of the draft's own Modules; one whose stage needs attention says why. */
 export const studioBoardPipelines = (
   source: ApplicationSourceDocument,
+  controlAlias?: string,
 ): readonly StudioBoardPipeline[] =>
   source.body.modules.flatMap((module) =>
     module.record_types.flatMap((record) =>
       record.pipelines.map((pipeline) => {
         const stage = record.fields.find((field) => field.key === pipeline.stage_field);
         const title = record.fields.find((field) => field.key === record.title_field);
-        const selectable = stage?.type === "choice" && stage.filterable && title !== undefined;
+        const reference = `${module.key}:${record.key}.${pipeline.stage_field}`;
+        const moveProblem =
+          controlAlias === undefined
+            ? undefined
+            : boardMoveRecordTypeProblem(source, controlAlias, {
+                enabled: true,
+                columnField: reference,
+                cardFields: [],
+                totals: [],
+              });
+        const selectable =
+          stage?.type === "choice" &&
+          stage.filterable &&
+          title !== undefined &&
+          moveProblem === undefined;
         return {
-          reference: `${module.key}:${record.key}.${pipeline.stage_field}`,
+          reference,
           label: `${record.plural_name}: ${pipeline.name}`,
           titleField: title === undefined ? undefined : `${module.key}:${record.key}.${title.key}`,
           selectable,
-          ...(selectable ? {} : { unavailableReason: stageFilterError }),
+          ...(selectable ? {} : { unavailableReason: moveProblem ?? stageFilterError }),
         };
       }),
     ),

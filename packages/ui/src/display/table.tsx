@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  lazy,
   Suspense,
   useCallback,
   useEffect,
@@ -27,7 +26,7 @@ import {
   SelectAllControl,
   SelectionControl,
 } from "./controls";
-import { useGridFeatures, type GridFeatureContext } from "./grid-features/registry";
+import { GridBoardView, useGridFeatures, type GridFeatureContext } from "./grid-features/registry";
 import { FULL_SCREEN_CLASS, GridToolbar, useGridFullScreen } from "./grid-features/toolbar";
 import { resolveDisplayContext, rowName, type DisplayRenderProps } from "./context";
 import { DisplayStateContainer } from "./display-state-container";
@@ -102,9 +101,6 @@ const useAnnouncer = (): [string, (message: string) => void] => {
   return [message, announce];
 };
 
-// The board view loads on demand: a grid that is not in Board mode never downloads its code.
-const BoardView = lazy(async () => ({ default: (await import("./board")).BoardView }));
-
 /**
  * The Data grid: the one block that shows a set of records. Its Board feature turns the same grid
  * into a board of cards in columns; every other grid shows the table below. The server projects
@@ -122,7 +118,7 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload | BoardPaylo
     DisplayRenderProps<BoardPayload> | DisplayRenderProps<TablePayload>;
   return boardMode ? (
     <Suspense fallback={null}>
-      <BoardView {...(checked as DisplayRenderProps<BoardPayload>)} />
+      <GridBoardView {...(checked as DisplayRenderProps<BoardPayload>)} />
     </Suspense>
   ) : (
     <RecordsTableView {...(checked as DisplayRenderProps<TablePayload>)} />

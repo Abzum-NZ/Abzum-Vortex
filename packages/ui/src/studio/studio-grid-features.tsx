@@ -76,6 +76,7 @@ export function StudioGridFeatures({
   query,
   compiledFields,
   choices,
+  boardChoices,
   related,
   pipelines,
   disabled,
@@ -92,6 +93,8 @@ export function StudioGridFeatures({
   compiledFields: readonly ModuleField[] | undefined;
   /** The block's choices: the bound query's fields by business name. */
   choices: StudioSettingChoices;
+  /** Real fields of the selected pipeline's record type, including fields not yet queried. */
+  boardChoices: StudioSettingChoices;
   /** What the draft offers the rows' related records. */
   related: StudioRelatedRecordsChoices;
   /** The pipelines of the draft's record types, which a board takes its columns from. */
@@ -258,7 +261,7 @@ export function StudioGridFeatures({
                   value={current}
                   declarations={settings}
                   pipelines={pipelines}
-                  choices={choices}
+                  choices={boardChoices}
                   disabled={disabled}
                   onChange={(next) => write(key, next)}
                 />
