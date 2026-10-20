@@ -1143,5 +1143,8 @@ export const applyStudioCompositionCommand = (current: StudioCompositionContext,
     const parsed = applicationSourceDocumentSchema.parse(source);
     if (sameValue(parsed, current.source)) return { kind: "invalid" };
     return { kind: "applied", source: parsed };
-  } catch { return { kind: "invalid" }; }
+  } catch (error) {
+    console.error("[studio] composition command could not be applied", error);
+    return { kind: "invalid" };
+  }
 };
