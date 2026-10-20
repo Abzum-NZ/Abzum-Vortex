@@ -64,6 +64,7 @@ const storedViewRowsSchema = z
         shareRoleIds: z.array(idSchema),
         shareGroupIds: z.array(idSchema),
         document: z.unknown().optional(),
+        hiddenFilters: z.number().int().min(0).optional(),
       })
       .strict(),
   )
@@ -117,6 +118,7 @@ export type StoredNamedGridView = Readonly<{
   revision: number;
   sharing: GridViewSharing;
   document: GridViewDocument | undefined;
+  hiddenFilters: number;
 }>;
 
 /** Everything one page read returns of the store: layouts keyed by placement, views by placement. */
@@ -214,6 +216,7 @@ export const readGridViews = async (
         roleIds: row.shareRoleIds.map((id) => id.toLowerCase()),
         groupIds: row.shareGroupIds.map((id) => id.toLowerCase()),
       },
+      hiddenFilters: row.hiddenFilters ?? 0,
       document:
         row.document === undefined
           ? undefined
@@ -262,6 +265,7 @@ export const addressedGridView = (
       revision: view.revision,
     },
     document: view.document,
+    hiddenFilters: view.hiddenFilters,
     sharing: view.sharing,
   };
 };

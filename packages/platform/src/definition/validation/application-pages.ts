@@ -113,6 +113,7 @@ export function applicationPageRules(scope: ApplicationScope): void {
   const recordsTableQueryFacts = (
     bound: JsonObject,
     page: RecordsTableRelatedRecordsFacts["page"],
+    signedIn: boolean,
   ): RecordsTableQueryFacts => {
     const recordTypeId = String(object(bound.recordType).recordTypeId);
     const record = records.get(recordTypeId);
@@ -123,6 +124,7 @@ export function applicationPageRules(scope: ApplicationScope): void {
       ),
     );
     return {
+      signedIn,
       recordTypeLabel: String(record?.singularLabel ?? ""),
       fields: array(record?.fields)
         .filter((field) => offered.has(String(field.fieldId).toLowerCase()))
@@ -519,7 +521,7 @@ export function applicationPageRules(scope: ApplicationScope): void {
         // own business sentence, the one Studio shows beside its switch.
         for (const feature of checkRecordsTableFeatures(
           table.features,
-          recordsTableQueryFacts(bound, bindingFacts),
+          recordsTableQueryFacts(bound, bindingFacts, page.type !== "public"),
         ))
           if (feature.enabled && feature.check.kind === "not_possible")
             failures.push(

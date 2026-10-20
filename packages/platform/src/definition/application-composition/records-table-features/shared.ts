@@ -151,6 +151,8 @@ export type RecordsTableRelatedRecordsFacts = Readonly<{
  * the compiled release; Studio from the draft being edited.
  */
 export type RecordsTableQueryFacts = Readonly<{
+  /** The page requires a person to sign in before using its table. */
+  signedIn: boolean;
   recordTypeLabel: string;
   fields: readonly RecordsTableFieldFacts[];
   relationships: readonly Readonly<{ key: string; label: string }>[];

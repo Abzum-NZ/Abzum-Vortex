@@ -106,6 +106,11 @@ export const recordsTableSavedViewsFeature: RecordsTableFeatureDefinition<Record
     },
     check: (state, facts) => {
       if (!state.enabled) return featureAvailable;
+      if (!facts.signedIn)
+        return featureNotPossible(
+          "definition_records_table_saved_views",
+          "Saved views need people to be signed in on this page",
+        );
       const defaults = new Set<string>();
       const ids = new Set<string>();
       for (const view of state.defaultViews) {

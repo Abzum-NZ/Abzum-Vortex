@@ -89,10 +89,12 @@ export type StudioRelatedRecordsChoices = Readonly<{
  */
 export const studioRecordsTableQueryFacts = (
   query: StudioQueryChoice | undefined,
+  signedIn: boolean,
   actions: readonly StudioActionChoice[],
   relationships: readonly StudioRelationshipChoice[],
   related: StudioRelatedRecordsChoices,
 ): RecordsTableQueryFacts => ({
+  signedIn,
   recordTypeLabel: query?.label ?? "",
   fields: (query?.fields ?? []).map((field) => ({
     field: field.reference,

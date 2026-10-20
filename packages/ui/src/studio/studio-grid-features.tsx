@@ -75,6 +75,7 @@ export function StudioGridFeatures({
   query,
   compiledFields,
   tableSettings,
+  signedIn,
   choices,
   related,
   disabled,
@@ -91,6 +92,7 @@ export function StudioGridFeatures({
   compiledFields: readonly ModuleField[] | undefined;
   /** The block's choices: the bound query's fields by business name. */
   tableSettings: StudioSettingValues;
+  signedIn: boolean;
   choices: StudioSettingChoices;
   /** What the draft offers the rows' related records. */
   related: StudioRelatedRecordsChoices;
@@ -113,6 +115,7 @@ export function StudioGridFeatures({
   const features = readRecordsTableFeatures(whole);
   const facts = studioRecordsTableQueryFacts(
     query,
+    signedIn,
     choices.actions,
     choices.relationships,
     related,

@@ -13,6 +13,8 @@ declare
   scope record;
   targets record;
   shareable uuid[] := '{}'::uuid[];
+  installation jsonb;
+  access_plan jsonb;
 begin
   if p_page_id is null or not vortex_platform.is_non_nil_uuid(p_page_id::text)
     or p_placement_ids is null
@@ -32,6 +34,14 @@ begin
 
   if vortex_platform.grid_view_may_share_internal() then
     shareable := p_placement_ids;
+  end if;
+
+  installation := vortex_definition.read_current_active_installation();
+  if exists (select 1 from vortex_platform.grid_views as selected
+    where selected.organization_id = scope.organization_id
+      and selected.application_root_id = scope.application_root_id
+      and selected.view_id = any(p_selected_view_ids) and selected.document ? 'filters') then
+    access_plan := vortex_record.resolve_installation_access_plan_internal(installation);
   end if;
 
   -- The person's current layouts and every named view they may see, for all the page's grids, in
@@ -79,7 +89,9 @@ begin
         'shareRoleIds', listed.share_role_ids,
         'shareGroupIds', listed.share_group_ids
       ) || case when listed.view_id = any (p_selected_view_ids)
-        then pg_catalog.jsonb_build_object('document', listed.document) else '{}'::jsonb end
+        then vortex_platform.grid_view_document_for_viewer_internal(
+          listed.query_id, listed.document, installation, access_plan
+        ) else '{}'::jsonb end
         order by listed.placement_id, pg_catalog.lower(listed.name), listed.view_id)
       from (
         select visible.*, pg_catalog.row_number() over (

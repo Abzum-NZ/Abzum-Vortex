@@ -339,7 +339,7 @@ export const applyRecordsTableView = (
   parameters: URLSearchParams,
   placementId: string,
   view: Readonly<{
-    viewId: string;
+    viewId: string | null;
     sort: readonly RecordsTableSortKey[];
     filters: readonly Readonly<{ fieldId: string; filter: string }>[];
     search: string | null;

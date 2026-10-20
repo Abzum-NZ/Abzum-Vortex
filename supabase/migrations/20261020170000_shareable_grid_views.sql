@@ -428,6 +428,90 @@ alter function vortex_access.initialize_platform_permission_catalogue(uuid, uuid
 grant execute on function vortex_access.initialize_platform_permission_catalogue(uuid, uuid, uuid)
   to postgres;
 
+create or replace function vortex_record.record_type_read_declaration_internal(
+  p_plan jsonb,
+  p_record_type_id uuid,
+  p_application_root_id uuid
+)
+returns jsonb
+language plpgsql
+stable
+security invoker
+set search_path = ''
+as $function$
+declare
+  target_meta jsonb;
+  required_permissions jsonb;
+begin
+  if p_record_type_id is null or p_application_root_id is null
+    or pg_catalog.jsonb_typeof(p_plan -> 'recordTypes') is distinct from 'object'
+    or pg_catalog.jsonb_typeof(p_plan -> 'permissions') is distinct from 'object' then
+    raise exception using errcode = '22023',
+      message = 'Record read declaration input is invalid';
+  end if;
+  target_meta := p_plan -> 'recordTypes' -> pg_catalog.lower(p_record_type_id::text);
+  if target_meta is null then
+    raise exception using errcode = '55000',
+      message = 'Record type is not part of the active installation';
+  end if;
+
+  -- The declaration the record loader builds for a read: every record-scoped
+  -- read permission declared for this exact record type by the context
+  -- Application or the record type's own Module, in canonical order.
+  select pg_catalog.jsonb_agg(
+    pg_catalog.jsonb_build_object(
+      'applicationRootId', p_application_root_id,
+      'ownerKind', declared.value ->> 'ownerKind',
+      'ownerId', (declared.value ->> 'ownerId')::uuid,
+      'permissionId', declared.key::uuid
+    )
+    order by declared.value ->> 'ownerKind' collate "C", declared.key collate "C"
+  )
+  into required_permissions
+  from pg_catalog.jsonb_each(p_plan -> 'permissions') as declared(key, value)
+  where pg_catalog.lower(declared.value ->> 'recordTypeId') = pg_catalog.lower(p_record_type_id::text)
+    and declared.value ->> 'actionKind' = 'read'
+    and (declared.value ->> 'namedAction') is null
+    and (
+      (declared.value ->> 'ownerKind') = 'application'
+      or (declared.value ->> 'ownerId')::uuid = (target_meta ->> 'moduleRootId')::uuid
+    );
+
+  -- No read permission is declared for the record type: nobody reads it.
+  if required_permissions is null then
+    return null;
+  end if;
+
+  return pg_catalog.jsonb_build_object(
+    'operationKey', 'record.read',
+    'action', pg_catalog.jsonb_build_object('actionKind', 'read'),
+    'target', pg_catalog.jsonb_build_object(
+      'kind', 'application', 'applicationRootId', p_application_root_id
+    ),
+    'requiredPermissions', required_permissions,
+    'recordBinding', pg_catalog.jsonb_build_object(
+      'moduleRootId', (target_meta ->> 'moduleRootId')::uuid,
+      'recordTypeId', p_record_type_id,
+      'storageContractId', (target_meta ->> 'storageContractId')::uuid,
+      'storageScope', target_meta ->> 'storageScope'
+    ),
+    'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
+    'authority', pg_catalog.jsonb_build_object('kind', 'permission')
+  );
+end
+$function$;
+
+alter function vortex_record.record_type_read_declaration_internal(jsonb, uuid, uuid)
+  owner to vortex_record_adapter;
+
+revoke all on function vortex_record.record_type_read_declaration_internal(jsonb, uuid, uuid)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+
+comment on function vortex_record.record_type_read_declaration_internal(jsonb, uuid, uuid) is
+  'Private whole-record-type read declaration over one installation access plan: every record-scoped read permission the context Application or the record type''s own Module declares for the record type, or null when none is declared.';
+
+grant execute on function vortex_record.record_type_read_declaration_internal(jsonb, uuid, uuid) to vortex_owner;
+
 create or replace function vortex_platform.grid_view_document_valid_internal(
   p_document jsonb,
   p_kind text
@@ -648,6 +732,78 @@ comment on function vortex_platform.grid_view_visible_internal(uuid, uuid, uuid,
 alter function vortex_platform.grid_view_visible_internal(uuid, uuid, uuid, uuid, uuid, uuid)
   owner to vortex_owner;
 
+create or replace function vortex_platform.grid_view_document_for_viewer_internal(
+  p_query_id uuid, p_document jsonb, p_installation jsonb, p_plan jsonb
+)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
+declare
+  context_value jsonb;
+  record_type_id uuid;
+  declaration jsonb;
+  eligibility jsonb;
+  readable text[] := '{}'::text[];
+  filters jsonb;
+  omitted integer;
+  document jsonb := p_document;
+begin
+  if not (p_document ? 'filters') then
+    return pg_catalog.jsonb_build_object('document', document, 'hiddenFilters', 0);
+  end if;
+  context_value := vortex_access.validated_human_request_context();
+  -- Resolve only releases pinned by this validated installation, including record-type listings.
+  select target.record_type_id into record_type_id
+  from (
+    select distinct (query.value #>> '{recordType,recordTypeId}')::uuid as record_type_id
+    from pg_catalog.jsonb_array_elements(p_installation -> 'moduleBindings') as binding(value)
+    join vortex_definition.releases as release
+      on release.root_id = (binding.value ->> 'moduleRootId')::uuid
+      and release.release_revision = (binding.value ->> 'moduleReleaseRevision')::bigint
+    cross join lateral pg_catalog.jsonb_array_elements(
+      release.compilation_output #> '{canonical,content,queries}'
+    ) as query(value)
+    where (query.value ->> 'queryId')::uuid = p_query_id
+    union
+    select p_query_id
+    where p_plan -> 'recordTypes' ? pg_catalog.lower(p_query_id::text)
+  ) as target;
+  if record_type_id is not null then
+    declaration := vortex_record.record_type_read_declaration_internal(
+      p_plan, record_type_id, (context_value ->> 'applicationRootId')::uuid
+    );
+    if declaration is not null then
+      -- Reuse the query engine's current field bounds, including direct-share restrictions.
+      eligibility := vortex_access.resolve_record_read_field_bounds_internal(declaration);
+      select coalesce(pg_catalog.array_agg(pg_catalog.lower(field.value)), '{}'::text[])
+      into readable
+      from pg_catalog.jsonb_array_elements_text(eligibility -> 'readableFieldIds') as field(value);
+    end if;
+  end if;
+  select coalesce(pg_catalog.jsonb_agg(filter.value order by filter.ordinal), '[]'::jsonb)
+  into filters
+  from pg_catalog.jsonb_array_elements(p_document -> 'filters')
+    with ordinality as filter(value, ordinal)
+  where pg_catalog.lower(filter.value ->> 'fieldId') = any(readable);
+  omitted := pg_catalog.jsonb_array_length(p_document -> 'filters') - pg_catalog.jsonb_array_length(filters);
+  document := document - 'filters';
+  if pg_catalog.jsonb_array_length(filters) > 0 then
+    document := document || pg_catalog.jsonb_build_object('filters', filters);
+  end if;
+  return pg_catalog.jsonb_build_object('document', document, 'hiddenFilters', omitted);
+end
+$function$;
+
+revoke all on function vortex_platform.grid_view_document_for_viewer_internal(uuid, jsonb, jsonb, jsonb)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
+alter function vortex_platform.grid_view_document_for_viewer_internal(uuid, jsonb, jsonb, jsonb)
+  owner to vortex_owner;
+comment on function vortex_platform.grid_view_document_for_viewer_internal(uuid, jsonb, jsonb, jsonb) is
+  'Removes saved filter values outside the current reader permission field policy before a selected document leaves the database; owner-only, with a count for the omission notice.';
+
 create or replace function vortex_platform.read_grid_views(
   p_page_id uuid,
   p_placement_ids uuid[],
@@ -663,6 +819,8 @@ declare
   scope record;
   targets record;
   shareable uuid[] := '{}'::uuid[];
+  installation jsonb;
+  access_plan jsonb;
 begin
   if p_page_id is null or not vortex_platform.is_non_nil_uuid(p_page_id::text)
     or p_placement_ids is null
@@ -682,6 +840,14 @@ begin
 
   if vortex_platform.grid_view_may_share_internal() then
     shareable := p_placement_ids;
+  end if;
+
+  installation := vortex_definition.read_current_active_installation();
+  if exists (select 1 from vortex_platform.grid_views as selected
+    where selected.organization_id = scope.organization_id
+      and selected.application_root_id = scope.application_root_id
+      and selected.view_id = any(p_selected_view_ids) and selected.document ? 'filters') then
+    access_plan := vortex_record.resolve_installation_access_plan_internal(installation);
   end if;
 
   -- The person's current layouts and every named view they may see, for all the page's grids, in
@@ -729,7 +895,9 @@ begin
         'shareRoleIds', listed.share_role_ids,
         'shareGroupIds', listed.share_group_ids
       ) || case when listed.view_id = any (p_selected_view_ids)
-        then pg_catalog.jsonb_build_object('document', listed.document) else '{}'::jsonb end
+        then vortex_platform.grid_view_document_for_viewer_internal(
+          listed.query_id, listed.document, installation, access_plan
+        ) else '{}'::jsonb end
         order by listed.placement_id, pg_catalog.lower(listed.name), listed.view_id)
       from (
         select visible.*, pg_catalog.row_number() over (

@@ -7,6 +7,7 @@ import {
   recordsTableAddressKey,
   recordsTableParameterPlacement,
   type RecordsTablePageRequest,
+  type GridViewDocument,
   type RecordsTableQueryChange,
 } from "@vortex/platform/schema";
 import type { ApplicationPageModel } from "../../../../../../_lib/application-page";
@@ -149,15 +150,26 @@ export function useTablePageAddress({
    * Selects a view the table already shows (the person just saved the grid as it): the address
    * names it without a reread, because the rows on screen are exactly the view's.
    */
-  const selectTableViewInPlace = useCallback((placementId: string, viewId: string) => {
-    const parameters = new URLSearchParams(window.location.search);
-    applyRecordsTableQueryChange(parameters, placementId, { kind: "view", viewId });
-    shownRef.current.keys.set(
-      placementId.toLowerCase(),
-      recordsTableAddressKey(placementId, [...parameters]),
-    );
-    push(parameters);
-  }, []);
+  const selectTableViewInPlace = useCallback(
+    (placementId: string, viewId: string | null, document?: GridViewDocument) => {
+      const parameters = new URLSearchParams(window.location.search);
+      if (document === undefined)
+        applyRecordsTableQueryChange(parameters, placementId, { kind: "view", viewId });
+      else
+        applyRecordsTableView(parameters, placementId, {
+          viewId,
+          sort: document.sort ?? [],
+          filters: document.filters ?? [],
+          search: document.search ?? null,
+        });
+      shownRef.current.keys.set(
+        placementId.toLowerCase(),
+        recordsTableAddressKey(placementId, [...parameters]),
+      );
+      push(parameters);
+    },
+    [],
+  );
 
   // A view opened by its address alone (a shared link, or a view just chosen) shows its own sort,
   // filters and search from the server. Once the page lands they are written into the address,

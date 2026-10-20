@@ -401,6 +401,7 @@ export function ApplicationCompositionEditor(props: Props) {
           idPrefix={`${settingsId}-features`}
           property={featuresProperty}
           tableSettings={settingsInputs.settings}
+          signedIn={settingsModel.kind === "available" && settingsModel.signedIn}
           value={settingsInputs.settings[featuresProperty.key]}
           query={props.choices.queries.find((query) => query.reference === settingsInputs.query)}
           compiledFields={(() => {

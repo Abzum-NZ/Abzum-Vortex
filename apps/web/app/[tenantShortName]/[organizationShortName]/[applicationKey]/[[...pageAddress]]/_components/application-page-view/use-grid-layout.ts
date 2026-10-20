@@ -48,7 +48,11 @@ export function useGridLayout({
   navigationKey: string;
   setRefreshedPlacementData: Dispatch<SetStateAction<RefreshedPlacementData | undefined>>;
   openTableView: (placementId: string, viewId: string | null) => void;
-  selectTableViewInPlace: (placementId: string, viewId: string) => void;
+  selectTableViewInPlace: (
+    placementId: string,
+    viewId: string | null,
+    document?: GridViewDocument,
+  ) => void;
   refreshPlacements: (placementIds: readonly string[]) => Promise<void>;
 }>) {
   const { tenantShortName, organizationShortName, applicationKey, pageKey } = model.invocation;
@@ -560,25 +564,31 @@ export function useGridLayout({
           });
           tellOutcome(result, "View deleted.");
           if (result.outcome === "done") {
-            if (state.views.selected?.viewId === command.viewId) openTableView(placementId, null);
-            else
-              patchViews(
-                placementId,
-                command.viewId,
-                (layout) =>
-                  layout.views === undefined
-                    ? layout
-                    : {
-                        ...layout,
-                        views: {
-                          ...layout.views,
-                          items: layout.views.items.filter(
-                            (item) => item.viewId !== command.viewId,
-                          ),
-                        },
+            if (state.views.selected?.viewId === command.viewId)
+              selectTableViewInPlace(placementId, null, documentOf(placementId, state.layout));
+            patchViews(
+              placementId,
+              command.viewId,
+              (layout) =>
+                layout.views === undefined
+                  ? layout
+                  : {
+                      ...layout,
+                      views: {
+                        ...layout.views,
+                        items: layout.views.items.filter((item) => item.viewId !== command.viewId),
+                        selected:
+                          layout.views.selected?.viewId === command.viewId
+                            ? null
+                            : layout.views.selected,
+                        basedOnViewId:
+                          layout.views.basedOnViewId === command.viewId
+                            ? null
+                            : layout.views.basedOnViewId,
                       },
-                (layout) => !layout.views?.items.some((item) => item.viewId === command.viewId),
-              );
+                    },
+              (layout) => !layout.views?.items.some((item) => item.viewId === command.viewId),
+            );
           } else if (result.outcome === "conflict") reopenAfterConflict(placementId);
           return result;
         }

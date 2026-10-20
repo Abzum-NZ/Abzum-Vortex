@@ -102,7 +102,7 @@ export type StudioCompositionAddTargetsModel =
   | Readonly<{ kind: "invalid" | "unsupported" }>;
 
 export type StudioCompositionSettingsModel =
-  | Readonly<{ kind: "available"; placementAlias: string;
+  | Readonly<{ kind: "available"; placementAlias: string; signedIn: boolean;
       /** Every setting the block's release declares, in declaration order. */
       properties: readonly BlockPropertySchemaContract[];
       settings: StudioCompositionSettings;
@@ -796,7 +796,7 @@ export const describeStudioCompositionSettings = (context: StudioCompositionCont
     const resolved = resolveSettings(context, selection);
     if (resolved.kind !== "available") return resolved;
     const item = resolved.target.item;
-    return { kind: "available", placementAlias: resolved.alias, properties: resolved.release.properties,
+    return { kind: "available", placementAlias: resolved.alias, signedIn: resolved.target.region.page?.type !== "public", properties: resolved.release.properties,
       settings: itemReading(context.catalogue, item).settings, readsQuery: readsQuery(resolved.release, item),
       query: item.props.vortex.query ?? null };
   } catch { return { kind: "invalid" }; }
