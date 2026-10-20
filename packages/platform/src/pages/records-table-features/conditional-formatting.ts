@@ -67,15 +67,17 @@ const lower = (value: string): string => value.toLowerCase();
  * arrives already narrowed to the fields this viewer can read, so a rule here reads none the
  * viewer cannot.
  */
+/** The table lets people add their own formatting rules to the views they save. */
+export const personalFormattingAllowed = (contract: RecordsTableContract): boolean =>
+  contract.features.savedViews.enabled &&
+  contract.features.savedViews.personalFormatting &&
+  contract.features.conditionalFormatting.enabled;
+
 export const personalFormattingRules = (
   contract: RecordsTableContract,
   layout: GridLayoutState,
 ): readonly ConditionalFormatRule[] =>
-  contract.features.savedViews.enabled &&
-  contract.features.savedViews.personalFormatting &&
-  contract.features.conditionalFormatting.enabled
-    ? (layout.views?.selected?.document.formatting ?? [])
-    : [];
+  personalFormattingAllowed(contract) ? (layout.views?.selected?.document.formatting ?? []) : [];
 
 /** A personal rule's style key, which cannot collide with an authored rule's identity. */
 const personalRuleId = (rule: ConditionalFormatRule): string => `personal:${rule.id}`;

@@ -24,6 +24,7 @@ import {
   deleteGridView,
   gridViewPlacement,
   listGridViewShareTargets,
+  personalFormattingAllowed,
   resetGridView,
   saveGridView,
   shareGridView,
@@ -338,7 +339,12 @@ export async function commitGridView(
             requested.viewId,
             stored.shareable.has(requested.placementId.toLowerCase()),
           );
-        const resolved = resolveSelectedGridView(authored, addressed, readable);
+        const resolved = resolveSelectedGridView(
+          authored,
+          addressed,
+          readable,
+          personalFormattingAllowed(placement.contract),
+        );
         return resolved.selected === null
           ? { outcome: "unavailable" }
           : {

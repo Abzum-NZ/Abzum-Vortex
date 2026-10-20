@@ -430,6 +430,8 @@ export const resolveSelectedGridView = (
   authored: GridLayout,
   addressed: AddressedGridView | undefined,
   readable: ReadonlySet<string> | undefined,
+  /** The table allows personal formatting now; when it does not, a view's rules do not apply. */
+  personalFormatting: boolean,
 ): Readonly<{
   selected: SelectedGridView | null;
   notice: (typeof gridViewNotices)[number] | null;
@@ -448,7 +450,7 @@ export const resolveSelectedGridView = (
   const sort = (document.sort ?? []).filter((entry) => readableField(entry.fieldId));
   // A rule stays only while every field it reads is one of the table's columns (the query reads
   // no other field for it, even after a release removes one) and one this viewer can read.
-  const formatting = (document.formatting ?? []).filter((rule) =>
+  const formatting = (personalFormatting ? (document.formatting ?? []) : []).filter((rule) =>
     conditionalFormatRuleFields(rule).every(
       (fieldId) => permitted.has(fieldId.toLowerCase()) && readableField(fieldId.toLowerCase()),
     ),
@@ -470,8 +472,9 @@ export const resolveSelectedGridView = (
         columns: document.columns.length - kept.length,
         filters: addressed.hiddenFilters + (document.filters ?? []).length - filters.length,
         sort: (document.sort ?? []).length - sort.length,
-        formatting:
-          addressed.hiddenFormatting + (document.formatting ?? []).length - formatting.length,
+        formatting: personalFormatting
+          ? addressed.hiddenFormatting + (document.formatting ?? []).length - formatting.length
+          : 0,
       },
       sharing,
     },

@@ -16,6 +16,7 @@ export {
   conditionalFormattingRelativeDates,
   conditionalFormattingUsesRelativeDates,
   evaluateConditionalFormatting,
+  personalFormattingAllowed,
   personalFormattingRules,
   type ConditionalColumnFormatProjection,
   type ConditionalFormattingContext,

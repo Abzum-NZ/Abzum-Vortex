@@ -22,6 +22,7 @@ import type { RecordsTableGroupRead } from "../records-table-features/grouping";
 import {
   conditionalFormattingRelativeDates,
   conditionalFormattingUsesRelativeDates,
+  personalFormattingAllowed,
   personalFormattingRules,
   type ConditionalFormattingContext,
 } from "../records-table-features";
@@ -143,6 +144,7 @@ export const readRecordsTable = async (
                 gridLayouts.stored.shareable.has(placementId.toLowerCase()),
               ),
             readable,
+            personalFormattingAllowed(contract),
           );
     views = {
       canShare: gridLayouts.stored.shareable.has(placementId.toLowerCase()),
