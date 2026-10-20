@@ -74,6 +74,7 @@ export const studioLayoutOutletTargets = (
         {
           parentPlacement: item.props.id,
           parentSlot: slot.key,
+          required: slot.required,
           label: `${label} ${index + 1} / ${slot.label}`,
           categories: slot.allowedChildCategories.map((category) => ({
             value: category,

@@ -323,7 +323,7 @@ export function StudioLayoutOutlets({
               shellAlias: shell.id,
               values: {
                 label: "Content",
-                required: false,
+                required: target.required,
                 parent_placement: target.parentPlacement,
                 parent_slot: target.parentSlot,
                 allowed_child_categories: target.categories.map((category) => category.value),
