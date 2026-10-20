@@ -247,7 +247,9 @@ export const readSummaryOrChart = async (
       placementId,
       refusal?.reasonCode === "dataset_limit_exceeded"
         ? "summary_dataset_limit_exceeded"
-        : "summary_query_refused",
+        : refusal?.reasonCode === "value_out_of_range"
+          ? "summary_value_out_of_range"
+          : "summary_query_refused",
       refusal?.reasonCode ?? summaryResult.kind,
     );
     data[placementId] = { status: "refused", reason: "not_permitted" };

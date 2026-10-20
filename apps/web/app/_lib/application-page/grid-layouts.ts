@@ -6,7 +6,7 @@ import {
   type InstalledRuntimeContext,
   type StoredGridViews,
 } from "@vortex/platform/server";
-import { readRecordsTableViewId } from "@vortex/platform/schema";
+import { readRecordsTableViewId, type GridLayoutStorage } from "@vortex/platform/schema";
 import type {
   GridViewDocument,
   IdentitySession,
@@ -21,8 +21,7 @@ import type { SearchParameters } from "./types";
  * reads its rows.
  */
 export type PageGridLayouts = Readonly<{
-  /** False in a preview: changes then stay on screen only. */
-  persisted: boolean;
+  storage: GridLayoutStorage;
   stored: StoredGridViews;
   /**
    * The fields the person can read on at least one record, by lower-cased record type identity:
@@ -101,8 +100,8 @@ export const readPageGridLayouts = async (
   grids: readonly PageGrid[],
 ): Promise<PageGridLayouts> => {
   if (selection.previewInstallationId !== undefined)
-    return { persisted: false, stored: NONE, readable: undefined };
-  if (grids.length === 0) return { persisted: true, stored: NONE, readable: new Map() };
+    return { storage: "preview", stored: NONE, readable: undefined };
+  if (grids.length === 0) return { storage: "personal", stored: NONE, readable: new Map() };
   const recordTypeIds = [...new Set(grids.map((grid) => grid.recordTypeId.toLowerCase()))];
   const result = await createHumanOrganizationRequestService(dependencies).run(
     session,
@@ -124,7 +123,7 @@ export const readPageGridLayouts = async (
       return { stored, readable };
     },
   );
-  if (result.kind === "available") return { persisted: true, ...result.value };
+  if (result.kind === "available") return { storage: "personal", ...result.value };
   console.error(
     `[page] grid layouts unavailable: code=GRID_LAYOUT_READ_FAILED kind=${result.kind}`,
   );

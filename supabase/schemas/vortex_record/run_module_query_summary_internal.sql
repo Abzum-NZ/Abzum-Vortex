@@ -1248,8 +1248,12 @@ begin
         access_shared_record_ids, filter_parameters, access_parameters, null::jsonb,
         filter_condition, filter_types, parameter_types, parameter_values,
         filter_ids, summary_field_ids, search_field_ids, user_search;
-  exception when invalid_parameter_value then
-    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'filter_invalid');
+  exception
+    when invalid_parameter_value then
+      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'filter_invalid');
+    when sqlstate 'V3187' then
+      -- A readable date bucket left the supported year domain (grouping_value_internal).
+      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'value_out_of_range');
   end;
   -- A grid's grouped read carries the reader's field bound, as its plain page read does, so the
   -- collapsed table offers the same controls without reading a member page.

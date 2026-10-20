@@ -73,6 +73,7 @@ export * from "./studio-field";
 export * from "./studio-inspector-group";
 export * from "./studio-inspector-actions";
 export * from "./studio-field-type-icon";
+export { studioCanvasGridKey, type StudioCanvasGridArrangement } from "./studio-canvas-grid";
 
 export { StudioQueryBindings } from "./studio-query-bindings";
 export { studioQueryBindingFacts, studioRecordBindingFields } from "./query-binding-facts";
