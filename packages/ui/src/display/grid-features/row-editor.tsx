@@ -553,6 +553,13 @@ function Toolbar({ context }: GridFeaturePointProps): ReactElement | null {
   );
 }
 
+/** The title a card shows for a field's linked record, so its link editor names the stored record. */
+const linkedTitle = (row: DisplayRow, field: string): string | undefined => {
+  const key = Object.keys(row.cells).find((cell) => same(cell, field));
+  const cell = key === undefined ? undefined : row.cells[key];
+  return cell?.kind === "record_link" ? cell.label : undefined;
+};
+
 /** The same draft and controls open inside the phone card, including its heading field. */
 function CardEditor({ context, row }: GridFeatureCommandProps): ReactElement | null {
   const editing = useContext(RowEditingContext);
@@ -572,6 +579,7 @@ function CardEditor({ context, row }: GridFeatureCommandProps): ReactElement | n
             field={field}
             editing={editing}
             events={context.events}
+            current={linkedTitle(row, field.field)}
           />
         </div>
       ))}
