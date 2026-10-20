@@ -43,7 +43,10 @@ export type GridLayoutControls = Readonly<{
   /** Every declared column, shown or hidden, in display order. */
   entries: readonly GridLayoutEntry[];
   density: RecordsTableDensity;
-  /** Whether the person's changes are stored for them; in a preview they stay on screen only. */
+  /**
+   * Whether the host receives the person's changes, stored for them or reported to the Studio
+   * canvas; the host then reads a newly shown column. In a preview they stay on screen only.
+   */
   persisted: boolean;
   /** Sets widths while a resize is under way; `commit` stores them once it ends. */
   setWidths: (update: SetStateAction<Readonly<Record<string, number>>>) => void;
@@ -516,7 +519,7 @@ export const useGridLayout = ({
     shown,
     entries,
     density: layout.density ?? contract?.density ?? "comfortable",
-    persisted: source?.storage === "personal",
+    persisted: source?.storage === "personal" || source?.storage === "canvas",
     setWidths,
     commit,
     moveColumn,

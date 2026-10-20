@@ -1,13 +1,26 @@
 import "server-only";
 
-import { createRecordChoiceReader, DefinitionError } from "@vortex/platform/server";
+import {
+  createRecordChoiceReader,
+  DefinitionError,
+  type StoredGridViews,
+} from "@vortex/platform/server";
 import {
   applicationRootIdSchema,
+  applyRecordsTableQueryChange,
+  authoredGridLayout,
   compiledItemSlots,
   describeFailure,
   fingerprintSchema,
+  GRID_VIEW_MAXIMUM_FILTER_LENGTH,
+  GRID_VIEW_MAXIMUM_FILTERS,
+  gridLayoutSchema,
   organizationIdSchema,
   readRecordDetailContract,
+  readRecordsTableContract,
+  resolveGridLayout,
+  RECORDS_TABLE_MAXIMUM_SEARCH_LENGTH,
+  RECORDS_TABLE_MAXIMUM_SORT_KEYS,
   recordIdSchema,
   revisionSchema,
   sameId,
@@ -36,6 +49,42 @@ import { studioPreviewDemand } from "./studio-preview-demand";
 import { beginStudioPreviewRead } from "./studio-preview-work";
 import type { PageDataState } from "./application-page/types";
 
+const fieldIdSchema = z
+  .string()
+  .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+
+/**
+ * What a Records table on the canvas is read with: the sort, typed filters (address spelling) and
+ * search its person chose, and the layout whose shown columns the read projects. The server turns
+ * the query state into the page address the one table codec reads, so the same allow-lists and
+ * typed refusals apply as in the running application.
+ */
+const tableStateSchema = z
+  .object({
+    sort: z
+      .array(
+        z
+          .object({ fieldId: fieldIdSchema, direction: z.enum(["ascending", "descending"]) })
+          .strict(),
+      )
+      .max(RECORDS_TABLE_MAXIMUM_SORT_KEYS),
+    filters: z
+      .array(
+        z
+          .object({
+            fieldId: fieldIdSchema,
+            filter: z.string().min(1).max(GRID_VIEW_MAXIMUM_FILTER_LENGTH),
+          })
+          .strict(),
+      )
+      .max(GRID_VIEW_MAXIMUM_FILTERS),
+    search: z.string().max(RECORDS_TABLE_MAXIMUM_SEARCH_LENGTH).nullable(),
+    layout: gridLayoutSchema.optional(),
+    /** Counts explicit re-reads on the canvas; it does not change what is read. */
+    reread: z.number().int().min(0),
+  })
+  .strict();
+
 const requestSchema = z
   .object({
     rootId: applicationRootIdSchema,
@@ -53,9 +102,19 @@ const requestSchema = z
      * exactly like a running page's address value, and none can carry the viewer's identity.
      */
     controlValues: z.record(z.string().min(1).max(160), z.string().max(400)),
+    /** The query state and projection of each Records table the builder worked on, by placement name. */
+    tableStates: z.record(
+      z
+        .string()
+        .min(1)
+        .max(160)
+        .regex(/^[a-z][a-z0-9_]*$/),
+      tableStateSchema,
+    ),
   })
   .strict()
-  .refine((request) => Object.keys(request.controlValues).length <= 32);
+  .refine((request) => Object.keys(request.controlValues).length <= 32)
+  .refine((request) => Object.keys(request.tableStates).length <= 32);
 
 /**
  * The records the data blocks of one content area of a saved draft page show, by block name, for
@@ -101,6 +160,7 @@ const placementAliases = (
 };
 
 type Placement = ReturnType<typeof collectPlacements>[number];
+type StoredLayout = NonNullable<ReturnType<StoredGridViews["layouts"]["get"]>>;
 type StudioPreview = Extract<
   Awaited<ReturnType<typeof openStudioPreviewRead>>,
   { kind: "available" }
@@ -182,7 +242,13 @@ export const readStudioCanvasRecords = async (
 ): Promise<StudioCanvasRecordsResult> => {
   const organization = organizationIdSchema.safeParse(candidateOrganizationId);
   const parsed = requestSchema.safeParse(candidate);
-  if (!organization.success || !parsed.success) return { kind: "refused" };
+  if (!organization.success || !parsed.success) {
+    console.error(
+      "[studio] canvas request refused: STUDIO_CANVAS_REQUEST_INVALID cause=invalid_request",
+      parsed.success ? [] : parsed.error.issues.map(({ code, path }) => ({ code, path })),
+    );
+    return { kind: "refused" };
+  }
   const request = parsed.data;
   const release = beginStudioPreviewRead(session, organization.data, request.rootId);
   try {
@@ -280,6 +346,9 @@ export const readStudioCanvasRecords = async (
     let subjectRead: ReturnType<typeof services.subjects.read> | undefined;
     const readSubject = (recordTypeId: string, recordId: string) =>
       (subjectRead ??= services.subjects.read(session, selection, { recordTypeId, recordId }));
+    // The layouts a table is read with: its shown columns decide the projection, exactly as a
+    // person's stored layout does in the running application.
+    const layouts = new Map<string, StoredLayout>();
     const input: PlacementReaderInput = {
       pageDefinition: compiledPage,
       accessVersion: undefined,
@@ -336,7 +405,7 @@ export const readStudioCanvasRecords = async (
         stored: {
           roleKeys: new Set(),
           shareable: new Set(),
-          layouts: new Map(),
+          layouts,
           views: new Map(),
           defaultDocuments: new Map(),
         },
@@ -345,6 +414,56 @@ export const readStudioCanvasRecords = async (
       adoptSubjectRead: () => {},
       markSubjectUnreadable: () => {},
     };
+    // A table's sort, filters and search become the page address the one table codec reads; the
+    // reader validates every part against the installed placement and refuses a forged one with
+    // its typed cause. A name that is not a table of this area is ignored and logged.
+    for (const [alias, state] of Object.entries(request.tableStates)) {
+      const compiled = compiledOf.get(alias);
+      const table =
+        compiled === undefined
+          ? undefined
+          : placements.find((placement) => sameId(placement.placementId, compiled));
+      const queryId = table?.vortex.queryId;
+      const contract =
+        table === undefined ? undefined : readRecordsTableContract(settingsOf(table));
+      if (
+        compiled === undefined ||
+        table === undefined ||
+        contract === undefined ||
+        typeof queryId !== "string"
+      ) {
+        console.error(
+          `[studio] canvas table state ignored: STUDIO_CANVAS_TABLE_STATE_REFUSED cause=not_a_table placement=${alias}`,
+        );
+        return { kind: "refused" };
+      }
+      if (state.layout !== undefined) {
+        const authored = authoredGridLayout(contract);
+        if (authored === undefined) throw new Error("STUDIO_CANVAS_TABLE_COLUMNS_MISSING");
+        if (resolveGridLayout(authored, { queryId, layout: state.layout }, queryId).reset) {
+          console.error(
+            `[studio] canvas table state refused: STUDIO_CANVAS_TABLE_STATE_REFUSED cause=projection_not_subset placement=${alias}`,
+          );
+          return { kind: "refused" };
+        }
+      }
+      const address = new URLSearchParams();
+      if (state.sort.length > 0)
+        applyRecordsTableQueryChange(address, compiled, { kind: "sort", keys: state.sort });
+      for (const { fieldId, filter } of state.filters)
+        applyRecordsTableQueryChange(address, compiled, { kind: "filter", fieldId, filter });
+      if (state.search !== null)
+        applyRecordsTableQueryChange(address, compiled, { kind: "search", text: state.search });
+      for (const [name, value] of address) parameters[name] = value;
+      if (state.layout !== undefined)
+        layouts.set(compiled.toLowerCase(), {
+          placementId: compiled,
+          queryId: queryId.toLowerCase(),
+          revision: 1,
+          basedOnViewId: null,
+          layout: state.layout,
+        });
+    }
     // A control's chosen value becomes the page parameter that control publishes. A name that is
     // not a control of this area, or that publishes no parameter, is ignored and logged; the
     // viewer's identity parts never come through here.

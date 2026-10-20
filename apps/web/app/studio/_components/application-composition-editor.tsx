@@ -205,6 +205,18 @@ export function ApplicationCompositionEditor(props: Props) {
     settingsModel.kind === "available"
       ? studioGridFeaturesProperty(settingsModel.properties)
       : undefined;
+  // A canvas arrangement belongs to the query, columns and density it was made for.
+  const canvasMatches =
+    props.canvasArrangement?.key ===
+    studioCanvasGridKey(
+      settingsInputs.query,
+      Object.fromEntries(
+        Object.entries(settingsInputs.settings).map(([key, value]) => [
+          key,
+          plainSourceSettingValue(value),
+        ]),
+      ),
+    );
   const destinations = moveModel.kind === "available" ? moveModel.destinations : [];
   const inputs = layout.value;
   const orderEditable = breakpoint === "desktop" || model.responsiveOrder;
@@ -433,20 +445,8 @@ export function ApplicationCompositionEditor(props: Props) {
           idPrefix={`${settingsId}-features`}
           property={featuresProperty}
           tableSettings={settingsInputs.settings}
-          canvasArrangement={
-            props.canvasArrangement?.key ===
-            studioCanvasGridKey(
-              settingsInputs.query,
-              settingsInputs.settings.columns === undefined
-                ? undefined
-                : plainSourceSettingValue(settingsInputs.settings.columns),
-              settingsInputs.settings.density === undefined
-                ? undefined
-                : plainSourceSettingValue(settingsInputs.settings.density),
-            )
-              ? props.canvasArrangement.state
-              : undefined
-          }
+          canvasArrangement={canvasMatches ? props.canvasArrangement?.state : undefined}
+          canvasStale={props.canvasArrangement !== undefined && !canvasMatches}
           signedIn={settingsModel.kind === "available" && settingsModel.signedIn}
           value={settingsInputs.settings[featuresProperty.key]}
           presentation={(() => {
