@@ -26,7 +26,7 @@ import {
   refusal,
   readInputs,
 } from "./protected-query-helpers";
-import { pageReadSchema, type pageAnchorSchema } from "./protected-query-read-schemas";
+import { pageAnchorSchema, pageReadSchema } from "./protected-query-read-schemas";
 import type { QueryCache } from "./protected-query-types";
 import { readThroughQueryCache } from "./shared-cache-adapter";
 import {
@@ -219,12 +219,14 @@ export const runCommand = async (
     // examined, or (at the end of the data) from the key it started after, so a person who paged
     // into an empty stretch of a sparse search can still go back.
     if (rows.length === 0 && after !== undefined)
-      oppositeAnchor = nextAnchor ?? {
-        sortKey: after.sortKey,
-        sort: after.sort,
-        phase: after.phase,
-        recordId: after.recordId,
-      };
+      oppositeAnchor =
+        nextAnchor ??
+        pageAnchorSchema.parse({
+          sortKey: after.sortKey,
+          sort: after.sort,
+          phase: after.phase,
+          recordId: after.recordId,
+        });
     // Only the declared system values may appear; a row carrying any other is a
     // contract breach, not something to pass on.
     const declaredSystemKeys = new Set<string>(command.requestedSystemFieldKeys);
