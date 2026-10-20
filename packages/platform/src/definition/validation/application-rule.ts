@@ -95,11 +95,7 @@ export function applicationRule(context: PreparedValidationContext): DefinitionR
           actionPermissionsMatch(action, permissionMap, permissionOwnersByKey)) &&
         applicationFieldReferencesValid(action.precondition, fields) &&
         (action.precondition === undefined ||
-          typedConditionTypesValid(
-            action.precondition,
-            fieldMap,
-            inputTypes,
-          ));
+          typedConditionTypesValid(action.precondition, fieldMap, inputTypes));
       for (const task of array(action.tasks)) {
         const properties = object(task.properties);
         if (String(task.type) === "record.set_fields") {
@@ -346,6 +342,7 @@ export function applicationRule(context: PreparedValidationContext): DefinitionR
         if (!aggregate.fieldId) return false;
         const field = allFields.get(String(aggregate.fieldId));
         if (!field) return false;
+        if (aggregate.operation === "distinct_count") return field.filterable === true;
         if (aggregate.operation === "sum" || aggregate.operation === "average")
           return ["whole_number", "decimal_number", "money"].includes(
             applicationFieldType(fieldValuePairs.get(String(aggregate.fieldId))) ?? "",
@@ -358,8 +355,7 @@ export function applicationRule(context: PreparedValidationContext): DefinitionR
         !recordType ||
         used.some((fieldId) => !fields.has(fieldId)) ||
         !filterFieldsValid ||
-        (query.filter !== undefined &&
-          !typedConditionTypesValid(query.filter, fieldMap)) ||
+        (query.filter !== undefined && !typedConditionTypesValid(query.filter, fieldMap)) ||
         !aggregatesValid
       )
         failures.push(

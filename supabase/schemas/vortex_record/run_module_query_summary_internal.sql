@@ -234,7 +234,7 @@ begin
     aggregate_operation := aggregate_item ->> 'operation';
     aggregate_alias := aggregate_item ->> 'alias';
     aggregate_field_id := nullif(pg_catalog.lower(aggregate_item ->> 'fieldId'), '');
-    if aggregate_operation not in ('count', 'sum', 'minimum', 'maximum', 'average')
+    if aggregate_operation not in ('count', 'sum', 'minimum', 'maximum', 'average', 'distinct_count')
       or aggregate_alias is null
       or aggregate_alias !~ '^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$'
       or pg_catalog.length(aggregate_alias) > 40
@@ -251,6 +251,10 @@ begin
       end if;
       aggregate_original_field_type := coalesce(fields_by_id -> aggregate_field_id ->> 'type', '');
       aggregate_field_type := aggregate_original_field_type;
+      if aggregate_operation = 'distinct_count'
+        and (fields_by_id -> aggregate_field_id ->> 'filterable')::boolean is not true then
+        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
+      end if;
       if aggregate_original_field_type = 'calculation' then
         if (fields_by_id -> aggregate_field_id) #>> '{settings,expression,kind}' is distinct from 'numeric'
           or (fields_by_id -> aggregate_field_id) #>> '{settings,evaluation}' is distinct from 'stored'
@@ -466,6 +470,20 @@ begin
       );
       if aggregate_operation = 'count' then
         aggregate_value_sql := pg_catalog.format('pg_catalog.to_jsonb(%s)', aggregate_count_sql);
+      elsif aggregate_operation = 'distinct_count' then
+        -- SQL numeric equality folds differently scaled exact decimal text. Money
+        -- includes its currency; counting different values never adds currencies.
+        value_expression := case aggregate_field_type
+          when 'decimal_number' then pg_catalog.format(
+            'pg_catalog.to_jsonb((candidate.projected_values ->> %L)::numeric)', aggregate_field_id)
+          when 'money' then pg_catalog.format(
+            'pg_catalog.jsonb_build_object(''amount'', %s, ''currency'', %s)',
+            aggregate_amount_sql, aggregate_currency_sql)
+          else value_expression end;
+        aggregate_value_sql := pg_catalog.format(
+          'pg_catalog.to_jsonb(pg_catalog.count(distinct %s) filter (where %s))',
+          value_expression, aggregate_present_sql
+        );
       elsif aggregate_field_type = 'money' then
         aggregate_mixed_currency_sql := pg_catalog.format(
           '(pg_catalog.count(distinct %s) filter (where %s)) > 1',
@@ -598,7 +616,7 @@ begin
         end if;
         aggregate_value_sql := pg_catalog.format('pg_catalog.to_jsonb(%s)', value_expression);
       end if;
-      if aggregate_operation = 'count' then
+      if aggregate_operation in ('count', 'distinct_count') then
         aggregate_result_sql := pg_catalog.format(
           'pg_catalog.jsonb_build_object(''outcome'', ''completed'', ''valueCount'', %s, ''value'', %s)',
           aggregate_count_sql, aggregate_value_sql

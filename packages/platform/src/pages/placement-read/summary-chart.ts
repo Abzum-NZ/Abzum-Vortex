@@ -55,7 +55,7 @@ export const summaryAggregateCellValue = (
   result: ProtectedQuerySummaryAggregateResult,
 ): SummaryCell | undefined => {
   if (result.outcome === "refused") return { kind: "unavailable" };
-  if (aggregate.operation === "count")
+  if (aggregate.operation === "count" || aggregate.operation === "distinct_count")
     return typeof result.value === "number" && Number.isSafeInteger(result.value)
       ? { kind: "number", value: result.value }
       : undefined;
