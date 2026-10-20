@@ -526,6 +526,10 @@ function ApplicationPageSlotPuckEditor({
   // cancelled) per control change: the workspace sends it once the preview runs this revision's
   // data shape, so it is never re-sent on a timer.
   const readValues = useRef({ controlValues, gridReads });
+  const gridContext = useMemo(
+    () => ({ report: onGridChange, interactive: arrangeGrid === true }),
+    [onGridChange, arrangeGrid],
+  );
   useEffect(() => {
     if (!visible || readRecords === undefined || savedKeys.size === 0) return;
     let cancelled = false;
@@ -749,7 +753,7 @@ function ApplicationPageSlotPuckEditor({
             <StudioCanvasRecordsProvider records={canvasRecords}>
               <StudioCanvasControlsProvider onValue={chooseControlValue}>
                 <StudioCanvasViewerProvider viewer={viewer ?? null}>
-                  <StudioCanvasGridContext.Provider value={arrangeGrid ? onGridChange : undefined}>
+                  <StudioCanvasGridContext.Provider value={gridContext}>
                     <Puck
                       config={config}
                       data={shown}

@@ -216,6 +216,9 @@ export function ApplicationCompositionEditor(props: Props) {
       settingsInputs.settings.density === undefined
         ? undefined
         : plainSourceSettingValue(settingsInputs.settings.density),
+      settingsInputs.settings.features === undefined
+        ? undefined
+        : plainSourceSettingValue(settingsInputs.settings.features),
     );
   const destinations = moveModel.kind === "available" ? moveModel.destinations : [];
   const inputs = layout.value;

@@ -58,8 +58,24 @@ export type StudioCanvasGridState = Readonly<{
 }>;
 
 /** A query or authored layout change invalidates an earlier interactive arrangement. */
-export const studioCanvasGridKey = (query: unknown, columns: unknown, density: unknown): string =>
-  canonicalJson([query ?? null, columns ?? null, density ?? null]);
+export const studioCanvasGridKey = (
+  query: unknown,
+  columns: unknown,
+  density: unknown,
+  features: unknown,
+): string =>
+  canonicalJson([
+    query ?? null,
+    columns ?? null,
+    density ?? null,
+    isRecord(features)
+      ? [
+          features.search,
+          features.column_filters,
+          isRecord(features.saved_views) ? features.saved_views.enabled : null,
+        ]
+      : null,
+  ]);
 
 type StudioCanvasGridEvent =
   | Readonly<{ kind: "sync" }>
@@ -238,8 +254,8 @@ export const studioCanvasGridReads = (
   );
 
 export const StudioCanvasGridContext = createContext<
-  ((change: StudioCanvasGridChange) => void) | undefined
->(undefined);
+  Readonly<{ report: ((change: StudioCanvasGridChange) => void) | undefined; interactive: boolean }>
+>({ report: undefined, interactive: false });
 
 /** The canvas uses the grid's normal events; no personal preference is written. */
 export function useStudioCanvasGridEvents(
@@ -247,7 +263,7 @@ export function useStudioCanvasGridEvents(
   compiled: Readonly<Record<string, unknown>> | undefined,
   release: PlatformBlockRelease | undefined,
 ): DisplayEventHandlers | undefined {
-  const report = useContext(StudioCanvasGridContext);
+  const { report, interactive } = useContext(StudioCanvasGridContext);
   const setup =
     report === undefined || compiled === undefined || release === undefined
       ? undefined
@@ -259,7 +275,7 @@ export function useStudioCanvasGridEvents(
     if (report !== undefined && setup !== undefined)
       report({ kind: "sync", placementAlias: alias, key: setup.key, fields: setup.fields });
   }, [report, alias, key]);
-  if (report === undefined || setup === undefined) return undefined;
+  if (report === undefined || setup === undefined || !interactive) return undefined;
   const { contract, fields } = setup;
   const send = (event: StudioCanvasGridEvent) =>
     report({ ...event, placementAlias: alias, key: setup.key, fields });
@@ -318,7 +334,7 @@ const gridSetup = (
   release: PlatformBlockRelease,
 ) => {
   const contract = readRecordsTableContract(compiledItemSettings(compiled, release));
-  if (contract === undefined || !contract.features.savedViews.enabled) return undefined;
+  if (contract === undefined) return undefined;
   const sourceColumns = props.columns;
   if (!Array.isArray(sourceColumns) || sourceColumns.length !== contract.columns.length)
     throw new Error("STUDIO_CANVAS_GRID_COLUMNS_MISMATCH");
@@ -367,6 +383,6 @@ const gridSetup = (
   return {
     contract,
     fields,
-    key: studioCanvasGridKey(vortex.query, plain("columns"), plain("density")),
+    key: studioCanvasGridKey(vortex.query, plain("columns"), plain("density"), plain("features")),
   };
 };
