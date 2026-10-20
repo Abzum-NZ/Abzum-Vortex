@@ -109,6 +109,7 @@ export const studioRecordsTableQueryFacts = (
     editable: query?.grouped !== true && recordsTableEditableFieldTypes.includes(field.type),
     parentLink: field.parentLink === true,
     ...(field.choiceCount === undefined ? {} : { choiceCount: field.choiceCount }),
+    ...(field.choiceValues === undefined ? {} : { choiceValues: field.choiceValues }),
     ...(field.resultType === undefined ? {} : { resultType: field.resultType }),
   })),
   relationships: relationships

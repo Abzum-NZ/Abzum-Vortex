@@ -147,7 +147,10 @@ export function applicationPageRules(scope: ApplicationScope): void {
                     recordTypeId.toLowerCase(),
               ),
             ...(field.type === "choice" && Array.isArray(options)
-              ? { choiceCount: options.length }
+              ? {
+                  choiceCount: options.length,
+                  choiceValues: options.map((option) => String(object(option).value)),
+                }
               : {}),
             ...(typeof object(field.settings ?? {}).resultType === "string"
               ? { resultType: String(object(field.settings ?? {}).resultType) }
