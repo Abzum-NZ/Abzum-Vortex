@@ -202,8 +202,9 @@ export type RecordsTableQueryFacts = Readonly<{
 
 /**
  * The field types whose stored value people change directly in a cell: text, numbers, yes/no,
- * choices, dates and the address types. Calculations, totals, generated numbers, money, formatted
- * text, several choices, links, tables and attachments are never edited in a cell.
+ * choices, dates, the address types and single-target links. Calculations, totals, generated
+ * numbers, money, formatted text, several choices, links to one of several record types, tables and
+ * attachments are never edited in a cell.
  */
 export const recordsTableEditableFieldTypes: readonly string[] = Object.freeze([
   "text",
@@ -217,6 +218,7 @@ export const recordsTableEditableFieldTypes: readonly string[] = Object.freeze([
   "email_address",
   "phone_number",
   "web_address",
+  "link",
 ]);
 
 /** Why a field of the bound query cannot be edited in a cell, as a business sentence; undefined when it can. */
@@ -230,6 +232,8 @@ export const recordsTableFieldNotEditableReason = (
       return `${field.label} is calculated, so it cannot be edited here`;
     case "reference_number":
       return `${field.label} is numbered by the system, so it cannot be edited here`;
+    case "link_to_one_of_several":
+      return `${field.label} links to one of several record types, so it cannot be edited here`;
     default:
       return `${field.label} cannot be edited in a cell`;
   }

@@ -20,8 +20,20 @@ import { Spinner } from "../../components/spinner";
 import { Textarea } from "../../components/textarea";
 import { useUnsavedWorkRegistry } from "../../controls/unsaved-work";
 import { useDateFormatOptions } from "../date-format-context";
-import type { DisplayInlineEditResult, DisplayRow, DisplaySemanticEvent } from "../projected-data";
-import { readEditDraft, sameEditValue, startEditDraft, type EditDraft } from "./edit-values";
+import type {
+  DisplayEventHandlers,
+  DisplayInlineEditResult,
+  DisplayRow,
+  DisplaySemanticEvent,
+} from "../projected-data";
+import {
+  readEditDraft,
+  sameEditDraft,
+  sameEditValue,
+  startEditDraft,
+  type EditDraft,
+} from "./edit-values";
+import { LinkDraftPicker } from "./record-choice-picker";
 import type { GridFeatureCellProps, GridFeatureModule } from "./registry";
 
 type Phase = "idle" | "editing" | "saving";
@@ -58,6 +70,7 @@ function EditableCell({
   editor,
   stored,
   handler,
+  events,
   reload,
   children,
 }: Readonly<{
@@ -68,6 +81,8 @@ function EditableCell({
   editor: RecordsTableInlineEditor;
   stored: JsonValue | undefined;
   handler: (event: DisplaySemanticEvent) => unknown;
+  /** The page's display callbacks, for a link editor's record picker. */
+  events: DisplayEventHandlers | undefined;
   reload: (() => void) | undefined;
   children: ReactNode;
 }>): ReactElement {
@@ -93,6 +108,7 @@ function EditableCell({
   const trigger = useRef<HTMLButtonElement>(null);
   const editing = useRef<HTMLElement | null>(null);
   const restoreFocus = useRef(false);
+  const linkEditor = useRef<HTMLSpanElement>(null);
   useEffect(() => {
     mounted.current = true;
     return () => {
@@ -128,7 +144,7 @@ function EditableCell({
   const holdsWork =
     phase === "saving" ||
     (phase === "editing" &&
-      (message !== undefined || draft !== startEditDraft(editor, stored, zone)));
+      (message !== undefined || !sameEditDraft(draft, startEditDraft(editor, stored, zone))));
   useEffect(() => {
     if (unsaved === undefined || !holdsWork) return;
     const formId = `inline-edit:${row.recordId}:${field}`;
@@ -362,6 +378,62 @@ function EditableCell({
     },
   } as const;
 
+  if (editor.kind === "link")
+    return (
+      <span
+        ref={linkEditor}
+        className="flex min-w-0 flex-col"
+        onKeyDown={(event) => {
+          // The picker owns its keys while open; Escape leaves the edit.
+          event.stopPropagation();
+          if (event.key === "Escape") {
+            event.preventDefault();
+            restoreFocus.current = true;
+            cancel();
+          }
+        }}
+      >
+        {withNotice(
+          <LinkDraftPicker
+            fieldId={field}
+            label={label}
+            events={events}
+            draft={typeof draft === "object" ? draft : null}
+            current={children}
+            required={editor.required}
+            disabled={phase === "saving"}
+            autoOpen
+            inputRef={(element) => {
+              editing.current = element;
+            }}
+            invalid={message !== undefined}
+            {...(describedBy === undefined ? {} : { describedBy })}
+            onChange={(next) => {
+              setDraft(next);
+              void commit(next);
+            }}
+            onOpenChange={(open) => {
+              if (open) return;
+              // The picker closing without a choice ends the edit, unless focus moved to the
+              // editor's own clear control or a commit is under way.
+              setTimeout(() => {
+                if (
+                  phaseNow.current === "editing" &&
+                  !committing.current &&
+                  message === undefined &&
+                  !linkEditor.current?.contains(document.activeElement)
+                ) {
+                  restoreFocus.current = false;
+                  cancelRef.current();
+                }
+              }, 0);
+            }}
+          />,
+        )}
+        {status}
+      </span>
+    );
+
   let control: ReactElement;
   switch (editor.kind) {
     case "choice":
@@ -481,6 +553,7 @@ function InlineEditor({ context, row, column, children }: GridFeatureCellProps):
       editor={field.editor}
       stored={row.edit[storedKey]}
       handler={onInlineEdit}
+      events={context.events}
       reload={onRefresh === undefined ? undefined : reload}
     >
       {children}

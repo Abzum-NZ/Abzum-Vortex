@@ -292,7 +292,7 @@ export const readRecordsTable = async (
       fieldLinkTypes: fieldLinkTypesOf(bound.module),
       filterTargets,
       ...(contract.features.inlineEdit.enabled || contract.features.rowEdit.enabled
-        ? { fieldEditors: fieldEditorsOf(bound.module) }
+        ? { fieldEditors: fieldEditorsOf(bound.module, read.context.releaseSet.modules) }
         : {}),
       ...(timeZone === undefined ? {} : { timeZone }),
       resolveRecordLinks: read.services.resolveRecordLinks,
