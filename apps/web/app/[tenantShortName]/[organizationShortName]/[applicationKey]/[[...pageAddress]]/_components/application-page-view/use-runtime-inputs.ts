@@ -342,6 +342,14 @@ export function useRuntimeInputs({
                   event.event === "row_clicked" || event.event === "row_action"
                     ? event.recordId
                     : undefined,
+                  tableData !== undefined &&
+                    event.event === "row_action" &&
+                    event.revision !== undefined
+                    ? { recordId: event.recordId, revision: event.revision }
+                    : undefined,
+                  undefined,
+                  undefined,
+                  tableData !== undefined && event.event === "row_action" ? true : undefined,
                 );
             };
         // An inline edit commits one stored value through the bound flow at the revision the row

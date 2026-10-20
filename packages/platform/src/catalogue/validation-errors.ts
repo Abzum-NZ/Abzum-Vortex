@@ -61,6 +61,8 @@ export const definitionValidationErrorCodes = [
   "definition_records_table_bulk_actions",
   "definition_records_table_inline_edit",
   "definition_records_table_row_edit",
+  "definition_records_table_row_actions",
+  "definition_records_table_row_action_limit",
   "definition_records_table_master_detail",
   "definition_records_table_tree",
   "definition_records_table_conditional_formatting",
@@ -155,6 +157,16 @@ const definitionValidationErrorCatalogueSource = {
     message: "Row editing needs at least one stored field that people may change.",
     guidance:
       "Choose editable columns and name the action that saves the row, or turn Row editing off.",
+  },
+  definition_records_table_row_action_limit: {
+    order: 39,
+    message: "At most three actions can sit beside the row; move the rest to the menu",
+    guidance: "Choose Row menu for the remaining actions.",
+  },
+  definition_records_table_row_actions: {
+    order: 39,
+    message: "Row actions need a query that returns individual records",
+    guidance: "Choose a query that lists records rather than totals or groups.",
   },
   definition_records_table_inline_edit: {
     order: 39,

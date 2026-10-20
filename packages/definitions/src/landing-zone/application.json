@@ -1163,12 +1163,16 @@
                       {
                         "event_id": "row_action_landing_zone_edit_favourite",
                         "label": "Edit favourite",
-                        "capability": "update"
+                        "capability": "update",
+                        "icon": "workflow",
+                        "placement": "menu"
                       },
                       {
                         "event_id": "row_action_landing_zone_remove_tile",
                         "label": "Remove tile",
-                        "capability": "delete"
+                        "capability": "delete",
+                        "icon": "workflow",
+                        "placement": "menu"
                       }
                     ],
                     "vortex": {
@@ -1198,6 +1202,9 @@
                       },
                       "spreadsheet": {
                         "enabled": false
+                      },
+                      "row_actions": {
+                        "enabled": true
                       }
                     }
                   }

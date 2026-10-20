@@ -15,6 +15,7 @@ import {
   placementSettings,
   TABLE_BLOCK_RELEASE,
 } from "../../definition/application-composition-catalogue";
+import { projectRowActionAvailability } from "./row-actions";
 import { fieldEditorsOf } from "../placement-read/shared";
 import { pageSubjectFromRead } from "../page-subject-read";
 import {
@@ -95,6 +96,8 @@ export const recordsTableBindingRefusal = async (
     event === "row_action"
       ? contract.rowBehaviours.rowActions.find((action) => sameId(action.eventId, binding.eventId))
       : undefined;
+  if (event === "row_action" && !contract.features.rowActions.enabled)
+    return recordsTableRequestRefusal(event, "feature_off");
   if (event === "row_action" && command === undefined)
     return recordsTableRequestRefusal(event, "command_not_declared");
   if (
@@ -187,6 +190,37 @@ export const recordsTableBindingRefusal = async (
         !row.capabilities?.actions.includes(command.capability)
       )
         return recordsTableRequestRefusal(event, "command_not_permitted");
+      if (event === "row_action") {
+        if (
+          row.revision === undefined ||
+          subject === undefined ||
+          !sameId(subject.recordId, row.recordId) ||
+          subject.revision !== row.revision
+        )
+          return recordsTableRequestRefusal(event, "displayed_revision_not_current");
+        const projected = projectRecordsTableFeatures(
+          contract,
+          { readableFieldIds: [], searchable: false },
+          [row],
+          undefined,
+          undefined,
+        )?.rowActions;
+        if (projected === undefined || installation.namedActions === undefined)
+          return recordsTableRequestRefusal(event, "feature_not_projected");
+        const current = await projectRowActionAvailability(
+          transaction,
+          { ...installation, namedActions: installation.namedActions },
+          binding.controlId,
+          recordTypeId,
+          projected,
+          new Date().toISOString(),
+        );
+        const decision = current.availability[0]?.actions.find((action) =>
+          sameId(action.action, binding.eventId),
+        );
+        if (decision?.eligible !== true)
+          return recordsTableRequestRefusal(event, decision?.reason ?? "command_not_projected");
+      }
       if (editing) {
         const module = installation.modules?.find((entry) => entry.content.queries.includes(query));
         if (module === undefined) return recordsTableRequestRefusal(event, "query_module_missing");

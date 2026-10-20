@@ -4233,7 +4233,9 @@
                     "row_actions": [
                       {
                         "event_id": "event_crm_pipeline_open_opportunity",
-                        "label": "Open"
+                        "label": "Open",
+                        "icon": "workflow",
+                        "placement": "menu"
                       }
                     ],
                     "features": {
@@ -4255,6 +4257,9 @@
                       },
                       "pivot": {
                         "enabled": false
+                      },
+                      "row_actions": {
+                        "enabled": true
                       }
                     },
                     "empty_message": "No opportunities in this stage.",

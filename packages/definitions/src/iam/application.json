@@ -1074,11 +1074,15 @@
                     "row_actions": [
                       {
                         "event_id": "event_make_steward",
-                        "label": "Make steward"
+                        "label": "Make steward",
+                        "icon": "workflow",
+                        "placement": "menu"
                       },
                       {
                         "event_id": "event_grant_install_authority_person",
-                        "label": "Grant app-installation authority"
+                        "label": "Grant app-installation authority",
+                        "icon": "workflow",
+                        "placement": "menu"
                       }
                     ],
                     "columns": [
@@ -1134,6 +1138,9 @@
                       },
                       "spreadsheet": {
                         "enabled": false
+                      },
+                      "row_actions": {
+                        "enabled": true
                       }
                     }
                   }
@@ -1311,15 +1318,21 @@
                     "row_actions": [
                       {
                         "event_id": "event_retire_role",
-                        "label": "Retire role"
+                        "label": "Retire role",
+                        "icon": "workflow",
+                        "placement": "menu"
                       },
                       {
                         "event_id": "event_revise_role_metadata",
-                        "label": "Revise role details"
+                        "label": "Revise role details",
+                        "icon": "workflow",
+                        "placement": "menu"
                       },
                       {
                         "event_id": "event_assign_role_assignment",
-                        "label": "Assign role"
+                        "label": "Assign role",
+                        "icon": "workflow",
+                        "placement": "menu"
                       }
                     ],
                     "vortex": {
@@ -1349,6 +1362,9 @@
                       },
                       "spreadsheet": {
                         "enabled": false
+                      },
+                      "row_actions": {
+                        "enabled": true
                       }
                     }
                   }
@@ -1387,19 +1403,27 @@
                     "row_actions": [
                       {
                         "event_id": "event_retire_group",
-                        "label": "Retire group"
+                        "label": "Retire group",
+                        "icon": "workflow",
+                        "placement": "menu"
                       },
                       {
                         "event_id": "event_rename_group",
-                        "label": "Rename group"
+                        "label": "Rename group",
+                        "icon": "workflow",
+                        "placement": "menu"
                       },
                       {
                         "event_id": "event_add_group_membership",
-                        "label": "Add member"
+                        "label": "Add member",
+                        "icon": "workflow",
+                        "placement": "menu"
                       },
                       {
                         "event_id": "event_grant_install_authority_group",
-                        "label": "Grant app-installation authority"
+                        "label": "Grant app-installation authority",
+                        "icon": "workflow",
+                        "placement": "menu"
                       }
                     ],
                     "vortex": {
@@ -1429,6 +1453,9 @@
                       },
                       "spreadsheet": {
                         "enabled": false
+                      },
+                      "row_actions": {
+                        "enabled": true
                       }
                     }
                   }
@@ -1474,7 +1501,9 @@
                     "row_actions": [
                       {
                         "event_id": "event_remove_group_membership",
-                        "label": "Remove member"
+                        "label": "Remove member",
+                        "icon": "workflow",
+                        "placement": "menu"
                       }
                     ],
                     "vortex": {
@@ -1504,6 +1533,9 @@
                       },
                       "spreadsheet": {
                         "enabled": false
+                      },
+                      "row_actions": {
+                        "enabled": true
                       }
                     }
                   }
@@ -2225,7 +2257,9 @@
                     "row_actions": [
                       {
                         "event_id": "event_revoke_role_assignment",
-                        "label": "Revoke assignment"
+                        "label": "Revoke assignment",
+                        "icon": "workflow",
+                        "placement": "menu"
                       }
                     ],
                     "vortex": {
@@ -2255,6 +2289,9 @@
                       },
                       "spreadsheet": {
                         "enabled": false
+                      },
+                      "row_actions": {
+                        "enabled": true
                       }
                     }
                   }
@@ -2300,7 +2337,9 @@
                     "row_actions": [
                       {
                         "event_id": "event_revoke_delegation_authority",
-                        "label": "Revoke delegation"
+                        "label": "Revoke delegation",
+                        "icon": "workflow",
+                        "placement": "menu"
                       }
                     ],
                     "vortex": {
@@ -2330,6 +2369,9 @@
                       },
                       "spreadsheet": {
                         "enabled": false
+                      },
+                      "row_actions": {
+                        "enabled": true
                       }
                     }
                   }
@@ -2755,7 +2797,9 @@
                     "row_actions": [
                       {
                         "event_id": "event_deactivate_role_activation",
-                        "label": "Deactivate role"
+                        "label": "Deactivate role",
+                        "icon": "workflow",
+                        "placement": "menu"
                       }
                     ],
                     "vortex": {
@@ -2785,6 +2829,9 @@
                       },
                       "spreadsheet": {
                         "enabled": false
+                      },
+                      "row_actions": {
+                        "enabled": true
                       }
                     }
                   }

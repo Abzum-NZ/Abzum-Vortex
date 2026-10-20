@@ -1,3 +1,4 @@
+import type { RecordsTableFeatureProjection } from "../records-table-features";
 import "server-only";
 
 import type { BoardColumnReadRequest, PageDefinition } from "../../schema";
@@ -58,7 +59,15 @@ export type PlacementReadServices = Readonly<{
    * the viewer; a host where nothing runs over a selection leaves it out.
    */
   tables: ReturnType<typeof createRecordsTableQueryResolver> &
-    Readonly<{ sealSelection?: RecordsSelectionSealer }>;
+    Readonly<{
+      sealSelection?: RecordsSelectionSealer;
+      projectRowActions: (
+        context: InstalledRuntimeContext,
+        placementId: string,
+        recordTypeId: string,
+        projection: NonNullable<RecordsTableFeatureProjection["rowActions"]>,
+      ) => Promise<NonNullable<RecordsTableFeatureProjection["rowActions"]>>;
+    }>;
   resolveRecordLinks: RecordLinkResolver;
   readCalendarSettings: () => Promise<
     HumanOrganizationRequestResult<{

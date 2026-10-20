@@ -61,6 +61,7 @@ export const studioGridFeatureEditors: Readonly<
   bulk_actions: { kind: "settings", boundRecordTypeActions: true },
   inline_edit: { kind: "custom" },
   row_edit: { kind: "custom" },
+  row_actions: { kind: "custom" },
   master_detail: { kind: "settings" },
   // Only the links from a record type to itself can name a record's parent.
   tree: { kind: "settings", offers: (field) => field.parentLink === true },

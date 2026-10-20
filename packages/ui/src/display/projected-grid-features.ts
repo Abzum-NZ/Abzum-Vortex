@@ -1,4 +1,7 @@
 import {
+  recordsTableRowActionIcons,
+  recordsTableActionCapabilities,
+  type RecordsTableActionContract,
   type RecordsTableInlineEditField,
   type RecordsTableInlineEditor,
   type RecordsTableBulkActionContract,
@@ -413,6 +416,7 @@ export const parseTableFeatures = (
       "bulkActions",
       "inlineEdit",
       "rowEdit",
+      "rowActions",
       "masterDetail",
       "tree",
       "conditionalFormatting",
@@ -452,6 +456,46 @@ export const parseTableFeatures = (
         );
   if (bulkActions !== undefined && bulkActions.length === 0)
     fail("Projected bulk actions are empty", location);
+  let rowActions: RecordsTableFeatureProjection["rowActions"];
+  if (record.rowActions !== undefined) {
+    const value = requireRecord(record.rowActions, "Projected row actions are invalid", location);
+    requireExactKeys(value, ["actions", "availability"], location);
+    const actions = requireArray(value.actions, "Row actions must be a list", location).map(
+      (item): RecordsTableActionContract => {
+        const action = requireRecord(item, "A row action is invalid", location);
+        requireExactKeys(action, ["eventId", "label", "icon", "placement", "capability"], location);
+        if (
+          !(recordsTableRowActionIcons as readonly unknown[]).includes(action.icon) ||
+          !["inline", "menu"].includes(action.placement as string) ||
+          (action.capability !== undefined &&
+            !(recordsTableActionCapabilities as readonly unknown[]).includes(action.capability))
+        )
+          fail("A row action has invalid settings", location);
+        return {
+          eventId: requireNonEmptyString(action.eventId, "A row action needs its event", location),
+          label: requireNonEmptyString(action.label, "A row action needs its label", location),
+          icon: action.icon as RecordsTableActionContract["icon"],
+          placement: action.placement as RecordsTableActionContract["placement"],
+          ...(action.capability === undefined
+            ? {}
+            : {
+                capability: action.capability as NonNullable<
+                  RecordsTableActionContract["capability"]
+                >,
+              }),
+        };
+      },
+    );
+    const availability = namedActionAvailabilitySchema.safeParse(value.availability);
+    if (
+      !availability.success ||
+      actions.length === 0 ||
+      actions.length > 20 ||
+      new Set(actions.map((action) => action.eventId)).size !== actions.length
+    )
+      fail("Projected row action availability is invalid", location);
+    rowActions = { actions, availability: availability.data! };
+  }
   let rowEdit: RecordsTableFeatureProjection["rowEdit"];
   if (record.rowEdit !== undefined) {
     const row = requireRecord(record.rowEdit, "Projected row editing is invalid", location);
@@ -560,6 +604,7 @@ export const parseTableFeatures = (
     ...(bulkActions === undefined ? {} : { bulkActions: Object.freeze(bulkActions) }),
     ...(inlineEdit === undefined ? {} : { inlineEdit }),
     ...(rowEdit === undefined ? {} : { rowEdit }),
+    ...(rowActions === undefined ? {} : { rowActions }),
     ...(masterDetail === undefined ? {} : { masterDetail }),
     ...(tree === undefined ? {} : { tree }),
     ...(record.conditionalFormatting === undefined

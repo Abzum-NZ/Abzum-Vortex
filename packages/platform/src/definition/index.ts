@@ -1,3 +1,4 @@
+export { installedNamedActions } from "./installed-named-actions";
 export * from "./definition-index";
 export * from "./module-index";
 export * from "./app-index";

@@ -317,6 +317,17 @@ export function RecordsGrid({
   const rowHeight = GRID_ROW_HEIGHT[layout.density];
   const virtual = virtualizesRows(rows.length);
   const bounded = contract.viewport === "bounded";
+  const actionsWidth = contract.features.rowActions.enabled
+    ? 16 +
+      36 *
+        (Math.min(
+          3,
+          contract.rowBehaviours.rowActions.filter((action) => action.placement === "inline")
+            .length,
+        ) +
+          1 +
+          Number(contract.features.rowEdit.enabled))
+    : GRID_CONTROL_COLUMN_WIDTH;
   const { columns } = layout;
   const columnsById = useMemo(
     () => new Map(columns.map((column) => [column.key, column])),
@@ -361,14 +372,14 @@ export function RecordsGrid({
         ? [
             {
               id: ACTIONS_COLUMN,
-              size: GRID_CONTROL_COLUMN_WIDTH,
+              size: actionsWidth,
               enableResizing: false,
               enableHiding: false,
             },
           ]
         : []),
     ],
-    [columns, expandable, selectable, showActions],
+    [columns, expandable, selectable, showActions, actionsWidth],
   );
   const sorting = useMemo<SortingState>(
     () =>
@@ -424,7 +435,7 @@ export function RecordsGrid({
     layout,
     pinning,
     selectable,
-    showActions,
+    showActions ? actionsWidth : 0,
     expandable,
   );
 

@@ -28,6 +28,7 @@ export {
   recordsTableFilterKinds,
   type RecordsTableFilterKind,
 } from "./column-filters";
+import { recordsTableRowActionsFeature } from "./row-actions";
 import { recordsTableRowEditFeature, type RecordsTableRowEditSettings } from "./row-edit";
 import { recordsTableInlineEditFeature, type RecordsTableInlineEditSettings } from "./inline-edit";
 import {
@@ -58,11 +59,8 @@ import {
 
 export {
   factsValueType,
-  recordsTableActionCapabilities,
   recordsTableEditableFieldTypes,
   recordsTableFieldNotEditableReason,
-  type RecordsTableActionCapability,
-  type RecordsTableActionContract,
   type RecordsTableBoardFacts,
   type RecordsTableFeatureCheck,
   type RecordsTableFeatureRefusalCode,
@@ -72,6 +70,12 @@ export {
   type RecordsTableRelatedQueryFacts,
   type RecordsTableRelatedRecordsFacts,
 } from "./shared";
+export {
+  recordsTableActionCapabilities,
+  recordsTableRowActionIcons,
+  type RecordsTableActionCapability,
+  type RecordsTableActionContract,
+} from "./row-actions";
 export { RECORDS_TABLE_RELATED_RECORDS_MAXIMUM_PAGE_SIZE } from "./master-detail";
 export { RECORDS_TABLE_TREE_MAXIMUM_PAGE_SIZE } from "./tree";
 export { boardProblem, recordsTableBoardFactsOf } from "./board";
@@ -135,6 +139,7 @@ export type RecordsTableFeatures = Readonly<{
   bulkActions: RecordsTableFeatureState<RecordsTableBulkActionsSettings>;
   inlineEdit: RecordsTableFeatureState<RecordsTableInlineEditSettings>;
   rowEdit: RecordsTableFeatureState<RecordsTableRowEditSettings>;
+  rowActions: RecordsTableFeatureState<object>;
   masterDetail: RecordsTableFeatureState<RecordsTableMasterDetailSettings>;
   tree: RecordsTableFeatureState<RecordsTableTreeSettings>;
   conditionalFormatting: RecordsTableFeatureState<RecordsTableConditionalFormattingSettings>;
@@ -153,6 +158,7 @@ const registry = {
   bulk_actions: { property: "bulkActions", definition: recordsTableBulkActionsFeature },
   inline_edit: { property: "inlineEdit", definition: recordsTableInlineEditFeature },
   row_edit: { property: "rowEdit", definition: recordsTableRowEditFeature },
+  row_actions: { property: "rowActions", definition: recordsTableRowActionsFeature },
   master_detail: { property: "masterDetail", definition: recordsTableMasterDetailFeature },
   tree: { property: "tree", definition: recordsTableTreeFeature },
   conditional_formatting: {
@@ -179,6 +185,7 @@ export const recordsTableFeatureKeys = [
   "bulk_actions",
   "inline_edit",
   "row_edit",
+  "row_actions",
   "master_detail",
   "tree",
   "conditional_formatting",
@@ -224,6 +231,7 @@ export const readRecordsTableFeatures = (
   const bulkActions = read("bulk_actions");
   const inlineEdit = read("inline_edit");
   const rowEdit = read("row_edit");
+  const rowActions = read("row_actions");
   const masterDetail = read("master_detail");
   const tree = read("tree");
   const conditionalFormatting = read("conditional_formatting");
@@ -238,6 +246,7 @@ export const readRecordsTableFeatures = (
     bulkActions === undefined ||
     inlineEdit === undefined ||
     rowEdit === undefined ||
+    rowActions === undefined ||
     masterDetail === undefined ||
     tree === undefined ||
     conditionalFormatting === undefined ||
@@ -255,6 +264,7 @@ export const readRecordsTableFeatures = (
     bulkActions: bulkActions as RecordsTableFeatures["bulkActions"],
     inlineEdit: inlineEdit as RecordsTableFeatures["inlineEdit"],
     rowEdit: rowEdit as RecordsTableFeatures["rowEdit"],
+    rowActions,
     masterDetail: masterDetail as RecordsTableFeatures["masterDetail"],
     tree: tree as RecordsTableFeatures["tree"],
     conditionalFormatting: conditionalFormatting as RecordsTableFeatures["conditionalFormatting"],
@@ -348,6 +358,7 @@ const featureEvents: Readonly<Record<string, RecordsTableFeatureKey>> = {
   filter_changed: "column_filters",
   inline_edit: "inline_edit",
   row_edit: "row_edit",
+  row_action: "row_actions",
   card_moved: "board",
 };
 

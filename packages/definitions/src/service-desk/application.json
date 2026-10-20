@@ -3068,7 +3068,9 @@
                     "row_actions": [
                       {
                         "event_id": "event_sd_case_board_open_case",
-                        "label": "Open"
+                        "label": "Open",
+                        "icon": "workflow",
+                        "placement": "menu"
                       }
                     ],
                     "features": {
@@ -3084,6 +3086,9 @@
                       },
                       "pivot": {
                         "enabled": false
+                      },
+                      "row_actions": {
+                        "enabled": true
                       }
                     },
                     "empty_message": "No cases in this status.",
