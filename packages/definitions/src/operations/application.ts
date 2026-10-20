@@ -18,8 +18,7 @@ const {
   APPLICATION_NAVIGATION_BLOCK_RELEASE,
   BUTTON_BLOCK_RELEASE,
   CHOICE_INPUT_BLOCK_RELEASE,
-  CONTAINER_BLOCK_RELEASE_1_2_0,
-  CONTAINER_BLOCK_RELEASE_1_3_0,
+  CONTAINER_BLOCK_RELEASE,
   FORM_CONTAINER_BLOCK_RELEASE,
   RECORD_DETAIL_BLOCK_RELEASE,
   RICH_TEXT_INPUT_BLOCK_RELEASE,
@@ -291,7 +290,12 @@ const pages = [
     permission: readIncidentsPage,
     blocks: slot({
       operations_incident_detail_body: placement(RECORD_DETAIL_BLOCK_RELEASE, {
+        heading_source: "title",
         title: "Incident",
+        detail_fields: incidentColumns.map(([field, label]) => ({
+          field: `${incidentRecordType}.${field}`,
+          label,
+        })),
       }),
       // Attach runs on the open incident as its subject; operators without the attach
       // permission never see the form, and the action refuses a resolved or closed incident and
@@ -369,7 +373,7 @@ const applicationShell = {
     root: { props: { vortex: { slot_orders: {} } } },
     content: slot({
       shell_root: placement(
-        CONTAINER_BLOCK_RELEASE_1_3_0,
+        CONTAINER_BLOCK_RELEASE,
         {
           direction: "column",
           gap: "medium",
@@ -380,7 +384,7 @@ const applicationShell = {
           header: slot({}),
           content: slot({
             shell_body: placement(
-              CONTAINER_BLOCK_RELEASE_1_2_0,
+              CONTAINER_BLOCK_RELEASE,
               {
                 direction: "row",
                 gap: "medium",
