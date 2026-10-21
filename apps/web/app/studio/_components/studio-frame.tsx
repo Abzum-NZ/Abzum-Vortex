@@ -338,6 +338,7 @@ export function StudioFrame<Key extends string>({
   const [inspectorOpen, setInspectorOpen] = useState(true);
   const [narrowPanelOpen, setNarrowPanelOpen] = useState(false);
   const [narrowInspectorOpen, setNarrowInspectorOpen] = useState(false);
+  const inspectorSheet = useRef<HTMLDivElement>(null);
   const [focused, setFocused] = useState(false);
   const hasInspector = inspector !== null;
   const beforeFocus = useRef({ panel: true, inspector: true });
@@ -362,17 +363,16 @@ export function StudioFrame<Key extends string>({
   }, [dockInspector, hasInspector]);
   useEffect(() => {
     const shortcut = (event: globalThis.KeyboardEvent) => {
-      if (
-        event.target instanceof Element &&
-        event.target.closest('[role="dialog"], [role="alertdialog"]')
-      )
-        return;
+      const dialog =
+        event.target instanceof Element
+          ? event.target.closest('[role="dialog"], [role="alertdialog"]')
+          : null;
       if ((!event.ctrlKey && !event.metaKey) || event.altKey || event.shiftKey) return;
-      if (event.key === ".") {
+      if (event.key === "." && (dialog === null || dialog === inspectorSheet.current)) {
         event.preventDefault();
         toggleInspector();
       }
-      if (event.key === "\\") {
+      if (event.key === "\\" && dialog === null) {
         event.preventDefault();
         focusCanvas();
       }
@@ -399,7 +399,7 @@ export function StudioFrame<Key extends string>({
   useEffect(() => {
     const create = () => {
       const host = document.createElement("div");
-      host.className = "flex h-full min-h-0 flex-col";
+      host.className = "flex h-full min-h-0 min-w-0 flex-col";
       return host;
     };
     madeHosts.current ??= { panel: create(), inspector: create() };
@@ -424,9 +424,9 @@ export function StudioFrame<Key extends string>({
   const showPanel = wide && panelOpen;
   const showInspector = hasInspector && dockInspector && inspectorOpen;
   return (
-    <div className="flex h-dvh flex-col bg-background text-foreground">
+    <div className="flex h-dvh min-w-0 flex-col bg-background text-foreground">
       {topBar}
-      <div className="flex min-h-0 flex-1">
+      <div className="flex min-h-0 min-w-0 flex-1">
         <StudioRail
           tabs={tabs}
           active={activeTab}
@@ -479,12 +479,16 @@ export function StudioFrame<Key extends string>({
         )}
       </div>
       <Sheet open={!wide && narrowPanelOpen} onOpenChange={setNarrowPanelOpen}>
-        <SheetContent side="left" className="w-80 max-w-full p-0">
+        <SheetContent side="left" className="w-80 max-w-full overflow-y-auto p-0 pt-10">
           <SheetHeader className="sr-only">
             <SheetTitle>{active?.label}</SheetTitle>
             <SheetDescription>The {active?.label} panel.</SheetDescription>
           </SheetHeader>
-          <div id="studio-rail-panel" role="tabpanel" className="flex h-full min-h-0 flex-col">
+          <div
+            id="studio-rail-panel"
+            role="tabpanel"
+            className="flex min-h-0 min-w-0 flex-1 flex-col"
+          >
             <PaneSlot host={hosts?.panel ?? null} />
           </div>
         </SheetContent>
@@ -493,12 +497,16 @@ export function StudioFrame<Key extends string>({
         open={hasInspector && !dockInspector && narrowInspectorOpen}
         onOpenChange={setNarrowInspectorOpen}
       >
-        <SheetContent side="right" className="w-96 max-w-full p-0">
+        <SheetContent
+          ref={inspectorSheet}
+          side="right"
+          className="w-96 max-w-full overflow-y-auto p-0 pt-10"
+        >
           <SheetHeader className="sr-only">
             <SheetTitle>{inspectorLabel}</SheetTitle>
             <SheetDescription>Settings for the selected item.</SheetDescription>
           </SheetHeader>
-          <div aria-label={inspectorLabel} className="flex h-full min-h-0 flex-col">
+          <div aria-label={inspectorLabel} className="flex min-h-0 min-w-0 flex-1 flex-col">
             <PaneSlot host={hosts?.inspector ?? null} />
           </div>
         </SheetContent>
