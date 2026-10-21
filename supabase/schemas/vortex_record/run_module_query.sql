@@ -201,6 +201,8 @@ declare
   tree_parent_id uuid;
   tree_relationship_id uuid;
   tree_item jsonb;
+  tree_filter jsonb;
+  tree_filter_predicate text;
   tree_candidates uuid[];
   tree_root_child_ids uuid[] := array[]::uuid[];
   tree_root_nonroot_ids uuid[];
@@ -753,6 +755,7 @@ begin
       end if;
     end if;
   end if;
+  tree_filter_predicate := filter_predicate;
   if tree_mode and tree_parent_id is not null then
     filter_predicate := '(' || filter_predicate || ') and ' || pg_catalog.format(
       'exists (select 1 from vortex_record.relationship_edges as tree_edge'
@@ -769,6 +772,28 @@ begin
   select coalesce(pg_catalog.array_agg(item.value), array[]::text[])
   into filter_expressions
   from pg_catalog.jsonb_array_elements_text(prepared_plan #> '{filter,expressions}') as item(value);
+  if tree_mode then
+    -- Every tree relative read applies the query's own filter and the viewer's search, exactly as
+    -- the level scan does: the pushed predicate, the filtered fields' readability and the residual.
+    tree_filter := pg_catalog.jsonb_build_object(
+      'predicate', tree_filter_predicate, 'parameters', filter_parameters, 'exact', filter_exact,
+      'condition', filter_condition, 'fieldTypes', filter_types,
+      'inputTypes', parameter_types, 'inputs', parameter_values,
+      'fieldIds', pg_catalog.to_jsonb(filter_ids),
+      'valuesSql', (select pg_catalog.string_agg(
+          filter_chunk.pairs_text,
+          ') || pg_catalog.jsonb_build_object(' order by filter_chunk.chunk_index)
+        from (
+          select (filter_pair.pair_number - 1) / 50 as chunk_index,
+            pg_catalog.string_agg(
+              filter_pair.pair_text, ', ' order by filter_pair.pair_number
+            ) as pairs_text
+          from pg_catalog.unnest(filter_expressions)
+            with ordinality as filter_pair(pair_text, pair_number)
+          group by (filter_pair.pair_number - 1) / 50
+        ) as filter_chunk),
+      'searchFieldIds', pg_catalog.to_jsonb(search_field_ids), 'search', user_search);
+  end if;
   -- The keyset position must fit this exact order. The cursor binds every
   -- declared sort field, direction and whether it was pushed, but carries
   -- values only for readable sort fields. A changed readable subset cannot
@@ -1260,7 +1285,9 @@ begin
             tree_item := vortex_record.read_query_tree_relatives_internal(
               true, tree_root_child_ids, tree_relationship_id, context_organization_id,
               context_application_root_id, storage_plan, record_type_id_value, page_first_loaded,
-              page_declaration, page_eligibility, page_shared, page_narrowed, validated_record_types);
+              page_declaration, page_eligibility, page_shared, page_narrowed, validated_record_types,
+              tree_filter);
+            if tree_item ->> 'outcome' <> 'completed' then return tree_item; end if;
             select coalesce(pg_catalog.array_agg(item.value::uuid), array[]::uuid[])
             into tree_root_nonroot_ids
             from pg_catalog.jsonb_array_elements_text(tree_item -> 'recordIds') as item(value);
@@ -1451,10 +1478,13 @@ begin
     tree_item := vortex_record.read_query_tree_relatives_internal(
       false, tree_candidates, tree_relationship_id, context_organization_id,
       context_application_root_id, storage_plan, record_type_id_value, page_first_loaded,
-      page_declaration, page_eligibility, page_shared, page_narrowed, validated_record_types);
+      page_declaration, page_eligibility, page_shared, page_narrowed, validated_record_types,
+      tree_filter);
     if tree_item ->> 'outcome' <> 'completed' then return tree_item; end if;
+    -- A parent the examination budget did not decide has no answer yet: null, never a refusal.
     select pg_catalog.jsonb_agg(item.value || pg_catalog.jsonb_build_object(
-        'hasChildren', (tree_item -> 'recordIds') ? (item.value ->> 'recordId')) order by item.ordinality)
+        'hasChildren', case when (tree_item -> 'undecidedIds') ? (item.value ->> 'recordId') then null
+          else (tree_item -> 'recordIds') ? (item.value ->> 'recordId') end) order by item.ordinality)
     into rows_value
     from pg_catalog.jsonb_array_elements(rows_value) with ordinality as item(value, ordinality);
   end if;

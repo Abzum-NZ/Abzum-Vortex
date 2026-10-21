@@ -730,13 +730,9 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
       return refused;
     }
     try {
-      // The viewer's own search or filters list the matching records flat: a level narrowed on its
-      // own would hide a matching record whose parent does not match, and no ancestor walk is run.
-      const tree =
-        request.tree?.parentRecordId === null &&
-        (built.narrowing.search !== null || built.narrowing.filters.length > 0)
-          ? undefined
-          : request.tree;
+      // The tree level reads honour the query's filter and the viewer's own search and filters at
+      // every level: a matching record whose parent does not match is a root.
+      const tree = request.tree;
       const treeCommand =
         tree === undefined
           ? undefined

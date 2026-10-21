@@ -145,7 +145,7 @@ export type ProjectedTableRow = Readonly<{
   /** The style keys and measures the table's formatting gives this row; absent when none. */
   format?: RecordsTableRowFormat;
   /** A tree row the viewer may read a child of; absent on every other row. */
-  hasChildren?: true;
+  hasChildren?: true | "unknown";
   /**
    * The exact text of each number and money cell the viewer may read, keyed by column: a decimal as
    * stored, money as "CURRENCY amount". It rides with the page for the spreadsheet range copy, which
@@ -155,7 +155,7 @@ export type ProjectedTableRow = Readonly<{
 }>;
 
 /** A row of a table read: a tree level's rows also say whether the viewer may read a child. */
-type TableSourceRow = ProtectedQueryRow & Readonly<{ hasChildren?: boolean }>;
+type TableSourceRow = ProtectedQueryRow & Readonly<{ hasChildren?: boolean | null }>;
 
 /** A query row proven to carry the revision and capabilities the engine decided for a list row. */
 type ListRow = TableSourceRow & Pick<ProjectedTableRow, "revision" | "capabilities">;
@@ -717,7 +717,11 @@ export const projectRecordsTableData = (
           ...exactValuesOf(row, columns, cells, features, input),
           cells,
           ...(format === undefined ? {} : { format }),
-          ...(row.hasChildren === true ? { hasChildren: true as const } : {}),
+          ...(row.hasChildren === true
+            ? { hasChildren: true as const }
+            : row.hasChildren === null
+              ? { hasChildren: "unknown" as const }
+              : {}),
         };
       }),
     },
