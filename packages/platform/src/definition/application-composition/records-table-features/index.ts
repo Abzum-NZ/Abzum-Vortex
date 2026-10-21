@@ -63,6 +63,7 @@ import {
 
 export {
   factsValueType,
+  recordsTablePivotDateUnits,
   recordsTableEditableFieldTypes,
   recordsTableFieldNotEditableReason,
   type RecordsTableBoardFacts,
@@ -70,6 +71,7 @@ export {
   type RecordsTableFeatureRefusalCode,
   type RecordsTableFeatureState,
   type RecordsTableFieldFacts,
+  type RecordsTablePivotDateUnit,
   type RecordsTableQueryFacts,
   type RecordsTableRelatedQueryFacts,
   type RecordsTableRelatedRecordsFacts,
@@ -90,15 +92,16 @@ export { RECORDS_TABLE_TREE_MAXIMUM_PAGE_SIZE } from "./tree";
 export {
   RECORDS_TABLE_GROUPING_MAXIMUM_CHOICES,
   RECORDS_TABLE_GROUPING_MAXIMUM_LABEL_LENGTH,
+  RECORDS_TABLE_GROUPING_MAXIMUM_PAGE_SIZE,
+  recordsTableGroupingFieldTypes,
+  type RecordsTableGroupingFieldType,
 } from "./grouping";
 export { boardAggregateLabel, boardProblem, recordsTableBoardFactsOf } from "./board";
 export {
   RECORDS_TABLE_PIVOT_MAXIMUM_COLUMNS,
   RECORDS_TABLE_PIVOT_MAXIMUM_ROW_PAGE_SIZE,
-  recordsTablePivotDateUnits,
   recordsTablePivotMeasureFieldTypes,
   recordsTablePivotMeasureFunctions,
-  type RecordsTablePivotDateUnit,
   type RecordsTablePivotMeasureFunction,
 } from "./pivot";
 export {

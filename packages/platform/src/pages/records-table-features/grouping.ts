@@ -1,79 +1,174 @@
 import "server-only";
 
-import type { JsonValue } from "../../schema";
+import type {
+  JsonValue,
+  RecordsTableGroupingFieldType,
+  RecordsTablePivotDateUnit,
+} from "../../schema";
 import type { ProtectedQuerySummaryCompleted } from "../../queries/index";
-import type { ProjectedTableGroup, ProjectedTableGroups } from "../component-data-projection";
-import { parseRecordsTableGroupKey, recordsTableGroupKey } from "../records-table-state";
+import {
+  collectRecordLinkValues,
+  recordLinkPlainText,
+  type ProjectedRecordLinks,
+  type ProjectedTableGroup,
+  type ProjectedTableGroups,
+} from "../component-data-projection";
+import {
+  parseRecordsTableGroupKey,
+  recordsTableGroupKey,
+  type RecordsTableGroupValue,
+} from "../records-table-state";
+import { bucketFirstDay, bucketLabel } from "./dimension-values";
 
-/** The most groups one grouped read returns; a choice field offers at most 50 and one more holds no value. */
-export const RECORDS_TABLE_GROUP_READ_LIMIT = 200;
+/** The one group of links whose target the viewer cannot read: it carries no identity or title. */
+const NOT_AVAILABLE = "not_available";
 
 /**
- * How a grouped table is read. `fieldId` is the authored choice field (lower-case) and `expanded`
- * the group key of the open group, or null while every group is closed. `membersOnly` reads one
- * page of the open group's members and no summary: opening or paging a group never counts the
- * groups again.
+ * How a grouped table is read. `fieldId` is the authored grouping field (lower-case) of the given
+ * type; a date field is bucketed by `dateUnit` in `timeZone`, the organisation's calendar zone read
+ * for this request. `pageSize` is how many groups one page shows and `after` the position of the
+ * page before (null for the first). `expanded` is the group key of the open group, or null while
+ * every group is closed. `membersOnly` reads one page of the open group's members and no summary:
+ * opening or paging a group never counts the groups again.
  */
 export type RecordsTableGroupRead = Readonly<{
   fieldId: string;
+  fieldType: RecordsTableGroupingFieldType;
+  dateUnit?: RecordsTablePivotDateUnit;
+  timeZone?: string;
+  pageSize: number;
+  after: string | null;
   unassignedLabel: string;
   expanded: string | null;
   membersOnly: boolean;
 }>;
 
-/** The typed selector that names one group's members: a choice value, or null for records with none. */
+/** The typed selector that names one group's members: the group's value in the field's own type. */
 export const recordsTableGroupSelector = (
   fieldId: string,
+  fieldType: RecordsTableGroupingFieldType,
   key: string,
 ):
-  | Readonly<{ values: readonly [{ fieldId: string; fieldType: "choice"; value: JsonValue }] }>
+  | Readonly<{
+      values: readonly [{ fieldId: string; fieldType: string; value: JsonValue }];
+    }>
   | undefined => {
   const value = parseRecordsTableGroupKey(key);
-  return value === undefined ? undefined : { values: [{ fieldId, fieldType: "choice", value }] };
+  if (value === undefined) return undefined;
+  // A key is only valid for the type of field the table is grouped by.
+  if (typeof value === "object" && value !== null && fieldType !== "link") return undefined;
+  if (value === NOT_AVAILABLE && fieldType !== "link") return undefined;
+  return { values: [{ fieldId, fieldType, value }] };
 };
 
+/** The group value a summary group holds for the grouping field, or undefined when it is malformed. */
+const groupValueOf = (
+  groupValues: Readonly<Record<string, JsonValue>>,
+  field: Pick<RecordsTableGroupRead, "fieldId" | "fieldType">,
+): RecordsTableGroupValue | undefined => {
+  const value = Object.entries(groupValues).find(
+    ([fieldId]) => fieldId.toLowerCase() === field.fieldId,
+  )?.[1];
+  if (value === undefined || value === null) return value;
+  if (field.fieldType === "link") {
+    if (value === NOT_AVAILABLE) return NOT_AVAILABLE;
+    const [link] = collectRecordLinkValues([value]);
+    return link === undefined
+      ? undefined
+      : { recordTypeId: link.recordTypeId.toLowerCase(), recordId: link.recordId.toLowerCase() };
+  }
+  return typeof value === "string" ? value : undefined;
+};
+
+/** The keys of the summary's groups in the order it returned them, or undefined when one is malformed. */
+export const recordsTableSummaryGroupKeys = (
+  summary: ProtectedQuerySummaryCompleted,
+  field: Pick<RecordsTableGroupRead, "fieldId" | "fieldType">,
+): readonly string[] | undefined => {
+  const keys: string[] = [];
+  for (const group of summary.groups) {
+    const value = groupValueOf(group.groupValues, field);
+    if (value === undefined) return undefined;
+    keys.push(recordsTableGroupKey(value));
+  }
+  return keys;
+};
+
+/** The links the summary's groups name, to be titled in the same batched read as the page's links. */
+export const recordsTableGroupLinks = (
+  summary: ProtectedQuerySummaryCompleted,
+  field: Pick<RecordsTableGroupRead, "fieldId" | "fieldType">,
+) =>
+  field.fieldType !== "link"
+    ? []
+    : collectRecordLinkValues(
+        summary.groups.flatMap((group) => {
+          const value = groupValueOf(group.groupValues, field);
+          return value === undefined || value === null || typeof value === "string" ? [] : [value];
+        }),
+      );
+
 /**
- * The groups a summary counted, in the field's choice order with the records that hold no value
- * last. A group's label is its choice's label (or the stored value when the choice is no longer
- * offered) and never a count of loaded rows: every count comes from the same summary read.
+ * The groups a summary counted. A choice's group is labelled with its choice's label (or the stored
+ * value when the choice is no longer offered) and ordered as the field orders its choices; a link's
+ * group is its target's readable title, and a date's the heading of its calendar bucket, each in the
+ * order the summary returned them. The records that hold no value come last. A label is never a
+ * count of loaded rows: every count comes from the same summary read.
  */
 export const projectRecordsTableGroups = (
   summary: ProtectedQuerySummaryCompleted,
-  field: Readonly<{
-    fieldId: string;
-    unassignedLabel: string;
-    options: readonly Readonly<{ value: string; label: string }>[];
-  }>,
-  expanded: string | null,
+  field: RecordsTableGroupRead &
+    Readonly<{ options: readonly Readonly<{ value: string; label: string }>[] }>,
+  recordLinks: ProjectedRecordLinks | undefined,
 ): ProjectedTableGroups | undefined => {
   const groups: ProjectedTableGroup[] = [];
   for (const group of summary.groups) {
-    const value = Object.entries(group.groupValues).find(
-      ([fieldId]) => fieldId.toLowerCase() === field.fieldId,
-    )?.[1];
-    if (value === undefined || (value !== null && typeof value !== "string")) return undefined;
+    const value = groupValueOf(group.groupValues, field);
+    if (value === undefined) return undefined;
     const key = recordsTableGroupKey(value);
     if (groups.some((held) => held.key === key)) return undefined;
-    const option = value === null ? undefined : field.options.find((o) => o.value === value);
     groups.push({
       key,
-      label: value === null ? field.unassignedLabel : (option?.label ?? value),
+      label: groupLabel(value, field, recordLinks),
       count: group.rowCount,
       ...(value === null ? { unassigned: true as const } : {}),
     });
   }
-  const rank = (group: ProjectedTableGroup): number => {
-    if (group.unassigned === true) return Number.MAX_SAFE_INTEGER;
-    const value = parseRecordsTableGroupKey(group.key);
-    const index = field.options.findIndex((option) => option.value === value);
-    return index < 0 ? field.options.length : index;
-  };
-  groups.sort((left, right) => rank(left) - rank(right) || left.label.localeCompare(right.label));
+  if (field.fieldType === "choice") {
+    const rank = (group: ProjectedTableGroup): number => {
+      if (group.unassigned === true) return Number.MAX_SAFE_INTEGER;
+      const value = parseRecordsTableGroupKey(group.key);
+      const index = field.options.findIndex((option) => option.value === value);
+      return index < 0 ? field.options.length : index;
+    };
+    groups.sort((left, right) => rank(left) - rank(right) || left.label.localeCompare(right.label));
+  }
+  const next = summary.nextGroupKey ?? undefined;
   return {
     status: "ready",
     fieldId: field.fieldId,
     groups,
     total: summary.totalRowCount,
-    ...(expanded !== null && groups.some((group) => group.key === expanded) ? { expanded } : {}),
+    page: { first: field.after === null, ...(next === undefined ? {} : { next }) },
+    ...(field.expanded !== null && groups.some((group) => group.key === field.expanded)
+      ? { expanded: field.expanded }
+      : {}),
   };
+};
+
+const groupLabel = (
+  value: RecordsTableGroupValue,
+  field: RecordsTableGroupRead &
+    Readonly<{ options: readonly Readonly<{ value: string; label: string }>[] }>,
+  recordLinks: ProjectedRecordLinks | undefined,
+): string => {
+  if (value === null) return field.unassignedLabel;
+  if (field.fieldType === "choice")
+    return field.options.find((option) => option.value === value)?.label ?? String(value);
+  if (field.fieldType === "link")
+    return typeof value === "string"
+      ? "Not available"
+      : (recordLinkPlainText(value, recordLinks) ?? "Not available");
+  const unit = field.dateUnit ?? "day";
+  return bucketLabel(bucketFirstDay(field.fieldType, String(value), field.timeZone), unit);
 };

@@ -37,6 +37,9 @@ export const settingOptionalChoice = <Choice extends string>(
   value?.kind === "choice" && (allowed as readonly string[]).includes(value.value)
     ? (value.value as Choice)
     : undefined;
+/** The calendar units a date dimension (a pivot axis or a grouping) buckets by. */
+export const recordsTablePivotDateUnits = ["day", "week", "month", "quarter", "year"] as const;
+export type RecordsTablePivotDateUnit = (typeof recordsTablePivotDateUnits)[number];
 export const fieldList = (value: ComponentSettingValue | undefined): string[] =>
   (settingItems(value) ?? []).flatMap((item) => settingField(item) ?? []);
 

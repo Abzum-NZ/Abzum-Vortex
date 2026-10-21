@@ -181,6 +181,11 @@ export type ProjectedTableGroups =
       total: number;
       /** The key of the open group; absent while every group is closed. */
       expanded?: string;
+      /**
+       * Where this page of groups sits: `first` when no group page precedes it, and `next` the
+       * opaque position that reads the following page (absent on the last page).
+       */
+      page: Readonly<{ first: boolean; next?: string }>;
     }>
   | Readonly<{ status: "too_many" }>;
 

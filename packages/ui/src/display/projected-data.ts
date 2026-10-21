@@ -372,6 +372,7 @@ export type DisplaySemanticEventName =
    * without a read). These are the Group by feature's own reads and address changes, not flow events.
    */
   | "group_changed"
+  | "group_page_changed"
   | "group_requested"
   | "group_opened"
   /** The Saved views feature asks the host to open, store, share or delete a view. */
@@ -435,6 +436,11 @@ export type DisplaySemanticEvent =
       /** Groups the table by its authored field, or (null) shows the records ungrouped. */
       event: "group_changed";
       grouped: boolean;
+    }>
+  | Readonly<{
+      /** Shows another page of the groups: the position of the page before it, or null for the first. */
+      event: "group_page_changed";
+      after: string | null;
     }>
   | Readonly<{
       /** Asks for one page of the members of one group; its handler resolves to that page. */
@@ -597,6 +603,7 @@ export const DISPLAY_EVENT_NAMES: readonly DisplaySemanticEventName[] = Object.f
   "pivot_view_changed",
   "pivot_drilled",
   "group_changed",
+  "group_page_changed",
   "group_requested",
   "group_opened",
   "grid_view_requested",

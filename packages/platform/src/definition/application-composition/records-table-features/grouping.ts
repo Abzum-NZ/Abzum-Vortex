@@ -3,25 +3,38 @@ import {
   featureAvailable,
   featureEnabled,
   featureNotPossible,
+  recordsTablePivotDateUnits,
   settingField,
+  settingOptionalChoice,
   settingText,
   type RecordsTableFeatureDefinition,
   type RecordsTableFieldFacts,
+  type RecordsTablePivotDateUnit,
 } from "./shared";
 
 /** The most choices a grouping field may hold: every group is one summary row and one header. */
 export const RECORDS_TABLE_GROUPING_MAXIMUM_CHOICES = 50;
 /** The longest name the group of records with no value may carry. */
 export const RECORDS_TABLE_GROUPING_MAXIMUM_LABEL_LENGTH = 40;
+/** The most groups one page of a grouped table may show; more groups continue on the next page. */
+export const RECORDS_TABLE_GROUPING_MAXIMUM_PAGE_SIZE = 200;
+
+/** The field types a table may be grouped by: a link is grouped by its target, a date by a calendar unit. */
+export const recordsTableGroupingFieldTypes = ["choice", "link", "date", "date_time"] as const;
+export type RecordsTableGroupingFieldType = (typeof recordsTableGroupingFieldTypes)[number];
 
 /**
- * Group by: the viewer may group the table by one choice field, a stage being a choice field with a
- * pipeline. `field` is that field, a column of the bound query people can filter by, and
- * `unassignedLabel` names the group of records with no value (or whose value the viewer cannot
- * see). Each part is absent until the builder names it, which the check refuses.
+ * Group by: the viewer may group the table by one choice, link or date field, a stage being a
+ * choice field with a pipeline. `field` is that field, a column of the bound query people can
+ * filter by; a date field needs its calendar unit (`dateUnit`, bucketed in the organisation's time
+ * zone); `groupPageSize` is how many groups one page shows; `unassignedLabel` names the group of
+ * records with no value (or whose value the viewer cannot see). Each part is absent until the
+ * builder names it, which the check refuses.
  */
 export type RecordsTableGroupingSettings = Readonly<{
   field?: string;
+  dateUnit?: RecordsTablePivotDateUnit;
+  groupPageSize?: number;
   unassignedLabel?: string;
 }>;
 
@@ -29,36 +42,45 @@ const code = "definition_records_table_grouping" as const;
 
 /** Whether a field can be grouped by at all; a choice field is also bounded by its options. */
 const groupable = (field: RecordsTableFieldFacts): boolean =>
-  field.type === "choice" && field.filterable;
+  (recordsTableGroupingFieldTypes as readonly string[]).includes(field.type) && field.filterable;
 
 export const recordsTableGroupingFeature: RecordsTableFeatureDefinition<RecordsTableGroupingSettings> =
   {
     key: "grouping",
     label: "Group by",
-    description: "Group the records by a choice or stage field, counted on the server",
+    description: "Group the records by a choice, stage, link or date field, counted on the server",
     read: (group) => {
       if (featureEnabled(group) !== true) return { enabled: false };
       const field = settingField(group["field"]);
       const unassignedLabel = settingText(group["unassigned_label"]);
+      const dateUnit = settingOptionalChoice(group["date_unit"], recordsTablePivotDateUnits);
+      const groupPageSize = group["group_page_size"];
       return {
         enabled: true,
         ...(field === undefined ? {} : { field }),
+        ...(dateUnit === undefined ? {} : { dateUnit }),
+        ...(groupPageSize?.kind === "number" ? { groupPageSize: groupPageSize.value } : {}),
         ...(unassignedLabel === undefined ? {} : { unassignedLabel }),
       };
     },
-    // Grouping needs a choice (or stage) field the query selects and people can filter by, with
-    // few enough choices to count each one. Every refusal names the part that does not fit.
+    // Grouping needs a choice (or stage), link or date field the query selects and people can
+    // filter by; a choice field has few enough choices to count each one, a date field a calendar
+    // unit, and every group page a size. Every refusal names the part that does not fit.
     check: (state, facts) => {
       if (facts.grouped)
         return featureNotPossible(code, "Rows that total records cannot be grouped again.");
       if (!facts.fields.some(groupable))
         return featureNotPossible(
           code,
-          "Group by needs a choice or stage field in the bound query",
+          "Group by needs a choice, stage, link or date field in the bound query",
         );
       if (!state.enabled) return featureAvailable;
+      const recordType = facts.recordTypeLabel || "this record type";
       if (state.field === undefined)
-        return featureNotPossible(code, "Choose the choice or stage field to group by.");
+        return featureNotPossible(
+          code,
+          "Choose the choice, stage, link or date field to group by.",
+        );
       const field = factsOf(facts, state.field);
       if (field === undefined) {
         const unselected = facts.unselectedFields?.find(
@@ -66,24 +88,43 @@ export const recordsTableGroupingFeature: RecordsTableFeatureDefinition<RecordsT
         );
         return featureNotPossible(
           code,
-          `${unselected?.label ?? "The chosen field"} is not selected by the query`,
+          `Grouping by ${unselected?.label ?? "the chosen field"} needs a choice, stage, link or date field of ${recordType} that the query reads`,
         );
       }
-      if (field.type !== "choice")
-        return featureNotPossible(code, `${field.label} is not a choice or stage field`);
+      if (!(recordsTableGroupingFieldTypes as readonly string[]).includes(field.type))
+        return featureNotPossible(
+          code,
+          `Grouping by ${field.label} needs a choice, stage, link or date field of ${recordType} that the query reads`,
+        );
       if (!field.filterable)
         return featureNotPossible(
           code,
           `${field.label} cannot be grouped by until it is filterable: make it filterable in Data.`,
         );
       if (
-        field.choiceCount === undefined ||
-        field.choiceCount < 1 ||
-        field.choiceCount > RECORDS_TABLE_GROUPING_MAXIMUM_CHOICES
+        field.type === "choice" &&
+        (field.choiceCount === undefined ||
+          field.choiceCount < 1 ||
+          field.choiceCount > RECORDS_TABLE_GROUPING_MAXIMUM_CHOICES)
       )
         return featureNotPossible(
           code,
           `${field.label} has more than ${RECORDS_TABLE_GROUPING_MAXIMUM_CHOICES} choices; group by a field with fewer`,
+        );
+      if ((field.type === "date" || field.type === "date_time") && state.dateUnit === undefined)
+        return featureNotPossible(
+          code,
+          `Choose how to group ${field.label}: by day, week, month, quarter or year`,
+        );
+      if (
+        state.groupPageSize === undefined ||
+        !Number.isInteger(state.groupPageSize) ||
+        state.groupPageSize < 1 ||
+        state.groupPageSize > RECORDS_TABLE_GROUPING_MAXIMUM_PAGE_SIZE
+      )
+        return featureNotPossible(
+          code,
+          `Set a group page of at most ${RECORDS_TABLE_GROUPING_MAXIMUM_PAGE_SIZE}`,
         );
       if (state.unassignedLabel === undefined)
         return featureNotPossible(code, "Name the group of records that have no value.");

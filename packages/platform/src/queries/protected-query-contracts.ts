@@ -180,6 +180,8 @@ export type ProtectedQueryBoardMembersCommand = z.infer<
 const safeWholeNumberGroupValueSchema = z.number().int().refine(Number.isSafeInteger);
 const groupStringValueSchema = z.string();
 const groupChoiceValueSchema = z.string().min(1).max(120);
+/** The one group of links whose targets the reader cannot read: no identity or title of one is carried. */
+const groupNotAvailableValueSchema = z.literal("not_available");
 const groupTypedValue = <K extends string, T extends z.ZodType>(fieldType: K, value: T) =>
   z
     .object({ fieldId: fieldIdSchema, fieldType: z.literal(fieldType), value: value.nullable() })
@@ -198,7 +200,7 @@ export const protectedQueryGroupValueSchema = z.discriminatedUnion("fieldType", 
   groupTypedValue("email_address", groupStringValueSchema),
   groupTypedValue("phone_number", groupStringValueSchema),
   groupTypedValue("web_address", groupStringValueSchema),
-  groupTypedValue("link", recordLinkValueSchema),
+  groupTypedValue("link", z.union([recordLinkValueSchema, groupNotAvailableValueSchema])),
   groupTypedValue("link_to_one_of_several", recordLinkValueSchema),
 ]);
 export type ProtectedQueryGroupValue = z.infer<typeof protectedQueryGroupValueSchema>;

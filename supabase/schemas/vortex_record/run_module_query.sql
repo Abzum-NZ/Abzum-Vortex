@@ -192,6 +192,7 @@ declare
   group_key text;
   group_member_matches boolean;
   group_scan_predicate text;
+  group_link_field_id text; group_link_cache jsonb := '{}'::jsonb; group_link_state jsonb;
   preview_mode boolean := false;
   -- A tree level: the roots of a tree (records with no readable parent) or the
   -- children of one parent, over a one-record link of the record type to itself.
@@ -722,6 +723,13 @@ begin
       return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
     end if;
     filter_predicate := '(' || filter_predicate || ') and (' || group_scan_predicate || ')';
+    if fields_by_id -> group_key ->> 'type' = 'link' then
+      group_link_field_id := group_key;
+      if (vortex_record.group_link_unreadable_internal(group_link_cache, group_selector_values -> group_key,
+        fields_by_id -> group_key) ->> 'matches')::boolean then
+        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'read_forbidden');
+      end if;
+    end if;
   end if;
   if tree_mode and tree_parent_id is not null then
     filter_predicate := '(' || filter_predicate || ') and ' || pg_catalog.format(
@@ -1275,7 +1283,14 @@ begin
               select 1 from pg_catalog.unnest(group_by_ids) as grouped(id)
               where not (readable_values ? grouped.id)
             );
-            if group_member_matches then
+            if group_member_matches and group_link_field_id is not null
+              and group_selector_values -> group_link_field_id = '"not_available"'::jsonb then
+              -- The group of unreadable targets: each distinct target is decided once per call.
+              group_link_state := vortex_record.group_link_unreadable_internal(
+                group_link_cache, readable_values -> group_link_field_id, fields_by_id -> group_link_field_id);
+              group_link_cache := group_link_state -> 'cache';
+              group_member_matches := (group_link_state ->> 'matches')::boolean;
+            elsif group_member_matches then
               select pg_catalog.jsonb_object_agg(grouped.id, vortex_record.grouping_value_internal(
                 readable_values -> grouped.id, fields_by_id -> grouped.id ->> 'type', p_user_inputs #> '{grouping,dateBucket}'
               ))

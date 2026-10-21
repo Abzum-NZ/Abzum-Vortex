@@ -5,7 +5,9 @@ import {
   factsOf,
   settingField,
   settingOptionalChoice,
+  recordsTablePivotDateUnits,
   type RecordsTableFeatureDefinition,
+  type RecordsTablePivotDateUnit,
   type RecordsTableFieldFacts,
 } from "./shared";
 
@@ -14,8 +16,6 @@ export const RECORDS_TABLE_PIVOT_MAXIMUM_COLUMNS = 50;
 /** The most rows one pivot page may show. */
 export const RECORDS_TABLE_PIVOT_MAXIMUM_ROW_PAGE_SIZE = 200;
 
-export const recordsTablePivotDateUnits = ["day", "week", "month", "quarter", "year"] as const;
-export type RecordsTablePivotDateUnit = (typeof recordsTablePivotDateUnits)[number];
 export const recordsTablePivotMeasureFunctions = [
   "count",
   "sum",
