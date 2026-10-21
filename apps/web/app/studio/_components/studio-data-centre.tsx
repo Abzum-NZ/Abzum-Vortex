@@ -238,7 +238,7 @@ function Totals({ totals }: Readonly<{ totals: readonly StudioDataTotal[] }>) {
 
 /**
  * What a query that groups records or adds totals reads: its overall totals, then its groups one page
- * at a time, by keyset like records: next and previous pages, and how many groups there are in all.
+ * at a time, by keyset like records: next and previous pages.
  */
 function SummaryResults({
   result,
@@ -307,8 +307,7 @@ function SummaryResults({
       {result.groupColumns.length === 0 ? null : (
         <div className="flex items-center justify-between gap-2">
           <p role="status" className="text-sm text-muted-foreground">
-            {result.groups.length} of {result.groupCount}{" "}
-            {result.groupCount === 1 ? "group" : "groups"} on this page
+            {result.groups.length} {result.groups.length === 1 ? "group" : "groups"} on this page
           </p>
           <div className="flex gap-2">
             <Button

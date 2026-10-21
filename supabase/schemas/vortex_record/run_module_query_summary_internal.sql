@@ -14,6 +14,8 @@ set search_path = ''
 as $function$
 declare
   summary_candidate_limit constant integer := 100000;
+  group_page_default constant integer := 40;
+  group_page_maximum constant integer := 200;
   uuid_pattern constant text :=
     '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
   prepared_plan jsonb := p_prepared_plan;
@@ -123,6 +125,7 @@ declare
   board_totals_sql text;
   board_empty_aggregates_sql text;
   result_value jsonb;
+  error_message text;
 begin
   board_summary_mode := p_user_inputs ? 'boardSummary';
   if board_summary_mode then
@@ -180,10 +183,13 @@ begin
       return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
     end;
   end if;
-  group_page_limit := case
+  -- Every grouped read pages its groups: the requested page size, or the default, held to the maximum.
+  -- The candidate ceiling bounds the rows a read may scan, never the groups it returns.
+  group_page_limit := least(group_page_maximum, greatest(1, coalesce(case
     when pivot_mode then ((p_user_inputs #>> '{pivot,rowLimit}')::numeric)::integer
     when p_user_inputs ? 'grouping' then ((p_user_inputs #>> '{grouping,limit}')::numeric)::integer
-    else summary_candidate_limit end;
+    when p_user_inputs ? 'groupLimit' then ((p_user_inputs ->> 'groupLimit')::numeric)::integer
+    end, group_page_default)));
   if pg_catalog.jsonb_typeof(declared_searchable_ids) is distinct from 'array' then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
   end if;
@@ -882,13 +888,18 @@ begin
          )'
       else 'select candidate.projected_values from candidate' end;
   else
-    -- Materialize each read once. The raw candidate count gates the reads, and
-    -- every filter and aggregate uses only the fields this read returned.
+    -- Decide the candidates together, one set pass per batch, and materialize each read once.
+    -- The raw candidate count gates the reads, and every filter and aggregate uses only the
+    -- fields this read returned.
     selected_sql := pg_catalog.format(
       'with readable as materialized (
-         select vortex_record.read_record(%L::uuid, candidate.record_id) as result
-         from candidate
-         where (select value from candidate_count) <= %s
+         select batch.result
+         from vortex_record.read_record_batch_internal(
+           %L::uuid,
+           (select pg_catalog.array_agg(candidate.record_id) from candidate
+             where (select value from candidate_count) <= %s),
+           %L::boolean, %L::uuid, %L::jsonb
+         ) as batch
        )
        select (
          select coalesce(pg_catalog.jsonb_object_agg(field.id, readable.result -> ''values'' -> field.id), ''{}''::jsonb)
@@ -913,7 +924,9 @@ begin
             from pg_catalog.unnest($16::text[]) as referenced(id)),
            $14, $15, false
          ))',
-      record_type_id_value::text, summary_candidate_limit
+      record_type_id_value::text, summary_candidate_limit,
+      prepared_plan ? 'preview', v_storage_contract_id::text,
+      case when prepared_plan ? 'preview' then record_type_item::text end
     );
   end if;
 
@@ -1195,6 +1208,16 @@ begin
          select * from row_axis
          order by row_rank, row_title collate "C", row_value::text collate "C" limit %s
        ),
+       visible_cells as materialized (
+         select cell.row_value, pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+           ''column'', cell.column_value, ''rowCount'', cell.row_count,
+           ''aggregates'', cell.aggregates
+         ) order by cell.column_rank, cell.column_title collate "C", cell.column_value::text collate "C") as cells
+         from crossed as cell
+         join visible_rows as visible on visible.row_value = cell.row_value
+         where cell.level = 0
+         group by cell.row_value
+       ),
        grand as (select row_count, aggregates from crossed where level = 3)
        select case
          when candidate_count.value > %s
@@ -1228,16 +1251,10 @@ begin
                select coalesce(pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
                  ''key'', visible.row_key, ''value'', visible.row_value, ''rowCount'', visible.row_count,
                  ''aggregates'', visible.aggregates,
-                 ''cells'', (
-                   select coalesce(pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
-                     ''column'', cell.column_value, ''rowCount'', cell.row_count,
-                     ''aggregates'', cell.aggregates
-                   ) order by cell.column_rank, cell.column_title collate "C", cell.column_value::text collate "C"), ''[]''::jsonb)
-                   from crossed as cell
-                   where cell.level = 0 and cell.row_value = visible.row_value
-                 )
+                 ''cells'', coalesce(row_cells.cells, ''[]''::jsonb)
                ) order by visible.row_rank, visible.row_title collate "C", visible.row_value::text collate "C"), ''[]''::jsonb)
                from visible_rows as visible
+               left join visible_cells as row_cells on row_cells.row_value = visible.row_value
              )
            )
          ) end
@@ -1389,6 +1406,12 @@ begin
         filter_ids, summary_field_ids, search_field_ids, user_search;
   exception
     when invalid_parameter_value then
+      -- Only the query condition evaluator's refusal is a filter the reader got wrong; any other
+      -- invalid parameter is a platform fault and propagates to the adapter, which logs it.
+      get stacked diagnostics error_message = message_text;
+      if error_message is distinct from 'Query condition is invalid' then
+        raise;
+      end if;
       return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'filter_invalid');
     when sqlstate 'V3187' then
       -- A readable date bucket left the supported year domain (grouping_value_internal).

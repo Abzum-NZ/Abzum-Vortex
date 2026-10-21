@@ -26,6 +26,7 @@ export type ChartPayload = Readonly<{
   categoryLabel: string;
   measureLabel: string;
   points: readonly ChartPoint[];
+  moreGroups: boolean;
 }>;
 
 const refuse = (message: string, location: DefinitionRenderErrorLocation): never => {
@@ -66,7 +67,8 @@ const parseChartPayload = (
   if (
     !isRecord(value) ||
     value.kind !== "chart" ||
-    !hasExactKeys(value, ["kind", "categoryLabel", "measureLabel", "points"]) ||
+    !hasExactKeys(value, ["kind", "categoryLabel", "measureLabel", "points", "moreGroups"]) ||
+    typeof value.moreGroups !== "boolean" ||
     typeof value.categoryLabel !== "string" ||
     typeof value.measureLabel !== "string" ||
     !Array.isArray(value.points)
@@ -80,6 +82,7 @@ const parseChartPayload = (
     categoryLabel: value.categoryLabel,
     measureLabel: value.measureLabel,
     points: Object.freeze(points),
+    moreGroups: value.moreGroups,
   });
 };
 
@@ -150,6 +153,11 @@ export function ChartDisplay(props: DisplayRenderProps<ChartPayload>): ReactElem
               ))}
             </TableBody>
           </Table>
+          {values.moreGroups ? (
+            <p className="text-sm text-muted-foreground" data-vortex-chart-more="true">
+              {`Showing the first ${values.points.length} groups.`}
+            </p>
+          ) : null}
         </section>
       )}
     </DisplayStateContainer>
