@@ -64,10 +64,11 @@ begin
   loaded := case when compact then null else p_loaded end;
   if loaded is null and not compact then
     if p_page ? 'installation' then
-      -- The active installation this invocation read and validated once.
-      loaded := vortex_record.load_record_access_facts_from_installation_internal(
-        p_record_type_id, 'read', p_record_id, null, p_page -> 'installation', p_projection_row,
-        case when requested_field_ids is null then null else '[]'::jsonb end
+      -- The installation and access plan this invocation's caller read,
+      -- validated and resolved once for the whole page.
+      loaded := vortex_record.load_record_access_facts_with_plan_internal(
+        p_record_type_id, 'read', p_record_id, null, p_page -> 'installation', p_page -> 'plan',
+        p_projection_row, case when requested_field_ids is null then null else '[]'::jsonb end
       );
     else
       loaded := vortex_record.load_record_access_facts_internal(

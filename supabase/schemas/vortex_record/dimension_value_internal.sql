@@ -33,11 +33,15 @@ begin
     ), '{}'::jsonb)
   into readable_ids, readable_titles
   from vortex_record.read_record_titles_internal(
-    target_type_id,
-    (select pg_catalog.array_agg(distinct (item.value ->> 'recordId')::uuid)
-     from pg_catalog.unnest(p_values) as item(value)
-     where item.value ->> 'recordTypeId' = target_type_id::text),
-    title_field_id
+    pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+      'recordTypeId', target_type_id,
+      'titleFieldId', title_field_id,
+      'recordIds', coalesce((
+        select pg_catalog.jsonb_agg(distinct (item.value ->> 'recordId')::uuid)
+        from pg_catalog.unnest(p_values) as item(value)
+        where item.value ->> 'recordTypeId' = target_type_id::text
+      ), '[]'::jsonb)
+    ))
   ) as titles
   where titles.result ->> 'outcome' = 'allowed'
     and titles.result -> 'values' ? title_field_id::text

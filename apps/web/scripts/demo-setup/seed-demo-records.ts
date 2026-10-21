@@ -683,6 +683,7 @@ export const seedDemoRecords = async (facts: DemoSeedFacts): Promise<void> => {
     await save(crmRootId, activityType, `activity/${index + 1}`, {
       subject: `Follow up with contact ${index + 1}`,
       activity_type: index % 2 === 0 ? "call" : "email",
+      ...(index === 0 ? { outcome: "connected" } : index === 1 ? { outcome: "replied" } : {}),
       due_at: dueAt.toISOString(),
       completed: false,
       regarding: { recordTypeId: contactType.recordTypeId, recordId: contactId },
