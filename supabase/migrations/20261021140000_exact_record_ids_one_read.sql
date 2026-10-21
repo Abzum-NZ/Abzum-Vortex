@@ -78,11 +78,9 @@ security definer
 set search_path = ''
 as $function$
 declare
-  -- The most candidate rows one request examines. A page that the budget ends
-  -- early still returns a position, so a later request resumes exactly there.
+  -- A page ending at this candidate budget still returns its position for the next request.
   scan_limit constant integer := 500;
-  uuid_pattern constant text :=
-    '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
+  uuid_pattern constant text := '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
   exact_ids_refusal text;
   prepared_plan jsonb;
   storage_plan jsonb;
@@ -176,8 +174,7 @@ declare
   lookahead_record record;
   lookahead_ids uuid[];
   page_first_loaded jsonb;
-  -- What every row of the page shares, built once in this invocation: the
-  -- validated active installation, the facts envelope and the read-time inputs.
+  -- Every row shares the validated installation, facts envelope and read-time inputs.
   page_shared jsonb; page_narrowed boolean;
   decided_ids uuid[] := array[]::uuid[];
   decided_loaded jsonb[];
@@ -264,7 +261,6 @@ declare
   tree_candidates uuid[];
   tree_root_child_ids uuid[] := array[]::uuid[];
   tree_root_nonroot_ids uuid[];
-
 begin
   -- Request shape. Nothing here is authority; it only bounds the work.
   if p_direction not in ('forward', 'backward') or p_direction is null then
