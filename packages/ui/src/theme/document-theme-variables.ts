@@ -1,5 +1,9 @@
 import type { CSSProperties } from "react";
-import { createThemeRootProps, type ApplicationTheme, type PlatformThemeTokens } from "./theme-variables";
+import {
+  createThemeRootProps,
+  type ApplicationTheme,
+  type PlatformThemeTokens,
+} from "./theme-variables";
 import { createVortexStyleRootProps, resolveVortexStyleSelection } from "./vortex-style";
 
 const platformDefaults = new WeakMap<PlatformThemeTokens, CSSProperties>();
@@ -26,7 +30,9 @@ export function createDocumentThemeVariables(
   theme: ApplicationTheme | undefined,
   platformThemeTokens: PlatformThemeTokens,
 ): CSSProperties {
-  const defaults = platformDefaultVariables(platformThemeTokens) as Readonly<Record<string, unknown>>;
+  const defaults = platformDefaultVariables(platformThemeTokens) as Readonly<
+    Record<string, unknown>
+  >;
   const full: Readonly<Record<string, unknown>> = {
     ...createThemeRootProps(theme, platformThemeTokens).style,
     ...createVortexStyleRootProps(resolveVortexStyleSelection(theme?.selection)).style,
