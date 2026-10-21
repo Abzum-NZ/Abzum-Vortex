@@ -379,8 +379,7 @@ export const loadRecordChoicePage = async (
       const readable = await createHumanOrganizationRequestService(dependencies).run(
         session,
         selection,
-        (transaction, scope) =>
-          decideRecordTypeFieldIds(transaction, scope, context, bound.sourceRecordTypeId, "read"),
+        (transaction) => readRecordTypeVisibleFieldIds(transaction, bound.sourceRecordTypeId),
       );
       if (readable.kind === "temporarily_unavailable") return readable;
       if (readable.kind !== "available") return { kind: "refused", cause: "link_field_withheld" };
