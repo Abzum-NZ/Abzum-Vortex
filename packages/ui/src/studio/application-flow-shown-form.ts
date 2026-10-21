@@ -38,14 +38,7 @@ export const studioFlowCanCreateShownForm = (
   catalogue: ImmutablePlatformBlockCatalogue,
   source: ApplicationSourceDocument,
   flow: SourceFlow,
-): boolean => {
-  const region = invokingRegion(source, flow);
-  return (
-    region?.page !== undefined &&
-    catalogue.releases.some((release) => release.key === "platform.form.container") &&
-    flowFormPlace(catalogue, source, flow) !== undefined
-  );
-};
+): boolean => flowFormPlace(catalogue, source, flow) !== undefined;
 
 const flowFormPlace = (
   catalogue: ImmutablePlatformBlockCatalogue,

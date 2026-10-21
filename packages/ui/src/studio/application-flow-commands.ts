@@ -114,8 +114,11 @@ const flowRecordType = (flow: SourceFlow): string | undefined => {
   );
 };
 
-/** The pick that asks for a new form on the page of the flow's button instead of an existing one. */
-export const studioNewFormChoice = "new_form";
+/**
+ * The pick that asks for a new form on the page of the flow's button instead of an existing one.
+ * It is not a valid block name, so no form can be named like it.
+ */
+export const studioNewFormChoice = "+new_form";
 
 /** One builder decision a step needs before it is inserted: what the setting points at. */
 export type StudioFlowStepBuilderChoice = Readonly<{
