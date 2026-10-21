@@ -206,9 +206,10 @@ export function StudioGridFeatures({
           const declaration = property.properties.find((feature) => feature.key === key);
           const { label, description } = recordsTableFeatureDescription(key);
           const enabled = features !== undefined && recordsTableFeatureState(features, key).enabled;
-          // In Board mode the grid shows none of the table's other features: only the board is judged.
+          // In Board mode a feature that is off is not judged; one that is on is refused unless the
+          // board implements it.
           const check =
-            features === undefined || (features.board.enabled && key !== "board")
+            features === undefined || (features.board.enabled && key !== "board" && !enabled)
               ? undefined
               : checkRecordsTableFeature(
                   key,

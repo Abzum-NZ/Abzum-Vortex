@@ -137,6 +137,7 @@ export const loadApplicationPivot = async (
                 : Promise.resolve({ kind: "refused" }),
       subjectRecordTypeId: subjectType === undefined ? undefined : String(subjectType.recordTypeId),
       readTimeZone,
+      readViewerTeams: services.readViewerTeams,
     });
     const pivot = await readRecordsTablePivot({
       context,

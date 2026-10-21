@@ -208,10 +208,26 @@ export function ModuleFieldsEditor({
     [formulaFields],
   );
   const otherFields = formulaFields.map(({ key, label, type }) => ({ key, label, type }));
+  // The link fields a dependent link can be narrowed by: the filterable ones on the record type it links to.
+  const storedTarget = (existing?.settings as { target?: unknown } | undefined)?.target;
+  const targetLinkFields = useMemo(() => {
+    if (typeof storedTarget !== "string") return [];
+    const separator = storedTarget.lastIndexOf(":");
+    const owner = separator > 0 ? storedTarget.slice(0, separator) : moduleKey;
+    const local = separator > 0 ? storedTarget.slice(separator + 1) : storedTarget;
+    return (
+      source.body.modules
+        .find((candidate) => candidate.key === owner)
+        ?.record_types.find((candidate) => candidate.key === local)
+        ?.fields.filter((item) => item.type === "link" && item.filterable)
+        .map(({ key, label }) => ({ key, label })) ?? []
+    );
+  }, [source, moduleKey, storedTarget]);
   const declarationsFor = (type: ModuleFieldType) =>
     moduleFieldSettingDeclarations(type, {
       fields: otherFields,
       permissions: (module?.permissions ?? []).map(({ key, label }) => ({ key, label })),
+      targetLinkFields,
     });
   const startSettings = (type: ModuleFieldType): Record<string, unknown> => {
     const start = starterModuleFieldSettings(type, {

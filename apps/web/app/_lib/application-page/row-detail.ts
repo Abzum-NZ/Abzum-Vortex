@@ -147,6 +147,7 @@ export const loadApplicationRowDetail = async (
                   })
                 : Promise.resolve({ kind: "refused" }),
       subjectRecordTypeId: subjectType === undefined ? undefined : String(subjectType.recordTypeId),
+      readViewerTeams: services.readViewerTeams,
       readTimeZone: async () => {
         try {
           const read = await services.readCalendarSettings();
