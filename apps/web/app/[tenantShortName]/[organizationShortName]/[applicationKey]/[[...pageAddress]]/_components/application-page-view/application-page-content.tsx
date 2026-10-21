@@ -37,7 +37,13 @@ import { FirstRecordTypeEmptyState } from "../../../../../../_components/first-r
 import { toast } from "@vortex/ui/components/sonner";
 import type { ApplicationPageModel } from "../../../../../../_lib/application-page";
 import type { PageWebMcpTool } from "../../../../../../_lib/application-page";
-import type { GuidedFormActions, Notice, SubmittedForm, RefreshedPlacementData } from "./types";
+import type {
+  GuidedFormActions,
+  Notice,
+  SubmittedForm,
+  RefreshedPlacementData,
+  PageSelection,
+} from "./types";
 import { formOwnersByPlacement } from "./form-surface";
 import { placementEventNamesByPage, applicationLauncherPlacementIds } from "./placement-helpers";
 import { useUnsavedWorkPrompt } from "./use-unsaved-work-prompt";
@@ -111,7 +117,7 @@ export function ApplicationPageViewContent({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const currentSearch = searchParams.toString();
-  const [selection, setSelection] = useState<Readonly<Record<string, readonly string[]>>>({});
+  const [selection, setSelection] = useState<PageSelection>({});
   const [choicePages, setChoicePages] = useState<Readonly<Record<string, ChoiceInputPayload>>>({});
   const [dialogChoicePages, setDialogChoicePages] = useState<
     Readonly<Record<string, ChoiceInputPayload>>

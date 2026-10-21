@@ -110,7 +110,6 @@ export const readRecordsTableNamedActionAvailability = async (
       const declared = recordsTableBulkActions(contract);
       if (declared.length === 0) return refuse("bulk_actions_not_offered");
       if (declared.length > 20) return refuse("too_many_declared_actions");
-      if (request.targets.length > contract.pageSize) return refuse("selection_larger_than_page");
       const queries = installed.releaseSet.modules.flatMap((module) =>
         module.content.queries.filter((query) => sameId(query.queryId, vortex.queryId as string)),
       );

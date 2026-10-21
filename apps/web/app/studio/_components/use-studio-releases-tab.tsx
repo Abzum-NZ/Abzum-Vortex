@@ -17,10 +17,8 @@ import {
 } from "../_lib/application-source-import";
 import type { SavedDraftContext, StudioPublicationOutcome } from "./application-draft-agent-tools";
 import type { ApplicationSourceImport as ApplicationSourceImportComponent } from "./application-source-import";
-import { StudioPublishDialog } from "./studio-publish-dialog";
 import { previewProblem, unavailableMessage } from "./studio-refusal-messages";
 import { describeStudioCompileFailure } from "../_lib/studio-compile-failure";
-import { StudioReleasesPanel } from "./studio-releases-panel";
 import { studioReleasesSections, type StudioReleasesSection } from "./studio-rail-tabs";
 import type { StudioDraft } from "./use-studio-draft";
 import { studioNotice } from "./studio-save-state";
@@ -28,7 +26,26 @@ import { toast } from "@vortex/ui/components/sonner";
 import { useStudioTabVisited } from "./studio-frame";
 import type { StudioCompositionContext } from "@vortex/ui/studio";
 import { studioDataEdit } from "../_lib/studio-data-model";
-import { StudioFieldPageReview } from "./studio-field-page-review";
+import { deferredStudioPart } from "./studio-deferred-part";
+import { useIntentPreload } from "../_lib/use-intent-preload";
+
+// What Publish and the Releases tab show loads when they are first wanted: the top bar's Publish
+// needs only this hook's state at first paint.
+const StudioReleasesPanel = deferredStudioPart(
+  () => import("./studio-releases-panel").then((module) => module.StudioReleasesPanel),
+  "releases panel",
+);
+const StudioPublishDialog = deferredStudioPart(
+  () => import("./studio-publish-dialog").then((module) => module.StudioPublishDialog),
+  "publish window",
+);
+const StudioFieldPageReview = deferredStudioPart(
+  () => import("./studio-field-page-review").then((module) => module.StudioFieldPageReview),
+  "review of the new fields",
+);
+const preloadReleasesPanel = () => import("./studio-releases-panel");
+const preloadPublishDialog = () =>
+  Promise.all([import("./studio-publish-dialog"), import("./studio-field-page-review")]);
 
 const ApplicationSourceImport = dynamic(
   () => import("./application-source-import").then((module) => module.ApplicationSourceImport),
@@ -76,11 +93,11 @@ const publicationProblemText = (
   if (reason === "identity_retired" && sentence !== undefined) return sentence;
   // A compilation refusal names what it is about (the field, query or block) so it can be fixed.
   if (reason?.startsWith("compilation_") === true) {
-    if (compileProblem !== undefined)
-      return `This draft does not compile, so it cannot be published. ${compileProblem} Then try again.`;
     // A rule with its own business sentence (a Records table feature check) says it as Studio does.
     if (sentence !== undefined)
       return `This draft cannot be published: ${sentence} Change it and try again.`;
+    if (compileProblem !== undefined)
+      return `This draft does not compile, so it cannot be published. ${compileProblem} Then try again.`;
     const rule = reason
       .slice("compilation_".length)
       .replace(/^vortex.definition./u, "")
@@ -122,11 +139,15 @@ export function useStudioReleasesTab({
   initialSection: StudioReleasesSection;
 }>) {
   const { organizationId, history } = draft;
+  useIntentPreload(preloadReleasesPanel, "#studio-rail-releases");
+  useIntentPreload(preloadPublishDialog, "#studio-publish");
   const latest = useRef(draft);
   latest.current = draft;
   const [section, setSection] = useState<StudioReleasesSection>(initialSection);
   const importVisited = useStudioTabVisited(!hidden && section === "import");
+  const panelVisited = useStudioTabVisited(!hidden);
   const [publishOpen, setPublishOpen] = useState(false);
+  const dialogVisited = useStudioTabVisited(publishOpen);
   const [note, setNote] = useState("");
   const [problem, setProblem] = useState("");
   const [preparing, setPreparing] = useState(false);
@@ -475,7 +496,9 @@ export function useStudioReleasesTab({
     ? "Wait for the workspace to finish loading or publishing."
     : savedWait;
 
-  const panel = <StudioReleasesPanel hidden={hidden} section={section} onSection={setSection} />;
+  const panel = panelVisited ? (
+    <StudioReleasesPanel hidden={hidden} section={section} onSection={setSection} />
+  ) : null;
   const centre: ReactNode = (
     <div className="mx-auto max-w-4xl px-8 py-6 text-foreground">
       {!hidden && section === "history" && (
@@ -533,7 +556,7 @@ export function useStudioReleasesTab({
   const title = studioReleasesSections.find((entry) => entry.value === section)!.label;
   const notSaved =
     draft.status.kind === "conflict" || draft.status.kind === "refused" ? draft.status.message : "";
-  const dialog = (
+  const dialog = !dialogVisited ? null : (
     <StudioPublishDialog
       open={publishOpen}
       onOpenChange={closePublish}

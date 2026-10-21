@@ -20,7 +20,6 @@ import {
   type RecordsTableFilterValue,
   type RecordsTableSortKey,
   type RecordsTableSortState,
-  type RecordsTableExportFormat,
   type RecordsTableBatchEditRequest,
   type RecordsTableBatchEditResult,
   RECORDS_TABLE_MAXIMUM_SORT_KEYS,
@@ -37,8 +36,10 @@ import {
   parseTableGroups,
   parseTableNarrowing,
   parseTableSelectionParts,
+  parseSelectedRecordIds,
   type TableGroups,
   type TableSelectionParts,
+  type TableSelectionEvent,
 } from "./projected-grid-features";
 
 /**
@@ -437,7 +438,7 @@ export type DisplaySemanticEvent =
       /** The record revision the row was read at; a stale one is refused by the server. */
       revision?: number;
     }>
-  | Readonly<{ event: "selection_changed"; recordId: string; selected: boolean }>
+  | TableSelectionEvent
   | Readonly<{
       event: "filter_changed";
       /** The filterable field whose control changed. */
@@ -532,18 +533,6 @@ export type DisplaySemanticEvent =
       columns: readonly BoardColumnSelector[];
       continuationToken?: string;
     }>
-  /** Runs a declared bulk named action over the selection the page holds for the table. */
-  | Readonly<{ event: "bulk_action"; action: string }>
-  /** Widens the selection to every matching record, or clears it (and a finished run's summary). */
-  | Readonly<{ event: "selection_scope_changed"; scope: "matching" | "cleared" }>
-  /** Downloads the rows ticked on the page, the records of the current view, or every matching record. */
-  | Readonly<{
-      event: "export_requested";
-      scope: "selected" | "view" | "matching";
-      format: RecordsTableExportFormat;
-    }>
-  /** Stops the export in progress; no file is saved. */
-  | Readonly<{ event: "export_cancelled" }>
   /**
    * Asks for the totals of the selected range: the shown page's record identities and the columns
    * the status bar offers. The handler resolves to a `RecordsRangeSummaryResult`; `signal` aborts
@@ -1139,31 +1128,6 @@ const parseColumns = (
   );
 };
 
-const parseSelection = (
-  value: unknown,
-  rows: readonly DisplayRow[],
-  location: DefinitionRenderErrorLocation,
-): readonly string[] | undefined => {
-  if (value === undefined) return undefined;
-  const items = requireArray(value, "Selected record identities must be an array", location);
-  const known = new Set(rows.map((row) => row.recordId));
-  const seen = new Set<string>();
-  return Object.freeze(
-    items.map((item) => {
-      const recordId = requireNonEmptyString(
-        item,
-        "A selected record identity must be a non-empty string",
-        location,
-      );
-      if (!known.has(recordId))
-        fail(`Selected record identity '${recordId}' is not a projected row`, location);
-      if (seen.has(recordId)) fail(`Duplicate selected record identity '${recordId}'`, location);
-      seen.add(recordId);
-      return recordId;
-    }),
-  );
-};
-
 /** @internal Shared with the pivot feature, whose cells are summary values. */
 export const parseSummaryValue = (
   value: unknown,
@@ -1361,7 +1325,7 @@ export const parseTablePayload = (
   if (layoutKeys.size !== carriedKeys.size || [...carriedKeys].some((key) => !layoutKeys.has(key)))
     fail("A projected table layout must arrange exactly the declared columns", location);
   const rows = parseRows(record.rows, location);
-  const selection = parseSelection(record.selectedRecordIds, rows, location);
+  const selection = parseSelectedRecordIds(record.selectedRecordIds, location);
   const page =
     record.page === undefined
       ? undefined

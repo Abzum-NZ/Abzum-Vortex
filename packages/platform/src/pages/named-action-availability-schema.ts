@@ -1,10 +1,13 @@
 import { z } from "zod";
 import { recordIdSchema, revisionSchema } from "../catalogue/identifiers";
-import { recordsTableBulkRefusalReasons } from "./records-selection";
+import { recordsSelectionMaximumIds, recordsTableBulkRefusalReasons } from "./records-selection";
 
 const targetSchema = z.object({ recordId: recordIdSchema, revision: revisionSchema }).strict();
 
-/** Visible identities and displayed revisions only; matching descriptors cannot enter this path. */
+/**
+ * Drawn identities (page roots and opened tree children) at their displayed revisions, bounded by
+ * the explicit selection maximum; matching descriptors cannot enter this path.
+ */
 export const namedActionAvailabilityRequestSchema = z
   .object({
     pageKey: z.string().min(1).max(200),
@@ -12,11 +15,11 @@ export const namedActionAvailabilityRequestSchema = z
     targets: z
       .array(targetSchema)
       .min(1)
-      .max(200)
+      .max(recordsSelectionMaximumIds)
       .refine(
         (targets) =>
           new Set(targets.map((target) => target.recordId.toLowerCase())).size === targets.length,
-        "Each visible record must occur once",
+        "Each selected record must occur once",
       ),
   })
   .strict();
@@ -53,7 +56,7 @@ export const namedActionAvailabilitySchema = z
   .refine(
     (records) =>
       new Set(records.map((record) => record.recordId.toLowerCase())).size === records.length,
-    "Each visible record must occur once",
+    "Each selected record must occur once",
   );
 export type NamedActionAvailability = z.infer<typeof namedActionAvailabilitySchema>;
 
