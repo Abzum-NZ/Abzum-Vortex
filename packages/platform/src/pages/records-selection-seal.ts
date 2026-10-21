@@ -1,6 +1,5 @@
 import "server-only";
 
-import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 import { z } from "zod";
 import {
   applicationRootIdSchema,
@@ -17,6 +16,81 @@ import {
   type RecordsTableQueryState,
 } from "../schema";
 import type { QueryContinuationKey } from "../queries/index";
+import { openToken, sealToken } from "../queries/sealed-token";
+
+/** Who reads a placement-bound sealed token, and the release, page and placement it addresses. */
+export type PlacementTokenExpectation = Readonly<{
+  session: IdentitySession;
+  selection: OrganizationSelectionCandidate;
+  installationRevision: number;
+  pageId: string;
+  placementId: string;
+}>;
+
+/**
+ * The binding every placement-bound sealed token carries (a records selection, a pivot position):
+ * the person, organisation, application, installed release, page and placement it was issued for,
+ * and when.
+ */
+export const placementTokenBindingShape = {
+  identityId: identityIdSchema,
+  organizationId: organizationIdSchema,
+  applicationRootId: applicationRootIdSchema,
+  previewInstallationId: z.string().uuid().optional(),
+  installationRevision: revisionSchema,
+  pageId: z.string().min(1).max(200),
+  placementId: z.string().min(1).max(200),
+  issuedAt: z.number().int().positive(),
+};
+type PlacementTokenBinding = z.infer<z.ZodObject<typeof placementTokenBindingShape>>;
+
+/** The binding of a token issued now for the expected reader and placement. */
+export const placementTokenBinding = (
+  expected: PlacementTokenExpectation,
+  now: () => number,
+): PlacementTokenBinding => {
+  const { session, selection } = expected;
+  if (selection.applicationRootId === undefined)
+    throw new Error("PLACEMENT_TOKEN_APPLICATION_NOT_SELECTED");
+  return {
+    identityId: session.identityId,
+    organizationId: selection.organizationId,
+    applicationRootId: selection.applicationRootId,
+    ...(selection.previewInstallationId === undefined
+      ? {}
+      : { previewInstallationId: selection.previewInstallationId }),
+    installationRevision: expected.installationRevision,
+    pageId: expected.pageId,
+    placementId: expected.placementId,
+    issuedAt: now(),
+  };
+};
+
+/**
+ * Why an opened token is not for the read that now presents it (another person, scope, release,
+ * page or placement, or past its lifetime); undefined when it is.
+ */
+export const placementTokenRefusal = (
+  binding: PlacementTokenBinding,
+  expected: PlacementTokenExpectation,
+  lifetimeMilliseconds: number,
+  now: () => number,
+): string | undefined => {
+  const { session, selection } = expected;
+  if (!sameId(binding.identityId, session.identityId)) return "other_person";
+  if (
+    !sameId(binding.organizationId, selection.organizationId) ||
+    selection.applicationRootId === undefined ||
+    !sameId(binding.applicationRootId, selection.applicationRootId) ||
+    (binding.previewInstallationId ?? "") !== (selection.previewInstallationId ?? "")
+  )
+    return "other_scope";
+  if (binding.installationRevision !== expected.installationRevision) return "release_changed";
+  if (!sameId(binding.pageId, expected.pageId)) return "other_page";
+  if (!sameId(binding.placementId, expected.placementId)) return "other_placement";
+  if (now() - binding.issuedAt > lifetimeMilliseconds) return "expired";
+  return undefined;
+};
 
 /**
  * The sealed "every matching record" descriptor of one Records table read: the page and placement and the
@@ -29,13 +103,7 @@ import type { QueryContinuationKey } from "../queries/index";
 const selectionDescriptorSchema = z
   .object({
     version: z.literal(1),
-    identityId: identityIdSchema,
-    organizationId: organizationIdSchema,
-    applicationRootId: applicationRootIdSchema,
-    previewInstallationId: z.string().uuid().optional(),
-    installationRevision: revisionSchema,
-    pageId: z.string().min(1).max(200),
-    placementId: z.string().min(1).max(200),
+    ...placementTokenBindingShape,
     moduleRootId: moduleRootIdSchema,
     queryId: queryIdSchema,
     inputValues: z.record(z.string(), jsonValueSchema),
@@ -44,23 +112,13 @@ const selectionDescriptorSchema = z
     search: z.string().max(500).nullable(),
     /** The organisation time zone a date-and-time filter was read in, when one applies. */
     timeZone: z.string().min(1).max(100).optional(),
-    issuedAt: z.number().int().positive(),
   })
   .strict();
 export type RecordsSelectionDescriptor = z.infer<typeof selectionDescriptorSchema>;
 
 /** A sealed descriptor stays usable for an hour; "Select all matching records" seals a fresh one. */
 const descriptorLifetimeMilliseconds = 3_600_000;
-const tokenVersion = 1;
-const nonceLength = 12;
-const tagLength = 16;
-const associatedData = Buffer.from("vortex.records.selection.v1", "utf8");
-
-const cipherKey = (key: QueryContinuationKey): Buffer => {
-  if (!(key.key instanceof Uint8Array) || key.key.byteLength !== 32)
-    throw new Error("RECORDS_SELECTION_KEY_INVALID");
-  return Buffer.from(key.key);
-};
+const purpose = "vortex.records.selection.v1";
 
 /** What one table read knows that the descriptor carries, beside who reads it. */
 export type RecordsSelectionTarget = Readonly<{
@@ -84,54 +142,31 @@ export const createRecordsSelectionSealer =
     selection: OrganizationSelectionCandidate,
     now: () => number = Date.now,
   ): RecordsSelectionSealer =>
-  (target) => {
-    if (selection.applicationRootId === undefined)
-      throw new Error("RECORDS_SELECTION_APPLICATION_NOT_SELECTED");
-    const descriptor = selectionDescriptorSchema.parse({
-      version: 1,
-      identityId: session.identityId,
-      organizationId: selection.organizationId,
-      applicationRootId: selection.applicationRootId,
-      ...(selection.previewInstallationId === undefined
-        ? {}
-        : { previewInstallationId: selection.previewInstallationId }),
-      installationRevision: target.installationRevision,
-      pageId: target.pageId,
-      placementId: target.placementId,
-      moduleRootId: target.moduleRootId,
-      queryId: target.queryId,
-      inputValues: target.inputValues,
-      sort: target.state.sort,
-      filters: target.state.filters,
-      search: target.state.search,
-      ...(target.timeZone === undefined ? {} : { timeZone: target.timeZone }),
-      issuedAt: now(),
-    });
-    const nonce = randomBytes(nonceLength);
-    const cipher = createCipheriv("aes-256-gcm", cipherKey(key), nonce, {
-      authTagLength: tagLength,
-    });
-    cipher.setAAD(associatedData);
-    const encrypted = Buffer.concat([
-      cipher.update(Buffer.from(JSON.stringify(descriptor), "utf8")),
-      cipher.final(),
-    ]);
-    return Buffer.concat([
-      Buffer.from([tokenVersion]),
-      nonce,
-      cipher.getAuthTag(),
-      encrypted,
-    ]).toString("base64url");
-  };
-
-/** Who opens a descriptor, and the release and placement the command addresses now. */
-export type RecordsSelectionExpectation = Readonly<{
-  session: IdentitySession;
-  selection: OrganizationSelectionCandidate;
-  installationRevision: number;
-  pageId: string;
-  placementId: string;
-}>;
+  (target) =>
+    sealToken(
+      key,
+      purpose,
+      selectionDescriptorSchema.parse({
+        version: 1,
+        ...placementTokenBinding(
+          {
+            session,
+            selection,
+            installationRevision: target.installationRevision,
+            pageId: target.pageId,
+            placementId: target.placementId,
+          },
+          now,
+        ),
+        moduleRootId: target.moduleRootId,
+        queryId: target.queryId,
+        inputValues: target.inputValues,
+        sort: target.state.sort,
+        filters: target.state.filters,
+        search: target.state.search,
+        ...(target.timeZone === undefined ? {} : { timeZone: target.timeZone }),
+      }),
+    );
 
 /**
  * Opens a sealed descriptor for the person it was sealed for, in the same organisation,
@@ -141,49 +176,18 @@ export type RecordsSelectionExpectation = Readonly<{
 export const openRecordsSelection = (
   token: string,
   key: QueryContinuationKey,
-  expected: RecordsSelectionExpectation,
+  /** Who opens the descriptor, and the release and placement the command addresses now. */
+  expected: PlacementTokenExpectation,
   now: () => number = Date.now,
 ): RecordsSelectionDescriptor | undefined => {
   const refuse = (cause: string): undefined => {
     console.error(`[records-selection] descriptor refused cause=${cause}`);
     return undefined;
   };
-  let descriptor: RecordsSelectionDescriptor;
-  try {
-    const bytes = Buffer.from(token, "base64url");
-    if (bytes.length <= 1 + nonceLength + tagLength || bytes[0] !== tokenVersion)
-      return refuse("token_malformed");
-    const decipher = createDecipheriv(
-      "aes-256-gcm",
-      cipherKey(key),
-      bytes.subarray(1, 1 + nonceLength),
-      { authTagLength: tagLength },
-    );
-    decipher.setAAD(associatedData);
-    decipher.setAuthTag(bytes.subarray(1 + nonceLength, 1 + nonceLength + tagLength));
-    const payload = Buffer.concat([
-      decipher.update(bytes.subarray(1 + nonceLength + tagLength)),
-      decipher.final(),
-    ]).toString("utf8");
-    const parsed = selectionDescriptorSchema.safeParse(JSON.parse(payload));
-    if (!parsed.success) return refuse("payload_invalid");
-    descriptor = parsed.data;
-  } catch {
-    return refuse("token_not_authentic");
-  }
-  const { session, selection } = expected;
-  if (!sameId(descriptor.identityId, session.identityId)) return refuse("other_person");
-  if (
-    !sameId(descriptor.organizationId, selection.organizationId) ||
-    selection.applicationRootId === undefined ||
-    !sameId(descriptor.applicationRootId, selection.applicationRootId) ||
-    (descriptor.previewInstallationId ?? "") !== (selection.previewInstallationId ?? "")
-  )
-    return refuse("other_scope");
-  if (descriptor.installationRevision !== expected.installationRevision)
-    return refuse("release_changed");
-  if (!sameId(descriptor.pageId, expected.pageId)) return refuse("other_page");
-  if (!sameId(descriptor.placementId, expected.placementId)) return refuse("other_placement");
-  if (now() - descriptor.issuedAt > descriptorLifetimeMilliseconds) return refuse("expired");
-  return descriptor;
+  const opening = openToken(key, purpose, token);
+  if (opening.kind === "refused") return refuse(opening.cause);
+  const parsed = selectionDescriptorSchema.safeParse(opening.payload);
+  if (!parsed.success) return refuse("payload_invalid");
+  const cause = placementTokenRefusal(parsed.data, expected, descriptorLifetimeMilliseconds, now);
+  return cause === undefined ? parsed.data : refuse(cause);
 };

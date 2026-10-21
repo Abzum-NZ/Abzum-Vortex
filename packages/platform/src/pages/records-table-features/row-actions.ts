@@ -10,6 +10,8 @@ import {
 } from "../../schema";
 import type { RequestDatabaseTransaction } from "../../db";
 import type { FlowNamedAction } from "../../definition/flow-orchestrator-types";
+import type { InstalledRuntimeContext } from "../../definition/installed-runtime-context";
+import { installedNamedActions } from "../../definition/installed-named-actions";
 import { collectActionFlowTasks, flowLibraryOf } from "../../rules";
 import { projectNamedActionAvailability } from "./named-action-availability";
 
@@ -19,6 +21,19 @@ export type RowActionInstallation = Readonly<{
   flows: ReadonlyMap<string, unknown>;
   namedActions: ReadonlyMap<string, FlowNamedAction>;
 }>;
+
+/** The flow bindings, flows and named actions of the installed release a row's commands run in. */
+export const rowActionInstallationOf = ({
+  releaseSet: { application, modules },
+}: Pick<InstalledRuntimeContext, "releaseSet">): RowActionInstallation => ({
+  bindings: application.content.flowBindings,
+  flows: new Map(
+    [...application.content.flows, ...modules.flatMap((module) => module.content.flows)].map(
+      (flow) => [String(flow.id), flow],
+    ),
+  ),
+  namedActions: installedNamedActions(application, modules),
+});
 
 /**
  * A named-action button binds the same interactive flow as every other row button. Its one Call

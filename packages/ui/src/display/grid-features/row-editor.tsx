@@ -15,26 +15,16 @@ import {
   type RecordsTableInlineEditor,
 } from "@vortex/platform/schema";
 import { Button } from "../../components/button";
-import { Checkbox } from "../../components/checkbox";
-import { Input } from "../../components/input";
 import { Label } from "../../components/label";
-import { NativeSelect, NativeSelectOption } from "../../components/native-select";
 import { Popover, PopoverContent, PopoverTrigger } from "../../components/popover";
-import { Textarea } from "../../components/textarea";
 import { useUnsavedWorkRegistry } from "../../controls/unsaved-work";
 import { Pencil } from "lucide-react";
 import { useDateFormatOptions } from "../date-format-context";
 import { fail, requireRecord, type DisplayEventHandlers, type DisplayRow } from "../projected-data";
 import type { RowLine } from "../sub-rows";
-import { LinkDraftPicker, linkedRecordTitle } from "./record-choice-picker";
-import {
-  clearedDraft,
-  dependentsToClear,
-  draftChoiceKey,
-  optionsForParent,
-  parentFieldOf,
-} from "./link-dependency";
-import { waitingForParent } from "../../controls/dependent-field";
+import { EditFieldControl } from "./edit-field-control";
+import { linkedRecordTitle } from "./record-choice-picker";
+import { clearedDraft, dependentsToClear, draftChoiceKey, parentFieldOf } from "./link-dependency";
 import {
   readEditDraft,
   sameEditDraft,
@@ -378,109 +368,35 @@ function FieldControl({
   const ownId = useId();
   const id = labelledId ?? ownId;
   const message = editing.errors[field.field];
-  const props = {
-    id,
-    "aria-label": `Edit ${field.label}`,
-    "aria-invalid": message !== undefined,
-    "aria-describedby": message === undefined ? undefined : `${id}-error`,
-    disabled: editing.saving,
-  };
-  const editor = field.editor;
-  const parentField = parentFieldOf(editor);
+  const parentField = parentFieldOf(field.editor);
   const parent =
     parentField === undefined
       ? undefined
       : editing.draft?.fields.find((entry) => same(entry.field, parentField));
-  const text = typeof field.draft === "string" ? field.draft : "";
-  let control: ReactElement;
-  if (editor.kind === "link")
-    control = (
-      <LinkDraftPicker
-        fieldId={field.field}
-        label={field.label}
-        events={events}
-        draft={typeof field.draft === "object" ? field.draft : null}
-        {...(current === undefined ? {} : { current })}
-        {...(inline === undefined ? {} : { inline })}
-        {...(parentField === undefined
-          ? {}
+  const control = (
+    <EditFieldControl
+      editor={field.editor}
+      fieldId={field.field}
+      label={field.label}
+      draft={field.draft}
+      onChange={(next) => editing.change(field.field, next)}
+      disabled={editing.saving}
+      invalid={message !== undefined}
+      describedBy={message === undefined ? undefined : `${id}-error`}
+      id={id}
+      events={events}
+      current={current}
+      inline={inline}
+      parent={
+        parentField === undefined
+          ? undefined
           : {
-              dependency: {
-                parentRecordId: draftChoiceKey(parent?.draft),
-                parentLabel: parent?.label ?? "the field it depends on",
-              },
-            })}
-        required={editor.required}
-        disabled={editing.saving}
-        invalid={message !== undefined}
-        {...(message === undefined ? {} : { describedBy: `${id}-error` })}
-        onChange={(next) => editing.change(field.field, next)}
-      />
-    );
-  else if (editor.kind === "yes_no")
-    control = (
-      <Checkbox
-        {...props}
-        checked={field.draft === true}
-        onCheckedChange={(value) => editing.change(field.field, value)}
-      />
-    );
-  else if (editor.kind === "choice") {
-    // A dependent choice offers only the options of the parent's chosen option, and waits for it.
-    const waiting = parentField !== undefined && draftChoiceKey(parent?.draft) === undefined;
-    const waitingText = waiting ? waitingForParent(parent?.label ?? "the field it depends on") : "";
-    control = (
-      <NativeSelect
-        {...props}
-        disabled={props.disabled || waiting}
-        {...(waiting ? { title: waitingText, "aria-description": waitingText } : {})}
-        className="w-full"
-        size="sm"
-        value={text}
-        onChange={(event) => editing.change(field.field, event.currentTarget.value)}
-      >
-        {!editor.required ? <NativeSelectOption value="">None</NativeSelectOption> : null}
-        {optionsForParent(editor, draftChoiceKey(parent?.draft)).map((option) => (
-          <NativeSelectOption key={option.value} value={option.value}>
-            {option.label}
-          </NativeSelectOption>
-        ))}
-      </NativeSelect>
-    );
-  } else if (editor.kind === "text" && editor.input === "long_text")
-    control = (
-      <Textarea
-        {...props}
-        rows={2}
-        value={text}
-        onChange={(event) => editing.change(field.field, event.currentTarget.value)}
-      />
-    );
-  else
-    control = (
-      <Input
-        {...props}
-        value={text}
-        type={
-          editor.kind === "date"
-            ? "date"
-            : editor.kind === "date_time"
-              ? "datetime-local"
-              : editor.kind === "text" && editor.input === "email"
-                ? "email"
-                : editor.kind === "text" && editor.input === "phone"
-                  ? "tel"
-                  : "text"
-        }
-        {...(editor.kind === "whole_number"
-          ? { inputMode: "numeric" as const }
-          : editor.kind === "decimal"
-            ? { inputMode: "decimal" as const }
-            : {})}
-        {...(editor.kind === "date_time" ? { step: 1 } : {})}
-        onChange={(event) => editing.change(field.field, event.currentTarget.value)}
-      />
-    );
+              choiceKey: draftChoiceKey(parent?.draft),
+              label: parent?.label ?? "the field it depends on",
+            }
+      }
+    />
+  );
   return (
     <span
       className="block min-w-0"

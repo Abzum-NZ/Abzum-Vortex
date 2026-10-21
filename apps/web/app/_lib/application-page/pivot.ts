@@ -1,26 +1,18 @@
 import "server-only";
 
 import {
-  pageQueryBindingContext,
   readRecordsTablePivot,
+  resolveProjectedTablePlacement,
   type PivotResult,
 } from "@vortex/platform/server";
 import {
-  describeFailure,
-  recordIdSchema,
   sameId,
   type OrganizationSelectionCandidate,
   type IdentitySession,
 } from "@vortex/platform/schema";
 import { getQueryContinuationKey } from "../query-continuation-key";
 import { loadInstalledContext, readPageProjections, requestDependencies } from "./load";
-import {
-  collectPlacements,
-  first,
-  isTablePlacement,
-  pageSubjectParameter,
-  projectedUseAvailability,
-} from "./placement-helpers";
+import { first, pageSubjectParameter } from "./placement-helpers";
 import { createPlacementReadServices } from "./placement-services";
 import type { ApplicationPageLoaderAddress, SearchParameters } from "./types";
 
@@ -83,19 +75,16 @@ export const loadApplicationPivot = async (
     const projectedPage = await projectedPageRead;
     if (projectedPage.kind !== "available") return projectedPage;
     if (projectedPage.value === undefined) return { kind: "unavailable" };
-    // The table must be on the page as projected for this viewer now, once, and usable.
-    const targets = collectPlacements(projectedPage.value).filter(({ placementId }) =>
-      sameId(placementId, request.placementId),
-    );
-    const placement = targets[0];
-    if (
-      placement === undefined ||
-      targets.length !== 1 ||
-      !isTablePlacement(placement) ||
-      projectedUseAvailability(placement) !== "available"
-    )
+    const resolved = resolveProjectedTablePlacement(projectedPage.value, request.placementId, {
+      context,
+      pageDefinition,
+      parameters,
+      subjectId,
+    });
+    if (resolved.kind === "refused") {
+      console.error(`[pivot] refused: ${resolved.reason}`);
       return { kind: "unavailable" };
-
+    }
     const services = createPlacementReadServices({
       session,
       selection,
@@ -104,47 +93,17 @@ export const loadApplicationPivot = async (
       tenantShortName: address.tenantShortName,
       organizationShortName: address.organizationShortName,
     });
-    const subjectType =
-      (pageDefinition.type === "detail" ||
-        pageDefinition.type === "public" ||
-        pageDefinition.type === "form" ||
-        pageDefinition.type === "guided_form") &&
-      pageDefinition.recordType?.state === "resolved"
-        ? pageDefinition.recordType
-        : undefined;
-    const subjectRecordId = recordIdSchema.safeParse(subjectId);
-    const readTimeZone = async (): Promise<string | undefined> => {
-      try {
-        const read = await services.readCalendarSettings();
-        return read.kind === "available" ? read.value.settings?.timeZone : undefined;
-      } catch (error) {
-        console.error(`[page] organisation time zone unavailable: ${describeFailure(error)}`);
-        return undefined;
-      }
-    };
-    const bindings = pageQueryBindingContext({
-      context,
-      pageDefinition,
-      parameters,
-      readSubject:
-        subjectType === undefined
-          ? undefined
-          : () =>
-              subjectRecordId.success
-                ? services.subjects.read(session, selection, {
-                    recordTypeId: String(subjectType.recordTypeId),
-                    recordId: subjectRecordId.data,
-                  })
-                : Promise.resolve({ kind: "refused" }),
-      subjectRecordTypeId: subjectType === undefined ? undefined : String(subjectType.recordTypeId),
-      readTimeZone,
+    const bindings = resolved.bindings({
+      readSubject: (recordTypeId, recordId) =>
+        services.subjects.read(session, selection, { recordTypeId, recordId }),
+      readTimeZone: services.readTimeZone,
       readViewerTeams: services.readViewerTeams,
     });
     const pivot = await readRecordsTablePivot({
       context,
       session,
       selection,
-      placement,
+      placement: resolved.placement,
       addressEntries: Object.entries(parameters).flatMap(([name, value]) =>
         (typeof value === "string" ? [value] : (value ?? [])).map((text): [string, string] => [
           name,
@@ -152,9 +111,11 @@ export const loadApplicationPivot = async (
         ]),
       ),
       ...(request.cursor === undefined ? {} : { cursor: request.cursor }),
+      pageId: String(pageDefinition.pageId),
+      continuationKey: getQueryContinuationKey(),
       bindings,
       queries: services.queries,
-      readTimeZone,
+      readTimeZone: services.readTimeZone,
       resolveRecordLinks: services.recordLinkResolver(context),
     });
     return { kind: "available", pivot };

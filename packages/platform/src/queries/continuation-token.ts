@@ -1,6 +1,6 @@
 import "server-only";
 
-import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
+import { createHash } from "node:crypto";
 import { z } from "zod";
 import {
   applicationRootIdSchema,
@@ -12,6 +12,7 @@ import {
   recordIdSchema,
   revisionSchema,
 } from "../schema";
+import { openToken, sealToken } from "./sealed-token";
 
 /**
  * What a continuation token carries: the exact actor, installation, query,
@@ -66,16 +67,7 @@ export class QueryContinuationTokenError extends Error {
   }
 }
 
-const tokenVersion = 1;
-const nonceLength = 12;
-const tagLength = 16;
-const associatedData = Buffer.from("vortex.query.continuation.v1", "utf8");
-
-const cipherKey = (key: QueryContinuationKey): Buffer => {
-  if (!(key.key instanceof Uint8Array) || key.key.byteLength !== 32)
-    throw new Error("QUERY_CONTINUATION_KEY_INVALID");
-  return Buffer.from(key.key);
-};
+const purpose = "vortex.query.continuation.v1";
 
 export const fingerprintQueryInputs = (inputValues: Readonly<Record<string, unknown>>): string =>
   createHash("sha256").update(canonicalJson(inputValues), "utf8").digest("hex");
@@ -84,42 +76,16 @@ export const fingerprintQueryInputs = (inputValues: Readonly<Record<string, unkn
 export const encodeQueryContinuationToken = (
   continuation: QueryContinuation,
   key: QueryContinuationKey,
-): string => {
-  const payload = Buffer.from(JSON.stringify(queryContinuationSchema.parse(continuation)), "utf8");
-  const nonce = randomBytes(nonceLength);
-  const cipher = createCipheriv("aes-256-gcm", cipherKey(key), nonce, { authTagLength: tagLength });
-  cipher.setAAD(associatedData);
-  const encrypted = Buffer.concat([cipher.update(payload), cipher.final()]);
-  return Buffer.concat([
-    Buffer.from([tokenVersion]),
-    nonce,
-    cipher.getAuthTag(),
-    encrypted,
-  ]).toString("base64url");
-};
+): string => sealToken(key, purpose, queryContinuationSchema.parse(continuation));
 
 /** Decrypts and verifies a token; any tamper, foreign key or shape defect is one error. */
 export const decodeQueryContinuationToken = (
   token: string,
   key: QueryContinuationKey,
 ): QueryContinuation => {
-  const secret = cipherKey(key);
-  try {
-    if (!/^[A-Za-z0-9_-]+$/.test(token)) throw new QueryContinuationTokenError();
-    const bytes = Buffer.from(token, "base64url");
-    if (bytes.length <= 1 + nonceLength + tagLength || bytes[0] !== tokenVersion)
-      throw new QueryContinuationTokenError();
-    const nonce = bytes.subarray(1, 1 + nonceLength);
-    const tag = bytes.subarray(1 + nonceLength, 1 + nonceLength + tagLength);
-    const encrypted = bytes.subarray(1 + nonceLength + tagLength);
-    const decipher = createDecipheriv("aes-256-gcm", secret, nonce, { authTagLength: tagLength });
-    decipher.setAAD(associatedData);
-    decipher.setAuthTag(tag);
-    const payload = Buffer.concat([decipher.update(encrypted), decipher.final()]).toString("utf8");
-    const parsed = queryContinuationSchema.safeParse(JSON.parse(payload));
-    if (!parsed.success) throw new QueryContinuationTokenError();
-    return parsed.data;
-  } catch {
-    throw new QueryContinuationTokenError();
-  }
+  const opening = openToken(key, purpose, token);
+  if (opening.kind === "refused") throw new QueryContinuationTokenError();
+  const parsed = queryContinuationSchema.safeParse(opening.payload);
+  if (!parsed.success) throw new QueryContinuationTokenError();
+  return parsed.data;
 };

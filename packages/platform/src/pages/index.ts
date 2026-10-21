@@ -1,6 +1,7 @@
 import "server-only";
 export {
   projectRowActionAvailability,
+  rowActionInstallationOf,
   type RowActionInstallation,
 } from "./records-table-features/row-actions";
 
@@ -52,6 +53,25 @@ export {
   type ProjectedPlacementGate,
   type ProjectedPlacementRefusal,
 } from "./projected-placement-gate";
+export {
+  applyChoiceOptionGates,
+  choiceOptionAccessDeclarations,
+  fieldControl,
+  fieldForPlacement,
+  formFieldOf,
+  planChoiceOptionGates,
+  projectEditField,
+  type ChoiceOptionPlan,
+  type DateTimeZones,
+} from "./field-placement";
+export {
+  isTablePlacement,
+  pageSubjectType,
+  resolveProjectedTablePlacement,
+  type ProjectedTableBindingReaders,
+  type ProjectedTablePlacement,
+  type ProjectedTablePlacementRefusal,
+} from "./projected-table-placement";
 export {
   createStoredPageCapabilityService,
   type StoredPageCapabilityDependencies,

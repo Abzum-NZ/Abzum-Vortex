@@ -617,13 +617,20 @@ export const projectRecordsTableData = (
   rows: readonly TableSourceRow[],
   fieldBounds: ProtectedQueryFieldBounds,
 ): ProjectedComponentData<ProjectedTableValues> | undefined => {
+  const withheld = (cause: string): undefined => {
+    console.error(`[records-table] table data withheld where=projection cause=${cause}`);
+    return undefined;
+  };
+  // An unreadable contract is logged with its cause by the reader itself.
   const contract = recordsTableContractOrLog(input.settings, "table data projection");
-  if (contract === undefined || contract.columns.length === 0) return undefined;
-  if (new Set(rows.map((row) => row.recordId)).size !== rows.length) return undefined;
+  if (contract === undefined) return undefined;
+  if (contract.columns.length === 0) return withheld("no_columns");
+  if (new Set(rows.map((row) => row.recordId)).size !== rows.length)
+    return withheld("duplicate_record_ids");
   // A list row must carry the revision and capabilities the engine decided for it; a row without
   // them is withheld whole, never displayed with an inferred or absent capability.
   const completeRows = rows.filter(isListRow);
-  if (completeRows.length !== rows.length) return undefined;
+  if (completeRows.length !== rows.length) return withheld("row_without_capabilities");
 
   const visibleFieldIds = gridLayoutVisibleFieldIds(layout.layout);
   const arranged = layout.layout.columns.map((column) => column.fieldId);
@@ -634,7 +641,7 @@ export const projectRecordsTableData = (
     // A column the person's field policy leaves out of the layout is neither listed nor offered.
     if (!arranged.some((fieldId) => sameField(fieldId, column.field))) continue;
     const label = headingFor(column.field, column.label, input.fieldLabels);
-    if (label === undefined) return undefined;
+    if (label === undefined) return withheld(`column_heading_missing ${column.field}`);
     if (visibleFieldIds.some((fieldId) => sameField(fieldId, column.field)))
       columns.push({ key: column.field, label, format: column.format });
     else hiddenColumns.push({ key: column.field, label });

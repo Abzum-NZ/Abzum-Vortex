@@ -1,20 +1,18 @@
 import "server-only";
 
 import {
-  pageQueryBindingContext,
   readRecordsTableRowDetail,
+  resolveProjectedTablePlacement,
   isGroupingTablePlacement,
   isTreeTablePlacement,
   readRecordsTableGroupMembers,
   readRecordsTableTreeLevel,
-  resolvedQueryRecordTypeId,
   type GroupMembersResult,
   type PlacementReadInput,
   type RowDetailResult,
   type TreeLevelResult,
 } from "@vortex/platform/server";
 import {
-  describeFailure,
   recordIdSchema,
   sameId,
   type OrganizationSelectionCandidate,
@@ -23,13 +21,7 @@ import {
 import { getQueryContinuationKey } from "../query-continuation-key";
 import { loadInstalledContext, readPageProjections, requestDependencies } from "./load";
 import { pageGridLayoutRequest, readPageGridLayouts } from "./grid-layouts";
-import {
-  collectPlacements,
-  first,
-  isTablePlacement,
-  pageSubjectParameter,
-  projectedUseAvailability,
-} from "./placement-helpers";
+import { first, pageSubjectParameter } from "./placement-helpers";
 import { createPlacementReadServices } from "./placement-services";
 import type { ApplicationPageLoaderAddress, SearchParameters } from "./types";
 
@@ -103,19 +95,17 @@ export const loadApplicationRowDetail = async (
     const projectedPage = await projectedPageRead;
     if (projectedPage.kind !== "available") return projectedPage;
     if (projectedPage.value === undefined) return { kind: "unavailable" };
-    // The table must be on the page as projected for this viewer now, once, and usable.
-    const targets = collectPlacements(projectedPage.value).filter(({ placementId }) =>
-      sameId(placementId, request.placementId),
-    );
-    const placement = targets[0];
-    if (
-      placement === undefined ||
-      targets.length !== 1 ||
-      !isTablePlacement(placement) ||
-      projectedUseAvailability(placement) !== "available"
-    )
+    const resolved = resolveProjectedTablePlacement(projectedPage.value, request.placementId, {
+      context,
+      pageDefinition,
+      parameters,
+      subjectId,
+    });
+    if (resolved.kind === "refused") {
+      console.error(`[row-detail] refused: ${resolved.reason}`);
       return { kind: "unavailable" };
-
+    }
+    const { placement, recordTypeId, subjectRecordType: subjectType } = resolved;
     const services = createPlacementReadServices({
       session,
       selection,
@@ -124,47 +114,13 @@ export const loadApplicationRowDetail = async (
       tenantShortName: address.tenantShortName,
       organizationShortName: address.organizationShortName,
     });
-    const subjectType =
-      (pageDefinition.type === "detail" ||
-        pageDefinition.type === "public" ||
-        pageDefinition.type === "form" ||
-        pageDefinition.type === "guided_form") &&
-      pageDefinition.recordType?.state === "resolved"
-        ? pageDefinition.recordType
-        : undefined;
-    const subjectRecordId = recordIdSchema.safeParse(subjectId);
-    const bindings = pageQueryBindingContext({
-      context,
-      pageDefinition,
-      parameters,
-      readSubject:
-        subjectType === undefined
-          ? undefined
-          : () =>
-              subjectRecordId.success
-                ? services.subjects.read(session, selection, {
-                    recordTypeId: String(subjectType.recordTypeId),
-                    recordId: subjectRecordId.data,
-                  })
-                : Promise.resolve({ kind: "refused" }),
-      subjectRecordTypeId: subjectType === undefined ? undefined : String(subjectType.recordTypeId),
-      readViewerTeams: services.readViewerTeams,
-      readTimeZone: async () => {
-        try {
-          const read = await services.readCalendarSettings();
-          return read.kind === "available" ? read.value.settings?.timeZone : undefined;
-        } catch (error) {
-          console.error(`[page] organisation time zone unavailable: ${describeFailure(error)}`);
-          return undefined;
-        }
-      },
-    });
-    const recordTypeId =
-      typeof placement.vortex.queryId === "string"
-        ? resolvedQueryRecordTypeId(context, placement.vortex.queryId)
-        : undefined;
     const readSubject = (subjectRecordTypeId: string, recordId: string) =>
       services.subjects.read(session, selection, { recordTypeId: subjectRecordTypeId, recordId });
+    const bindings = resolved.bindings({
+      readSubject,
+      readTimeZone: services.readTimeZone,
+      readViewerTeams: services.readViewerTeams,
+    });
     // A tree level and a group's members are read through the table's own read, which takes the
     // person's stored layout and field policy as the page read does.
     const accessVersion = projectedPage.value.accessVersion;
@@ -177,7 +133,7 @@ export const loadApplicationRowDetail = async (
         pageDefinition,
         accessVersion: typeof accessVersion === "number" ? accessVersion : undefined,
         subjectType,
-        subjectId: subjectRecordId.success ? subjectRecordId.data : undefined,
+        subjectId: resolved.subjectRecordId,
         parameters,
         bindings,
         data: {},
