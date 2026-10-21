@@ -387,6 +387,9 @@ const studioCompileFailure = (error: unknown): StudioCompileFailure => {
       return {
         reasonCode: current.ruleCode,
         family: current.family,
+        moduleKeys: segments
+          .filter((segment) => segment.kind === "module")
+          .map((segment) => segment.key),
         ...(current.code === undefined
           ? {}
           : { sentence: definitionValidationErrorCatalogue[current.code].message }),
