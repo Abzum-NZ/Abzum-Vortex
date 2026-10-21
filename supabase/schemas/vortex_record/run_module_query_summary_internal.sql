@@ -188,6 +188,7 @@ begin
   group_page_limit := least(group_page_maximum, greatest(1, coalesce(case
     when pivot_mode then ((p_user_inputs #>> '{pivot,rowLimit}')::numeric)::integer
     when p_user_inputs ? 'grouping' then ((p_user_inputs #>> '{grouping,limit}')::numeric)::integer
+    when p_user_inputs ? 'groupLimit' then ((p_user_inputs ->> 'groupLimit')::numeric)::integer
     end, group_page_default)));
   if pg_catalog.jsonb_typeof(declared_searchable_ids) is distinct from 'array' then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');

@@ -566,6 +566,8 @@ export const protectedQuerySummaryCommandSchema = z
     grouping: protectedQueryGroupingSchema.optional(),
     /** A pivot crosses two dimensions with one measure; it replaces the query's grouping. */
     pivot: protectedQueryPivotSchema.optional(),
+    /** Groups per page for the query's own grouping (default 40); a grid dimension or pivot carries its own. */
+    groupLimit: z.number().int().min(1).max(200).optional(),
     /** Last visible summary key; each page recomputes counts under current access. */
     groupAfter: z.string().min(1).max(4096).optional(),
     search: protectedQueryCommandSchema.shape.search,
@@ -582,14 +584,13 @@ export const protectedQuerySummaryCommandSchema = z
   .strict()
   .superRefine((command, context) => {
     if (
-      command.groupAfter !== undefined &&
-      command.grouping === undefined &&
-      command.pivot === undefined
+      command.groupLimit !== undefined &&
+      (command.grouping !== undefined || command.pivot !== undefined)
     )
       context.addIssue({
         code: "custom",
-        path: ["groupAfter"],
-        message: "Choose a grouping dimension before paging groups",
+        path: ["groupLimit"],
+        message: "A grid dimension or pivot carries its own page size",
       });
     if (command.grouping !== undefined && command.pivot !== undefined)
       context.addIssue({
