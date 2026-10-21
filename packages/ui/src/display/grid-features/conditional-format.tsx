@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactElement } from "react";
+import type { ReactElement, ReactNode } from "react";
 import type {
   ConditionalColumnFormatProjection,
   ConditionalFormatIcon,
@@ -194,6 +194,68 @@ function ConditionalFormatHeading({
 }: GridFeatureColumnProps): ReactElement | null {
   return columnFormatOf(context, column) === undefined ? null : (
     <span className="text-xs font-normal text-muted-foreground">on this page</span>
+  );
+}
+
+/** A card's tint, laid over the card's own surface; every token is a semantic theme colour. */
+const cardTintClasses: Readonly<Record<ConditionalFormatToken, string>> = {
+  success: "[&>[data-slot=card]]:bg-success/10",
+  warning: "[&>[data-slot=card]]:bg-warning/10",
+  info: "[&>[data-slot=card]]:bg-info/10",
+  destructive: "[&>[data-slot=card]]:bg-destructive/10",
+  muted: "[&>[data-slot=card]]:bg-muted",
+};
+
+const cardTitleTextClasses: Readonly<Record<ConditionalFormatToken, string>> = {
+  success: "[&_[data-slot=card-title]]:text-success",
+  warning: "[&_[data-slot=card-title]]:text-warning",
+  info: "[&_[data-slot=card-title]]:text-info",
+  destructive:
+    "[&_[data-slot=card-title]]:text-[color:color-mix(in_oklab,var(--destructive)_75%,var(--foreground))]",
+  muted: "[&_[data-slot=card-title]]:text-muted-foreground",
+};
+
+/**
+ * A Board card formatted by the rule the server matched: the tint, the title's colour, weight and
+ * strike, and the rule's icon and label above the card, so the meaning never rests on colour
+ * alone. The server decided the rule under the viewer's field policy; this only draws its style.
+ */
+export function BoardCardFormat({
+  style,
+  children,
+}: Readonly<{ style: ConditionalFormatStyle; children: ReactNode }>): ReactElement {
+  return (
+    <div
+      data-vortex-format="row"
+      className={cn(
+        "flex flex-col gap-1",
+        style.tint && cardTintClasses[style.token],
+        style.text && cardTitleTextClasses[style.token],
+        style.bold && "[&_[data-slot=card-title]]:font-bold",
+        style.strike && "[&_[data-slot=card-title]]:line-through",
+      )}
+    >
+      {style.icon === undefined && style.badgeLabel === undefined ? null : (
+        <span className="flex min-w-0 items-center gap-1.5 text-xs">
+          {style.icon === undefined ? null : (
+            <span
+              className={cn("inline-flex shrink-0", style.text && iconTextClasses[style.token])}
+            >
+              <Icon name={iconNames[style.icon]} className="size-3.5" />
+              {style.badgeLabel === undefined ? (
+                <span className="sr-only">{iconWords[style.icon]}</span>
+              ) : null}
+            </span>
+          )}
+          {style.badgeLabel === undefined ? null : (
+            <Badge variant="outline" className={cn("min-w-0 truncate", tintClasses[style.token])}>
+              {style.badgeLabel}
+            </Badge>
+          )}
+        </span>
+      )}
+      {children}
+    </div>
   );
 }
 

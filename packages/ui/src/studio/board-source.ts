@@ -126,23 +126,27 @@ const draftQueryOf = (source: ApplicationSourceDocument, queryReference: string)
 
 /**
  * Whether the query already groups by exactly the board's stage field, reads no linked records and
- * selects every field the board shows, so the board keeps the query it has.
+ * selects every field the cards show or their enabled formatting rules read, so the board keeps
+ * the query it has. Rule-only fields remain outside the card's display projection.
  */
 export const studioBoardQueryFits = (
   source: ApplicationSourceDocument,
   board: RecordsTableBoardMode,
   queryReference: string,
+  ruleFields: readonly string[],
 ): boolean => {
   const draft = draftQueryOf(source, queryReference);
   if (draft === undefined) return true;
   const facts = studioBoardFacts(draft.module.key, draft.query, draft.record);
   const same = (left: string, right: string): boolean => left.toLowerCase() === right.toLowerCase();
-  const shown = [board.columnField, board.cardTitleField, ...board.cardFields];
+  const requested = [board.columnField, board.cardTitleField, ...board.cardFields, ...ruleFields];
   return (
     facts.groupBy.length === 1 &&
     same(facts.groupBy[0]!, board.columnField ?? "") &&
     facts.relationshipHops === 0 &&
-    shown.every((field) => field !== undefined && facts.selected.some((held) => same(held, field)))
+    requested.every(
+      (field) => field !== undefined && facts.selected.some((held) => same(held, field)),
+    )
   );
 };
 
@@ -228,15 +232,16 @@ export const ensureStudioBoardTotals = (
  * Writes an ordinary unfiltered query grouped by the board's stage field, editable in Data like any
  * other query, or reuses one that already reads exactly the board's fields. When the board already
  * reads a query of the same record type and stage, the new query keeps that query's totals,
- * filter, inputs, sort, page size and selected fields and only adds what the board now shows, so
- * changing the card never drops the totals. Returns the query's reference, or the sentence saying
- * why no such query can be made.
+ * filter, inputs, sort, page size and selected fields and only adds what the board now shows or
+ * its enabled formatting rules read, so changing the card never drops the totals. Returns the
+ * query's reference, or the sentence saying why no such query can be made.
  */
 export const createStudioBoardQuery = (
   source: ApplicationSourceDocument,
   board: RecordsTableBoardMode,
   taken: ReadonlySet<string>,
   previous: string | null,
+  ruleFields: readonly string[],
 ): Readonly<{ query: string }> | Readonly<{ problem: string }> => {
   const pipeline = studioBoardPipelines(source).find(
     (candidate) => candidate.reference === board.columnField,
@@ -256,11 +261,14 @@ export const createStudioBoardQuery = (
     const prefix = `${module.key}:${record.key}.`;
     return reference.startsWith(prefix) ? reference.slice(prefix.length) : undefined;
   };
-  const requestedKeys = [board.columnField, board.cardTitleField, ...board.cardFields].map(
-    (reference) => qualifiedFieldKey(reference),
-  );
+  const requestedKeys = [
+    board.columnField,
+    board.cardTitleField,
+    ...board.cardFields,
+    ...ruleFields,
+  ].map((reference) => qualifiedFieldKey(reference));
   if (requestedKeys.some((key) => key === undefined))
-    return { problem: `Choose card fields of ${record.plural_name}` };
+    return { problem: `Choose card and formatting fields of ${record.plural_name}` };
   const selected = [...new Set(requestedKeys.filter((key): key is string => key !== undefined))];
   const selectsExactly = (candidate: readonly string[]): boolean =>
     candidate.length === selected.length && selected.every((key) => candidate.includes(key));

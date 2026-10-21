@@ -11,6 +11,7 @@ import {
   isSafeLinkAddress,
   type BoardColumnSelector,
   type BlockPropertyValueContract,
+  type ConditionalFormatStyle,
   type ComponentSemanticEventKind,
   type PipelineStageTone,
   type RecordsTableFeatureProjection,
@@ -254,6 +255,8 @@ export type BoardPage = Readonly<{
     capabilities: DisplayRowCapabilities;
     /** Only currently readable declared card fields are present, each with its safe label. */
     fields: readonly DisplayField[];
+    /** The key of the Formatting rule that styles the whole card, decided by the server. */
+    format?: Readonly<{ row: string }>;
   }>[];
   nextContinuationToken?: string;
 }>;
@@ -306,6 +309,8 @@ export type BoardPayload = Readonly<{
     fields: readonly RecordsTableFilterField[];
     applied: readonly RecordsTableFilterValue[];
   }>;
+  /** The styles cards name through `format`; absent when the board has no Formatting. */
+  formatting?: Readonly<{ styles: Readonly<Record<string, ConditionalFormatStyle>> }>;
   cardTitleFieldId: string;
   /** The only field identities a card may carry; readable values and labels may be omitted. */
   cardFieldIds: readonly string[];

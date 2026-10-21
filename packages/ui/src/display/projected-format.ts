@@ -98,6 +98,19 @@ const parseFormatStyle = (
   });
 };
 
+/** The styles a board's cards name, keyed by rule: each is a closed style of semantic tokens. */
+export const parseFormatStyles = (
+  value: unknown,
+  location: DefinitionRenderErrorLocation,
+): Readonly<Record<string, ConditionalFormatStyle>> =>
+  Object.freeze(
+    Object.fromEntries(
+      Object.entries(requireRecord(value, "Projected format styles are invalid", location)).map(
+        ([key, style]) => [key, parseFormatStyle(style, location)],
+      ),
+    ),
+  );
+
 /** The styles a page's rows name and its numeric columns' formats. */
 export const parseConditionalFormatting = (
   value: unknown,
