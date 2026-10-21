@@ -303,6 +303,7 @@
           "vortex.crm.activities.activity.create",
           "vortex.crm.activities.activity.read",
           "application.crm.activity.read",
+          "application.crm.activity.create",
           "vortex.crm.activities.activity.update",
           "vortex.crm.activities.activity.soft_delete",
           "vortex.crm.activities.activity.restore",
@@ -312,8 +313,7 @@
           "vortex.crm.tags.record_tag.manage",
           "vortex.crm.locations.country.read",
           "vortex.crm.locations.region.read",
-          "vortex.crm.locations.city.read",
-          "application.crm.activity.create"
+          "vortex.crm.locations.city.read"
         ]
       },
       {
@@ -377,6 +377,7 @@
           "vortex.crm.activities.activity.create",
           "vortex.crm.activities.activity.read",
           "application.crm.activity.read",
+          "application.crm.activity.create",
           "vortex.crm.activities.activity.update",
           "vortex.crm.activities.activity.soft_delete",
           "vortex.crm.activities.activity.restore",
@@ -403,8 +404,7 @@
           "vortex.crm.locations.region.update",
           "vortex.crm.locations.city.create",
           "vortex.crm.locations.city.read",
-          "vortex.crm.locations.city.update",
-          "application.crm.activity.create"
+          "vortex.crm.locations.city.update"
         ]
       }
     ],
@@ -7818,7 +7818,7 @@
         }
       },
       {
-        "id": "binding_event_save_activity_row",
+        "id": "binding_save_activity_row",
         "control": "content_5",
         "event_id": "event_save_activity_row",
         "event": "row_edit",
@@ -7835,7 +7835,7 @@
         }
       },
       {
-        "id": "binding_event_edit_activity_cell",
+        "id": "binding_edit_activity_cell",
         "control": "content_5",
         "event_id": "event_edit_activity_cell",
         "event": "inline_edit",
