@@ -38,6 +38,7 @@ const END_OF_SLOT = Number.MAX_SAFE_INTEGER;
 export function StudioBlockPalette({
   targets,
   editable,
+  owner,
   message,
   onAdd,
 }: Readonly<{
@@ -45,6 +46,8 @@ export function StudioBlockPalette({
   targets: readonly StudioCompositionAddTarget[];
   /** Whether the canvas takes edits now (desktop, not busy, stored data readable). */
   editable: boolean;
+  /** A page's blocks also drag onto the canvas; a layout's blocks are added with Add. */
+  owner: "page" | "layout";
   message: string;
   onAdd: (request: StudioCanvasAddRequest) => void;
 }>) {
@@ -65,7 +68,11 @@ export function StudioBlockPalette({
             <Icon name="blocks" />
           </EmptyMedia>
           <EmptyTitle>No block targets</EmptyTitle>
-          <EmptyDescription>This page has no place for new blocks.</EmptyDescription>
+          <EmptyDescription>
+            {owner === "layout"
+              ? "This layout has no place for new blocks."
+              : "This page has no place for new blocks."}
+          </EmptyDescription>
         </EmptyHeader>
       </Empty>
     );
@@ -104,7 +111,11 @@ export function StudioBlockPalette({
           onChange={(event) => setSearch(event.target.value)}
         />
       </div>
-      <p className="text-sm text-muted-foreground">Drag onto the page or use Add.</p>
+      <p className="text-sm text-muted-foreground">
+        {owner === "layout"
+          ? "Use Add to put a block into the layout."
+          : "Drag onto the page or use Add."}
+      </p>
       {message.length === 0 ? null : (
         <p role="status" aria-live="polite" className="text-sm">
           {message}
@@ -141,7 +152,7 @@ export function StudioBlockPalette({
                         <Drawer.Item
                           name={choice.rendererKey}
                           label={choice.name}
-                          isDragDisabled={!editable || !available}
+                          isDragDisabled={!editable || !available || owner === "layout"}
                         >
                           {() => (
                             <div className="flex min-w-0 items-start gap-2">
