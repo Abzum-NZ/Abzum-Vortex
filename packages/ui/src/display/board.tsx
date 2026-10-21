@@ -11,6 +11,7 @@ import {
 } from "react";
 import {
   describeFailure,
+  readRecordsTableContract,
   type BoardColumnSelector,
   type PipelineStageTone,
 } from "@vortex/platform/schema";
@@ -114,6 +115,8 @@ function ColumnMetrics({
   );
 }
 
+type BoardRowAction = Readonly<{ eventId: string; label: string }>;
+
 function BoardColumn({
   bucket,
   wipLimit,
@@ -121,6 +124,7 @@ function BoardColumn({
   cardFieldIds,
   emptyMessage,
   events,
+  rowActions,
   pending,
   anyPending,
   failed,
@@ -138,6 +142,8 @@ function BoardColumn({
   cardFieldIds: readonly string[];
   emptyMessage: string;
   events: DisplayRenderProps<BoardPayload>["events"];
+  /** The grid's declared row actions; a card offers each one, by its own event identity. */
+  rowActions: readonly BoardRowAction[];
   pending: boolean;
   anyPending: boolean;
   failed: boolean;
@@ -301,13 +307,15 @@ function BoardColumn({
                           <DisplayCellView value={titleField.value} />
                         )}
                       </CardTitle>
-                      {events?.row_action === undefined && !movable ? null : (
+                      {(events?.row_action === undefined || rowActions.length === 0) &&
+                      !movable ? null : (
                         <CardAction>
                           <CardActionsMenu
                             card={card}
                             from={bucket}
                             name={accessibleTitle}
                             events={events}
+                            rowActions={rowActions}
                             mover={movable ? mover : undefined}
                             disabled={mover?.movingRecordId !== undefined}
                           />
@@ -378,6 +386,7 @@ function CardActionsMenu({
   from,
   name,
   events,
+  rowActions,
   mover,
   disabled,
 }: Readonly<{
@@ -386,10 +395,11 @@ function CardActionsMenu({
   from: BoardBucket;
   name: string;
   events: DisplayRenderProps<BoardPayload>["events"];
+  rowActions: readonly BoardRowAction[];
   mover: BoardMover | undefined;
   disabled: boolean;
 }>): ReactElement | null {
-  const onRowAction = events?.row_action;
+  const onRowAction = rowActions.length === 0 ? undefined : events?.row_action;
   const targets = mover?.targets.filter((target) => mayMove(from, target)) ?? [];
   if (onRowAction === undefined && targets.length === 0) return null;
   return (
@@ -408,15 +418,23 @@ function CardActionsMenu({
         <Icon name="more-horizontal" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        {onRowAction === undefined ? null : (
-          <DropdownMenuItem
-            onClick={() =>
-              onRowAction({ event: "row_action", recordId: card.recordId, revision: card.revision })
-            }
-          >
-            Open
-          </DropdownMenuItem>
-        )}
+        {onRowAction === undefined
+          ? null
+          : rowActions.map((action) => (
+              <DropdownMenuItem
+                key={action.eventId}
+                onClick={() =>
+                  onRowAction({
+                    event: "row_action",
+                    eventId: action.eventId,
+                    recordId: card.recordId,
+                    revision: card.revision,
+                  })
+                }
+              >
+                {action.label}
+              </DropdownMenuItem>
+            ))}
         {onRowAction === undefined || targets.length === 0 ? null : <DropdownMenuSeparator />}
         {mover === undefined || targets.length === 0 ? null : (
           <DropdownMenuGroup>
@@ -452,6 +470,11 @@ export function BoardView(props: DisplayRenderProps<BoardPayload>): ReactElement
     errorMessage,
     events,
   } = resolveDisplayContext<BoardPayload>(props, () => false, "No records to show");
+  // The board's cards offer the grid's own declared row actions, each by its event identity.
+  const contract = readRecordsTableContract(props.settings);
+  const rowActions: readonly BoardRowAction[] = contract?.features.rowActions.enabled
+    ? contract.rowBehaviours.rowActions
+    : [];
   const [pendingKeys, setPendingKeys] = useState<ReadonlySet<string>>(new Set());
   const [failedKeys, setFailedKeys] = useState<ReadonlySet<string>>(new Set());
   const pendingKeyRef = useRef<string | undefined>(undefined);
@@ -723,6 +746,7 @@ export function BoardView(props: DisplayRenderProps<BoardPayload>): ReactElement
                   cardFieldIds={values.cardFieldIds}
                   emptyMessage={emptyMessage}
                   events={events}
+                  rowActions={rowActions}
                   pending={pendingKeys.has(bucket.key)}
                   anyPending={pendingKeys.size > 0}
                   failed={failedKeys.has(bucket.key)}

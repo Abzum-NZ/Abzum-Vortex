@@ -81,7 +81,15 @@ export const createFlowInvocationHandler =
         logRefusal(route, "request body", "body_not_json", error);
         return refusedResponse();
       }
-      if (!parsedBody.success) return refusedResponse();
+      if (!parsedBody.success) {
+        logRefusal(route, "request body", "body_schema_invalid", {
+          issues: parsedBody.error.issues.map((issue) => ({
+            code: issue.code,
+            path: issue.path,
+          })),
+        });
+        return refusedResponse();
+      }
       const body = parsedBody.data;
       const address = await resolveApplicationAddress(
         identity.session,

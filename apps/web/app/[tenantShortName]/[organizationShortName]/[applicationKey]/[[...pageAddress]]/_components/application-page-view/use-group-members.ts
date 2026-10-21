@@ -124,8 +124,8 @@ export function useGroupMembers({
   }, []);
 
   /**
-   * The events a grouped table reports: grouping on or off (an address change that reads the
-   * groups once), one page of an open group's members, and the open group (kept in the address).
+   * The events a grouped table reports: grouping on or off, or another page of the groups (an
+   * address change that reads the groups once), one page of an open group's members, and the open group (kept in the address).
    * The grouping field is the table's own, as the server projected it, never one the browser names.
    */
   const eventsFor = useCallback(
@@ -133,6 +133,10 @@ export function useGroupMembers({
       group_changed: (event: DisplaySemanticEvent) => {
         if (event.event !== "group_changed") return;
         changeTableQuery(placementId, { kind: "group", fieldId: event.grouped ? fieldId : null });
+      },
+      group_page_changed: (event: DisplaySemanticEvent) => {
+        if (event.event !== "group_page_changed") return;
+        changeTableQuery(placementId, { kind: "groupPage", fieldId, after: event.after });
       },
       group_requested: (event: DisplaySemanticEvent) => readGroupPage(placementId, event),
       group_opened: (event: DisplaySemanticEvent) => {

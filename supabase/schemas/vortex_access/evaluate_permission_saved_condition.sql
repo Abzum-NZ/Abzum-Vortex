@@ -6,8 +6,6 @@ declare
   scope_condition jsonb;
   field_entry jsonb;
   field_id text;
-  field_kind text;
-  result_kind text;
   semantic_type text;
   field_types jsonb := '{}'::jsonb;
   account_record_type_id uuid;
@@ -94,38 +92,10 @@ begin
       raise exception using errcode = '22023', message = 'Typed record condition is invalid';
     end if;
     field_id := field_entry ->> 'fieldId';
-    field_kind := field_entry ->> 'type';
     if field_types ? field_id then
       raise exception using errcode = '22023', message = 'Typed record condition is invalid';
     end if;
-    semantic_type := case
-      when field_kind = 'decimal_number' then 'decimal_number'
-      when field_kind = 'money' then 'money'
-      when field_kind = 'whole_number' then 'whole_number'
-      when field_kind = 'yes_no' then 'yes_no'
-      when field_kind = 'date' then 'date'
-      when field_kind = 'date_time' then 'date_time'
-      when field_kind = 'several_choices' then 'text_collection'
-      when field_kind in ('table', 'attachment') then 'opaque_json'
-      when field_kind in ('link', 'link_to_one_of_several') then 'record_reference'
-      when field_kind in ('calculation', 'total') then null
-      when field_kind in (
-        'text', 'long_text', 'formatted_text', 'choice', 'reference_number',
-        'email_address', 'phone_number', 'web_address'
-      ) then 'text'
-      else null end;
-    if field_kind in ('calculation', 'total') then
-      result_kind := field_entry #>> '{settings,resultType}';
-      semantic_type := case
-        when result_kind = 'decimal_number' then 'decimal_number'
-        when result_kind = 'money' then 'money'
-        when result_kind = 'whole_number' then 'whole_number'
-        when result_kind = 'yes_no' then 'yes_no'
-        when result_kind = 'date' then 'date'
-        when result_kind = 'date_time' then 'date_time'
-        when result_kind in ('text', 'choice') then 'text'
-        else null end;
-    end if;
+    semantic_type := vortex_access.condition_field_type_internal(field_entry);
     if semantic_type is null then
       raise exception using errcode = '22023', message = 'Typed record condition is invalid';
     end if;

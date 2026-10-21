@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { satisfies } from "semver";
 import type {
   ModuleSourceDocument,
@@ -7,7 +6,7 @@ import type {
   DefinitionSourceDocument,
   DefinitionValidationLocation,
 } from "../../schema";
-import { canonicalJson } from "../canonical-json-definition";
+import { fingerprintCanonicalValue } from "../canonical-json-definition";
 import {
   DefinitionCompilationError,
   type DefinitionCompilerRefusalCode,
@@ -59,16 +58,11 @@ export class Resolution {
         ),
       ),
     );
-    const actualFingerprint = `sha256:${createHash("sha256")
-      .update(
-        canonicalJson({
-          contractVersion: snapshot.contractVersion,
-          definitions: snapshot.definitions,
-          identities: snapshot.identities,
-        }),
-        "utf8",
-      )
-      .digest("hex")}`;
+    const actualFingerprint = fingerprintCanonicalValue({
+      contractVersion: snapshot.contractVersion,
+      definitions: snapshot.definitions,
+      identities: snapshot.identities,
+    });
     if (snapshot.fingerprint !== actualFingerprint)
       fail(
         "vortex.definition.invalid_resolution_fingerprint",

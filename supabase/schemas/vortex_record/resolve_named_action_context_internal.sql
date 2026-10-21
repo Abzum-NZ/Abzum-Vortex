@@ -52,6 +52,29 @@ begin
   context_value := base_context -> 'context';
   installation := vortex_definition.read_current_active_installation();
 
+  -- A Module action whose own subject is not this record type in a release this installation
+  -- binds is owned only as a contribution to this record type: the contributor may be installed
+  -- beside this application, or bound by it and contribute one of its actions to another bound
+  -- Module's record type. It is resolved from the installed contributions or not at all.
+  if p_action_owner_kind = 'module' and not exists (
+    select 1
+    from pg_catalog.jsonb_array_elements(installation -> 'moduleBindings') as item(value)
+    join vortex_definition.releases as release
+      on release.root_id = (item.value ->> 'moduleRootId')::uuid
+      and release.release_revision = (item.value ->> 'moduleReleaseRevision')::bigint
+    cross join lateral pg_catalog.jsonb_array_elements(
+      coalesce(release.record_content -> 'actions', '[]'::jsonb)
+    ) as own_action(value)
+    where (item.value ->> 'moduleRootId')::uuid = p_action_owner_id
+      and (item.value ->> 'moduleReleaseRevision')::bigint = p_action_release_revision
+      and (own_action.value ->> 'actionId')::uuid = p_action_id
+      and (own_action.value ->> 'subjectRecordTypeId')::uuid = p_record_type_id
+  ) then
+    return vortex_record.resolve_contributed_named_action_context_internal(
+      base_context, p_action_owner_id, p_action_release_revision, p_action_id, p_record_type_id
+    );
+  end if;
+
   if p_action_owner_kind = 'application' then
     if p_action_owner_id <> (context_value ->> 'applicationRootId')::uuid
       or p_action_release_revision <>

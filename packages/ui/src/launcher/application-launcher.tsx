@@ -6,6 +6,7 @@ import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from "../com
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "../components/empty";
 import { cellValueToText } from "../display/cell";
 import { DisplayHeader, RowActionControl } from "../display/controls";
+import { rowActionEventIdOf } from "../display/context";
 import { DisplayStateContainer } from "../display/display-state-container";
 import type { DisplayCellValue } from "../display/projected-data";
 import { cn } from "../lib/utils";
@@ -39,7 +40,9 @@ export function ApplicationLauncher(props: LauncherRenderProps): ReactElement {
   const rows = values?.rows ?? [];
   const sidePanel = props.slots.side_panel ?? null;
   // A tile shows its open control only when the declared row action is bound and invocable.
-  const openable = context.events?.row_action !== undefined;
+  const rowActionEventId =
+    context.events?.row_action === undefined ? undefined : rowActionEventIdOf(props);
+  const openable = rowActionEventId !== undefined;
 
   return (
     <div className="flex w-full min-w-0 flex-col gap-4 md:flex-row">
@@ -100,6 +103,7 @@ export function ApplicationLauncher(props: LauncherRenderProps): ReactElement {
                               ? () =>
                                   context.events?.row_action?.({
                                     event: "row_action",
+                                    eventId: rowActionEventId,
                                     recordId: row.recordId,
                                   })
                               : undefined
@@ -111,6 +115,7 @@ export function ApplicationLauncher(props: LauncherRenderProps): ReactElement {
                                     event.preventDefault();
                                     context.events?.row_action?.({
                                       event: "row_action",
+                                      eventId: rowActionEventId,
                                       recordId: row.recordId,
                                     });
                                   }
@@ -156,6 +161,7 @@ export function ApplicationLauncher(props: LauncherRenderProps): ReactElement {
                               <RowActionControl
                                 recordId={row.recordId}
                                 name={name}
+                                eventId={rowActionEventId}
                                 events={context.events}
                                 label="Open"
                               />

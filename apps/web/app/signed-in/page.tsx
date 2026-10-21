@@ -15,6 +15,7 @@ import {
   HEADING_BLOCK_RELEASE,
   organizationChooserEmptyPage,
   organizationChooserPage,
+  organizationChooserOpenEventId,
   organizationChooserPlacementId,
   organizationChooserShell,
 } from "@vortex/platform/server";
@@ -93,13 +94,19 @@ const organizationTileValues = (
 
 /**
  * Tile activation is the launcher block's declared `row_action` event. The browser supplies only
- * the tile's identity; this server action re-resolves the signed-in person's current organisation
+ * the tile's identity and the event's declared identity, which must be the chooser's open identity; this server action re-resolves the signed-in person's current organisation
  * entries and opens the matching one, so a withdrawn or foreign organisation is never opened from
  * stale page data or a crafted identity.
  */
 async function openOrganization(event: DisplaySemanticEvent): Promise<void> {
   "use server";
   if (event?.event !== "row_action" || typeof event.recordId !== "string") return;
+  if (event.eventId !== organizationChooserOpenEventId) {
+    console.error(
+      `[chooser] open refused: ROW_ACTION_EVENT_UNKNOWN eventId=${String(event.eventId)}`,
+    );
+    return;
+  }
   const identity = await continueSessionOrEnd(await resolveIdentitySession());
   if (identity.kind === "temporarily_unavailable") redirect("/signed-in");
 

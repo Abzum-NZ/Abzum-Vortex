@@ -31,6 +31,7 @@ import type {
   FlowIntentHost,
   FlowMessageIntent,
 } from "./intents";
+import { surfaceCancellationError } from "./intents";
 
 type Surface =
   | Readonly<{ id: number; kind: "message"; message: FlowMessageIntent; settle: () => void }>
@@ -70,11 +71,6 @@ export type FlowIntentHostOptions = Readonly<{
 
 /** Flow surface width, the same 36rem the theme's medium dialog scale used. */
 const FLOW_SURFACE_CLASS = "max-h-[calc(100%-2rem)] overflow-y-auto sm:max-w-xl";
-const flowExecutionAbortError = (): Error => {
-  const error = new Error("Flow surface cancelled");
-  error.name = "AbortError";
-  return error;
-};
 
 /**
  * One modal flow surface on the shadcn Dialog (Base UI), like every other surface in the product.
@@ -211,12 +207,12 @@ export function useFlowIntentHost(
           if (removeSurface) setSurfaces((current) => current.filter((entry) => entry.id !== id));
           reject(reason);
         };
-        const abort = (): void => cancel(signal?.reason ?? flowExecutionAbortError());
+        const abort = (): void => cancel(signal?.reason ?? surfaceCancellationError());
         if (signal?.aborted) {
-          reject(signal.reason ?? flowExecutionAbortError());
+          reject(signal.reason ?? surfaceCancellationError());
           return;
         }
-        abandon.current.set(id, () => cancel(new Error("FLOW_SURFACE_ABANDONED"), false));
+        abandon.current.set(id, () => cancel(surfaceCancellationError(), false));
         signal?.addEventListener("abort", abort, { once: true });
         if (signal?.aborted) {
           abort();

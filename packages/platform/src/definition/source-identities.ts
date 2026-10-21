@@ -216,6 +216,14 @@ export function extractApplicationSourceIdentityRequirements(
     for (const item of itemsValue) {
       if (!isSourceItemShape(item)) continue;
       add("block_placement", "content", "content", item.props.id, [item.props.id]);
+      // A single row-action control owns its authored event identity even before a flow is
+      // bound. Binding it later uses the same reservation as the application's event declaration.
+      const rowEvent = stringValue(item.props.row_action_event_id);
+      if (
+        rowEvent !== undefined &&
+        !requirements.some((entry) => entry.kind === "event" && entry.aliases.includes(rowEvent))
+      )
+        add("event", "content", "content", rowEvent, [rowEvent]);
       for (const [key, child] of Object.entries(item.props))
         if (!reservedItemPropKeys.has(key)) addItems(child);
     }

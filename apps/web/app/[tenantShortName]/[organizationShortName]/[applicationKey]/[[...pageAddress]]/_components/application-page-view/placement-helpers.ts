@@ -12,7 +12,6 @@ import {
   walkPageComposition,
   walkPlacementData,
 } from "@vortex/platform/schema";
-import type { PlacementFlowBinding } from "../../../../../../_lib/application-page";
 import { isPlatformRelease } from "./form-surface";
 
 /** Finds the semantic events each registered placement declares in the rendered page tree. */
@@ -165,23 +164,4 @@ export const mergeBoardColumnRead = (
     // A duplicate live record identity or strict merged-shape mismatch triggers a fresh read.
     return undefined;
   }
-};
-
-export const compatibleBoardRowAction = (
-  bindings: readonly PlacementFlowBinding[],
-): PlacementFlowBinding | undefined => {
-  const rowActions = bindings.filter((binding) => binding.event === "row_action");
-  if (rowActions.length !== 1) return undefined;
-  const [binding] = rowActions;
-  if (binding?.recordTypeId === undefined) return undefined;
-  const canReceiveSelectedRecord = binding.callerInputs.some(
-    (inputName) =>
-      inputName === "record_id" ||
-      (binding.selectedReadInputs ?? []).some(
-        (selected) =>
-          selected.callerInputName === inputName &&
-          selected.recordTypeId.toLowerCase() === binding.recordTypeId?.toLowerCase(),
-      ),
-  );
-  return canReceiveSelectedRecord ? binding : undefined;
 };
