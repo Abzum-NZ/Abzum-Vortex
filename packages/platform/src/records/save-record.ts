@@ -1172,7 +1172,7 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
           const problems: RecordBatchSaveProblem[] = [];
           const previous = new Map<string, Record<string, unknown>>();
           const finals: Array<Record<string, unknown>> = [];
-          let replays = 0;
+          const replays: number[] = [];
           for (const [position, command] of commands.entries()) {
             if (command.operation !== "update") throw new Error("RECORD_BATCH_SAVE_NOT_UPDATE");
             const { subject, activityId } = planned[position]!;
@@ -1197,7 +1197,9 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
             }
             const prepared = await prepare(transaction, command, activityId);
             if (prepared.outcome === "replayed") {
-              replays += 1;
+              if (prepared.result.outcome === "saved")
+                replays[position] = prepared.result.concurrencyNumber;
+              else stop("refused", "RECORD_BATCH_SAVE_REPLAY_NOT_SAVED");
               continue;
             }
             if (prepared.outcome !== "prepared") {
@@ -1272,12 +1274,19 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
             throw rollback;
           }
           // A replayed batch (the same gesture submitted again) completed before: every record
-          // replays and none is written twice.
-          if (replays !== 0 && replays !== commands.length) {
+          // returns its stored outcome and none is written twice.
+          const replayed = replays.filter((entry) => entry !== undefined).length;
+          if (replayed !== 0 && replayed !== commands.length) {
             console.error("[record] batch save refused RECORD_BATCH_SAVE_PARTIAL_REPLAY");
             settled = { kind: "unavailable" };
             throw rollback;
           }
+          if (replayed === commands.length)
+            return planned.map(({ subject }, position) => ({
+              recordId: subject.recordId,
+              concurrencyNumber: replays[position]!,
+              previous: {},
+            }));
           await transaction.query`set local role vortex_runtime`;
           const rows = await transaction.query<SaveRow>`
             select vortex_record.save_base_record_set(
