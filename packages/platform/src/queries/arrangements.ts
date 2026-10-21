@@ -71,7 +71,6 @@ const groupableTypes: ReadonlySet<FieldType> = new Set([
   "phone_number",
   "web_address",
   "link",
-  "link_to_one_of_several",
 ]);
 
 // Plan validation
@@ -134,7 +133,7 @@ const validateUse = (
 
 const groupKeyPart = (value: JsonValue | undefined, type: FieldType): JsonValue => {
   if (!present(value)) return null;
-  if (type === "link" || type === "link_to_one_of_several") {
+  if (type === "link") {
     const link = value as Readonly<{ recordTypeId: string; recordId: string }>;
     return [lower(link.recordTypeId), lower(link.recordId)];
   }
@@ -168,7 +167,6 @@ const compareFieldValues = (
           : codeUnitOrder(left as string, right as string);
     }
     case "link":
-    case "link_to_one_of_several":
       return codeUnitOrder(
         JSON.stringify(groupKeyPart(left, type)),
         JSON.stringify(groupKeyPart(right, type)),
