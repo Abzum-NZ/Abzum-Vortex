@@ -11,6 +11,7 @@ import {
   readRecordDetailContract,
   releaseSettingDeclarations,
   setSourcePageSlot,
+  sourceItemTree,
   sourcePageSlotAddresses,
   sourcePageSlotAt,
   type ApplicationSourceDocument,
@@ -41,6 +42,11 @@ import {
   type ReactNode,
 } from "react";
 import { Icon } from "../icons";
+import { regions } from "./application-composition-regions";
+import {
+  studioPlacementReferenceSentence,
+  studioPlacementRemovalReference,
+} from "./composition-references";
 import { Alert, AlertTitle, AlertDescription } from "../components/alert";
 import { Button } from "../components/button";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "../components/collapsible";
@@ -646,6 +652,19 @@ function ApplicationPageSlotPuckEditor({
       );
       next.body.flow_bindings = withCopiedFlowBindings(next.body.flow_bindings, copies);
       removeFlowBindingsOf(next.body, removed);
+      // A flow step that still names a removed block (the form it shows) keeps it on the page.
+      const aliases = new Set(
+        regions(current).flatMap((region) =>
+          sourceItemTree(region.zone.items).map((item) => item.props.id),
+        ),
+      );
+      for (const alias of removed) {
+        const reference = studioPlacementRemovalReference(next, alias, aliases);
+        if (reference === undefined) continue;
+        setResync((generation) => generation + 1);
+        setMessage(`${studioPlacementReferenceSentence(reference)} The item stays on the page.`);
+        return;
+      }
       syncStoredBlockDependencies(next);
       const parsed = applicationSourceDocumentSchema.safeParse(next);
       if (!parsed.success) throw parsed.error;

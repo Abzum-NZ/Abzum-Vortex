@@ -6,13 +6,18 @@ import {
 } from "@vortex/platform/schema";
 import { addPlaces, newBlockItem, placeItem } from "./application-composition-add";
 import { regions } from "./application-composition-regions";
-import { StoredCompositionRefusal, syncStoredBlockDependencies } from "./stored-composition";
+import { sourceNames } from "./composition-references";
+import {
+  freshBlockName,
+  StoredCompositionRefusal,
+  syncStoredBlockDependencies,
+} from "./stored-composition";
 
 export type StudioFlowShownFormResult =
-  | Readonly<{ ok: true; alias: string }>
-  | Readonly<{ ok: false; reason: string }>;
+  Readonly<{ ok: true; alias: string }> | Readonly<{ ok: false; reason: string }>;
 
-const noPage = "Put the button that starts this flow on a page first. The form needs a page to belong to.";
+const noPage =
+  "Put the button that starts this flow on a page first. The form needs a page to belong to.";
 
 /** The page that holds a control of this flow, with the content area it sits in. */
 const invokingRegion = (source: ApplicationSourceDocument, flow: SourceFlow) => {
@@ -83,7 +88,10 @@ export const addStudioFlowShownForm = (
 ): StudioFlowShownFormResult => {
   const found = flowFormPlace(catalogue, source, flow);
   if (found === undefined) return { ok: false, reason: noPage };
-  const { alias, item } = newBlockItem(catalogue, source, found.release, {}, null, true);
+  const { item } = newBlockItem(catalogue, source, found.release, {}, null, true);
+  // The form is named for its flow, so the outline and the step picker show whose form it is.
+  const alias = freshBlockName(`${flow.key}_form`, sourceNames(source));
+  item.props.id = alias;
   item.props.title = title;
   item.props.vortex.responsive.desktop.visible = false;
   try {

@@ -34,7 +34,10 @@ import {
   type StudioFlowStepDraft,
 } from "./application-flow-step-form";
 import { studioFlowEventChoices } from "./application-flow-values";
-import { addStudioFlowShownForm, studioFlowCanCreateShownForm } from "./application-flow-shown-form";
+import {
+  addStudioFlowShownForm,
+  studioFlowCanCreateShownForm,
+} from "./application-flow-shown-form";
 import { studioFlowLabel } from "./semantic-selection";
 
 /**
@@ -151,7 +154,11 @@ const builderChoiceOptions = (
   switch (type) {
     case "form_id": {
       const forms = draft().forms.map((form) => ({ value: form.alias, label: form.label }));
-      return studioFlowCanCreateShownForm(context.catalogue, source as ApplicationSourceDocument, flow)
+      return studioFlowCanCreateShownForm(
+        context.catalogue,
+        source as ApplicationSourceDocument,
+        flow,
+      )
         ? [...forms, { value: studioNewFormChoice, label: "Create a form for this step" }]
         : forms;
     }
@@ -324,7 +331,10 @@ export const studioOperationCallProperties = (
         target === undefined || recordInput === undefined
           ? {}
           : {
-              [target.key]: { kind: "reference", reference: { source: "input", name: recordInput } },
+              [target.key]: {
+                kind: "reference",
+                reference: { source: "input", name: recordInput },
+              },
             },
     },
   };
@@ -419,8 +429,7 @@ const newStep = (
   const unpicked = offered.choices.find(
     (choice) => !choice.options.some((option) => option.value === picks[choice.property]),
   );
-  if (unpicked !== undefined)
-    return { kind: "invalid", reason: `${unpicked.unset}.` };
+  if (unpicked !== undefined) return { kind: "invalid", reason: `${unpicked.unset}.` };
   const definition = studioFlowDefinitionOf(taskType);
   const needsMessage = definition?.properties.message?.required === true;
   if (needsMessage && !settings.message?.trim())
@@ -454,8 +463,10 @@ const newStep = (
           offered.choices,
           picks,
         );
-  if (task !== undefined && settings.message !== undefined) task.properties.message = text(settings.message.trim());
-  if (task?.type === "rule.require" && settings.field !== undefined) task.properties.field = text(settings.field);
+  if (task !== undefined && settings.message !== undefined)
+    task.properties.message = text(settings.message.trim());
+  if (task?.type === "rule.require" && settings.field !== undefined)
+    task.properties.field = text(settings.field);
   if (task?.type === "operation.call") {
     const operation = source.body.modules
       .flatMap((module) => module.actions)

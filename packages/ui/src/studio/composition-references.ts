@@ -82,10 +82,14 @@ export const studioPlacementRemovalReference = (
 ): StudioPlacementReference | undefined => {
   const binding = source.body.flow_bindings.find((entry) => entry.control === alias);
   if (binding !== undefined) {
-    const bound = [...source.body.flows, ...source.body.modules.flatMap((module) => module.flows)].find(
-      (flow) => flow.id === binding.flow || flow.key === binding.flow,
-    );
-    return { reason: "flow_control", ...(bound === undefined ? {} : { flow: studioFlowLabel(bound) }) };
+    const bound = [
+      ...source.body.flows,
+      ...source.body.modules.flatMap((module) => module.flows),
+    ].find((flow) => flow.id === binding.flow || flow.key === binding.flow);
+    return {
+      reason: "flow_control",
+      ...(bound === undefined ? {} : { flow: studioFlowLabel(bound) }),
+    };
   }
   const target = (
     value: unknown,

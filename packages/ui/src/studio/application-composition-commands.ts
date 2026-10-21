@@ -472,11 +472,6 @@ const resolveRemoval = (
     (target.region.parent !== undefined && !pinnedRelease(catalogue, source, target.region.parent))
   )
     return { kind: "unsupported", reason: "manifest_mismatch" };
-  if (
-    !layout &&
-    [...itemSlots(catalogue, target.item).values()].some((slot) => slot.items.length > 0)
-  )
-    return { kind: "unsupported", reason: "has_children" };
   validateRegion(catalogue, target.region);
   if (studioLayoutOutletPlacementUses(source, alias).length > 0)
     return { kind: "blocked", reason: "content_outlet" };
@@ -512,6 +507,12 @@ const resolveRemoval = (
     const key = releaseKey(item.props.vortex.block);
     releaseUses.set(key, releaseUses.get(key)! - 1);
   }
+  // What a flow still names is the cause to fix first, so it is told before the item's content is.
+  if (
+    !layout &&
+    [...itemSlots(catalogue, target.item).values()].some((slot) => slot.items.length > 0)
+  )
+    return { kind: "unsupported", reason: "has_children" };
   return {
     kind: "available",
     removal: {
