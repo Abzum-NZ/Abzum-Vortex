@@ -50,7 +50,12 @@ const installedRecordContributionsSchema = z.array(
       moduleRootId: z.uuid(),
       recordTypeId: z.uuid(),
       contributions: z
-        .array(z.discriminatedUnion("kind", [installedFieldContributionSchema, installedActionContributionSchema]))
+        .array(
+          z.discriminatedUnion("kind", [
+            installedFieldContributionSchema,
+            installedActionContributionSchema,
+          ]),
+        )
         .min(1)
         .max(200),
     })

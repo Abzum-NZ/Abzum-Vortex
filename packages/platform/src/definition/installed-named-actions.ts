@@ -110,7 +110,11 @@ export const installedNamedActions = (
 ): Map<string, FlowNamedAction> => {
   const namedActions = new Map<string, FlowNamedAction>();
   const ambiguousActionKeys = new Set<string>();
-  for (const { key, named } of installedNamedActionDescriptors(application, modules, contributions)) {
+  for (const { key, named } of installedNamedActionDescriptors(
+    application,
+    modules,
+    contributions,
+  )) {
     if (namedActions.has(key) || ambiguousActionKeys.has(key)) {
       namedActions.delete(key);
       ambiguousActionKeys.add(key);

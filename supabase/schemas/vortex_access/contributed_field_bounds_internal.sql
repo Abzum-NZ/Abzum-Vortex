@@ -109,7 +109,8 @@ begin
           where pg_catalog.lower(item.value) = field_id_value
         ) then
           readable_ids := readable_ids || field_id_value;
-          if candidate.action_kind = 'update' and exists (
+          if candidate.action_kind = 'update'
+            and p_decision #>> '{action,actionKind}' = 'update' and exists (
             select 1 from pg_catalog.jsonb_array_elements_text(policy -> 'changeableFieldIds') as item(value)
             where pg_catalog.lower(item.value) = field_id_value
           ) then

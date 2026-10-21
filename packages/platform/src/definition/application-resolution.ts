@@ -83,7 +83,9 @@ export const fieldInputSourceField = (field: FieldInputJson): FieldInputSourceFi
     typeof field.settings === "object" && field.settings !== null
       ? (field.settings as FieldInputJson)
       : {};
-  const resolvedRecordType = (value: unknown): FieldInputSourceField["recordTypes"][number] | undefined => {
+  const resolvedRecordType = (
+    value: unknown,
+  ): FieldInputSourceField["recordTypes"][number] | undefined => {
     const recordType = (typeof value === "object" && value !== null ? value : {}) as FieldInputJson;
     return recordType.state === "resolved"
       ? {
@@ -131,9 +133,7 @@ export const fieldInputSourceField = (field: FieldInputJson): FieldInputSourceFi
       : {}),
     ...(type === "table"
       ? {
-          tableSettings: settings as unknown as NonNullable<
-            FieldInputSourceField["tableSettings"]
-          >,
+          tableSettings: settings as unknown as NonNullable<FieldInputSourceField["tableSettings"]>,
         }
       : {}),
     choices,

@@ -100,7 +100,8 @@ const insertAfterPlacement = (
     slotKey: string,
   ): boolean => {
     const at = items.findIndex(
-      (entry) => isRecord(entry) && isRecord(entry.props) && sameId(String(entry.props.id), anchorId),
+      (entry) =>
+        isRecord(entry) && isRecord(entry.props) && sameId(String(entry.props.id), anchorId),
     );
     if (at >= 0) {
       items.splice(at + 1, 0, item);
@@ -113,7 +114,11 @@ const insertAfterPlacement = (
           const order = orders[breakpoint];
           if (Array.isArray(order)) {
             const position = order.findIndex((entry) => sameId(String(entry), anchorId));
-            order.splice(position < 0 ? order.length : position + 1, 0, String((item.props as Record<string, unknown>).id));
+            order.splice(
+              position < 0 ? order.length : position + 1,
+              0,
+              String((item.props as Record<string, unknown>).id),
+            );
           }
         }
       return true;
@@ -123,7 +128,8 @@ const insertAfterPlacement = (
         isRecord(entry) &&
         isRecord(entry.props) &&
         Object.entries(entry.props).some(
-          ([key, value]) => Array.isArray(value) && insertInto(value, entry.props as Record<string, unknown>, key),
+          ([key, value]) =>
+            Array.isArray(value) && insertInto(value, entry.props as Record<string, unknown>, key),
         ),
     );
   };
@@ -137,10 +143,7 @@ const insertAfterPlacement = (
       )
     )
       return true;
-    return (
-      Array.isArray(data.content) &&
-      insertInto(data.content, root ?? {}, "content")
-    );
+    return Array.isArray(data.content) && insertInto(data.content, root ?? {}, "content");
   };
   const composition = page.composition;
   if (!isRecord(composition)) return false;
@@ -235,7 +238,10 @@ export const withContributedPlacements = (
       if (!isRecord(last) || !isRecord(last.props) || !isRecord(last.props.vortex)) continue;
       const shownFields = new Set(
         placements
-          .filter((placement) => placement.formId !== undefined && sameId(placement.formId, form.placementId))
+          .filter(
+            (placement) =>
+              placement.formId !== undefined && sameId(placement.formId, form.placementId),
+          )
           .flatMap((placement) =>
             isRecord(placement.settings.field) &&
             placement.settings.field.kind === "field_reference" &&
@@ -244,9 +250,6 @@ export const withContributedPlacements = (
               : [],
           ),
       );
-      const orders = isRecord(form.vortex.slotOrders) && isRecord(form.vortex.slotOrders.content)
-        ? form.vortex.slotOrders.content
-        : undefined;
       let anchor = String(last.props.id);
       for (const field of contributed) {
         const fieldId = String(field.fieldId);
@@ -275,7 +278,9 @@ export const withContributedPlacements = (
                 blockId: FIELD_INPUT_BLOCK_RELEASE.blockId,
                 releaseVersion: FIELD_INPUT_BLOCK_RELEASE.releaseVersion,
               },
-              responsive: structuredClone((last.props.vortex as Record<string, unknown>).responsive),
+              responsive: structuredClone(
+                (last.props.vortex as Record<string, unknown>).responsive,
+              ),
               slotOrders: {},
             },
           },
@@ -321,7 +326,8 @@ export const omitUnreadableContributedFields = (
 
 /** The contributed actions on the record type a detail page is about. */
 const contributedActionsOf = (context: InstalledRuntimeContext, pageDefinition: PageDefinition) => {
-  if (pageDefinition.type !== "detail" || pageDefinition.recordType?.state !== "resolved") return [];
+  if (pageDefinition.type !== "detail" || pageDefinition.recordType?.state !== "resolved")
+    return [];
   const subject = pageDefinition.recordType;
   return (
     context.recordContributions.find(
@@ -377,11 +383,14 @@ export const readContributedActionAvailability = async (
       (action) => (seed) => collectActionFlowTasks(library, action.actionId, randomUUID(), seed),
     ),
   );
-  if (result.kind !== "available") throw new Error(`CONTRIBUTED_ACTION_AVAILABILITY_${result.kind}`);
+  if (result.kind !== "available")
+    throw new Error(`CONTRIBUTED_ACTION_AVAILABILITY_${result.kind}`);
+  // A refusal is an ordinary answer (the person may not run the action); only an undecided
+  // preview is worth a trace.
   for (const [actionId, availability] of result.value.availability)
-    if (availability.kind !== "available")
+    if (availability.kind === "undecided")
       console.info(
-        `[page] contributed action ${actionId} is not offered: ${availability.kind === "undecided" ? availability.reason : `${availability.kind} (${availability.cause})`}`,
+        `[page] contributed action ${actionId} availability undecided: ${availability.reason}`,
       );
   return new Set(
     [...result.value.availability]
