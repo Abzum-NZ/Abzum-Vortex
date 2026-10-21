@@ -34,6 +34,8 @@ declare
   preview_installation_id uuid;
   previews jsonb[];
   results jsonb[] := array[]::jsonb[];
+  action_contexts jsonb := '{}'::jsonb;
+  context_key text;
 begin
   if p_record_type_id is null
     or pg_catalog.jsonb_typeof(p_targets) is distinct from 'array'
@@ -47,12 +49,14 @@ begin
         or exists (
           select 1 from pg_catalog.jsonb_array_elements(target.value -> 'actions') as item(value)
           where pg_catalog.jsonb_typeof(item.value) is distinct from 'object'
-            or pg_catalog.jsonb_typeof(item.value -> 'ownerKind') is distinct from 'string'
+            or item.value ->> 'ownerKind' is null
+            or item.value ->> 'ownerKind' not in ('application', 'module')
             or not coalesce(pg_catalog.pg_input_is_valid(item.value ->> 'commandId', 'uuid'), false)
             or not coalesce(pg_catalog.pg_input_is_valid(item.value ->> 'activityId', 'uuid'), false)
             or not coalesce(pg_catalog.pg_input_is_valid(item.value ->> 'ownerId', 'uuid'), false)
             or not coalesce(pg_catalog.pg_input_is_valid(item.value ->> 'actionId', 'uuid'), false)
-            or not coalesce(pg_catalog.pg_input_is_valid(item.value ->> 'releaseRevision', 'bigint'), false)
+            or not coalesce(case when pg_catalog.pg_input_is_valid(item.value ->> 'releaseRevision', 'bigint')
+              then (item.value ->> 'releaseRevision')::bigint between 1 and 9007199254740991 end, false)
         )
     ) then
     raise exception using errcode = '22023', message = 'Named action previews are invalid';
@@ -162,15 +166,37 @@ begin
           with ordinality as item(value, ordinality)
         order by item.ordinality
       loop
+        -- An action's context depends only on the action and the record type, not on the
+        -- record: it is resolved once per page. A resolution the single preview would turn into
+        -- a refusal is a refusal of every record's preview of that action.
+        context_key := pg_catalog.lower(action_item ->> 'ownerKind') || ':'
+          || pg_catalog.lower(action_item ->> 'ownerId') || ':'
+          || ((action_item ->> 'releaseRevision')::bigint)::text || ':'
+          || pg_catalog.lower(action_item ->> 'actionId');
+        if not action_contexts ? context_key then
+          begin
+            action_contexts := action_contexts || pg_catalog.jsonb_build_object(context_key,
+              vortex_record.resolve_named_action_context_internal(
+                action_item ->> 'ownerKind', (action_item ->> 'ownerId')::uuid,
+                (action_item ->> 'releaseRevision')::bigint, (action_item ->> 'actionId')::uuid,
+                p_record_type_id));
+          exception
+            when no_data_found or too_many_rows or insufficient_privilege
+              or object_not_in_prerequisite_state or check_violation then
+              action_contexts := action_contexts || pg_catalog.jsonb_build_object(context_key, false);
+          end;
+        end if;
         previews := pg_catalog.array_append(previews, pg_catalog.jsonb_build_object(
           'actionId', action_item -> 'actionId',
-          'preview', vortex_record.prepare_named_action_set_announce_internal(
+          'preview', case when action_contexts -> context_key = 'false'::jsonb
+            then pg_catalog.jsonb_build_object('outcome', 'refused')
+            else vortex_record.prepare_named_action_set_announce_internal(
             true, (action_item ->> 'commandId')::uuid, action_item ->> 'ownerKind',
             (action_item ->> 'ownerId')::uuid, (action_item ->> 'releaseRevision')::bigint,
             (action_item ->> 'actionId')::uuid, p_record_type_id, requested_id,
             (projection ->> 'concurrencyNumber')::bigint, '{}'::jsonb,
-            (action_item ->> 'activityId')::uuid, read_facts
-          )
+            (action_item ->> 'activityId')::uuid, read_facts, action_contexts -> context_key
+          ) end
         ));
       end loop;
     end if;

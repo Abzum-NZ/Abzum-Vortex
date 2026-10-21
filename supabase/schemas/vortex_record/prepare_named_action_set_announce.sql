@@ -5,7 +5,7 @@ CREATE OR REPLACE FUNCTION vortex_record.prepare_named_action_set_announce(p_com
   select vortex_record.prepare_named_action_set_announce_internal(
     false, p_command_id, p_action_owner_kind, p_action_owner_id,
     p_action_release_revision, p_action_id, p_record_type_id, p_record_id,
-    p_expected_concurrency_number, p_inputs, p_activity_id, null::jsonb
+    p_expected_concurrency_number, p_inputs, p_activity_id, null::jsonb, null::jsonb
   )
 $$;
 alter function vortex_record.prepare_named_action_set_announce(uuid,text,uuid,bigint,uuid,uuid,uuid,bigint,jsonb,uuid) owner to vortex_record_adapter;
