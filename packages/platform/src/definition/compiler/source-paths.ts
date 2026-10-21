@@ -100,7 +100,21 @@ export type SourceContractPositions = {
   }>[];
 };
 
+// Walking a source against its contract is a pure function of the source object, and one compile
+// asks for the positions of the same Module source from several steps (dependency resolution,
+// provenance, field settings). Each source object is walked once; nothing outlives the object.
+const contractPositionsBySource = new WeakMap<JsonObject, SourceContractPositions>();
+
 export function sourceContractPositions(source: JsonObject): SourceContractPositions {
+  let positions = contractPositionsBySource.get(source);
+  if (positions === undefined) {
+    positions = walkSourceContractPositions(source);
+    contractPositionsBySource.set(source, positions);
+  }
+  return positions;
+}
+
+function walkSourceContractPositions(source: JsonObject): SourceContractPositions {
   const opaqueDataRoots: Path[] = [];
   const recordRoots: Path[] = [];
   const provenanceTargets: {

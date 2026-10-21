@@ -13,7 +13,8 @@ export type DerivedModuleDependency = Readonly<{
 /** Every string held at or below one source position, with its path. */
 const stringsAt = (value: unknown, path: Path, into: [Path, string][]): [Path, string][] => {
   if (typeof value === "string") into.push([path, value]);
-  else if (Array.isArray(value)) value.forEach((item, index) => stringsAt(item, [...path, index], into));
+  else if (Array.isArray(value))
+    value.forEach((item, index) => stringsAt(item, [...path, index], into));
   else if (value !== null && typeof value === "object")
     for (const [key, item] of Object.entries(value)) stringsAt(item, [...path, key], into);
   return into;
@@ -27,12 +28,24 @@ const referencedModule = (value: string): string | undefined => {
   return namespacedKeySchema.safeParse(key).success ? key : undefined;
 };
 
+// A pure function of the source object, asked for by every step of one compile; computed once.
+const referencePathsBySource = new WeakMap<object, ReadonlyMap<string, readonly Path[]>>();
+
 /**
  * The source leaves of a Module that reference another Module, by that Module's key. Only the
  * positions the source contract declares as compiled into a canonical identity are read, so names,
  * labels and descriptions never create a dependency.
  */
 export const moduleReferencePaths = (document: object): ReadonlyMap<string, readonly Path[]> => {
+  let references = referencePathsBySource.get(document);
+  if (references === undefined) {
+    references = collectModuleReferencePaths(document);
+    referencePathsBySource.set(document, references);
+  }
+  return references;
+};
+
+const collectModuleReferencePaths = (document: object): ReadonlyMap<string, readonly Path[]> => {
   const source = document as JsonObject;
   const own = String(source.key);
   const references = new Map<string, Path[]>();
@@ -42,7 +55,8 @@ export const moduleReferencePaths = (document: object): ReadonlyMap<string, read
       const module = referencedModule(value);
       if (module === undefined || module === own) continue;
       const paths = references.get(module) ?? [];
-      if (!paths.some((existing) => existing.join("\u0000") === path.join("\u0000"))) paths.push(path);
+      if (!paths.some((existing) => existing.join("\u0000") === path.join("\u0000")))
+        paths.push(path);
       references.set(module, paths);
     }
   }
@@ -58,7 +72,10 @@ export const moduleDependencies = (source: object): readonly DerivedModuleDepend
   const modules = [...moduleReferencePaths(source).keys()].sort(compareCanonicalStrings);
   const localKeys = modules.map((module) => module.slice(module.lastIndexOf(".") + 1));
   return modules.map((module, index) => ({
-    dependency_key: localKeys.indexOf(localKeys[index]!) === index ? localKeys[index]! : `${localKeys[index]}_${index}`,
+    dependency_key:
+      localKeys.indexOf(localKeys[index]!) === index
+        ? localKeys[index]!
+        : `${localKeys[index]}_${index}`,
     module,
     version: { selection: "allowed_range", expression: "*" },
   }));
