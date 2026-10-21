@@ -2,7 +2,6 @@ import "server-only";
 
 import {
   applicationCompilationRequestSchema,
-  definitionCompilationOutputSchema,
   moduleCompilationRequestSchema,
   savedConditionRevisionAssignmentSchema,
   storedDefinitionDraftSchema,
@@ -150,10 +149,11 @@ export const compileModuleCandidate = (
 ): CompiledModuleCandidate => {
   if (candidate.draft.source.kind !== "module" || resolution.contractVersion !== "3.0.0")
     return refuse("DEFINITION_COMPILATION_REFUSED");
+  // Dependency resolution already authenticated and parsed these outputs.
   const dependencyOutputs = [
     ...dependencies.modules.map((release) => release.compilationOutput),
     ...dependencies.connections.map((release) => release.compilationOutput),
-  ].map((output) => definitionCompilationOutputSchema.parse(output));
+  ];
   const common = {
     sourceContractVersion: moduleSourceContractVersion,
     validationContractVersion: moduleValidationContractVersion,
@@ -224,10 +224,11 @@ export const compileApplicationCandidate = (
     dependencies.composition === undefined
   )
     return refuse("DEFINITION_COMPILATION_REFUSED");
+  // Dependency resolution already authenticated and parsed these outputs.
   const dependencyOutputs = [
     ...dependencies.modules.map((release) => release.compilationOutput),
     ...dependencies.connections.map((release) => release.compilationOutput),
-  ].map((output) => definitionCompilationOutputSchema.parse(output));
+  ];
   const request = parsedCompilationRequest(applicationCompilationRequestSchema, {
     sourceContractVersion: applicationSourceContractVersion,
     validationContractVersion: applicationValidationContractVersion,

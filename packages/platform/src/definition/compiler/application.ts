@@ -723,17 +723,16 @@ export function compileParsedApplicationRequest(
       request.catalogueSnapshot,
       applicationCompositionResolution(source, resolution, valueIndex),
     );
-    const canonical = applicationDraftSchema.parse(
-      compileApplication(
-        sourceObject,
-        resolution,
-        request.draftMetadata as unknown as JsonObject,
-        dependencyOutputs,
-        composition,
-        valueIndex,
-        flowSet.flows,
-        platformPermissions,
-      ),
+    // compileApplication returns the parsed draft; the final output parse below also checks it.
+    const canonical = compileApplication(
+      sourceObject,
+      resolution,
+      request.draftMetadata as unknown as JsonObject,
+      dependencyOutputs,
+      composition,
+      valueIndex,
+      flowSet.flows,
+      platformPermissions,
     );
     const ownDefinition = resolution.definition(source.key, "application");
     const roleReview = applicationRoleReviewBytes(
