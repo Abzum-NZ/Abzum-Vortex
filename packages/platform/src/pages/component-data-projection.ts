@@ -146,6 +146,12 @@ export type ProjectedTableRow = Readonly<{
   format?: RecordsTableRowFormat;
   /** A tree row the viewer may read a child of; absent on every other row. */
   hasChildren?: true;
+  /**
+   * The exact text of each number and money cell the viewer may read, keyed by column: a decimal as
+   * stored, money as "amount CURRENCY". It rides with the page for the spreadsheet range copy, which
+   * reads nothing at copy time; present only while Range selection is on, and never for a withheld cell.
+   */
+  exact?: Readonly<Record<string, string>>;
 }>;
 
 /** A row of a table read: a tree level's rows also say whether the viewer may read a child. */
@@ -181,6 +187,11 @@ export type ProjectedTableGroups =
       total: number;
       /** The key of the open group; absent while every group is closed. */
       expanded?: string;
+      /**
+       * Where this page of groups sits: `first` when no group page precedes it, and `next` the
+       * opaque position that reads the following page (absent on the last page).
+       */
+      page: Readonly<{ first: boolean; next?: string }>;
     }>
   | Readonly<{ status: "too_many" }>;
 
@@ -337,6 +348,21 @@ const projectLink = (value: string, linkType: LinkFieldType): ProjectedScalarCel
   if (isSafeLinkAddress(address)) return { kind: "link", address, label: text };
   console.error(`[page] link value refused LINK_VALUE_INVALID type=${linkType}`);
   return { kind: "text", text: value };
+};
+
+/** The exact text of a stored number or money value a cell shows; undefined for any other value. */
+const exactTextOf = (stored: JsonValue, cell: ProjectedScalarCellValue): string | undefined => {
+  if (
+    stored !== null &&
+    typeof stored === "object" &&
+    !Array.isArray(stored) &&
+    typeof stored.amount === "string" &&
+    typeof stored.currency === "string"
+  )
+    return `${stored.amount} ${stored.currency}`;
+  if (cell.kind !== "number") return undefined;
+  if (typeof stored === "string" && isExactDecimal(stored)) return stored;
+  return typeof stored === "number" && Number.isFinite(stored) ? String(stored) : undefined;
 };
 
 const numberCell = (value: number, grouped: boolean): ProjectedScalarCellValue => ({
@@ -547,6 +573,28 @@ const editValuesOf = (
 };
 
 /**
+ * The exact number and money texts of one row's readable shown cells, for the range copy; none unless
+ * Range selection is on for this viewer.
+ */
+const exactValuesOf = (
+  row: ListRow,
+  columns: readonly Readonly<{ key: string }>[],
+  cells: Readonly<Record<string, ProjectedScalarCellValue>>,
+  features: RecordsTableFeatureProjection | undefined,
+  input: ComponentDataProjectionInput,
+): Pick<ProjectedTableRow, "exact"> => {
+  if (features?.spreadsheet?.rangeSelect !== true) return {};
+  const entries = columns.flatMap(({ key }): [string, string][] => {
+    const stored = isReadable(key, input) ? valueOf(row, key) : undefined;
+    const cell = cells[key];
+    if (stored === undefined || cell === undefined) return [];
+    const exact = exactTextOf(stored.value, cell);
+    return exact === undefined ? [] : [[key, exact]];
+  });
+  return entries.length === 0 ? {} : { exact: Object.fromEntries(entries) };
+};
+
+/**
  * Projects a Records table's query rows into its display payload. Columns and headings come only
  * from the declared contract, narrowed to the columns the person's layout arranges (already
  * resolved against the declared columns and their field policy) and shown by the columns it shows,
@@ -637,6 +685,24 @@ export const projectRecordsTableData = (
       ...(features === undefined ? {} : { features }),
       rows: completeRows.map((row) => {
         const format = formatting?.rows.get(row.recordId);
+        const cells = Object.fromEntries(
+          columns.map((column) => {
+            const stored = isReadable(column.key, input) ? valueOf(row, column.key) : undefined;
+            return [
+              column.key,
+              stored === undefined
+                ? RESTRICTED_CELL
+                : projectCell(
+                    stored.value,
+                    column.format,
+                    input.fieldChoiceLabels?.[column.key.toLowerCase()],
+                    input.fieldDateTypes?.[column.key.toLowerCase()],
+                    input.recordLinks,
+                    input.fieldLinkTypes?.[column.key.toLowerCase()],
+                  ),
+            ];
+          }),
+        );
         return {
           recordId: row.recordId,
           revision: row.revision,
@@ -647,24 +713,8 @@ export const projectRecordsTableData = (
             ),
           },
           ...editValuesOf(row, columns, editableFields, input),
-          cells: Object.fromEntries(
-            columns.map((column) => {
-              const stored = isReadable(column.key, input) ? valueOf(row, column.key) : undefined;
-              return [
-                column.key,
-                stored === undefined
-                  ? RESTRICTED_CELL
-                  : projectCell(
-                      stored.value,
-                      column.format,
-                      input.fieldChoiceLabels?.[column.key.toLowerCase()],
-                      input.fieldDateTypes?.[column.key.toLowerCase()],
-                      input.recordLinks,
-                      input.fieldLinkTypes?.[column.key.toLowerCase()],
-                    ),
-              ];
-            }),
-          ),
+          ...exactValuesOf(row, columns, cells, features, input),
+          cells,
           ...(format === undefined ? {} : { format }),
           ...(row.hasChildren === true ? { hasChildren: true as const } : {}),
         };

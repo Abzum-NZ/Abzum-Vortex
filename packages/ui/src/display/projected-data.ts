@@ -121,6 +121,8 @@ export type DisplayRow = Readonly<{
   format?: RecordsTableRowFormat;
   /** A tree row the viewer may read a child of, decided on the server. */
   hasChildren?: true;
+  /** The exact text of each readable number and money cell, for the range copy (see the server). */
+  exact?: Readonly<Record<string, string>>;
 }>;
 
 /** One declared table column; only declared columns are ever rendered. */
@@ -360,6 +362,11 @@ export type DisplaySemanticEventName =
   | "export_requested"
   | "export_cancelled"
   /**
+   * A Records table's status bar asks the page for the totals of the selected range of the shown
+   * page; the handler resolves to the server's answer. It is a read, not a flow event.
+   */
+  | "range_summary_requested"
+  /**
    * A Records table's pivot asks for one page of its rows, opens the pivot or closes it, or a cell
    * opens the ordinary grid on the records it counts. These are the Pivot feature's own reads and
    * address changes, not flow events.
@@ -373,6 +380,7 @@ export type DisplaySemanticEventName =
    * without a read). These are the Group by feature's own reads and address changes, not flow events.
    */
   | "group_changed"
+  | "group_page_changed"
   | "group_requested"
   | "group_opened"
   /** The Saved views feature asks the host to open, store, share or delete a view. */
@@ -436,6 +444,11 @@ export type DisplaySemanticEvent =
       /** Groups the table by its authored field, or (null) shows the records ungrouped. */
       event: "group_changed";
       grouped: boolean;
+    }>
+  | Readonly<{
+      /** Shows another page of the groups: the position of the page before it, or null for the first. */
+      event: "group_page_changed";
+      after: string | null;
     }>
   | Readonly<{
       /** Asks for one page of the members of one group; its handler resolves to that page. */
@@ -504,6 +517,17 @@ export type DisplaySemanticEvent =
     }>
   /** Stops the export in progress; no file is saved. */
   | Readonly<{ event: "export_cancelled" }>
+  /**
+   * Asks for the totals of the selected range: the shown page's record identities and the columns
+   * the status bar offers. The handler resolves to a `RecordsRangeSummaryResult`; `signal` aborts
+   * a request the range has moved past.
+   */
+  | Readonly<{
+      event: "range_summary_requested";
+      recordIds: readonly string[];
+      fieldIds: readonly string[];
+      signal: AbortSignal;
+    }>
   | Readonly<{
       event: "row_edit";
       eventId: string;
@@ -602,6 +626,7 @@ export const DISPLAY_EVENT_NAMES: readonly DisplaySemanticEventName[] = Object.f
   "pivot_view_changed",
   "pivot_drilled",
   "group_changed",
+  "group_page_changed",
   "group_requested",
   "group_opened",
   "grid_view_requested",
@@ -613,6 +638,7 @@ export const DISPLAY_EVENT_NAMES: readonly DisplaySemanticEventName[] = Object.f
   "selection_scope_changed",
   "export_requested",
   "export_cancelled",
+  "range_summary_requested",
   "inline_edit",
   "row_edit",
   "card_moved",
@@ -935,6 +961,20 @@ const parseEditValues = (
   return Object.freeze(values);
 };
 
+/** The exact number and money texts of a row's cells, keyed by column. */
+const parseExactValues = (
+  value: unknown,
+  location: DefinitionRenderErrorLocation,
+): Readonly<Record<string, string>> => {
+  const record = requireRecord(value, "A projected row's exact values must be an object", location);
+  const values: Record<string, string> = {};
+  for (const [key, held] of Object.entries(record)) {
+    const field = requireFieldKey(key, `Invalid projected exact key '${key}'`, location);
+    values[field] = requireNonEmptyString(held, "A projected exact value must be text", location);
+  }
+  return Object.freeze(values);
+};
+
 const parseRows = (
   value: unknown,
   location: DefinitionRenderErrorLocation,
@@ -947,7 +987,7 @@ const parseRows = (
       const record = requireRecord(item, "A projected row must be an object", rowLocation);
       requireExactKeys(
         record,
-        ["recordId", "revision", "capabilities", "edit", "cells", "format", "hasChildren"],
+        ["recordId", "revision", "capabilities", "edit", "cells", "format", "hasChildren", "exact"],
         rowLocation,
       );
       if (record.hasChildren !== undefined && record.hasChildren !== true)
@@ -1000,8 +1040,16 @@ const parseRows = (
               ...rowLocation,
               propertyPath: [`rows[${index}]`, "format"],
             });
+      const exact =
+        record.exact === undefined
+          ? undefined
+          : parseExactValues(record.exact, {
+              ...rowLocation,
+              propertyPath: [`rows[${index}]`, "exact"],
+            });
       return Object.freeze({
         recordId,
+        ...(exact === undefined ? {} : { exact }),
         ...(revision === undefined ? {} : { revision }),
         ...(capabilities === undefined ? {} : { capabilities }),
         ...(edit === undefined ? {} : { edit }),

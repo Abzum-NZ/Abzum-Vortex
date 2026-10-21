@@ -39,7 +39,7 @@ import type {
   EventHandlers,
 } from "./types";
 import { bindingFor, suppliedValues, bindingOfEvent, asComponentBinding } from "./event-values";
-import { cancelledMoveNotice, unavailableNotice } from "./notices";
+import { unavailableNotice } from "./notices";
 import {
   publishedControlData,
   rememberPublishedChoices,
@@ -47,6 +47,7 @@ import {
 } from "./published-control-data";
 import { usePageParameters } from "./use-page-parameters";
 import { useBulkSelection } from "./use-bulk-selection";
+import { useRangeSummary } from "./use-range-summary";
 import { useRecordsExport } from "./use-records-export";
 import { requestRecordChoices } from "./record-choices";
 
@@ -86,7 +87,6 @@ export function useRuntimeInputs({
   setFormFeedback,
   choiceEvidenceFor,
   submittedFormsRef,
-  formCancelledRef,
   applyDispatch,
   formBlock,
   selection,
@@ -184,7 +184,6 @@ export function useRuntimeInputs({
     surface?: "page" | "dialog",
   ) => ReferenceChoiceSelectionEvidenceMap | undefined;
   submittedFormsRef: RefObject<Map<string, SubmittedForm>>;
-  formCancelledRef: RefObject<boolean>;
   applyDispatch: (
     dispatch: Promise<FlowDispatchResult | undefined>,
     formPlacementId?: string,
@@ -232,6 +231,8 @@ export function useRuntimeInputs({
   });
   // Export: the file of the records a person selected, streamed by the server.
   const exported = useRecordsExport({ model, navigationKey, matchingOf: bulk.matchingOf });
+  // The spreadsheet status bar's totals of a selected range, read from the server per settled range.
+  const rangeSummary = useRangeSummary({ model });
   const titles = useRef<{ scope: string; values: PublishedRecordTitles }>({
     scope: navigationKey,
     values: new Map(),
@@ -415,7 +416,6 @@ export function useRuntimeInputs({
               return false;
             }
             let accepted = false;
-            formCancelledRef.current = false;
             await runBinding(
               placementId,
               binding,
@@ -423,9 +423,6 @@ export function useRuntimeInputs({
               event.recordId,
               { recordId: event.recordId, revision: event.revision },
               async () => {
-                // A flow whose form the person cancelled finishes as completed without saving, so
-                // the move is not accepted and the card goes back to its column.
-                if (formCancelledRef.current) return cancelledMoveNotice;
                 accepted = true;
                 return undefined;
               },
@@ -470,6 +467,8 @@ export function useRuntimeInputs({
         // A table's Export streams a file from the server over the same selection, never a flow.
         if (tableData?.features?.export !== undefined)
           Object.assign(events, exported.eventsFor(placementId, tableData, selection[placementId]));
+        if (tableData?.features?.spreadsheet?.statusBar !== undefined)
+          Object.assign(events, rangeSummary.eventsFor(placementId, tableData));
         if (supportsEvent("selection_changed"))
           events.selection_changed = (event: DisplaySemanticEvent) => {
             if (event.event !== "selection_changed") return;
@@ -891,8 +890,7 @@ export function useRuntimeInputs({
     applyDispatch,
     busy,
     formBlock,
-    formCancelledRef,
-    formFeedback,
+      formFeedback,
     formOwners,
     launcherPlacements,
     choiceEvidenceFor,
@@ -935,6 +933,7 @@ export function useRuntimeInputs({
     continueTablePage,
     bulk,
     exported,
+    rangeSummary,
   ]);
 
   runtimeInputsRef.current = runtimeInputs;

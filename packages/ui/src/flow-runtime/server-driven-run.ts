@@ -2,6 +2,7 @@ import { describeFailure, type JsonValue } from "@vortex/platform/schema";
 import {
   performPresentationIntent,
   confirmAnswer,
+  isSurfaceCancellation,
   readConfirmIntent,
   readFormIntent,
   type FlowIntent,
@@ -17,6 +18,7 @@ export type ServerDrivenResult =
   /** The server ended the run; `descriptor` is its safe result and outputs are as it released them. */
   | Readonly<{
       kind: "finished";
+      warnings: Extract<ServerFlowResponse, { kind: "result" }>["warnings"];
       runId: string;
       descriptor: Extract<ServerFlowResponse, { kind: "result" }>["descriptor"];
       outputs: Readonly<Record<string, JsonValue>>;
@@ -35,8 +37,6 @@ const maximumContinuationLength = 128;
 const maximumRounds = 25;
 
 const expectedIntentKind = { form: "show_form", confirm: "confirm" } as const;
-const isSurfaceCancellation = (error: unknown): boolean =>
-  error instanceof Error && error.name === "AbortError";
 const refuseInvalidServerFlowState = (stage: string): Readonly<{ kind: "refused" }> => {
   console.error(`[flow] server response invalid: stage=${stage}`);
   return { kind: "refused" };
@@ -70,7 +70,10 @@ export async function driveServerFlow(
         case "unavailable":
           return response;
         case "result": {
-          if (response.descriptor.commit === "confirmed" || response.descriptor.commit === "partial")
+          if (
+            response.descriptor.commit === "confirmed" ||
+            response.descriptor.commit === "partial"
+          )
             committed?.();
           for (const intent of response.intents) {
             if (signal?.aborted) return { kind: "abandoned" };
@@ -78,6 +81,7 @@ export async function driveServerFlow(
           }
           return {
             kind: "finished",
+            warnings: response.warnings,
             runId: response.runId,
             descriptor: response.descriptor,
             outputs: response.outputs,

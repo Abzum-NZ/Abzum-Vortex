@@ -69,13 +69,8 @@ begin
         ) end) ->> 'hiddenFormatting')::integer > 0 then
       return pg_catalog.jsonb_build_object('outcome', 'formatting_refused', 'cause', 'field_not_readable');
     end if;
-    select pg_catalog.jsonb_object_agg(field.value ->> 'fieldId', case
-        when kind.value in ('whole_number', 'decimal_number', 'money', 'yes_no', 'date', 'date_time')
-          then kind.value
-        when kind.value = 'several_choices' then 'text_collection'
-        when kind.value in ('link', 'link_to_one_of_several') then 'record_reference'
-        when kind.value in ('table', 'attachment') then 'opaque_json'
-        else 'text' end),
+    -- A field the mapping does not know stays out, so a rule naming it is refused as rule_invalid.
+    select pg_catalog.jsonb_object_agg(field.value ->> 'fieldId', kind.value),
       pg_catalog.jsonb_object_agg(field.value ->> 'fieldId', 'null'::jsonb)
     into field_types, field_nulls
     from pg_catalog.jsonb_array_elements(installation -> 'moduleBindings') as binding(value)
@@ -85,9 +80,9 @@ begin
     cross join lateral pg_catalog.jsonb_array_elements(
       release.compilation_output #> '{canonical,content,recordTypes}') as record_type(value)
     cross join lateral pg_catalog.jsonb_array_elements(record_type.value -> 'fields') as field(value)
-    cross join lateral (select case when field.value ->> 'type' in ('calculation', 'total')
-      then field.value #>> '{settings,resultType}' else field.value ->> 'type' end) as kind(value)
-    where (record_type.value ->> 'recordTypeId')::uuid = record_type_id;
+    cross join lateral (select vortex_access.condition_field_type_internal(field.value)) as kind(value)
+    where (record_type.value ->> 'recordTypeId')::uuid = record_type_id
+      and kind.value is not null;
     for format_rule in select value from pg_catalog.jsonb_array_elements(p_document -> 'formatting')
     loop
       begin

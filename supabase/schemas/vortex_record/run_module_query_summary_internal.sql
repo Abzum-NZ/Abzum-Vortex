@@ -502,35 +502,11 @@ begin
     fast_path := fast_path_fields_valid;
   end if;
 
-  -- A search narrows the candidate scan, and so the ceiling, with the authoritative
-  -- search predicate evaluated over the stored values of the searched fields, built
-  -- from the same value expression read_record projects from. A projection only omits
-  -- stored values, so every record whose readable values match also matches here: the
-  -- narrowing is a superset and read_record stays the decision for each counted match.
-  -- A searched field without an active column, or derived (calculation, total), has no
-  -- such proof, so the scan is then not narrowed at all. Nor is it when a searched field
-  -- is not readable on every scanned row: a withheld stored value must never decide
-  -- whether the ceiling refuses, or the refusal would reveal it.
-  if user_search is not null and pg_catalog.cardinality(search_field_ids) > 0 and not exists (
-    select 1
-    from pg_catalog.unnest(search_field_ids) as searched(id)
-    left join vortex_record.field_storage_mappings as mapping
-      on mapping.storage_contract_id = v_storage_contract_id
-      and mapping.field_id = searched.id::uuid
-    where mapping.storage_contract_id is null
-      or mapping.state <> 'active'
-      or fields_by_id -> searched.id ->> 'type' in ('calculation', 'total')
-      or searched.id <> all (readable_field_ids)
-  ) then
-    search_prefilter_sql := pg_catalog.format(
-      'vortex_record.query_search_matches_internal(pg_catalog.jsonb_build_object(%s), $18::text[], $19::text)',
-      vortex_record.named_action_storage_columns_internal(
-        v_storage_contract_id,
-        (select pg_catalog.jsonb_agg(fields_by_id -> searched.id)
-         from pg_catalog.unnest(search_field_ids) as searched(id))
-      ) ->> 'valueExpression'
-    );
-  end if;
+  -- A search narrows the candidate scan, and so the ceiling, through the one shared
+  -- stored-value pre-predicate; read_record stays the decision for each counted match.
+  search_prefilter_sql := vortex_record.query_search_prefilter_internal(
+    v_storage_contract_id, fields_by_id, search_field_ids, readable_field_ids, user_search, 18, 19
+  );
 
   for aggregate_item in
     select item.value from pg_catalog.jsonb_array_elements(aggregate_items) as item(value)
@@ -783,7 +759,7 @@ begin
       'select pg_catalog.jsonb_build_object(%1$L, axis.value) as value,
          pg_catalog.jsonb_build_object(%1$L, axis.normalized) as normalized,
          axis.sort_rank, axis.sort_title
-       from vortex_record.pivot_dimension_internal(
+       from vortex_record.dimension_value_internal(
          (select pg_catalog.array_agg(distinct raw.group_values -> %1$L) from raw_dimensions as raw), %2$L::jsonb
        ) as axis',
       group_ids[1], (fields_by_id -> group_ids[1])::text
@@ -1109,12 +1085,12 @@ begin
          where %s and (select value from candidate_count) <= %s
        ),
        row_values as materialized (
-         select * from vortex_record.pivot_dimension_internal(
+         select * from vortex_record.dimension_value_internal(
            (select pg_catalog.array_agg(distinct row_value) from raw_dimensions), %L::jsonb
          )
        ),
        column_values as materialized (
-         select * from vortex_record.pivot_dimension_internal(
+         select * from vortex_record.dimension_value_internal(
            (select pg_catalog.array_agg(distinct column_value) from raw_dimensions), %L::jsonb
          )
        ),
@@ -1381,4 +1357,4 @@ grant execute on function vortex_record.run_module_query_summary_internal(uuid,u
   to vortex_record_adapter;
 
 comment on function vortex_record.run_module_query_summary_internal(uuid,uuid,bigint,jsonb,jsonb,jsonb) is
-  'Owner-only summary execution over the access plan prepared by the protected adapter entry point; explicit organisation and application scope and the exact read plan bound every aggregate scan, including a pivot crossed in one grouping-sets statement; a grid''s grouped read also returns the reader''s guaranteed field bound.';
+  'Owner-only summary execution over the access plan prepared by the protected adapter entry point; explicit organisation and application scope and the exact read plan bound every aggregate scan, including a pivot crossed in one grouping-sets statement and a link grouping folded through one protected title batch; a grid''s grouped read also returns the reader''s guaranteed field bound.';

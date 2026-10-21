@@ -241,16 +241,8 @@ export function useApplyDispatch({
           showResult(unavailableNotice);
           return outcome;
         }
-        if (server.kind === "abandoned") {
-          // The run may have committed a step before the answer was lost: never report nothing.
-          showResult(outcomeNotices.uncertain ?? unavailableNotice);
-          if (model.guidedForm !== undefined) setCompletedGuidedNavigationKey(navigationKey);
-          if (sourceBindingId !== undefined)
-            void refreshPlacements(refreshTargetsForBinding(sourceBindingId), undefined, {
-              content: true,
-            });
-          return outcome;
-        }
+        // The person cancelled a surface or left the page: no answer was sent, nothing to report.
+        if (server.kind === "abandoned") return outcome;
         showResult(unavailableNotice);
         return outcome;
       } catch {

@@ -5,6 +5,7 @@ import type {
   RecordsTableContract,
   RecordsTableFilterField,
   RecordsTableExportFormat,
+  RecordsTableStatusBarOperation,
 } from "../../schema";
 import type {
   ProtectedQueryFieldBounds,
@@ -37,7 +38,18 @@ export {
  */
 export type RecordsTableFeatureProjection = Readonly<{
   pinning?: true;
-  spreadsheet?: Readonly<{ rangeSelect: boolean; find: boolean }>;
+  spreadsheet?: Readonly<{
+    rangeSelect: boolean;
+    find: boolean;
+    /**
+     * The status bar of a selected range: the configured fields (every one is shown, a field the
+     * viewer cannot read as "Not available") and the totals. Absent while the status bar is off.
+     */
+    statusBar?: Readonly<{
+      fields: readonly string[];
+      operations: readonly RecordsTableStatusBarOperation[];
+    }>;
+  }>;
   /** Present when the viewer can read some field the record type marks searchable. */
   search?: true;
   /**
@@ -151,7 +163,8 @@ export type RecordsTableRequestPart =
   | "row_clicked"
   | "row_detail"
   | "tree_level"
-  | "group";
+  | "group"
+  | "range_summary";
 
 /**
  * Why the server refused a Records table request: the part and the cause. The viewer only ever
@@ -328,6 +341,18 @@ export const projectRecordsTableFeatures = (
           spreadsheet: {
             rangeSelect: features.spreadsheet.rangeSelect,
             find: features.spreadsheet.find,
+            ...(features.spreadsheet.rangeSelect &&
+            features.spreadsheet.statusBarFields.length > 0 &&
+            features.spreadsheet.statusBarOperations.length > 0
+              ? {
+                  statusBar: {
+                    fields: features.spreadsheet.statusBarFields.filter((field) =>
+                      contract.columns.some((column) => sameField(column.field, field)),
+                    ),
+                    operations: features.spreadsheet.statusBarOperations,
+                  },
+                }
+              : {}),
           },
         }
       : {}),
