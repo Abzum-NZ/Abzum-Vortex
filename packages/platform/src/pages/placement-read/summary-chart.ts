@@ -4,6 +4,7 @@ import {
   describeFailure,
   exactDecimalTextSchema,
   moneyValueSchema,
+  queryTotalLabel,
   type BlockPropertyValueContract,
   type JsonValue,
 } from "../../schema";
@@ -153,15 +154,19 @@ const projectChart = (input: {
   | Readonly<{
       ok: false;
       code: "chart_settings_invalid" | "chart_group_invalid" | "chart_measure_invalid";
+      cause: string;
     }> => {
   const { settings, query, fields, summary, recordLinks } = input;
   const category = settings.category_field;
   const categoryFieldId =
     category?.kind === "field_reference" ? String(category.fieldId) : undefined;
-  const measure = settingText(settings.measure);
-  const measureLabel = settingText(settings.measure_label);
-  if (categoryFieldId === undefined || measure === undefined || measureLabel === undefined)
-    return { ok: false, code: "chart_settings_invalid" };
+  const measure = settings.measure?.kind === "total_reference" ? settings.measure.value : undefined;
+  if (categoryFieldId === undefined || measure === undefined)
+    return {
+      ok: false,
+      code: "chart_settings_invalid",
+      cause: "Category field or Measure has no valid reference",
+    };
 
   const categoryId = categoryFieldId.toLowerCase();
   const categoryField = fields.get(categoryId);
@@ -170,12 +175,24 @@ const projectChart = (input: {
     query.groupByFieldIds.length !== 1 ||
     String(query.groupByFieldIds[0]).toLowerCase() !== categoryId
   )
-    return { ok: false, code: "chart_group_invalid" };
+    return {
+      ok: false,
+      code: "chart_group_invalid",
+      cause: "Category must be the query's one grouping field",
+    };
 
   const aggregate = query.aggregates.find((candidate) => candidate.alias === measure);
-  if (aggregate === undefined) return { ok: false, code: "chart_measure_invalid" };
+  if (aggregate === undefined)
+    return {
+      ok: false,
+      code: "chart_measure_invalid",
+      cause: `Query ${query.key} has no total named ${measure}`,
+    };
   const measureField =
     aggregate.fieldId === undefined ? undefined : fields.get(aggregate.fieldId.toLowerCase());
+  const measureLabel =
+    settingText(settings.measure_label) ??
+    queryTotalLabel(aggregate.operation, measureField?.label);
 
   const points: ChartPoint[] = [];
   for (const group of summary.groups) {
@@ -183,7 +200,11 @@ const projectChart = (input: {
     const label = groupLabel(categoryField, groupValues[categoryId], recordLinks);
     const result = group.aggregates[aggregate.alias];
     if (label === undefined || result === undefined)
-      return { ok: false, code: "chart_group_invalid" };
+      return {
+        ok: false,
+        code: "chart_group_invalid",
+        cause: "A summary group is missing its category or chosen total",
+      };
     const cell = summaryAggregateCellValue(aggregate, measureField, result);
     const numeric =
       cell?.kind === "number"
@@ -191,7 +212,12 @@ const projectChart = (input: {
         : cell?.kind === "text" && exactDecimalTextSchema.safeParse(cell.text).success
           ? { value: Number(cell.text), text: cell.text }
           : undefined;
-    if (numeric === undefined) return { ok: false, code: "chart_measure_invalid" };
+    if (numeric === undefined)
+      return {
+        ok: false,
+        code: "chart_measure_invalid",
+        cause: `Total ${aggregate.alias} (${aggregate.operation}) did not produce a numeric chart value for group ${group.groupKey}`,
+      };
     points.push({ key: group.groupKey, label, ...numeric });
   }
   return {
@@ -292,7 +318,7 @@ export const readSummaryOrChart = async (
       ...(groupLabels === undefined ? {} : { recordLinks: groupLabels }),
     });
     if (!projection.ok) {
-      logPlacementFailure(address, placementId, projection.code);
+      logPlacementFailure(address, placementId, projection.code, projection.cause);
       data[placementId] = { status: "error" };
       return;
     }

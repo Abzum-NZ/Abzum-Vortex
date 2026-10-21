@@ -25,6 +25,8 @@ import {
   compiledPlacementBindingProblems,
   compiledQueryInputs,
   compiledRecordBindingFields,
+  queryTotalLabel,
+  queryTotalReferenceProblem,
 } from "../../schema";
 import type { ApplicationScope } from "./application-scope";
 
@@ -405,6 +407,47 @@ export function applicationPageRules(scope: ApplicationScope): void {
         `${String(block.blockId)}:${String(block.releaseVersion)}`,
       );
       const blockKey = release?.key;
+      const totalRecord =
+        bound === undefined
+          ? undefined
+          : records.get(String(object(bound.recordType).recordTypeId));
+      const totals = array(bound?.aggregates ?? []).map((total) => ({
+        alias: String(total.alias),
+        label: queryTotalLabel(
+          String(total.operation),
+          array(totalRecord?.fields ?? []).find(
+            (field) => String(field.fieldId).toLowerCase() === String(total.fieldId).toLowerCase(),
+          )?.label as string | undefined,
+        ),
+      }));
+      const checkTotalReferences = (
+        declaration: BlockPropertySchemaContract,
+        value: unknown,
+      ): void => {
+        if (value === undefined) return;
+        const held = object(value);
+        if (declaration.kind === "total_reference") {
+          const problem = queryTotalReferenceProblem(declaration.label, String(held.value), totals);
+          if (problem !== undefined)
+            failures.push(
+              failure(
+                output,
+                "vortex.definition.application_block_settings",
+                "broken_reference",
+                undefined,
+                "definition_query_binding_choice",
+                problem,
+              ),
+            );
+        } else if (declaration.kind === "group") {
+          for (const child of declaration.properties)
+            checkTotalReferences(child, object(held.properties)[child.key]);
+        } else if (declaration.kind === "list") {
+          for (const item of array(held.items)) checkTotalReferences(declaration.item, item);
+        }
+      };
+      for (const declaration of release?.properties ?? [])
+        checkTotalReferences(declaration, object(placement.settings)[declaration.key]);
       if (bound === undefined) {
         if (blockKey === "platform.display.calendar")
           failures.push(
