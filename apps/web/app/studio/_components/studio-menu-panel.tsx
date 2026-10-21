@@ -371,6 +371,7 @@ export function StudioMenuPanel({
           aria-expanded={addingHeading}
           onClick={() => setAddingHeading((open) => !open)}
         >
+          <Icon name="plus" />
           Add a heading
         </Button>
         {addingHeading && (
@@ -472,7 +473,14 @@ export function StudioMenuPanel({
               This application has no menu entries yet.
             </p>
           ) : (
-            <StudioSection title="Menu entries" count={source.body.navigation.length}>
+            <StudioSection
+              title="Menu entries"
+              count={source.body.navigation.reduce(
+                (total, entry) =>
+                  total + 1 + (entry.type === "heading" ? entry.children.length : 0),
+                0,
+              )}
+            >
               <div ref={treeHost}>
                 <StudioNavTree
                   label="Menu entries"
