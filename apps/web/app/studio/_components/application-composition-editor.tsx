@@ -783,7 +783,17 @@ export function ApplicationCompositionEditor(props: Props) {
                   : removalModel.reason === "unresolved_target"
                     ? "Something this item points to cannot be found. It cannot be removed."
                     : "A flow still uses this item. It cannot be removed."
-              : "Only display items in a layout or in the main area of a list, detail or dashboard page can be removed."}
+              : removalModel.kind === "invalid"
+                ? "This item could not be read. Reload Studio."
+                : removalModel.reason === "page_kind"
+                  ? "Items can only be removed from a layout or from the content of a list, detail or dashboard page."
+                  : removalModel.reason === "public_page"
+                    ? "This page is published at a public address. Its items cannot be removed."
+                    : removalModel.reason === "has_children"
+                      ? "This item holds other items. Remove or move them first."
+                      : removalModel.reason === "repeating_slot"
+                        ? "This item sits in a repeating area and cannot be removed here."
+                        : "This item no longer matches its page definition. Reload Studio."}
           </p>
         )}
       </StudioInspectorGroup>
