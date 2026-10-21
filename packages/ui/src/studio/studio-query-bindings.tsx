@@ -361,8 +361,9 @@ export function StudioQueryBindings({
                         (option) =>
                           props.value?.kind === "text" && option.value === props.value.value,
                       )?.label ??
-                        (props.value?.kind === "text" && props.value.value) ??
-                        "Choose a value"}
+                        (props.value?.kind === "text" && props.value.value !== ""
+                          ? props.value.value
+                          : "Choose a value")}
                     </SelectValue>
                   </SelectTrigger>
                   <SelectContent>

@@ -455,6 +455,9 @@ const ownQueries = (source: ApplicationSourceDocument): StudioQueryChoice[] =>
           label: input.label,
           type: input.type,
           required: input.required,
+          ...(input.type === "text" && input.validation?.choices !== undefined
+            ? { choices: input.validation.choices }
+            : {}),
           ...(input.type === "record_reference"
             ? {
                 recordTypes: Object.freeze(

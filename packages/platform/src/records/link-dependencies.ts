@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { RecordTypeDefinition } from "../schema";
+import { sameId, type RecordTypeDefinition } from "../schema";
 import type { RequestDatabaseTransaction } from "../db/index";
 
 /**
@@ -29,8 +29,6 @@ const linkValue = (value: unknown): LinkValue | undefined =>
         recordId: (value as Record<string, string>).recordId!,
       }
     : undefined;
-
-const sameId = (left: string, right: string): boolean => left.toLowerCase() === right.toLowerCase();
 
 /**
  * The first dependent link field of the saved record whose value is not consistent with its

@@ -514,11 +514,30 @@ export const deleteInlineModuleField = (
     return { kind: "invalid", issues: ["The field is not in this record type any more."] };
   const references = applicationUses(current, { kind: "field", moduleKey, recordKey, fieldKey });
   if (references.length > 0) return { kind: "referenced", references };
-  const dependent = record.fields.find(
-    (item) =>
-      (item.settings as { depends_on?: LinkDependencyDeclaration }).depends_on?.parent_field ===
-      fieldKey,
-  );
+  // A dependency names its parent in its own record type and its filter in the linked record type,
+  // so both sides are looked for across every owned record type.
+  const recordType = `${moduleKey}:${recordKey}`;
+  const dependent = source.body.modules
+    .flatMap((other) =>
+      other.record_types.flatMap((type) =>
+        type.fields.map((item) => ({ module: other, type, item })),
+      ),
+    )
+    .find(({ module: other, type, item }) => {
+      const settings = item.settings as {
+        target?: unknown;
+        depends_on?: LinkDependencyDeclaration;
+      };
+      if (settings.depends_on === undefined) return false;
+      return (
+        (other.key === moduleKey &&
+          type.key === recordKey &&
+          settings.depends_on.parent_field === fieldKey) ||
+        (typeof settings.target === "string" &&
+          qualifiedLinkTarget(other.key, settings.target) === recordType &&
+          settings.depends_on.filter_field === fieldKey)
+      );
+    })?.item;
   if (dependent !== undefined)
     return {
       kind: "invalid",

@@ -59,6 +59,7 @@ import {
   type RelationshipTotalPreparationOutcome,
 } from "./save-record";
 import { calculateAndFinalize, operationClock } from "./field-candidate";
+import { firstLinkDependencyRefusal } from "./link-dependencies";
 
 type ResultRow = DatabaseRow & { readonly value: unknown };
 type RuleReason = Readonly<{ code: string; message: string }>;
@@ -1127,6 +1128,48 @@ const planNamedAction = async (
       values: creation.values,
       finalValues: createdFinalValues.values[creation.ordinal] ?? creation.values,
     }));
+    // A dependent link holds only a record of its parent's choice, exactly as a record save
+    // judges it: the subject's changed pair and every created record's pair.
+    const targets = new Map(prepared.createTargets.map((target) => [target.ordinal, target]));
+    const judged = [
+      {
+        name: "the subject",
+        recordType: prepared.recordType,
+        existing: prepared.existingValues,
+        submitted: Object.keys(composition.submittedValues),
+        final: finalValues,
+      },
+      ...creations.flatMap((creation) => {
+        const target = targets.get(creation.ordinal);
+        return target === undefined
+          ? []
+          : [
+              {
+                name: `the created record ${creation.ordinal}`,
+                recordType: target.recordType,
+                existing: {},
+                submitted: Object.keys(creation.finalValues),
+                final: creation.finalValues,
+              },
+            ];
+      }),
+    ];
+    for (const record of judged) {
+      if (record.recordType.systemProjection !== undefined) continue;
+      const dependency = await firstLinkDependencyRefusal(
+        transaction,
+        record.recordType,
+        record.existing,
+        record.submitted,
+        record.final,
+      );
+      if (dependency !== undefined)
+        return safeRefusal(
+          prepared.correlationId,
+          "operation_refused",
+          `${record.name} would hold link ${dependency.childFieldId} that does not belong to its parent ${dependency.parentFieldId} (LINK_DEPENDENCY_${dependency.reason.toUpperCase()})`,
+        );
+    }
   }
   try {
     state.standardOccurrenceId ??= eventOccurrenceIdSchema.parse(ids.occurrence());

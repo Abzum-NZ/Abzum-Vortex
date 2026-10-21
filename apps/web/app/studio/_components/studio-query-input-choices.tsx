@@ -63,7 +63,10 @@ export function StudioQueryInputChoices({
   /** Reports a refusal the control cannot show itself. */
   onEdit: (problem: string | undefined) => void;
 }>) {
-  const [limited, setLimited] = useState(choices !== undefined);
+  // The draft owns the limit: a list means limited (also after Undo or Redo). Only an empty limit
+  // just switched on, before its first choice, is held here.
+  const [opened, setOpened] = useState(false);
+  const limited = choices !== undefined || opened;
   const [added, setAdded] = useState("");
   const list = choices ?? [];
   const apply = (next: readonly QueryInputChoice[] | undefined, merge?: string) =>
@@ -93,7 +96,7 @@ export function StudioQueryInputChoices({
           checked={limited}
           disabled={disabled}
           onCheckedChange={(checked) => {
-            setLimited(checked === true);
+            setOpened(checked === true);
             if (checked !== true && choices !== undefined) apply(undefined);
           }}
         />

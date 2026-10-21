@@ -63,6 +63,7 @@ export const definitionValidationErrorCodes = [
   "definition_records_table_row_edit",
   "definition_records_table_row_actions",
   "definition_records_table_row_action_limit",
+  "definition_records_table_board_row_action",
   "definition_records_table_master_detail",
   "definition_records_table_tree",
   "definition_records_table_grouping",
@@ -171,6 +172,11 @@ const definitionValidationErrorCatalogueSource = {
     order: 39,
     message: "At most three actions can sit beside the row; move the rest to the menu",
     guidance: "Choose Row menu for the remaining actions.",
+  },
+  definition_records_table_board_row_action: {
+    order: 39,
+    message: "A board opens a card through one row action.",
+    guidance: "Keep one row action that opens the record, or turn Board off to offer more.",
   },
   definition_records_table_row_actions: {
     order: 39,

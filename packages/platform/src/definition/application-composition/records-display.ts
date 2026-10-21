@@ -289,23 +289,30 @@ export const readRecordsTableContract = (
  * Why a readable Records table contract cannot be published as authored, as the validation
  * catalogue code whose message is the business sentence, or undefined when it can. The grid mounts
  * only the visible window of a page of more than one hundred rows, which needs its own bounded
- * scroll area.
+ * scroll area; a board card opens through one row action.
  */
 export const recordsTableContractRefusal = (
   contract: RecordsTableContract,
 ):
   | Extract<
       DefinitionValidationErrorCode,
-      "definition_records_table_bounded_scrolling" | "definition_records_table_row_action_limit"
+      | "definition_records_table_bounded_scrolling"
+      | "definition_records_table_row_action_limit"
+      | "definition_records_table_board_row_action"
     >
   | undefined =>
   contract.viewport === "page" && contract.pageSize > RECORDS_TABLE_UNVIRTUALIZED_ROW_LIMIT
     ? "definition_records_table_bounded_scrolling"
-    : contract.features.rowActions.enabled &&
-        contract.rowBehaviours.rowActions.filter((action) => action.placement === "inline").length >
-          3
-      ? "definition_records_table_row_action_limit"
-      : undefined;
+    : // A board card opens through exactly one row action; it has no row menu for more.
+      contract.features.board.enabled &&
+        contract.features.rowActions.enabled &&
+        contract.rowBehaviours.rowActions.length !== 1
+      ? "definition_records_table_board_row_action"
+      : contract.features.rowActions.enabled &&
+          contract.rowBehaviours.rowActions.filter((action) => action.placement === "inline")
+            .length > 3
+        ? "definition_records_table_row_action_limit"
+        : undefined;
 
 /** Reads a Record detail placement's declared detail fields; undefined for earlier releases. */
 export const readRecordDetailContract = (
