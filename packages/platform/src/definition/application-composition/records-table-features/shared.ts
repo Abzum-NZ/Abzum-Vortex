@@ -29,6 +29,9 @@ export const settingField = (value: ComponentSettingValue | undefined): string |
     : "fieldId" in value
       ? String(value.fieldId)
       : String(value.field);
+/** A boolean setting read only when it is a boolean; otherwise absent. */
+export const settingBoolean = (value: ComponentSettingValue | undefined): boolean | undefined =>
+  value?.kind === "boolean" ? value.value : undefined;
 /** A choice setting read only when it names one of the allowed values; otherwise absent. */
 export const settingOptionalChoice = <Choice extends string>(
   value: ComponentSettingValue | undefined,

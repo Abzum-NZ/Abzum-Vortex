@@ -4,6 +4,7 @@ import {
   featureEnabled,
   featureNotPossible,
   recordsTablePivotDateUnits,
+  settingBoolean,
   settingField,
   settingOptionalChoice,
   settingText,
@@ -31,14 +32,16 @@ export type RecordsTableGroupingFieldType = (typeof recordsTableGroupingFieldTyp
  * choice field with a pipeline. `field` is that field, a column of the bound query people can
  * filter by; a date field needs its calendar unit (`dateUnit`, bucketed in the organisation's time
  * zone); `groupPageSize` is how many groups one page shows; `unassignedLabel` names the group of
- * records with no value (or whose value the viewer cannot see). Each part is absent until the
- * builder names it, which the check refuses.
+ * records with no value (or whose value the viewer cannot see); `opensGrouped` is whether the
+ * table opens grouped (the viewer's address may then ungroup it) or flat (the viewer's address may
+ * then group it). Each part is absent until the builder names it, which the check refuses.
  */
 export type RecordsTableGroupingSettings = Readonly<{
   field?: string;
   dateUnit?: RecordsTablePivotDateUnit;
   groupPageSize?: number;
   unassignedLabel?: string;
+  opensGrouped?: boolean;
 }>;
 
 const code = "definition_records_table_grouping" as const;
@@ -52,7 +55,7 @@ const groupable = (field: RecordsTableFieldFacts): boolean =>
  * must be on. Publication and Studio refuse the table until it is.
  */
 export const recordsTableGroupedQueryRefusal = (
-  facts: RecordsTableQueryFacts,
+  facts: Pick<RecordsTableQueryFacts, "queryLabel">,
 ): RecordsTableFeatureCheck =>
   featureNotPossible(
     code,
@@ -80,7 +83,7 @@ export const groupingDefaultsFromQuery = (
 /** What the grouping check reads of the bound query: Studio's Grouped table preset judges the same facts. */
 export type RecordsTableGroupingFacts = Pick<
   RecordsTableQueryFacts,
-  "recordTypeLabel" | "fields" | "unselectedFields"
+  "recordTypeLabel" | "fields" | "unselectedFields" | "grouped" | "queryLabel"
 >;
 
 /**
@@ -146,6 +149,10 @@ export const checkRecordsTableGrouping = (
       code,
       `Set a group page of at most ${RECORDS_TABLE_GROUPING_MAXIMUM_PAGE_SIZE}`,
     );
+  if (state.opensGrouped === undefined)
+    return featureNotPossible(code, "Choose whether the table opens grouped.");
+  // A table that reads a grouped query has no flat rows, so it can only open grouped.
+  if (facts.grouped && !state.opensGrouped) return recordsTableGroupedQueryRefusal(facts);
   if (state.unassignedLabel === undefined)
     return featureNotPossible(code, "Name the group of records that have no value.");
   if (state.unassignedLabel.length > RECORDS_TABLE_GROUPING_MAXIMUM_LABEL_LENGTH)
@@ -167,12 +174,14 @@ export const recordsTableGroupingFeature: RecordsTableFeatureDefinition<RecordsT
       const unassignedLabel = settingText(group["unassigned_label"]);
       const dateUnit = settingOptionalChoice(group["date_unit"], recordsTablePivotDateUnits);
       const groupPageSize = group["group_page_size"];
+      const opensGrouped = settingBoolean(group["opens_grouped"]);
       return {
         enabled: true,
         ...(field === undefined ? {} : { field }),
         ...(dateUnit === undefined ? {} : { dateUnit }),
         ...(groupPageSize?.kind === "number" ? { groupPageSize: groupPageSize.value } : {}),
         ...(unassignedLabel === undefined ? {} : { unassignedLabel }),
+        ...(opensGrouped === undefined ? {} : { opensGrouped }),
       };
     },
     check: checkRecordsTableGrouping,
