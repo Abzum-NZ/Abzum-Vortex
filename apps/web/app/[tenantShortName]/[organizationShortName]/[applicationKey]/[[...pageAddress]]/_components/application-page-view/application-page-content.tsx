@@ -27,7 +27,6 @@ import {
 import {
   describeFailure,
   type ProjectedApplicationFrame,
-  type ReferenceChoiceSelectionEvidence,
   isRecord,
   walkPageComposition,
 } from "@vortex/platform/schema";
@@ -165,16 +164,6 @@ export function ApplicationPageViewContent({
     ) => Promise<void>
   >(async () => undefined);
   const choiceRequestIdsRef = useRef<Record<string, number>>({});
-  const choiceSelectionsRef = useRef<
-    Record<
-      string,
-      Readonly<{
-        key: string;
-        evidence: ReferenceChoiceSelectionEvidence;
-      }>
-    >
-  >({});
-  const choiceDefaultContextsRef = useRef<Record<string, boolean>>({});
   const submittedFormsRef = useRef(new Map<string, SubmittedForm>());
   const continuingFormsRef = useRef(new Map<string, SubmittedForm>());
   /** Set when the person cancels a form a running flow paused at; a board move clears it when it starts. */
@@ -263,25 +252,15 @@ export function ApplicationPageViewContent({
     setFormFeedback({});
   }, [navigationKey]);
 
-  const {
-    choicePayloadFor,
-    choiceEvidenceFor,
-    changeChoiceField,
-    initializeChoiceForm,
-    clearChoiceForm,
-    requestChoicePage,
-  } = useReferenceChoices({
+  const { choicePayloadFor, choiceEvidenceFor, requestChoicePage } = useReferenceChoices({
     setChoicePagesOwner,
     model,
     setChoicePages,
     setDialogChoicePages,
-    choiceSelectionsRef,
-    choiceDefaultContextsRef,
     choiceRequestIdsRef,
     activeChoicePages,
     activeDialogChoicePages,
     currentData,
-    placementRequestsRef,
     application,
     router,
     setNotice,
@@ -303,16 +282,11 @@ export function ApplicationPageViewContent({
     platformComponentRegistry,
     runtimeInputsRef,
     choicePayloadFor,
-    choiceDefaultContextsRef,
     fieldInputControlReleases,
-    choiceSelectionsRef,
     setNotice,
     choiceEvidenceFor,
     requestChoicePageRef,
-    changeChoiceField,
-    initializeChoiceForm,
     currentData,
-    clearChoiceForm,
     dialogFormRef,
     platformThemeTokens,
     committed: (bindingId) =>
@@ -513,7 +487,6 @@ export function ApplicationPageViewContent({
     commitPivotView,
     groupEventsFor,
     requestChoicePageRef,
-    changeChoiceField,
     subject,
     requestedStepId,
     guidedSummaryStepId,
@@ -527,7 +500,6 @@ export function ApplicationPageViewContent({
     formCancelledRef,
     applyDispatch,
     formBlock,
-    initializeChoiceForm,
     selection,
     application,
     activeChoicePages,

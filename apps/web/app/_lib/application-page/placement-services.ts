@@ -12,6 +12,7 @@ import {
   createViewerSafeRecordLinkService,
   decideRecordTypeExport,
   readCurrentOrganizationRuntimeSettingsAfterAuthorization,
+  readCurrentRecordOwnerGroupsAfterAuthorization,
   runtimeDatabasePoolSize,
   type HumanOrganizationRequestDependencies,
   type InstalledRuntimeContext,
@@ -158,6 +159,29 @@ export const createPlacementReadServices = (
     );
   let calendarSettingsRead: ReturnType<typeof loadCalendarSettings> | undefined;
   const readCalendarSettings = () => (calendarSettingsRead ??= loadCalendarSettings());
+  // The viewer's active organisation groups (their teams), read once per request under the
+  // viewer's own verified context; a failure is logged with its cause and reads as unavailable.
+  const loadViewerTeams = async (): Promise<readonly string[] | undefined> => {
+    try {
+      const read = await humanOrganizationRequests(dependencies.identityAuthorityId).run(
+        session,
+        selection,
+        (transaction) => readCurrentRecordOwnerGroupsAfterAuthorization(transaction),
+      );
+      if (read.kind !== "available") {
+        console.error(`[page] viewer teams unavailable: kind=${read.kind}`);
+        return undefined;
+      }
+      return read.value.map((group) => group.groupId);
+    } catch (error) {
+      console.error(
+        `[page] viewer teams unavailable: ${error instanceof Error ? error.message : "unknown"}`,
+      );
+      return undefined;
+    }
+  };
+  let viewerTeamsRead: ReturnType<typeof loadViewerTeams> | undefined;
+  const readViewerTeams = () => (viewerTeamsRead ??= loadViewerTeams());
   // Export is offered to a person whose export permission reaches every record of the table's
   // record type; the export route decides it again on every request. A draft preview offers none.
   const exportAllowed = async (
@@ -224,6 +248,7 @@ export const createPlacementReadServices = (
     queryNotices,
     linkTiles,
     readCalendarSettings,
+    readViewerTeams,
     subjects,
     recordLinkResolver,
     readConcurrently,

@@ -54,6 +54,8 @@ export const pageQueryBindingContext = (
     readSubject: (() => Promise<PageSubjectReadResult>) | undefined;
     subjectRecordTypeId: string | undefined;
     readTimeZone: () => Promise<string | undefined>;
+    /** The viewer's active organisation group identities from the verified request, or undefined. */
+    readViewerTeams: () => Promise<readonly string[] | undefined>;
   }>,
 ): QueryBindingContext => {
   const entries: [string, { settings: unknown; vortex: unknown }][] = [];
@@ -129,6 +131,12 @@ export const pageQueryBindingContext = (
             recordTypeId: facts.currentPersonRecordType,
             recordId: input.context.viewerOrganizationAccountId,
           },
+    // A team is an organisation group the verified viewer is an active member of; the read runs
+    // inside the request's own verified context, once, and only if a binding asks for it.
+    viewerTeams:
+      facts.currentTeamRecordType === undefined
+        ? undefined
+        : { recordTypeId: facts.currentTeamRecordType, read: input.readViewerTeams },
     // The organisation of the verified installed context; no address parameter, control or preview
     // value may choose it.
     viewerOrganisation: String(input.context.organizationId),

@@ -26,11 +26,12 @@ export const queryBindingSourceKinds = [
 export type QueryBindingSourceKind = (typeof queryBindingSourceKinds)[number];
 
 /**
- * The parts of the person viewing the page a binding may use: their directory record, and the
- * organisation they are signed in to (its identity as text). Both come from the verified session
- * on the server, never from an address, a control or a preview request.
+ * The parts of the person viewing the page a binding may use: their directory record, the
+ * organisation they are signed in to (its identity as text), and their team (the organisation group
+ * they are an active member of, as a reference to the group directory). All come from the verified
+ * session on the server, never from an address, a control or a preview request.
  */
-export const currentPersonParts = ["person", "organisation"] as const;
+export const currentPersonParts = ["person", "organisation", "team"] as const;
 export type CurrentPersonPart = (typeof currentPersonParts)[number];
 
 /** The dates a relative date counts from, each in the organisation's time zone. */

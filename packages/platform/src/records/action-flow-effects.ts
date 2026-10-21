@@ -132,6 +132,11 @@ const inputValue = (
         candidate.length > input.validation.maximumLength)
     )
       return undefined;
+    if (
+      input.validation?.choices !== undefined &&
+      !input.validation.choices.some((choice) => choice.value === candidate)
+    )
+      return undefined;
     if (input.validation?.pattern !== undefined) {
       const pattern = compileTextInputPattern(input.validation.pattern);
       if (pattern === undefined || !pattern.test(candidate)) return undefined;

@@ -194,8 +194,6 @@ export type ChoiceInputPayload = Readonly<{
   options?: readonly ChoiceOption[];
   optionEvidence?: Readonly<Record<string, ReferenceChoiceSelectionEvidence>>;
   nextContinuationToken?: string;
-  /** The current parent option key of a dependent Choice, used to reset local edits. */
-  dependencyKey?: string | null;
   error?: string;
 }>;
 
@@ -679,7 +677,7 @@ const parseDateTimeInputPayload = (
   });
 };
 
-/** The ready values a choice input accepts; `dependencyKey` resets a dependent Choice. */
+/** The ready values a choice input accepts. */
 export const parseChoiceInputPayload = (
   value: unknown,
   location: DefinitionRenderErrorLocation = {},
@@ -689,24 +687,9 @@ export const parseChoiceInputPayload = (
     return fail(`Expected 'choice_input' projected values, got '${String(record.kind)}'`, location);
   requireExactKeys(
     record,
-    [
-      "kind",
-      "value",
-      "options",
-      "optionEvidence",
-      "nextContinuationToken",
-      "error",
-      "dependencyKey",
-    ],
+    ["kind", "value", "options", "optionEvidence", "nextContinuationToken", "error"],
     location,
   );
-  const { dependencyKey } = record;
-  if (
-    dependencyKey !== undefined &&
-    dependencyKey !== null &&
-    !builderKeySchema.safeParse(dependencyKey).success
-  )
-    return fail("A Choice dependency must be an offered option key or null", location);
   const options =
     record.options === undefined ? undefined : parseChoiceOptions(record.options, location);
   let optionEvidence: Readonly<Record<string, ReferenceChoiceSelectionEvidence>> | undefined;
@@ -747,7 +730,6 @@ export const parseChoiceInputPayload = (
     ...(options === undefined ? {} : { options }),
     ...(optionEvidence === undefined ? {} : { optionEvidence }),
     ...(nextContinuationToken === undefined ? {} : { nextContinuationToken }),
-    ...(dependencyKey === undefined ? {} : { dependencyKey: dependencyKey as string | null }),
     ...optionalError(record, location),
   });
 };
