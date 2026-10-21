@@ -9,7 +9,7 @@ create or replace function vortex_record.run_module_query(
   p_requested_system_field_keys jsonb,
   p_user_inputs jsonb,
   p_direction text,
-  p_exact_record_id uuid
+  p_exact_record_ids uuid[]
 )
 returns jsonb
 language plpgsql
@@ -215,6 +215,18 @@ begin
     or p_page_size is null or p_page_size not between 1 and 200 then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
   end if;
+  -- An exact read names 1..200 distinct, non-nil record ids and asks for exactly that many rows.
+  if p_exact_record_ids is not null and (
+    pg_catalog.array_ndims(p_exact_record_ids) <> 1
+    or pg_catalog.cardinality(p_exact_record_ids) not between 1 and 200
+    or pg_catalog.cardinality(p_exact_record_ids) <> p_page_size
+    or pg_catalog.array_position(p_exact_record_ids, null) is not null
+    or '00000000-0000-0000-0000-000000000000'::uuid = any (p_exact_record_ids)
+    or (select pg_catalog.count(distinct exact_id.id) from pg_catalog.unnest(p_exact_record_ids) as exact_id(id))
+      <> pg_catalog.cardinality(p_exact_record_ids)
+  ) then
+    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
+  end if;
   for field_item in select item.value from pg_catalog.jsonb_array_elements(p_requested_field_ids) as item(value) loop
     if pg_catalog.jsonb_typeof(field_item) <> 'string'
       or pg_catalog.lower(field_item #>> '{}') !~ uuid_pattern
@@ -255,7 +267,7 @@ begin
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
   end if;
   -- A board's first pages: every requested column, each from its start.
-  if board_columns_mode and (p_direction <> 'forward' or p_exact_record_id is not null
+  if board_columns_mode and (p_direction <> 'forward' or p_exact_record_ids is not null
     or (p_after is not null and p_after <> 'null'::jsonb)) then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
   end if;
@@ -271,7 +283,7 @@ begin
   end if;
   tree_mode := p_user_inputs ? 'tree';
   if tree_mode and (board_member_mode or group_member_mode or p_user_inputs ? 'grouping'
-    or p_exact_record_id is not null) then
+    or p_exact_record_ids is not null) then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
   end if;
   if group_member_mode then
@@ -338,7 +350,7 @@ begin
   if board_member_mode and (
     pg_catalog.jsonb_array_length(user_sort) <> 0
     -- The search plan is read further down; a board member read carries no search term at all.
-    or (p_exact_record_id is null and nullif(pg_catalog.btrim(p_user_inputs ->> 'search'), '') is not null)
+    or nullif(pg_catalog.btrim(p_user_inputs ->> 'search'), '') is not null
     or pg_catalog.cardinality(declared_sortable_ids) <> 0
     or pg_catalog.cardinality(declared_searchable_ids) <> 0
   ) then
@@ -373,7 +385,7 @@ begin
   context_organization_id := (prepared_plan #>> '{scope,organizationId}')::uuid;
   context_application_root_id := (prepared_plan #>> '{scope,applicationRootId}')::uuid;
   preview_mode := prepared_plan ? 'preview';
-  if p_exact_record_id is not null and record_type_item ? 'systemProjection' then
+  if p_exact_record_ids is not null and record_type_item ? 'systemProjection' then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
   end if;
   for field_item in
@@ -417,7 +429,7 @@ begin
   if coalesce((query_item ->> 'relationshipHops')::integer, 0) <> 0 then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'relationship_invalid');
   end if;
-  if p_page_size > coalesce((query_item ->> 'pageSize')::integer, 0) then
+  if p_exact_record_ids is null and p_page_size > coalesce((query_item ->> 'pageSize')::integer, 0) then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'page_size_invalid');
   end if;
   prepared_plan := vortex_record.prepare_module_query_internal(
@@ -471,7 +483,7 @@ begin
     tree_relationship_id := (tree_item ->> 'relationshipId')::uuid;
   end if;
   search_plan := vortex_record.query_search_plan_internal(
-    p_user_inputs, fields_by_id, declared_searchable_ids, p_exact_record_id);
+    p_user_inputs, fields_by_id, declared_searchable_ids);
   if search_plan ->> 'outcome' <> 'completed' then return search_plan; end if;
   user_search := search_plan ->> 'search';
   select coalesce(pg_catalog.array_agg(item.value), array[]::text[]) into search_field_ids
@@ -1053,7 +1065,7 @@ begin
      from %s
      where stored.organisation_id = $1
        and stored.lifecycle_state = ''active''
-       and ($12 is null or stored.record_id = $12)
+       and ($12::uuid[] is null or stored.record_id = any ($12))
        and %s
        and (%s)
         and (case when (%s) then true else false end)%s%s
@@ -1090,7 +1102,7 @@ begin
     using context_organization_id, context_application_root_id, after_sort_key,
       after_record_id, scan_limit + 1, access_owner_account_id,
       access_owner_group_ids, access_shared_record_ids,
-      filter_parameters, access_parameters, projection_batch, p_exact_record_id,
+      filter_parameters, access_parameters, projection_batch, p_exact_record_ids,
       board_column_value, board_option_values, group_selector_values, tree_parent_id;
   cursor_position := 0;
   loop
@@ -1475,10 +1487,10 @@ begin
   ) else '{}'::jsonb end;
 end
 $function$;
-alter function vortex_record.run_module_query(uuid,uuid,bigint,jsonb,jsonb,integer,jsonb,jsonb,jsonb,text,uuid) owner to vortex_record_adapter;
-revoke all on function vortex_record.run_module_query(uuid, uuid, bigint, jsonb, jsonb, integer, jsonb, jsonb, jsonb, text, uuid)
+alter function vortex_record.run_module_query(uuid,uuid,bigint,jsonb,jsonb,integer,jsonb,jsonb,jsonb,text,uuid[]) owner to vortex_record_adapter;
+revoke all on function vortex_record.run_module_query(uuid, uuid, bigint, jsonb, jsonb, integer, jsonb, jsonb, jsonb, text, uuid[])
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-grant execute on function vortex_record.run_module_query(uuid, uuid, bigint, jsonb, jsonb, integer, jsonb, jsonb, jsonb, text, uuid)
+grant execute on function vortex_record.run_module_query(uuid, uuid, bigint, jsonb, jsonb, integer, jsonb, jsonb, jsonb, text, uuid[])
   to vortex_request;
-comment on function vortex_record.run_module_query(uuid, uuid, bigint, jsonb, jsonb, integer, jsonb, jsonb, jsonb, text, uuid) is
-  'One bounded keyset page of rows readable through read_record for one installed Module query, or one exact current human-owned preview query over isolated preview storage, each carrying the record''s concurrency number and the per-row capabilities from read_record_capabilities, each action decided exactly as its own writer decides it, with only the declared Record system values, or one refusal before any row is exposed; accepts a bound list component''s declared sortable, filterable and searchable field sets together with the viewer''s chosen sort, typed filter and search term, refuses a sort or filter outside the declared sets, keeps a user sort only over a field the record type declares sortable and the reader is guaranteed to see, ANDs the user filter with the published filter so it can only narrow, and matches a search only through searchable fields the returned row exposes to the reader; returns with every plain page and board column read, even an empty one, the reader''s current field bound (the fields it is guaranteed to see on every record it may read, and whether any searchable field is among them) so a list offers and accepts its filter, search and sort controls from the same read; requires every filtered field to be declared filterable; pushes a filter or a sort into the candidate scan only for fields the reader is guaranteed to see for the whole record type, evaluates a filter on a possibly-withheld field per row, and keeps the keyset cursor over readable sort values and a record identity so no cursor carries a hidden field value and the scan order and budget never depend on one; narrows an installed scan with one predicate that OR-s every eligible alternative''s exact owner, owner-group and direct-share route test with its saved condition compiled over the record''s own catalogue columns where that condition can be expressed as a superset of the per-row decision, leaves the installed scan unrestricted where a route or condition has no exact stored form, and still decides every returned row through read_record; validates every preview stage against the current human, candidate revision and exact release and storage pins, uses only active preview catalogue mappings and preview field bounds, and never falls through to installed resolution; works out read-time fields, such as a deadline-passed calculation, inside an installed query at one statement timestamp in the organisation time zone, so no installed query is refused for freshness; admits board members only through a separately validated board selector over the sole filterable choice grouping key, reads one column''s member page or, for a board''s first pages, the first page of every requested column in one invocation with its own budget and position per column, classifies those columns from current readable values and, when the choice field is guaranteed readable on every scanned row, narrows each column''s candidate scan to its own stored choice value so a column reads only its own cards, and admits generic grouped members only when every installed grouping value is present in the current readable projection and JSONB-equal to the closed typed selector; missing or withheld values belong to no generic group while JSON null is a value, and generic group membership never uses hidden stored values, and a grid dimension narrows the stored candidate scan only after the field is proven guaranteed readable, with date bucket membership using the same authored-zone canonical value as the summary and typed half-open calendar ranges; reads one level of a tree over a one-record link of the record type to itself, either the roots (records whose parent no access-readable record holds, so an unreadable parent is never revealed) or the children of one parent, through the same keyset order, access scan and exact per-row decision as a plain page, requiring the parent link to be a field the reader is guaranteed to see and reporting for every returned record, from one bounded set of rounds over the whole page rather than one query per row, whether the reader may read a child of it; orders board pages by record identity and generic members by the requested or query order with bidirectional keysets, returns generic group identity and the reader''s field bound even for empty pages, and binds each member operation, selector and projection in its own uncached continuation; reads the copied records of a preview like installed ones and refuses a system projection in a preview.';
+comment on function vortex_record.run_module_query(uuid, uuid, bigint, jsonb, jsonb, integer, jsonb, jsonb, jsonb, text, uuid[]) is
+  'One bounded keyset page of rows readable through read_record for one installed Module query, or one exact current human-owned preview query over isolated preview storage, each carrying the record''s concurrency number and the per-row capabilities from read_record_capabilities, each action decided exactly as its own writer decides it, with only the declared Record system values, or one refusal before any row is exposed; accepts a bound list component''s declared sortable, filterable and searchable field sets together with the viewer''s chosen sort, typed filter and search term, refuses a sort or filter outside the declared sets, keeps a user sort only over a field the record type declares sortable and the reader is guaranteed to see, ANDs the user filter with the published filter so it can only narrow, and matches a search only through searchable fields the returned row exposes to the reader; returns with every plain page and board column read, even an empty one, the reader''s current field bound (the fields it is guaranteed to see on every record it may read, and whether any searchable field is among them) so a list offers and accepts its filter, search and sort controls from the same read; requires every filtered field to be declared filterable; pushes a filter or a sort into the candidate scan only for fields the reader is guaranteed to see for the whole record type, evaluates a filter on a possibly-withheld field per row, and keeps the keyset cursor over readable sort values and a record identity so no cursor carries a hidden field value and the scan order and budget never depend on one; narrows an installed scan with one predicate that OR-s every eligible alternative''s exact owner, owner-group and direct-share route test with its saved condition compiled over the record''s own catalogue columns where that condition can be expressed as a superset of the per-row decision, leaves the installed scan unrestricted where a route or condition has no exact stored form, and still decides every returned row through read_record; validates every preview stage against the current human, candidate revision and exact release and storage pins, uses only active preview catalogue mappings and preview field bounds, and never falls through to installed resolution; works out read-time fields, such as a deadline-passed calculation, inside an installed query at one statement timestamp in the organisation time zone, so no installed query is refused for freshness; admits board members only through a separately validated board selector over the sole filterable choice grouping key, reads one column''s member page or, for a board''s first pages, the first page of every requested column in one invocation with its own budget and position per column, classifies those columns from current readable values and, when the choice field is guaranteed readable on every scanned row, narrows each column''s candidate scan to its own stored choice value so a column reads only its own cards, and admits generic grouped members only when every installed grouping value is present in the current readable projection and JSONB-equal to the closed typed selector; missing or withheld values belong to no generic group while JSON null is a value, and generic group membership never uses hidden stored values, and a grid dimension narrows the stored candidate scan only after the field is proven guaranteed readable, with date bucket membership using the same authored-zone canonical value as the summary and typed half-open calendar ranges; reads one level of a tree over a one-record link of the record type to itself, either the roots (records whose parent no access-readable record holds, so an unreadable parent is never revealed) or the children of one parent, through the same keyset order, access scan and exact per-row decision as a plain page, requiring the parent link to be a field the reader is guaranteed to see and reporting for every returned record, from one bounded set of rounds over the whole page rather than one query per row, whether the reader may read a child of it; orders board pages by record identity and generic members by the requested or query order with bidirectional keysets, returns generic group identity and the reader''s field bound even for empty pages, and binds each member operation, selector and projection in its own uncached continuation; reads the copied records of a preview like installed ones and refuses a system projection in a preview; with a list of 1 to 200 distinct record ids it reads exactly those records in one page, each under the same scope, release, filter, search and readability decision as any row, and returns only those readable now.';

@@ -220,8 +220,12 @@ const recordChoices = async (
     inputValues: bound === undefined ? {} : { [bound.key]: bound.value },
     requestedFieldIds: [command.labelFieldId],
     searchableFieldIds: [command.labelFieldId],
-    ...(command.search === undefined ? {} : { search: command.search }),
-    ...(command.exactRecordId === undefined ? {} : { exactRecordId: command.exactRecordId }),
+    // A selected record is re-read by identity alone: the search only narrows pages of choices.
+    ...(command.exactRecordId !== undefined
+      ? { exactRecordIds: [command.exactRecordId] }
+      : command.search === undefined
+        ? {}
+        : { search: command.search }),
     pageSize:
       command.exactRecordId === undefined ? Math.min(command.pageSize, source.query.pageSize) : 1,
     ...(command.continuationToken === undefined

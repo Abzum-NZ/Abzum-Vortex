@@ -98,7 +98,7 @@ const readPage = async (
       ${JSON.stringify(command.requestedSystemFieldKeys)}::text::jsonb,
       ${JSON.stringify(userQueryInputs(command))}::text::jsonb,
       ${command.pageDirection ?? "forward"}::text,
-      ${command.exactRecordId ?? null}::uuid
+      ${command.exactRecordIds === undefined ? null : `{${command.exactRecordIds.join(",")}}`}::text::uuid[]
     ) as result
   `;
   return pageReadSchema.parse(one(rows));
@@ -113,7 +113,7 @@ export const runCommand = async (
 ): Promise<ProtectedQueryResult> => {
   const applicationRootId = scope.applicationRootId;
   if (applicationRootId === undefined) return refusal("request_invalid");
-  if (command.exactRecordId !== undefined && command.continuationToken !== undefined)
+  if (command.exactRecordIds !== undefined && command.continuationToken !== undefined)
     return refusal("request_invalid");
 
   // A user sort or filter outside the component-declared sets is refused before any read.
@@ -179,7 +179,7 @@ export const runCommand = async (
     let fieldBounds: ProtectedQueryPage["fieldBounds"] | undefined;
     for (
       let call = 0;
-      call < (command.exactRecordId === undefined ? tableReadCallsPerRequest : 1);
+      call < (command.exactRecordIds === undefined ? tableReadCallsPerRequest : 1);
       call += 1
     ) {
       const page = await readPage(
@@ -288,7 +288,7 @@ export const runCommand = async (
     };
   };
 
-  if (cache === undefined || command.exactRecordId !== undefined) return load();
+  if (cache === undefined || command.exactRecordIds !== undefined) return load();
   const plan = await planCache(transaction, scope, command, applicationRootId, declared, cache);
   if (plan === undefined) return load();
   const { value } = await readThroughQueryCache<ProtectedQueryResult>({

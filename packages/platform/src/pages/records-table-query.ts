@@ -653,7 +653,7 @@ const readGrouped = async (
   const selector = recordsTableGroupSelector(group.fieldId, opened);
   // A group's members are never one exact record, so the grouped command has no such part.
   const memberBase: Record<string, unknown> = { ...built.command };
-  delete memberBase["exactRecordId"];
+  delete memberBase["exactRecordIds"];
   const memberCommand = protectedQueryGroupedMembersCommandSchema.safeParse({
     ...memberBase,
     selector,

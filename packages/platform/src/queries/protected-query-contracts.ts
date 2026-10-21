@@ -118,8 +118,18 @@ export const protectedQueryCommandSchema = z
     pageSize: z.number().int().min(1).max(200),
     pageDirection: z.enum(["forward", "backward"]).optional(),
     continuationToken: z.string().min(1).max(65_536).optional(),
-    /** Narrows the installed query to one record under its ordinary viewer authority. */
-    exactRecordId: recordIdSchema.optional(),
+    /**
+     * Narrows the installed query to these records (1 to 200 distinct ids, exactly `pageSize` of
+     * them) under their ordinary viewer authority: only those readable now come back.
+     */
+    exactRecordIds: z
+      .array(recordIdSchema)
+      .min(1)
+      .max(200)
+      .refine((ids) => new Set(ids.map((id) => id.toLowerCase())).size === ids.length, {
+        message: "Each exact record is named once",
+      })
+      .optional(),
   })
   .strict();
 export type ProtectedQueryCommand = z.infer<typeof protectedQueryCommandSchema>;
@@ -280,7 +290,7 @@ export type ProtectedQueryPivot = z.infer<typeof protectedQueryPivotSchema>;
 
 /** One uncached, ordered, bidirectional page of currently readable members of a group. */
 export const protectedQueryGroupedMembersCommandSchema = protectedQueryCommandSchema
-  .omit({ exactRecordId: true })
+  .omit({ exactRecordIds: true })
   .extend({
     selector: protectedQueryGroupSelectorSchema,
     /** A grid's authored dimension overrides the query's grouping defaults. */
@@ -504,7 +514,7 @@ export type ProtectedQueryGroupedMembersResult = z.infer<
  * Records table's own read shape, so the viewer's sort, filter and search apply at every level.
  */
 export const protectedQueryTreeLevelCommandSchema = protectedQueryCommandSchema
-  .omit({ exactRecordId: true })
+  .omit({ exactRecordIds: true })
   .extend({
     /** The record type's link to itself that makes a record the child of another. */
     parentFieldId: fieldIdSchema,
