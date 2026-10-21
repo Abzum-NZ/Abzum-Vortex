@@ -191,7 +191,8 @@ declare
   group_key text;
   group_member_matches boolean;
   group_scan_predicate text;
-  group_link_field_id text; group_link_cache jsonb := '{}'::jsonb; group_link_state jsonb;
+  group_link_field_id text; group_link_cache jsonb := '{}'::jsonb; group_link_values jsonb[];
+  group_link_scan_sql text := 'null::jsonb';
   preview_mode boolean := false;
   -- A tree level: the roots of a tree (records with no readable parent) or the
   -- children of one parent, over a one-record link of the record type to itself.
@@ -740,10 +741,14 @@ begin
       return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
     end if;
     filter_predicate := '(' || filter_predicate || ') and (' || group_scan_predicate || ')';
+    if group_selector_values -> group_key = '"not_available"'::jsonb then
+      group_link_scan_sql := pg_catalog.format('stored.%I', mapping_row.physical_column_token);
+    end if;
     if fields_by_id -> group_key ->> 'type' = 'link' then
       group_link_field_id := group_key;
-      if (vortex_record.group_link_unreadable_internal(group_link_cache, group_selector_values -> group_key,
-        fields_by_id -> group_key) ->> 'matches')::boolean then
+      group_link_cache := vortex_record.group_link_unreadable_internal(
+        group_link_cache, array[group_selector_values -> group_key], fields_by_id -> group_key);
+      if coalesce((group_link_cache ->> (group_selector_values -> group_key ->> 'recordId'))::boolean, false) then
         return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'read_forbidden');
       end if;
     end if;
@@ -1079,7 +1084,8 @@ begin
        array[%s]::text[] as sort_key,
        pg_catalog.jsonb_build_object(%s) as filter_values,
        pg_catalog.jsonb_build_object(%s) as system_values,
-       %s as projection_row
+       %s as projection_row,
+       %s as group_link_value
      from %s
      where stored.organisation_id = $1
        and stored.lifecycle_state = ''active''
@@ -1106,6 +1112,7 @@ begin
      ) as filter_chunk),
     system_columns_sql,
     scan_projection_sql,
+    group_link_scan_sql,
     scan_source_sql,
     case when storage_scope = 'application_contained'
       then 'stored.application_root_id = $2' else 'stored.application_root_id is null' end,
@@ -1309,11 +1316,22 @@ begin
             );
             if group_member_matches and group_link_field_id is not null
               and group_selector_values -> group_link_field_id = '"not_available"'::jsonb then
-              -- The group of unreadable targets: each distinct target is decided once per call.
-              group_link_state := vortex_record.group_link_unreadable_internal(
-                group_link_cache, readable_values -> group_link_field_id, fields_by_id -> group_link_field_id);
-              group_link_cache := group_link_state -> 'cache';
-              group_member_matches := (group_link_state ->> 'matches')::boolean;
+              -- The group of unreadable targets: one protected title batch decides the targets of this
+              -- row and the page's next candidates together; the cache holds each target once per call.
+              if pg_catalog.jsonb_typeof(readable_values -> group_link_field_id) = 'object'
+                and not (group_link_cache ? (readable_values -> group_link_field_id ->> 'recordId')) then
+                group_link_values := array[readable_values -> group_link_field_id];
+                while pg_catalog.cardinality(group_link_values) <= p_page_size loop
+                  fetch scan_cursor into lookahead_record;
+                  exit when not found;
+                  group_link_values := pg_catalog.array_append(group_link_values, lookahead_record.group_link_value);
+                end loop;
+                move absolute cursor_position from scan_cursor;
+                group_link_cache := vortex_record.group_link_unreadable_internal(
+                  group_link_cache, group_link_values, fields_by_id -> group_link_field_id);
+              end if;
+              group_member_matches := coalesce(
+                (group_link_cache ->> (readable_values -> group_link_field_id ->> 'recordId'))::boolean, false);
             elsif group_member_matches then
               select pg_catalog.jsonb_object_agg(grouped.id, vortex_record.grouping_value_internal(
                 readable_values -> grouped.id, fields_by_id -> grouped.id ->> 'type', p_user_inputs #> '{grouping,dateBucket}'
