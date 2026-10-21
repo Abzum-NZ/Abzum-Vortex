@@ -1,7 +1,4 @@
-import {
-  applicationRoleReviewVolumeMessage,
-  type ApplicationSourceDocument,
-} from "@vortex/platform/schema";
+import type { ApplicationSourceDocument } from "@vortex/platform/schema";
 import type { StudioCompileFailure, StudioDataSelection } from "@vortex/ui/studio";
 
 /** Why the saved draft does not compile, in words, and the Data tab item to change when it is one. */
@@ -32,8 +29,6 @@ export const describeStudioCompileFailure = (
   failure: StudioCompileFailure,
   source: ApplicationSourceDocument,
 ): StudioCompileProblem => {
-  if (failure.reasonCode === "vortex.definition.application_role_review_volume")
-    return { message: applicationRoleReviewVolumeMessage, selection: null };
   // A rule with its own business sentence says it as it is, exactly as Studio showed it beforehand.
   if (failure.sentence !== undefined) return { message: failure.sentence, selection: null };
   if (failure.reasonCode === "vortex.definition.application_query_exposure") {

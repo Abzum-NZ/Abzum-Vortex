@@ -3,7 +3,6 @@ import type {
   DefinitionRuleFailureFamily,
   DefinitionValidationLocation,
 } from "../schema";
-import { applicationRoleReviewVolumeMessage } from "./application-role-review-volume";
 
 export const definitionCompilerRefusalCodes = Object.freeze([
   "vortex.definition.ambiguous_definition",
@@ -158,11 +157,7 @@ export class DefinitionCompilationError extends Error {
     sentence?: string,
   ) {
     assertDefinitionCompilerRefusalCode(ruleCode);
-    super(
-      ruleCode === "vortex.definition.application_role_review_volume"
-        ? applicationRoleReviewVolumeMessage
-        : ruleCode,
-    );
+    super(ruleCode);
     this.name = "DefinitionCompilationError";
     this.ruleCode = ruleCode;
     this.family = family;
