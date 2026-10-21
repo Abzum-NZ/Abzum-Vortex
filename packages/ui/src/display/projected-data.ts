@@ -18,6 +18,7 @@ import {
   type RecordsTableFilterValue,
   type RecordsTableSortKey,
   type RecordsTableSortState,
+  type RecordsTableExportFormat,
   RECORDS_TABLE_MAXIMUM_SORT_KEYS,
   gridLayoutStateSchema,
   type GridLayout,
@@ -496,7 +497,11 @@ export type DisplaySemanticEvent =
   /** Widens the selection to every matching record, or clears it (and a finished run's summary). */
   | Readonly<{ event: "selection_scope_changed"; scope: "matching" | "cleared" }>
   /** Downloads the rows ticked on the page, the records of the current view, or every matching record. */
-  | Readonly<{ event: "export_requested"; scope: "selected" | "view" | "matching" }>
+  | Readonly<{
+      event: "export_requested";
+      scope: "selected" | "view" | "matching";
+      format: RecordsTableExportFormat;
+    }>
   /** Stops the export in progress; no file is saved. */
   | Readonly<{ event: "export_cancelled" }>
   | Readonly<{

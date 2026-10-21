@@ -5,6 +5,7 @@ import {
   authoredGridLayout,
   isRecord,
   sameId,
+  recordsTableColumnWidth,
   type GridLayout,
   type IdentitySession,
   type JsonValue,
@@ -15,17 +16,20 @@ import {
 } from "../../schema";
 import {
   createHumanOrganizationRequestService,
+  readCurrentOrganizationRuntimeSettingsAfterAuthorization,
   type HumanOrganizationRequestDependencies,
 } from "../../access/index";
 import {
   createProtectedQueryService,
   prepareRecordsExport,
   recordsCsvFormat,
+  recordsXlsxFormat,
   type QueryContinuationKey,
   type RecordsExportCell,
   type RecordsExportFormat,
   type RecordsExportOutcome,
   type RecordsExportPage,
+  type RecordsXlsxColumn,
 } from "../../queries/index";
 import type { ProtectedQueryRow } from "../../queries/protected-query-contracts";
 import { recordLinkLabelKey } from "../../definition/app-index";
@@ -97,7 +101,49 @@ const failureReason = (cause: unknown): string =>
     ? cause.reason
     : "preparation_failed";
 
-type ExportColumn = Readonly<{ fieldId: string; label: string; field: PlacementField }>;
+type ExportColumn = Readonly<{
+  fieldId: string;
+  label: string;
+  field: PlacementField;
+  width: number;
+}>;
+
+/** Totals inherit their source precision; ordinary money has no declared decimal scale. */
+const columnScale = (
+  field: PlacementField,
+  fields: readonly PlacementField[],
+  visited: ReadonlySet<string> = new Set(),
+): number | "value" => {
+  if (visited.has(String(field.fieldId))) throw exportFailure("column_precision_cycle");
+  if ("decimalPlaces" in field.settings && field.settings.decimalPlaces !== undefined)
+    return field.settings.decimalPlaces;
+  if (field.type === "total" && field.settings.fieldId !== undefined) {
+    const source = fields.find((candidate) => sameId(candidate.fieldId, field.settings.fieldId!));
+    if (source === undefined) throw exportFailure("column_precision_unavailable");
+    return columnScale(source, fields, new Set([...visited, String(field.fieldId)]));
+  }
+  return "value";
+};
+
+const xlsxColumns = (
+  columns: readonly ExportColumn[],
+  fields: readonly PlacementField[],
+): readonly RecordsXlsxColumn[] =>
+  columns.map(({ field, width }) => {
+    const type = valueTypeOf(field);
+    switch (type) {
+      case "decimal_number":
+      case "money":
+        return { type, width, scale: columnScale(field, fields) };
+      case "whole_number":
+      case "date":
+      case "date_time":
+      case "yes_no":
+        return { type, width };
+      default:
+        return { type: "text", width };
+    }
+  });
 
 /** The value type a column's cells carry: a calculation's or total's result type, else its own. */
 const valueTypeOf = (field: PlacementField): string =>
@@ -379,9 +425,14 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
       const { installed, contract, recordTypeId } = placement;
       const feature = contract.features.export;
       // Every request is judged again: a disabled export compiles to nothing and is refused here.
-      if (!feature.enabled || feature.maxRows === undefined || !feature.formats.includes("csv")) {
+      if (!feature.enabled || feature.maxRows === undefined) {
         refuse("feature_off");
         return notAvailable;
+      }
+      if (!feature.formats.includes(request.format)) {
+        refuse("format_not_authored");
+        await audit(session, address, recordTypeId, [], "refused");
+        return { kind: "refused", reason: "format_not_authored" };
       }
       const maxRows = feature.maxRows;
       const preview = address.selection.previewInstallationId !== undefined;
@@ -407,6 +458,7 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
           : await decideRecordTypeFieldIds(transaction, scope, installed, recordTypeId, "read");
         return {
           kind: "permitted" as const,
+          accessVersion: scope.accessVersion,
           exportFieldIds: permission.fieldIds,
           layout: await effectiveLayout(
             transaction,
@@ -455,7 +507,10 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
           (exportFieldIds !== undefined && !exportFieldIds.has(fieldId.toLowerCase()))
         )
           return [];
-        return [{ fieldId: fieldId.toLowerCase(), label, field }];
+        const width =
+          layout.columns.find((column) => sameField(column.fieldId, fieldId))?.width ??
+          recordsTableColumnWidth(declared);
+        return [{ fieldId: fieldId.toLowerCase(), label, field, width }];
       });
       if (columns.length === 0) {
         refuse("no_exportable_columns");
@@ -470,6 +525,27 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
       if (descriptor === undefined) {
         await audit(session, address, recordTypeId, columnIds, "refused");
         return { kind: "refused", reason: "changed" };
+      }
+      let timeZone = descriptor.timeZone;
+      if (request.format === "xlsx" && timeZone === undefined) {
+        const settings = await requests.run(
+          session,
+          address.selection,
+          async (transaction, scope) => ({
+            settings: await readCurrentOrganizationRuntimeSettingsAfterAuthorization(transaction),
+            accessVersion: scope.accessVersion,
+          }),
+        );
+        if (
+          settings.kind !== "available" ||
+          settings.value.accessVersion !== decided.value.accessVersion ||
+          settings.value.settings === undefined
+        ) {
+          refuse("time_zone_unavailable", settings.kind);
+          await audit(session, address, recordTypeId, columnIds, "refused");
+          return unavailable;
+        }
+        timeZone = settings.value.settings.timeZone;
       }
       const matching = request.selection.kind === "matching";
       const built = buildRecordsTableQueryCommand({
@@ -706,9 +782,20 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
         } while (continuationToken !== undefined);
       }
 
-      const format: RecordsExportFormat = recordsCsvFormat();
       let prepared: Awaited<ReturnType<typeof prepareRecordsExport>>;
       try {
+        const format: RecordsExportFormat =
+          request.format === "xlsx"
+            ? await recordsXlsxFormat({
+                columns: xlsxColumns(
+                  columns,
+                  installed.releaseSet.modules.flatMap((module) =>
+                    module.content.recordTypes.flatMap((record) => record.fields),
+                  ),
+                ),
+                timeZone: timeZone!,
+              })
+            : recordsCsvFormat();
         prepared = await prepareRecordsExport({
           name: String(placement.query.key),
           labels: columns.map((column) => column.label),

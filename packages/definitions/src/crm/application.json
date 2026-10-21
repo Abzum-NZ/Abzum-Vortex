@@ -1095,7 +1095,7 @@
                       },
                       "export": {
                         "enabled": true,
-                        "formats": ["csv"],
+                        "formats": ["csv", "xlsx"],
                         "max_rows": 10000
                       },
                       "conditional_formatting": {

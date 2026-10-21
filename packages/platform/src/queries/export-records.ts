@@ -98,7 +98,8 @@ export const recordsCsvFormat = (): RecordsExportFormat => {
 export type RecordsXlsxColumn = Readonly<
   { width: number } & (
     | { type: "text" | "whole_number" | "date" | "date_time" | "yes_no" }
-    | { type: "decimal_number" | "money"; scale: number }
+    // Fields without declared precision explicitly preserve the stored amount's scale.
+    | { type: "decimal_number" | "money"; scale: number | "value" }
   )
 >;
 
@@ -296,6 +297,7 @@ export const recordsXlsxFormat = async (
           throw exportError("column_type_invalid");
         if (
           (column.type === "decimal_number" || column.type === "money") &&
+          column.scale !== "value" &&
           (!Number.isInteger(column.scale) || column.scale < 0 || column.scale > 12)
         )
           throw exportError("number_scale_invalid");
@@ -343,11 +345,11 @@ export const recordsXlsxFormat = async (
             case "money": {
               if (column.type !== "decimal_number" && column.type !== "money")
                 throw exportError("column_cell_type_mismatch");
-              target.value = excelNumber(
-                cell.type === "money" ? cell.value.amount : cell.value,
-                column.scale,
-              );
-              const numberFormat = column.scale === 0 ? "0" : `0.${"0".repeat(column.scale)}`;
+              const amount = cell.type === "money" ? cell.value.amount : cell.value;
+              const scale =
+                column.scale === "value" ? parseExactDecimal(amount)!.scale : column.scale;
+              target.value = excelNumber(amount, scale);
+              const numberFormat = scale === 0 ? "0" : `0.${"0".repeat(scale)}`;
               target.numFmt =
                 cell.type === "money" ? `"${cell.value.currency}" ${numberFormat}` : numberFormat;
               break;
