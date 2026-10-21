@@ -97,6 +97,7 @@ declare
   physical_table_token text;
   storage_scope text;
   scan_source_sql text;
+  search_prefilter_sql text := 'true';
   scan_projection_sql text := 'null::jsonb';
   projection_page_scan boolean := false;
   projection_sort_key text;
@@ -987,6 +988,11 @@ begin
   if projection_page_scan then
     -- The bounded reader has already applied the sealed keyset and order.
     segment_predicates := array[''];
+  else
+    -- A search narrows the candidate scan, and so the budget, through the one shared
+    -- stored-value pre-predicate; the per-row search match below stays the decision.
+    search_prefilter_sql := vortex_record.query_search_prefilter_internal(
+      v_storage_contract_id, fields_by_id, search_field_ids, readable_field_ids, user_search, 17, 18);
   end if;
   -- One pass per requested board column, each with its own page, budget and
   -- position; every other read makes exactly one pass. The page's access facts,
@@ -1057,6 +1063,7 @@ begin
        and %s
        and (%s)
         and (case when (%s) then true else false end)%s%s
+        and (%s)
      order by %s
      limit $5',
     pg_catalog.array_to_string(sort_key_terms, ', '),
@@ -1082,6 +1089,7 @@ begin
     filter_predicate,
     board_scan_sql,
     segment_sql,
+    search_prefilter_sql,
     order_by_sql
   );
   -- A validated type set stays local to this invocation and is passed only to
@@ -1091,7 +1099,7 @@ begin
       after_record_id, scan_limit + 1, access_owner_account_id,
       access_owner_group_ids, access_shared_record_ids,
       filter_parameters, access_parameters, projection_batch, p_exact_record_id,
-      board_column_value, board_option_values, group_selector_values, tree_parent_id;
+      board_column_value, board_option_values, group_selector_values, tree_parent_id, search_field_ids, user_search;
   cursor_position := 0;
   loop
     fetch scan_cursor into scan_record;
