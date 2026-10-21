@@ -632,8 +632,22 @@ const applicationCompositionResolution = (
           ? (settings.options as JsonObject[]).map((option) => ({
               key: String(option.value),
               label: String(option.label),
+              ...(Array.isArray(option.parentValues)
+                ? { parentValues: (option.parentValues as unknown[]).map(String) }
+                : {}),
             }))
           : [];
+      const dependsOnParent =
+        (type === "link" || type === "choice") && settings.dependsOn !== undefined
+          ? valueIndex.fieldById(String(asObject(settings.dependsOn).parentFieldId))?.field
+          : undefined;
+      // A dependency whose parent is not in the bound release is refused, never left off the control.
+      if (
+        (type === "link" || type === "choice") &&
+        settings.dependsOn !== undefined &&
+        dependsOnParent === undefined
+      )
+        fail("vortex.definition.module_field_references", "broken_reference");
       const recordTypes: FieldInputSourceField["recordTypes"] =
         type === "link" && settings.target !== undefined
           ? [resolvedRecordType(settings.target)]
@@ -669,6 +683,14 @@ const applicationCompositionResolution = (
             }
           : {}),
         choices,
+        ...(dependsOnParent === undefined
+          ? {}
+          : {
+              dependsOn: {
+                fieldKey: String(dependsOnParent.key),
+                label: String(dependsOnParent.label),
+              },
+            }),
         recordTypes,
       };
     },

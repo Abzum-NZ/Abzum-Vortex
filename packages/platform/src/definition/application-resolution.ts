@@ -62,7 +62,9 @@ export type FieldInputSourceField = Readonly<{
   textFormat?: string | undefined;
   displayTimeZone?: "person" | "organization" | "utc" | undefined;
   maximumSelections?: number | undefined;
-  choices: readonly Readonly<{ key: string; label: string }>[];
+  choices: readonly Readonly<{ key: string; label: string; parentValues?: readonly string[] }>[];
+  /** The field of the same record type whose chosen value narrows this field's choices. */
+  dependsOn?: Readonly<{ fieldKey: string; label: string }> | undefined;
   recordTypes: readonly Readonly<{
     state: "resolved";
     moduleRootId: string;

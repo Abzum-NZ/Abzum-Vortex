@@ -76,14 +76,14 @@ export type RecordsTableFieldFacts = Readonly<{
   resultType?: string;
   /** The field is a one-record link from the record type to itself, so a record names its parent. */
   parentLink: boolean;
-  /** A link that takes its choices from another link field of the record type: that field, spelled as `field` is. */
+  /** A link or choice that takes its choices from another field of the record type: that field, spelled as `field` is. */
   dependsOn?: string;
 }>;
 
 /**
- * Why a chosen edit field cannot be edited without the link field it depends on, or undefined
- * when it has no such dependency or the parent is chosen as well: a parent's chosen record is what
- * narrows the child's choices, and changing it must be able to clear the child in the same draft.
+ * Why a chosen edit field cannot be edited without the field it depends on, or undefined
+ * when it has no such dependency or the parent is chosen as well: a parent's chosen record or option is
+ * what narrows the child's choices, and changing it must be able to clear the child in the same draft.
  */
 export const recordsTableDependencyMissing = (
   facts: RecordsTableQueryFacts,

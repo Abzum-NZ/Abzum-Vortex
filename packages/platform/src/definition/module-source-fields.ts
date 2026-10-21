@@ -50,6 +50,14 @@ const sourceOptionSchema = z
     ]),
   })
   .strict();
+/** An option of a choice field that depends on a parent choice field: the parent options it belongs to. */
+const sourceDependentOptionSchema = sourceOptionSchema.extend({
+  parent_values: sourceProvenanceTarget(
+    z.array(z.string().min(1).max(120)).min(1).max(200).optional(),
+    ["parentValues/**"],
+    true,
+  ),
+});
 const emptySettingsSchema = z.object({}).strict();
 const sourceTextFormatSchema = z.enum(["uuid"]);
 const sourceTextSettingsSchema = z
@@ -158,6 +166,36 @@ const sourceDateTimeSettingsSchema = z
 const sourceChoiceSettingsSchema = z
   .object({ options: sourceProvenanceUnchanged(z.array(sourceOptionSchema).min(1).max(200)) })
   .strict();
+/**
+ * The declared dependency of a choice field on another choice field of the same record type: the
+ * options offered are those whose `parent_values` list the parent's chosen option. Both the parent
+ * and the values are exact keys and stored values.
+ */
+const sourceChoiceDependencySchema = z
+  .object({ parent_field: sourceProvenanceUnchanged(builderKeySchema) })
+  .strict();
+const sourceChoiceFieldSettingsSchema = z
+  .object({
+    options: sourceProvenanceUnchanged(z.array(sourceDependentOptionSchema).min(1).max(200)),
+    depends_on: sourceProvenanceTarget(
+      sourceChoiceDependencySchema.optional(),
+      ["dependsOn/**"],
+      true,
+    ),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    // Parent values exist exactly with a declared dependency; the parents are judged with the fields.
+    if (
+      value.options.some((option) => option.parent_values !== undefined) !==
+      (value.depends_on !== undefined)
+    )
+      context.addIssue({
+        code: "custom",
+        path: ["depends_on"],
+        message: "Options list parent values exactly when the field depends on a parent choice",
+      });
+  });
 const sourceSeveralChoicesSettingsSchema = z
   .object({
     options: sourceProvenanceUnchanged(z.array(sourceOptionSchema).min(1).max(200)),
@@ -287,7 +325,11 @@ const sourceLinkSettingsSchema = z
     application_root_required: sourceProvenanceTarget(z.boolean().optional(), [
       "applicationRootIdRequired",
     ]),
-    depends_on: sourceProvenanceTarget(sourceLinkDependencySchema.optional(), ["dependsOn/**"], true),
+    depends_on: sourceProvenanceTarget(
+      sourceLinkDependencySchema.optional(),
+      ["dependsOn/**"],
+      true,
+    ),
   })
   .strict();
 const sourceMultiLinkSettingsSchema = z
@@ -620,7 +662,7 @@ const sourceFieldMembers = [
   sourceField("yes_no", emptySettingsSchema, z.boolean()),
   sourceField("date", sourceDateSettingsSchema, z.iso.date()),
   sourceField("date_time", sourceDateTimeSettingsSchema, z.iso.datetime({ offset: true })),
-  sourceField("choice", sourceChoiceSettingsSchema, z.string()),
+  sourceField("choice", sourceChoiceFieldSettingsSchema, z.string()),
   sourceField("several_choices", sourceSeveralChoicesSettingsSchema, z.array(z.string()).max(200)),
   sourceField("reference_number", sourceReferenceNumberSettingsSchema, noDefaultSchema),
   sourceField("email_address", emptySettingsSchema, z.email()),

@@ -159,6 +159,14 @@ export function FormContainer(props: FormContainerProps): ReactElement {
   const unsavedWorkRegistry = useUnsavedWorkRegistry();
   const baselineRef = useRef<Readonly<Record<string, unknown>> | undefined>(undefined);
   const [, setFeedbackTick] = useState(0);
+  // Fields that depend on another field's value listen here; they re-render without the form.
+  const listeners = useRef(new Set<() => void>());
+  const subscribe = useCallback((listener: () => void) => {
+    listeners.current.add(listener);
+    return () => {
+      listeners.current.delete(listener);
+    };
+  }, []);
   // The located corrections the person has edited past; a new submission shows them afresh.
   const [editedPastCorrections, setEditedPastCorrections] = useState<string | undefined>();
   // The submission's flow: the form is pending from the submit gesture until that flow settles.
@@ -188,6 +196,7 @@ export function FormContainer(props: FormContainerProps): ReactElement {
   const flowFeedbackRef = useRef(props.flowFeedback);
   flowFeedbackRef.current = props.flowFeedback;
   const reportFieldChanged = useCallback(() => {
+    for (const listener of [...listeners.current]) listener();
     const settled = flowFeedbackRef.current;
     if (settled?.kind === "refusal" && settled.corrections !== undefined)
       setEditedPastCorrections(JSON.stringify(settled.corrections));
@@ -242,8 +251,18 @@ export function FormContainer(props: FormContainerProps): ReactElement {
       fieldErrorFor,
       draftFeedbackFor,
       reportFieldChanged,
+      valueOf: registry.valueOf,
+      subscribe,
     }),
-    [pending, context.inactive, registry, fieldErrorFor, draftFeedbackFor, reportFieldChanged],
+    [
+      pending,
+      context.inactive,
+      registry,
+      fieldErrorFor,
+      draftFeedbackFor,
+      reportFieldChanged,
+      subscribe,
+    ],
   );
 
   const events = context.events;

@@ -331,6 +331,19 @@ const compileSettings = (
   return result;
 };
 
+const dependsOnSetting = (field: FieldInputSourceField): Record<string, unknown> =>
+  field.dependsOn === undefined
+    ? {}
+    : {
+        depends_on: {
+          kind: "group",
+          properties: {
+            field: { kind: "text", value: field.dependsOn.fieldKey },
+            label: { kind: "text", value: field.dependsOn.label },
+          },
+        },
+      };
+
 /**
  * The control one automatic field input renders and the canonical settings that follow from its
  * field type. A type with no exact existing control is refused with `unsupported_field_type`.
@@ -397,9 +410,18 @@ const deriveFieldInputContract = (field: FieldInputSourceField): DerivedFieldInp
               properties: {
                 key: { kind: "text", value: choice.key },
                 label: { kind: "text", value: choice.label },
+                ...(choice.parentValues === undefined
+                  ? {}
+                  : {
+                      parent_values: {
+                        kind: "list",
+                        items: choice.parentValues.map((value) => ({ kind: "text", value })),
+                      },
+                    }),
               },
             })),
           },
+          ...(field.type === "choice" ? dependsOnSetting(field) : {}),
           ...(field.type === "several_choices" && field.maximumSelections !== undefined
             ? {
                 maximum_selections: {
@@ -479,6 +501,7 @@ const deriveFieldInputContract = (field: FieldInputSourceField): DerivedFieldInp
               recordType,
             })),
           },
+          ...dependsOnSetting(field),
         },
       };
     default:

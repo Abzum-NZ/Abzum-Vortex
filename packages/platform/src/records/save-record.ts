@@ -41,7 +41,7 @@ import {
   type RelationshipTotalParentMutation,
 } from "./relationship-total-save";
 import { calculateAndFinalize, operationClock } from "./field-candidate";
-import { firstLinkDependencyRefusal } from "./link-dependencies";
+import { firstFieldDependencyRefusal } from "./link-dependencies";
 import {
   parentCycleRefusal,
   uniqueValueRefusal,
@@ -936,7 +936,7 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
             if ("clearFieldIds" in values)
               for (const fieldId of values.clearFieldIds) finalValues[fieldId] = null;
             if (prepared.recordType.systemProjection === undefined) {
-              const dependency = await firstLinkDependencyRefusal(
+              const dependency = await firstFieldDependencyRefusal(
                 transaction,
                 prepared.recordType,
                 prepared.existingValues,
@@ -946,7 +946,7 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
               if (dependency !== undefined) {
                 // The cause stays in the log; the person is told only which field to choose again.
                 console.error(
-                  `[record] save refused LINK_DEPENDENCY_${dependency.reason.toUpperCase()}: child=${dependency.childFieldId} parent=${dependency.parentFieldId}`,
+                  `[record] save refused FIELD_DEPENDENCY_${dependency.reason.toUpperCase()}: child=${dependency.childFieldId} parent=${dependency.parentFieldId}`,
                 );
                 if (!prepared.readableFieldIds.has(dependency.childFieldId.toLowerCase()))
                   return safeRefusal(prepared.correlationId, "operation_refused");

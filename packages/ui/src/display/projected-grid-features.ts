@@ -366,17 +366,39 @@ const parseInlineEditor = (
       requireExactKeys(editor, ["kind", "required"], location);
       return Object.freeze({ kind: "yes_no", required });
     case "choice": {
-      requireExactKeys(editor, ["kind", "required", "options"], location);
+      requireExactKeys(editor, ["kind", "required", "options", "dependsOnField"], location);
       const options = requireArray(editor.options, message, location).map((option) => {
         const entry = requireRecord(option, message, location);
-        requireExactKeys(entry, ["value", "label"], location);
+        requireExactKeys(entry, ["value", "label", "parentValues"], location);
         return Object.freeze({
           value: requireNonEmptyString(entry.value, message, location),
           label: requireNonEmptyString(entry.label, message, location),
+          ...(entry.parentValues === undefined
+            ? {}
+            : {
+                parentValues: Object.freeze(
+                  requireArray(entry.parentValues, message, location).map((parent) =>
+                    requireNonEmptyString(parent, message, location),
+                  ),
+                ),
+              }),
         });
       });
       if (options.length === 0) fail(message, location);
-      return Object.freeze({ kind: "choice", required, options: Object.freeze(options) });
+      // A dependent choice carries which parent options each option belongs to, and only it does.
+      if (
+        (editor.dependsOnField === undefined) !==
+        options.every((option) => option.parentValues === undefined)
+      )
+        fail(message, location);
+      return Object.freeze({
+        kind: "choice",
+        required,
+        options: Object.freeze(options),
+        ...(editor.dependsOnField === undefined
+          ? {}
+          : { dependsOnField: requireFieldKey(editor.dependsOnField, message, location) }),
+      });
     }
     case "date": {
       requireExactKeys(editor, ["kind", "required", "earliest", "latest"], location);

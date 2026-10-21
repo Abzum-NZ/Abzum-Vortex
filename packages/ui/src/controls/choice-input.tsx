@@ -38,7 +38,8 @@ import {
   useFieldIds,
   useSeededState,
 } from "./field-parts";
-import { useRequiredFormField } from "./form-context";
+import { useFormFieldValue, useRequiredFormField } from "./form-context";
+import { waitingForParent } from "./dependent-field";
 
 export type ChoiceInputProps = ControlRenderProps<ChoiceInputPayload>;
 
@@ -59,13 +60,29 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
   const fieldKey = settings.fieldKey();
   const label = context.accessibleName ?? props.metadata.name;
   const help = settings.text("help_text");
-  const placeholder = settings.text("placeholder") ?? "Select an option";
+  const authoredPlaceholder = settings.text("placeholder") ?? "Select an option";
   const required = settings.boolean("required");
   const variant = settings.choice<"select" | "radio">("variant", "select");
   const draftFeedback = useFieldFeedback(fieldKey);
-  const disabled =
+  const explicitlyDisabled =
     context.inactive || settings.boolean("disabled") || draftFeedback?.disabled === true;
-  const options = context.values?.options ?? settings.options("options");
+  const declaredOptions = context.values?.options ?? settings.options("options");
+  // A dependent choice offers only the options that belong to what the form's draft holds in its
+  // parent field, and waits while that is empty; the server judges the pair again at save.
+  const dependsOn = settings.dependsOn();
+  const parentValue = useFormFieldValue(dependsOn?.fieldKey);
+  const parentKey = typeof parentValue === "string" && parentValue !== "" ? parentValue : undefined;
+  const optionParents = dependsOn === undefined ? undefined : settings.optionParents("options");
+  const waiting = dependsOn !== undefined && parentKey === undefined;
+  const disabled = explicitlyDisabled || waiting;
+  const placeholder =
+    waiting && dependsOn !== undefined ? waitingForParent(dependsOn.label) : authoredPlaceholder;
+  const options =
+    optionParents === undefined
+      ? declaredOptions
+      : declaredOptions.filter(
+          (option) => parentKey !== undefined && optionParents.get(option.key)?.includes(parentKey),
+        );
   const projectedError = context.values?.error;
   const note = inactiveNote(context);
   const projected = context.values?.value;
@@ -73,7 +90,7 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
   if (
     projected !== undefined &&
     projected !== null &&
-    !options.some((option) => option.key === projected)
+    !declaredOptions.some((option) => option.key === projected)
   )
     throw new DefinitionRenderError(
       "INVALID_COMPOSITION",
@@ -106,9 +123,22 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
   const selectedOption = options.find((option) => option.key === permittedSelected) ?? null;
   const validationError = useRequiredFormField(fieldKey, props.placementId, permittedSelected, {
     label,
-    missing: required && !disabled && permittedSelected === null,
+    missing: required && !explicitlyDisabled && permittedSelected === null,
   });
   const error = projectedError ?? validationError;
+
+  // A changed parent leaves this field holding an option that no longer belongs: it clears with it.
+  const previousParent = useRef(parentKey);
+  useEffect(() => {
+    const before = previousParent.current;
+    previousParent.current = parentKey;
+    // A parent that was not registered yet (a form starting with its stored values) is no change.
+    if (before === undefined || before === parentKey) return;
+    if (selected !== null) {
+      setSelected(null);
+      context.events?.field_changed?.({ event: "field_changed", fieldKey, value: null });
+    }
+  }, [parentKey]);
 
   const change = (next: string | null): void => {
     if (disabled) return;

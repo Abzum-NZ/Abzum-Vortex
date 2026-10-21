@@ -69,11 +69,14 @@ const permissionChoices = (permissions: ModuleFieldSettingsContext["permissions"
 const deleteRules = [["refuse", "Refuse to delete the linked record"], ["empty_optional", "Clear this link"],
   ["soft_delete_dependent", "Delete this record too"]] as const;
 const currencyModes = [["organization_default", "The organisation's currency"], ["fixed", "One fixed currency"]] as const;
-const optionItem = (permissions: ModuleFieldSettingsContext["permissions"]): Declaration => ({ ...base("option", "Option", true), kind: "group", properties: [
+const optionItem = (permissions: ModuleFieldSettingsContext["permissions"], dependent = false): Declaration => ({ ...base("option", "Option", true), kind: "group", properties: [
   text("label", "Label", true, 1, 60),
   text("value", "Stored value", true, 1, 120, "Made from the label when added. Renaming the option keeps this value."),
   choice("required_permission", "Permission needed to choose it", false, permissionChoices(permissions),
     "Leave empty so everyone who can edit the field may choose it."),
+  ...(dependent ? [list("parent_values", "Belongs to these options of the field it depends on", false, 1, 200,
+    text("parent_value", "Stored value of the parent option", true, 1, 120),
+    "Only when this field depends on another choice: the parent options this option is offered for.")] : []),
 ], namedEntry: { label: "label", value: "value" } });
 const tableColumnTypes = [["text", "Text"], ["whole_number", "Whole number"], ["decimal_number", "Decimal number"],
   ["money", "Money"], ["yes_no", "Yes or no"], ["date", "Date"], ["date_time", "Date and time"], ["choice", "Choice"]] as const;
@@ -126,6 +129,20 @@ const linkDependencyDeclaration = (context: ModuleFieldSettingsContext): Declara
 };
 
 /**
+ * A choice field can offer only the options that belong to the option chosen in another choice
+ * field of its record type (Kind, then Subkind). Offered when another choice field exists to depend
+ * on; each option then lists the parent options it belongs to.
+ */
+const choiceDependencyDeclaration = (context: ModuleFieldSettingsContext): Declaration[] => {
+  const parents = context.fields.filter((field) => field.type === "choice");
+  if (parents.length === 0) return [];
+  return [group("depends_on", "Options depend on another choice", [
+    choice("parent_field", "Choice it depends on", true, parents.map(({ key, label }) => [key, label] as const),
+      "Its chosen option narrows the options here. It must come before this field."),
+  ], false)];
+};
+
+/**
  * The typed settings one field type declares. A calculation and a total declare none here: the
  * Data tab edits them with its formula and total editors (`module-field-formulas.ts`).
  */
@@ -158,7 +175,8 @@ export const moduleFieldSettingDeclarations = (
     case "date_time":
       return [choice("display_time_zone", "Time zone shown", true, timeZones)];
     case "choice":
-      return [list("options", "Options", true, 1, 200, optionItem(context.permissions), "Add, rename and reorder the options people choose from.")];
+      return [list("options", "Options", true, 1, 200, optionItem(context.permissions, context.fields.some((field) => field.type === "choice")), "Add, rename and reorder the options people choose from."),
+        ...choiceDependencyDeclaration(context)];
     case "several_choices":
       return [list("options", "Options", true, 1, 200, optionItem(context.permissions), "Add, rename and reorder the options people choose from."),
         number("maximum_selections", "Most options a person may choose", false, { minimum: 1, maximum: 200 })];

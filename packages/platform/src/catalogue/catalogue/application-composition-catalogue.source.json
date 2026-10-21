@@ -1723,6 +1723,34 @@
         }
       },
       {
+        "kind": "group",
+        "key": "depends_on",
+        "label": "Depends on",
+        "help": "The field of the same form whose chosen value narrows what this field offers",
+        "required": false,
+        "properties": [
+          {
+            "kind": "text",
+            "key": "field",
+            "label": "Field name",
+            "help": "Key of the field this one depends on in form values",
+            "required": true,
+            "minLength": 1,
+            "maxLength": 40
+          },
+          {
+            "kind": "text",
+            "key": "label",
+            "presentation": true,
+            "label": "Label",
+            "help": "Name of that field, shown while it is not chosen yet",
+            "required": true,
+            "minLength": 1,
+            "maxLength": 120
+          }
+        ]
+      },
+      {
         "kind": "text",
         "key": "publishes_parameter",
         "label": "Page parameter",
@@ -2072,6 +2100,23 @@
               "required": true,
               "minLength": 1,
               "maxLength": 120
+            },
+            {
+              "kind": "list",
+              "key": "parent_values",
+              "label": "Parent values",
+              "help": "The options of the field this one depends on that this option is offered for",
+              "required": false,
+              "minimumItems": 1,
+              "maximumItems": 200,
+              "item": {
+                "kind": "text",
+                "key": "parent_value",
+                "label": "Parent value",
+                "required": true,
+                "minLength": 1,
+                "maxLength": 120
+              }
             }
           ]
         }
@@ -2084,6 +2129,34 @@
         "integer": true,
         "minimum": 1,
         "maximum": 200
+      },
+      {
+        "kind": "group",
+        "key": "depends_on",
+        "label": "Depends on",
+        "help": "The field of the same form whose chosen value narrows what this field offers",
+        "required": false,
+        "properties": [
+          {
+            "kind": "text",
+            "key": "field",
+            "label": "Field name",
+            "help": "Key of the field this one depends on in form values",
+            "required": true,
+            "minLength": 1,
+            "maxLength": 40
+          },
+          {
+            "kind": "text",
+            "key": "label",
+            "presentation": true,
+            "label": "Label",
+            "help": "Name of that field, shown while it is not chosen yet",
+            "required": true,
+            "minLength": 1,
+            "maxLength": 120
+          }
+        ]
       },
       {
         "kind": "list",

@@ -65,6 +65,7 @@ const directSourceKeyMap: Readonly<Record<string, string>> = Object.freeze({
   depends_on: "dependsOn",
   parent_field: "parentFieldId",
   filter_field: "filterFieldId",
+  parent_values: "parentValues",
   permission: "permissionKey",
   permission_alternatives: "permissionKeys",
   required_permission: "requiredPermissionId",
