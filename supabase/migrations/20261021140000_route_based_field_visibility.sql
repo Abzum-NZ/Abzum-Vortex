@@ -1,5 +1,31 @@
 -- #3265, #3196: route-based column visibility that honours direct shares without record scans.
 
+set local role vortex_record_adapter;
+
+create or replace function vortex_record.decide_visible_produced_field_ids_internal(
+  p_plan jsonb, p_record_type_id uuid, p_field_ids jsonb
+)
+returns jsonb
+language sql
+volatile
+security definer
+set search_path = ''
+as $function$
+  select vortex_record.decide_produced_field_ids_internal(
+    p_plan, p_record_type_id, p_field_ids, '[]'::jsonb
+  )
+$function$;
+
+alter function vortex_record.decide_visible_produced_field_ids_internal(jsonb, uuid, jsonb)
+  owner to vortex_record_adapter;
+revoke all on function vortex_record.decide_visible_produced_field_ids_internal(jsonb, uuid, jsonb)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+grant execute on function vortex_record.decide_visible_produced_field_ids_internal(jsonb, uuid, jsonb)
+  to vortex_owner;
+
+comment on function vortex_record.decide_visible_produced_field_ids_internal(jsonb, uuid, jsonb) is
+  'Owner-only entry to the one produced-field rule for the column decision: a calculation or total the reader cannot fully read is withheld from the field identities it is given.';
+
 set local role vortex_owner;
 
 drop function vortex_platform.read_grid_views(uuid, uuid[], uuid[], jsonb);
@@ -140,13 +166,12 @@ begin
 
   -- The upper bound, then the one rule for produced fields: a calculation or
   -- total the reader cannot fully read stays withheld.
-  return vortex_record.decide_produced_field_ids_internal(
+  return vortex_record.decide_visible_produced_field_ids_internal(
     p_plan, p_record_type_id,
     coalesce((
       select pg_catalog.jsonb_agg(ids.value order by ids.value)
       from (select distinct listed.value from pg_catalog.unnest(visible) as listed(value)) as ids
-    ), '[]'::jsonb),
-    '[]'::jsonb
+    ), '[]'::jsonb)
   );
 end
 $function$;

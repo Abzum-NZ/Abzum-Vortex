@@ -133,13 +133,12 @@ begin
 
   -- The upper bound, then the one rule for produced fields: a calculation or
   -- total the reader cannot fully read stays withheld.
-  return vortex_record.decide_produced_field_ids_internal(
+  return vortex_record.decide_visible_produced_field_ids_internal(
     p_plan, p_record_type_id,
     coalesce((
       select pg_catalog.jsonb_agg(ids.value order by ids.value)
       from (select distinct listed.value from pg_catalog.unnest(visible) as listed(value)) as ids
-    ), '[]'::jsonb),
-    '[]'::jsonb
+    ), '[]'::jsonb)
   );
 end
 $function$;
