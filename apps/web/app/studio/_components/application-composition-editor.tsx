@@ -740,8 +740,14 @@ export function ApplicationCompositionEditor(props: Props) {
         {destinations.length === 0 && (
           <p role="status" className="text-sm text-muted-foreground">
             {moveModel.kind === "unsupported"
-              ? "Items can only be moved within the main area of an ordinary page or a layout."
-              : "There is no other area this item can move to."}
+              ? {
+                  page_kind: "Items on this kind of page can't be moved.",
+                  manifest_mismatch:
+                    "This page uses a block version Studio can't edit. Reload Studio.",
+                }[moveModel.reason]
+              : moveModel.kind === "invalid"
+                ? "This item's move destinations could not be read. Reload Studio."
+                : "There is no other area this item can move to."}
           </p>
         )}
         {wrapModel.kind === "available" && wrapModel.containers.length > 0 && (
