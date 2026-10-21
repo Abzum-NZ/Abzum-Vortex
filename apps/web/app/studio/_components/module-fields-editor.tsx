@@ -244,7 +244,7 @@ export function ModuleFieldsEditor({
             }),
       };
     });
-  const dependencyContext = (type: ModuleFieldType, settings: Plain) => {
+  const dependencyContext = (type: ModuleFieldType, settings: Plain, label: string) => {
     const target =
       typeof settings.target === "string"
         ? qualifiedLinkTarget(moduleKey, settings.target)
@@ -259,7 +259,7 @@ export function ModuleFieldsEditor({
       fields: dependencyFields(moduleKey, record?.fields ?? []),
       field: {
         id: existing?.key ?? "",
-        label: existing?.label ?? "This link",
+        label: label.trim() === "" ? "this link" : label.trim(),
         type,
         filterable: existing?.filterable ?? false,
         recordLabel: record?.name ?? "this record type",
@@ -284,11 +284,11 @@ export function ModuleFieldsEditor({
     Object.fromEntries(
       Object.entries(values).map(([key, value]) => [key, plainSourceSettingValue(value)]),
     );
-  const declarationsFor = (type: ModuleFieldType, settings: Plain) =>
+  const declarationsFor = (type: ModuleFieldType, settings: Plain, label: string) =>
     moduleFieldSettingDeclarations(type, {
       fields: otherFields,
       permissions: (module?.permissions ?? []).map(({ key, label }) => ({ key, label })),
-      linkDependency: dependencyContext(type, settings),
+      linkDependency: dependencyContext(type, settings, label),
     });
   const startSettings = (type: ModuleFieldType): Record<string, unknown> => {
     const start = starterModuleFieldSettings(type, {
@@ -309,7 +309,7 @@ export function ModuleFieldsEditor({
       ? (existing.settings as Plain)
       : startSettings(type);
   const read = (type: ModuleFieldType, plain: Plain, stored: unknown) => {
-    const reading = readModuleFieldSettings(type, plain, declarationsFor(type, plain));
+    const reading = readModuleFieldSettings(type, plain, declarationsFor(type, plain, existing?.label ?? ""));
     const defaultDeclaration = moduleFieldDefaultDeclaration(type, plain);
     const typedDefault =
       defaultDeclaration.kind === "declared"
@@ -375,7 +375,7 @@ export function ModuleFieldsEditor({
     const next: FormState = { ...stored, ...patch };
     const typeChanged = next.type !== existing.type;
     const plain = plainOf(next.type);
-    const declarations = declarationsFor(next.type, formSettings(next.settings));
+    const declarations = declarationsFor(next.type, formSettings(next.settings), next.label);
     let settings: Plain;
     if (computedTypes.has(next.type) && (patch.computed !== undefined || typeChanged)) {
       const problems = computedProblems(next.type, next.computed);
@@ -446,8 +446,8 @@ export function ModuleFieldsEditor({
   const plainBase = plainOf(form.type);
   const computed = computedTypes.has(form.type);
   const currentSettings = formSettings(form.settings);
-  const declarations = declarationsFor(form.type, currentSettings);
-  const dependency = dependencyContext(form.type, currentSettings);
+  const declarations = declarationsFor(form.type, currentSettings, form.label);
+  const dependency = dependencyContext(form.type, currentSettings, form.label);
   const candidates =
     form.type === "link"
       ? linkDependencyCandidates(dependency.fields, dependency.field, dependency.targetFields)
@@ -823,7 +823,7 @@ export function ModuleFieldsEditor({
         title={form.type === "choice" || form.type === "several_choices" ? "Choices" : "Format"}
       >
         {candidates?.kind === "unavailable" && (
-          <Alert variant="default" role="note" className="text-muted-foreground">
+          <Alert variant="info" role="note">
             <AlertTitle>Choices depend on another link</AlertTitle>
             <AlertDescription>
               <p>{candidates.message}</p>
