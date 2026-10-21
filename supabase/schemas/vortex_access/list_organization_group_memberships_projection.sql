@@ -120,7 +120,7 @@ begin
       "organization_account_id": {"sql": "membership.organization_account_id::text", "database": "text", "filter": true},
       "state": {"sql": "membership.state::text", "database": "text", "filter": true},
       "temporal_state": {"sql": "(case when membership.state = 'revoked' then 'revoked' when membership.starts_at > $7 then 'scheduled' when membership.expires_at is not null and membership.expires_at <= $7 then 'expired' else 'active' end)", "database": "text", "filter": true},
-      "account_display_name": {"sql": "account.display_name", "database": "text", "search": true}
+      "account_display_name": {"sql": "account.display_name", "database": "text", "filter": true, "search": true}
     }$declared$::jsonb,
     8
   );

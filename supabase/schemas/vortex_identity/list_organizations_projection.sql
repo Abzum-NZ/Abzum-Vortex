@@ -103,7 +103,7 @@ begin
     $declared${
       "state": {"sql": "organization.state", "database": "text", "filter": true},
       "short_name": {"sql": "organization.short_name", "database": "text", "search": true},
-      "display_name": {"sql": "organization.display_name", "database": "text", "search": true}
+      "display_name": {"sql": "organization.display_name", "database": "text", "filter": true, "search": true}
     }$declared$::jsonb,
     8
   );

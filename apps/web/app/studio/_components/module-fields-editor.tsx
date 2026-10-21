@@ -614,6 +614,7 @@ export function ModuleFieldsEditor({
   };
 
   const shapeLocked = published;
+  const isTitleField = existing !== undefined && existing.key === record.title_field;
   const shapeHint = shapeLocked
     ? "Published shape is fixed. Labels, help, defaults, privacy and link-back names can change."
     : undefined;
@@ -863,7 +864,10 @@ export function ModuleFieldsEditor({
           "Unique value",
           linkTypes.has(form.type) && form.cardinality === "one_to_one",
         )}
-        {flag("filterable", "Allow filtering")}
+        {flag("filterable", "Allow filtering", isTitleField)}
+        {isTitleField ? (
+          <p className="text-xs text-muted-foreground">The title is always filterable.</p>
+        ) : null}
         {flag("sortable", "Allow sorting")}
         <fieldset className="space-y-2">
           <legend className="text-sm font-semibold">Also show it on</legend>

@@ -291,7 +291,7 @@ function RecordTypeInspector({
         </StudioField>
         <StudioField
           label="Title field"
-          hint="Names records in pickers and headings. Changing a published title requires a major version."
+          hint="Names records in pickers and headings, and is always filterable. Changing a published title requires a major version."
         >
           {(control) => (
             <NativeSelect

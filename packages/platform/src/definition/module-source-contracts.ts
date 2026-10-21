@@ -486,6 +486,12 @@ const moduleSourceRecordTypeSchema = z
         message:
           "Title field must be an existing text, number, choice or date field, or a stored calculation with one of those results",
       });
+    if (title !== undefined && !title.filterable)
+      context.addIssue({
+        code: "custom",
+        path: ["fields", value.fields.indexOf(title), "filterable"],
+        message: "The title field must allow filtering: people find records by their title",
+      });
     const pipelineKeys = new Set<string>();
     const stageFields = new Set<string>();
     for (const [index, pipeline] of value.pipelines.entries()) {
