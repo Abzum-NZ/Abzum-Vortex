@@ -35,6 +35,13 @@ begin
     if pg_catalog.jsonb_typeof(content -> 'recordTypes') <> 'array' then
       raise exception using errcode = '55000', message = 'Installed Record definitions are unavailable';
     end if;
+    -- The record types a save closure sees carry the fields other installed Modules contributed
+    -- to them; a preview runs its own storage and receives none.
+    if not installation ? 'previewInstallationId' then
+      content := vortex_record.with_installed_record_contributions_internal(
+        content, (installation ->> 'organizationId')::uuid, (binding ->> 'moduleRootId')::uuid
+      );
+    end if;
     has_before_save_flows := has_before_save_flows or exists (
       select 1
       from pg_catalog.jsonb_array_elements(coalesce(content -> 'flows', '[]'::jsonb)) flow(value)

@@ -2,6 +2,13 @@ import {
   recordsTableSpreadsheetFeature,
   type RecordsTableSpreadsheetSettings,
 } from "./spreadsheet";
+
+export {
+  RECORDS_TABLE_STATUS_BAR_MAXIMUM_FIELDS,
+  recordsTableStatusBarFieldTypes,
+  recordsTableStatusBarOperations,
+  type RecordsTableStatusBarOperation,
+} from "./spreadsheet";
 import type { ComponentSettingValue } from "../block-property-schema";
 import {
   boardFilterProblem,
@@ -64,6 +71,7 @@ import {
 
 export {
   factsValueType,
+  recordsTablePivotDateUnits,
   recordsTableEditableFieldTypes,
   recordsTableFieldNotEditableReason,
   type RecordsTableBoardFacts,
@@ -71,6 +79,7 @@ export {
   type RecordsTableFeatureRefusalCode,
   type RecordsTableFeatureState,
   type RecordsTableFieldFacts,
+  type RecordsTablePivotDateUnit,
   type RecordsTableQueryFacts,
   type RecordsTableRelatedQueryFacts,
   type RecordsTableRelatedRecordsFacts,
@@ -83,7 +92,9 @@ export {
 } from "./row-actions";
 export {
   RECORDS_TABLE_EXPORT_MAXIMUM_ROWS,
+  recordsTableExportFormatLabels,
   recordsTableExportFormats,
+  spreadsheetText,
   type RecordsTableExportFormat,
 } from "./export";
 export { RECORDS_TABLE_RELATED_RECORDS_MAXIMUM_PAGE_SIZE } from "./master-detail";
@@ -91,6 +102,9 @@ export { RECORDS_TABLE_TREE_MAXIMUM_PAGE_SIZE } from "./tree";
 export {
   RECORDS_TABLE_GROUPING_MAXIMUM_CHOICES,
   RECORDS_TABLE_GROUPING_MAXIMUM_LABEL_LENGTH,
+  RECORDS_TABLE_GROUPING_MAXIMUM_PAGE_SIZE,
+  recordsTableGroupingFieldTypes,
+  type RecordsTableGroupingFieldType,
 } from "./grouping";
 export {
   boardAggregateLabel,
@@ -101,10 +115,8 @@ export {
 export {
   RECORDS_TABLE_PIVOT_MAXIMUM_COLUMNS,
   RECORDS_TABLE_PIVOT_MAXIMUM_ROW_PAGE_SIZE,
-  recordsTablePivotDateUnits,
   recordsTablePivotMeasureFieldTypes,
   recordsTablePivotMeasureFunctions,
-  type RecordsTablePivotDateUnit,
   type RecordsTablePivotMeasureFunction,
 } from "./pivot";
 export {

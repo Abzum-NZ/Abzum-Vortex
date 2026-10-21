@@ -20,6 +20,7 @@ import {
 } from "../components/card";
 import { Empty, EmptyHeader, EmptyTitle } from "../components/empty";
 import { DisplayHeader, RowActionControl } from "../display/controls";
+import { rowActionEventIdOf } from "../display/context";
 import { DisplayStateContainer } from "../display/display-state-container";
 import type { DisplayDataState } from "../display/projected-data";
 import {
@@ -52,6 +53,10 @@ export function LinkTiles(props: LinkTilesRenderProps): ReactElement {
   const rows = values?.rows ?? [];
   const events = props.availability === "available" ? props.events : undefined;
   const actionLabel = settings.text("row_action_label");
+  const rowActionEventId =
+    events?.row_action === undefined || actionLabel === undefined
+      ? undefined
+      : rowActionEventIdOf(props);
   const actions = props.slots.actions ?? null;
   return (
     <div className="flex w-full min-w-0 flex-col gap-4">
@@ -178,13 +183,14 @@ export function LinkTiles(props: LinkTilesRenderProps): ReactElement {
                             </Button>
                           </CardContent>
                         )}
-                        {events?.row_action === undefined || actionLabel === undefined ? null : (
+                        {rowActionEventId === undefined || actionLabel === undefined ? null : (
                           <CardFooter className="mt-auto">
                             <RowActionControl
                               recordId={row.sourceRecordId}
                               revision={row.sourceRevision}
                               name={label}
                               label={actionLabel}
+                              eventId={rowActionEventId}
                               events={events}
                             />
                           </CardFooter>

@@ -104,8 +104,8 @@ export function useFlowRuntime({
    * and the runtime carries out every pause (another form or a confirmation) through a continuation,
    * which is returned exactly as the server issued it.
    */
-  const flowClient = useMemo<FlowInvokeClient>(() => {
-    const client = createFlowInvokeClient({
+  const { flowClient, webMcpClient } = useMemo(() => {
+    const options = {
       address: {
         tenantShortName: application.tenantShortName,
         organizationShortName: application.organizationShortName,
@@ -117,7 +117,7 @@ export function useFlowRuntime({
         releaseKey: application.releaseKey,
       },
       ...(subject === undefined ? {} : { subject }),
-    });
+    };
     const recordResponse = (
       response: ServerFlowResponse,
       submission: SubmittedForm | undefined,
@@ -134,7 +134,7 @@ export function useFlowRuntime({
         unsavedWorkRegistry?.markSaved(submission.formId, submission.values);
       }
     };
-    return {
+    const trackedClient = (client: FlowInvokeClient): FlowInvokeClient => ({
       startBinding: async (binding, callerInputs, clickId, signal, gestureSubject) => {
         const submission = submittedFormsRef.current.get(binding.bindingId);
         submittedFormsRef.current.delete(binding.bindingId);
@@ -160,26 +160,14 @@ export function useFlowRuntime({
         recordResponse(response, submission);
         return response;
       },
+    });
+    return {
+      flowClient: trackedClient(createFlowInvokeClient(options)),
+      webMcpClient: trackedClient(
+        createFlowInvokeClient({ ...options, endpoint: "/api/flows/invoke/mcp" }),
+      ),
     };
   }, [application, formCancelledRef, subject, unsavedWorkRegistry]);
-  const webMcpClient = useMemo(
-    () =>
-      createFlowInvokeClient({
-        address: {
-          tenantShortName: application.tenantShortName,
-          organizationShortName: application.organizationShortName,
-          applicationKey: application.applicationKey,
-          pageKey: application.pageKey,
-        },
-        installation: {
-          installationRevision: application.installationRevision,
-          releaseKey: application.releaseKey,
-        },
-        ...(subject === undefined ? {} : { subject }),
-        endpoint: "/api/flows/invoke/mcp",
-      }),
-    [application, subject],
-  );
   const startPageChange = useApplicationFrame()?.startPageChange;
   const navigationEnvironment = useMemo<LinkNavigationEnvironment>(
     () => ({

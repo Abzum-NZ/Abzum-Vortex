@@ -27,6 +27,10 @@ export const recordsDisplayFormats = [
 export type RecordsDisplayFormat = (typeof recordsDisplayFormats)[number];
 
 export const recordsTableColumnWidths = ["auto", "narrow", "medium", "wide"] as const;
+/** Starting pixel widths shared by the grid and its spreadsheet export. */
+const columnWidths = { auto: 180, narrow: 120, medium: 220, wide: 320 } as const;
+export const recordsTableColumnWidth = (column: RecordsTableColumnContract): number =>
+  columnWidths[column.width];
 export const recordsTableColumnPins = ["start", "end", "unpinned"] as const;
 export type RecordsTableColumnPin = (typeof recordsTableColumnPins)[number];
 /**

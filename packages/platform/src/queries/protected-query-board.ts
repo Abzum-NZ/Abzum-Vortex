@@ -79,7 +79,7 @@ const readBoardMemberPage = async (
         boardMember: command.selector,
       })}::text::jsonb,
       ${"forward"}::text,
-      ${null}::uuid
+      ${null}::uuid[]
     ) as result
   `;
   return pageReadSchema.parse(one(rows));
@@ -258,7 +258,7 @@ const readBoardColumnPages = async (
         },
       })}::text::jsonb,
       ${"forward"}::text,
-      ${null}::uuid
+      ${null}::uuid[]
     ) as result
   `;
   return boardColumnPagesReadSchema.parse(one(rows));

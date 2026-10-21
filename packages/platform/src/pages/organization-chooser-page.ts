@@ -14,6 +14,9 @@ const launcherContentSlot = organizationLauncherShell.contentSlots[0];
 if (launcherContentSlot === undefined)
   throw new Error("Platform organisation launcher shell has no content slot");
 
+/** The chooser tile's one row-action identity: it opens the organisation the tile names. */
+export const organizationChooserOpenEventId = "open_organization";
+
 const headingId = "909f1d05-5596-47ec-b478-40c3dce43fae";
 const detailId = "d050acf3-d3a2-4279-855d-6fcc90f7b355";
 
@@ -81,6 +84,7 @@ export const organizationChooserPage = chooserPage(
         title: "Available organisations",
         name_key: "name",
         icon_key: "icon",
+        row_action_event_id: organizationChooserOpenEventId,
       },
       ["side_panel"],
     ),
