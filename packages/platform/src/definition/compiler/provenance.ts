@@ -1,5 +1,5 @@
 import type { DefinitionProvenanceEntry } from "../../schema";
-import { canonicalJson } from "../canonical-json-definition";
+import { sameCanonicalValue } from "../canonical-json-definition";
 import { explicitSourceTargets } from "./explicit-source-targets";
 import { moduleReferencePaths } from "../module-dependencies";
 import type { Resolution } from "./resolution";
@@ -278,9 +278,10 @@ export function provenanceFor(
     if (transformTargets.length === 0)
       fail("vortex.definition.invalid_compilation_output", "invalid_value");
     for (const targetPath of transformTargets) {
-      const transformed =
-        canonicalJson(valueAtPath(source, sourcePath)) !==
-        canonicalJson(valueAtPath(canonical, targetPath));
+      const transformed = !sameCanonicalValue(
+        valueAtPath(source, sourcePath),
+        valueAtPath(canonical, targetPath),
+      );
       if (transformed && !sourceTransformationApproved(sourcePath, targetPath, positions)) {
         fail("vortex.definition.invalid_compilation_output", "invalid_value");
       }

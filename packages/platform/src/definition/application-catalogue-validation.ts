@@ -5,6 +5,10 @@ import {
   readQueryBindings,
   recordsTableContractRefusal,
   readSourceItem,
+  canonicalJson,
+  plainSourceSettingValue,
+  plainSettingValue,
+  type JsonValue,
   sourceItemChildSlots,
   sourcePageDataOf,
   sourcePageRootSlots,
@@ -161,12 +165,12 @@ export function validateApplicationSourceCatalogue(
     placementAlias: string,
     settings: Readonly<Record<string, SourceValue>>,
     location: readonly Segment[],
-    blockKey: string,
+    release: PlatformBlockRelease,
   ): void => {
     const table = readRecordsTableContract(settings);
     const detail = table === undefined ? readRecordDetailContract(settings) : undefined;
     if (
-      blockKey === "platform.display.record_detail" &&
+      release.key === "platform.display.record_detail" &&
       settings.detail_fields !== undefined &&
       detail === undefined
     ) {
@@ -239,17 +243,28 @@ export function validateApplicationSourceCatalogue(
       const features = table.features;
       if (features.columnFilters.enabled)
         checkFields("features", features.columnFilters.fields, orders, "unsupported_choice");
-      // A feature that is off holds nothing but its switch, so it compiles to nothing.
+      // A disabled feature may carry only its catalogue defaults, never configured behaviour.
       const featureGroups = settings.features;
-      if (featureGroups?.kind === "group")
-        for (const feature of Object.values(featureGroups.properties))
+      const featureDeclaration = release.properties.find((property) => property.key === "features");
+      if (featureGroups?.kind === "group" && featureDeclaration?.kind === "group")
+        for (const [key, feature] of Object.entries(featureGroups.properties)) {
+          const declared = featureDeclaration.properties.find((property) => property.key === key);
+          const defaults = declared?.defaultValue;
           if (
             feature.kind === "group" &&
             feature.properties.enabled?.kind === "boolean" &&
             !feature.properties.enabled.value &&
-            Object.keys(feature.properties).some((key) => key !== "enabled")
+            Object.entries(feature.properties).some(
+              ([property, value]) =>
+                property !== "enabled" &&
+                (defaults?.kind !== "group" ||
+                  defaults.properties[property] === undefined ||
+                  canonicalJson(plainSourceSettingValue(value) as JsonValue) !==
+                    canonicalJson(plainSettingValue(defaults.properties[property]!) as JsonValue)),
+            )
           )
             report("vortex.definition.application_block_settings", "invalid_value", at("features"));
+        }
       /**
        * Every configured row behaviour must bind a flow: the placement and the behaviour's event
        * identity must resolve to exactly one flow binding of the expected kind, and the bound flow
@@ -536,7 +551,7 @@ export function validateApplicationSourceCatalogue(
 
       const reading = readSourceItem(item, release);
       reportSettingFailures(reading.settingFailures, location);
-      validateDataContract(placement, alias, reading.settings, location, release.key);
+      validateDataContract(placement, alias, reading.settings, location, release);
       validateQueryBindingStructure(reading.settings, location);
       validateAccessibleName(reading.settings, release, location);
       validateResponsive(placement, release, location);

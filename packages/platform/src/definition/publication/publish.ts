@@ -245,6 +245,29 @@ const rawModuleReleasePageSchema = z
   .strict();
 const moduleReleasePageRowSchema = z.object({ module_release_page: z.unknown() }).strict();
 const moduleReleaseRowSchema = z.object({ module_release: z.unknown() }).strict();
+const parseModuleReleasePage = (row: DatabaseRow, cursor?: ModuleReleasePageCursor) => {
+  const transport = parseOneRow([row], moduleReleasePageRowSchema);
+  const parsed = rawModuleReleasePageSchema.safeParse(transport.module_release_page);
+  if (!parsed.success) return invalidStorage(parsed.error);
+  const page = parsed.data;
+  if (page.rootId === null || page.anchorReleaseRevision === null) {
+    if (
+      page.rootId !== null ||
+      page.anchorReleaseRevision !== null ||
+      page.entries.length !== 0 ||
+      page.nextAfterReleaseRevision !== null ||
+      cursor !== undefined
+    )
+      return invalidStorage("readModuleReleasePage found inconsistent stored evidence");
+  } else if (
+    page.entries.length === 0 ||
+    (cursor !== undefined &&
+      (page.rootId !== cursor.rootId ||
+        page.anchorReleaseRevision !== cursor.anchorReleaseRevision))
+  )
+    return invalidStorage("readModuleReleasePage found inconsistent stored evidence");
+  return page;
+};
 const appendReleaseRowSchema = z
   .object({
     root_id: platformIdSchema,
@@ -460,6 +483,39 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
         };
   }
 
+  async isApplicationDraftCurrent(candidate: DefinitionDraftCandidate): Promise<boolean> {
+    const { draft } = candidate;
+    const rows = await this.transaction.query`
+      select vortex_definition.read_application_draft_consistency(
+        ${draft.rootId}::uuid, ${draft.draftRevision}::bigint,
+        ${draft.sourceFingerprint}::text, ${draft.publishedRevision ?? null}::bigint
+      ) as consistency
+    `;
+    const { consistency } = parseOneRow(
+      rows,
+      z
+        .object({
+          consistency: z
+            .object({
+              draftRevision: safeRevisionSchema,
+              sourceFingerprint: fingerprintSchema,
+              publishedRevision: nullableRevisionSchema,
+            })
+            .strict()
+            .nullable(),
+        })
+        .strict(),
+    );
+    if (consistency === null) return false;
+    if (
+      consistency.draftRevision !== draft.draftRevision ||
+      consistency.sourceFingerprint !== draft.sourceFingerprint ||
+      consistency.publishedRevision !== (draft.publishedRevision ?? null)
+    )
+      return invalidStorage("Draft consistency returned a substituted identity");
+    return true;
+  }
+
   async readCandidate(rootId: string): Promise<DefinitionPublicationCandidate | undefined> {
     const state = await this.readPublicationState(rootId);
     if (state === undefined) return undefined;
@@ -572,6 +628,27 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
     reject: (error: unknown) => void;
   }[] = [];
 
+  async readModuleReleaseAnchors(
+    organizationId: typeof this.context.organizationId,
+    keys: readonly string[],
+  ): Promise<readonly Pick<ResolvableModuleReleasePage, "rootId" | "anchorReleaseRevision">[]> {
+    if (organizationId !== this.context.organizationId)
+      return invalidStorage("Module anchors requested for another organisation");
+    if (keys.length === 0) return [];
+    const rows = await this.transaction.query`
+      select vortex_definition.read_module_release_page(requested.key, null, null, 1)
+        as module_release_page
+      from pg_catalog.jsonb_array_elements_text(${JSON.stringify(keys)}::text::jsonb)
+        with ordinality as requested(key, ordinality)
+      order by requested.ordinality
+    `;
+    if (rows.length !== keys.length) return invalidStorage("Module anchor frontier is incomplete");
+    return rows.map((row) => {
+      const page = parseModuleReleasePage(row);
+      return { rootId: page.rootId, anchorReleaseRevision: page.anchorReleaseRevision };
+    });
+  }
+
   readModuleReleasePage(
     organizationId: typeof this.context.organizationId,
     key: string,
@@ -612,30 +689,7 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
       `;
       if (rows.length !== requests.length)
         return invalidStorage("Module page frontier is incomplete");
-      const pages = rows.map((row, index) => {
-        const transport = parseOneRow([row], moduleReleasePageRowSchema);
-        const parsed = rawModuleReleasePageSchema.safeParse(transport.module_release_page);
-        if (!parsed.success) return invalidStorage(parsed.error);
-        const page = parsed.data;
-        const cursor = requests[index]!.cursor;
-        if (page.rootId === null || page.anchorReleaseRevision === null) {
-          if (
-            page.rootId !== null ||
-            page.anchorReleaseRevision !== null ||
-            page.entries.length !== 0 ||
-            page.nextAfterReleaseRevision !== null ||
-            cursor !== undefined
-          )
-            return invalidStorage("readModuleReleasePage found inconsistent stored evidence");
-        } else if (
-          page.entries.length === 0 ||
-          (cursor !== undefined &&
-            (page.rootId !== cursor.rootId ||
-              page.anchorReleaseRevision !== cursor.anchorReleaseRevision))
-        )
-          return invalidStorage("readModuleReleasePage found inconsistent stored evidence");
-        return page;
-      });
+      const pages = rows.map((row, index) => parseModuleReleasePage(row, requests[index]!.cursor));
       const releases = await this.readModuleReleases(
         this.context.organizationId,
         pages.flatMap((page) =>
@@ -1025,6 +1079,7 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
       releaseVersion: release.releaseVersion,
       contentFingerprint: release.contentFingerprint,
       resolutionFingerprint: release.resolutionFingerprint,
+      sourceFingerprint: release.authoredSourceFingerprint,
       compilationOutput: output,
       resolutionSnapshot: snapshot,
       published: published.data,

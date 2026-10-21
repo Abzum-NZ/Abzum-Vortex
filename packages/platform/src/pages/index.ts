@@ -89,6 +89,7 @@ export {
 } from "./records-table-query";
 export {
   logRecordsTableRequestRefusal,
+  personalFormattingAllowed,
   projectRecordsTableFeatures,
   type RecordsTableRequestPart,
   type RecordsTableRequestRefusal,

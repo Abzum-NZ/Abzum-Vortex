@@ -15,7 +15,7 @@ as $function$
       select 1 from pg_catalog.jsonb_object_keys(p_document) as supplied(key)
       where supplied.key <> all (case p_kind
         when 'current_layout' then array['columns', 'density']
-        else array['columns', 'density', 'sort', 'filters', 'search'] end)
+        else array['columns', 'density', 'sort', 'filters', 'search', 'formatting'] end)
     )
     and pg_catalog.jsonb_typeof(p_document -> 'columns') = 'array'
     and pg_catalog.jsonb_array_length(p_document -> 'columns') between 1 and 200
@@ -75,13 +75,24 @@ as $function$
         = pg_catalog.jsonb_array_length(p_document -> 'filters')))
     and (not p_document ? 'search' or (
       pg_catalog.jsonb_typeof(p_document -> 'search') = 'string'
-      and pg_catalog.char_length(p_document ->> 'search') between 1 and 200)), false)
+      and pg_catalog.char_length(p_document ->> 'search') between 1 and 200))
+    -- Personal formatting rules have the authored conditional-format rule shape.
+    and (not p_document ? 'formatting' or (
+      pg_catalog.jsonb_typeof(p_document -> 'formatting') = 'array'
+      and pg_catalog.jsonb_array_length(p_document -> 'formatting') between 1 and 20
+      and not exists (
+        select 1 from pg_catalog.jsonb_array_elements(p_document -> 'formatting') as entry(value)
+        where not vortex_platform.grid_view_format_rule_valid_internal(entry.value)
+      )
+      and (select pg_catalog.count(distinct pg_catalog.lower(entry.value ->> 'id'))
+        from pg_catalog.jsonb_array_elements(p_document -> 'formatting') as entry(value))
+        = pg_catalog.jsonb_array_length(p_document -> 'formatting'))), false)
 $function$;
 
 revoke all on function vortex_platform.grid_view_document_valid_internal(jsonb, text)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 
 comment on function vortex_platform.grid_view_document_valid_internal(jsonb, text) is
-  'Whether a grid view document holds only the arrangement and, for a named view, the query state the platform stores; owner-only.';
+  'Whether a grid view document holds only the arrangement and, for a named view, the query state and personal formatting rules the platform stores; owner-only.';
 
 alter function vortex_platform.grid_view_document_valid_internal(jsonb, text) owner to vortex_owner;

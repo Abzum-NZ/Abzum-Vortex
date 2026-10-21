@@ -1,14 +1,6 @@
 "use client";
 
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useMemo,
-  useState,
-  type ReactElement,
-  type ReactNode,
-} from "react";
+import type { ReactElement } from "react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,42 +10,8 @@ import {
 } from "../components/dropdown-menu";
 import { Button } from "../components/button";
 import { Icon } from "../icons/icon";
-import { APPEARANCE_COOKIE, createAppearanceRootProps, parseThemeMode, type ThemeMode } from "../theme";
-
-type AppearanceState = Readonly<{ mode: ThemeMode; choose: (mode: ThemeMode) => void }>;
-
-const AppearanceContext = createContext<AppearanceState | null>(null);
-
-/** The viewer's choice; components with system-mode support resolve it with the same media query. */
-export function useAppearanceMode(): ThemeMode {
-  const appearance = useContext(AppearanceContext);
-  if (appearance === null) throw new Error("Appearance requires an AppearanceProvider.");
-  return appearance.mode;
-}
-
-const ONE_YEAR_SECONDS = 60 * 60 * 24 * 365;
-
-/**
- * The viewer's appearance, shared by every application. The server render of the document root
- * already carries `initial` (read from the cookie), so the first paint is correct; a choice updates
- * the root and the cookie in place, and the next server render reads the same cookie.
- */
-export function AppearanceProvider({
-  initial,
-  children,
-}: Readonly<{ initial: ThemeMode; children: ReactNode }>): ReactElement {
-  const [mode, setMode] = useState<ThemeMode>(initial);
-  const choose = useCallback((next: ThemeMode) => {
-    const root = document.documentElement;
-    const props = createAppearanceRootProps(next);
-    root.style.colorScheme = String(props.style.colorScheme);
-    root.setAttribute("data-vortex-theme-mode", props["data-vortex-theme-mode"]);
-    document.cookie = `${APPEARANCE_COOKIE}=${next}; path=/; max-age=${ONE_YEAR_SECONDS}; samesite=lax`;
-    setMode(next);
-  }, []);
-  const value = useMemo(() => ({ mode, choose }), [mode, choose]);
-  return <AppearanceContext.Provider value={value}>{children}</AppearanceContext.Provider>;
-}
+import { parseThemeMode, type ThemeMode } from "../theme/appearance";
+import { useAppearance } from "./appearance-provider";
 
 const CHOICES: readonly Readonly<{ mode: ThemeMode; label: string }>[] = [
   { mode: "system", label: "System" },
@@ -63,7 +21,7 @@ const CHOICES: readonly Readonly<{ mode: ThemeMode; label: string }>[] = [
 
 /** The top bar's appearance menu, placed when the shell's `appearance_toggle` is true. */
 export function AppearanceToggle(): ReactElement | null {
-  const appearance = useContext(AppearanceContext);
+  const appearance = useAppearance();
   if (appearance === null) return null;
   const current = CHOICES.find((choice) => choice.mode === appearance.mode);
   return (
@@ -73,7 +31,12 @@ export function AppearanceToggle(): ReactElement | null {
         render={<Button variant="ghost" size="sm" className="max-sm:min-h-11 max-sm:min-w-11" />}
       >
         <span className="max-sm:sr-only">{current?.label}</span>
-        <Icon name="chevron-down" aria-hidden="true" data-icon="inline-end" className="text-muted-foreground" />
+        <Icon
+          name="chevron-down"
+          aria-hidden="true"
+          data-icon="inline-end"
+          className="text-muted-foreground"
+        />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-36">
         <DropdownMenuRadioGroup

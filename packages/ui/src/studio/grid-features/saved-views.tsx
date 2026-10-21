@@ -4,46 +4,64 @@ import type { SourceBlockPropertyValueContract } from "@vortex/platform/schema";
 import { Button } from "../../components/button";
 import { RotateCcw, Trash2 } from "lucide-react";
 import { Input } from "../../components/input";
+import { Label } from "../../components/label";
 import { Checkbox } from "../../components/checkbox";
 import { StudioField } from "../studio-field";
 import { StudioReferencePicker } from "../studio-reference-picker";
-import type { StudioSettingValues } from "../studio-setting-controls";
 
 type Group = Extract<SourceBlockPropertyValueContract, { kind: "group" }>;
 const text = (value: SourceBlockPropertyValueContract | undefined): string =>
   value?.kind === "text" ? value.value : "";
 
-const arrangementSummary = (view: Group): string => {
-  const state = view.properties["state"];
+const count = (value: SourceBlockPropertyValueContract | undefined): number =>
+  value?.kind === "list" ? value.items.length : 0;
+
+/** What a view state holds, in the words the builder reviews it by. */
+const arrangementSummary = (state: SourceBlockPropertyValueContract | undefined): string => {
   const columns = state?.kind === "group" ? state.properties["columns"] : undefined;
   const density = state?.kind === "group" ? state.properties["density"] : undefined;
-  if (columns?.kind !== "list" || density?.kind !== "choice")
+  if (state?.kind !== "group" || columns?.kind !== "list" || density?.kind !== "choice")
     throw new Error("STUDIO_SAVED_VIEW_ARRANGEMENT_INVALID");
-  const visible = columns.items.filter(
+  const groups = columns.items.flatMap((column) => (column.kind === "group" ? [column] : []));
+  const visible = groups.filter(
     (column) =>
-      column.kind === "group" &&
-      column.properties["visible"]?.kind === "boolean" &&
-      column.properties["visible"].value,
+      column.properties["visible"]?.kind === "boolean" && column.properties["visible"].value,
   ).length;
-  const widths = columns.items.flatMap((column) => {
-    const width = column.kind === "group" ? column.properties["width"] : undefined;
+  const pinned = groups.filter(
+    (column) =>
+      column.properties["pin"]?.kind === "choice" && column.properties["pin"].value !== "unpinned",
+  ).length;
+  const widths = groups.flatMap((column) => {
+    const width = column.properties["width"];
     return width?.kind === "number" ? [`${width.value} px`] : [];
   });
-  return `${density.value === "compact" ? "Compact" : "Comfortable"} · ${visible} of ${columns.items.length} columns shown${widths.length === 0 ? "" : ` · Resized widths: ${widths.join(", ")}`}`;
+  const search = state.properties["search"];
+  const sorted = count(state.properties["sort"]);
+  const filtered = count(state.properties["filters"]);
+  return [
+    density.value === "compact" ? "Compact" : "Comfortable",
+    `${visible} of ${columns.items.length} columns shown`,
+    ...(pinned === 0 ? [] : [`${pinned} pinned`]),
+    ...(widths.length === 0 ? [] : [`Resized widths: ${widths.join(", ")}`]),
+    sorted === 0 ? "Default order" : `Sorted by ${sorted} ${sorted === 1 ? "field" : "fields"}`,
+    ...(filtered === 0 ? [] : [`${filtered} ${filtered === 1 ? "filter" : "filters"}`]),
+    ...(search?.kind === "text" ? [`Search “${search.value}”`] : []),
+  ].join(" · ");
 };
 
 /** Capture the table configuration displayed by the canvas into the definition's default views. */
 export function StudioSavedViewsEditor({
   value,
-  tableSettings,
   canvasArrangement,
+  canvasStale,
   roles,
   disabled,
   onChange,
 }: Readonly<{
   value: Group;
-  tableSettings: StudioSettingValues;
   canvasArrangement?: Group | undefined;
+  /** The canvas held an arrangement that no longer matches the table's source, query or columns. */
+  canvasStale: boolean;
   roles: readonly Readonly<{ key: string; label: string }>[];
   disabled: boolean;
   onChange: (value: Group) => void;
@@ -58,27 +76,38 @@ export function StudioSavedViewsEditor({
       ...value,
       properties: { ...value.properties, default_views: { kind: "list", items: [...items] } },
     });
-  const capture = (previous?: SourceBlockPropertyValueContract): Group | undefined => {
-    if (canvasArrangement === undefined) return undefined;
-    return {
-      kind: "group",
-      properties: {
-        sort: tableSettings["default_sort"] ?? { kind: "list", items: [] },
-        filters: { kind: "list", items: [] },
-        ...(previous?.kind === "group" ? previous.properties : {}),
-        ...canvasArrangement.properties,
-      },
-    };
-  };
+  const personalFormatting = value.properties["personal_formatting"];
+  // The captured state is exactly what the canvas shows: its arrangement, order, filters and search.
+  const capture = (): Group | undefined => canvasArrangement;
   return (
     <div className="space-y-3">
       <p className="text-sm text-muted-foreground">
         Give roles the Share table views permission in Access to let people share views.
       </p>
+      <Label className="gap-2 font-normal">
+        <Checkbox
+          disabled={disabled}
+          checked={personalFormatting?.kind === "boolean" && personalFormatting.value}
+          onCheckedChange={(checked) =>
+            onChange({
+              ...value,
+              properties: {
+                ...value.properties,
+                personal_formatting: { kind: "boolean", value: checked === true },
+              },
+            })
+          }
+        />
+        Allow personal formatting
+      </Label>
+      <p className="text-sm text-muted-foreground">
+        People add their own highlighting rules to the views they save, on the fields they can read.
+        It needs Formatting turned on for this table.
+      </p>
       <p className="text-sm">
-        Turn on Arrange grid columns above the canvas, then move, resize or hide columns and choose
-        a density. Capture that arrangement here. Personal layouts take precedence over defaults; a
-        role default takes precedence over the app default.
+        Turn on Arrange grid columns above the canvas, then move, resize or hide columns, choose a
+        density, sort, filter or search. Capture what the canvas shows here. Personal layouts take
+        precedence over defaults; a role default takes precedence over the app default.
       </p>
       {views.map((view, index) => (
         <div key={text(view.properties["view_id"])} className="space-y-1">
@@ -138,7 +167,7 @@ export function StudioSavedViewsEditor({
               title="Use the canvas arrangement"
               disabled={disabled || canvasArrangement === undefined}
               onClick={() => {
-                const state = capture(view.properties["state"]);
+                const state = capture();
                 if (state)
                   write(
                     views.map((entry, i) =>
@@ -161,9 +190,20 @@ export function StudioSavedViewsEditor({
               <Trash2 aria-hidden="true" />
             </Button>
           </div>
-          <p className="text-sm text-muted-foreground">{arrangementSummary(view)}</p>
+          <p className="text-sm text-muted-foreground">
+            {arrangementSummary(view.properties["state"])}
+          </p>
         </div>
       ))}
+      {canvasStale && (
+        <p role="status" className="text-sm text-muted-foreground">
+          The table's source, query or columns changed after the canvas was arranged, so that
+          arrangement is no longer captured. Arrange the grid again to capture it.
+        </p>
+      )}
+      {canvasArrangement !== undefined && (
+        <p className="text-sm">On the canvas now: {arrangementSummary(canvasArrangement)}</p>
+      )}
       <StudioField label="View name">
         {(control) => (
           <Input

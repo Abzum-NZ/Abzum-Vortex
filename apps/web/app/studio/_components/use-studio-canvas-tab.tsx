@@ -1,9 +1,10 @@
 "use client";
-import { useIdlePreload } from "../_lib/use-idle-preload";
+import { useIntentPreload } from "../_lib/use-intent-preload";
 import dynamic from "next/dynamic";
 import { Suspense, useCallback, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   applicationSourceDocumentSchema,
+  describeFailure,
   holdsPermission,
   type ApplicationSourceDocument,
   type ImmutablePlatformBlockCatalogue,
@@ -25,7 +26,12 @@ import {
   type StudioRecordReader,
   type StudioSemanticOutline,
   type StudioSemanticSelection,
-  type StudioCanvasGridArrangement,
+  reduceStudioCanvasGrid,
+  studioCanvasGridArrangement,
+  studioCanvasGridReads,
+  type StudioCanvasGridChange,
+  type StudioCanvasGridRead,
+  type StudioCanvasGridState,
 } from "@vortex/ui/studio";
 import { Icon, type FieldInputControlReleaseMap, type PlatformThemeTokens } from "@vortex/ui";
 import {
@@ -149,7 +155,10 @@ export function useStudioCanvasTab({
   /** The organisation's applications, which name the owner of a choice from a used Module. */
   applications: readonly StudioModuleOwnerApplication[];
 }>) {
-  useIdlePreload(preloadPuckEditor);
+  useIntentPreload(
+    preloadPuckEditor,
+    "#studio-rail-outline, #studio-rail-blocks, #studio-rail-menu, #studio-rail-theme, #studio-rail-panel [data-tree-key^='page:']",
+  );
   const { organizationId, source, selected, state, view } = draft;
   const rootId = state.rootId;
   const key = draft.saved.key;
@@ -169,17 +178,32 @@ export function useStudioCanvasTab({
   const [blockSetup, setBlockSetup] = useState<StudioBlockSetupRequest | null>(null);
   const [notice, setNotice] = useState("");
   const [arrangeGrid, setArrangeGrid] = useState(false);
-  const gridRevision = `${rootId}:${view.draftRevision}:${view.sourceFingerprint}`;
-  const [gridArrangements, setGridArrangements] = useState<
-    ReadonlyMap<string, Readonly<{ revision: string; arrangement: StudioCanvasGridArrangement }>>
-  >(new Map());
-  const onGridArrangement = useCallback(
-    (arrangement: StudioCanvasGridArrangement) => {
-      setGridArrangements((held) =>
-        new Map(held).set(arrangement.placementAlias, { revision: gridRevision, arrangement }),
-      );
-    },
-    [gridRevision],
+  const [gridStates, setGridStates] = useState<ReadonlyMap<string, StudioCanvasGridState>>(
+    new Map(),
+  );
+  const onGridChange = useCallback((change: StudioCanvasGridChange) => {
+    setGridStates((held) => {
+      try {
+        const next = reduceStudioCanvasGrid(held.get(change.placementAlias), change);
+        if (next === held.get(change.placementAlias)) return held;
+        const states = new Map(held);
+        if (next === undefined) states.delete(change.placementAlias);
+        else states.set(change.placementAlias, next);
+        return states;
+      } catch (error) {
+        console.error(
+          `[studio] a canvas grid change was not applied: STUDIO_CANVAS_GRID_CHANGE_REFUSED cause=${describeFailure(error)}`,
+        );
+        return held;
+      }
+    });
+  }, []);
+  // The preview reads a grid again only for a query change or a newly shown column; the text
+  // makes the object stable across the layout gestures that read nothing.
+  const gridReadsText = JSON.stringify(studioCanvasGridReads(gridStates));
+  const gridReads = useMemo(
+    () => JSON.parse(gridReadsText) as ReturnType<typeof studioCanvasGridReads>,
+    [gridReadsText],
   );
 
   // Resolving validates the whole source: once per source and selection, not on every render.
@@ -509,7 +533,12 @@ export function useStudioCanvasTab({
   // The records of the canvas's data blocks, read once per area for the compiled saved revision,
   // when the builder's preview runs that revision's data shape.
   const readCanvasRecords = useCallback(
-    async (area: string, signal: AbortSignal, controlValues: Readonly<Record<string, string>>) => {
+    async (
+      area: string,
+      signal: AbortSignal,
+      controlValues: Readonly<Record<string, string>>,
+      tableStates: Readonly<Record<string, StudioCanvasGridRead>>,
+    ) => {
       const pageAlias = canvasPageRef.current;
       if (pageAlias === undefined) return { state: "unavailable" as const, records: {} };
       const result = await readWhenPreviewReady(
@@ -527,6 +556,7 @@ export function useStudioCanvasTab({
               pageAlias,
               area,
               controlValues,
+              tableStates,
             },
             signal,
           ),
@@ -782,11 +812,7 @@ export function useStudioCanvasTab({
           disabled={draft.locked}
           choices={draftChoices}
           compiledFields={view.compiledFields}
-          canvasArrangement={
-            gridArrangements.get(selected.placementAlias)?.revision === gridRevision
-              ? gridArrangements.get(selected.placementAlias)?.arrangement
-              : undefined
-          }
+          canvasArrangement={studioCanvasGridArrangement(gridStates.get(selected.placementAlias))}
           onCommand={commandComposition}
           onNewQuery={(use) => setQuerySheet({ use })}
         />
@@ -935,7 +961,8 @@ export function useStudioCanvasTab({
                 onChange={applyPuckPageEdit}
                 readRecords={readCanvasRecords}
                 arrangeGrid={arrangeGrid && !draft.locked}
-                onGridArrangement={onGridArrangement}
+                onGridChange={onGridChange}
+                gridReads={gridReads}
                 updating={draft.updatingCanvas}
                 palette={
                   addTargets === null

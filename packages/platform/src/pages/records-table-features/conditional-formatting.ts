@@ -1,5 +1,7 @@
+import type { GridLayoutState } from "../grid-view-state";
 import {
   conditionalFormatRuleFields,
+  type ConditionalFormatRule,
   conditionalFormattingDateParameters,
   type ConditionNode,
   type ConditionalFormatStyle,
@@ -59,6 +61,27 @@ export type ConditionalFormattingContext = Readonly<{
 
 const lower = (value: string): string => value.toLowerCase();
 
+/**
+ * The personal rules of the view in effect, which follow the authored rules through the same
+ * evaluation: only where the table allows personal formatting and its Formatting is on. The view
+ * arrives already narrowed to the fields this viewer can read, so a rule here reads none the
+ * viewer cannot.
+ */
+/** The table lets people add their own formatting rules to the views they save. */
+export const personalFormattingAllowed = (contract: RecordsTableContract): boolean =>
+  contract.features.savedViews.enabled &&
+  contract.features.savedViews.personalFormatting &&
+  contract.features.conditionalFormatting.enabled;
+
+export const personalFormattingRules = (
+  contract: RecordsTableContract,
+  layout: GridLayoutState,
+): readonly ConditionalFormatRule[] =>
+  personalFormattingAllowed(contract) ? (layout.views?.selected?.document.formatting ?? []) : [];
+
+/** A personal rule's style key, which cannot collide with an authored rule's identity. */
+const personalRuleId = (rule: ConditionalFormatRule): string => `personal:${rule.id}`;
+
 const dateParameterSet: ReadonlySet<string> = new Set(conditionalFormattingDateParameters);
 
 /** The calendar dates a rule's relative-date parameters name, counted in the time zone at `now`. */
@@ -79,13 +102,16 @@ export const conditionalFormattingRelativeDates = (
 /** The fields the enabled rules and column formats read that the read does not already request. */
 export const conditionalFormattingFieldIds = (
   contract: RecordsTableContract,
+  personal: readonly ConditionalFormatRule[],
 ): readonly string[] => {
   const feature = contract.features.conditionalFormatting;
   if (!feature.enabled) return [];
   return [
     ...new Set(
       [
-        ...feature.rules.filter((rule) => rule.enabled).flatMap(conditionalFormatRuleFields),
+        ...[...feature.rules, ...personal]
+          .filter((rule) => rule.enabled)
+          .flatMap(conditionalFormatRuleFields),
         ...feature.columnFormats.map((format) => format.field),
       ].map(lower),
     ),
@@ -101,11 +127,14 @@ const parameterKeys = (condition: ConditionNode): readonly string[] => {
 };
 
 /** Whether any enabled rule compares a date with a relative date, so the time zone is needed. */
-export const conditionalFormattingUsesRelativeDates = (contract: RecordsTableContract): boolean => {
+export const conditionalFormattingUsesRelativeDates = (
+  contract: RecordsTableContract,
+  personal: readonly ConditionalFormatRule[],
+): boolean => {
   const feature = contract.features.conditionalFormatting;
   return (
     feature.enabled &&
-    feature.rules.some(
+    [...feature.rules, ...personal].some(
       (rule) => rule.enabled && parameterKeys(rule.condition as ConditionNode).length > 0,
     )
   );
@@ -161,6 +190,7 @@ export const evaluateConditionalFormatting = (
   visibleFieldIds: readonly string[],
   rows: readonly ProtectedQueryRow[],
   context: ConditionalFormattingContext,
+  personal: readonly ConditionalFormatRule[],
 ):
   | Readonly<{
       projection: ConditionalFormattingProjection;
@@ -177,7 +207,11 @@ export const evaluateConditionalFormatting = (
   // Each rule is prepared once: its condition over lower-cased identities, the fields it reads as
   // the evaluator declares them, and its relative dates. A rule that names a field the release
   // does not declare, or a relative date the server could not count, is skipped for every row.
-  const prepared = feature.rules.flatMap((rule) => {
+  const rules: readonly ConditionalFormatRule[] = [
+    ...feature.rules,
+    ...personal.map((rule) => ({ ...rule, id: personalRuleId(rule) })),
+  ];
+  const prepared = rules.flatMap((rule) => {
     if (!rule.enabled) return [];
     const condition = lowerFields(rule.condition as ConditionNode);
     const reads = conditionalFormatRuleFields({ ...rule, condition, target: { kind: "row" } });
@@ -312,7 +346,7 @@ export const evaluateConditionalFormatting = (
 
   if (formats.size === 0) return undefined;
   const styles = Object.fromEntries(
-    feature.rules.filter((rule) => used.has(rule.id)).map((rule) => [rule.id, rule.style]),
+    rules.filter((rule) => used.has(rule.id)).map((rule) => [rule.id, rule.style]),
   );
   return { projection: { styles, columns }, rows: formats };
 };

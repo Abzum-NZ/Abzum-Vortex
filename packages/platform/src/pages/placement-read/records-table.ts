@@ -22,6 +22,8 @@ import type { RecordsTableGroupRead } from "../records-table-features/grouping";
 import {
   conditionalFormattingRelativeDates,
   conditionalFormattingUsesRelativeDates,
+  personalFormattingAllowed,
+  personalFormattingRules,
   type ConditionalFormattingContext,
 } from "../records-table-features";
 import {
@@ -142,6 +144,7 @@ export const readRecordsTable = async (
                 gridLayouts.stored.shareable.has(placementId.toLowerCase()),
               ),
             readable,
+            personalFormattingAllowed(contract),
           );
     views = {
       canShare: gridLayouts.stored.shareable.has(placementId.toLowerCase()),
@@ -158,6 +161,22 @@ export const readRecordsTable = async (
       basedOnViewId: stored?.basedOnViewId ?? null,
       selected: resolvedView.selected,
       notice: resolvedView.notice,
+      ...(installedViews.personalFormatting && contract.features.conditionalFormatting.enabled
+        ? {
+            formattingFields: (
+              bound.module.content.recordTypes.find(
+                (candidate) =>
+                  recordType.state === "resolved" &&
+                  String(candidate.recordTypeId).toLowerCase() ===
+                    String(recordType.recordTypeId).toLowerCase(),
+              )?.fields ?? []
+            ).filter((field) =>
+              authored.columns.some(
+                (column) => column.fieldId === String(field.fieldId).toLowerCase(),
+              ),
+            ),
+          }
+        : {}),
     };
     const selected = resolvedView.selected;
     if (selected !== null) {
@@ -233,7 +252,9 @@ export const readRecordsTable = async (
         (candidate) => String(candidate.recordTypeId).toLowerCase() === recordTypeId,
       )?.fields ?? [];
     let relativeDates: ConditionalFormattingContext["relativeDates"];
-    if (conditionalFormattingUsesRelativeDates(contract)) {
+    if (
+      conditionalFormattingUsesRelativeDates(contract, personalFormattingRules(contract, layout))
+    ) {
       const timeZone = await read.bindings.timeZone();
       if (timeZone === undefined)
         logPlacementFailure(address, placementId, "table_formatting_time_zone_unavailable");

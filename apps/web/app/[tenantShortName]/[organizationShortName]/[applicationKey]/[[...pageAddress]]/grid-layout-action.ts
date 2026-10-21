@@ -24,6 +24,7 @@ import {
   deleteGridView,
   gridViewPlacement,
   listGridViewShareTargets,
+  personalFormattingAllowed,
   resetGridView,
   saveGridView,
   shareGridView,
@@ -256,6 +257,8 @@ const viewResult = (outcome: GridViewOperationOutcome): GridViewCommandResult =>
     case "forbidden":
     case "limit":
       return { outcome: outcome.outcome };
+    case "formatting_refused":
+      return { outcome: "formatting_refused", reason: outcome.reason };
     case "not_found":
     case "target_unknown":
       return { outcome: "unavailable" };
@@ -282,6 +285,18 @@ export async function commitGridView(
   if (placement === undefined) return { outcome: "unavailable" };
   const pageId = String(page.pageId);
   const { queryId } = placement;
+  // The bound record type's declared fields, which a personal rule's operators are checked against.
+  const boundQuery = opened.context.releaseSet.modules
+    .flatMap((module) => module.content.queries.map((query) => ({ module, query })))
+    .find(({ query }) => String(query.queryId).toLowerCase() === queryId);
+  const recordTypeId =
+    boundQuery?.query.recordType.state === "resolved"
+      ? String(boundQuery.query.recordType.recordTypeId).toLowerCase()
+      : undefined;
+  const recordFields =
+    boundQuery?.module.content.recordTypes.find(
+      (recordType) => String(recordType.recordTypeId).toLowerCase() === recordTypeId,
+    )?.fields ?? [];
 
   const result = await opened.run(async (transaction, scope): Promise<GridViewCommandResult> => {
     switch (requested.kind) {
@@ -324,7 +339,12 @@ export async function commitGridView(
             requested.viewId,
             stored.shareable.has(requested.placementId.toLowerCase()),
           );
-        const resolved = resolveSelectedGridView(authored, addressed, readable);
+        const resolved = resolveSelectedGridView(
+          authored,
+          addressed,
+          readable,
+          personalFormattingAllowed(placement.contract),
+        );
         return resolved.selected === null
           ? { outcome: "unavailable" }
           : {
@@ -343,6 +363,7 @@ export async function commitGridView(
             expectedRevision: null,
             name: requested.name,
             document: requested.document,
+            recordFields,
           }),
         );
       case "save":
@@ -355,6 +376,7 @@ export async function commitGridView(
             expectedRevision: requested.expectedRevision,
             name: null,
             document: requested.document,
+            recordFields,
           }),
         );
       case "rename":
@@ -367,6 +389,7 @@ export async function commitGridView(
             expectedRevision: requested.expectedRevision,
             name: requested.name,
             document: null,
+            recordFields,
           }),
         );
       case "share":

@@ -21,6 +21,8 @@ export type AuthoredGridView = Readonly<{
 }>;
 export type RecordsTableSavedViewsSettings = Readonly<{
   defaultViews: readonly AuthoredGridView[];
+  /** People may add their own conditional-format rules to the views they save. */
+  personalFormatting: boolean;
 }>;
 
 /** Authored views compile their field references through the ordinary setting compiler. */
@@ -31,6 +33,8 @@ export const recordsTableSavedViewsFeature: RecordsTableFeatureDefinition<Record
     description: "Save, reopen and share views of the table",
     read: (group) => {
       if (featureEnabled(group) !== true) return { enabled: false };
+      const personalFormatting = group["personal_formatting"];
+      if (personalFormatting?.kind !== "boolean") return undefined;
       const defaultViews: AuthoredGridView[] = [];
       for (const item of settingItems(group["default_views"]) ?? []) {
         const view = settingGroup(item);
@@ -103,7 +107,11 @@ export const recordsTableSavedViewsFeature: RecordsTableFeatureDefinition<Record
           },
         });
       }
-      return { enabled: true, defaultViews };
+      return {
+        enabled: true,
+        defaultViews,
+        personalFormatting: personalFormatting.value,
+      };
     },
     check: (state, facts) => {
       if (!state.enabled) return featureAvailable;

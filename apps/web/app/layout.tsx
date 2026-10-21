@@ -4,11 +4,12 @@ import type { ReactNode } from "react";
 import { SHADCN_FONT_VARIABLE_CLASSES } from "./catalogue-fonts";
 import {
   APPEARANCE_COOKIE,
-  AppearanceProvider,
   createAppearanceRootProps,
   parseThemeMode,
-} from "@vortex/ui";
-import { loadDocumentTheme, PLATFORM_ROOT_CSS } from "./_lib/document-theme";
+} from "@vortex/ui/theme/appearance";
+import { AppearanceProvider } from "@vortex/ui/appearance";
+import { loadDocumentTheme } from "./_lib/document-theme";
+import { documentStylesheetHref } from "./_lib/document-styles";
 import "@vortex/ui/styles/globals.css";
 import { HistoryRefresh } from "./_components/history-refresh";
 
@@ -33,7 +34,13 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
       style={{ ...documentTheme.style, ...appearanceRoot.style }}
     >
       <head>
-        <style>{PLATFORM_ROOT_CSS}</style>
+        <link
+          rel="stylesheet"
+          href={documentStylesheetHref(documentTheme.stylesheet)}
+          precedence="platform"
+        />
+        {/* The one delivery of the shared component styles: a cached asset, never inlined. */}
+        <link rel="stylesheet" href={documentStylesheetHref("components")} precedence="default" />
       </head>
       <body>
         <AppearanceProvider initial={appearance}>

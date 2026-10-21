@@ -5,7 +5,7 @@ import type {
   DefinitionProvenanceEntry,
   PlatformBlockRelease,
 } from "../../schema";
-import { canonicalJson } from "../canonical-json-definition";
+import { sameCanonicalValue } from "../canonical-json-definition";
 import { peopleDirectory } from "../module-links";
 import { explicitSourceTargets } from "./explicit-source-targets";
 import { compiledSourceFlowBindings } from "./application-flow-binding-sources";
@@ -194,9 +194,7 @@ function applicationFlowProvenance(
         canonicalPath: [...canonicalBase, "flow", "inputs", ...leaf],
         origin: "source",
         sourcePath: [...sourceBase, "inputs", ...leaf],
-        ...(canonicalJson(sourceValue) === canonicalJson(canonicalValue)
-          ? {}
-          : { ruleCode: TRANSFORM_RULE }),
+        ...(sameCanonicalValue(sourceValue, canonicalValue) ? {} : { ruleCode: TRANSFORM_RULE }),
       });
     }
   });
@@ -261,9 +259,10 @@ export function applicationProvenance(
       if (!canonicalLeafSet.has(pathKey(canonicalPath))) {
         fail("vortex.definition.invalid_compilation_output", "invalid_value");
       }
-      const transformed =
-        canonicalJson(valueAtPath(source, sourcePath)) !==
-        canonicalJson(valueAtPath(canonical, canonicalPath));
+      const transformed = !sameCanonicalValue(
+        valueAtPath(source, sourcePath),
+        valueAtPath(canonical, canonicalPath),
+      );
       if (transformed && !sourceTransformationApproved(sourcePath, canonicalPath, positions)) {
         fail("vortex.definition.invalid_compilation_output", "invalid_value");
       }
