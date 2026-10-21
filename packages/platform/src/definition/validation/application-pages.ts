@@ -14,6 +14,7 @@ import {
   calendarBlockSourceIsSupported,
   moduleQueryDefinitionSchema,
   checkRecordsTableFeatures,
+  recordsTableGroupingRequired,
   recordsTableEditableFieldTypes,
   type BlockPropertySchemaContract,
   type RecordsTableQueryFacts,
@@ -185,6 +186,8 @@ export function applicationPageRules(scope: ApplicationScope): void {
           acceptsSelection: array(action.inputs).every((input) => input.required !== true),
         })),
       grouped,
+      queryLabel: String(bound.label ?? bound.key ?? ""),
+      groupBy: array(bound.groupByFieldIds).map((id) => String(id)),
       exportable:
         Array.isArray(record?.standardActions) &&
         record.standardActions.some((action) => action === "export"),
@@ -540,18 +543,25 @@ export function applicationPageRules(scope: ApplicationScope): void {
           );
         // Every enabled grid feature must fit the bound query; publication reports the feature's
         // own business sentence, the one Studio shows beside its switch.
+        const tableFacts = recordsTableQueryFacts(
+          bound,
+          bindingFacts,
+          page.type !== "public",
+          table.columns.map((column) => column.field),
+        );
+        // A table that reads a grouped query is refused while Group by is off, since the query
+        // has no flat rows to show.
+        const groupingRequired = recordsTableGroupingRequired(table.features, tableFacts);
         for (const feature of checkRecordsTableFeatures(
           table.features,
-          recordsTableQueryFacts(
-            bound,
-            bindingFacts,
-            page.type !== "public",
-            table.columns.map((column) => column.field),
-          ),
+          tableFacts,
           table.presentation,
           table.pageSize,
         ))
-          if (feature.enabled && feature.check.kind === "not_possible")
+          if (
+            (feature.enabled || (feature.key === "grouping" && groupingRequired)) &&
+            feature.check.kind === "not_possible"
+          )
             failures.push(
               failure(
                 output,

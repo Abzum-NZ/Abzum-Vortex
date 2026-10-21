@@ -92,7 +92,20 @@ export const readRecordsTable = async (
       return (typeof value === "string" ? [value] : (value ?? [])).map((text) => [name, text]);
     },
   );
-  const addressed = readRecordsTableQueryState(placementId, addressEntries);
+  // A table that reads a grouped query has no flat rows: it is grouped by its authored field
+  // whatever the address says, and publication refuses one that is not.
+  const queryGrouped = bound.query.groupByFieldIds.length > 0 || bound.query.aggregates.length > 0;
+  const authoredGrouping = contract.features.grouping;
+  if (queryGrouped && !(authoredGrouping.enabled && authoredGrouping.field !== undefined)) {
+    logPlacementFailure(address, placementId, "table_grouping_required");
+    data[placementId] = { status: "error" };
+    return;
+  }
+  const addressed = readRecordsTableQueryState(
+    placementId,
+    addressEntries,
+    queryGrouped && authoredGrouping.enabled ? authoredGrouping.field : undefined,
+  );
   if (addressed.kind === "malformed") {
     logPlacementFailure(address, placementId, "table_state_malformed", addressed.part);
     data[placementId] = { status: "refused", reason: "not_permitted" };
@@ -366,6 +379,7 @@ export const readRecordsTable = async (
           unassignedLabel: groupingFeature.unassignedLabel,
           expanded: groupMembers?.groupKey ?? addressedGroup.expanded,
           membersOnly: groupMembers !== undefined,
+          required: queryGrouped,
         }
       : undefined;
   // Export is projected only for a viewer whose export permission reaches every record; the
@@ -453,7 +467,13 @@ export const readRecordsTable = async (
     // A date group that left the supported years has its own business sentence.
     data[placementId] = {
       status: "refused",
-      reason: resolved.reasonCode === "value_out_of_range" ? "value_out_of_range" : "not_permitted",
+      reason:
+        resolved.reasonCode === "value_out_of_range" ||
+        resolved.reasonCode === "dataset_limit_exceeded"
+          ? resolved.reasonCode
+          : resolved.reasonCode === "field_unbounded" && queryGrouped
+            ? "grouping_unavailable"
+            : "not_permitted",
     };
   } else if (resolved.display.status === "empty") data[placementId] = { status: "empty" };
   else {

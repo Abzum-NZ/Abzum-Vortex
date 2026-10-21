@@ -86,7 +86,13 @@ export type RecordsTableFeatureProjection = Readonly<{
    * The viewer may group the table by the authored choice field: it is readable on every record
    * the viewer may read, so the grouped read never needs a withheld value.
    */
-  grouping?: Readonly<{ fieldId: string; label: string; unassignedLabel: string }>;
+  grouping?: Readonly<{
+    fieldId: string;
+    label: string;
+    unassignedLabel: string;
+    /** The table reads a grouped query, so it is always grouped and offers no way to ungroup. */
+    required?: true;
+  }>;
   /** The styles the page's rows name and the numeric columns drawn as bars or scales. */
   conditionalFormatting?: ConditionalFormattingProjection;
   /**

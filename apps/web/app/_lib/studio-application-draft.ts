@@ -820,6 +820,14 @@ export const loadStudioApplicationDraft = async (
                             ];
                       }),
                       grouped: query.groupByFieldIds.length > 0 || query.aggregates.length > 0,
+                      groupBy: query.groupByFieldIds.flatMap((fieldId) => {
+                        const field = recordType.fields.find((candidate) =>
+                          sameId(String(candidate.fieldId), String(fieldId)),
+                        );
+                        return field === undefined
+                          ? []
+                          : [`${release!.key}:${recordType.key}.${field.key}`];
+                      }),
                       inputs: queryInputs(query),
                       pageSize: query.pageSize,
                       exposure: query.exposure,

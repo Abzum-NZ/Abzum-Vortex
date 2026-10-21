@@ -55,7 +55,11 @@ import { recordsTableSavedViewsFeature, type RecordsTableSavedViewsSettings } fr
 import { recordsTableSearchFeature, type RecordsTableSearchSettings } from "./search";
 import { recordsTablePinningFeature, type RecordsTablePinningSettings } from "./pinning";
 import { recordsTablePivotFeature, type RecordsTablePivotSettings } from "./pivot";
-import { recordsTableGroupingFeature, type RecordsTableGroupingSettings } from "./grouping";
+import {
+  recordsTableGroupedQueryRefusal,
+  recordsTableGroupingFeature,
+  type RecordsTableGroupingSettings,
+} from "./grouping";
 import { recordsTableExportFeature, type RecordsTableExportSettings } from "./export";
 import {
   featureAvailable,
@@ -102,7 +106,10 @@ export {
   RECORDS_TABLE_GROUPING_MAXIMUM_CHOICES,
   RECORDS_TABLE_GROUPING_MAXIMUM_LABEL_LENGTH,
   RECORDS_TABLE_GROUPING_MAXIMUM_PAGE_SIZE,
+  checkRecordsTableGrouping,
+  groupingDefaultsFromQuery,
   recordsTableGroupingFieldTypes,
+  type RecordsTableGroupingFacts,
   type RecordsTableGroupingFieldType,
 } from "./grouping";
 export { boardAggregateLabel, boardProblem, recordsTableBoardFactsOf } from "./board";
@@ -322,6 +329,16 @@ export const readRecordsTableFeatures = (
 const recordsTableBoardSupportedFeatures: readonly RecordsTableFeatureKey[] = ["row_actions"];
 
 /**
+ * Whether the table must be grouped to read its query: a grouped query has no flat rows, so a
+ * table that reads one (and is not a board, which reads it its own way) shows its records in
+ * groups. Publication refuses such a table while Group by is off, even though the feature is off.
+ */
+export const recordsTableGroupingRequired = (
+  features: RecordsTableFeatures,
+  facts: RecordsTableQueryFacts,
+): boolean => facts.grouped && !features.board.enabled;
+
+/**
  * The one capability check of one feature against the bound query's facts. Publication runs it on
  * the compiled release for every enabled feature and refuses with its sentence; Studio runs it on
  * the draft's facts beside each switch, so the two never disagree.
@@ -372,6 +389,8 @@ export const checkRecordsTableFeature = (
       "definition_records_table_saved_views",
       "People can only add their own formatting when Formatting is on for this table. Turn Formatting on, or turn personal formatting off.",
     );
+  if (key === "grouping" && !state.enabled && recordsTableGroupingRequired(features, facts))
+    return recordsTableGroupedQueryRefusal(facts);
   // Groups, a board's columns, a tree's levels and a pivot's cells each arrange the records
   // their own way, so the table shows one of them at a time.
   if (key === "grouping" && state.enabled) {

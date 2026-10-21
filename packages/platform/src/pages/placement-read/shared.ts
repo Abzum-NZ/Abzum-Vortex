@@ -78,6 +78,7 @@ export type PlacementFailureReason =
   | "table_time_zone_unavailable"
   | "table_tree_off"
   | "table_grouping_invalid"
+  | "table_grouping_required"
   | "table_grouping_refused"
   | "table_tree_invalid"
   | "calendar_query_invalid"

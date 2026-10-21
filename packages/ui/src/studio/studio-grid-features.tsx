@@ -28,7 +28,7 @@ import { Switch } from "../components/switch";
 import type { StudioQueryChoice } from "./contextual-palette";
 import {
   studioGridFeatureEditors,
-  studioGridFeatureStartSettings,
+  studioGridFeatureStart,
   studioRecordsTableQueryFacts,
   type StudioRelatedRecordsChoices,
 } from "./grid-features";
@@ -268,7 +268,7 @@ export function StudioGridFeatures({
                                 ...(declaration?.defaultValue?.kind === "group"
                                   ? declaration.defaultValue.properties
                                   : {}),
-                                ...studioGridFeatureStartSettings[key],
+                                ...studioGridFeatureStart(key, facts),
                                 enabled: { kind: "boolean", value: true },
                               },
                             }
