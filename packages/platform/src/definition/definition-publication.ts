@@ -543,21 +543,28 @@ export const createDefinitionPublicationService = (
     });
   },
 
-  /** Published field facts and compilation share one request-scoped definition snapshot. */
+  /**
+   * Published field facts and compilation share one request-scoped definition snapshot. It reads
+   * the draft once and returns it beside the compile; a caller that omits the expected revision
+   * takes the saved one, so no caller reads the same draft a second time.
+   */
   readApplicationDraftSnapshot: async (
     context: SessionContext,
     input: unknown,
     resources: Readonly<{ publication: boolean }>,
   ) => {
-    const command = prepareDefinitionPublicationCommandSchema.safeParse(input);
+    const command = prepareDefinitionPublicationCommandSchema
+      .partial({ expectedDraftRevision: true })
+      .safeParse(input);
     if (!command.success) return refuse("INVALID_DEFINITION_PUBLICATION_COMMAND");
     await authorize(authority, context, { kind: "draft_change", rootId: command.data.rootId });
     return repository.read(context, async (reader) => {
-      const candidate = validateDraftCandidate(
-        context,
-        await reader.readDraftCandidate(command.data.rootId),
-        command.data,
-      );
+      const stored = await reader.readDraftCandidate(command.data.rootId);
+      if (stored === undefined) return refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
+      const candidate = validateDraftCandidate(context, stored, {
+        rootId: command.data.rootId,
+        expectedDraftRevision: command.data.expectedDraftRevision ?? stored.draft.draftRevision,
+      });
       if (candidate.draft.kind !== "application" || candidate.draft.source.kind !== "application")
         return refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
       const overlay = createDraftModuleOverlay(reader, context, candidate.draft);
@@ -566,12 +573,13 @@ export const createDefinitionPublicationService = (
         : null;
       try {
         return {
+          draft: candidate.draft,
           publication,
           compilation: await compileDraftSnapshot(context, reader, overlay, catalogue, candidate),
           failure: undefined,
         };
       } catch (failure) {
-        return { publication, compilation: null, failure };
+        return { draft: candidate.draft, publication, compilation: null, failure };
       }
     });
   },
