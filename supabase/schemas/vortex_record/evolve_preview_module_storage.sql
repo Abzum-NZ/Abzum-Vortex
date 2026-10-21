@@ -119,8 +119,10 @@ begin
       raise exception using errcode = '42501', message = 'Record field storage identity is invalid';
     end;
     -- Every field of the record type is checked in one pass, then applied set-based: only what a
-    -- field actually changes costs a statement.
-    if exists (
+    -- field actually changes costs a statement. A field appears once, so each gets one mapping.
+    if pg_catalog.cardinality(field_ids) <> (
+      select pg_catalog.count(distinct field_id) from pg_catalog.unnest(field_ids) as field_id
+    ) or exists (
       select 1
       from pg_catalog.jsonb_array_elements(record_type -> 'fields') as item(value)
       where not vortex_platform.is_non_nil_uuid(item.value ->> 'fieldId')
@@ -167,6 +169,7 @@ begin
         or mapping.introduced_by_module_root_id is distinct from p_module_root_id
         or mapping.introduced_at_release_revision is distinct from p_module_release_revision
         or mapping.state is distinct from 'active'
+        or mapping.retired_by_module_root_id is not null
         or mapping.retired_at_release_revision is not null);
     -- Records already in the preview have no value for a new field, so the column takes none;
     -- the save path enforces a required field for every record it writes.
