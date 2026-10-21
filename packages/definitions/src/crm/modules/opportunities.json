@@ -84,7 +84,11 @@
             "target": "vortex.crm.people:contact",
             "reverse_key": "primary_opportunities",
             "reverse_name": "Primary opportunities",
-            "on_parent_delete": "empty_optional"
+            "on_parent_delete": "empty_optional",
+            "depends_on": {
+              "parent_field": "company",
+              "filter_field": "company"
+            }
           }
         },
         {
@@ -1218,6 +1222,7 @@
         "opportunity_number",
         "name",
         "company",
+        "primary_contact",
         "value",
         "net_value",
         "stage",
