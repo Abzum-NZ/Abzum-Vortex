@@ -254,10 +254,12 @@ export const readRecordsTableFeatures = (
 ): RecordsTableFeaturesRead => {
   try {
     const group = requiredGroup(value, "features");
-    const read = <Key extends RecordsTableFeatureKey>(key: Key): RecordsTableFeatureState<object> =>
-      withSettingPath(`features.${key}`, () =>
-        registry[key].definition.read(requiredGroup(group[key], "group")),
-      );
+    const read = <Key extends RecordsTableFeatureKey>(
+      key: Key,
+    ): RecordsTableFeatureState<object> => {
+      const feature = requiredGroup(group[key], `features.${key}`);
+      return withSettingPath(`features.${key}`, () => registry[key].definition.read(feature));
+    };
     const states = Object.fromEntries(
       recordsTableFeatureKeys.map((key) => [registry[key].property, read(key)]),
     );
