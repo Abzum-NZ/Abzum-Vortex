@@ -23,6 +23,19 @@ import {
   QueryInputRefusalError,
 } from "./typed-input-validation";
 
+/**
+ * A group continuation is the JSON text [rank, title, canonical group value]; its last part is the
+ * key of the final group the page returned, which is how a member read names that group.
+ */
+const groupCursorEndsAt = (cursor: string | undefined, groupKey: string | undefined): boolean => {
+  try {
+    const parts: unknown = JSON.parse(cursor ?? "");
+    return Array.isArray(parts) && parts.length === 3 && parts[2] === groupKey;
+  } catch {
+    return false;
+  }
+};
+
 const readSummary = async (
   transaction: RequestDatabaseTransaction,
   command: ProtectedQuerySummaryCommand,
@@ -105,7 +118,8 @@ export const summariseCommand = async (
     (result.groups.length > command.grouping.limit ||
       result.groupByFieldIds.length !== 1 ||
       result.groupByFieldIds[0]?.toLowerCase() !== command.grouping.fieldId.toLowerCase() ||
-      (result.nextGroupKey !== null && result.nextGroupKey !== result.groups.at(-1)?.groupKey))
+      (result.nextGroupKey !== null &&
+        !groupCursorEndsAt(result.nextGroupKey, result.groups.at(-1)?.groupKey)))
   )
     throw new Error("PROTECTED_QUERY_RESULT_INVALID");
   if (
