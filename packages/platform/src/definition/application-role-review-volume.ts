@@ -41,10 +41,12 @@ export const reviewJsonbBytes = (value: JsonValue): number => {
  * its saved key/label plus its displayed label and change marker. Each field grant reserves
  * 384 bytes: two 60-character labels at up to 3 UTF-8 bytes per UTF-16 unit, change marker,
  * edit suffix and separators. This also covers UUID fallbacks and names changed in later
- * releases. A list that names every field of the permission's record type is shown as one
- * "all fields" entry, so it is charged as one grant; a narrower list pays per field. The
- * largest role is charged 500 times because independently accepted roles can retain permission
- * sets from 500 different releases.
+ * releases. The review names a field once per record type, sign and edit suffix however many of
+ * the role's permissions list it, so a role pays for the distinct fields it can read and the
+ * distinct fields it can change on each record type; a permission whose record type is not
+ * declared in the given modules pays for each listed field. The largest role is charged 500
+ * times because independently accepted roles can retain permission sets from 500 different
+ * releases.
  */
 export const applicationRoleReviewBytes = (
   application: ApplicationContent,
@@ -59,28 +61,22 @@ export const applicationRoleReviewBytes = (
       (permission) => [permission.key, permission],
     ),
   );
-  const recordFieldCounts = new Map(
+  const declaredRecordTypes = new Set(
     modules.flatMap((module) =>
-      module.recordTypes.map(
-        (recordType) =>
-          [
-            String(recordType.recordTypeId).toLowerCase(),
-            new Set(recordType.fields.map((field) => String(field.fieldId).toLowerCase())),
-          ] as const,
-      ),
+      module.recordTypes.map((recordType) => String(recordType.recordTypeId).toLowerCase()),
     ),
   );
-  const grants = (recordTypeId: unknown, fieldIds: readonly unknown[]): number => {
-    const all = recordFieldCounts.get(String(recordTypeId).toLowerCase());
-    const named = new Set(fieldIds.map((fieldId) => String(fieldId).toLowerCase()));
-    return all !== undefined && named.size === all.size && [...all].every((id) => named.has(id))
-      ? 1
-      : fieldIds.length;
-  };
   const roles = application.roles.map((role): ApplicationRoleReviewRole => {
     let size = 512 + bytes(role.name) + bytes(role.key);
     let permissionCount = 0;
-    let fieldGrants = 0;
+    // Distinct field ids per record type (or per permission when its record type is unknown).
+    const readable = new Map<string, Set<string>>();
+    const changeable = new Map<string, Set<string>>();
+    const add = (into: Map<string, Set<string>>, subject: string, ids: readonly unknown[]) => {
+      const fields = into.get(subject) ?? new Set<string>();
+      for (const id of ids) fields.add(String(id).toLowerCase());
+      into.set(subject, fields);
+    };
     for (const key of role.permissionKeys) {
       const permission = permissions.get(key);
       if (permission === undefined) throw new Error(`Role permission is unresolved: ${key}`);
@@ -94,11 +90,17 @@ export const applicationRoleReviewBytes = (
       size += reviewJsonbBytes({ key, label: permission.label }) + bytes(permission.label) + 16;
       permissionCount += 1;
       const policy = permission.fieldPolicy;
-      if (policy !== undefined)
-        fieldGrants +=
-          grants(permission.recordTypeId, policy.readableFieldIds) +
-          grants(permission.recordTypeId, policy.changeableFieldIds);
+      if (policy !== undefined) {
+        const recordTypeId = String(permission.recordTypeId).toLowerCase();
+        const subject = declaredRecordTypes.has(recordTypeId)
+          ? `record:${recordTypeId}`
+          : `permission:${key}`;
+        add(readable, subject, policy.readableFieldIds);
+        add(changeable, subject, policy.changeableFieldIds);
+      }
     }
+    let fieldGrants = 0;
+    for (const fields of [...readable.values(), ...changeable.values()]) fieldGrants += fields.size;
     return {
       name: role.name,
       permissionCount,
@@ -131,7 +133,11 @@ export const applicationRoleReviewRefusal = (
     maximumApplicationRoleReviewBytes - (review.releaseBytes - largest.bytes),
     Math.floor(maximumAcceptedRoleHistoryBytes / maximumApplicationRoles),
   );
-  const limit =
-    largest.fieldGrants + Math.max(0, Math.floor((budget - largest.bytes) / fieldGrantBytes));
+  const limit = Math.max(
+    0,
+    Math.floor(
+      (budget - (largest.bytes - fieldGrantBytes * largest.fieldGrants)) / fieldGrantBytes,
+    ),
+  );
   return `The role ${largest.name} holds ${largest.permissionCount} permissions with ${largest.fieldGrants} field grants; one role can hold at most ${limit} field grants for an installation review. Give it fewer permissions or field-level grants, or split it into two roles.`;
 };
