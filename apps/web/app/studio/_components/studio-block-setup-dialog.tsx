@@ -10,10 +10,14 @@ import {
   DialogTitle,
 } from "@vortex/ui/components/dialog";
 import {
+  STUDIO_GROUPED_TABLE_PRESET,
   StudioQueryPicker,
   StudioSettingFields,
   studioBlockChoices,
+  studioGroupedTableSettings,
+  studioGroupedTableStart,
   studioSettingProblems,
+  studioTablePresetProperty,
   type StudioCompositionAddTarget,
   type StudioCompositionSettings,
   type StudioPaletteChoice,
@@ -64,10 +68,15 @@ export function StudioBlockSetupDialog({
   const queries = draftChoices.queries;
   const [query, setQuery] = useState("");
   const [values, setValues] = useState<StudioCompositionSettings>({});
+  // The Grouped table preset: the field it groups by and, for a date, the calendar unit.
+  const [grouped, setGrouped] = useState(false);
+  const [groupValues, setGroupValues] = useState<StudioCompositionSettings>({});
   const [problem, setProblem] = useState("");
   const formId = useId();
   useEffect(() => {
     setValues(setupDefaults(request?.choice));
+    setGrouped(false);
+    setGroupValues({});
     setProblem("");
     setQuery(
       request?.choice.needsQuery !== true
@@ -82,8 +91,29 @@ export function StudioBlockSetupDialog({
     () => studioBlockChoices(draftChoices, query === "" ? null : query),
     [draftChoices, query],
   );
+  // The bound query starts the Grouped table with the field it already groups by.
+  const queryChoice = queries.find((candidate) => candidate.reference === query);
+  const choosePreset = (next: StudioCompositionSettings) => {
+    const preset = next["presentation"];
+    const groupedPreset = preset?.kind === "choice" && preset.value === STUDIO_GROUPED_TABLE_PRESET;
+    setGrouped(groupedPreset);
+    if (groupedPreset) setGroupValues(studioGroupedTableStart(queryChoice));
+    setValues(groupedPreset ? { ...next, presentation: { kind: "choice", value: "grid" } } : next);
+  };
   if (request === null) return null;
   const { choice, target } = request;
+  const groupedTable = choice.groupedTable;
+  // Table, List and Grouped table are one Preset choice; the first two are catalogue values and
+  // the third is a palette choice that switches Group by on.
+  const setup =
+    groupedTable === undefined
+      ? choice.setup
+      : choice.setup.map((property) =>
+          property.key === "presentation" ? studioTablePresetProperty(property) : property,
+        );
+  const shown: StudioCompositionSettings = grouped
+    ? { ...values, presentation: { kind: "choice", value: STUDIO_GROUPED_TABLE_PRESET } }
+    : values;
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -96,7 +126,16 @@ export function StudioBlockSetupDialog({
       setProblem(problems.join(" "));
       return;
     }
-    const outcome = request.add(values, choice.needsQuery ? query : null);
+    let added = values;
+    if (grouped && groupedTable !== undefined) {
+      const preset = studioGroupedTableSettings(groupedTable, queryChoice, groupValues);
+      if ("problem" in preset) {
+        setProblem(preset.problem);
+        return;
+      }
+      added = { ...values, ...preset.settings };
+    }
+    const outcome = request.add(added, choice.needsQuery ? query : null);
     if (outcome === true) onClose();
     else setProblem(outcome);
   };
@@ -125,21 +164,36 @@ export function StudioBlockSetupDialog({
               onChange={(next) => {
                 setQuery(next);
                 setValues(setupDefaults(choice));
+                setGrouped(false);
+                setGroupValues({});
                 setProblem("");
               }}
             />
           )}
           <StudioSettingFields
             idPrefix={formId}
-            properties={choice.setup}
-            values={values}
+            properties={setup}
+            values={shown}
             choices={choices}
             disabled={false}
             onChange={(next) => {
-              setValues(next);
+              choosePreset(next);
               setProblem("");
             }}
           />
+          {grouped && groupedTable !== undefined && (
+            <StudioSettingFields
+              idPrefix={`${formId}-group`}
+              properties={groupedTable.settings}
+              values={groupValues}
+              choices={choices}
+              disabled={false}
+              onChange={(next) => {
+                setGroupValues(next);
+                setProblem("");
+              }}
+            />
+          )}
           {problem.length === 0 ? null : (
             <p role="alert" className="text-sm text-destructive">
               {problem}

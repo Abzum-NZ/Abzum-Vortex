@@ -555,6 +555,15 @@ const withoutGrouping = (values: ProjectedTableValues): ProjectedTableValues => 
   return Object.keys(features).length === 0 ? rest : { ...rest, features };
 };
 
+/** The table whose grouping is not the viewer's to switch off, because its query has no flat rows. */
+const withRequiredGrouping = (values: ProjectedTableValues): ProjectedTableValues =>
+  values.features?.grouping === undefined
+    ? values
+    : {
+        ...values,
+        features: { ...values.features, grouping: { ...values.features.grouping, required: true } },
+      };
+
 /** The rows and bounds one grouped read returned, in the shape an ordinary page read has. */
 type GroupedPage = Readonly<{
   rows: readonly ProtectedQueryRow[];
@@ -637,9 +646,10 @@ const readGrouped = async (
     if (summary.kind !== "available") return { kind: "resolution", resolution: refused };
     if (summary.value.outcome === "refused") {
       const reason = summary.value.reasonCode;
-      if (reason === "dataset_limit_exceeded")
+      // A table that reads a grouped query has no flat page to fall back to.
+      if (!group.required && reason === "dataset_limit_exceeded")
         return { kind: "flat", groups: { status: "too_many" } };
-      if (reason === "field_unbounded") return { kind: "flat", withheld: true };
+      if (!group.required && reason === "field_unbounded") return { kind: "flat", withheld: true };
       return { kind: "resolution", resolution: { kind: "refused", reasonCode: reason } };
     }
     fieldBounds = summary.value.fieldBounds;
@@ -895,7 +905,9 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
               values: {
                 ...(grouped?.kind === "flat" && grouped.withheld === true
                   ? withoutGrouping(projected.values)
-                  : projected.values),
+                  : request.group?.required === true
+                    ? withRequiredGrouping(projected.values)
+                    : projected.values),
                 ...(built.sort === undefined ? {} : { sort: built.sort }),
                 narrowing,
                 page,

@@ -16,6 +16,8 @@ const REFUSAL_MESSAGES: Readonly<Record<DisplayRefusalReason, string>> = Object.
     "Some dates in these records fall in a period that reaches past the supported years 0001 to 9999. Narrow the records with search or filters, or group the dates by a shorter period.",
   dataset_limit_exceeded:
     "There are too many records to summarise at once. Narrow them with search or filters.",
+  grouping_unavailable:
+    "This table shows its records in groups, and you cannot see the field they are grouped by, so there is nothing to show you.",
 });
 
 /**
@@ -135,7 +137,8 @@ export function DisplayStateContainer<Values>({
         <EmptyHeader>
           <EmptyDescription>
             {projectedData.reason === "value_out_of_range" ||
-            projectedData.reason === "dataset_limit_exceeded"
+            projectedData.reason === "dataset_limit_exceeded" ||
+            projectedData.reason === "grouping_unavailable"
               ? REFUSAL_MESSAGES[projectedData.reason]
               : (refusedMessage ?? REFUSAL_MESSAGES[projectedData.reason])}
           </EmptyDescription>

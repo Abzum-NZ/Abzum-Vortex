@@ -18,9 +18,11 @@ import type { GridFeatureColumnProps, GridFeatureModule, GridFeaturePointProps }
 function GroupToggle({ context }: GridFeaturePointProps): ReactElement | null {
   const grouping = context.grouping;
   const settings = context.features.grouping;
+  // A table that reads a grouped query is always grouped: there is nothing to switch.
   if (
     grouping === undefined ||
     settings === undefined ||
+    settings.required === true ||
     context.events?.group_changed === undefined
   )
     return null;
@@ -45,6 +47,7 @@ function GroupItems({ context, column }: GridFeatureColumnProps): ReactElement |
   if (
     grouping === undefined ||
     settings === undefined ||
+    settings.required === true ||
     context.events?.group_changed === undefined ||
     column.key.toLowerCase() !== settings.fieldId.toLowerCase()
   )

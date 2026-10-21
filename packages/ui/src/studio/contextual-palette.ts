@@ -12,6 +12,7 @@ import {
 } from "@vortex/platform/schema";
 import { PALETTE_GROUP_TITLES } from "../palette-groups";
 import { studioHasSlotStarter } from "./composition-starters";
+import { studioGroupedTablePreset, type StudioGroupedTablePreset } from "./grouped-table-preset";
 
 /**
  * The Studio block palette for one place on a page: the one release of each block the catalogue
@@ -36,6 +37,8 @@ export type StudioPaletteChoice = Readonly<{
   needsQuery: boolean;
   /** Required settings without a catalogue default, asked for when the block is added. */
   setup: readonly BlockPropertySchemaContract[];
+  /** The Data grid's Grouped table preset: Group by switched on in the one grid. */
+  groupedTable?: StudioGroupedTablePreset;
   /** Why the block cannot be added yet; absent when it can. */
   unavailable?: string;
 }>;
@@ -99,6 +102,7 @@ const choiceFor = (
   release: PlatformBlockRelease,
 ): StudioPaletteChoice => {
   const setup: BlockPropertySchemaContract[] = [];
+  const groupedTable = studioGroupedTablePreset(release);
   let unavailable: string | undefined;
   for (const property of release.properties) {
     // A preset is selected inside the one Data grid tile. It writes ordinary grid settings.
@@ -133,6 +137,7 @@ const choiceFor = (
     groupLabel: PALETTE_GROUP_TITLES[release.paletteGroup],
     needsQuery: studioReleaseReadsQuery(release),
     setup: Object.freeze(setup),
+    ...(groupedTable === undefined ? {} : { groupedTable }),
     ...(unavailable === undefined ? {} : { unavailable }),
   });
 };
@@ -293,6 +298,8 @@ export type StudioQueryChoice = Readonly<{
   fields: readonly StudioQueryField[];
   /** The query groups or totals its rows, so its rows are not records a person can act on. */
   grouped: boolean;
+  /** The fields the query groups by, in its order, as a block's settings name them. */
+  groupBy: readonly string[];
   /** The values the query asks for. */
   inputs: readonly StudioQueryInput[];
   /** The most rows one read of the query returns. */
@@ -491,6 +498,7 @@ const ownQueries = (source: ApplicationSourceDocument): StudioQueryChoice[] =>
         recordType,
         fields: Object.freeze(fields),
         grouped: query.group_by.length > 0 || query.aggregates.length > 0,
+        groupBy: Object.freeze(query.group_by.map((key) => `${recordType}.${key}`)),
         inputs: Object.freeze(inputs),
         pageSize: query.page_size,
         exposure: query.exposure,

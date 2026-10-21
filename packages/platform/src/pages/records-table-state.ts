@@ -334,6 +334,11 @@ const parseSort = (value: string): RecordsTableSortKey[] | undefined => {
 export const readRecordsTableQueryState = (
   placementId: string,
   entries: Iterable<readonly [string, string]>,
+  /**
+   * The field a table that must be grouped (it reads a grouped query) is grouped by when the
+   * address names none: its authored grouping field, never one the address chose.
+   */
+  requiredGroupField?: string,
 ): RecordsTableQueryStateRead => {
   const addressed = [...entries];
   const filtersSeen = new Set<string>();
@@ -368,7 +373,11 @@ export const readRecordsTableQueryState = (
       return { kind: "malformed", part: "filter" };
     filters.push({ fieldId: fieldId.toLowerCase(), filter });
   }
-  const group = decodeGroupParameter(owned.get(groupParameter(placementId)));
+  const group =
+    decodeGroupParameter(owned.get(groupParameter(placementId))) ??
+    (requiredGroupField === undefined
+      ? undefined
+      : { fieldId: requiredGroupField.toLowerCase(), after: null });
   if (group === "malformed") return { kind: "malformed", part: "group" };
   const expanded = decodeGroupExpansion(
     addressed.find(
