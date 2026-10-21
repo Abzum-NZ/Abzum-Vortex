@@ -6,6 +6,7 @@ import {
 } from "@vortex/platform/schema";
 import type { DisplayBatchEditAnswer, DisplaySemanticEvent } from "@vortex/ui";
 import type { ApplicationPageModel } from "../../../../../../_lib/application-page";
+import { recordsTableAddress } from "./records-table-address";
 
 type Rows = RecordsTableBatchEditRequest["rows"];
 type Saved = Extract<RecordsTableBatchEditResult, { kind: "saved" }>;
@@ -80,10 +81,7 @@ export function useBatchUndo({
           credentials: "same-origin",
           cache: "no-store",
           body: JSON.stringify({
-            tenantShortName: model.invocation.tenantShortName,
-            organizationShortName: model.invocation.organizationShortName,
-            applicationKey: model.invocation.applicationKey,
-            pageKey: model.invocation.pageKey,
+            ...recordsTableAddress(model),
             placementId,
             commandId: crypto.randomUUID(),
             rows,
