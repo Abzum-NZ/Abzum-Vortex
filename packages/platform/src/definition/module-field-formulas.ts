@@ -206,7 +206,7 @@ export const calculationProblems = (settings: CalculationSettings, fields: Reado
   const problems: string[] = [];
   const known = (where: string, key: string): FormulaField | undefined => {
     const field = fields.get(key);
-    if (field === undefined) problems.push(`${where}: "${key}" is not another field of this record type.`);
+    if (field === undefined) problems.push(`${where}: choose another field of this record type.`);
     return field;
   };
   const expression = settings.expression;

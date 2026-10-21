@@ -37,6 +37,7 @@ import {
   deleteInlineModuleField,
   deriveFieldKey,
   fieldTypeKeys,
+  joinTextAccepts,
   linkDependencyCandidates,
   moduleFieldDefaultDeclaration,
   moduleFieldSettingDeclarations,
@@ -65,7 +66,7 @@ import {
   type TotalSettings,
 } from "@vortex/platform/schema";
 import { StudioField } from "./studio-field";
-import { StudioReferencesAlert, StudioUsedIn } from "./studio-used-in";
+import { StudioReferencesAlert, StudioUsedIn, useStudioPlaceOpener } from "./studio-used-in";
 import { StudioLinkSection } from "./studio-link-section";
 import { useStudioDraftText } from "./use-studio-draft-text";
 import { useStudioDraftHeld } from "./use-studio-draft-held";
@@ -167,6 +168,7 @@ export function ModuleFieldsEditor({
   onRemoved?: () => void;
 }>) {
   const [confirm, confirmDialog] = useConfirm();
+  const placeOpener = useStudioPlaceOpener();
   const module = source.body.modules.find((item) => item.key === moduleKey);
   const record = module?.record_types.find((item) => item.key === recordKey);
   const existing =
@@ -291,9 +293,12 @@ export function ModuleFieldsEditor({
       linkDependency: dependencyContext(type, settings, label),
     });
   const startSettings = (type: ModuleFieldType): Record<string, unknown> => {
+    // A new calculation starts by joining the first other text or choice field, never itself.
     const start = starterModuleFieldSettings(type, {
       recordTypes: recordTypes.map((item) => item.key),
-      titleField: record?.title_field ?? "",
+      joinField: formulaFields.find(
+        (item) => (item.type === "text" || item.type === "choice") && joinTextAccepts(item),
+      )?.key,
       relationships: totalLinks.map((item) => item.reference),
     });
     // A new calculation is settled like every edit of its formula, so it is read-time when it must be.
@@ -309,7 +314,11 @@ export function ModuleFieldsEditor({
       ? (existing.settings as Plain)
       : startSettings(type);
   const read = (type: ModuleFieldType, plain: Plain, stored: unknown) => {
-    const reading = readModuleFieldSettings(type, plain, declarationsFor(type, plain, existing?.label ?? ""));
+    const reading = readModuleFieldSettings(
+      type,
+      plain,
+      declarationsFor(type, plain, existing?.label ?? ""),
+    );
     const defaultDeclaration = moduleFieldDefaultDeclaration(type, plain);
     const typedDefault =
       defaultDeclaration.kind === "declared"
@@ -356,6 +365,7 @@ export function ModuleFieldsEditor({
   const [placements, setPlacements] = useState<ReadonlySet<string>>(new Set());
   const [issues, setIssues] = useState<readonly string[]>([]);
   const [references, setReferences] = useState<readonly ApplicationUsePlace[]>([]);
+  const [titleRefusal, setTitleRefusal] = useState<string | null>(null);
   const [computedValid, setComputedValid] = useState(true);
 
   const computedProblems = (type: ModuleFieldType, settings: Plain): readonly string[] =>
@@ -385,7 +395,7 @@ export function ModuleFieldsEditor({
     else if (readFailures.length > 0 && !typeChanged) settings = plain;
     else {
       const problems = studioSettingProblems(next.settings, declarations);
-      if (problems.length > 0) return problems.map((problem) => `Settings: ${problem}`).join(" ");
+      if (problems.length > 0) return problems.join(" ");
       settings = writeModuleFieldSettings(next.type, next.settings, declarations, plain);
     }
     const defaultModel = moduleFieldDefaultDeclaration(next.type, settings);
@@ -431,11 +441,14 @@ export function ModuleFieldsEditor({
   const helpText = useStudioDraftText(existing?.help_text ?? "", (next) =>
     adding ? true : (commit({ helpText: next }, mergeKey("help")) ?? true),
   );
+  // A type whose starting settings are not valid yet is held here, not applied and not reverted.
+  const typeValue = useStudioDraftHeld<ModuleFieldType>(stored.type);
   const settingsValue = useStudioDraftHeld(stored.settings);
   const defaultValue = useStudioDraftHeld(stored.defaultValue);
   const computedValue = useStudioDraftHeld(stored.computed);
   const form: FormState = {
     ...stored,
+    type: typeValue.value,
     label: label.text,
     helpText: helpText.text,
     settings: settingsValue.value,
@@ -507,20 +520,71 @@ export function ModuleFieldsEditor({
     const problem = commit(patch);
     setIssues(problem === undefined ? [] : [problem]);
   };
+  const typeHeld = existing !== undefined && typeValue.value !== existing.type;
+  /** The held type with its settings: what the first valid settings edit applies together with the type. */
+  const heldBase: Partial<FormState> = typeHeld
+    ? {
+        type: form.type,
+        settings: form.settings,
+        defaultValue: form.defaultValue,
+        computed: form.computed,
+      }
+    : {};
+  /** Why the new type is not applied yet, at the Type control, in the builder's words. */
+  const incompleteTypeSentence = (type: ModuleFieldType): string => {
+    const todo =
+      type === "choice" || type === "several_choices"
+        ? "Add at least one option"
+        : type === "calculation"
+          ? "Choose the fields to join"
+          : type === "total"
+            ? "Choose what to add up"
+            : "Complete the settings below";
+    return `${todo} to change ${existing!.label} to ${moduleFieldTypeLabels[type]}. Until then it stays ${moduleFieldTypeLabels[existing!.type as ModuleFieldType]}.`;
+  };
   const changeType = (type: ModuleFieldType) => {
+    if (existing !== undefined && type === existing.type) {
+      // Back to the stored type: the hold and any refusal are dropped.
+      typeValue.applied(type);
+      settingsValue.applied(stored.settings);
+      defaultValue.applied(stored.defaultValue);
+      computedValue.applied(stored.computed);
+      setIssues([]);
+      return;
+    }
     // A field that is not published takes the new type's starting settings; no value is converted.
-    const fresh = read(
-      type,
-      plainOf(type),
-      existing !== undefined && existing.type === type ? storedDefault : undefined,
-    );
+    const fresh = read(type, plainOf(type), undefined);
     setComputedValid(true);
-    change({
+    if (adding) {
+      change({
+        type,
+        settings: fresh.reading.values,
+        defaultValue: fresh.defaultValue,
+        computed: fresh.computed,
+      });
+      return;
+    }
+    const incomplete = computedTypes.has(type)
+      ? computedProblems(type, fresh.computed).length > 0
+      : studioSettingProblems(
+          fresh.reading.values,
+          declarationsFor(type, formSettings(fresh.reading.values), form.label),
+        ).length > 0;
+    if (incomplete) {
+      typeValue.hold(type, incompleteTypeSentence(type));
+      settingsValue.hold(fresh.reading.values, "");
+      defaultValue.hold(fresh.defaultValue, "");
+      computedValue.hold(fresh.computed, "");
+      setIssues([]);
+      return;
+    }
+    const problem = commit({
       type,
       settings: fresh.reading.values,
       defaultValue: fresh.defaultValue,
       computed: fresh.computed,
     });
+    if (problem !== undefined) typeValue.hold(existing!.type as ModuleFieldType, problem);
   };
   const changeSettings = (settings: StudioSettingValues) => {
     if (adding) {
@@ -528,7 +592,7 @@ export function ModuleFieldsEditor({
       setIssues([]);
       return;
     }
-    const problem = commit({ settings }, mergeKey("settings"));
+    const problem = commit({ ...heldBase, settings }, mergeKey("settings"));
     if (problem === undefined) settingsValue.applied(settings);
     else settingsValue.hold(settings, problem);
   };
@@ -538,7 +602,7 @@ export function ModuleFieldsEditor({
       setIssues([]);
       return;
     }
-    const problem = commit({ defaultValue: value }, mergeKey("default"));
+    const problem = commit({ ...heldBase, defaultValue: value }, mergeKey("default"));
     if (problem === undefined) defaultValue.applied(value);
     else defaultValue.hold(value, problem);
   };
@@ -551,7 +615,7 @@ export function ModuleFieldsEditor({
       return;
     }
     const problem = valid
-      ? commit({ computed: next }, mergeKey("computed"))
+      ? commit({ ...heldBase, computed: next }, mergeKey("computed"))
       : `${form.type === "total" ? "Filter" : "Condition"}: complete or remove the comparisons marked above.`;
     if (problem === undefined) computedValue.applied(next);
     else computedValue.hold(next, problem);
@@ -561,9 +625,7 @@ export function ModuleFieldsEditor({
     event.preventDefault();
     if (disabled || !adding) return;
     const problems = [
-      ...studioSettingProblems(form.settings, declarations).map(
-        (problem) => `Settings: ${problem}`,
-      ),
+      ...studioSettingProblems(form.settings, declarations),
       ...(computed && !computedValid
         ? [
             `${form.type === "total" ? "Filter" : "Condition"}: complete or remove the comparisons marked above.`,
@@ -654,6 +716,7 @@ export function ModuleFieldsEditor({
     if (existing === undefined) return;
     setIssues([]);
     setReferences([]);
+    setTitleRefusal(null);
     const check = deleteInlineModuleField(
       source,
       moduleKey,
@@ -663,6 +726,10 @@ export function ModuleFieldsEditor({
     );
     if (check.kind === "referenced") {
       setReferences(check.references);
+      return;
+    }
+    if (check.kind === "title_field") {
+      setTitleRefusal(check.issue);
       return;
     }
     if (check.kind === "invalid") {
@@ -682,6 +749,7 @@ export function ModuleFieldsEditor({
     );
     if (result.kind === "changed") onRemoved?.();
     else if (result.kind === "referenced") setReferences(result.references);
+    else if (result.kind === "title_field") setTitleRefusal(result.issue);
     else setIssues([studioEditProblem(result) ?? "The field was not removed."]);
   };
 
@@ -767,6 +835,45 @@ export function ModuleFieldsEditor({
           </DropdownMenu>
         </div>
       )}
+      {issues.length === 0 ? null : (
+        <ul
+          className="space-y-1 text-sm text-destructive"
+          aria-label={adding ? "Why the field was not added" : "Why the field was not changed"}
+          role="alert"
+        >
+          {issues.map((issue, index) => (
+            <li key={index} className="break-words">
+              {issue}
+            </li>
+          ))}
+        </ul>
+      )}
+      {existing === undefined ? null : (
+        <>
+          {titleRefusal === null ? null : (
+            <Alert variant="destructive" role="alert">
+              <AlertTitle>{existing.label} cannot be removed</AlertTitle>
+              <AlertDescription className="space-y-2">
+                <p>{titleRefusal}</p>
+                <Button
+                  type="button"
+                  size="xs"
+                  variant="outline"
+                  onClick={() =>
+                    placeOpener.open({
+                      label: record.name,
+                      open: { kind: "record_type", moduleKey, recordKey },
+                    })
+                  }
+                >
+                  Choose the title field
+                </Button>
+              </AlertDescription>
+            </Alert>
+          )}
+          <StudioReferencesAlert name={existing.label} action="removed" references={references} />
+        </>
+      )}
       <StudioInspectorGroup title="General">
         <StudioField
           label="Label"
@@ -796,6 +903,7 @@ export function ModuleFieldsEditor({
         </StudioField>
         <StudioField
           label="Type"
+          error={problemOf(typeValue.problem)}
           hint={
             shapeLocked
               ? "Published: the type is fixed. To hold another kind of value, add a new field."
@@ -1073,22 +1181,8 @@ export function ModuleFieldsEditor({
           Add field
         </Button>
       )}
-      {issues.length === 0 ? null : (
-        <ul
-          className="space-y-1 text-sm text-destructive"
-          aria-label={adding ? "Why the field was not added" : "Why the field was not changed"}
-          role="alert"
-        >
-          {issues.map((issue, index) => (
-            <li key={index} className="break-words">
-              {issue}
-            </li>
-          ))}
-        </ul>
-      )}
       {existing === undefined ? null : (
         <>
-          <StudioReferencesAlert name={existing.label} action="removed" references={references} />
           <StudioUsedIn
             source={source}
             target={{ kind: "field", moduleKey, recordKey, fieldKey: existing.key }}

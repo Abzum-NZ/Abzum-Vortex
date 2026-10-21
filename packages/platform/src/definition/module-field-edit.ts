@@ -12,6 +12,7 @@ import {
 } from "./module-field-shape";
 import { applicationUses, describeSourcePlace, type ApplicationUsePlace } from "./application-uses";
 import { moduleFieldTypeLabels, type ModuleFieldType } from "./module-field-settings";
+import { recordTitleFieldEligible } from "./record-title-field";
 import {
   enablePeopleDirectoryLinks,
   linkCardinalities,
@@ -409,6 +410,16 @@ export const changeInlineModuleField = (
     includeFieldInStandardPermissions(module, record, { key, type: change.type as Field["type"] });
   } else {
     field = record.fields[fieldIndex]!;
+    if (
+      field.key === record.title_field &&
+      !recordTitleFieldEligible({ type: change.type, settings })
+    )
+      return {
+        kind: "invalid",
+        issues: [
+          `${field.label} is the title of ${record.plural_name}, so it must stay text, a number, a choice, a date or a stored calculation.`,
+        ],
+      };
     wasPersonLink = isPersonLink(field);
     if (publication.fields.has(`${qualifiedRecord}.${field.key}`)) {
       // The display name is editable even after publication; stored relationship settings are fixed.
@@ -520,13 +531,19 @@ export const deleteInlineModuleField = (
   publication: ModuleFieldPublication,
 ):
   | InlineModuleFieldChangeResult
-  | Readonly<{ kind: "referenced"; references: readonly ApplicationUsePlace[] }> => {
+  | Readonly<{ kind: "referenced"; references: readonly ApplicationUsePlace[] }>
+  | Readonly<{ kind: "title_field"; issue: string }> => {
   const source = structuredClone(current);
   const module = source.body.modules.find((item) => item.key === moduleKey);
   const record = module?.record_types.find((item) => item.key === recordKey);
   const field = record?.fields.find((item) => item.key === fieldKey);
   if (module === undefined || record === undefined || field === undefined)
     return { kind: "invalid", issues: ["The field is not in this record type any more."] };
+  if (record.title_field === fieldKey)
+    return {
+      kind: "title_field",
+      issue: `${field.label} is the title of ${record.plural_name}. Choose another title field for ${record.plural_name} first.`,
+    };
   const references = applicationUses(current, { kind: "field", moduleKey, recordKey, fieldKey });
   if (references.length > 0) return { kind: "referenced", references };
   // A dependency names its parent in its own record type and its filter in the linked record type,
