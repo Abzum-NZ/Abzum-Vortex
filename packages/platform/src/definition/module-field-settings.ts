@@ -6,6 +6,7 @@ import {
   type ComponentSettingFailure,
 } from "./application-composition/block-property-schema";
 import type { SourceBlockPropertyValueContract } from "./application-composition/block-property-values";
+import { linkDependencyCandidates, type LinkDependencyField } from "./module-link-dependencies";
 
 /**
  * The settings of every module field type, declared once as typed settings, so Studio edits a
@@ -36,11 +37,12 @@ export type ModuleFieldSettingsContext = Readonly<{
   fields: readonly Readonly<{ key: string; label: string; type: string }>[];
   /** The module's permissions, which may control who can choose a choice option. */
   permissions: readonly Readonly<{ key: string; label: string }>[];
-  /**
-   * The filterable link fields of the record type a link field points at: the fields its choices
-   * can be narrowed by when it depends on another link field of its own record type.
-   */
-  targetLinkFields: readonly Readonly<{ key: string; label: string }>[];
+  /** Current link form and the draft fields the shared dependency judgement reads. */
+  linkDependency: Readonly<{
+    fields: readonly LinkDependencyField[];
+    field: LinkDependencyField & Readonly<{ recordLabel: string; targetLabel: string }>;
+    targetFields: readonly LinkDependencyField[];
+  }>;
 }>;
 
 const base = (key: string, label: string, required: boolean, help?: string) =>
@@ -113,17 +115,18 @@ const tableColumnItem = (permissions: ModuleFieldSettingsContext["permissions"])
 
 /**
  * A link field can take its choices from the records linked to another link field of its record
- * type (Country, then Region). Offered only when both sides exist: another link field to choose
- * as the parent, and a filterable link field on the linked record type to narrow by.
+ * type (Country, then Region). The editor explains unavailable dependencies beside the settings.
  */
 const linkDependencyDeclaration = (context: ModuleFieldSettingsContext): Declaration[] => {
-  const parents = context.fields.filter((field) => field.type === "link");
-  if (parents.length === 0 || context.targetLinkFields.length === 0) return [];
+  const { fields, field, targetFields } = context.linkDependency;
+  const candidates = linkDependencyCandidates(fields, field, targetFields);
+  if (candidates.kind === "unavailable") return [];
+  const filters = candidates.filtersByParent[field.dependsOn?.parent ?? ""] ?? [];
   return [group("depends_on", "Choices depend on another link", [
-    choice("parent_field", "Link it depends on", true, parents.map(({ key, label }) => [key, label] as const),
+    choice("parent_field", "Link it depends on", true, candidates.parents.map(({ id, label }) => [id, label] as const),
       "Its chosen record narrows the choices here. It must come before this field."),
     choice("filter_field", "Field the linked records are narrowed by", true,
-      context.targetLinkFields.map(({ key, label }) => [key, label] as const),
+      filters.map(({ id, label }) => [id, label] as const),
       "A filterable link on the linked record type that points at the same record type as the link above."),
   ], false)];
 };

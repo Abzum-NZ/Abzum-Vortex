@@ -26,6 +26,7 @@ export * from "./definition/module-event-shape";
 export * from "./definition/module-extension-point-shape";
 export * from "./definition/module-pipeline-shape";
 export * from "./definition/module-field-settings";
+export * from "./definition/module-link-dependencies";
 export * from "./definition/module-field-formulas";
 export * from "./definition/module-field-edit";
 export * from "./definition/module-query-edit";

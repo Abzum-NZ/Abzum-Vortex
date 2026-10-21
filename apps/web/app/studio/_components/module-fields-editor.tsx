@@ -26,6 +26,7 @@ import {
   StudioSettingFields,
   studioSourceRecordTypes,
   type StudioCompositionContext,
+  type StudioDataSelection,
   type StudioRecordReader,
   type StudioSettingChoices,
   type StudioSettingValues,
@@ -36,11 +37,14 @@ import {
   deleteInlineModuleField,
   deriveFieldKey,
   fieldTypeKeys,
+  linkDependencyCandidates,
   moduleFieldDefaultDeclaration,
   moduleFieldSettingDeclarations,
   moduleFieldTypeLabels,
   moveInlineModuleField,
   peopleDirectory,
+  plainSourceSettingValue,
+  qualifiedLinkTarget,
   readModuleFieldDefault,
   readModuleFieldSettings,
   settledCalculation,
@@ -52,6 +56,7 @@ import {
   type ApplicationSourceDocument,
   type ApplicationUsePlace,
   type LinkCardinality,
+  type LinkDependencyField,
   type CalculationSettings,
   type FormulaField,
   type ModuleFieldPublication,
@@ -141,6 +146,7 @@ export function ModuleFieldsEditor({
   disabled,
   context,
   edit,
+  onSelect,
   onAdded,
   onRemoved,
 }: Readonly<{
@@ -154,6 +160,7 @@ export function ModuleFieldsEditor({
   disabled: boolean;
   context: ModuleFieldEditorContext;
   edit: StudioDataEdit;
+  onSelect: (selection: StudioDataSelection) => void;
   /** Called with the key of the field the form added. */
   onAdded?: (fieldKey: string) => void;
   /** Called after the field is removed from the draft. */
@@ -208,26 +215,80 @@ export function ModuleFieldsEditor({
     [formulaFields],
   );
   const otherFields = formulaFields.map(({ key, label, type }) => ({ key, label, type }));
-  // The link fields a dependent link can be narrowed by: the filterable ones on the record type it links to.
-  const storedTarget = (existing?.settings as { target?: unknown } | undefined)?.target;
-  const targetLinkFields = useMemo(() => {
-    if (typeof storedTarget !== "string") return [];
-    const separator = storedTarget.lastIndexOf(":");
-    const owner = separator > 0 ? storedTarget.slice(0, separator) : moduleKey;
-    const local = separator > 0 ? storedTarget.slice(separator + 1) : storedTarget;
-    return (
-      source.body.modules
-        .find((candidate) => candidate.key === owner)
-        ?.record_types.find((candidate) => candidate.key === local)
-        ?.fields.filter((item) => item.type === "link" && item.filterable)
-        .map(({ key, label }) => ({ key, label })) ?? []
+  const dependencyFields = (
+    owner: string,
+    fields: readonly SourceField[],
+  ): readonly LinkDependencyField[] =>
+    fields.map((item) => {
+      const settings = item.settings as {
+        target?: string;
+        depends_on?: { parent_field: string; filter_field?: string };
+      };
+      return {
+        id: item.key,
+        label: item.label,
+        type: item.type,
+        filterable: item.filterable,
+        ...(settings.target === undefined
+          ? {}
+          : { target: qualifiedLinkTarget(owner, settings.target) }),
+        ...(settings.depends_on === undefined
+          ? {}
+          : {
+              dependsOn: {
+                parent: settings.depends_on.parent_field,
+                ...(settings.depends_on.filter_field === undefined
+                  ? {}
+                  : { filter: settings.depends_on.filter_field }),
+              },
+            }),
+      };
+    });
+  const dependencyContext = (type: ModuleFieldType, settings: Plain) => {
+    const target =
+      typeof settings.target === "string"
+        ? qualifiedLinkTarget(moduleKey, settings.target)
+        : undefined;
+    const [owner, local] = (target ?? "").split(":");
+    const targetRecord = source.body.modules
+      .find((item) => item.key === owner)
+      ?.record_types.find((item) => item.key === local);
+    const dependency = settings.depends_on as
+      { parent_field: string; filter_field?: string } | undefined;
+    return {
+      fields: dependencyFields(moduleKey, record?.fields ?? []),
+      field: {
+        id: existing?.key ?? "",
+        label: existing?.label ?? "This link",
+        type,
+        filterable: existing?.filterable ?? false,
+        recordLabel: record?.name ?? "this record type",
+        targetLabel:
+          recordTypes.find((item) => item.key === target)?.label ?? "The linked record type",
+        ...(target === undefined ? {} : { target }),
+        ...(dependency === undefined
+          ? {}
+          : {
+              dependsOn: {
+                parent: dependency.parent_field,
+                ...(dependency.filter_field === undefined
+                  ? {}
+                  : { filter: dependency.filter_field }),
+              },
+            }),
+      },
+      targetFields: dependencyFields(owner ?? moduleKey, targetRecord?.fields ?? []),
+    };
+  };
+  const formSettings = (values: StudioSettingValues): Plain =>
+    Object.fromEntries(
+      Object.entries(values).map(([key, value]) => [key, plainSourceSettingValue(value)]),
     );
-  }, [source, moduleKey, storedTarget]);
-  const declarationsFor = (type: ModuleFieldType) =>
+  const declarationsFor = (type: ModuleFieldType, settings: Plain) =>
     moduleFieldSettingDeclarations(type, {
       fields: otherFields,
       permissions: (module?.permissions ?? []).map(({ key, label }) => ({ key, label })),
-      targetLinkFields,
+      linkDependency: dependencyContext(type, settings),
     });
   const startSettings = (type: ModuleFieldType): Record<string, unknown> => {
     const start = starterModuleFieldSettings(type, {
@@ -248,7 +309,7 @@ export function ModuleFieldsEditor({
       ? (existing.settings as Plain)
       : startSettings(type);
   const read = (type: ModuleFieldType, plain: Plain, stored: unknown) => {
-    const reading = readModuleFieldSettings(type, plain, declarationsFor(type));
+    const reading = readModuleFieldSettings(type, plain, declarationsFor(type, plain));
     const defaultDeclaration = moduleFieldDefaultDeclaration(type, plain);
     const typedDefault =
       defaultDeclaration.kind === "declared"
@@ -314,7 +375,7 @@ export function ModuleFieldsEditor({
     const next: FormState = { ...stored, ...patch };
     const typeChanged = next.type !== existing.type;
     const plain = plainOf(next.type);
-    const declarations = declarationsFor(next.type);
+    const declarations = declarationsFor(next.type, formSettings(next.settings));
     let settings: Plain;
     if (computedTypes.has(next.type) && (patch.computed !== undefined || typeChanged)) {
       const problems = computedProblems(next.type, next.computed);
@@ -384,7 +445,18 @@ export function ModuleFieldsEditor({
 
   const plainBase = plainOf(form.type);
   const computed = computedTypes.has(form.type);
-  const declarations = declarationsFor(form.type);
+  const currentSettings = formSettings(form.settings);
+  const declarations = declarationsFor(form.type, currentSettings);
+  const dependency = dependencyContext(form.type, currentSettings);
+  const candidates =
+    form.type === "link"
+      ? linkDependencyCandidates(dependency.fields, dependency.field, dependency.targetFields)
+      : undefined;
+  const [targetModule, targetRecord] = (dependency.field.target ?? "").split(":");
+  const canOpenTarget =
+    source.body.modules
+      .find((item) => item.key === targetModule)
+      ?.record_types.some((item) => item.key === targetRecord) === true;
   const plainSettings = computed
     ? form.computed
     : writeModuleFieldSettings(form.type, form.settings, declarations, plainBase);
@@ -750,6 +822,40 @@ export function ModuleFieldsEditor({
       <StudioInspectorGroup
         title={form.type === "choice" || form.type === "several_choices" ? "Choices" : "Format"}
       >
+        {candidates?.kind === "unavailable" && (
+          <Alert variant="default" role="note" className="text-muted-foreground">
+            <AlertTitle>Choices depend on another link</AlertTitle>
+            <AlertDescription>
+              <p>{candidates.message}</p>
+              {candidates.reason !== "no_parent_link" && canOpenTarget && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-auto whitespace-normal text-left"
+                  onClick={() =>
+                    onSelect(
+                      candidates.fieldId === undefined
+                        ? {
+                            kind: "record_type",
+                            moduleKey: targetModule!,
+                            recordKey: targetRecord!,
+                          }
+                        : {
+                            kind: "field",
+                            moduleKey: targetModule!,
+                            recordKey: targetRecord!,
+                            fieldKey: candidates.fieldId,
+                          },
+                    )
+                  }
+                >
+                  {`Open ${dependency.field.targetLabel}${candidates.fieldId === undefined ? "" : `'s ${dependency.targetFields.find((item) => item.id === candidates.fieldId)!.label}`}`}
+                </Button>
+              )}
+            </AlertDescription>
+          </Alert>
+        )}
         {shapeHint === undefined ? null : (
           <p className="text-sm text-muted-foreground" role="note">
             {shapeHint}
