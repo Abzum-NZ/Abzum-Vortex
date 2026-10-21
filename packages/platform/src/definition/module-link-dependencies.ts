@@ -1,9 +1,10 @@
 /**
- * The one judgement of a declared dependency between link fields: a link field's choices are the
- * records of its target whose `filter` link points at the record chosen in its `parent` link field
- * (Country -> Region -> City). Studio asks it while a field is edited and the publish rules ask it
- * of the compiled module, each handing over its fields in this one shape, so both refuse the same
- * declarations in the same words.
+ * The one judgement of a declared dependency between fields of a record type. A link field's
+ * choices are the records of its target whose `filter` link points at the record chosen in its
+ * `parent` link field (Country -> Region -> City). A choice field's options are those that list the
+ * option chosen in its `parent` choice field among their parent values. Studio asks it while a
+ * field is edited and the publish rules ask it of the compiled module, each handing over its
+ * fields in this one shape, so both refuse the same declarations in the same words.
  */
 export type LinkDependencyField = Readonly<{
   /** The field's identity in the shape the caller holds it (a key in the source, an id compiled). */
@@ -13,11 +14,21 @@ export type LinkDependencyField = Readonly<{
   filterable: boolean;
   /** The identity of the one record type a single-target link points at. */
   target?: string;
-  dependsOn?: Readonly<{ parent: string; filter: string }>;
+  /** A link child names the `filter` link of its target; a choice child names none. */
+  dependsOn?: Readonly<{ parent: string; filter?: string }>;
+  /** A choice field's options, each with the parent options it belongs to when it depends on one. */
+  options?: readonly Readonly<{ value: string; parentValues?: readonly string[] }>[];
 }>;
 
 export type LinkDependencyProblem = Readonly<{
-  reason: "not_a_link" | "parent_missing" | "loop" | "order" | "filter_unavailable";
+  reason:
+    | "not_dependable"
+    | "parent_missing"
+    | "loop"
+    | "order"
+    | "filter_unavailable"
+    | "parent_not_a_choice"
+    | "option_parents";
   message: string;
 }>;
 
@@ -35,10 +46,11 @@ export const linkDependencyProblem = (
   const dependsOn = child?.dependsOn;
   if (child === undefined || dependsOn === undefined) return undefined;
   const parent = fields.find((field) => field.id === dependsOn.parent);
-  if (child.type !== "link" || child.target === undefined)
+  const isChoice = child.type === "choice";
+  if (!isChoice && (child.type !== "link" || child.target === undefined))
     return {
-      reason: "not_a_link",
-      message: `${child.label} can depend on another field only when it links to one record type.`,
+      reason: "not_dependable",
+      message: `${child.label} can depend on another field only when it is a choice or links to one record type.`,
     };
   if (parent === undefined)
     return {
@@ -59,6 +71,25 @@ export const linkDependencyProblem = (
       reason: "order",
       message: `Not possible - ${child.label} depends on ${parent.label}, which comes after it.`,
     };
+  if (isChoice) {
+    if (parent.type !== "choice")
+      return {
+        reason: "parent_not_a_choice",
+        message: `${child.label} can depend only on a choice field, and ${parent.label} is not one.`,
+      };
+    const parentValues = new Set((parent.options ?? []).map((option) => option.value));
+    for (const option of child.options ?? [])
+      if (
+        option.parentValues === undefined ||
+        option.parentValues.length === 0 ||
+        option.parentValues.some((value) => !parentValues.has(value))
+      )
+        return {
+          reason: "option_parents",
+          message: `Every option of ${child.label} must say which ${parent.label} options it belongs to.`,
+        };
+    return undefined;
+  }
   const filter = targetFields?.find((field) => field.id === dependsOn.filter);
   if (
     parent.type !== "link" ||

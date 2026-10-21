@@ -108,6 +108,26 @@ type CompanySeed = Readonly<{
   phone: string;
 }>;
 
+/** Countries, their regions and each region's cities, chosen one level inside the other. */
+const locations: Readonly<Record<string, Readonly<Record<string, readonly string[]>>>> = {
+  "New Zealand": {
+    Auckland: ["Auckland", "Manukau", "Takapuna"],
+    Wellington: ["Wellington", "Lower Hutt", "Porirua"],
+    Canterbury: ["Christchurch", "Timaru", "Ashburton"],
+  },
+  Australia: {
+    "New South Wales": ["Sydney", "Newcastle", "Wollongong"],
+    Victoria: ["Melbourne", "Geelong", "Ballarat"],
+  },
+};
+
+/** The location of the first companies, each a country, a region of it and a city of that region. */
+const companyLocations: readonly (readonly [string, string, string])[] = [
+  ["New Zealand", "Auckland", "Auckland"],
+  ["New Zealand", "Wellington", "Wellington"],
+  ["New Zealand", "Canterbury", "Christchurch"],
+];
+
 const companies: readonly CompanySeed[] = [
   {
     name: "Kauri Cloud Systems",
@@ -378,6 +398,9 @@ export const seedDemoRecords = async (facts: DemoSeedFacts): Promise<void> => {
       }),
     ),
   ]);
+  const countryType = recordType(crm, "vortex.crm.locations", "country");
+  const regionType = recordType(crm, "vortex.crm.locations", "region");
+  const cityType = recordType(crm, "vortex.crm.locations", "city");
   const companyType = recordType(crm, "vortex.crm.organisations", "company");
   const contactType = recordType(crm, "vortex.crm.people", "contact");
   const opportunityType = recordType(crm, "vortex.crm.opportunities", "opportunity");
@@ -506,9 +529,46 @@ export const seedDemoRecords = async (facts: DemoSeedFacts): Promise<void> => {
     return saved.recordId;
   };
 
+  const locationIds = new Map<string, { country: string; region: string; city: string }>();
+  for (const [countryName, regions] of Object.entries(locations)) {
+    const country = await save(
+      crmRootId,
+      countryType,
+      `location/${countryName}`,
+      { name: countryName },
+      crmOwnerGroupId,
+    );
+    for (const [regionName, cities] of Object.entries(regions)) {
+      const region = await save(
+        crmRootId,
+        regionType,
+        `location/${countryName}/${regionName}`,
+        {
+          name: regionName,
+          country: { recordTypeId: countryType.recordTypeId, recordId: country },
+        },
+        crmOwnerGroupId,
+      );
+      for (const cityName of cities) {
+        const city = await save(
+          crmRootId,
+          cityType,
+          `location/${countryName}/${regionName}/${cityName}`,
+          {
+            name: cityName,
+            region: { recordTypeId: regionType.recordTypeId, recordId: region },
+          },
+          crmOwnerGroupId,
+        );
+        locationIds.set(`${countryName}/${regionName}/${cityName}`, { country, region, city });
+      }
+    }
+  }
   const companyIds: string[] = [];
   const contactIds: string[] = [];
   for (const [index, company] of companies.entries()) {
+    const placed = companyLocations[index];
+    const where = placed === undefined ? undefined : locationIds.get(placed.join("/"));
     const companyId = await save(
       crmRootId,
       companyType,
@@ -535,6 +595,13 @@ export const seedDemoRecords = async (facts: DemoSeedFacts): Promise<void> => {
           ],
         },
         customer_since: company.customerSince,
+        ...(where === undefined
+          ? {}
+          : {
+              country: { recordTypeId: countryType.recordTypeId, recordId: where.country },
+              region: { recordTypeId: regionType.recordTypeId, recordId: where.region },
+              city: { recordTypeId: cityType.recordTypeId, recordId: where.city },
+            }),
       },
       crmOwnerGroupId,
     );

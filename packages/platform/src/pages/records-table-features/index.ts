@@ -134,7 +134,20 @@ export type RecordsTableInlineEditor = Readonly<{ required: boolean }> &
         maximum?: string;
       }>
     | Readonly<{ kind: "yes_no" }>
-    | Readonly<{ kind: "choice"; options: readonly Readonly<{ value: string; label: string }>[] }>
+    | Readonly<{
+        kind: "choice";
+        options: readonly Readonly<{
+          value: string;
+          label: string;
+          parentValues?: readonly string[];
+        }>[];
+        /**
+         * The choice field of the same record type whose chosen option narrows this field's
+         * options, as the table's field identity (lower case): only options listing that parent
+         * option are offered, and changing the parent must clear or flag this field.
+         */
+        dependsOnField?: string;
+      }>
     | Readonly<{ kind: "date"; earliest?: string; latest?: string }>
     | Readonly<{ kind: "date_time" }>
     | Readonly<{

@@ -43,12 +43,24 @@ const linkDependencyViews = (fields: readonly JsonObject[]): LinkDependencyField
       type: String(field.type),
       filterable: field.filterable === true,
       ...(field.type === "link" ? { target: String(object(settings.target).recordTypeId) } : {}),
+      ...(field.type === "choice"
+        ? {
+            options: array(settings.options).map((option) => ({
+              value: String(option.value),
+              ...(option.parentValues === undefined
+                ? {}
+                : { parentValues: (option.parentValues as unknown[]).map(String) }),
+            })),
+          }
+        : {}),
       ...(dependsOn === undefined
         ? {}
         : {
             dependsOn: {
               parent: String(dependsOn.parentFieldId),
-              filter: String(dependsOn.filterFieldId),
+              ...(dependsOn.filterFieldId === undefined
+                ? {}
+                : { filter: String(dependsOn.filterFieldId) }),
             },
           }),
     };
@@ -369,6 +381,14 @@ export function moduleReferenceRule(context: PreparedValidationContext): Definit
             array(settings.columns).some((column) => column.settings === undefined))
         )
           valid = false;
+        if (field.type === "choice" && settings.dependsOn !== undefined)
+          valid =
+            valid &&
+            linkDependencyProblem(
+              linkDependencyViews(array(record.fields)),
+              String(field.fieldId),
+              undefined,
+            ) === undefined;
         if (field.type === "link") {
           const target = recordReference(settings.target, allowedModuleRoots);
           valid = target !== undefined;

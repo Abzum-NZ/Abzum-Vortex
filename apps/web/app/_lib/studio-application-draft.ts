@@ -811,7 +811,8 @@ export const loadStudioApplicationDraft = async (
                                 )
                                   ? { parentLink: true }
                                   : {}),
-                                ...(field.type === "link" && field.settings.dependsOn !== undefined
+                                ...((field.type === "link" || field.type === "choice") &&
+                                field.settings.dependsOn !== undefined
                                   ? {
                                       dependsOn: `${release!.key}:${recordType.key}.${recordType.fields.find((candidate) => sameId(String(candidate.fieldId), String(field.settings.dependsOn!.parentFieldId)))?.key ?? ""}`,
                                     }

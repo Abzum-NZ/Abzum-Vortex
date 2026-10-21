@@ -59,7 +59,7 @@ import {
   type RelationshipTotalPreparationOutcome,
 } from "./save-record";
 import { calculateAndFinalize, operationClock } from "./field-candidate";
-import { firstLinkDependencyRefusal } from "./link-dependencies";
+import { firstFieldDependencyRefusal } from "./link-dependencies";
 
 type ResultRow = DatabaseRow & { readonly value: unknown };
 type RuleReason = Readonly<{ code: string; message: string }>;
@@ -1156,7 +1156,7 @@ const planNamedAction = async (
     ];
     for (const record of judged) {
       if (record.recordType.systemProjection !== undefined) continue;
-      const dependency = await firstLinkDependencyRefusal(
+      const dependency = await firstFieldDependencyRefusal(
         transaction,
         record.recordType,
         record.existing,
@@ -1167,7 +1167,7 @@ const planNamedAction = async (
         return safeRefusal(
           prepared.correlationId,
           "operation_refused",
-          `${record.name} would hold link ${dependency.childFieldId} that does not belong to its parent ${dependency.parentFieldId} (LINK_DEPENDENCY_${dependency.reason.toUpperCase()})`,
+          `${record.name} would hold field ${dependency.childFieldId} that does not belong to its parent ${dependency.parentFieldId} (FIELD_DEPENDENCY_${dependency.reason.toUpperCase()})`,
         );
     }
   }

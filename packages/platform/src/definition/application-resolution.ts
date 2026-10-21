@@ -62,7 +62,9 @@ export type FieldInputSourceField = Readonly<{
   textFormat?: string | undefined;
   displayTimeZone?: "person" | "organization" | "utc" | undefined;
   maximumSelections?: number | undefined;
-  choices: readonly Readonly<{ key: string; label: string }>[];
+  choices: readonly Readonly<{ key: string; label: string; parentValues?: readonly string[] }>[];
+  /** The field of the same record type whose chosen value narrows this field's choices. */
+  dependsOn?: Readonly<{ fieldKey: string; label: string }> | undefined;
   recordTypes: readonly Readonly<{
     state: "resolved";
     moduleRootId: string;
@@ -75,9 +77,14 @@ type FieldInputJson = Readonly<Record<string, unknown>>;
 /**
  * The automatic field input metadata of one canonical module field, read by the compiler for a
  * bound release and by the runtime for a contributed field. Undefined when a link field names a
- * target that is not resolved: an automatic input never invents a record type identity.
+ * target that is not resolved: an automatic input never invents a record type identity. A link or
+ * choice that depends on another field takes that field's key and label from `parentOf`; it is
+ * undefined too when the parent cannot be found, so the dependency is never left off the control.
  */
-export const fieldInputSourceField = (field: FieldInputJson): FieldInputSourceField | undefined => {
+export const fieldInputSourceField = (
+  field: FieldInputJson,
+  parentOf: (fieldId: string) => FieldInputJson | undefined = () => undefined,
+): FieldInputSourceField | undefined => {
   const type = String(field.type);
   const settings: FieldInputJson =
     typeof field.settings === "object" && field.settings !== null
@@ -100,8 +107,19 @@ export const fieldInputSourceField = (field: FieldInputJson): FieldInputSourceFi
       ? (settings.options as FieldInputJson[]).map((option) => ({
           key: String(option.value),
           label: String(option.label),
+          ...(Array.isArray(option.parentValues)
+            ? { parentValues: (option.parentValues as unknown[]).map(String) }
+            : {}),
         }))
       : [];
+  const dependsOn =
+    (type === "link" || type === "choice") &&
+    typeof settings.dependsOn === "object" &&
+    settings.dependsOn !== null
+      ? (settings.dependsOn as FieldInputJson)
+      : undefined;
+  const parent = dependsOn === undefined ? undefined : parentOf(String(dependsOn.parentFieldId));
+  if (dependsOn !== undefined && parent === undefined) return undefined;
   const targets: unknown[] =
     type === "link" && settings.target !== undefined
       ? [settings.target]
@@ -137,6 +155,9 @@ export const fieldInputSourceField = (field: FieldInputJson): FieldInputSourceFi
         }
       : {}),
     choices,
+    ...(parent === undefined
+      ? {}
+      : { dependsOn: { fieldKey: String(parent.key), label: String(parent.label) } }),
     recordTypes: recordTypes as FieldInputSourceField["recordTypes"],
   };
 };

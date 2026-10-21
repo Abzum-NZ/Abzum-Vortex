@@ -181,6 +181,21 @@ const dateTimeSettingsSchema = z
   .object({ displayTimeZone: z.enum(["person", "organization", "utc"]).optional() })
   .strict();
 const choiceSettingsSchema = z.object({ options: z.array(optionSchema).min(1).max(200) }).strict();
+/** A choice field's settings: options may belong to the parent choice option(s) it depends on. */
+const choiceFieldSettingsSchema = z
+  .object({
+    options: z
+      .array(
+        optionSchema
+          .extend({ parentValues: z.array(z.string().min(1).max(120)).min(1).max(200).optional() })
+          .strict(),
+      )
+      .min(1)
+      .max(200),
+    /** The choice field of this record type whose chosen option narrows this field's options. */
+    dependsOn: z.object({ parentFieldId: fieldIdSchema }).strict().optional(),
+  })
+  .strict();
 const severalChoicesSettingsSchema = z
   .object({
     options: z.array(optionSchema).min(1).max(200),
@@ -526,7 +541,7 @@ const fieldMembers = [
   moduleFieldMember("yes_no", emptySettingsSchema, z.boolean()),
   moduleFieldMember("date", dateSettingsSchema, z.iso.date()),
   moduleFieldMember("date_time", dateTimeSettingsSchema, z.iso.datetime({ offset: true })),
-  moduleFieldMember("choice", choiceSettingsSchema, z.string()),
+  moduleFieldMember("choice", choiceFieldSettingsSchema, z.string()),
   moduleFieldMember("several_choices", severalChoicesSettingsSchema, z.array(z.string())),
   moduleFieldMember("reference_number", referenceNumberSettingsSchema, noDefaultSchema),
   moduleFieldMember("email_address", emptySettingsSchema, z.email()),

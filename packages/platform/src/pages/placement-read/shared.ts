@@ -438,7 +438,17 @@ export const fieldEditorsOf = (
                   options: field.settings.options.map((option) => ({
                     value: option.value,
                     label: option.label,
+                    ...(option.parentValues === undefined
+                      ? {}
+                      : { parentValues: option.parentValues }),
                   })),
+                  ...(field.settings.dependsOn === undefined
+                    ? {}
+                    : {
+                        dependsOnField: String(
+                          field.settings.dependsOn.parentFieldId,
+                        ).toLowerCase(),
+                      }),
                 },
               ],
             ];

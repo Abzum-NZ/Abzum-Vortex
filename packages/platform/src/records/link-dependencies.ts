@@ -4,12 +4,15 @@ import { sameId, type RecordTypeDefinition } from "../schema";
 import type { RequestDatabaseTransaction } from "../db/index";
 
 /**
- * The write-time rule behind a declared link dependency: a link field that depends on another link
- * field of its record type (Region on Country) may hold only a record whose declared filter link
- * points at the record the parent holds. It is derived from the field declaration alone, runs in
- * the saving transaction under the saver's own access, and does not trust what the form offered.
+ * The write-time rule behind a declared field dependency, the same for a record save, a named
+ * action and a grid edit. A link field that depends on another link field of its record type
+ * (Region on Country) may hold only a record whose declared filter link points at the record the
+ * parent holds. A choice field that depends on another choice field may hold only an option that
+ * lists the parent's chosen option among its parent values. It is derived from the field
+ * declaration alone, runs in the saving transaction under the saver's own access, and does not
+ * trust what the form offered.
  */
-export type LinkDependencyRefusal = Readonly<{
+export type FieldDependencyRefusal = Readonly<{
   childFieldId: string;
   parentFieldId: string;
   /** Why the pair was refused, for the log; the person is told only which field to choose again. */
@@ -35,13 +38,13 @@ const linkValue = (value: unknown): LinkValue | undefined =>
  * parent, or undefined when all are. Only a pair the save touches is judged: an update that
  * submits neither the child nor its parent leaves the stored pair as it is.
  */
-export const firstLinkDependencyRefusal = async (
+export const firstFieldDependencyRefusal = async (
   transaction: RequestDatabaseTransaction,
   recordType: RecordTypeDefinition,
   existingValues: Readonly<Record<string, unknown>>,
   submittedFieldIds: readonly string[],
   finalValues: Readonly<Record<string, unknown>>,
-): Promise<LinkDependencyRefusal | undefined> => {
+): Promise<FieldDependencyRefusal | undefined> => {
   const submitted = new Set(submittedFieldIds.map((fieldId) => fieldId.toLowerCase()));
   const effective = (fieldId: string): unknown => {
     const key = Object.keys(finalValues).find((candidate) => sameId(candidate, fieldId));
@@ -50,21 +53,35 @@ export const firstLinkDependencyRefusal = async (
     return stored === undefined ? undefined : existingValues[stored];
   };
   for (const field of recordType.fields) {
-    if (field.type !== "link" || field.settings.dependsOn === undefined) continue;
+    if (
+      (field.type !== "link" && field.type !== "choice") ||
+      field.settings.dependsOn === undefined
+    )
+      continue;
     const childFieldId = String(field.fieldId);
-    const { parentFieldId, filterFieldId } = field.settings.dependsOn;
+    const { parentFieldId } = field.settings.dependsOn;
     if (
       !submitted.has(childFieldId.toLowerCase()) &&
       !submitted.has(String(parentFieldId).toLowerCase())
     )
       continue;
-    const child = linkValue(effective(childFieldId));
-    if (child === undefined) continue;
-    const refusal = (reason: LinkDependencyRefusal["reason"]): LinkDependencyRefusal => ({
+    const refusal = (reason: FieldDependencyRefusal["reason"]): FieldDependencyRefusal => ({
       childFieldId,
       parentFieldId: String(parentFieldId),
       reason,
     });
+    if (field.type === "choice") {
+      const chosen = effective(childFieldId);
+      if (typeof chosen !== "string") continue;
+      const parentChosen = effective(String(parentFieldId));
+      if (typeof parentChosen !== "string") return refusal("parent_empty");
+      const option = field.settings.options.find((candidate) => candidate.value === chosen);
+      if (option?.parentValues?.includes(parentChosen) !== true) return refusal("child_mismatch");
+      continue;
+    }
+    const child = linkValue(effective(childFieldId));
+    if (child === undefined) continue;
+    const { filterFieldId } = field.settings.dependsOn;
     const parent = linkValue(effective(String(parentFieldId)));
     if (parent === undefined) return refusal("parent_empty");
     // The child is read as the saver reads it: the request role, then back to the save's role.
