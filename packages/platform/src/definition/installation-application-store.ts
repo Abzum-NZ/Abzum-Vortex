@@ -13,7 +13,10 @@ import {
   type JsonValue,
   type OrganizationSelectionCandidate,
 } from "../schema";
-import type { InstallationProblemShape } from "./installation-authority";
+import type {
+  InstallationMemberRoleRefusal,
+  InstallationProblemShape,
+} from "./installation-authority";
 import { maximumApplicationRoles } from "./application-contracts";
 import { classifyInstallationFailure } from "./installation-failure";
 import { FirstInstallUnavailable } from "./installation-first-install";
@@ -137,6 +140,18 @@ const reviewFailure = (error: unknown): ApplicationStoreResult => {
     : commandFailure(problem);
 };
 
+/**
+ * The one mapping from a refusal that names its missing piece to the public code the person is
+ * shown; the cause stays in the log. A retired role or access changed meanwhile stay untyped.
+ */
+const namedRefusalCodes: Readonly<
+  Partial<Record<InstallationMemberRoleRefusal, FlowRefusalFeedback["code"]>>
+> = {
+  installation_authority: "applications_manage_required",
+  member_role_delegation: "installation_delegation_required",
+  assignments_manage: "assignments_manage_required",
+};
+
 /** A command's failure: a conflict, a refusal (permission or eligibility) or a temporary failure. */
 const commandFailure = (problem: InstallationProblemShape): ApplicationStoreResult => {
   if (problem.unavailableReason === "storage_incompatible")
@@ -148,7 +163,15 @@ const commandFailure = (problem: InstallationProblemShape): ApplicationStoreResu
   if (problem.kind === "conflict") return "conflict";
   if (problem.kind === "authentication_required")
     return { kind: "unavailable", code: "recent_authentication_required" };
-  if (problem.kind === "refused") return { kind: "unavailable" };
+  if (problem.kind === "refused") {
+    const code =
+      problem.memberRoleRefusal === undefined
+        ? undefined
+        : namedRefusalCodes[problem.memberRoleRefusal];
+    return code === undefined
+      ? { kind: "unavailable" }
+      : { kind: "confirmed_failure", outcome: "refused", diagnostic: { code } };
+  }
   return { kind: "temporarily_unavailable" };
 };
 

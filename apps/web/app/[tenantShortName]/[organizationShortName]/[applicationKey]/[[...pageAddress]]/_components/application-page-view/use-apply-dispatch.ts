@@ -9,7 +9,13 @@ import type { ApplicationPageModel } from "../../../../../../_lib/application-pa
 import { applicationPageAddressPath } from "../../../../../../_lib/address-paths";
 import type { ComponentRequestGeneration } from "@vortex/platform/schema";
 import type { DispatchOutcome, Notice, TableContinuationTarget } from "./types";
-import { unavailableNotice, finishedNotice, refusalNotices, outcomeNotices } from "./notices";
+import {
+  unavailableNotice,
+  finishedNotice,
+  refusalNotices,
+  refusalDestinations,
+  outcomeNotices,
+} from "./notices";
 import { visibleOwningFormFieldLabel } from "./form-surface";
 
 export function useApplyDispatch({
@@ -160,7 +166,7 @@ export function useApplyDispatch({
               ruleMessages === undefined
                 ? refusalNotices[diagnostic.code]
                 : { tone: "problem", text: ruleMessages.join(" ") };
-            const presentation = diagnostic.presentation;
+            const presentation = diagnostic.presentation ?? refusalDestinations[diagnostic.code];
             resultNotice = {
               ...reason,
               ...(presentation === undefined
@@ -178,8 +184,8 @@ export function useApplyDispatch({
                   }),
               text:
                 recovery === undefined
-                  ? (presentation?.message ?? reason.text)
-                  : `${presentation?.message ?? reason.text} ${resultNotice.text}`,
+                  ? (diagnostic.presentation?.message ?? reason.text)
+                  : `${diagnostic.presentation?.message ?? reason.text} ${resultNotice.text}`,
             };
           }
           if (
