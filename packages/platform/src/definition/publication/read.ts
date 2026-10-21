@@ -380,6 +380,12 @@ const materialisePlatformThemeRelease = (
   );
 };
 
+// Pure and frozen: one catalogue per definition object, not one per request.
+const immutableCatalogues = new WeakMap<
+  ImmutableDefinitionPublicationCatalogueDefinition,
+  ImmutableDefinitionPublicationCatalogue
+>();
+
 /**
  * Creates the read-only publication catalogue used until durable platform-catalogue storage exists.
  * Connection releases are compiled from the governed source contract; platform block and theme
@@ -396,12 +402,6 @@ export const createImmutableDefinitionPublicationCatalogue = (
   }
   return catalogue;
 };
-
-// Pure and frozen: one catalogue per definition object, not one per request.
-const immutableCatalogues = new WeakMap<
-  ImmutableDefinitionPublicationCatalogueDefinition,
-  ImmutableDefinitionPublicationCatalogue
->();
 
 const buildImmutableDefinitionPublicationCatalogue = (
   input: ImmutableDefinitionPublicationCatalogueDefinition,
