@@ -409,7 +409,10 @@ export function ApplicationDraftAgentTools({
       pages: collect(outline, "page").flatMap((page) => {
         const places =
           page.kind === "page"
-            ? describeStudioCompositionAddTargets(context, page.pageAlias)
+            ? describeStudioCompositionAddTargets(context, {
+                kind: "page",
+                pageAlias: page.pageAlias,
+              })
             : ({ kind: "invalid" } as const);
         return [
           {
@@ -720,7 +723,7 @@ export function ApplicationDraftAgentTools({
             { kind: "page", pageAlias: input.pageAlias },
             {
               kind: "add",
-              pageAlias: input.pageAlias,
+              owner: { kind: "page", pageAlias: input.pageAlias },
               area: input.area,
               destination: input.destination,
               index: input.index ?? Number.MAX_SAFE_INTEGER,

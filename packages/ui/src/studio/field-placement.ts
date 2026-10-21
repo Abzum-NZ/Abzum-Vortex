@@ -307,7 +307,10 @@ export const applyStudioFieldPlacements = (
           `${place.label}: ${result.kind === "refused" ? result.reason : "the block did not take the field."}`,
         );
     } else {
-      const targets = describeStudioCompositionAddTargets(current, place.pageAlias);
+      const targets = describeStudioCompositionAddTargets(current, {
+        kind: "page",
+        pageAlias: place.pageAlias,
+      });
       const target =
         targets.kind === "available"
           ? targets.targets.find(
@@ -335,7 +338,7 @@ export const applyStudioFieldPlacements = (
       const submit = content.findIndex((item) => item.props.action_kind === "submit");
       const result = applyStudioCompositionCommand(current, current, null, {
         kind: "add",
-        pageAlias: place.pageAlias,
+        owner: { kind: "page", pageAlias: place.pageAlias },
         area: target.area,
         destination: target.destination,
         index: submit < 0 ? content.length : submit,

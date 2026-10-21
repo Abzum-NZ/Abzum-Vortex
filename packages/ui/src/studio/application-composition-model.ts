@@ -25,6 +25,10 @@ export type StudioCompositionContext = Readonly<{
   borrowed: StudioBorrowedChoices | null;
 }>;
 
+/** What owns the blocks an edit reaches: a page, or an application layout (shell). */
+export type StudioCompositionOwner =
+  Readonly<{ kind: "page"; pageAlias: string }> | Readonly<{ kind: "layout"; shellAlias: string }>;
+
 export type StudioCompositionCommand =
   | Readonly<{
       kind: "order";
@@ -39,13 +43,19 @@ export type StudioCompositionCommand =
   | Readonly<{ kind: "move"; destination: StudioCompositionDestination }>
   | Readonly<{ kind: "remove" }>
   /**
+   * Puts the selected block into a new container block of this release, which takes the block's
+   * place. The block keeps its name, settings and orders; the container's first fixed slot that
+   * admits the block holds it.
+   */
+  | Readonly<{ kind: "wrap"; blockId: string; releaseVersion: string }>
+  /**
    * The one settings edit: the block's complete set settings (a declared setting left out takes
    * its default) and, for a block that reads records, the query it reads.
    */
   | Readonly<{ kind: "settings"; settings: StudioCompositionSettings; query: string | null }>
   | Readonly<{
       kind: "add";
-      pageAlias: string;
+      owner: StudioCompositionOwner;
       area: string;
       destination: StudioCompositionDestination;
       index: number;
@@ -57,11 +67,11 @@ export type StudioCompositionCommand =
 
 /** A block's settings by setting key, each a typed authored value of its declared kind. */
 export type StudioCompositionSettings = Readonly<Record<string, SourceBlockPropertyValueContract>>;
-/** One place on a page a new block can go: a content area's top, or a fixed slot of a block in it. */
+/** One place on a page or layout a new block can go: a content area's (or layout's) top, or a fixed slot of a block in it. */
 export type StudioCompositionAddTarget = Readonly<{
   /** Stable key of this place among the page's places. */
   id: string;
-  /** The page content area (its slot address key). */
+  /** The page content area (its slot address key), or "layout" for a layout's own blocks. */
   area: string;
   destination: StudioCompositionDestination;
   label: string;
@@ -70,6 +80,22 @@ export type StudioCompositionAddTarget = Readonly<{
   /** The blocks the catalogue admits here. */
   choices: readonly StudioPaletteChoice[];
 }>;
+/** The containers a selected block can be wrapped in, each with why it cannot when it cannot. */
+export type StudioCompositionWrapModel =
+  | Readonly<{
+      kind: "available";
+      containers: readonly Readonly<{
+        blockId: string;
+        releaseVersion: string;
+        name: string;
+        description: string;
+        /** The slot of the container that would hold the block. */
+        slotLabel: string;
+        /** Why this container cannot hold the block; absent when it can. */
+        unavailable?: string;
+      }>[];
+    }>
+  | Readonly<{ kind: "invalid" | "unsupported" }>;
 export type StudioCompositionAddTargetsModel =
   | Readonly<{ kind: "available"; targets: readonly StudioCompositionAddTarget[] }>
   | Readonly<{ kind: "invalid" | "unsupported" }>;
