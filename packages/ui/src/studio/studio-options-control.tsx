@@ -29,8 +29,9 @@ export function StudioOptionsControl({
   const searchable = options.length > 12;
   const selected = options.filter((option) => value.includes(option.value));
   const unknown = value.filter((entry) => !options.some((option) => option.value === entry));
-  const visible = options.filter((option) =>
-    !searchable || option.label.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()),
+  const visible = options.filter(
+    (option) =>
+      !searchable || option.label.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()),
   );
   const commit = (keys: readonly string[], removedIndex?: number) =>
     onChange([
