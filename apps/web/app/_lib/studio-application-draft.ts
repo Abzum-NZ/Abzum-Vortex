@@ -38,6 +38,7 @@ import {
   type ModuleField,
   type PeopleDirectoryOwner,
   moduleQueryBorrowable,
+  queryTotalLabel,
   definitionValidationErrorCatalogue,
 } from "@vortex/platform/schema";
 import type { DatabaseRow } from "@vortex/platform/server";
@@ -383,10 +384,15 @@ const studioCompileFailure = (error: unknown): StudioCompileFailure => {
         recordTypeKey: keyOf("record_type"),
         fieldKey: keyOf("field"),
         queryKey: keyOf("query"),
+        flowKey: keyOf("flow"),
+        taskId: keyOf("flow_node"),
       };
       return {
         reasonCode: current.ruleCode,
         family: current.family,
+        moduleKeys: segments
+          .filter((segment) => segment.kind === "module")
+          .map((segment) => segment.key),
         ...(current.code === undefined
           ? {}
           : { sentence: definitionValidationErrorCatalogue[current.code].message }),
@@ -831,6 +837,15 @@ export const loadStudioApplicationDraft = async (
                         return allFields.filter((candidate) => candidate.reference === reference);
                       }),
                       grouped: query.groupByFieldIds.length > 0 || query.aggregates.length > 0,
+                      totals: query.aggregates.map((total) => ({
+                        alias: total.alias,
+                        label: queryTotalLabel(
+                          total.operation,
+                          recordType.fields.find((field) =>
+                            sameId(String(field.fieldId), String(total.fieldId)),
+                          )?.label,
+                        ),
+                      })),
                       groupBy: query.groupByFieldIds.flatMap((fieldId) => {
                         const field = recordType.fields.find((candidate) =>
                           sameId(String(candidate.fieldId), String(fieldId)),

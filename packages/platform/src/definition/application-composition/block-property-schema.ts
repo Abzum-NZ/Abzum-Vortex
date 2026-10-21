@@ -66,6 +66,7 @@ type BlockPropertySchemaBase = {
 };
 
 export type BlockPropertySchemaContract =
+  | (BlockPropertySchemaBase & { kind: "total_reference" })
   | (BlockPropertySchemaBase & { kind: "text"; minLength: number; maxLength: number })
   | (BlockPropertySchemaBase & {
       kind: "number";
@@ -288,6 +289,10 @@ export const validateComponentSettingValue = (
     return failures;
   }
   switch (declaration.kind) {
+    case "total_reference":
+      if (!builderKeySchema.safeParse((value as { value: string }).value).success)
+        report("invalid_value");
+      break;
     case "text": {
       const text = (value as { value: string }).value;
       if (text.length < declaration.minLength || text.length > declaration.maxLength)
@@ -452,6 +457,10 @@ export const typedSourceSettingValue = (
   const text = (schema: z.ZodType<string>): string | undefined =>
     plainStringOf(schema, value) ?? invalid();
   switch (declaration.kind) {
+    case "total_reference": {
+      const parsed = text(builderKeySchema);
+      return parsed === undefined ? undefined : { kind: "total_reference", value: parsed };
+    }
     case "text":
     case "url":
     case "choice": {
@@ -692,6 +701,7 @@ const typedSettingCandidate = (
   declaration: BlockPropertySchemaContract,
 ): unknown => {
   switch (declaration.kind) {
+    case "total_reference":
     case "text":
     case "number":
     case "boolean":
@@ -761,6 +771,7 @@ export const typedSettingValue = (
 
 /** Kinds naming application-scoped authority, which a platform-owned default cannot choose. */
 const authorityReferenceKinds: ReadonlySet<string> = new Set([
+  "total_reference",
   "field_reference",
   "condition",
   "relationship_reference",
@@ -949,6 +960,12 @@ export const blockPropertySchema: z.ZodType<BlockPropertySchemaContract> = z.laz
           path: ["allowedElements"],
           message: "Allowed rich-text elements must be unique",
         }),
+      z
+        .object({
+          ...propertySchemaBase,
+          kind: sourceProvenanceUnchanged(z.literal("total_reference")),
+        })
+        .strict(),
       z
         .object({ ...propertySchemaBase, kind: sourceProvenanceUnchanged(z.literal("url")) })
         .strict(),

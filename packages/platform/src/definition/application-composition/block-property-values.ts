@@ -25,6 +25,7 @@ import { richTextDocumentSchema } from "../../records/rich-text";
 export { richTextDocumentSchema, richTextElementKindSchema } from "../../records/rich-text";
 
 export type BlockPropertyValueContract =
+  | { kind: "total_reference"; value: string }
   | { kind: "text"; value: string }
   | { kind: "number"; value: number }
   | { kind: "boolean"; value: boolean }
@@ -55,6 +56,12 @@ export type BlockPropertyValueContract =
 /** Canonical  values are closed and kind-discriminated; there is no arbitrary JSON branch. */
 export const blockPropertyValueSchema: z.ZodType<BlockPropertyValueContract> = z.lazy(() =>
   z.discriminatedUnion("kind", [
+    z
+      .object({
+        kind: sourceProvenanceUnchanged(z.literal("total_reference")),
+        value: sourceProvenanceUnchanged(builderKeySchema),
+      })
+      .strict(),
     z
       .object({
         kind: sourceProvenanceUnchanged(z.literal("text")),
@@ -173,6 +180,7 @@ export const blockPropertyValueSchema: z.ZodType<BlockPropertyValueContract> = z
  * portable aliases until compilation resolves them to the canonical form above.
  */
 export type SourceBlockPropertyValueContract =
+  | { kind: "total_reference"; value: string }
   | { kind: "text"; value: string }
   | { kind: "number"; value: number }
   | { kind: "boolean"; value: boolean }

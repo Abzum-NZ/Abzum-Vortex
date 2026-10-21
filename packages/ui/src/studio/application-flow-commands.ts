@@ -17,6 +17,7 @@ import type { StudioSemanticSelection } from "./semantic-selection";
 import {
   sameStudioFlowContext,
   samePath,
+  studioWords,
   studioFlowDefinitionOf,
   studioFlowListAt,
   studioFlowOutline,
@@ -76,7 +77,8 @@ type RegisteredTask = Extract<SourceFlowTask, { properties: unknown }>;
 
 /** Required choices are authored before a new step enters the saved draft. */
 export type StudioFlowNewStepSettings = Readonly<{
-  formAlias?: string;
+  /** The builder's pick for each required reference setting of the step, by property key. */
+  choices?: Readonly<Record<string, string>>;
   message?: string;
   field?: string;
   condition?: FlowFormula;
@@ -91,39 +93,91 @@ const staleEdit = (
 
 const text = (value: string): FlowValue => ({ kind: "literal", literal: { type: "text", value } });
 
+/** The record input the flow runs for: the one it names, or its first record reference input. */
+const flowRecordInput = (flow: SourceFlow): string | undefined =>
+  flow.recordInput ??
+  Object.entries(flow.inputs ?? {}).find(([, input]) => input.type === "record_reference")?.[0];
+
+/** The record type the flow itself runs for (its record input or its trigger), when it has one. */
+const flowRecordType = (flow: SourceFlow): string | undefined => {
+  const recordInput = flowRecordInput(flow);
+  return (
+    (recordInput === undefined ? undefined : flow.inputs?.[recordInput]?.recordTypeIds?.at(0)) ??
+    (flow.triggers ?? [])
+      .flatMap((trigger) => ("recordTypeId" in trigger ? [trigger.recordTypeId] : []))
+      .at(0)
+  );
+};
+
+/** One builder decision a step needs before it is inserted: what the setting points at. */
+export type StudioFlowStepBuilderChoice = Readonly<{
+  property: string;
+  label: string;
+  unset: string;
+  options: readonly Readonly<{ value: string; label: string }>[];
+}>;
+
+const builderChoiceLabels: Readonly<Record<string, readonly [label: string, unset: string]>> = {
+  form: ["Form to show", "Choose a form before adding the step"],
+  operation: ["Operation to call", "Choose an operation before adding the step"],
+  page: ["Page to open", "Choose a page before adding the step"],
+  query: ["Query to read", "Choose a query before adding the step"],
+  record_type: ["Record type", "Choose a record type before adding the step"],
+  event: ["Event to announce", "Choose an event before adding the step"],
+};
+
 /**
- * The first valid value of a required setting, read from the draft where it points at something
- * (the first record type, page, action or query), or undefined when there is none.
+ * What a required setting points at when only the builder can decide it: the forms, operations,
+ * pages, queries, record types or events of the draft. Undefined for a setting the flow itself
+ * decides (a record type the flow already runs for, a value, a message).
  */
-const seedValue = (
+const builderChoiceOptions = (
   type: FlowTaskPropertyType,
   flow: SourceFlow,
   source: Readonly<ApplicationSourceDocument>,
   context: StudioFlowContext,
+): StudioFlowStepBuilderChoice["options"] | undefined => {
+  const draft = () =>
+    projectStudioFlowDraftChoices({
+      ...context,
+      source: source as ApplicationSourceDocument,
+      flow,
+    });
+  switch (type) {
+    case "form_id":
+      return draft().forms.map((form) => ({ value: form.alias, label: form.label }));
+    case "protected_operation_key":
+      return draft().actions.map((action) => ({ value: action.key, label: action.label }));
+    case "page_id":
+      return draft().pages.map((page) => ({ value: page.key, label: page.label }));
+    case "query_id":
+      return draft().queries.map((query) => ({ value: query.key, label: query.label }));
+    case "record_type_id":
+      return flowRecordType(flow) === undefined
+        ? draft().recordTypes.map((record) => ({ value: record.key, label: record.label }))
+        : undefined;
+    case "namespaced_key": {
+      const moduleKey =
+        source.body.modules.find((module) =>
+          module.flows.some((candidate) => candidate.id === flow.id),
+        )?.key ?? null;
+      return studioFlowEventChoices(source, flow, moduleKey);
+    }
+    default:
+      return undefined;
+  }
+};
+
+/** The value of a required setting the flow decides itself, or undefined when it has none. */
+const seedValue = (
+  type: FlowTaskPropertyType,
+  flow: SourceFlow,
+  source: Readonly<ApplicationSourceDocument>,
 ): FlowValue | undefined => {
   const modules = source.body.modules;
-  const recordInput =
-    flow.recordInput ??
-    Object.entries(flow.inputs ?? {}).find(([, input]) => input.type === "record_reference")?.[0];
-  const recordType =
-    (recordInput === undefined ? undefined : flow.inputs?.[recordInput]?.recordTypeIds?.[0]) ??
-    (flow.triggers ?? []).flatMap((trigger) =>
-      "recordTypeId" in trigger ? [trigger.recordTypeId] : [],
-    )[0];
+  const recordInput = flowRecordInput(flow);
+  const recordType = flowRecordType(flow);
   switch (type) {
-    case "form_id": {
-      const form = projectStudioFlowDraftChoices({
-        ...context,
-        source: source as ApplicationSourceDocument,
-        flow,
-      }).forms[0];
-      return form === undefined ? undefined : text(form.alias);
-    }
-    case "namespaced_key": {
-      const moduleKey = modules.find((module) => module.flows.some((candidate) => candidate.id === flow.id))?.key ?? null;
-      const event = studioFlowEventChoices(source, flow, moduleKey)[0];
-      return event === undefined ? undefined : text(event.value);
-    }
     case "record_reference": {
       return recordInput === undefined
         ? undefined
@@ -150,23 +204,8 @@ const seedValue = (
           rounding: "half_up",
         },
       };
-    case "record_type_id": {
-      if (recordType !== undefined) return text(recordType);
-      const module = modules.find((candidate) => candidate.record_types.length > 0);
-      return module === undefined
-        ? undefined
-        : text(`${module.key}:${module.record_types[0]!.key}`);
-    }
-    case "page_id":
-      return source.body.pages[0] === undefined ? undefined : text(source.body.pages[0].key);
-    case "protected_operation_key": {
-      const action = modules.flatMap((module) => module.actions)[0];
-      return action === undefined ? undefined : text(action.key);
-    }
-    case "query_id": {
-      const module = modules.find((candidate) => candidate.queries.length > 0);
-      return module === undefined ? undefined : text(`${module.key}:${module.queries[0]!.key}`);
-    }
+    case "record_type_id":
+      return recordType === undefined ? undefined : text(recordType);
     case "field_values": {
       const formAnswers = Object.entries(flow.inputs ?? {}).find(
         ([, declaration]) => declaration.type === "json",
@@ -198,24 +237,88 @@ const seedValue = (
 /** The reason key a new Refuse save step starts with; the builder words its message. */
 const refusalReasonSeed = text("save_refused");
 
+/** The builder decisions a step type needs before it is inserted, with what each can point at. */
+const stepBuilderChoices = (
+  definition: FlowTaskTypeDefinition,
+  flow: SourceFlow,
+  source: Readonly<ApplicationSourceDocument>,
+  context: StudioFlowContext,
+): StudioFlowStepBuilderChoice[] =>
+  Object.entries(definition.properties).flatMap(([property, declaration]) => {
+    if (!declaration.required) return [];
+    const options = builderChoiceOptions(declaration.type, flow, source, context);
+    const [label, unset] = builderChoiceLabels[property] ?? [
+      studioWords(property),
+      `Choose ${studioWords(property).toLowerCase()} before adding the step`,
+    ];
+    return options === undefined ? [] : [{ property, label, unset, options }];
+  });
+
+/**
+ * A step with its required settings: the flow's own values, and the builder's pick for every
+ * setting only the builder can decide. Undefined when a pick is missing or no choice exists.
+ */
 const seededTask = (
   definition: FlowTaskTypeDefinition,
   id: string,
   flow: SourceFlow,
   source: Readonly<ApplicationSourceDocument>,
-  context: StudioFlowContext,
+  choices: readonly StudioFlowStepBuilderChoice[],
+  picks: Readonly<Record<string, string>>,
 ): RegisteredTask | undefined => {
   const properties: RegisteredTask["properties"] = {};
   for (const [key, declaration] of Object.entries(definition.properties)) {
     if (!declaration.required) continue;
+    const choice = choices.find((entry) => entry.property === key);
+    const pick = picks[key];
+    if (choice !== undefined) {
+      if (pick === undefined || !choice.options.some((option) => option.value === pick))
+        return undefined;
+      properties[key] = text(pick);
+      continue;
+    }
     const seed =
       definition.type === "rule.refuse" && key === "reason"
         ? refusalReasonSeed
-        : seedValue(declaration.type, flow, source, context);
+        : seedValue(declaration.type, flow, source);
     if (seed === undefined) return undefined;
     properties[key] = seed;
   }
   return { id, type: definition.type, version: definition.version, properties };
+};
+
+/**
+ * The inputs of a Call protected operation step: always an explicit map, so the step passes
+ * nothing the builder did not map. The flow's record goes to the operation's record input only
+ * when the operation declares one for the record type the flow runs for.
+ */
+export const studioOperationCallProperties = (
+  flow: SourceFlow,
+  operation: Readonly<{
+    key: string;
+    inputs: readonly Readonly<{ key: string; type: string; record_types?: readonly string[] }>[];
+  }>,
+): RegisteredTask["properties"] => {
+  const recordInput = flowRecordInput(flow);
+  const flowRecordTypes =
+    recordInput === undefined ? [] : (flow.inputs?.[recordInput]?.recordTypeIds ?? []);
+  const target = operation.inputs.find(
+    (input) =>
+      input.type === "record_reference" &&
+      (input.record_types ?? []).some((type) => flowRecordTypes.includes(type)),
+  );
+  return {
+    operation: text(operation.key),
+    inputs: {
+      kind: "map",
+      entries:
+        target === undefined || recordInput === undefined
+          ? {}
+          : {
+              [target.key]: { kind: "reference", reference: { source: "input", name: recordInput } },
+            },
+    },
+  };
 };
 
 /** The registry's own placement rule for a flow of this execution kind holding these tasks. */
@@ -224,7 +327,13 @@ const placementIssues = (flow: SourceFlow, tasks: readonly SourceFlowTask[]): st
     typeof validateFlowTaskPlacement
   >[0]).map((issue) => issue.message);
 
-export type StudioFlowStepType = Readonly<{ type: string; title: string; summary: string }>;
+export type StudioFlowStepType = Readonly<{
+  type: string;
+  title: string;
+  summary: string;
+  /** What the builder decides before the step is inserted; the palette asks for each first. */
+  choices: readonly StudioFlowStepBuilderChoice[];
+}>;
 
 /** The control steps a person adds from the palette: a decision and an early end. */
 const paletteControls = ["if", "stop"] as const;
@@ -237,7 +346,16 @@ const registeredTypes = (
 ): FlowTaskTypeDefinition[] =>
   Object.values(flowTaskRegistry).filter((definition) => {
     if (definition.category !== "registered") return false;
-    const task = seededTask(definition, "probe", flow, source, context);
+    const choices = stepBuilderChoices(definition, flow, source, context);
+    // The type is offered when each decision has at least one option; the probe only proves the
+    // step would be valid, and is never inserted.
+    const probe = Object.fromEntries(
+      choices.flatMap((choice) => {
+        const option = choice.options.at(0);
+        return option === undefined ? [] : [[choice.property, option.value]];
+      }),
+    );
+    const task = seededTask(definition, "probe", flow, source, choices, probe);
     return (
       task !== undefined &&
       sourceFlowTaskSchema.safeParse(task).success &&
@@ -257,6 +375,10 @@ const stepTypes = (
     type: definition.type,
     title: definition.title,
     summary: definition.summary,
+    choices:
+      definition.category === "registered"
+        ? stepBuilderChoices(definition, flow, source, context)
+        : [],
   }));
 };
 
@@ -282,7 +404,14 @@ const newStep = (
     reason:
       "This flow cannot run that kind of step, or the step needs settings this application does not have yet.",
   };
-  if (!stepTypes(flow, source, context).some((entry) => entry.type === taskType)) return refused;
+  const offered = stepTypes(flow, source, context).find((entry) => entry.type === taskType);
+  if (offered === undefined) return refused;
+  const picks = settings.choices ?? {};
+  const unpicked = offered.choices.find(
+    (choice) => !choice.options.some((option) => option.value === picks[choice.property]),
+  );
+  if (unpicked !== undefined)
+    return { kind: "invalid", reason: `${unpicked.unset}.` };
   const definition = studioFlowDefinitionOf(taskType);
   const needsMessage = definition?.properties.message?.required === true;
   if (needsMessage && !settings.message?.trim())
@@ -308,17 +437,30 @@ const newStep = (
   const task =
     definition === undefined
       ? undefined
-      : seededTask(definition, uniqueTaskId(definition.type, used), flow, source, context);
+      : seededTask(
+          definition,
+          uniqueTaskId(definition.type, used),
+          flow,
+          source,
+          offered.choices,
+          picks,
+        );
   if (task !== undefined && settings.message !== undefined) task.properties.message = text(settings.message.trim());
   if (task?.type === "rule.require" && settings.field !== undefined) task.properties.field = text(settings.field);
-  if (task?.type === "interface.show_form" && settings.formAlias !== undefined) {
+  if (task?.type === "operation.call") {
+    const operation = source.body.modules
+      .flatMap((module) => module.actions)
+      .find((entry) => entry.key === picks.operation);
+    if (operation === undefined) return refused;
+    task.properties = studioOperationCallProperties(flow, operation);
+  }
+  if (task?.type === "interface.show_form") {
     const form = projectStudioFlowDraftChoices({
       ...context,
       source: source as ApplicationSourceDocument,
       flow,
-    }).forms.find((entry) => entry.alias === settings.formAlias);
+    }).forms.find((entry) => entry.alias === picks.form);
     if (form === undefined) return refused;
-    task.properties.form = text(settings.formAlias);
     task.properties.inputs = {
       kind: "map",
       entries: Object.fromEntries(

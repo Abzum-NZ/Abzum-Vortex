@@ -14,6 +14,7 @@ import {
   type StudioBorrowedChoices,
   type StudioQueryChoice,
 } from "./contextual-palette";
+import { studioOperationCallProperties } from "./application-flow-commands";
 import { studioFlowCallerNames } from "./application-flow-start";
 import { projectStudioFlowDraftChoices } from "./application-flow-step-form";
 import { describeStudioFlowLocation, studioWords } from "./application-flow-model";
@@ -24,8 +25,8 @@ import {
 
 /**
  * Creating a flow and binding it, the one way flows are created and bound:
- * - for an action control: an interactive flow started by the person, with one Show message step,
- *   and one flow binding of the control's action event to it (the existing `flow_bindings` model);
+ * - for an action control: an interactive flow started by the person, with the one step the builder
+ *   chose (call an operation or show a message), and one flow binding of the control's action event to it (the existing `flow_bindings` model);
  *   on a record page the flow runs for the record the page shows, its `record_id` record input;
  * - for a board: an interactive flow bound to its card moves, with one Save record step that saves
  *   the moved card's new stage, so its pipeline and the action that owns the stage apply; it runs
@@ -100,6 +101,20 @@ const controlEventRecordType = (
   return pageRecord;
 };
 
+/**
+ * A board's card move and a table's inline edit on a record type save the change themselves: the
+ * new flow gets its Save record step and takes no step chosen by the builder.
+ */
+export const studioFlowCreateSavesChange = (
+  event: StudioFlowAuthoringEvent,
+  recordType: string | null,
+): boolean =>
+  (event === "card_moved" || event === "inline_edit" || event === "row_edit") && recordType !== null;
+
+export type StudioFlowCreateStep =
+  | Readonly<{ kind: "operation"; operation: string }>
+  | Readonly<{ kind: "message"; message: string }>;
+
 export type StudioFlowCreateCommand =
   /** On a record page, the flow gets the record the page shows as its record_id input. */
   | Readonly<{
@@ -108,6 +123,11 @@ export type StudioFlowCreateCommand =
       name: string;
       recordType: string | null;
       event: StudioFlowAuthoringEvent;
+      /**
+       * The one step the flow starts with, chosen by the builder: an operation to call or a message
+       * to show. A board's card move and a table's inline edit save the change and take none.
+       */
+      step?: StudioFlowCreateStep;
       rowActionLabel?: string;
     }>
   | Readonly<{
@@ -162,6 +182,8 @@ export type StudioFlowCreateChoices = Readonly<{
     rowActionMenu: boolean;
     callerNames: readonly Readonly<{ name: string; label: string }>[];
   }>[];
+  /** The operations a new flow can call, by the key a Call protected operation step names. */
+  operations: readonly Readonly<{ key: string; label: string }>[];
 }>;
 
 export const projectStudioFlowCreateChoices = (
@@ -228,7 +250,10 @@ export const projectStudioFlowCreateChoices = (
       });
     }
   });
-  return { actions };
+  const operations = draft.source.body.modules.flatMap((module) =>
+    module.actions.map((action) => ({ key: action.key, label: action.label })),
+  );
+  return { actions, operations };
 };
 
 /** A builder key from a name, unique among the taken ones. */
@@ -566,10 +591,8 @@ export const applyStudioFlowCreate = (
     let binding: Readonly<{ id: string; eventId: string }>;
     if (
       command.kind === "action" &&
-      (command.event === "card_moved" ||
-        command.event === "inline_edit" ||
-        command.event === "row_edit") &&
-      command.recordType !== null
+      command.recordType !== null &&
+      studioFlowCreateSavesChange(command.event, command.recordType)
     ) {
       // A board's card move and a table's inline edit each save the changed value of one record
       // through the one Save record task: the record and the changed field with its new value.
@@ -625,15 +648,36 @@ export const applyStudioFlowCreate = (
                     recordTypeIds: [command.recordType],
                   },
                 },
-        tasks: [
+        tasks: [],
+      });
+      const step = command.step;
+      if (step === undefined)
+        return refuse("Choose what the flow does: run an operation or show a message.");
+      if (step.kind === "message") {
+        if (!step.message.trim()) return refuse("Write the message the flow shows.");
+        flow.tasks = [
           {
             id: "show_message",
             type: "interface.show_message",
             version: "1.0.0",
-            properties: { message: message("Edit this message") },
+            properties: { message: message(step.message.trim()) },
           },
-        ],
-      });
+        ];
+      } else {
+        const operation = body.modules
+          .flatMap((module) => module.actions)
+          .find((entry) => entry.key === step.operation);
+        if (operation === undefined)
+          return refuse("That operation is no longer in the application.");
+        flow.tasks = [
+          {
+            id: "run_operation",
+            type: "operation.call",
+            version: "1.0.0",
+            properties: studioOperationCallProperties(flow, operation),
+          },
+        ];
+      }
       if (command.event === "form_submit") {
         flow.inputs = { ...flow.inputs, values: { type: "json", required: true } };
       }
