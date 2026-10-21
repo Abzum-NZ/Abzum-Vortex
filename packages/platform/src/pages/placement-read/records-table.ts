@@ -512,6 +512,7 @@ export const readRecordsTable = async (
         ? undefined
         : seal({
             installationRevision: read.context.applicationReleaseRevision,
+            pageId: String(read.pageDefinition.pageId),
             placementId,
             moduleRootId: String(bound.module.rootId),
             queryId: String(bound.query.queryId),

@@ -48,6 +48,11 @@ export {
   type PageContentRevisions,
 } from "./page-content-discard";
 export {
+  requireProjectedPlacement,
+  type ProjectedPlacementGate,
+  type ProjectedPlacementRefusal,
+} from "./projected-placement-gate";
+export {
   createStoredPageCapabilityService,
   type StoredPageCapabilityDependencies,
   type StoredPageCapabilitySelection,
