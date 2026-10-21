@@ -160,6 +160,8 @@ export type StudioFlowNamedEntry = Readonly<{
   type: string | undefined;
   required: boolean;
   initialValue?: FlowValue;
+  /** An operation's declared input: only values of its type fit, never a whole set of values. */
+  typed?: true;
 }>;
 
 /** The parts of the draft a step setting can point at, read from the draft being edited. */
@@ -308,6 +310,7 @@ export const projectStudioFlowDraftChoices = (
           label: input.label,
           type: actionInputType(input.type),
           required: input.required,
+          typed: true as const,
         })),
       })),
     ),

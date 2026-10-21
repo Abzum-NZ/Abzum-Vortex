@@ -18,6 +18,7 @@ import {
   type StudioFlowReferenceChoice,
   type StudioFlowValueSource,
 } from "@vortex/ui/studio";
+import { operationInputAccepts } from "@vortex/platform/schema";
 
 /**
  * One flow value: where it comes from (a fixed value, or something the flow can read at this step)
@@ -376,6 +377,7 @@ export function StudioFlowValueControl({
   options = [],
   references,
   referenceCompatible,
+  typed,
   unset,
   long = false,
   disabled,
@@ -393,6 +395,8 @@ export function StudioFlowValueControl({
   references: readonly StudioFlowReferenceChoice[];
   /** Field-aware compatibility, when the owning contract supplies it. */
   referenceCompatible?: (reference: FlowReference) => boolean;
+  /** An operation's declared input: offers only what the publication check accepts for its type. */
+  typed?: true | undefined;
   /** The words for leaving it unset, when it may be left unset. */
   unset?: string;
   long?: boolean;
@@ -401,7 +405,9 @@ export function StudioFlowValueControl({
 }>) {
   const fixedType = options.length > 0 ? "choice" : studioFixedLiteralType(valueType);
   const offered = references.filter((choice) =>
-    referenceCompatible !== undefined
+    typed === true && valueType !== undefined
+      ? operationInputAccepts(choice.type, valueType)
+      : referenceCompatible !== undefined
       ? referenceCompatible(choice.reference)
       : valueType === undefined ||
         choice.type === undefined ||

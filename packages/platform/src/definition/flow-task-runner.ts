@@ -12,6 +12,7 @@ import {
   recordTypeIdSchema,
   sameId,
   saveRecordCommandSchema,
+  unlocatedCorrectionsRefusal,
   viewerSafeRecordPinAcquisitionResultSchema,
   viewerSafeRecordPinSelectorSchema,
   type ExecuteNamedActionCommand,
@@ -473,9 +474,13 @@ export const createFlowTaskRunner = (
                 ];
           }),
         );
+        // Corrections on no field of this save still carry the rule's sentence (for example the
+        // pipeline's), which the person reads as one refusal rather than getting nothing.
+        const ruleRefusal =
+          located.length === 0 ? unlocatedCorrectionsRefusal(value.corrections) : undefined;
         const diagnostic = flowRefusalFeedbackSchema.safeParse({
           code: "invalid_command",
-          corrections: located,
+          ...(ruleRefusal === undefined ? { corrections: located } : { ruleRefusal }),
         });
         // The caller sees the located fields; the run-ended line carries the stable reason.
         console.error(
@@ -490,11 +495,17 @@ export const createFlowTaskRunner = (
             ? {
                 diagnostic: {
                   code: diagnostic.data.code,
-                  corrections: located.map((correction) => ({
-                    field: correction.field,
-                    code: correction.code,
-                    ...(correction.message === undefined ? {} : { message: correction.message }),
-                  })),
+                  ...(ruleRefusal === undefined
+                    ? {
+                        corrections: located.map((correction) => ({
+                          field: correction.field,
+                          code: correction.code,
+                          ...(correction.message === undefined
+                            ? {}
+                            : { message: correction.message }),
+                        })),
+                      }
+                    : { ruleRefusal }),
                 },
               }
             : {},

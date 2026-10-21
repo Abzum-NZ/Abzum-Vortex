@@ -7,6 +7,7 @@ import {
   formContinuationReceiptSchema,
   formContinuationTargetSchema,
   flowRefusalFeedbackSchema,
+  unlocatedCorrectionsRefusal,
   flowSchema,
   flowTaskChildLists,
   flowBindingInvocationSchema,
@@ -422,12 +423,19 @@ const surfaceDiagnostic = (
         : parsed.data.corrections.filter((correction) =>
             hasVisibleOwningFormField(installation, binding.controlId, correction.field),
           );
+  // Corrections the person cannot see at a field are never dropped: their messages become the one
+  // refusal sentence, unless the rule already refused with its own.
+  const ruleRefusal =
+    parsed.data.ruleRefusal ??
+    (corrections.length === 0 && parsed.data.corrections !== undefined
+      ? unlocatedCorrectionsRefusal(parsed.data.corrections)
+      : undefined);
   return flowRefusalFeedbackSchema.parse({
     code: parsed.data.code,
     ...(parsed.data.presentation === undefined ? {} : { presentation: parsed.data.presentation }),
     ...(submittedField === undefined ? {} : { submittedField }),
     ...(corrections.length === 0 ? {} : { corrections }),
-    ...(parsed.data.ruleRefusal === undefined ? {} : { ruleRefusal: parsed.data.ruleRefusal }),
+    ...(ruleRefusal === undefined ? {} : { ruleRefusal }),
   });
 };
 

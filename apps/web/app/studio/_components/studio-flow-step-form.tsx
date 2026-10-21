@@ -104,6 +104,7 @@ function EntryRows({
           label={entry.label}
           optional={!entry.required}
           valueType={entry.type}
+          typed={entry.typed}
           references={references}
           value={entries.find((candidate) => candidate.name === entry.name)?.source ?? null}
           unset="Not given"
