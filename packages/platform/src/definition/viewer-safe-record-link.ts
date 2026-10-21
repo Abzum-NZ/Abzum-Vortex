@@ -29,6 +29,8 @@ import type { RequestDatabaseTransaction } from "../db/index";
 import type { ViewerSafeRecordLinkTitle } from "../schema";
 import {
   createViewerSafeRecordLinkReadService,
+  viewerSafeRecordLinkTitleRecordLimit,
+  viewerSafeRecordLinkTitleTypeLimit,
   type ViewerSafeRecordLinkTitleReadResult,
 } from "../queries/index";
 import {
@@ -112,7 +114,6 @@ export const recordLinkLabelKey = (link: RecordLinkReference): string =>
   `${link.recordTypeId.toLowerCase()}:${link.recordId.toLowerCase()}`;
 
 const MAXIMUM_LABEL_LENGTH = 200;
-const titleReadBatchSize = 1_000;
 
 /** The installed module and record type a stored link value's record type identity names. */
 const locateLinkTarget = (context: InstalledRuntimeContext, recordTypeId: string) => {
@@ -124,6 +125,20 @@ const locateLinkTarget = (context: InstalledRuntimeContext, recordTypeId: string
   }
   return undefined;
 };
+
+/** The identity of a located link target within the installed context, without a record. */
+const linkTargetIdentity = (
+  context: InstalledRuntimeContext,
+  module: NonNullable<ReturnType<typeof locateLinkTarget>>["module"],
+  recordType: NonNullable<ReturnType<typeof locateLinkTarget>>["recordType"],
+) => ({
+  organizationId: context.organizationId,
+  applicationRootId: context.applicationRootId,
+  moduleRootId: module.rootId,
+  moduleReleaseRevision: module.releaseRevision,
+  recordTypeId: recordType.recordTypeId,
+  storageContractId: recordType.storageContractId,
+});
 
 const labelText = (title: ViewerSafeRecordLinkTitle): string | undefined => {
   const text = (typeof title === "string" ? title : JSON.stringify(title))?.trim();
@@ -410,6 +425,17 @@ export const createViewerSafeRecordLinkService = (
               !sameId(scope.applicationRootId, context.applicationRootId)
             )
               throw new Error("RECORD_LINK_SCOPE_MISMATCH");
+            type LinkTypeRead = {
+              readonly typeKey: string;
+              readonly identity: ReturnType<typeof linkTargetIdentity>;
+              readonly titleFieldId: string;
+              readonly recordIds: readonly RecordId[];
+              readonly protectedGroups: boolean;
+              readonly titleIsGroupName: boolean;
+              readonly page: PageDefinition | undefined;
+              readonly openable: boolean;
+            };
+            const typeReads: LinkTypeRead[] = [];
             for (const [typeKey, ids] of byType) {
               const target = locateLinkTarget(context, typeKey);
               if (target === undefined) {
@@ -422,14 +448,7 @@ export const createViewerSafeRecordLinkService = (
               }
               const { module, recordType } = target;
               const recordIds = [...ids.values()];
-              const identity = {
-                organizationId: context.organizationId,
-                applicationRootId: context.applicationRootId,
-                moduleRootId: module.rootId,
-                moduleReleaseRevision: module.releaseRevision,
-                recordTypeId: recordType.recordTypeId,
-                storageContractId: recordType.storageContractId,
-              };
+              const identity = linkTargetIdentity(context, module, recordType);
               const page = matchingDetailPage(context, { ...identity, recordId: recordIds[0]! });
               const openable =
                 page !== undefined &&
@@ -440,85 +459,102 @@ export const createViewerSafeRecordLinkService = (
                   context,
                   page,
                 ));
-              if (recordType.systemProjection?.protectedView === "groups") {
-                const titleIsGroupName = recordType.fields.some(
+              typeReads.push({
+                typeKey,
+                identity,
+                titleFieldId: recordType.titleFieldId,
+                recordIds,
+                protectedGroups: recordType.systemProjection?.protectedView === "groups",
+                titleIsGroupName: recordType.fields.some(
                   (field) =>
                     sameId(field.fieldId, recordType.titleFieldId) && field.key === "label",
+                ),
+                page,
+                openable,
+              });
+            }
+
+            // The titles of every target type are read together: one database call (one access
+            // plan resolution) per set of at most the database's type and record limits.
+            const titles = new Map<string, ViewerSafeRecordLinkTitle>();
+            let pending: {
+              identity: LinkTypeRead["identity"];
+              titleFieldId: string;
+              recordIds: RecordId[];
+            }[] = [];
+            let pendingRecords = 0;
+            const flushTitles = async () => {
+              if (pending.length === 0) return;
+              const read = await records.readTitles(transaction, scope, {
+                applicationReleaseRevision: context.applicationReleaseRevision,
+                targets: pending,
+              });
+              if (read.outcome !== "read") throw new Error("RECORD_LINK_INSTALLATION_MISMATCH");
+              for (const [key, title] of read.titles) titles.set(key, title);
+              pending = [];
+              pendingRecords = 0;
+            };
+            for (const typeRead of typeReads) {
+              for (let start = 0; start < typeRead.recordIds.length;) {
+                if (
+                  pendingRecords >= viewerSafeRecordLinkTitleRecordLimit ||
+                  pending.length >= viewerSafeRecordLinkTitleTypeLimit
+                )
+                  await flushTitles();
+                const take = Math.min(
+                  viewerSafeRecordLinkTitleRecordLimit - pendingRecords,
+                  typeRead.recordIds.length - start,
                 );
-                for (let start = 0; start < recordIds.length; start += titleReadBatchSize) {
-                  const batch = recordIds.slice(start, start + titleReadBatchSize);
-                  const read = await records.readTitles(transaction, scope, {
-                    identity,
-                    applicationReleaseRevision: context.applicationReleaseRevision,
-                    titleFieldId: recordType.titleFieldId,
-                    recordIds: batch,
-                  });
-                  if (read.outcome !== "read") throw new Error("RECORD_LINK_INSTALLATION_MISMATCH");
-                  const visible = await readVisibleGroupLabels(transaction, batch);
-                  for (const recordId of batch) {
-                    const title = read.titles.get(recordId.toLowerCase());
-                    const titleText = title === undefined ? undefined : labelText(title);
-                    if (title !== undefined && titleText === undefined)
-                      console.error("[page] record link title is empty: RECORD_LINK_TITLE_EMPTY");
-                    const groupName = visible.get(recordId.toLowerCase());
-                    let label: string | undefined;
-                    if (groupName !== undefined && titleText !== undefined)
-                      label = titleIsGroupName ? groupName : titleText;
-                    labels.set(
-                      `${typeKey}:${recordId.toLowerCase()}`,
-                      label === undefined
-                        ? { outcome: "restricted" }
-                        : {
-                            outcome: "available",
-                            label,
-                            ...(openable && page !== undefined
-                              ? {
-                                  detail: {
-                                    applicationKey: context.releaseSet.application.definitionKey,
-                                    pageKey: page.key,
-                                    recordId,
-                                  },
-                                }
-                              : {}),
-                          },
-                    );
-                  }
-                }
-                continue;
-              }
-              for (let start = 0; start < recordIds.length; start += titleReadBatchSize) {
-                const batch = recordIds.slice(start, start + titleReadBatchSize);
-                const read = await records.readTitles(transaction, scope, {
-                  identity,
-                  applicationReleaseRevision: context.applicationReleaseRevision,
-                  titleFieldId: recordType.titleFieldId,
-                  recordIds: batch,
+                pending.push({
+                  identity: typeRead.identity,
+                  titleFieldId: typeRead.titleFieldId,
+                  recordIds: typeRead.recordIds.slice(start, start + take),
                 });
-                if (read.outcome !== "read") throw new Error("RECORD_LINK_INSTALLATION_MISMATCH");
-                for (const recordId of batch) {
-                  const title = read.titles.get(recordId.toLowerCase());
-                  const text = title === undefined ? undefined : labelText(title);
-                  if (title !== undefined && text === undefined)
-                    console.error("[page] record link title is empty: RECORD_LINK_TITLE_EMPTY");
-                  labels.set(
-                    `${typeKey}:${recordId.toLowerCase()}`,
-                    text === undefined
-                      ? { outcome: "restricted" }
-                      : {
-                          outcome: "available",
-                          label: text,
-                          ...(openable && page !== undefined
-                            ? {
-                                detail: {
-                                  applicationKey: context.releaseSet.application.definitionKey,
-                                  pageKey: page.key,
-                                  recordId,
-                                },
-                              }
-                            : {}),
-                        },
-                  );
+                pendingRecords += take;
+                start += take;
+              }
+            }
+            await flushTitles();
+
+            for (const typeRead of typeReads) {
+              const { typeKey, page } = typeRead;
+              const visible = typeRead.protectedGroups
+                ? await readVisibleGroupLabels(transaction, typeRead.recordIds)
+                : undefined;
+              for (const recordId of typeRead.recordIds) {
+                const key = `${typeKey}:${recordId.toLowerCase()}`;
+                const title = titles.get(key);
+                const titleText = title === undefined ? undefined : labelText(title);
+                if (title !== undefined && titleText === undefined)
+                  console.error("[page] record link title is empty: RECORD_LINK_TITLE_EMPTY");
+                let label: string | undefined = titleText;
+                if (visible !== undefined) {
+                  const groupName = visible.get(recordId.toLowerCase());
+                  label =
+                    groupName !== undefined && titleText !== undefined
+                      ? typeRead.titleIsGroupName
+                        ? groupName
+                        : titleText
+                      : undefined;
                 }
+                labels.set(
+                  key,
+                  label === undefined
+                    ? { outcome: "restricted" }
+                    : {
+                        outcome: "available",
+                        label,
+                        ...(typeRead.openable && page !== undefined
+                          ? {
+                              detail: {
+                                applicationKey: context.releaseSet.application.definitionKey,
+                                pageKey: page.key,
+                                recordId,
+                              },
+                            }
+                          : {}),
+                      },
+                );
               }
             }
             return { outcome: "read", labels };
