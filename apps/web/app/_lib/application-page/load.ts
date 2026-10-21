@@ -155,7 +155,10 @@ export const loadInstalledContext = (
 /**
  * The viewer's projection of one page and of the application menu, read once per server render:
  * the application frame layout and the page of one request share them instead of deciding the same
- * access twice. The next request reads again, so no access decision outlives its request.
+ * access twice. The next request reads again, so no access decision outlives its request. React's
+ * `cache` keys on the number of arguments as well as their values, so every caller passes all five
+ * (the selected placements are required, `undefined` for a whole page): a call with fewer would
+ * miss the shared read and project the page and the menu a second time.
  */
 export const readPageProjections = cache(
   (
@@ -163,7 +166,7 @@ export const readPageProjections = cache(
     context: InstalledRuntimeContext,
     pageId: string,
     subjectRecordId: string | undefined,
-    selectedPlacementIds?: ReadonlySet<string>,
+    selectedPlacementIds: ReadonlySet<string> | undefined,
   ) => {
     const dependencies = requestDependencies();
     const selection: OrganizationSelectionCandidate = runtimeContextSelection(context);
