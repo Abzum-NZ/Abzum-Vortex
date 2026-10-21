@@ -201,6 +201,8 @@ declare
   tree_parent_id uuid;
   tree_relationship_id uuid;
   tree_item jsonb;
+  tree_filter jsonb;
+  tree_filter_predicate text;
   tree_candidates uuid[];
   tree_root_child_ids uuid[] := array[]::uuid[];
   tree_root_nonroot_ids uuid[];
@@ -753,6 +755,7 @@ begin
       end if;
     end if;
   end if;
+  tree_filter_predicate := filter_predicate;
   if tree_mode and tree_parent_id is not null then
     filter_predicate := '(' || filter_predicate || ') and ' || pg_catalog.format(
       'exists (select 1 from vortex_record.relationship_edges as tree_edge'
@@ -769,6 +772,28 @@ begin
   select coalesce(pg_catalog.array_agg(item.value), array[]::text[])
   into filter_expressions
   from pg_catalog.jsonb_array_elements_text(prepared_plan #> '{filter,expressions}') as item(value);
+  if tree_mode then
+    -- Every tree relative read applies the query's own filter and the viewer's search, exactly as
+    -- the level scan does: the pushed predicate, the filtered fields' readability and the residual.
+    tree_filter := pg_catalog.jsonb_build_object(
+      'predicate', tree_filter_predicate, 'parameters', filter_parameters, 'exact', filter_exact,
+      'condition', filter_condition, 'fieldTypes', filter_types,
+      'inputTypes', parameter_types, 'inputs', parameter_values,
+      'fieldIds', pg_catalog.to_jsonb(filter_ids),
+      'valuesSql', (select pg_catalog.string_agg(
+          filter_chunk.pairs_text,
+          ') || pg_catalog.jsonb_build_object(' order by filter_chunk.chunk_index)
+        from (
+          select (filter_pair.pair_number - 1) / 50 as chunk_index,
+            pg_catalog.string_agg(
+              filter_pair.pair_text, ', ' order by filter_pair.pair_number
+            ) as pairs_text
+          from pg_catalog.unnest(filter_expressions)
+            with ordinality as filter_pair(pair_text, pair_number)
+          group by (filter_pair.pair_number - 1) / 50
+        ) as filter_chunk),
+      'searchFieldIds', pg_catalog.to_jsonb(search_field_ids), 'search', user_search);
+  end if;
   -- The keyset position must fit this exact order. The cursor binds every
   -- declared sort field, direction and whether it was pushed, but carries
   -- values only for readable sort fields. A changed readable subset cannot
@@ -1260,7 +1285,9 @@ begin
             tree_item := vortex_record.read_query_tree_relatives_internal(
               true, tree_root_child_ids, tree_relationship_id, context_organization_id,
               context_application_root_id, storage_plan, record_type_id_value, page_first_loaded,
-              page_declaration, page_eligibility, page_shared, page_narrowed, validated_record_types);
+              page_declaration, page_eligibility, page_shared, page_narrowed, validated_record_types,
+              tree_filter);
+            if tree_item ->> 'outcome' <> 'completed' then return tree_item; end if;
             select coalesce(pg_catalog.array_agg(item.value::uuid), array[]::uuid[])
             into tree_root_nonroot_ids
             from pg_catalog.jsonb_array_elements_text(tree_item -> 'recordIds') as item(value);
@@ -1451,10 +1478,13 @@ begin
     tree_item := vortex_record.read_query_tree_relatives_internal(
       false, tree_candidates, tree_relationship_id, context_organization_id,
       context_application_root_id, storage_plan, record_type_id_value, page_first_loaded,
-      page_declaration, page_eligibility, page_shared, page_narrowed, validated_record_types);
+      page_declaration, page_eligibility, page_shared, page_narrowed, validated_record_types,
+      tree_filter);
     if tree_item ->> 'outcome' <> 'completed' then return tree_item; end if;
+    -- A parent the examination budget did not decide has no answer yet: null, never a refusal.
     select pg_catalog.jsonb_agg(item.value || pg_catalog.jsonb_build_object(
-        'hasChildren', (tree_item -> 'recordIds') ? (item.value ->> 'recordId')) order by item.ordinality)
+        'hasChildren', case when (tree_item -> 'undecidedIds') ? (item.value ->> 'recordId') then null
+          else (tree_item -> 'recordIds') ? (item.value ->> 'recordId') end) order by item.ordinality)
     into rows_value
     from pg_catalog.jsonb_array_elements(rows_value) with ordinality as item(value, ordinality);
   end if;
@@ -1542,4 +1572,4 @@ revoke all on function vortex_record.run_module_query(uuid, uuid, bigint, jsonb,
 grant execute on function vortex_record.run_module_query(uuid, uuid, bigint, jsonb, jsonb, integer, jsonb, jsonb, jsonb, text, uuid[])
   to vortex_request;
 comment on function vortex_record.run_module_query(uuid, uuid, bigint, jsonb, jsonb, integer, jsonb, jsonb, jsonb, text, uuid[]) is
-  'One bounded keyset page of rows readable through read_record for one installed Module query, or one exact current human-owned preview query over isolated preview storage, each carrying the record''s concurrency number and the per-row capabilities from read_record_capabilities, each action decided exactly as its own writer decides it, with only the declared Record system values, or one refusal before any row is exposed; accepts a bound list component''s declared sortable, filterable and searchable field sets together with the viewer''s chosen sort, typed filter and search term, refuses a sort or filter outside the declared sets, keeps a user sort only over a field the record type declares sortable and the reader is guaranteed to see, ANDs the user filter with the published filter so it can only narrow, and matches a search only through searchable fields the returned row exposes to the reader; returns with every plain page and board column read, even an empty one, the reader''s current field bound (the fields it is guaranteed to see on every record it may read, and whether any searchable field is among them) so a list offers and accepts its filter, search and sort controls from the same read; requires every filtered field to be declared filterable; pushes a filter or a sort into the candidate scan only for fields the reader is guaranteed to see for the whole record type, evaluates a filter on a possibly-withheld field per row, and keeps the keyset cursor over readable sort values and a record identity so no cursor carries a hidden field value and the scan order and budget never depend on one; narrows an installed scan with one predicate that OR-s every eligible alternative''s exact owner, owner-group and direct-share route test with its saved condition compiled over the record''s own catalogue columns where that condition can be expressed as a superset of the per-row decision, leaves the installed scan unrestricted where a route or condition has no exact stored form, and still decides every returned row through read_record; validates every preview stage against the current human, candidate revision and exact release and storage pins, uses only active preview catalogue mappings and preview field bounds, and never falls through to installed resolution; works out read-time fields, such as a deadline-passed calculation, inside an installed query at one statement timestamp in the organisation time zone, so no installed query is refused for freshness; admits board members only through a separately validated board selector over the sole filterable choice grouping key, reads one column''s member page or, for a board''s first pages, the first page of every requested column in one invocation with its own budget and position per column, classifies those columns from current readable values and, when the choice field is guaranteed readable on every scanned row, narrows each column''s candidate scan to its own stored choice value so a column reads only its own cards, and admits generic grouped members only when every installed grouping value is present in the current readable projection and JSONB-equal to the closed typed selector; missing or withheld values belong to no generic group while JSON null is a value, and generic group membership never uses hidden stored values, and a grid dimension narrows the stored candidate scan only after the field is proven guaranteed readable, with date bucket membership using the same authored-zone canonical value as the summary and typed half-open calendar ranges; reads one level of a tree over a one-record link of the record type to itself, either the roots (records whose parent no access-readable record holds, so an unreadable parent is never revealed) or the children of one parent, through the same keyset order, access scan and exact per-row decision as a plain page, requiring the parent link to be a field the reader is guaranteed to see and reporting for every returned record, from one bounded set of rounds over the whole page rather than one query per row, whether the reader may read a child of it; orders board pages by record identity and generic members by the requested or query order with bidirectional keysets, returns generic group identity and the reader''s field bound even for empty pages, and binds each member operation, selector and projection in its own uncached continuation; reads the copied records of a preview like installed ones and refuses a system projection in a preview; with a list of 1 to 200 distinct record ids it reads exactly those records in one page, each under the same scope, release, filter, search and readability decision as any row, and returns only those readable now.';
+  'One bounded keyset page of rows readable through read_record for one installed Module query, or one exact current human-owned preview query over isolated preview storage, each carrying the record''s concurrency number and the per-row capabilities from read_record_capabilities, each action decided exactly as its own writer decides it, with only the declared Record system values, or one refusal before any row is exposed; accepts a bound list component''s declared sortable, filterable and searchable field sets together with the viewer''s chosen sort, typed filter and search term, refuses a sort or filter outside the declared sets, keeps a user sort only over a field the record type declares sortable and the reader is guaranteed to see, ANDs the user filter with the published filter so it can only narrow, and matches a search only through searchable fields the returned row exposes to the reader; returns with every plain page and board column read, even an empty one, the reader''s current field bound (the fields it is guaranteed to see on every record it may read, and whether any searchable field is among them) so a list offers and accepts its filter, search and sort controls from the same read; requires every filtered field to be declared filterable; pushes a filter or a sort into the candidate scan only for fields the reader is guaranteed to see for the whole record type, evaluates a filter on a possibly-withheld field per row, and keeps the keyset cursor over readable sort values and a record identity so no cursor carries a hidden field value and the scan order and budget never depend on one; narrows an installed scan with one predicate that OR-s every eligible alternative''s exact owner, owner-group and direct-share route test with its saved condition compiled over the record''s own catalogue columns where that condition can be expressed as a superset of the per-row decision, leaves the installed scan unrestricted where a route or condition has no exact stored form, and still decides every returned row through read_record; validates every preview stage against the current human, candidate revision and exact release and storage pins, uses only active preview catalogue mappings and preview field bounds, and never falls through to installed resolution; works out read-time fields, such as a deadline-passed calculation, inside an installed query at one statement timestamp in the organisation time zone, so no installed query is refused for freshness; admits board members only through a separately validated board selector over the sole filterable choice grouping key, reads one column''s member page or, for a board''s first pages, the first page of every requested column in one invocation with its own budget and position per column, classifies those columns from current readable values and, when the choice field is guaranteed readable on every scanned row, narrows each column''s candidate scan to its own stored choice value so a column reads only its own cards, and admits generic grouped members only when every installed grouping value is present in the current readable projection and JSONB-equal to the closed typed selector; missing or withheld values belong to no generic group while JSON null is a value, and generic group membership never uses hidden stored values, and a grid dimension narrows the stored candidate scan only after the field is proven guaranteed readable, with date bucket membership using the same authored-zone canonical value as the summary and typed half-open calendar ranges; reads one level of a tree over a one-record link of the record type to itself, either the roots (records whose parent no readable record matching the query''s filter and search holds, so an unreadable parent is never revealed and a matching record under a non-matching parent stays reachable) or the children of one parent, through the same keyset order, access scan, filter, search and exact per-row decision as a plain page, requiring the parent link to be a field the reader is guaranteed to see and reporting for every returned record, from one bounded set of rounds over the whole page rather than one query per row, whether the reader may read a child of it that matches the query, or that this is undecided when the rounds'' examination budget ran out; orders board pages by record identity and generic members by the requested or query order with bidirectional keysets, returns generic group identity and the reader''s field bound even for empty pages, and binds each member operation, selector and projection in its own uncached continuation; reads the copied records of a preview like installed ones and refuses a system projection in a preview; with a list of 1 to 200 distinct record ids it reads exactly those records in one page, each under the same scope, release, filter, search and readability decision as any row, and returns only those readable now.';

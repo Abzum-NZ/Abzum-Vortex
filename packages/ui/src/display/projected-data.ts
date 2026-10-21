@@ -131,8 +131,11 @@ export type DisplayRow = Readonly<{
   cells: Readonly<Record<string, DisplayCellValue>>;
   /** The style keys and measures the table's formatting gives the row, decided on the server. */
   format?: RecordsTableRowFormat;
-  /** A tree row the viewer may read a child of, decided on the server. */
-  hasChildren?: true;
+  /**
+   * A tree row the viewer may read a matching child of, decided on the server; "unknown" when the
+   * server stopped before deciding, so the child level is read when the row is opened.
+   */
+  hasChildren?: true | "unknown";
   /** The exact text of each readable number and money cell, for the range copy (see the server). */
   exact?: Readonly<Record<string, string>>;
 }>;
@@ -709,8 +712,12 @@ const parseRows = (
         ["recordId", "revision", "capabilities", "edit", "cells", "format", "hasChildren", "exact"],
         rowLocation,
       );
-      if (record.hasChildren !== undefined && record.hasChildren !== true)
-        fail("A projected row can only say it has children", rowLocation);
+      if (
+        record.hasChildren !== undefined &&
+        record.hasChildren !== true &&
+        record.hasChildren !== "unknown"
+      )
+        fail("A projected row can only say it has or may have children", rowLocation);
       const recordId = requireNonEmptyString(
         record.recordId,
         "A projected row requires a stable record identity",
@@ -774,7 +781,9 @@ const parseRows = (
         ...(edit === undefined ? {} : { edit }),
         cells: Object.freeze(cells),
         ...(format === undefined ? {} : { format }),
-        ...(record.hasChildren === true ? { hasChildren: true as const } : {}),
+        ...(record.hasChildren === true || record.hasChildren === "unknown"
+          ? { hasChildren: record.hasChildren }
+          : {}),
       });
     }),
   );
