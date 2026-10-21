@@ -1,5 +1,4 @@
 import {
-  PLATFORM_SERVICE_OPERATIONS,
   flowLiteralSchema,
   flowJsonMemberType,
   flowMaximumForEachItemsDurable,
@@ -8,12 +7,10 @@ import {
   flowMaximumTaskCount,
   flowMaximumTaskNestingDepth,
   flowMaximumTaskOutputPathDepth,
-  flowReadFieldsProjectionSchema,
   flowTaskChildLists,
   flowTaskRegistry,
   flowTriggerExecutionKinds,
   isFlowControlTask,
-  platformOperationKey,
   recordTypeIdSchema,
   validateFlowCallGraph,
   validateFlowTaskPlacement,
@@ -31,6 +28,7 @@ import {
   type SourceFlow,
 } from "../schema";
 import type { DefinitionCompilerRefusalCode } from "./compilation-error";
+import { flowTaskOutputMembers } from "./flow-output-members";
 
 /**
  * The one flow validator. It replaces the free-graph validators (frontend flow
@@ -437,59 +435,8 @@ export function validateFlow(
             );
             return undefined;
           }
-          if (task.type === "record.read_fields") {
-            const registered = task as Extract<FlowTask, { properties: unknown }> & {
-              properties: Readonly<Record<string, FlowValue>>;
-              readFieldTypes?: Readonly<Record<string, string>>;
-            };
-            if (reference.key !== "values" || reference.path.length !== 1) {
-              add(
-                path,
-                "vortex.definition.workflow_node_values",
-                "invalid_value",
-                "A selected-record read exposes only one declared values member at a time",
-              );
-              return undefined;
-            }
-            const projectionValue = registered.properties.fields;
-            const projection =
-              projectionValue?.kind === "literal" && projectionValue.literal.type === "json"
-                ? flowReadFieldsProjectionSchema.safeParse(projectionValue.literal.value)
-                : undefined;
-            const alias = reference.path[0]!;
-            if (!projection?.success || !projection.data.some((field) => field.alias === alias)) {
-              add(
-                path,
-                "vortex.definition.workflow_node_references",
-                "broken_reference",
-                `Task ${reference.task}.values declares no field ${alias}`,
-              );
-              return undefined;
-            }
-            const memberType = registered.readFieldTypes?.[alias];
-            return memberType as StaticType | undefined;
-          }
-          if (task.type === "operation.call" && reference.key === "result") {
-            const operation = (task as Extract<FlowTask, { properties: Record<string, FlowValue> }>)
-              .properties.operation;
-            const key = operation?.kind === "literal" ? operation.literal.value : undefined;
-            const entry = Object.values(PLATFORM_SERVICE_OPERATIONS).find(
-              (candidate) => platformOperationKey(candidate.key) === key,
-            );
-            if (
-              entry !== undefined &&
-              (entry.descriptor.effect === "read" || entry.descriptor.effect === "change") &&
-              reference.path.length === 1 &&
-              Object.hasOwn(entry.descriptor.outputs, reference.path[0]!)
-            )
-              return entry.descriptor.outputs[reference.path[0]!]!.type;
-          }
-          const inputs =
-            task.type === "interface.show_form"
-              ? (task as Extract<FlowTask, { properties: Record<string, FlowValue> }>).properties
-                  .inputs
-              : undefined;
-          if (reference.key !== "values" || inputs?.kind !== "map") {
+          const declared = flowTaskOutputMembers(task, reference.key);
+          if (declared === undefined) {
             add(
               path,
               "vortex.definition.workflow_node_references",
@@ -498,6 +445,31 @@ export function validateFlow(
             );
             return undefined;
           }
+          const declaredMember = declared.members.find(
+            (candidate) => candidate.name === reference.path![0],
+          );
+          if (declaredMember === undefined) {
+            add(
+              path,
+              "vortex.definition.workflow_node_references",
+              "broken_reference",
+              `Task ${reference.task}.${reference.key} declares no field ${reference.path[0]}`,
+            );
+            return undefined;
+          }
+          // A selected-record read and a protected operation's result name exactly one member.
+          if (task.type !== "interface.show_form") {
+            if (reference.path.length === 1) return declaredMember.type as StaticType;
+            add(
+              path,
+              "vortex.definition.workflow_node_values",
+              "invalid_value",
+              `Task ${reference.task}.${reference.key} exposes only one declared member at a time`,
+            );
+            return undefined;
+          }
+          const inputs = (task as Extract<FlowTask, { properties: Record<string, FlowValue> }>)
+            .properties.inputs!;
           // Show form's input map is its answer declaration. A nested map or a JSON object
           // literal declares further names; an arbitrary JSON value has no known member shape.
           let member: FlowValue = inputs;
@@ -530,12 +502,12 @@ export function validateFlow(
           }
           return valueType(member, where, path);
         }
-        if (task.type === "record.read_fields" && reference.key === "values") {
+        if (flowTaskOutputMembers(task, reference.key)?.whole === false) {
           add(
             path,
             "vortex.definition.workflow_node_values",
             "invalid_value",
-            "A selected-record read must name one declared values member",
+            `Task ${reference.task}.${reference.key} must name one declared member`,
           );
           return undefined;
         }
