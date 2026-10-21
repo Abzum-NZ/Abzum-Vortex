@@ -72,15 +72,15 @@ declare
   group_page_limit integer;
   group_after text := p_user_inputs ->> 'groupAfter';
   pivot_mode boolean := false;
-  pivot_after jsonb;
+  group_cursor jsonb;
   pivot_row_field_id text;
   pivot_column_field_id text;
   pivot_measure_field_id text;
   pivot_buckets jsonb := '{}'::jsonb;
   group_bucket jsonb;
   pivot_column_limit constant integer := 50;
-  group_by_sql text;
   group_presence_sql text;
+  group_dimension_sql text;
   aggregate_object_sql text := '';
   summary_totals_sql text;
   aggregate_result_sql text;
@@ -148,26 +148,27 @@ begin
       pivot_row_field_id, p_user_inputs #> '{pivot,rowDateBucket}',
       pivot_column_field_id, p_user_inputs #> '{pivot,columnDateBucket}'
     );
-    -- A pivot row key is the jsonb text [rank, title, canonical value]; anything else is forged.
-    if group_after is not null then
-      begin
-        pivot_after := group_after::jsonb;
-        if pg_catalog.jsonb_typeof(pivot_after) <> 'array'
-          or pg_catalog.jsonb_array_length(pivot_after) <> 3
-          or (pivot_after ->> 0) not in ('0', '1', '2')
-          or pg_catalog.jsonb_typeof(pivot_after -> 0) <> 'number'
-          or pg_catalog.jsonb_typeof(pivot_after -> 1) <> 'string'
-          or pg_catalog.jsonb_typeof(pivot_after -> 2) <> 'string' then
-          raise exception using errcode = '22023', message = 'Pivot cursor is not a row key';
-        end if;
-      exception when others then
-        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
-      end;
-    end if;
   elsif p_user_inputs ? 'grouping' then
     pivot_buckets := pg_catalog.jsonb_build_object(
       pg_catalog.lower(p_user_inputs #>> '{grouping,fieldId}'), p_user_inputs #> '{grouping,dateBucket}'
     );
+  end if;
+  -- A group continuation is the jsonb text [rank, title, canonical group value] of the last group
+  -- a page returned, for pivot rows and grouped tables alike; anything else is forged.
+  if group_after is not null then
+    begin
+      group_cursor := group_after::jsonb;
+      if pg_catalog.jsonb_typeof(group_cursor) <> 'array'
+        or pg_catalog.jsonb_array_length(group_cursor) <> 3
+        or (group_cursor ->> 0) not in ('0', '1', '2')
+        or pg_catalog.jsonb_typeof(group_cursor -> 0) <> 'number'
+        or pg_catalog.jsonb_typeof(group_cursor -> 1) <> 'string'
+        or pg_catalog.jsonb_typeof(group_cursor -> 2) <> 'string' then
+        raise exception using errcode = '22023', message = 'Group cursor is not a group key';
+      end if;
+    exception when others then
+      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
+    end;
   end if;
   group_page_limit := case
     when pivot_mode then ((p_user_inputs #>> '{pivot,rowLimit}')::numeric)::integer
@@ -772,8 +773,26 @@ begin
     );
   end loop;
   group_values_sql := 'pg_catalog.jsonb_build_object(' || pg_catalog.array_to_string(group_value_pairs, ', ') || ')';
-  group_by_sql := pg_catalog.array_to_string(group_by_terms, ', ');
   group_presence_sql := pg_catalog.array_to_string(group_presence_terms, ' and ');
+  -- A grouped table orders its groups by (rank, title, canonical value). A link dimension takes
+  -- its rank and title from the one protected title batch pivot axes use, so unreadable targets
+  -- fold into one Not available group; every other dimension keeps its canonical value order.
+  if not pivot_mode and pg_catalog.cardinality(group_ids) = 1
+    and fields_by_id -> group_ids[1] ->> 'type' = 'link' then
+    group_dimension_sql := pg_catalog.format(
+      'select pg_catalog.jsonb_build_object(%1$L, axis.value) as value,
+         pg_catalog.jsonb_build_object(%1$L, axis.normalized) as normalized,
+         axis.sort_rank, axis.sort_title
+       from vortex_record.pivot_dimension_internal(
+         (select pg_catalog.array_agg(distinct raw.group_values -> %1$L) from raw_dimensions as raw), %2$L::jsonb
+       ) as axis',
+      group_ids[1], (fields_by_id -> group_ids[1])::text
+    );
+  else
+    group_dimension_sql :=
+      'select raw.group_values as value, raw.group_values as normalized, 0 as sort_rank, ''''::text as sort_title
+       from (select distinct group_values from raw_dimensions) as raw';
+  end if;
 
   if fast_path then
     candidate_sql := pg_catalog.format(
@@ -1198,7 +1217,7 @@ begin
       (fields_by_id -> pivot_row_field_id)::text,
       (fields_by_id -> pivot_column_field_id)::text,
       aggregate_object_sql,
-      group_after, pivot_after ->> 0, pivot_after ->> 1, pivot_after ->> 2,
+      group_after, group_cursor ->> 0, group_cursor ->> 1, group_cursor ->> 2,
       group_page_limit + 1, group_page_limit,
       summary_candidate_limit,
       pivot_column_limit,
@@ -1211,6 +1230,8 @@ begin
       pivot_column_field_id
     );
   elsif pg_catalog.cardinality(group_ids) > 0 then
+    -- Groups are ordered and keyset-paged on (rank, title, canonical value); the group key a member
+    -- read selects by stays the canonical value text.
     groups_json_sql := pg_catalog.format(
       '(select coalesce(pg_catalog.jsonb_agg(
          pg_catalog.jsonb_build_object(
@@ -1218,7 +1239,7 @@ begin
            ''groupValues'', grouped.group_values,
            ''rowCount'', grouped.row_count,
            ''aggregates'', grouped.aggregates
-         ) order by grouped.group_values::text collate "C"
+         ) order by grouped.sort_rank, grouped.sort_title collate "C", grouped.group_values::text collate "C"
        ), ''[]''::jsonb) from visible_groups as grouped)'
     );
     summary_sql := pg_catalog.format(
@@ -1227,21 +1248,35 @@ begin
        selected as materialized (%s),
        selected_count as (select pg_catalog.count(*)::integer as value from selected),
        totals as (%s),
+       raw_dimensions as materialized (
+         select candidate.projected_values, %s as group_values
+         from selected as candidate
+         where %s and (select value from candidate_count) <= %s
+       ),
+       axis_values as materialized (%s),
+       dimensions as materialized (
+         select source.projected_values, axis.normalized as group_values, axis.sort_rank, axis.sort_title
+         from raw_dimensions as source
+         join axis_values as axis on axis.value = source.group_values
+       ),
        grouped as (
-         select %s as group_values,
+         select candidate.group_values, candidate.sort_rank, candidate.sort_title,
            pg_catalog.count(*)::integer as row_count,
            pg_catalog.jsonb_build_object(%s) as aggregates
-         from selected as candidate
-         where %s
-         group by %s
+         from dimensions as candidate
+         group by candidate.group_values, candidate.sort_rank, candidate.sort_title
        ),
        paged_groups as materialized (
          select * from grouped
-         where %L::text is null or group_values::text collate "C" > %L::text collate "C"
-         order by group_values::text collate "C" limit %s
+         where %L::text is null or (
+           grouped.sort_rank, grouped.sort_title collate "C", grouped.group_values::text collate "C"
+         ) > (%L::integer, %L::text collate "C", %L::text collate "C")
+         order by grouped.sort_rank, grouped.sort_title collate "C", grouped.group_values::text collate "C"
+         limit %s
        ),
        visible_groups as materialized (
-         select * from paged_groups order by group_values::text collate "C" limit %s
+         select * from paged_groups
+         order by sort_rank, sort_title collate "C", group_values::text collate "C" limit %s
        )
        select case when candidate_count.value > %s
          then pg_catalog.jsonb_build_object(''outcome'', ''refused'', ''reasonCode'', ''dataset_limit_exceeded'')
@@ -1255,7 +1290,9 @@ begin
            ''groups'', %s,
            ''aggregates'', totals.aggregate_values,
            ''nextGroupKey'', case when (select pg_catalog.count(*) from paged_groups) > %s
-             then (select group_values::text from visible_groups order by group_values::text collate "C" desc limit 1)
+             then (select pg_catalog.jsonb_build_array(sort_rank, sort_title, group_values::text)::text
+               from visible_groups
+               order by sort_rank desc, sort_title collate "C" desc, group_values::text collate "C" desc limit 1)
              else null end
          ) end
        from candidate_count cross join selected_count cross join totals',
@@ -1263,10 +1300,12 @@ begin
       selected_sql,
       summary_totals_sql,
       group_values_sql,
-      aggregate_object_sql,
       group_presence_sql,
-      group_by_sql,
-      group_after, group_after, group_page_limit + 1, group_page_limit,
+      summary_candidate_limit,
+      group_dimension_sql,
+      aggregate_object_sql,
+      group_after, group_cursor ->> 0, group_cursor ->> 1, group_cursor ->> 2,
+      group_page_limit + 1, group_page_limit,
       summary_candidate_limit,
       p_module_root_id::text,
       resolved ->> 'moduleReleaseVersion',
