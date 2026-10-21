@@ -18,7 +18,6 @@ import {
   studioGroupedTableStart,
   studioSettingProblems,
   studioTablePresetProperty,
-  type StudioCompositionAddTarget,
   type StudioCompositionSettings,
   type StudioPaletteChoice,
   type StudioSettingChoices,
@@ -29,7 +28,10 @@ import { plainSettingValue, typedSourceSettingValue } from "@vortex/platform/sch
 /** A new block whose required settings or query the person gives before it is added. */
 export type StudioBlockSetupRequest = Readonly<{
   choice: StudioPaletteChoice;
-  target: StudioCompositionAddTarget;
+  /** Where the block goes, in words. */
+  description: string;
+  /** The button that adds it, such as "Add Dialog". */
+  action: string;
   /** The query the page itself reads, offered first for a data block. */
   pageQuery: string | undefined;
   add: (settings: StudioCompositionSettings, query: string | null) => string | true;
@@ -102,7 +104,7 @@ export function StudioBlockSetupDialog({
     setValues(groupedPreset ? { ...next, presentation: { kind: "choice", value: "grid" } } : next);
   };
   if (request === null) return null;
-  const { choice, target } = request;
+  const { choice } = request;
   const groupedTable = choice.groupedTable;
   // Table, List and Grouped table are one Preset choice; the first two are catalogue values and
   // the third is a palette choice that switches Group by on.
@@ -152,7 +154,7 @@ export function StudioBlockSetupDialog({
         <DialogHeader>
           <DialogTitle>Set up {choice.name}</DialogTitle>
           <DialogDescription>
-            Add to {target.label}. You can change its settings in the inspector.
+            {request.description} You can change its settings in the inspector.
           </DialogDescription>
         </DialogHeader>
         <form id={formId} className="space-y-4" onSubmit={submit}>
@@ -206,7 +208,7 @@ export function StudioBlockSetupDialog({
             Cancel
           </Button>
           <Button type="submit" form={formId}>
-            Add {choice.name}
+            {request.action}
           </Button>
         </DialogFooter>
       </DialogContent>

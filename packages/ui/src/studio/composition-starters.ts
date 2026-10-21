@@ -25,6 +25,7 @@ export const studioStarterSlots = (
   catalogue: ImmutablePlatformBlockCatalogue,
   release: PlatformBlockRelease,
   taken: Set<string>,
+  shownByFlow: boolean,
 ): Record<string, SourceItem[]> => {
   if (release.key !== "platform.form.container") return {};
   const children = formChildren(catalogue);
@@ -50,9 +51,12 @@ export const studioStarterSlots = (
       },
     } as SourceItem;
   };
+  const answer = item(children.input, "answer", { name: "answer", label: "Answer" });
+  // The surface a flow shows a form in supplies Submit and Cancel, so that form starts with its field only.
+  if (shownByFlow) return { content: [answer] };
   return {
     content: [
-      item(children.input, "answer", { name: "answer", label: "Answer" }),
+      answer,
       item(children.button, "submit", {
         label: "Submit",
         action_kind: "submit",

@@ -86,6 +86,7 @@ import { applyWrap } from "./application-composition-wrap";
 export type * from "./application-composition-model";
 export {
   studioPlacementRemovalReference,
+  studioPlacementReferenceSentence,
   type StudioCompositionRemovalReason,
 } from "./composition-references";
 export { describeStudioCompositionAddTargets } from "./application-composition-add";
@@ -471,11 +472,6 @@ const resolveRemoval = (
     (target.region.parent !== undefined && !pinnedRelease(catalogue, source, target.region.parent))
   )
     return { kind: "unsupported", reason: "manifest_mismatch" };
-  if (
-    !layout &&
-    [...itemSlots(catalogue, target.item).values()].some((slot) => slot.items.length > 0)
-  )
-    return { kind: "unsupported", reason: "has_children" };
   validateRegion(catalogue, target.region);
   if (studioLayoutOutletPlacementUses(source, alias).length > 0)
     return { kind: "blocked", reason: "content_outlet" };
@@ -506,11 +502,17 @@ const resolveRemoval = (
       releaseUses.set(key, (releaseUses.get(key) ?? 0) + 1);
     }
   for (const item of removed) {
-    const reason = studioPlacementRemovalReference(source, item.props.id, aliases);
-    if (reason !== undefined) return { kind: "blocked", reason };
+    const reference = studioPlacementRemovalReference(source, item.props.id, aliases);
+    if (reference !== undefined) return { kind: "blocked", ...reference };
     const key = releaseKey(item.props.vortex.block);
     releaseUses.set(key, releaseUses.get(key)! - 1);
   }
+  // What a flow still names is the cause to fix first, so it is told before the item's content is.
+  if (
+    !layout &&
+    [...itemSlots(catalogue, target.item).values()].some((slot) => slot.items.length > 0)
+  )
+    return { kind: "unsupported", reason: "has_children" };
   return {
     kind: "available",
     removal: {

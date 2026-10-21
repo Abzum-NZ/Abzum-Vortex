@@ -6,6 +6,7 @@ import {
   isRecord as isObject,
   type ApplicationSourceDocument,
 } from "@vortex/platform/schema";
+import { studioFlowLabel } from "./semantic-selection";
 
 const refuse = (): never => {
   throw new TypeError("Composition edit refused");
@@ -23,6 +24,35 @@ export type StudioCompositionRemovalReason =
   | "required_slot"
   | "content_outlet"
   | "unresolved_target";
+
+/** What still names a placement, with the flow and step that do when one does. */
+export type StudioPlacementReference = Readonly<{
+  reason: StudioCompositionRemovalReason;
+  flow?: string;
+  step?: string;
+}>;
+
+/** Where a flow still names an item, as a sentence a person can act on. */
+export const studioPlacementReferenceSentence = (reference: StudioPlacementReference): string => {
+  const where =
+    reference.flow === undefined
+      ? "A flow"
+      : reference.step === undefined
+        ? `Flow "${reference.flow}"`
+        : `Flow "${reference.flow}", step "${reference.step}"`;
+  switch (reference.reason) {
+    case "flow_control":
+      return `${where} starts from this item. Change that flow first.`;
+    case "flow_form":
+      return `${where} shows this form. Change that step first.`;
+    case "flow_component":
+      return `${where} refreshes or filters this item. Change that step first.`;
+    case "flow_panel":
+      return `${where} opens this panel. Change that step first.`;
+    default:
+      return `${where} names something this item points to that cannot be found. Change that step first.`;
+  }
+};
 
 /** Every `id` in the source: a new block's name is unique among them all. */
 export const sourceNames = (source: ApplicationSourceDocument): Set<string> => {
@@ -49,8 +79,18 @@ export const studioPlacementRemovalReference = (
   source: ApplicationSourceDocument,
   alias: string,
   aliases: ReadonlySet<string>,
-): StudioCompositionRemovalReason | undefined => {
-  if (source.body.flow_bindings.some((binding) => binding.control === alias)) return "flow_control";
+): StudioPlacementReference | undefined => {
+  const binding = source.body.flow_bindings.find((entry) => entry.control === alias);
+  if (binding !== undefined) {
+    const bound = [
+      ...source.body.flows,
+      ...source.body.modules.flatMap((module) => module.flows),
+    ].find((flow) => flow.id === binding.flow || flow.key === binding.flow);
+    return {
+      reason: "flow_control",
+      ...(bound === undefined ? {} : { flow: studioFlowLabel(bound) }),
+    };
+  }
   const target = (
     value: unknown,
     qualified: boolean,
@@ -91,6 +131,7 @@ export const studioPlacementRemovalReference = (
   };
   const definitions = Object.values(flowTaskRegistry);
   for (const flow of source.body.flows) {
+    const flowName = studioFlowLabel(flow);
     // These are authored SourceFlow lists, not the compiled Flow body's shape.
     const pending = [...flow.tasks, ...flow.errors, ...flow.finally].map((task) => ({
       task: object(task),
@@ -100,10 +141,18 @@ export const studioPlacementRemovalReference = (
     while (pending.length > 0) {
       const entry = pending.pop()!;
       if (++count > flowMaximumTaskCount || entry.depth > flowMaximumTaskNestingDepth)
-        return "unresolved_target";
+        return { reason: "unresolved_target", flow: flowName };
       const task = entry.task;
       const definition = definitions.find((candidate) => candidate.type === task.type);
-      if (definition === undefined) return "unresolved_target";
+      const at = (reason: StudioCompositionRemovalReason): StudioPlacementReference => ({
+        reason,
+        flow: flowName,
+        step:
+          typeof task.description === "string"
+            ? task.description
+            : (definition?.title ?? String(task.type)),
+      });
+      if (definition === undefined) return at("unresolved_target");
       const children: (readonly unknown[])[] = [];
       if (definition.category === "control") {
         switch (task.type) {
@@ -124,7 +173,7 @@ export const studioPlacementRemovalReference = (
             break;
           case "wait_for_person": {
             const blocked = target(task.formId, true, "flow_form");
-            if (blocked !== undefined) return blocked;
+            if (blocked !== undefined) return at(blocked);
             break;
           }
           case "run_flow":
@@ -132,11 +181,11 @@ export const studioPlacementRemovalReference = (
           case "wait_until":
             break;
           default:
-            return "unresolved_target";
+            return at("unresolved_target");
         }
       } else {
         if (task.version !== definition.version || !isObject(task.properties))
-          return "unresolved_target";
+          return at("unresolved_target");
         for (const [key, declaration] of Object.entries(definition.properties)) {
           const reason =
             declaration.type === "form_id"
@@ -151,7 +200,7 @@ export const studioPlacementRemovalReference = (
           const value = task.properties[key];
           if (value === undefined && !declaration.required) continue;
           const blocked = literalTarget(value, declaration.type === "form_id", reason);
-          if (blocked !== undefined) return blocked;
+          if (blocked !== undefined) return at(blocked);
         }
       }
       for (const child of children)
