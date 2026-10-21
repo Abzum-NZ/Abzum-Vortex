@@ -64,10 +64,7 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
   const variant = settings.choice<"select" | "radio">("variant", "select");
   const draftFeedback = useFieldFeedback(fieldKey);
   const disabled =
-    context.inactive ||
-    settings.boolean("disabled") ||
-    draftFeedback?.disabled === true ||
-    context.values?.dependencyKey === null;
+    context.inactive || settings.boolean("disabled") || draftFeedback?.disabled === true;
   const options = context.values?.options ?? settings.options("options");
   const projectedError = context.values?.error;
   const note = inactiveNote(context);
@@ -91,15 +88,8 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
   const lastRequestedSearch = useRef<string | undefined>(undefined);
   const [remoteLoading, setRemoteLoading] = useState(false);
   const choiceRequestGeneration = useRef(0);
-  const [previousDependency, setPreviousDependency] = useState(context.values?.dependencyKey);
-  const [previouslyOffered, setPreviouslyOffered] = useState(options.length > 0);
   const [previouslyInactive, setPreviouslyInactive] = useState(context.inactive);
-  if (
-    context.values?.dependencyKey !== previousDependency ||
-    (context.inactive && !previouslyInactive) ||
-    (context.values?.dependencyKey !== undefined && previouslyOffered && options.length === 0)
-  ) {
-    setPreviousDependency(context.values?.dependencyKey);
+  if (context.inactive && !previouslyInactive) {
     setSelected(null);
     setSearchTerm("");
     setComboboxOpen(false);
@@ -108,7 +98,6 @@ export function ChoiceInput(props: ChoiceInputProps): ReactElement {
     setRemoteLoading(false);
     choiceRequestGeneration.current += 1;
   }
-  if (previouslyOffered !== options.length > 0) setPreviouslyOffered(options.length > 0);
   if (previouslyInactive !== context.inactive) setPreviouslyInactive(context.inactive);
 
   // Only a currently offered option may be registered in the form or submitted.

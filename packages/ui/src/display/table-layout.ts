@@ -48,6 +48,8 @@ export type GridLayoutControls = Readonly<{
    * canvas; the host then reads a newly shown column. In a preview they stay on screen only.
    */
   persisted: boolean;
+  /** Whether the layout is the Studio canvas arrangement, which exists even before any row is read. */
+  canvas: boolean;
   /** Sets widths while a resize is under way; `commit` stores them once it ends. */
   setWidths: (update: SetStateAction<Readonly<Record<string, number>>>) => void;
   commit: () => void;
@@ -520,6 +522,7 @@ export const useGridLayout = ({
     entries,
     density: layout.density ?? contract?.density ?? "comfortable",
     persisted: source?.storage === "personal" || source?.storage === "canvas",
+    canvas: source?.storage === "canvas",
     setWidths,
     commit,
     moveColumn,

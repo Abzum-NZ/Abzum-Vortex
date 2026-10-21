@@ -120,6 +120,12 @@ export type RecordsTableInlineEditor = Readonly<{ required: boolean }> &
         kind: "link";
         recordTypeId: string;
         targetLabel: string;
+        /**
+         * The link field of the same record type whose chosen record narrows this field's choices,
+         * as the table's field identity (lower case). The picker offers this field's records only
+         * for that parent, and changing the parent must clear or flag this field.
+         */
+        dependsOnField?: string;
       }>
   );
 

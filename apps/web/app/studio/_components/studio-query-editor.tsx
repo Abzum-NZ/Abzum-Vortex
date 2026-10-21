@@ -40,6 +40,7 @@ import { Label } from "@vortex/ui/components/label";
 import { Textarea } from "@vortex/ui/components/textarea";
 import { Icon } from "@vortex/ui";
 import { StudioField } from "./studio-field";
+import { StudioQueryInputChoices } from "./studio-query-input-choices";
 import { StudioReferencesAlert } from "./studio-used-in";
 import { useStudioDraftText } from "./use-studio-draft-text";
 import { useStudioDraftHeld } from "./use-studio-draft-held";
@@ -921,6 +922,30 @@ export function StudioQueryEditor({
                     }
                   />
                 </>
+              )}
+              {input.type === "text" && (
+                <StudioQueryInputChoices
+                  id={`query-${queryKey}-input-${index}`}
+                  inputLabel={input.label}
+                  choices={input.validation?.choices}
+                  disabled={disabled}
+                  onEdit={(problem) => setIssues(problem === undefined ? [] : [problem])}
+                  onChange={(choices, merge) => {
+                    // The list is the input's one constraint: it replaces any other validation.
+                    const rest = Object.fromEntries(
+                      Object.entries(input).filter(([key]) => key !== "validation"),
+                    );
+                    const inputs = query.inputs.map((item, at) =>
+                      at !== index
+                        ? item
+                        : ({
+                            ...rest,
+                            ...(choices === undefined ? {} : { validation: { choices } }),
+                          } as InlineQueryInput),
+                    );
+                    return commit({ inputs }, merge);
+                  }}
+                />
               )}
               <div className="flex items-center gap-2">
                 <Checkbox

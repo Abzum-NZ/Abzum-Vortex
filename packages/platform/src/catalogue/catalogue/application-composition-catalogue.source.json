@@ -993,33 +993,6 @@
             "label": "Label field",
             "help": "A selected text field from the query used to label each choice",
             "required": true
-          },
-          {
-            "kind": "group",
-            "key": "input",
-            "label": "Dependent query input",
-            "help": "Use a permitted record selected in one other Choice in this Form",
-            "required": false,
-            "properties": [
-              {
-                "kind": "text",
-                "key": "key",
-                "label": "Query input key",
-                "help": "The only required text input declared by the query",
-                "required": true,
-                "minLength": 1,
-                "maxLength": 40
-              },
-              {
-                "kind": "text",
-                "key": "from_field",
-                "label": "Parent Choice field",
-                "help": "A unique unbound record Choice field in this Form",
-                "required": true,
-                "minLength": 1,
-                "maxLength": 40
-              }
-            ]
           }
         ]
       },

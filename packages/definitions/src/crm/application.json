@@ -1196,6 +1196,7 @@
                         "fields": [
                           "vortex.crm.opportunities:opportunity.name",
                           "vortex.crm.opportunities:opportunity.company",
+                          "vortex.crm.opportunities:opportunity.primary_contact",
                           "vortex.crm.opportunities:opportunity.expected_close_date",
                           "vortex.crm.opportunities:opportunity.probability"
                         ]
@@ -1221,6 +1222,12 @@
                       {
                         "field": "vortex.crm.opportunities:opportunity.company",
                         "label": "Company",
+                        "visible": true,
+                        "pin": "unpinned"
+                      },
+                      {
+                        "field": "vortex.crm.opportunities:opportunity.primary_contact",
+                        "label": "Primary contact",
                         "visible": true,
                         "pin": "unpinned"
                       },

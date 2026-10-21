@@ -28,6 +28,7 @@ import { useDateFormatOptions } from "../date-format-context";
 import { fail, requireRecord, type DisplayEventHandlers, type DisplayRow } from "../projected-data";
 import type { RowLine } from "../sub-rows";
 import { LinkDraftPicker, linkedRecordTitle } from "./record-choice-picker";
+import { dependentsToClear, draftRecordId, parentFieldOf } from "./link-dependency";
 import {
   readEditDraft,
   sameEditDraft,
@@ -293,17 +294,26 @@ function RowEditScope({ context, children, retainRow }: GridFeatureScopeProps): 
     errors,
     start,
     change: (field, value) => {
-      if (!submitting.current)
-        setDraft((current) =>
-          current === undefined
-            ? current
-            : {
-                ...current,
-                fields: current.fields.map((entry) =>
-                  same(entry.field, field) ? { ...entry, draft: value } : entry,
-                ),
-              },
-        );
+      if (submitting.current || draft === undefined) return;
+      // Fields that take their choices from the changed one clear in the same draft, so the row
+      // never carries a pair the server refuses; a required one is then flagged at save.
+      const updated = draft.fields.map((entry) =>
+        same(entry.field, field) ? { ...entry, draft: value } : entry,
+      );
+      const cleared = dependentsToClear(updated, field);
+      setDraft({
+        ...draft,
+        fields: updated.map((entry) =>
+          cleared.some((dependent) => same(dependent.field, entry.field))
+            ? { ...entry, draft: null }
+            : entry,
+        ),
+      });
+      setMessage(
+        cleared.length === 0
+          ? undefined
+          : `${cleared.map((entry) => entry.label).join(" and ")} cleared because ${draft.fields.find((entry) => same(entry.field, field))?.label ?? "the field"} changed.`,
+      );
     },
     cancel,
     save: () => {
@@ -353,6 +363,11 @@ function FieldControl({
     disabled: editing.saving,
   };
   const editor = field.editor;
+  const parentField = parentFieldOf(editor);
+  const parent =
+    parentField === undefined
+      ? undefined
+      : editing.draft?.fields.find((entry) => same(entry.field, parentField));
   const text = typeof field.draft === "string" ? field.draft : "";
   let control: ReactElement;
   if (editor.kind === "link")
@@ -364,6 +379,14 @@ function FieldControl({
         draft={typeof field.draft === "object" ? field.draft : null}
         {...(current === undefined ? {} : { current })}
         {...(inline === undefined ? {} : { inline })}
+        {...(parentField === undefined
+          ? {}
+          : {
+              dependency: {
+                parentRecordId: draftRecordId(parent?.draft),
+                parentLabel: parent?.label ?? "the field it depends on",
+              },
+            })}
         required={editor.required}
         disabled={editing.saving}
         invalid={message !== undefined}

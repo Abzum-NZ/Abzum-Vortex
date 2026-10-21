@@ -416,6 +416,8 @@ export type DisplaySemanticEvent =
       field: string;
       /** Why the records are read: to filter by them, or to choose one in an edited cell. */
       purpose: "filter" | "edit";
+      /** For a dependent link field: the record chosen in the field it depends on, in the draft. */
+      parentRecordId?: string;
       search?: string;
       continuationToken?: string;
     }>

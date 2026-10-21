@@ -54,27 +54,7 @@ const readReferenceChoices = async (
     data[placementId] = { status: "disabled", reason: "Choices unavailable" };
     return;
   }
-  const parent =
-    field.dependency === undefined
-      ? undefined
-      : [...(form?.placements ?? [])].find(
-          ([, candidate]) => candidate.fieldKey === field.dependency?.fromField,
-        );
-  input.referenceChoiceInputs.push({
-    placementId,
-    formId,
-    fieldKey: field.fieldKey,
-    ...(parent === undefined
-      ? {}
-      : { dependency: { fieldKey: parent[1].fieldKey, placementId: parent[0] } }),
-  });
-  if (field.dependency !== undefined) {
-    data[placementId] = {
-      status: "ready",
-      values: projectReferenceChoiceInputValues([], null, undefined, { dependencyKey: null }),
-    };
-    return;
-  }
+  input.referenceChoiceInputs.push({ placementId, formId, fieldKey: field.fieldKey });
   const result = await input.referenceChoices.run(input.session, input.selection, field.command);
   if (
     result.kind !== "available" ||
