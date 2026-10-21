@@ -12,6 +12,7 @@ import {
   type ShellOutletLocation,
 } from "@vortex/platform/schema";
 import {
+  createDocumentThemeVariables,
   createThemeRootProps,
   createVortexStyleRootProps,
   resolveVortexStyleSelection,
@@ -367,7 +368,11 @@ export function PagePuckRenderer({
     <VortexStyleRoot
       {...themeRootProps}
       {...vortexStyleProps}
-      style={{ ...themeRootProps.style, ...vortexStyleProps.style }}
+      style={
+        applicationSurface
+          ? createDocumentThemeVariables(applicationTheme, platformThemeTokens)
+          : { ...themeRootProps.style, ...vortexStyleProps.style }
+      }
       {...(applicationSurface ? { "data-vortex-application-surface": "" } : {})}
       documentTheme={applicationSurface}
     >

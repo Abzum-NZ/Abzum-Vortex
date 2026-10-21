@@ -117,7 +117,14 @@ export const readQueryPlacement = async (
   else if (calendarContract !== undefined)
     await readCalendar(read, placement, bound, calendarContract, inputValues);
   else if (tableContract !== undefined && tableContract.features.board.enabled)
-    await readBoard(read, placement, tableContract.features.board, inputValues);
+    await readBoard(
+      read,
+      placement,
+      bound,
+      tableContract,
+      tableContract.features.board,
+      inputValues,
+    );
   else if (tableContract !== undefined)
     await readRecordsTable(read, placement, bound, tableContract, inputValues);
   else await readQueryDetail(read, placement, bound, inputValues);

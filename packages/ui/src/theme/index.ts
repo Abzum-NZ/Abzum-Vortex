@@ -13,6 +13,8 @@ export {
   type PlatformThemeTokens,
 } from "./theme-variables";
 
+export { createDocumentThemeVariables } from "./document-theme-variables";
+
 export {
   createVortexStyleRootProps,
   DEFAULT_VORTEX_MENU_ACCENT,

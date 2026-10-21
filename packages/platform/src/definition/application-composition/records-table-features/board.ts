@@ -1,3 +1,4 @@
+import { recordsTableFilterKindOf } from "./column-filters";
 import {
   featureAvailable,
   featureEnabled,
@@ -174,6 +175,46 @@ export const boardProblem = (
     return refuse(`Limit a column to 1 to ${RECORDS_TABLE_BOARD_MAXIMUM_WIP_LIMIT} cards.`);
   if (state.quickAdd === undefined)
     return refuse("Choose whether each column offers adding a card.");
+  return undefined;
+};
+
+/**
+ * Why the fields a board's Column filters chose cannot narrow its cards, as one business sentence,
+ * or undefined when each can. A board filters over every field of its record type, not only the
+ * ones its cards show; a filter on linked records needs a record picker the board does not draw.
+ */
+export const boardFilterProblem = (
+  fields: readonly string[],
+  board: RecordsTableBoardFacts,
+): Extract<RecordsTableFeatureCheck, { kind: "not_possible" }> | undefined => {
+  const refuseFilters = (
+    reason: string,
+  ): Extract<RecordsTableFeatureCheck, { kind: "not_possible" }> =>
+    Object.freeze({
+      kind: "not_possible",
+      code: "definition_records_table_column_filters",
+      reason,
+    });
+  if (fields.length === 0)
+    return refuseFilters("Choose at least one field to filter the cards by.");
+  for (const field of fields) {
+    const held = board.fields.find((candidate) => same(candidate.field, field));
+    if (held === undefined)
+      return refuseFilters(`A chosen filter field is not a field of ${board.queryLabel}.`);
+    if (held.type === "calculation" || held.type === "total")
+      return refuseFilters(`${held.label} is a calculated field and cannot be filtered.`);
+    if (!held.filterable)
+      return refuseFilters(
+        `${held.label} cannot be filtered: its record type does not allow filtering by it.`,
+      );
+    const kind = recordsTableFilterKindOf(held.type);
+    if (kind === undefined)
+      return refuseFilters(`${held.label} cannot be filtered: no filter fits its type.`);
+    if (kind === "link")
+      return refuseFilters(
+        `${held.label} links to other records, and a board cannot filter by linked records yet.`,
+      );
+  }
   return undefined;
 };
 

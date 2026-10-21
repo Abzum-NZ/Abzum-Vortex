@@ -4292,6 +4292,14 @@
                         ],
                         "quick_add": true
                       },
+                      "column_filters": {
+                        "enabled": true,
+                        "fields": [
+                          "vortex.crm.opportunities:opportunity.name",
+                          "vortex.crm.opportunities:opportunity.value",
+                          "vortex.crm.opportunities:opportunity.expected_close_date"
+                        ]
+                      },
                       "pivot": {
                         "enabled": false
                       },

@@ -15,6 +15,7 @@ import {
   type PipelineStageTone,
   type RecordsTableFeatureProjection,
   type RecordsTableRowFormat,
+  type RecordsTableFilterField,
   type RecordsTableFilterValue,
   type RecordsTableSortKey,
   type RecordsTableSortState,
@@ -296,6 +297,14 @@ export type BoardPayload = Readonly<{
   wipLimit?: number;
   /** Each stage column offers adding a card there. */
   quickAdd: boolean;
+  /**
+   * The fields people may filter the cards by and the filters this read applied; absent when the
+   * board offers no filters. The board shows them and reports changes; the server narrows.
+   */
+  filters?: Readonly<{
+    fields: readonly RecordsTableFilterField[];
+    applied: readonly RecordsTableFilterValue[];
+  }>;
   cardTitleFieldId: string;
   /** The only field identities a card may carry; readable values and labels may be omitted. */
   cardFieldIds: readonly string[];
