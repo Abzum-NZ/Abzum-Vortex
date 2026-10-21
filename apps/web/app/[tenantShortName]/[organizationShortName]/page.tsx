@@ -13,6 +13,7 @@ import {
   organizationLauncherPage,
   organizationLauncherPlacementId,
   organizationLauncherShell,
+  applicationLauncherOpenEventId,
 } from "@vortex/platform/server";
 import { OrganizationLauncherPage } from "./_components/organization-launcher-page";
 import {
@@ -53,7 +54,9 @@ export default async function OrganizationPage({ params }: OrganizationPageProps
 
   async function openApplication(event: DisplaySemanticEvent): Promise<void> {
     "use server";
-    await openPermittedApplication(tenantShortName, organizationShortName, event);
+    await openPermittedApplication(tenantShortName, organizationShortName, event, [
+      applicationLauncherOpenEventId,
+    ]);
   }
 
   if (identity.kind === "temporarily_unavailable")
@@ -126,6 +129,7 @@ export default async function OrganizationPage({ params }: OrganizationPageProps
 
   return (
     <OrganizationLauncherPage
+      openEventId={applicationLauncherOpenEventId}
       page={page}
       shell={organizationLauncherShell}
       placementId={organizationLauncherPlacementId}

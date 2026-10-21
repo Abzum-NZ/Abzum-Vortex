@@ -292,6 +292,15 @@
     "rendererKey": "platform.renderer.record_detail",
     "properties": [
       {
+        "kind": "text",
+        "key": "row_action_event_id",
+        "label": "Row action event identity",
+        "help": "Stable identity of the flow binding the row action runs",
+        "required": true,
+        "minLength": 1,
+        "maxLength": 60
+      },
+      {
         "kind": "choice",
         "key": "heading_source",
         "label": "Heading comes from",
@@ -2291,6 +2300,15 @@
     "properties": [
       {
         "kind": "text",
+        "key": "row_action_event_id",
+        "label": "Row action event identity",
+        "help": "Stable identity of the flow binding the row action runs",
+        "required": true,
+        "minLength": 1,
+        "maxLength": 60
+      },
+      {
+        "kind": "text",
         "key": "title",
         "presentation": true,
         "label": "Title",
@@ -2362,6 +2380,15 @@
     "paletteGroup": "content",
     "rendererKey": "platform.renderer.link_tiles",
     "properties": [
+      {
+        "kind": "text",
+        "key": "row_action_event_id",
+        "label": "Row action event identity",
+        "help": "Stable identity of the flow binding the row action runs",
+        "required": true,
+        "minLength": 1,
+        "maxLength": 60
+      },
       {
         "kind": "text",
         "key": "title",
@@ -5042,6 +5069,15 @@
     "paletteGroup": "data",
     "rendererKey": "platform.renderer.calendar",
     "properties": [
+      {
+        "kind": "text",
+        "key": "row_action_event_id",
+        "label": "Row action event identity",
+        "help": "Stable identity of the flow binding the row action runs",
+        "required": true,
+        "minLength": 1,
+        "maxLength": 60
+      },
       {
         "kind": "text",
         "key": "title",

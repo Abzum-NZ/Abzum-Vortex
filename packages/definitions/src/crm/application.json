@@ -2850,7 +2850,8 @@
                           }
                         }
                       }
-                    }
+                    },
+                    "row_action_event_id": "row_action_detail_crm_company"
                   }
                 },
                 {
@@ -3198,7 +3199,8 @@
                           }
                         }
                       }
-                    }
+                    },
+                    "row_action_event_id": "row_action_detail_crm_contact"
                   }
                 },
                 {
@@ -3313,7 +3315,8 @@
                           }
                         }
                       }
-                    }
+                    },
+                    "row_action_event_id": "row_action_detail_crm_lead"
                   }
                 },
                 {
@@ -3455,7 +3458,8 @@
                           }
                         }
                       }
-                    }
+                    },
+                    "row_action_event_id": "row_action_detail_crm_opportunity"
                   }
                 },
                 {
@@ -3617,7 +3621,8 @@
                           }
                         }
                       }
-                    }
+                    },
+                    "row_action_event_id": "row_action_detail_crm_activity"
                   }
                 },
                 {

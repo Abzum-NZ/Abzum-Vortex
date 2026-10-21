@@ -1206,7 +1206,8 @@
                           }
                         }
                       }
-                    }
+                    },
+                    "row_action_event_id": "row_action_iam_person_detail"
                   }
                 }
               ],
@@ -3065,7 +3066,8 @@
                           }
                         }
                       }
-                    }
+                    },
+                    "row_action_event_id": "row_action_iam_access_request_detail_body"
                   }
                 },
                 {
