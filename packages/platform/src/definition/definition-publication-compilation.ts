@@ -161,14 +161,12 @@ export const compileModuleCandidate = (
     resolution,
     draftMetadata: draftMetadata(candidate.draft),
   };
-  const provisional = compileParsedDefinition(
-    parsedCompilationRequest(moduleCompilationRequestSchema, {
-      ...common,
-      savedConditionRevisions: provisionalSavedConditionRevisions(candidate),
-    }),
-    dependencyOutputs,
-    permissions,
-  );
+  const provisionalAssignments = provisionalSavedConditionRevisions(candidate);
+  const provisionalRequest = parsedCompilationRequest(moduleCompilationRequestSchema, {
+    ...common,
+    savedConditionRevisions: provisionalAssignments,
+  });
+  const provisional = compileParsedDefinition(provisionalRequest, dependencyOutputs, permissions);
   if (
     provisional.kind !== "module" ||
     !("validationContractVersion" in provisional) ||
@@ -179,6 +177,18 @@ export const compileModuleCandidate = (
     candidate,
     provisional.canonical.content.sharingConditions,
   );
+  // When the first request already has the final assignments, its output is the final output.
+  if (
+    savedConditionRevisions.length === provisionalAssignments.length &&
+    savedConditionRevisions.every((assignment, index) => {
+      const provisional = provisionalAssignments[index]!;
+      return (
+        assignment.conditionId === provisional.conditionId &&
+        assignment.revision === provisional.revision
+      );
+    })
+  )
+    return { request: provisionalRequest, output: provisional, dependencyOutputs };
   const request = parsedCompilationRequest(moduleCompilationRequestSchema, {
     ...common,
     savedConditionRevisions,
@@ -321,14 +331,8 @@ export const validateCandidate = (
   )
     refuse("DEFINITION_HISTORY_INVALID");
   const latest = candidate.historyEvidence.latestRelease;
-  if (
-    candidate.draft.publishedRevision !== latest?.publication.revision ||
-    candidate.draft.sourceFingerprint !== fingerprintCanonicalValue(candidate.draft.source)
-  )
-    refuse(
-      candidate.draft.sourceFingerprint !== fingerprintCanonicalValue(candidate.draft.source)
-        ? "DEFINITION_SOURCE_EVIDENCE_MISMATCH"
-        : "DEFINITION_HISTORY_INVALID",
-    );
+  // validatedDraft already authenticated this source's fingerprint.
+  if (candidate.draft.publishedRevision !== latest?.publication.revision)
+    refuse("DEFINITION_HISTORY_INVALID");
   return candidate;
 };

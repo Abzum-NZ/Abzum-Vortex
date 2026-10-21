@@ -1,16 +1,17 @@
 export {
   APPEARANCE_COOKIE,
   createAppearanceRootProps,
-  createThemeRootProps,
   parseThemeMode,
   type AppearanceRootProps,
-  type ApplicationTheme,
   type ThemeMode,
+} from "./appearance";
+
+export {
+  createThemeRootProps,
+  type ApplicationTheme,
   type ThemeRootProps,
   type PlatformThemeTokens,
 } from "./theme-variables";
-
-export { ALL_UI_STYLES_CSS } from "./theme-styles";
 
 export {
   createVortexStyleRootProps,

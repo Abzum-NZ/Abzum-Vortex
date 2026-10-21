@@ -151,13 +151,9 @@
       "height": "content_or_bounded",
       "publicSurface": "allowed",
       "accessibleName": "optional",
-      "accessibleNamePropertyPath": [
-        "title"
-      ]
+      "accessibleNamePropertyPath": ["title"]
     },
-    "supportedEvents": [
-      "refresh"
-    ],
+    "supportedEvents": ["refresh"],
     "supportedStateOperations": []
   },
   "RICH_TEXT_BLOCK_RELEASE": {
@@ -215,13 +211,9 @@
       "height": "content_or_bounded",
       "publicSurface": "allowed",
       "accessibleName": "optional",
-      "accessibleNamePropertyPath": [
-        "title"
-      ]
+      "accessibleNamePropertyPath": ["title"]
     },
-    "supportedEvents": [
-      "refresh"
-    ],
+    "supportedEvents": ["refresh"],
     "supportedStateOperations": []
   },
   "SUMMARY_VALUES_BLOCK_RELEASE": {
@@ -284,13 +276,9 @@
       "height": "content_or_bounded",
       "publicSurface": "allowed",
       "accessibleName": "optional",
-      "accessibleNamePropertyPath": [
-        "title"
-      ]
+      "accessibleNamePropertyPath": ["title"]
     },
-    "supportedEvents": [
-      "refresh"
-    ],
+    "supportedEvents": ["refresh"],
     "supportedStateOperations": []
   },
   "RECORD_DETAIL_BLOCK_RELEASE": {
@@ -468,14 +456,9 @@
       "height": "content_or_bounded",
       "publicSurface": "allowed",
       "accessibleName": "optional",
-      "accessibleNamePropertyPath": [
-        "title"
-      ]
+      "accessibleNamePropertyPath": ["title"]
     },
-    "supportedEvents": [
-      "refresh",
-      "row_action"
-    ],
+    "supportedEvents": ["refresh", "row_action"],
     "supportedStateOperations": []
   },
   "TEXT_INPUT_BLOCK_RELEASE": {
@@ -602,13 +585,9 @@
       "height": "content",
       "publicSurface": "allowed",
       "accessibleName": "required",
-      "accessibleNamePropertyPath": [
-        "label"
-      ]
+      "accessibleNamePropertyPath": ["label"]
     },
-    "supportedEvents": [
-      "field_changed"
-    ],
+    "supportedEvents": ["field_changed"],
     "supportedStateOperations": []
   },
   "NUMBER_INPUT_BLOCK_RELEASE": {
@@ -721,13 +700,9 @@
       "height": "content",
       "publicSurface": "allowed",
       "accessibleName": "required",
-      "accessibleNamePropertyPath": [
-        "label"
-      ]
+      "accessibleNamePropertyPath": ["label"]
     },
-    "supportedEvents": [
-      "field_changed"
-    ],
+    "supportedEvents": ["field_changed"],
     "supportedStateOperations": []
   },
   "BOOLEAN_INPUT_BLOCK_RELEASE": {
@@ -809,13 +784,9 @@
       "height": "content",
       "publicSurface": "allowed",
       "accessibleName": "required",
-      "accessibleNamePropertyPath": [
-        "label"
-      ]
+      "accessibleNamePropertyPath": ["label"]
     },
-    "supportedEvents": [
-      "field_changed"
-    ],
+    "supportedEvents": ["field_changed"],
     "supportedStateOperations": []
   },
   "DATE_INPUT_BLOCK_RELEASE": {
@@ -896,13 +867,9 @@
       "height": "content",
       "publicSurface": "allowed",
       "accessibleName": "required",
-      "accessibleNamePropertyPath": [
-        "label"
-      ]
+      "accessibleNamePropertyPath": ["label"]
     },
-    "supportedEvents": [
-      "field_changed"
-    ],
+    "supportedEvents": ["field_changed"],
     "supportedStateOperations": []
   },
   "CHOICE_INPUT_BLOCK_RELEASE": {
@@ -1091,13 +1058,9 @@
       "height": "content",
       "publicSurface": "allowed",
       "accessibleName": "required",
-      "accessibleNamePropertyPath": [
-        "label"
-      ]
+      "accessibleNamePropertyPath": ["label"]
     },
-    "supportedEvents": [
-      "field_changed"
-    ],
+    "supportedEvents": ["field_changed"],
     "supportedStateOperations": []
   },
   "VALIDATION_MESSAGE_BLOCK_RELEASE": {
@@ -1172,9 +1135,7 @@
       "height": "content",
       "publicSurface": "allowed",
       "accessibleName": "optional",
-      "accessibleNamePropertyPath": [
-        "title"
-      ]
+      "accessibleNamePropertyPath": ["title"]
     },
     "supportedEvents": [],
     "supportedStateOperations": []
@@ -1261,13 +1222,9 @@
       "height": "content",
       "publicSurface": "allowed",
       "accessibleName": "required",
-      "accessibleNamePropertyPath": [
-        "label"
-      ]
+      "accessibleNamePropertyPath": ["label"]
     },
-    "supportedEvents": [
-      "action"
-    ],
+    "supportedEvents": ["action"],
     "supportedStateOperations": []
   },
   "TABS_BLOCK_RELEASE": {
@@ -1356,16 +1313,10 @@
       "height": "content_or_bounded",
       "publicSurface": "allowed",
       "accessibleName": "required",
-      "accessibleNamePropertyPath": [
-        "title"
-      ]
+      "accessibleNamePropertyPath": ["title"]
     },
-    "supportedEvents": [
-      "tab_changed"
-    ],
-    "supportedStateOperations": [
-      "select_tab"
-    ]
+    "supportedEvents": ["tab_changed"],
+    "supportedStateOperations": ["select_tab"]
   },
   "DIALOG_BLOCK_RELEASE": {
     "blockId": "651460f1-5fce-4443-bc9d-4dd4b6ae8a8b",
@@ -1435,9 +1386,7 @@
         "key": "actions",
         "label": "Dialog actions",
         "required": false,
-        "allowedChildCategories": [
-          "actions"
-        ]
+        "allowedChildCategories": ["actions"]
       }
     ],
     "capabilities": {
@@ -1447,17 +1396,10 @@
       "height": "content_or_bounded",
       "publicSurface": "allowed",
       "accessibleName": "required",
-      "accessibleNamePropertyPath": [
-        "title"
-      ]
+      "accessibleNamePropertyPath": ["title"]
     },
-    "supportedEvents": [
-      "action"
-    ],
-    "supportedStateOperations": [
-      "open",
-      "close"
-    ]
+    "supportedEvents": ["action"],
+    "supportedStateOperations": ["open", "close"]
   },
   "DRAWER_BLOCK_RELEASE": {
     "blockId": "a399ff74-5716-4411-bca8-c5ab87ec2e7d",
@@ -1552,9 +1494,7 @@
         "key": "actions",
         "label": "Drawer actions",
         "required": false,
-        "allowedChildCategories": [
-          "actions"
-        ]
+        "allowedChildCategories": ["actions"]
       }
     ],
     "capabilities": {
@@ -1564,17 +1504,10 @@
       "height": "content_or_bounded",
       "publicSurface": "allowed",
       "accessibleName": "required",
-      "accessibleNamePropertyPath": [
-        "title"
-      ]
+      "accessibleNamePropertyPath": ["title"]
     },
-    "supportedEvents": [
-      "action"
-    ],
-    "supportedStateOperations": [
-      "open",
-      "close"
-    ]
+    "supportedEvents": ["action"],
+    "supportedStateOperations": ["open", "close"]
   },
   "APPLICATION_NAVIGATION_BLOCK_RELEASE": {
     "blockId": "e2f4a1b7-3c58-4d09-9e62-1a7b5c8d0f24",
@@ -1605,9 +1538,7 @@
       "height": "content_or_bounded",
       "publicSurface": "refused",
       "accessibleName": "required",
-      "accessibleNamePropertyPath": [
-        "title"
-      ]
+      "accessibleNamePropertyPath": ["title"]
     },
     "supportedEvents": [],
     "supportedStateOperations": []
@@ -1728,19 +1659,10 @@
       "height": "content_or_bounded",
       "publicSurface": "allowed",
       "accessibleName": "optional",
-      "accessibleNamePropertyPath": [
-        "title"
-      ]
+      "accessibleNamePropertyPath": ["title"]
     },
-    "supportedEvents": [
-      "form_ready",
-      "form_submit",
-      "form_reset"
-    ],
-    "supportedStateOperations": [
-      "set_value",
-      "reset"
-    ]
+    "supportedEvents": ["form_ready", "form_submit", "form_reset"],
+    "supportedStateOperations": ["set_value", "reset"]
   },
   "LINK_INPUT_BLOCK_RELEASE": {
     "blockId": "8d1b6a2f-4c3e-4f0a-9c2b-6f1d2e7a5b94",
@@ -1845,13 +1767,9 @@
       "height": "content",
       "publicSurface": "allowed",
       "accessibleName": "required",
-      "accessibleNamePropertyPath": [
-        "label"
-      ]
+      "accessibleNamePropertyPath": ["label"]
     },
-    "supportedEvents": [
-      "field_changed"
-    ],
+    "supportedEvents": ["field_changed"],
     "supportedStateOperations": []
   },
   "RICH_TEXT_INPUT_BLOCK_RELEASE": {
@@ -1938,13 +1856,9 @@
       "height": "content_or_bounded",
       "publicSurface": "allowed",
       "accessibleName": "required",
-      "accessibleNamePropertyPath": [
-        "label"
-      ]
+      "accessibleNamePropertyPath": ["label"]
     },
-    "supportedEvents": [
-      "field_changed"
-    ],
+    "supportedEvents": ["field_changed"],
     "supportedStateOperations": []
   },
   "FIELD_INPUT_BLOCK_RELEASE": {
@@ -2387,13 +2301,9 @@
       "height": "content_or_bounded",
       "publicSurface": "allowed",
       "accessibleName": "optional",
-      "accessibleNamePropertyPath": [
-        "label"
-      ]
+      "accessibleNamePropertyPath": ["label"]
     },
-    "supportedEvents": [
-      "field_changed"
-    ],
+    "supportedEvents": ["field_changed"],
     "supportedStateOperations": []
   },
   "APPLICATION_LAUNCHER_BLOCK_RELEASE": {
@@ -2464,14 +2374,9 @@
       "height": "content_or_bounded",
       "publicSurface": "allowed",
       "accessibleName": "optional",
-      "accessibleNamePropertyPath": [
-        "title"
-      ]
+      "accessibleNamePropertyPath": ["title"]
     },
-    "supportedEvents": [
-      "refresh",
-      "row_action"
-    ],
+    "supportedEvents": ["refresh", "row_action"],
     "supportedStateOperations": []
   },
   "LINK_TILES_BLOCK_RELEASE": {
@@ -2653,9 +2558,7 @@
         "key": "actions",
         "label": "Tile actions",
         "required": false,
-        "allowedChildCategories": [
-          "actions"
-        ]
+        "allowedChildCategories": ["actions"]
       }
     ],
     "capabilities": {
@@ -2665,14 +2568,9 @@
       "height": "content_or_bounded",
       "publicSurface": "allowed",
       "accessibleName": "optional",
-      "accessibleNamePropertyPath": [
-        "title"
-      ]
+      "accessibleNamePropertyPath": ["title"]
     },
-    "supportedEvents": [
-      "refresh",
-      "row_action"
-    ],
+    "supportedEvents": ["refresh", "row_action"],
     "supportedStateOperations": []
   },
   "TABLE_BLOCK_RELEASE": {
@@ -3164,9 +3062,7 @@
             "maxLength": 60,
             "showWhen": {
               "property": "mode",
-              "values": [
-                "flow"
-              ]
+              "values": ["flow"]
             }
           }
         ]
@@ -3392,6 +3288,10 @@
                 "enabled": {
                   "kind": "boolean",
                   "value": false
+                },
+                "personal_formatting": {
+                  "kind": "boolean",
+                  "value": false
                 }
               }
             },
@@ -3402,6 +3302,17 @@
                 "label": "On",
                 "help": "Let people save views",
                 "required": false,
+                "defaultValue": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              },
+              {
+                "kind": "boolean",
+                "key": "personal_formatting",
+                "label": "Personal formatting",
+                "help": "Let people add their own highlighting rules to the views they save; needs Formatting on",
+                "required": true,
                 "defaultValue": {
                   "kind": "boolean",
                   "value": false
@@ -4001,9 +3912,7 @@
                       "maximumItems": 50,
                       "showWhen": {
                         "property": "target",
-                        "values": [
-                          "cells"
-                        ]
+                        "values": ["cells"]
                       },
                       "item": {
                         "kind": "field_reference",
@@ -4243,9 +4152,7 @@
                       },
                       "showWhen": {
                         "property": "kind",
-                        "values": [
-                          "data_bar"
-                        ]
+                        "values": ["data_bar"]
                       }
                     },
                     {
@@ -4282,9 +4189,7 @@
                       },
                       "showWhen": {
                         "property": "kind",
-                        "values": [
-                          "colour_scale"
-                        ]
+                        "values": ["colour_scale"]
                       }
                     },
                     {
@@ -4321,9 +4226,7 @@
                       },
                       "showWhen": {
                         "property": "kind",
-                        "values": [
-                          "colour_scale"
-                        ]
+                        "values": ["colour_scale"]
                       }
                     },
                     {
@@ -4360,9 +4263,7 @@
                       },
                       "showWhen": {
                         "property": "kind",
-                        "values": [
-                          "colour_scale"
-                        ]
+                        "values": ["colour_scale"]
                       }
                     }
                   ]
@@ -4596,9 +4497,7 @@
                 "label": "Column field",
                 "help": "The stage field of a pipeline: each of its stages is a column and moving a card changes its stage",
                 "required": false,
-                "fieldTypes": [
-                  "choice"
-                ]
+                "fieldTypes": ["choice"]
               },
               {
                 "kind": "field_reference",
@@ -4712,12 +4611,7 @@
                 "label": "Rows",
                 "help": "A choice, link or date field people can filter by; each value is one row",
                 "required": false,
-                "fieldTypes": [
-                  "choice",
-                  "link",
-                  "date",
-                  "date_time"
-                ]
+                "fieldTypes": ["choice", "link", "date", "date_time"]
               },
               {
                 "kind": "choice",
@@ -4754,12 +4648,7 @@
                 "label": "Columns",
                 "help": "A choice, link or date field people can filter by, with at most 50 values",
                 "required": false,
-                "fieldTypes": [
-                  "choice",
-                  "link",
-                  "date",
-                  "date_time"
-                ]
+                "fieldTypes": ["choice", "link", "date", "date_time"]
               },
               {
                 "kind": "choice",
@@ -4825,11 +4714,7 @@
                 "label": "Number or money field",
                 "help": "The field each cell totals; leave empty when counting records",
                 "required": false,
-                "fieldTypes": [
-                  "whole_number",
-                  "decimal_number",
-                  "money"
-                ]
+                "fieldTypes": ["whole_number", "decimal_number", "money"]
               },
               {
                 "kind": "boolean",
@@ -5009,6 +4894,10 @@
                 "enabled": {
                   "kind": "boolean",
                   "value": false
+                },
+                "personal_formatting": {
+                  "kind": "boolean",
+                  "value": false
                 }
               }
             },
@@ -5149,9 +5038,7 @@
       "height": "content_or_bounded",
       "publicSurface": "allowed",
       "accessibleName": "optional",
-      "accessibleNamePropertyPath": [
-        "title"
-      ]
+      "accessibleNamePropertyPath": ["title"]
     },
     "supportedEvents": [
       "refresh",
@@ -5317,14 +5204,9 @@
       "height": "content_or_bounded",
       "publicSurface": "allowed",
       "accessibleName": "optional",
-      "accessibleNamePropertyPath": [
-        "title"
-      ]
+      "accessibleNamePropertyPath": ["title"]
     },
-    "supportedEvents": [
-      "refresh",
-      "row_action"
-    ],
+    "supportedEvents": ["refresh", "row_action"],
     "supportedStateOperations": []
   },
   "CONTAINER_BLOCK_RELEASE": {
@@ -5729,13 +5611,9 @@
       "height": "content_or_bounded",
       "publicSurface": "refused",
       "accessibleName": "required",
-      "accessibleNamePropertyPath": [
-        "title"
-      ]
+      "accessibleNamePropertyPath": ["title"]
     },
-    "supportedEvents": [
-      "refresh"
-    ],
+    "supportedEvents": ["refresh"],
     "supportedStateOperations": []
   },
   "CHART_BLOCK_RELEASE": {
@@ -5828,13 +5706,9 @@
       "height": "content_or_bounded",
       "publicSurface": "refused",
       "accessibleName": "required",
-      "accessibleNamePropertyPath": [
-        "title"
-      ]
+      "accessibleNamePropertyPath": ["title"]
     },
-    "supportedEvents": [
-      "refresh"
-    ],
+    "supportedEvents": ["refresh"],
     "supportedStateOperations": []
   },
   "NOTICE_BLOCK_RELEASE": {
@@ -6045,9 +5919,7 @@
       "height": "content",
       "publicSurface": "allowed",
       "accessibleName": "required",
-      "accessibleNamePropertyPath": [
-        "text"
-      ]
+      "accessibleNamePropertyPath": ["text"]
     },
     "supportedEvents": [],
     "supportedStateOperations": []
@@ -6264,13 +6136,9 @@
       "height": "content",
       "publicSurface": "allowed",
       "accessibleName": "required",
-      "accessibleNamePropertyPath": [
-        "label"
-      ]
+      "accessibleNamePropertyPath": ["label"]
     },
-    "supportedEvents": [
-      "field_changed"
-    ],
+    "supportedEvents": ["field_changed"],
     "supportedStateOperations": []
   },
   "ATTACHMENT_INPUT_BLOCK_RELEASE": {
@@ -6384,13 +6252,9 @@
       "height": "content",
       "publicSurface": "refused",
       "accessibleName": "required",
-      "accessibleNamePropertyPath": [
-        "label"
-      ]
+      "accessibleNamePropertyPath": ["label"]
     },
-    "supportedEvents": [
-      "field_changed"
-    ],
+    "supportedEvents": ["field_changed"],
     "supportedStateOperations": []
   }
 }

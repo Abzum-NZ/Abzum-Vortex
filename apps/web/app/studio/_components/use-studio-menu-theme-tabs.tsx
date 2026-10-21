@@ -1,5 +1,5 @@
 "use client";
-import { useIdlePreload } from "../_lib/use-idle-preload";
+import { useIntentPreload } from "../_lib/use-intent-preload";
 import dynamic from "next/dynamic";
 import {
   applicationSourceDocumentSchema,
@@ -45,7 +45,7 @@ export function useStudioMenuThemeTabs({
   /** Opens Access on its Pages and menu view, where who can see an entry is set. */
   openAccessPages: () => void;
 }>) {
-  useIdlePreload(preloadThemePanel);
+  useIntentPreload(preloadThemePanel, "#studio-rail-theme");
   const { source, selected } = draft;
   const themeVisited = useStudioTabVisited(!themeHidden);
   const commandMenu = (command: StudioMenuCommand, merge?: string): StudioMenuResult => {

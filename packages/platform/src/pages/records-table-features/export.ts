@@ -59,6 +59,7 @@ import {
   type RecordsTablePlacement,
 } from "./placement";
 import { decideRecordTypeExport, decideRecordTypeFieldIds } from "./record-type-access";
+import { personalFormattingAllowed } from "./conditional-formatting";
 import type { InstalledRuntimeContext } from "../../definition/index";
 
 /**
@@ -268,6 +269,7 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
               stored.shareable.has(key),
             ),
           readable,
+          personalFormattingAllowed(placement.contract),
         );
         // A layout the person arranged from this view is theirs; otherwise the view's shows.
         if (resolved.selected !== null && own?.basedOnViewId !== resolved.selected.viewId)

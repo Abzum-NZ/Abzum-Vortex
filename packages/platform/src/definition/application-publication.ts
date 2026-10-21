@@ -11,6 +11,7 @@ import {
 } from "../schema";
 import { applicationValidationContractVersion } from "./application-contract-versions";
 import { applicationModuleSources } from "./application-module-lowering";
+import { readRetainedApplicationModule } from "./application-draft-compilation-cache";
 import { canonicalJson, fingerprintCanonicalValue } from "./canonical-json-definition";
 import {
   assertReleasable,
@@ -37,6 +38,7 @@ import {
   manifestFor,
   resolveDependencies,
   selectCurrentModuleRelease,
+  type ResolvedDependencies,
 } from "./definition-dependency-resolution";
 import { createDraftModuleOverlay } from "./publication/draft-module-overlay";
 import { derivedOwnedModuleRootId } from "./derived-definition-id";
@@ -61,6 +63,9 @@ type ModuleStep = Readonly<{
   output: ModuleOutput;
   reasons: readonly VersionImpactReason[];
   append: DefinitionReleaseAppend;
+  dependencies: ResolvedDependencies;
+  released: boolean;
+  candidate: DefinitionPublicationCandidate;
 }>;
 
 /** Reads and checks the Application draft a publication is for; any other kind is refused. */
@@ -202,6 +207,7 @@ const releaseInlineModules = async (
     if (unchanged.has(source.key)) continue;
     const root = roots.get(source.key);
     if (root === undefined) return refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
+    const sourceFingerprint = fingerprintCanonicalValue(source);
     const module = validateCandidate(
       context,
       await transaction.readCandidate(root.rootId),
@@ -210,14 +216,18 @@ const releaseInlineModules = async (
         expectedDraftRevision: root.draftRevision,
       }),
     );
-    if (
-      module.draft.kind !== "module" ||
-      fingerprintCanonicalValue(module.draft.source) !== fingerprintCanonicalValue(source)
-    )
+    if (module.draft.kind !== "module" || module.draft.sourceFingerprint !== sourceFingerprint)
       return refuse("DEFINITION_SOURCE_EVIDENCE_MISMATCH");
     const dependencies = await resolveDependencies(transaction, catalogue, module);
     await assertNoCycle(transaction, module, dependencies.modules);
     const resolution = buildResolution(module, dependencies, version);
+    const retained = readRetainedApplicationModule(candidate, module, dependencies, resolution);
+    if (retained !== undefined) {
+      const append = { ...retained.append, draft: module.draft, releaseNote };
+      if (retained.released) await transaction.appendModuleRelease(append);
+      steps.push({ ...retained, candidate: module, append });
+      continue;
+    }
     const compiled = compileModuleCandidate(
       module,
       dependencies,
@@ -250,9 +260,9 @@ const releaseInlineModules = async (
     const repinned =
       latest !== null &&
       (pins.length !== latestPins.size || pins.some((pin) => !latestPins.has(pin)));
-    if (impact.outcome === "no_change" && !repinned) continue;
+    const released = impact.outcome !== "no_change" || repinned;
     const reasons = impact.outcome === "no_change" ? [] : impact.reasons;
-    assertReleasable(compiled, module.historyEvidence, catalogue.permissions);
+    if (released) assertReleasable(compiled, module.historyEvidence, catalogue.permissions);
     const append: DefinitionReleaseAppend = {
       draft: module.draft,
       compilationOutput: output,
@@ -263,8 +273,8 @@ const releaseInlineModules = async (
       validationContractVersion: "3.0.0",
       releaseNote,
     };
-    await transaction.appendModuleRelease(append);
-    steps.push({ output, reasons, append });
+    if (released) await transaction.appendModuleRelease(append);
+    steps.push({ output, reasons, append, dependencies, released, candidate: module });
   }
   return steps;
 };
@@ -417,7 +427,7 @@ export const planApplicationPublication = async (
 
 /**
  * The inline Modules whose current release already is what their publication would leave current.
- * A Module qualifies when its draft is exactly its released source, every sibling it depends on
+ * A Module qualifies when its source fingerprint equals its release's, every sibling it depends on
  * qualifies, and its release pins exactly the releases its dependencies resolve to now. Its
  * publication would compile it, find no change and no new pin, and not release it, so a draft
  * compile takes the release as it is instead of compiling it again.
@@ -453,7 +463,7 @@ export const releasedUnchangedModules = async (
           return (
             root !== undefined &&
             root.currentReleaseRevision !== null &&
-            root.draftRevision === root.currentReleaseRevision &&
+            currentReleases.get(source.key)?.sourceFingerprint === root.sourceFingerprint &&
             root.sourceFingerprint === fingerprintCanonicalValue(source)
           );
         })
@@ -476,7 +486,7 @@ export const releasedUnchangedModules = async (
     if (
       root === undefined ||
       root.currentReleaseRevision === null ||
-      root.draftRevision !== root.currentReleaseRevision ||
+      currentReleases.get(source.key)?.sourceFingerprint !== root.sourceFingerprint ||
       root.sourceFingerprint !== fingerprintCanonicalValue(source)
     )
       continue;
@@ -533,7 +543,7 @@ export const compileApplicationWithInlineModules = async (
   const version =
     options.version ??
     (latestVersion === null ? "1.0.0" : assignNextDefinitionVersion(latestVersion, "major"));
-  const modules = await releaseInlineModules(
+  const moduleCompilations = await releaseInlineModules(
     context,
     transaction,
     catalogue,
@@ -550,7 +560,11 @@ export const compileApplicationWithInlineModules = async (
     version,
     options.pinned,
   );
-  return { ...application, modules };
+  return {
+    ...application,
+    modules: moduleCompilations.filter((module) => module.released),
+    moduleCompilations,
+  };
 };
 
 /** One compiled Application with its inline Module releases: what a preview or publication releases. */

@@ -19,11 +19,9 @@ import {
   type ProjectedRecordLink,
   type RecordLinkResolver,
 } from "@vortex/platform/server";
-import {
-  applicationLauncherQueryRowsToListValues,
-  parseBoardPayload,
-  parseDisplayData,
-} from "@vortex/ui";
+import { applicationLauncherQueryRowsToListValues } from "@vortex/ui/launcher/bindings";
+import { parseBoardPayload } from "@vortex/ui/display/board-payload";
+import { parseDisplayData } from "@vortex/ui/display/projected-data";
 import type { IdentitySession, OrganizationSelectionCandidate } from "@vortex/platform/schema";
 import { createApplicationPageLinkReader } from "../application-page-link";
 import { humanOrganizationRequests } from "../server-composition";

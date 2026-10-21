@@ -12,7 +12,6 @@ import {
   type ShellOutletLocation,
 } from "@vortex/platform/schema";
 import {
-  ALL_UI_STYLES_CSS,
   createThemeRootProps,
   createVortexStyleRootProps,
   resolveVortexStyleSelection,
@@ -372,9 +371,6 @@ export function PagePuckRenderer({
       {...(applicationSurface ? { "data-vortex-application-surface": "" } : {})}
       documentTheme={applicationSurface}
     >
-      <style href="vortex-ui-styles" precedence="default">
-        {ALL_UI_STYLES_CSS}
-      </style>
       {applicationTheme === undefined ? (
         screen
       ) : (
