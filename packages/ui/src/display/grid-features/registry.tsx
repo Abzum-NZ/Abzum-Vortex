@@ -325,7 +325,7 @@ const expansionKinds: Readonly<Partial<Record<RecordsTableFeatureKey, RowExpansi
 const subRowsKinds: Readonly<Partial<Record<RecordsTableFeatureKey, SubRowsKind>>> = {
   tree: {
     noun: "child records",
-    expandable: (row) => row.hasChildren === true,
+    expandable: (row) => row.hasChildren !== undefined,
   },
 };
 

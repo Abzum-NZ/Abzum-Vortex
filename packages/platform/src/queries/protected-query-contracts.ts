@@ -525,9 +525,12 @@ export const protectedQueryTreeLevelCommandSchema = protectedQueryCommandSchema
   .strict();
 export type ProtectedQueryTreeLevelCommand = z.infer<typeof protectedQueryTreeLevelCommandSchema>;
 
-/** A tree row is a page row that also says whether the reader may read a child of it. */
+/**
+ * A tree row is a page row that also says whether the reader may read a child of it that matches
+ * the query; null when the level read ran out of its examination budget before deciding.
+ */
 export const protectedQueryTreeRowSchema = protectedQueryPageRowSchema
-  .extend({ hasChildren: z.boolean() })
+  .extend({ hasChildren: z.boolean().nullable() })
   .strict();
 export type ProtectedQueryTreeRow = z.infer<typeof protectedQueryTreeRowSchema>;
 
