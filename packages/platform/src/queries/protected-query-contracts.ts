@@ -681,7 +681,7 @@ export const protectedQuerySummaryCompletedSchema = z
     queryId: queryIdSchema,
     groupByFieldIds: z.array(fieldIdSchema).max(10),
     totalRowCount: z.number().int().nonnegative().max(100_000),
-    groups: z.array(protectedQuerySummaryGroupSchema).max(100_000),
+    groups: z.array(protectedQuerySummaryGroupSchema).max(200),
     /** Null when this is the last group page; totals still cover the full filtered set. */
     nextGroupKey: z.string().nullable().optional(),
     aggregates: z.record(builderKeySchema, protectedQuerySummaryAggregateResultSchema),
