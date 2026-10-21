@@ -2195,6 +2195,10 @@ reset role;
 -- changing its definition.
 -- guard-allow: migration-owner-role The baseline function is postgres owned, so its owner must transfer it first.
 alter function vortex_platform.append_record_occurrences_for_resolved_installation_internal(uuid, uuid, jsonb, jsonb) owner to vortex_owner;
+-- Its new owner appends to the Event queue, so the queue's privileges move with it: the queue
+-- schema and the one occurrence queue table, nothing else of pgmq.
+grant usage on schema pgmq to vortex_owner;
+grant select, insert on table pgmq.q_vortex_event_occurrences to vortex_owner;
 
 set local role vortex_owner;
 
