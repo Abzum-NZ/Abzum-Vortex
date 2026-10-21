@@ -80,7 +80,7 @@ const totalOf = (
 
 const refusedBy = (refusal: RecordsTableRequestRefusal): RecordsRangeSummaryResult => {
   logRecordsTableRequestRefusal(refusal, "range-summary");
-  return { kind: "refused" };
+  return { kind: "refused", reason: "not_available" };
 };
 
 export const createRecordsRangeSummaryService = (dependencies: RecordsRangeSummaryDependencies) => {

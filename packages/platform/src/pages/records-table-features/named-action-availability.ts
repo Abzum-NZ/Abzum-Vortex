@@ -76,7 +76,7 @@ export const readRecordsTableNamedActionAvailability = async (
       recordsTableRequestRefusal("bulk_action", reason),
       request.placementId,
     );
-    return { kind: "refused" };
+    return { kind: "refused", reason: "not_available" };
   };
   const result = await createHumanOrganizationRequestService(dependencies).run(
     session,

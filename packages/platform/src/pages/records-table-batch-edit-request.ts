@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { recordsTableRequestRejectionSchema } from "./records-selection";
 import {
   fieldIdSchema,
   platformIdSchema,
@@ -142,10 +143,10 @@ export const recordsTableBatchEditResultSchema = z.discriminatedUnion("kind", [
         .max(recordsTableBatchEditMaximumRows),
     })
     .strict(),
-  z
-    .object({
-      kind: z.literal("refused"),
-      problems: z.array(recordsTableBatchEditProblemSchema).min(1).max(1000),
+  recordsTableRequestRejectionSchema
+    .extend({
+      /** A request rejected before cell validation has no record or field problems. */
+      problems: z.array(recordsTableBatchEditProblemSchema).min(1).max(1000).optional(),
     })
     .strict(),
   z.object({ kind: z.literal("unavailable") }).strict(),

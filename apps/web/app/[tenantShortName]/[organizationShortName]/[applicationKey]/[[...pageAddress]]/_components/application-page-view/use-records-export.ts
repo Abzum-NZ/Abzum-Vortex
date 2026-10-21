@@ -28,6 +28,8 @@ const numberFormat = new Intl.NumberFormat();
 const refusalMessage = (refusal: RecordsTableExportRefusal): string => {
   if (refusal.kind === "unavailable") return "The export could not start. Try again.";
   switch (refusal.reason) {
+    case "request_invalid":
+      return "This export request could not be read. Reload the page and try again.";
     case "too_many":
       return `Too many records to export${
         refusal.count === undefined ? "" : `: ${numberFormat.format(refusal.count)} are selected`

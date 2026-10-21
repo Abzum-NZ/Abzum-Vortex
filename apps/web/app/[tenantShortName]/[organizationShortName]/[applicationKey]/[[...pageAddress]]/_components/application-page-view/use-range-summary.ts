@@ -27,7 +27,7 @@ export function useRangeSummary({ model }: Readonly<{ model: ApplicationPageMode
         event: DisplaySemanticEvent,
       ): Promise<RecordsRangeSummaryResult> => {
         if (event.event !== "range_summary_requested" || table.selectionToken === undefined)
-          return { kind: "refused" };
+          return { kind: "refused", reason: "not_available" };
         const page = pagePositionOf(placementId);
         const response = await fetch("/api/records-table/range-summary", {
           method: "POST",
