@@ -98,6 +98,11 @@ const validateOne = (input: ActionInputDefinition, value: JsonValue): JsonValue 
         refuse();
       if (validation?.maximumLength !== undefined && value.length > validation.maximumLength)
         refuse();
+      if (
+        validation?.choices !== undefined &&
+        !validation.choices.some((choice) => choice.value === value)
+      )
+        refuse();
       if (validation?.pattern !== undefined) {
         const pattern = compileTextInputPattern(validation.pattern);
         if (pattern === undefined) return refuse();

@@ -109,6 +109,12 @@ export function StudioSavedViewsEditor({
         density, sort, filter or search. Capture what the canvas shows here. Personal layouts take
         precedence over defaults; a role default takes precedence over the app default.
       </p>
+      {canvasArrangement === undefined ? (
+        <p className="text-sm text-muted-foreground">
+          Capturing waits for the grid on the canvas to show its columns: turn on Arrange grid
+          columns and save the page if the grid says it needs a save.
+        </p>
+      ) : null}
       {views.map((view, index) => (
         <div key={text(view.properties["view_id"])} className="space-y-1">
           <div className="flex items-center gap-2">

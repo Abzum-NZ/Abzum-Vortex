@@ -6,6 +6,7 @@ import {
   fieldIdSchema,
   moduleRootIdSchema,
   queryIdSchema,
+  recordIdSchema,
   recordTypeIdSchema,
   sameId,
   type IdentitySession,
@@ -38,6 +39,19 @@ export type RecordChoiceTarget = z.infer<typeof recordChoiceTargetSchema>;
 const recordChoiceCommandSchema = z
   .object({
     targets: z.array(recordChoiceTargetSchema).min(1).max(20),
+    /**
+     * A dependent link field's choices: only the records whose `fieldId` link points at this one
+     * record. The composing server derives it from the field's declared dependency and a parent
+     * it read under the viewer's access; one target only.
+     */
+    narrowedBy: z
+      .object({
+        fieldId: fieldIdSchema,
+        recordTypeId: recordTypeIdSchema,
+        recordId: recordIdSchema,
+      })
+      .strict()
+      .optional(),
     /** Narrows the records to those whose title or another searchable field holds this text. */
     search: z.string().trim().min(1).max(100).optional(),
     pageSize: z.number().int().min(1).max(recordChoicePageSizes.maximum),
@@ -133,6 +147,8 @@ export const createRecordChoiceReader = (queries: RecordChoiceQueryRunner) =>
         return { kind: "available", value: { outcome: "refused", reasonCode: "request_invalid" } };
       const command = parsed.data;
       const several = command.targets.length > 1;
+      if (command.narrowedBy !== undefined && several)
+        return { kind: "available", value: { outcome: "refused", reasonCode: "request_invalid" } };
       let positions: Positions | undefined;
       if (command.continuationToken !== undefined) {
         positions = several
@@ -168,7 +184,25 @@ export const createRecordChoiceReader = (queries: RecordChoiceQueryRunner) =>
           requestedSystemFieldKeys: [],
           sort: [],
           sortableFieldIds: [],
-          filterableFieldIds: [],
+          filterableFieldIds: command.narrowedBy === undefined ? [] : [command.narrowedBy.fieldId],
+          ...(command.narrowedBy === undefined
+            ? {}
+            : {
+                filter: {
+                  kind: "comparison" as const,
+                  operator: "in" as const,
+                  left: { source: "field" as const, fieldId: command.narrowedBy.fieldId },
+                  right: {
+                    source: "value" as const,
+                    value: [
+                      {
+                        recordTypeId: command.narrowedBy.recordTypeId.toLowerCase(),
+                        recordId: command.narrowedBy.recordId,
+                      },
+                    ],
+                  },
+                },
+              }),
           // No declared list: the engine searches every field the record type marks searchable.
           searchableFieldIds: [],
           ...(command.search === undefined ? {} : { search: command.search }),

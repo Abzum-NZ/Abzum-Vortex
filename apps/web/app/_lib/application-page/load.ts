@@ -809,6 +809,7 @@ const loadApplicationPageJoined = async (
               ? readSubject(String(subjectType.recordTypeId), subjectId.data)
               : Promise.resolve({ kind: "refused" }),
     subjectRecordTypeId: subjectType === undefined ? undefined : String(subjectType.recordTypeId),
+    readViewerTeams: services.readViewerTeams,
     readTimeZone: async () => {
       try {
         const read = await readCalendarSettings();

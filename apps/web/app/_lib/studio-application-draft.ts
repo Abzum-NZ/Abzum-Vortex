@@ -614,6 +614,9 @@ export const loadStudioApplicationDraft = async (
                 label: input.label,
                 type: input.type,
                 required: input.required,
+                ...(input.type === "text" && input.validation?.choices !== undefined
+                  ? { choices: input.validation.choices }
+                  : {}),
                 ...(input.type === "record_reference"
                   ? {
                       recordTypes: input.recordTypes.flatMap((type) =>
@@ -807,6 +810,11 @@ export const loadStudioApplicationDraft = async (
                                     ),
                                 )
                                   ? { parentLink: true }
+                                  : {}),
+                                ...(field.type === "link" && field.settings.dependsOn !== undefined
+                                  ? {
+                                      dependsOn: `${release!.key}:${recordType.key}.${recordType.fields.find((candidate) => sameId(String(candidate.fieldId), String(field.settings.dependsOn!.parentFieldId)))?.key ?? ""}`,
+                                    }
                                   : {}),
                               },
                             ];
