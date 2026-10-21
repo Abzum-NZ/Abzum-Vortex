@@ -151,7 +151,7 @@ const applicationDraftCompilations = (processCompilations[applicationDraftCompil
 
 const deepFreeze = <Value>(value: Value): Value => {
   if (typeof value !== "object" || value === null || Object.isFrozen(value)) return value;
-  for (const key of Object.keys(value)) deepFreeze(Reflect.get(value, key));
+  for (const child of Object.values(value)) deepFreeze(child);
   Object.freeze(value);
   return value;
 };
