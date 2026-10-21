@@ -72,6 +72,7 @@ export type PlacementFailureReason =
   | "launcher_query_invalid"
   | "launcher_query_unavailable"
   | "launcher_query_refused"
+  | "records_table_settings_invalid"
   | "calendar_settings_invalid"
   | "calendar_range_unsupported"
   | "calendar_time_zone_unavailable"

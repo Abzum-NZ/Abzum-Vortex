@@ -20,9 +20,11 @@ const count = (value: SourceBlockPropertyValueContract | undefined): number =>
 const arrangementSummary = (state: SourceBlockPropertyValueContract | undefined): string => {
   const columns = state?.kind === "group" ? state.properties["columns"] : undefined;
   const density = state?.kind === "group" ? state.properties["density"] : undefined;
-  if (state?.kind !== "group" || columns?.kind !== "list" || density?.kind !== "choice")
-    throw new Error("STUDIO_SAVED_VIEW_ARRANGEMENT_INVALID");
-  const groups = columns.items.flatMap((column) => (column.kind === "group" ? [column] : []));
+  // Read as the platform reader reads a view: an absent list is empty.
+  if (state?.kind !== "group" || density?.kind !== "choice")
+    return "This view's layout cannot be read; capture it again";
+  const items = columns?.kind === "list" ? columns.items : [];
+  const groups = items.flatMap((column) => (column.kind === "group" ? [column] : []));
   const visible = groups.filter(
     (column) =>
       column.properties["visible"]?.kind === "boolean" && column.properties["visible"].value,
@@ -40,7 +42,7 @@ const arrangementSummary = (state: SourceBlockPropertyValueContract | undefined)
   const filtered = count(state.properties["filters"]);
   return [
     density.value === "compact" ? "Compact" : "Comfortable",
-    `${visible} of ${columns.items.length} columns shown`,
+    `${visible} of ${items.length} columns shown`,
     ...(pinned === 0 ? [] : [`${pinned} pinned`]),
     ...(widths.length === 0 ? [] : [`Resized widths: ${widths.join(", ")}`]),
     sorted === 0 ? "Default order" : `Sorted by ${sorted} ${sorted === 1 ? "field" : "fields"}`,

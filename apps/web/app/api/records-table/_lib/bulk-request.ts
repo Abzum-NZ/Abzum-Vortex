@@ -4,15 +4,24 @@ import type { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import {
   logRefusal,
+  sameId,
   type IdentitySession,
   type RecordsTableRequestRejection,
 } from "@vortex/platform/schema";
 import {
   createRecordsTableBulkService,
   createRecordsTableExportService,
+  createStoredPageCapabilityService,
+  projectedUseAvailability,
+  runtimeContextSelection,
   type RecordsTableBulkAddress,
 } from "@vortex/platform/server";
 import { resolveApplicationAddress } from "../../../_lib/application-address";
+import {
+  collectPlacements,
+  isTablePlacement,
+} from "../../../_lib/application-page/placement-helpers";
+import { platformPermissionSource } from "../../../_lib/platform-permission-source";
 import { getQueryContinuationKey } from "../../../_lib/query-continuation-key";
 import { humanOrganizationRequestDependencies } from "../../../_lib/server-composition";
 import { privateJsonResponse as privateResponse } from "../../../_lib/private-response";
@@ -60,11 +69,13 @@ export type ResolvedBulkRequest<Body> =
 
 /**
  * Reads one Records table bulk request: from this site's own JSON client, for the signed-in
- * person, addressed to an application page the person may open now. The page address is resolved
- * on the server; the request body never chooses the organisation or the application. A request
- * that carries many values (a batch of cell changes) names its own larger body limit.
+ * person, addressed to an application page the person may open now, naming a Records table that is
+ * on that page as projected for the person now and usable by them. The page address is resolved on
+ * the server; the request body never chooses the organisation or the application, and a table of
+ * another page (or one hidden from the person) is refused. A request that carries many values (a
+ * batch of cell changes) names its own larger body limit.
  */
-export const resolveBulkRequest = async <Body extends { pageKey: string }>(
+export const resolveBulkRequest = async <Body extends { pageKey: string; placementId: string }>(
   request: NextRequest,
   route: string,
   bodySchema: z.ZodType<Body>,
@@ -129,6 +140,33 @@ export const resolveBulkRequest = async <Body extends { pageKey: string }>(
     return { kind: "response", response: privateResponse({ kind: "unavailable" }, 503) };
   if (address.kind !== "application_page")
     return refused(`address_${address.kind}`, "not_available", 403);
+  const context = address.installedContext;
+  if (context === undefined) return refused("installation_unavailable", "not_available", 403);
+  const page = context.releaseSet.application.content.pages.find(
+    (candidate) => candidate.key === address.pageKey,
+  );
+  if (page === undefined) return refused("page_not_installed", "not_available", 403);
+  const projected = await createStoredPageCapabilityService({
+    ...humanOrganizationRequestDependencies(),
+    context,
+    permissions: platformPermissionSource,
+    selection: { pageId: String(page.pageId) },
+  }).project(identity.session, runtimeContextSelection(context));
+  if (projected.kind === "temporarily_unavailable")
+    return { kind: "response", response: privateResponse({ kind: "unavailable" }, 503) };
+  if (projected.kind !== "available" || projected.value === undefined)
+    return refused(`page_projection_${projected.kind}`, "not_available", 403);
+  // The table must be on this page as projected for the person now, once, and usable by them.
+  const placements = collectPlacements(projected.value).filter(({ placementId }) =>
+    sameId(placementId, body.data.placementId),
+  );
+  const placement = placements.length === 1 ? placements[0] : undefined;
+  if (
+    placement === undefined ||
+    !isTablePlacement(placement) ||
+    projectedUseAvailability(placement) !== "available"
+  )
+    return refused("placement_not_on_page", "not_available", 403);
   return {
     kind: "resolved",
     session: identity.session,

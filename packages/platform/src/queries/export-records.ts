@@ -4,7 +4,10 @@ import { PassThrough, type Transform } from "node:stream";
 import { Temporal } from "@js-temporal/polyfill";
 import { moduleFieldValueSchemas } from "../records/module-field-values";
 import { compareExactDecimals, parseExactDecimal } from "../records/exact-decimal";
-import { spreadsheetText } from "../definition/application-composition/records-table-features/export";
+import {
+  RECORDS_TABLE_EXPORT_MAXIMUM_ROWS,
+  spreadsheetText,
+} from "../definition/application-composition/records-table-features/export";
 
 /**
  * Values already projected by the export authority. Links enter only as permitted titles (text),
@@ -515,7 +518,11 @@ export const prepareRecordsExport = async (
   let filename: string;
   try {
     throwIfAborted();
-    if (!Number.isSafeInteger(request.maxRows) || request.maxRows < 1 || request.maxRows > 100_000)
+    if (
+      !Number.isSafeInteger(request.maxRows) ||
+      request.maxRows < 1 ||
+      request.maxRows > RECORDS_TABLE_EXPORT_MAXIMUM_ROWS
+    )
       throw exportError("row_limit_invalid");
     if (request.labels.length === 0 || request.labels.length > 200)
       throw exportError("columns_invalid");

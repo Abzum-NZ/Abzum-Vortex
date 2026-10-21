@@ -318,7 +318,7 @@ export const recordsTableContractRefusal = (
         ? "definition_records_table_row_action_limit"
         : undefined;
 
-/** Reads a Record detail placement's declared detail fields; undefined for earlier releases. */
+/** Reads a Record detail placement's declared detail fields; undefined when they cannot be read. */
 export const readRecordDetailContract = (
   settings: SettingsRecord,
 ): RecordDetailContract | undefined => {
