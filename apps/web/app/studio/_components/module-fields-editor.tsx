@@ -233,25 +233,16 @@ export function ModuleFieldsEditor({
     });
   const startSettings = (type: ModuleFieldType): Record<string, unknown> => {
     // A new calculation starts by joining the first other text or choice field, never itself.
-    const joined = formulaFields.find(
-      (item) => (item.type === "text" || item.type === "choice") && joinTextAccepts(item),
-    )?.key;
     const start = starterModuleFieldSettings(type, {
       recordTypes: recordTypes.map((item) => item.key),
-      titleField: joined ?? "",
+      joinField: formulaFields.find(
+        (item) => (item.type === "text" || item.type === "choice") && joinTextAccepts(item),
+      )?.key,
       relationships: totalLinks.map((item) => item.reference),
     });
     // A new calculation is settled like every edit of its formula, so it is read-time when it must be.
-    if (type === "calculation") {
-      const calculation = start as unknown as CalculationSettings;
-      const { expression } = calculation;
-      return settledCalculation(
-        joined === undefined && expression.operation === "join_text"
-          ? { ...calculation, expression: { ...expression, fields: [] } }
-          : calculation,
-        formulaFieldsByKey,
-      );
-    }
+    if (type === "calculation")
+      return settledCalculation(start as CalculationSettings, formulaFieldsByKey);
     // A new link reads back from the linked record by this record type's plural name, for example assets.
     const back = type === "link" ? record?.plural_name : undefined;
     return back === undefined ? start : { ...start, reverse_name: back };
