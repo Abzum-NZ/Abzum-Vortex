@@ -459,9 +459,9 @@ export function ApplicationDraftAgentTools({
           removable:
             removal.kind === "available"
               ? true
-              : removal.kind === "blocked"
-                ? `blocked: ${removal.reason}`
-                : false,
+              : removal.kind === "invalid"
+                ? false
+                : `${removal.kind}: ${removal.reason}`,
         };
       }),
     };

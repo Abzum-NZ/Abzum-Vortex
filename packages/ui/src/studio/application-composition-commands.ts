@@ -462,7 +462,10 @@ const resolveRemoval = (
     !manifestMatches(catalogue, source, target.region.zone.items)
   )
     return { kind: "unsupported", reason: "manifest_mismatch" };
-  if (!layout && itemSlots(catalogue, target.item).size !== 0)
+  if (
+    !layout &&
+    [...itemSlots(catalogue, target.item).values()].some((slot) => slot.items.length > 0)
+  )
     return { kind: "unsupported", reason: "has_children" };
   validateRegion(catalogue, target.region);
   if (studioLayoutOutletPlacementUses(source, alias).length > 0)
@@ -475,8 +478,9 @@ const resolveRemoval = (
         ? undefined
         : releaseFor(catalogue, parent)?.slots.find((item) => item.key === step.slotKey);
     const child = parent === undefined ? undefined : itemSlots(catalogue, parent).get(step.slotKey);
-    if (declaration === undefined || declaration.repeats !== undefined || child === undefined)
-      return { kind: "unsupported", reason: "repeating_slot" };
+    if (declaration === undefined || child === undefined)
+      return { kind: "unsupported", reason: "manifest_mismatch" };
+    if (declaration.repeats !== undefined) return { kind: "unsupported", reason: "repeating_slot" };
     if (child.items === target.zone.items && declaration.required && child.items.length === 1)
       return { kind: "blocked", reason: "required_slot" };
     zone = child;
