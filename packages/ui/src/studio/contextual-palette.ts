@@ -212,6 +212,8 @@ export type StudioQueryField = Readonly<{
   resultType?: string;
   /** The field is a one-record link from its record type to itself, so a record names its parent. */
   parentLink?: boolean;
+  /** The field of the same record type whose chosen record narrows this link's choices. */
+  dependsOn?: string;
 }>;
 
 /** The facts of one draft field, as a query field carries them. */
@@ -261,6 +263,8 @@ export type StudioQueryInput = Readonly<{
   required: boolean;
   /** For a record input, the record types it accepts, as `<module>:<record>`. */
   recordTypes?: readonly string[];
+  /** For a text input limited to a list, the choices a person picks from. */
+  choices?: readonly Readonly<{ value: string; label: string }>[];
 }>;
 
 /** A query a data block can read, and the fields it reads. */
@@ -435,6 +439,13 @@ const ownQueries = (source: ApplicationSourceDocument): StudioQueryChoice[] =>
                 ...(isParentLink(module.key, recordType, record, field)
                   ? { parentLink: true }
                   : {}),
+                ...(field.type === "link" &&
+                (field.settings as { depends_on?: { parent_field: string } }).depends_on !==
+                  undefined
+                  ? {
+                      dependsOn: `${recordType}.${(field.settings as { depends_on: { parent_field: string } }).depends_on.parent_field}`,
+                    }
+                  : {}),
               }),
             ];
       });
@@ -444,6 +455,9 @@ const ownQueries = (source: ApplicationSourceDocument): StudioQueryChoice[] =>
           label: input.label,
           type: input.type,
           required: input.required,
+          ...(input.type === "text" && input.validation?.choices !== undefined
+            ? { choices: input.validation.choices }
+            : {}),
           ...(input.type === "record_reference"
             ? {
                 recordTypes: Object.freeze(

@@ -10,6 +10,7 @@ import {
 } from "./definitions";
 import type { ResolveRecordTypeReferences } from "./definitions";
 import { refineActionTaskIds } from "./definition-source-common";
+import { actionInputChoiceSchema, refineCompiledTextInputChoices } from "./module-contracts";
 import {
   actionTaskSchema,
   conditionNodeSchema,
@@ -67,6 +68,7 @@ const textActionInputSchema = z
         minimumLength: z.number().int().min(0).optional(),
         maximumLength: z.number().int().positive().optional(),
         pattern: z.string().min(1).max(500).optional(),
+        choices: z.array(actionInputChoiceSchema).min(1).max(200).optional(),
       })
       .strict()
       .optional(),
@@ -166,6 +168,7 @@ export const applicationActionInputDefinitionSchema = z
         path: ["validation", "maximumLength"],
         message: "Maximum length cannot be below minimum length",
       });
+    if (value.type === "text") refineCompiledTextInputChoices(value.validation, context);
     if (
       value.type === "whole_number" &&
       value.validation?.minimum !== undefined &&

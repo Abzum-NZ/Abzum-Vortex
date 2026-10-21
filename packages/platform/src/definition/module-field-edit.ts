@@ -24,6 +24,7 @@ import {
   type PeopleDirectoryOwner,
 } from "./module-links";
 import { syncInlinePipelineStages } from "./module-pipeline-shape";
+import { linkDependencyProblem, type LinkDependencyField } from "./module-link-dependencies";
 
 type InlineModule = ApplicationSourceDocument["body"]["modules"][number];
 type RecordType = InlineModule["record_types"][number];
@@ -244,6 +245,61 @@ const linkProblem = (
   return undefined;
 };
 
+type LinkDependencyDeclaration = Readonly<{ parent_field: string; filter_field: string }>;
+
+/** A source record type's fields as the one link-dependency judgement reads them, by field key. */
+const linkDependencyViews = (
+  moduleKey: string,
+  record: RecordType,
+): readonly LinkDependencyField[] =>
+  record.fields.map((field) => {
+    const settings = field.settings as { target?: unknown; depends_on?: LinkDependencyDeclaration };
+    return {
+      id: field.key,
+      label: field.label,
+      type: field.type,
+      filterable: field.filterable,
+      ...(field.type === "link" && typeof settings.target === "string"
+        ? { target: qualifiedLinkTarget(moduleKey, settings.target) }
+        : {}),
+      ...(settings.depends_on === undefined
+        ? {}
+        : {
+            dependsOn: {
+              parent: settings.depends_on.parent_field,
+              filter: settings.depends_on.filter_field,
+            },
+          }),
+    };
+  });
+
+/**
+ * Why a record type's declared link dependencies cannot hold, or undefined when they can. A target
+ * outside the owned Modules is judged when the application is published.
+ */
+const linkDependencyRefusal = (
+  source: ApplicationSourceDocument,
+  module: InlineModule,
+  record: RecordType,
+): string | undefined => {
+  const views = linkDependencyViews(module.key, record);
+  for (const view of views) {
+    if (view.dependsOn === undefined) continue;
+    const [targetModule, targetRecord] = (view.target ?? "").split(":");
+    const target = source.body.modules
+      .find((item) => item.key === targetModule)
+      ?.record_types.find((item) => item.key === targetRecord);
+    if (view.target !== undefined && target === undefined) continue;
+    const problem = linkDependencyProblem(
+      views,
+      view.id,
+      target === undefined ? undefined : linkDependencyViews(targetModule!, target),
+    );
+    if (problem !== undefined) return problem.message;
+  }
+  return undefined;
+};
+
 /**
  * The Application source with one field of one owned inline Module added or changed. Every property
  * a person sets is written as given, and the result is checked by the source schema. A field that is
@@ -412,6 +468,8 @@ export const changeInlineModuleField = (
     if (change.defaultValue === undefined) delete destination.default;
     else destination.default = change.defaultValue;
   }
+  const refusedDependency = linkDependencyRefusal(source, module, record);
+  if (refusedDependency !== undefined) return { kind: "invalid", issues: [refusedDependency] };
   syncLinkRelationship(module, record, field, change.cardinality);
   syncInlinePipelineStages(record, field.key);
   if (isPersonLink(field)) {
@@ -456,6 +514,35 @@ export const deleteInlineModuleField = (
     return { kind: "invalid", issues: ["The field is not in this record type any more."] };
   const references = applicationUses(current, { kind: "field", moduleKey, recordKey, fieldKey });
   if (references.length > 0) return { kind: "referenced", references };
+  // A dependency names its parent in its own record type and its filter in the linked record type,
+  // so both sides are looked for across every owned record type.
+  const recordType = `${moduleKey}:${recordKey}`;
+  const dependent = source.body.modules
+    .flatMap((other) =>
+      other.record_types.flatMap((type) =>
+        type.fields.map((item) => ({ module: other, type, item })),
+      ),
+    )
+    .find(({ module: other, type, item }) => {
+      const settings = item.settings as {
+        target?: unknown;
+        depends_on?: LinkDependencyDeclaration;
+      };
+      if (settings.depends_on === undefined) return false;
+      return (
+        (other.key === moduleKey &&
+          type.key === recordKey &&
+          settings.depends_on.parent_field === fieldKey) ||
+        (typeof settings.target === "string" &&
+          qualifiedLinkTarget(other.key, settings.target) === recordType &&
+          settings.depends_on.filter_field === fieldKey)
+      );
+    })?.item;
+  if (dependent !== undefined)
+    return {
+      kind: "invalid",
+      issues: [`${dependent.label} depends on ${field.label}. Remove that dependency first.`],
+    };
   if (publication.fields.has(`${moduleKey}:${recordKey}.${fieldKey}`))
     return {
       kind: "invalid",
