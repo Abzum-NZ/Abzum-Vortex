@@ -1168,13 +1168,17 @@ begin
         -- Keep the reusable decision in this invocation; the request role cannot
         -- write it or pass it to the owner-only exact-record evaluator.
         page_eligibility_checked := true;
+        -- The installation and its access plan are resolved once for the page;
+        -- every exact record decision below consumes this local plan.
         page_shared := pg_catalog.jsonb_build_object(
           'installation', case when preview_mode
             then vortex_record.read_current_preview_installation_internal()
             else vortex_definition.read_current_active_installation() end);
-        page_access_loaded := vortex_record.load_record_access_facts_from_installation_internal(
+        page_shared := page_shared || pg_catalog.jsonb_build_object('plan',
+          vortex_record.resolve_installation_access_plan_internal(page_shared -> 'installation'));
+        page_access_loaded := vortex_record.load_record_access_facts_with_plan_internal(
           record_type_id_value, 'read', scan_record.record_id, null,
-          page_shared -> 'installation', scan_record.projection_row
+          page_shared -> 'installation', page_shared -> 'plan', scan_record.projection_row
         );
         if page_access_loaded ->> 'outcome' = 'loaded'
           and pg_catalog.jsonb_typeof(page_access_loaded -> 'declaration') = 'object' then

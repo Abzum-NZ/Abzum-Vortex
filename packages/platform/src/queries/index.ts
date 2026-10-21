@@ -110,6 +110,8 @@ export {
   type ViewerSafeRecordLinkTitleReadResult,
   type ViewerSafeRecordLinkFieldsReadResult,
   type ViewerSafeRecordLinkTitlesReadResult,
+  viewerSafeRecordLinkTitleRecordLimit,
+  viewerSafeRecordLinkTitleTypeLimit,
 } from "./viewer-safe-record-link-read";
 
 export type { QueryContinuationKey } from "./continuation-token";

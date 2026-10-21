@@ -343,37 +343,68 @@ const readFields = async (
   return viewerSafeRecordLinkFieldsReadResultSchema.parse({ outcome: "read", values });
 };
 
-const viewerSafeRecordLinkTitlesCommandSchema = z
+/** The bounds of one titles read, matching `vortex_record.read_record_titles`. */
+export const viewerSafeRecordLinkTitleTypeLimit = 20;
+export const viewerSafeRecordLinkTitleRecordLimit = 200;
+
+const viewerSafeRecordLinkTitleTargetSchema = z
   .object({
     identity: viewerSafeRecordLinkIdentitySchema.omit({ recordId: true }),
-    /** The exact Application revision already checked by App's installed-context loader. */
-    applicationReleaseRevision: revisionSchema,
     titleFieldId: fieldIdSchema,
-    /** One page of linked records of this one record type; the read is a single statement. */
-    recordIds: z.array(recordIdSchema).min(1).max(1_000),
+    /** The linked records of this one record type. */
+    recordIds: z.array(recordIdSchema).min(1),
   })
   .strict();
 
+const viewerSafeRecordLinkTitlesCommandSchema = z
+  .object({
+    /** The exact Application revision already checked by App's installed-context loader. */
+    applicationReleaseRevision: revisionSchema,
+    /** One entry per target record type; the whole read is a single statement. */
+    targets: z
+      .array(viewerSafeRecordLinkTitleTargetSchema)
+      .min(1)
+      .max(viewerSafeRecordLinkTitleTypeLimit),
+  })
+  .strict()
+  .refine(
+    (command) =>
+      command.targets.reduce((total, target) => total + target.recordIds.length, 0) <=
+      viewerSafeRecordLinkTitleRecordLimit,
+  );
+
+export type ViewerSafeRecordLinkTitlesCommand = z.input<
+  typeof viewerSafeRecordLinkTitlesCommandSchema
+>;
+
 type RecordLinkTitlesRow = DatabaseRow & {
   readonly active_installation: unknown;
+  readonly record_type_id: string;
   readonly record_id: string;
   readonly result: unknown;
 };
 
-/** The titles of one record type's linked records, keyed by lower-case record identity. */
+/** The key of a linked record's title in a titles read: lower-case record type and record identity. */
+export const viewerSafeRecordLinkTitleKey = (recordTypeId: string, recordId: string): string =>
+  `${recordTypeId.toLowerCase()}:${recordId.toLowerCase()}`;
+
+/** The titles of the linked records of every requested record type. */
 export type ViewerSafeRecordLinkTitlesReadResult =
   | Readonly<{
       outcome: "read";
-      /** A record the viewer may read and whose title field is readable; every other record is absent. */
+      /**
+       * A record the viewer may read and whose title field is readable, keyed by
+       * `viewerSafeRecordLinkTitleKey`; every other record is absent.
+       */
       titles: ReadonlyMap<string, z.infer<typeof viewerSafeRecordLinkTitleSchema>>;
     }>
   | Readonly<{ outcome: "unavailable" }>;
 
 /**
- * Reads the configured title of many linked records of one record type in one statement behind the
- * same exact current-installation gate as the single read, through the same protected Record
- * projection. A record the viewer may not read, or whose title field is withheld, is simply absent
- * from the result, so a caller cannot tell it from a record that does not exist.
+ * Reads the configured title of the linked records of every target record type in one statement
+ * behind the same exact current-installation gate as the single read, through the same protected
+ * Record projection. A record the viewer may not read, or whose title field is withheld, is simply
+ * absent from the result, so a caller cannot tell it from a record that does not exist.
  */
 const readTitles = async (
   transaction: RequestDatabaseTransaction,
@@ -383,67 +414,104 @@ const readTitles = async (
   const scope = selectedOrganizationScopeSchema.safeParse(scopeCandidate);
   const command = viewerSafeRecordLinkTitlesCommandSchema.safeParse(commandCandidate);
   if (!scope.success || !command.success) return unavailable;
-  const { identity, applicationReleaseRevision, titleFieldId, recordIds } = command.data;
+  const { applicationReleaseRevision, targets } = command.data;
+  const first = targets[0]!;
+  const applicationRootId = scope.data.applicationRootId;
   if (
-    scope.data.applicationRootId === undefined ||
-    !sameId(scope.data.organizationId, identity.organizationId) ||
-    !sameId(scope.data.applicationRootId, identity.applicationRootId)
+    applicationRootId === undefined ||
+    targets.some(
+      ({ identity }) =>
+        !sameId(scope.data.organizationId, identity.organizationId) ||
+        !sameId(applicationRootId, identity.applicationRootId),
+    )
   )
     return unavailable;
 
+  const targetsJson = JSON.stringify(
+    targets.map(({ identity, titleFieldId, recordIds }) => ({
+      moduleRootId: identity.moduleRootId,
+      moduleReleaseRevision: identity.moduleReleaseRevision,
+      recordTypeId: identity.recordTypeId,
+      titleFieldId,
+      recordIds,
+    })),
+  );
   const rows = await transaction.query<RecordLinkTitlesRow>`
     with active_installation as materialized (
       select vortex_definition.read_current_active_installation() as value
+    ), requested as materialized (
+      select ${targetsJson}::text::jsonb as value
     ), verified_installation as materialized (
-      select value
+      select active_installation.value
       from active_installation
-      where pg_catalog.lower(value ->> 'organizationId') =
-          pg_catalog.lower(${identity.organizationId}::text)
-        and pg_catalog.lower(value ->> 'applicationRootId') =
-          pg_catalog.lower(${identity.applicationRootId}::text)
-        and (value ->> 'applicationReleaseRevision')::bigint =
+      where pg_catalog.lower(active_installation.value ->> 'organizationId') =
+          pg_catalog.lower(${first.identity.organizationId}::text)
+        and pg_catalog.lower(active_installation.value ->> 'applicationRootId') =
+          pg_catalog.lower(${first.identity.applicationRootId}::text)
+        and (active_installation.value ->> 'applicationReleaseRevision')::bigint =
           ${applicationReleaseRevision}::bigint
-        and exists (
+        and not exists (
           select 1
-          from pg_catalog.jsonb_array_elements(value -> 'moduleBindings') as binding(value)
-          where pg_catalog.lower(binding.value ->> 'moduleRootId') =
-              pg_catalog.lower(${identity.moduleRootId}::text)
-            and (binding.value ->> 'moduleReleaseRevision')::bigint =
-              ${identity.moduleReleaseRevision}::bigint
-            and binding.value ->> 'state' = 'active'
+          from requested
+          cross join lateral pg_catalog.jsonb_array_elements(requested.value) as target(value)
+          where not exists (
+            select 1
+            from pg_catalog.jsonb_array_elements(active_installation.value -> 'moduleBindings')
+              as binding(value)
+            where pg_catalog.lower(binding.value ->> 'moduleRootId') =
+                pg_catalog.lower(target.value ->> 'moduleRootId')
+              and (binding.value ->> 'moduleReleaseRevision')::bigint =
+                (target.value ->> 'moduleReleaseRevision')::bigint
+              and binding.value ->> 'state' = 'active'
+          )
         )
     ), linked as materialized (
-      select pg_catalog.jsonb_array_elements_text(${JSON.stringify(recordIds)}::text::jsonb)::uuid
-        as record_id
+      select (target.value ->> 'recordTypeId')::uuid as record_type_id,
+        link.record_id::uuid as record_id
+      from requested
+      cross join lateral pg_catalog.jsonb_array_elements(requested.value) as target(value)
+      cross join lateral pg_catalog.jsonb_array_elements_text(target.value -> 'recordIds')
+        as link(record_id)
     ), titles as materialized (
-      select title.record_id, title.result
+      select title.record_type_id, title.record_id, title.result
       from verified_installation
-      cross join lateral vortex_record.read_record_titles(
-        ${identity.recordTypeId}::uuid,
-        array(select linked.record_id from linked),
-        ${titleFieldId}::uuid
-      ) as title
+      cross join lateral vortex_record.read_record_titles((
+        select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+          'recordTypeId', target.value -> 'recordTypeId',
+          'titleFieldId', target.value -> 'titleFieldId',
+          'recordIds', target.value -> 'recordIds'
+        ))
+        from requested
+        cross join lateral pg_catalog.jsonb_array_elements(requested.value) as target(value)
+      )) as title
     )
     select
       active_installation.value as active_installation,
+      linked.record_type_id::text as record_type_id,
       linked.record_id::text as record_id,
       titles.result as result
     from active_installation
     cross join linked
-    left join titles on titles.record_id = linked.record_id
+    left join titles
+      on titles.record_type_id = linked.record_type_id and titles.record_id = linked.record_id
   `;
-  const first = rows[0];
-  if (first === undefined) throw contractError("RECORD_LINK_READ_ROW_INVALID", rows.length);
-  if (
-    !currentInstallationMatches(
-      first.active_installation,
-      scope.data,
-      { ...identity, recordId: recordIds[0]! },
-      applicationReleaseRevision,
+  const head = rows[0];
+  if (head === undefined) throw contractError("RECORD_LINK_READ_ROW_INVALID", rows.length);
+  for (const { identity, recordIds } of targets) {
+    if (
+      !currentInstallationMatches(
+        head.active_installation,
+        scope.data,
+        { ...identity, recordId: recordIds[0]! },
+        applicationReleaseRevision,
+      )
     )
-  )
-    return unavailable;
+      return unavailable;
+  }
 
+  const titleFieldByType = new Map(
+    targets.map((target) => [target.identity.recordTypeId.toLowerCase(), target.titleFieldId]),
+  );
   const titles = new Map<string, z.infer<typeof viewerSafeRecordLinkTitleSchema>>();
   for (const row of rows) {
     if (refusedRecordSchema.safeParse(row.result).success) continue;
@@ -451,13 +519,15 @@ const readTitles = async (
     if (!record.success) throw contractError("RECORD_LINK_READ_RESULT_INVALID", record.error);
     if (!sameId(record.data.recordId, row.record_id))
       throw contractError("RECORD_LINK_READ_IDENTITY_INVALID");
+    const titleFieldId = titleFieldByType.get(row.record_type_id.toLowerCase());
+    if (titleFieldId === undefined) throw contractError("RECORD_LINK_READ_IDENTITY_INVALID");
     const entries = Object.entries(record.data.values).filter(([fieldId]) =>
       sameId(fieldId, titleFieldId),
     );
     if (entries.length !== 1) continue;
     const title = viewerSafeRecordLinkTitleSchema.safeParse(entries[0]?.[1]);
     if (!title.success) throw contractError("RECORD_LINK_READ_TITLE_INVALID", title.error);
-    titles.set(row.record_id.toLowerCase(), title.data);
+    titles.set(viewerSafeRecordLinkTitleKey(row.record_type_id, row.record_id), title.data);
   }
   return { outcome: "read", titles };
 };

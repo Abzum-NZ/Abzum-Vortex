@@ -66,6 +66,75 @@
           }
         },
         {
+          "id": "fld_activity_outcome",
+          "key": "outcome",
+          "label": "Outcome",
+          "required": false,
+          "unique": false,
+          "filterable": true,
+          "sortable": true,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "choice",
+          "settings": {
+            "options": [
+              {
+                "value": "connected",
+                "label": "Connected",
+                "parent_values": ["call"]
+              },
+              {
+                "value": "left_voicemail",
+                "label": "Left voicemail",
+                "parent_values": ["call"]
+              },
+              {
+                "value": "no_answer",
+                "label": "No answer",
+                "parent_values": ["call"]
+              },
+              {
+                "value": "held",
+                "label": "Held",
+                "parent_values": ["meeting"]
+              },
+              {
+                "value": "rescheduled",
+                "label": "Rescheduled",
+                "parent_values": ["call", "meeting"]
+              },
+              {
+                "value": "cancelled",
+                "label": "Cancelled",
+                "parent_values": ["meeting"]
+              },
+              {
+                "value": "replied",
+                "label": "Replied",
+                "parent_values": ["email"]
+              },
+              {
+                "value": "no_reply",
+                "label": "No reply",
+                "parent_values": ["email"]
+              },
+              {
+                "value": "done",
+                "label": "Done",
+                "parent_values": ["task"]
+              },
+              {
+                "value": "deferred",
+                "label": "Deferred",
+                "parent_values": ["task"]
+              }
+            ],
+            "depends_on": {
+              "parent_field": "activity_type"
+            }
+          }
+        },
+        {
           "id": "fld_activity_due",
           "key": "due_at",
           "label": "Due at",
@@ -211,6 +280,7 @@
         "readable_fields": [
           "subject",
           "activity_type",
+          "outcome",
           "due_at",
           "completed",
           "duration_minutes",
@@ -221,6 +291,7 @@
         "changeable_fields": [
           "subject",
           "activity_type",
+          "outcome",
           "due_at",
           "completed",
           "duration_minutes",
@@ -249,6 +320,7 @@
         "readable_fields": [
           "subject",
           "activity_type",
+          "outcome",
           "due_at",
           "completed",
           "duration_minutes",
@@ -278,6 +350,7 @@
         "readable_fields": [
           "subject",
           "activity_type",
+          "outcome",
           "due_at",
           "completed",
           "duration_minutes",
@@ -288,6 +361,7 @@
         "changeable_fields": [
           "subject",
           "activity_type",
+          "outcome",
           "due_at",
           "completed",
           "duration_minutes",
@@ -356,6 +430,7 @@
         "readable_fields": [
           "subject",
           "activity_type",
+          "outcome",
           "due_at",
           "completed",
           "duration_minutes",
@@ -452,7 +527,15 @@
       "label": "Activities",
       "record_type": "activity",
       "inputs": [],
-      "select": ["subject", "activity_type", "due_at", "completed", "regarding", "owner"],
+      "select": [
+        "subject",
+        "activity_type",
+        "outcome",
+        "due_at",
+        "completed",
+        "regarding",
+        "owner"
+      ],
       "filter": {
         "field": "completed",
         "operator": "equals",
