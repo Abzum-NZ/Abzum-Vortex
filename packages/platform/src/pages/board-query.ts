@@ -554,7 +554,8 @@ export const projectBoardPlacement = async (
         choiceFieldRequired: choiceField.required,
         ...(board.wipLimit === undefined ? {} : { wipLimit: board.wipLimit }),
         quickAdd: board.quickAdd,
-        ...(input.filters === undefined
+        // Filters the viewer cannot read any field of are not offered at all.
+        ...(input.filters === undefined || input.filters.fields.length === 0
           ? {}
           : { filters: { fields: input.filters.fields, applied: input.filters.applied } }),
         cardTitleFieldId: board.cardTitleField,
