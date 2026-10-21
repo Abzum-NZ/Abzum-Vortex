@@ -23,6 +23,22 @@ const jsonValueSchema: z.ZodType<unknown> = z.lazy(() =>
 );
 
 /**
+ * A link cell pasted as the title the person copied: the server resolves it, per person and per
+ * field, to exactly one record they may read. It is the only form of a link value that is not a
+ * record reference; the cap is the one a record picker reads titles by.
+ */
+export const pastedLinkTitleSchema = z
+  .object({ pastedTitle: z.string().trim().min(1).max(200) })
+  .strict();
+export type PastedLinkTitle = z.infer<typeof pastedLinkTitleSchema>;
+
+/** The title a cell value pastes, or undefined when the value is not a pasted title. */
+export const pastedLinkTitleOf = (value: unknown): string | undefined => {
+  const parsed = pastedLinkTitleSchema.safeParse(value);
+  return parsed.success ? parsed.data.pastedTitle : undefined;
+};
+
+/**
  * One batch of cell changes on the loaded page: explicit record ids with the revision the person
  * saw, at most 200 of them, and the fields each changes. `commandId` is the person's one gesture:
  * submitting it again replays what it committed. It is the whole of the bounded explicit-ids
@@ -42,7 +58,8 @@ export const recordsTableBatchEditRequestSchema = z
             /**
              * The value each changed field takes, exactly what a single inline edit would submit
              * (an exact decimal as canonical text, a date as an ISO date, a choice as its option
-             * value, a link as its record reference or null).
+             * value, a link as its record reference or null). A pasted link is the title the
+             * person copied, `{ pastedTitle }`, which the server resolves to one readable record.
              */
             values: z
               .record(fieldIdSchema, jsonValueSchema)
@@ -51,6 +68,17 @@ export const recordsTableBatchEditRequestSchema = z
                   Object.keys(values).length >= 1 &&
                   Object.keys(values).length <= recordsTableBatchEditMaximumFields,
                 { message: "A row changes between 1 and 50 fields" },
+              )
+              .refine(
+                (values) =>
+                  Object.values(values).every(
+                    (value) =>
+                      typeof value !== "object" ||
+                      value === null ||
+                      !("pastedTitle" in value) ||
+                      pastedLinkTitleSchema.safeParse(value).success,
+                  ),
+                { message: "A pasted link is one title of 1 to 200 characters" },
               ),
           })
           .strict(),

@@ -74,8 +74,21 @@ const cellOf = (
   | Readonly<{ ok: true; cell: JsonValue | undefined }>
   | Readonly<{ ok: false; message: string }> => {
   const { editor, column } = target;
-  // A record's title is not a value the writer takes: links cannot be pasted yet.
-  if (editor.kind === "link") return { ok: false, message: "Links can't be pasted yet." };
+  // A link is pasted as the title the person copied; the server resolves it to one record they
+  // may read (or refuses the cell), so the same-value shortcut is not taken here. An empty text
+  // clears the link under the ordinary required rules.
+  if (editor.kind === "link") {
+    const title = text.trim();
+    return {
+      ok: true,
+      cell:
+        title === ""
+          ? sameEditValue(editor, target.stored, null)
+            ? undefined
+            : null
+          : { pastedTitle: title },
+    };
+  }
   let draft: EditDraft = text;
   if (editor.kind === "yes_no") {
     const word = text.trim().toLowerCase();
@@ -102,7 +115,7 @@ const cellOf = (
 /**
  * Paste: Ctrl+V of tab-separated text over the loaded page, starting at the top-left of the selected
  * range (or the focused cell). The text is read with the one edit-value reader into the value each
- * field's inline editor would submit; a link cell stops the paste (links cannot be pasted yet).
+ * field's inline editor would submit; a link cell carries the pasted title, which the server resolves to one record the person may read.
  * The whole paste is ONE request that commits every cell or none: a cell that is not on the page,
  * is read-only or cannot be read stops it, with every offending cell named before anything is sent.
  * One value pasted over a larger selection fills the selection.
