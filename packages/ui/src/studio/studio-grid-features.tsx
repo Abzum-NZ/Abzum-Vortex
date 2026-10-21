@@ -403,7 +403,7 @@ export function StudioGridFeatures({
                   value={current}
                   declarations={settings}
                   pipelines={pipelines}
-                  choices={boardChoices}
+                  choices={{ ...boardChoices, totals: query?.totals ?? [] }}
                   boardFacts={query?.board}
                   disabled={disabled}
                   onChange={(next) => write(key, next)}
