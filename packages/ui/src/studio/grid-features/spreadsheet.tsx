@@ -78,6 +78,9 @@ export function StudioSpreadsheetEditor({
         [
           ["range_select", "Range selection"],
           ["find", "Find on page"],
+          ["paste", "Paste"],
+          ["fill", "Fill down"],
+          ["undo", "Undo"],
         ] as const
       ).map(([key, label]) => {
         const setting = value.properties[key];
