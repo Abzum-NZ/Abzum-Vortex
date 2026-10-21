@@ -1,5 +1,7 @@
 import type { fieldTypeKeys } from "../catalogue/catalogues";
 import {
+  componentSettingApplies,
+  plainSettingValue,
   plainSourceSettingValue,
   typedSourceSettingValue,
   type BlockPropertySchemaContract,
@@ -45,8 +47,8 @@ export type ModuleFieldSettingsContext = Readonly<{
   }>;
 }>;
 
-const base = (key: string, label: string, required: boolean, help?: string) =>
-  ({ key, label, required, ...(help === undefined ? {} : { help }) });
+const base = (key: string, label: string, required: boolean, help?: string, defaultValue?: Declaration["defaultValue"]) =>
+  ({ key, label, required, ...(help === undefined ? {} : { help }), ...(defaultValue === undefined ? {} : { defaultValue }) });
 const text = (key: string, label: string, required: boolean, minLength: number, maxLength: number, help?: string): Declaration =>
   ({ ...base(key, label, required, help), kind: "text", minLength, maxLength });
 const number = (key: string, label: string, required: boolean, options: Readonly<{ integer?: boolean; minimum?: number; maximum?: number; help?: string }> = {}): Declaration => ({
@@ -56,8 +58,8 @@ const number = (key: string, label: string, required: boolean, options: Readonly
 });
 const boolean = (key: string, label: string, required: boolean, help?: string): Declaration =>
   ({ ...base(key, label, required, help), kind: "boolean" });
-const choice = (key: string, label: string, required: boolean, options: readonly (readonly [string, string])[], help?: string): Declaration =>
-  ({ ...base(key, label, required, help), kind: "choice", options: options.map(([optionKey, optionLabel]) => ({ key: optionKey, label: optionLabel })) });
+const choice = (key: string, label: string, required: boolean, options: readonly (readonly [string, string])[], help?: string, defaultValue?: Declaration["defaultValue"]): Declaration =>
+  ({ ...base(key, label, required, help, defaultValue), kind: "choice", options: options.map(([optionKey, optionLabel]) => ({ key: optionKey, label: optionLabel })) });
 const list = (key: string, label: string, required: boolean, minimumItems: number, maximumItems: number, item: Declaration, help?: string): Declaration =>
   ({ ...base(key, label, required, help), kind: "list", minimumItems, maximumItems, item });
 const group = (key: string, label: string, properties: Declaration[], required = true): Declaration =>
@@ -71,6 +73,13 @@ const permissionChoices = (permissions: ModuleFieldSettingsContext["permissions"
 const deleteRules = [["refuse", "Refuse to delete the linked record"], ["empty_optional", "Clear this link"],
   ["soft_delete_dependent", "Delete this record too"]] as const;
 const currencyModes = [["organization_default", "The organisation's currency"], ["fixed", "One fixed currency"]] as const;
+/** Fields and table columns author the same money settings, including their stored default. */
+const moneyCurrencyDeclarations = (subject: "field" | "column"): Declaration[] => [
+  choice("currency_mode", "Currency", true, currencyModes, undefined,
+    { kind: "choice", value: "organization_default" }),
+  { ...text("currency", `The currency this ${subject} always uses`, true, 3, 3,
+    "Three capital letters, for example NZD."), showWhen: { property: "currency_mode", values: ["fixed"] } },
+];
 const optionItem = (permissions: ModuleFieldSettingsContext["permissions"], dependent = false): Declaration => ({ ...base("option", "Option", true), kind: "group", properties: [
   text("label", "Label", true, 1, 60),
   text("value", "Stored value", true, 1, 120, "Made from the label when added. Renaming the option keeps this value."),
@@ -97,8 +106,7 @@ const tableColumnItem = (permissions: ModuleFieldSettingsContext["permissions"])
   number("step", "Step (whole number)", false, { minimum: 1 }),
   number("digits_before_decimal", "Digits before the decimal point (decimal number)", false, { minimum: 1, maximum: 30 }),
   number("decimal_places", "Decimal places (decimal number)", false, { minimum: 0, maximum: 12 }),
-  choice("currency_mode", "Currency (money)", false, currencyModes),
-  text("currency", "Fixed currency (money)", false, 3, 3, "Three capital letters, for example NZD."),
+  ...moneyCurrencyDeclarations("column"),
   decimalText("minimum_amount", "Smallest value (decimal number or money)"),
   decimalText("maximum_amount", "Largest value (decimal number or money)"),
   isoDate("earliest", "Earliest date (date)"),
@@ -107,9 +115,8 @@ const tableColumnItem = (permissions: ModuleFieldSettingsContext["permissions"])
   list("options", "Options (choice)", false, 0, 200, optionItem(permissions)),
 ].map((property): Declaration => {
   if (["key", "required", "type"].includes(property.key)) return property;
-  return { ...property, showWhen: property.key === "currency"
-    ? { property: "currency_mode", values: ["fixed"] }
-    : { property: "type", values: Object.entries(columnSettingKeys)
+  return { ...property, showWhen: property.showWhen
+    ?? { property: "type", values: Object.entries(columnSettingKeys)
       .filter(([, keys]) => keys.includes(property.key)).map(([type]) => type) } };
 }));
 
@@ -170,8 +177,7 @@ export const moduleFieldSettingDeclarations = (
         number("decimal_places", "Decimal places (precision)", true, { minimum: 0, maximum: 12 }),
         decimalText("minimum", "Smallest value"), decimalText("maximum", "Largest value")];
     case "money":
-      return [choice("currency_mode", "Currency", true, currencyModes),
-        text("currency", "Fixed currency", false, 3, 3, "Three capital letters, for example NZD. Only for one fixed currency."),
+      return [...moneyCurrencyDeclarations("field"),
         decimalText("minimum", "Smallest amount"), decimalText("maximum", "Largest amount")];
     case "date":
       return [isoDate("earliest", "Earliest date"), isoDate("latest", "Latest date")];
@@ -269,10 +275,11 @@ export const writeModuleFieldSettings = (
   type: ModuleFieldType, values: ModuleFieldTypedSettings, declarations: readonly Declaration[],
   current: Readonly<Record<string, unknown>>,
 ): Record<string, unknown> => {
-  const declared = new Set(declarations.map((declaration) => declaration.key));
+  const declared = new Map(declarations.map((declaration) => [declaration.key, declaration]));
   const settings: Record<string, unknown> = Object.fromEntries(Object.entries(current).filter(([key]) => !declared.has(key)));
   for (const [key, value] of Object.entries(values)) {
-    if (!declared.has(key)) continue;
+    const declaration = declared.get(key);
+    if (declaration === undefined || !componentSettingApplies(declaration, values)) continue;
     let plain = plainSourceSettingValue(value);
     if (type === "table" && key === "columns") plain = (plain as Record<string, unknown>[]).map(storedColumn);
     settings[key] = plain;
@@ -291,7 +298,8 @@ export const starterModuleFieldSettings = (
     case "long_text": return { max_length: 10_000 };
     case "formatted_text": return { allowed_blocks: ["paragraph", "heading", "list", "link"] };
     case "decimal_number": return { digits_before_decimal: 12, decimal_places: 2 };
-    case "money": return { currency_mode: "organization_default" };
+    case "money": return Object.fromEntries(moneyCurrencyDeclarations("field").flatMap((declaration) =>
+      declaration.defaultValue === undefined ? [] : [[declaration.key, plainSettingValue(declaration.defaultValue)]]));
     case "date_time": return { display_time_zone: "person" };
     case "choice": return { options: [] };
     case "several_choices": return { options: [] };

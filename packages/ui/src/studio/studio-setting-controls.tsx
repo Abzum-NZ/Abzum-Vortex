@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type ReactElement } from "react";
 import {
   canonicalJson,
   componentSettingApplies,
+  plainSettingValue,
   plainSourceSettingValue,
   typedSourceSettingValue,
   validateComponentSettings,
@@ -150,6 +151,7 @@ const familyText: Readonly<Record<ComponentSettingFailure["family"], string>> = 
 const failurePlace = (
   properties: readonly BlockPropertySchemaContract[],
   path: readonly (string | number)[],
+  family?: ComponentSettingFailure["family"],
 ): string => {
   const parts: string[] = [];
   let declarations: readonly BlockPropertySchemaContract[] | undefined = properties;
@@ -165,8 +167,17 @@ const failurePlace = (
     parts.push(current?.label ?? segment);
     declarations = current?.kind === "group" ? current.properties : undefined;
   }
-  return parts.join(", ");
+  if (family === undefined) return parts.join(", ");
+  if (family !== "required_value" || current?.showWhen === undefined)
+    return `${parts.join(", ")} ${familyText[family]}.`;
+  // A nested entry keeps its place, so the pre-check names which column needs the value.
+  const owner = parts.slice(0, -1).join(", ");
+  return owner === "" ? conditionalRequiredMessage(current) : `${owner}: ${conditionalRequiredMessage(current)}`;
 };
+
+/** A setting required by a selected choice asks for its value beside the control. */
+const conditionalRequiredMessage = (property: BlockPropertySchemaContract): string =>
+  `Choose ${property.label.charAt(0).toLowerCase()}${property.label.slice(1)}.`;
 
 /**
  * The fields a field reference may name: the block's fields, narrowed to the field types its
@@ -186,8 +197,8 @@ export const studioSettingProblems = (
   properties: readonly BlockPropertySchemaContract[],
   choices?: Pick<StudioSettingChoices, "fields">,
 ): readonly string[] => {
-  const problems = validateComponentSettings(values, properties).map(
-    (failure) => `${failurePlace(properties, failure.path)} ${familyText[failure.family]}.`,
+  const problems = validateComponentSettings(values, properties).map((failure) =>
+    failurePlace(properties, failure.path, failure.family),
   );
   if (choices !== undefined) {
     const visit = (
@@ -1354,13 +1365,37 @@ function SettingFields({
                 [property.key],
                 [],
               ) ?? next;
-          for (const sibling of properties)
+          for (const sibling of properties) {
             if (!componentSettingApplies(sibling, result)) delete result[sibling.key];
+            else if (result[sibling.key] === undefined && sibling.defaultValue !== undefined) {
+              const initial = typedSourceSettingValue(
+                plainSettingValue(sibling.defaultValue),
+                sibling,
+                [sibling.key],
+                [],
+              );
+              if (initial === undefined)
+                throw new TypeError(`The declared default for ${sibling.key} is invalid.`);
+              result[sibling.key] = initial;
+            }
+          }
           onChange(result);
         };
         return (
           <div key={property.key} className="space-y-2" data-vortex-setting={property.key}>
-            <StudioField label={property.label} optional={!property.required} hint={property.help}>
+            <StudioField
+              label={property.label}
+              optional={!property.required}
+              hint={property.help}
+              error={
+                property.required &&
+                property.showWhen !== undefined &&
+                property.defaultValue === undefined &&
+                value === undefined
+                  ? conditionalRequiredMessage(property)
+                  : undefined
+              }
+            >
               {(control) => (
                 <SettingControl
                   id={control.id}
