@@ -14,7 +14,7 @@ import {
 } from "@vortex/platform/schema";
 import type { ApplicationPageModel } from "../../../../../../_lib/application-page";
 import { tablePayloadFor } from "./placement-helpers";
-import type { TableContinuationTarget } from "./types";
+import type { PageSelection, TableContinuationTarget } from "./types";
 
 type Entries = readonly (readonly [string, string])[];
 
@@ -58,7 +58,7 @@ export function useTablePageAddress({
     placementIds: readonly string[],
     tableContinuation?: TableContinuationTarget,
   ) => Promise<void>;
-  setSelection: Dispatch<SetStateAction<Readonly<Record<string, readonly string[]>>>>;
+  setSelection: Dispatch<SetStateAction<PageSelection>>;
 }>) {
   // The table state the shown data was read for; a new server model starts from its own.
   const shownRef = useRef<{ owner: ApplicationPageModel; keys: Map<string, string> }>({

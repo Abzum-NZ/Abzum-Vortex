@@ -37,9 +37,8 @@ import {
   type StudioSemanticSelection,
 } from "@vortex/ui/studio";
 import type { StudioDraft, StudioDraftStep } from "./use-studio-draft";
-import { StudioFlowsPanel } from "./studio-flows-panel";
-import { StudioFlowInspector } from "./studio-flow-inspector";
-import { StudioPlacementWorkflows } from "./studio-placement-workflows";
+import { deferredStudioPart } from "./studio-deferred-part";
+import { useStudioTabVisited } from "./studio-frame";
 import type { StudioModuleOwnerApplication } from "./module-fields-editor";
 
 // The workflow canvas pulls in @xyflow/react; load it only when the Flows tab shows a flow.
@@ -47,7 +46,24 @@ const StudioFlowCanvas = dynamic(
   () => import("@vortex/ui/studio/flow-canvas").then((module) => module.StudioFlowCanvas),
   { ssr: false },
 );
-const preloadFlowCanvas = () => import("@vortex/ui/studio/flow-canvas");
+const StudioFlowsPanel = deferredStudioPart(
+  () => import("./studio-flows-panel").then((module) => module.StudioFlowsPanel),
+  "flows panel",
+);
+const StudioFlowInspector = deferredStudioPart(
+  () => import("./studio-flow-inspector").then((module) => module.StudioFlowInspector),
+  "flow inspector",
+);
+const StudioPlacementWorkflows = deferredStudioPart(
+  () => import("./studio-placement-workflows").then((module) => module.StudioPlacementWorkflows),
+  "workflows of this control",
+);
+const preloadFlowsTab = () =>
+  Promise.all([
+    import("@vortex/ui/studio/flow-canvas"),
+    import("./studio-flows-panel"),
+    import("./studio-flow-inspector"),
+  ]);
 
 /**
  * The Flows tab of the one Studio: its panel (the flows), its centre (the workflow canvas), its
@@ -60,6 +76,7 @@ export function useStudioFlowsTab({
   catalogue,
   labels,
   applications,
+  hidden,
   openFlowsTab,
 }: Readonly<{
   draft: StudioDraft;
@@ -67,9 +84,11 @@ export function useStudioFlowsTab({
   /** Selection key to the label Studio shows for it. */
   labels: ReadonlyMap<string, string>;
   applications: readonly StudioModuleOwnerApplication[];
+  hidden: boolean;
   openFlowsTab: () => void;
 }>) {
-  useIntentPreload(preloadFlowCanvas, "#studio-rail-flows");
+  useIntentPreload(preloadFlowsTab, "#studio-rail-flows");
+  const panelVisited = useStudioTabVisited(!hidden);
   const { state, source, selected } = draft;
   const appearance = useAppearanceMode();
   const disabled = draft.locked;
@@ -307,7 +326,7 @@ export function useStudioFlowsTab({
     [context, flowSelection],
   );
 
-  const panel = (hidden: boolean): ReactNode => (
+  const panel: ReactNode = !panelVisited ? null : (
     <StudioFlowsPanel
       source={source}
       organizationId={draft.organizationId}

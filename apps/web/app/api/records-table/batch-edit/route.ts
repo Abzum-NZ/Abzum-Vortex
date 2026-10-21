@@ -3,6 +3,8 @@ import { logRefusal, recordsTableBatchEditRequestSchema } from "@vortex/platform
 import { createRecordsTableBatchEditService } from "@vortex/platform/server";
 import { humanOrganizationRequestDependencies } from "../../../_lib/server-composition";
 import { privateJsonResponse as privateResponse } from "../../../_lib/private-response";
+import { getQueryContinuationKey } from "../../../_lib/query-continuation-key";
+import { prepareRuntimePreviewChoices } from "../../../_lib/runtime-preview-demand";
 import { resolveBulkRequest } from "../_lib/bulk-request";
 
 export const runtime = "nodejs";
@@ -18,6 +20,16 @@ const batchEditService = () =>
   createRecordsTableBatchEditService({
     ...humanOrganizationRequestDependencies(),
     channel: "web",
+    continuationKey: getQueryContinuationKey(),
+    // A pasted link title is read from its target record type, which a Studio preview makes ready.
+    prepareLinkTargets: async (session, installed, recordTypeIds) => {
+      const demand = await prepareRuntimePreviewChoices(session, installed, recordTypeIds);
+      return demand.kind === "ready"
+        ? "ready"
+        : demand.kind === "temporarily_unavailable"
+          ? "temporarily_unavailable"
+          : "refused";
+    },
   });
 
 /**

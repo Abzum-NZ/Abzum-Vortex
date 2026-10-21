@@ -5,7 +5,6 @@ import {
   flowMaximumProtectedOperations,
   flowMaximumRunFlowDepth,
   flowMaximumTaskOutputPathDepth,
-  flowJsonMemberType,
   flowReadFieldsProjectionSchema,
   flowReadFieldsTypeMapSchema,
   flowTaskChildLists,
@@ -351,31 +350,12 @@ const declaredOutputFieldType = (
     const types = flowReadFieldsTypeMapSchema.safeParse(task.readFieldTypes);
     return types.success && Object.hasOwn(types.data, path[0]!) ? types.data[path[0]!] : undefined;
   }
-  if (task?.type !== "interface.show_form") return undefined;
+  // A show-form answer is one declared member, read as a whole (the validator refuses deeper paths).
+  if (task?.type !== "interface.show_form" || path.length !== 1) return undefined;
   const inputs = (task as Extract<FlowTask, { properties: Record<string, FlowValue> }>).properties
     .inputs;
-  if (inputs?.kind !== "map") return undefined;
-  let member: FlowValue = inputs;
-  for (const name of path) {
-    if (member.kind === "map" && Object.hasOwn(member.entries, name)) {
-      member = member.entries[name]!;
-      continue;
-    }
-    const object =
-      member.kind === "literal" && member.literal.type === "json"
-        ? member.literal.value
-        : undefined;
-    if (
-      object === null ||
-      typeof object !== "object" ||
-      Array.isArray(object) ||
-      !Object.hasOwn(object, name)
-    )
-      return undefined;
-    const value = object[name]!;
-    member = { kind: "literal", literal: { type: flowJsonMemberType(value), value } };
-  }
-  return evaluateValue(member, state, activation, flow, taskId).type;
+  if (inputs?.kind !== "map" || !Object.hasOwn(inputs.entries, path[0]!)) return undefined;
+  return evaluateValue(inputs.entries[path[0]!]!, state, activation, flow, taskId).type;
 };
 
 const scopeOf = (

@@ -12,6 +12,7 @@ import type {
   TablePayload,
 } from "@vortex/ui";
 import type { ApplicationPageModel } from "../../../../../../_lib/application-page";
+import type { SelectedRecords } from "./types";
 
 /** The application page an export request addresses; the server resolves it again. */
 const addressOf = (model: ApplicationPageModel) => ({
@@ -97,7 +98,7 @@ export function useRecordsExport({
     async (
       placementId: string,
       table: TablePayload,
-      held: readonly string[] | undefined,
+      held: SelectedRecords | undefined,
       scope: TableExportScope,
       format: RecordsTableExportFormat,
     ): Promise<void> => {
@@ -105,11 +106,7 @@ export function useRecordsExport({
       let selection: RecordsSelectionInput;
       let token: string | undefined;
       if (scope === "selected") {
-        // The rows the person ticked on the shown page, each at the revision they saw.
-        const items = (held ?? []).flatMap((recordId) => {
-          const row = table.rows.find((candidate) => candidate.recordId === recordId);
-          return row?.revision === undefined ? [] : [{ recordId, revision: row.revision }];
-        });
+        const items = [...(held ?? [])];
         if (items.length === 0 || table.selectionToken === undefined) return;
         selection = { kind: "ids", items };
         token = table.selectionToken;
@@ -201,7 +198,7 @@ export function useRecordsExport({
   );
 
   const eventsFor = useCallback(
-    (placementId: string, table: TablePayload, held: readonly string[] | undefined) => ({
+    (placementId: string, table: TablePayload, held: SelectedRecords | undefined) => ({
       export_requested: (event: DisplaySemanticEvent) => {
         if (event.event !== "export_requested") return;
         return start(placementId, table, held, event.scope, event.format);

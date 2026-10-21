@@ -217,6 +217,7 @@ export function StudioTopBar({
                 ? "Resolve the blocked draft before publishing"
                 : "Publish a version of this application"
             }
+            id="studio-publish"
             type="button"
             size="sm"
             disabled={publishDisabled}

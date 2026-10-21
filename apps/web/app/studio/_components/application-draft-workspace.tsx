@@ -170,6 +170,7 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
     catalogue,
     labels,
     applications,
+    hidden: tab !== "flows",
     openFlowsTab: () => setTab("flows"),
   });
   const structureCommand = useStudioStructureCommand({ draft, catalogue, describePlacement });
@@ -349,7 +350,7 @@ function ExistingApplicationWorkspace(props: ExistingProps) {
                 {canvas.panels}
                 {menuTheme.menuPanel}
                 {data.panel}
-                {flows.panel(tab !== "flows")}
+                {flows.panel}
                 {menuTheme.themePanel}
                 {access.panel}
                 {releases.panel}
