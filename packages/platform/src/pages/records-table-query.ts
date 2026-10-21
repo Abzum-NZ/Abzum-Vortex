@@ -55,6 +55,7 @@ import {
   logRecordsTableRequestRefusal,
   recordsTableNarrowingRefusal,
   recordsTableRequestRefusal,
+  type RecordsTableRequestPart,
   type ConditionalFormattingContext,
   type RecordsTableFeatureProjection,
   type RecordsTableInlineEditor,
@@ -186,6 +187,12 @@ export type RecordsTableQueryResolution =
   | Readonly<{ kind: "unavailable" }>;
 
 const refused = Object.freeze({ kind: "refused" as const });
+
+/** The refusal of a table read, with its part and cause logged; the client sees it neutral. */
+const refusedBecause = (part: RecordsTableRequestPart, reason: string) => {
+  logRecordsTableRequestRefusal(recordsTableRequestRefusal(part, reason), "table_read");
+  return refused;
+};
 
 /** The rows with only the visible columns' values: a value read only for formatting never leaves. */
 const visibleRows = (
@@ -643,13 +650,18 @@ const readGrouped = async (
     const summary = await runner.summarise(session, selection, summaryCommand.data);
     if (summary.kind === "temporarily_unavailable")
       return { kind: "resolution", resolution: unavailableResult };
-    if (summary.kind !== "available") return { kind: "resolution", resolution: refused };
+    if (summary.kind !== "available")
+      return {
+        kind: "resolution",
+        resolution: refusedBecause("group", `summary_${summary.kind}`),
+      };
     if (summary.value.outcome === "refused") {
       const reason = summary.value.reasonCode;
       // A table that reads a grouped query has no flat page to fall back to.
       if (!group.required && reason === "dataset_limit_exceeded")
         return { kind: "flat", groups: { status: "too_many" } };
       if (!group.required && reason === "field_unbounded") return { kind: "flat", withheld: true };
+      refusedBecause("group", `summary_refused ${reason}`);
       return { kind: "resolution", resolution: { kind: "refused", reasonCode: reason } };
     }
     fieldBounds = summary.value.fieldBounds;
@@ -665,7 +677,10 @@ const readGrouped = async (
       : group.expanded;
   if (opened === undefined) {
     if (group.membersOnly || fieldBounds === undefined)
-      return { kind: "resolution", resolution: refused };
+      return {
+        kind: "resolution",
+        resolution: refusedBecause("group", "open_group_not_in_summary"),
+      };
     return {
       kind: "read",
       ...(summaryRead === undefined ? {} : { summary: summaryRead }),
@@ -691,12 +706,18 @@ const readGrouped = async (
   const members = await runner.groupedMembers(session, selection, memberCommand.data);
   if (members.kind === "temporarily_unavailable")
     return { kind: "resolution", resolution: unavailableResult };
-  if (members.kind !== "available") return { kind: "resolution", resolution: refused };
-  if (members.value.outcome === "refused")
+  if (members.kind !== "available")
+    return {
+      kind: "resolution",
+      resolution: refusedBecause("group", `members_${members.kind}`),
+    };
+  if (members.value.outcome === "refused") {
+    refusedBecause("group", `members_refused ${members.value.reasonCode}`);
     return {
       kind: "resolution",
       resolution: { kind: "refused", reasonCode: members.value.reasonCode },
     };
+  }
   return {
     kind: "read",
     ...(summaryRead === undefined ? {} : { summary: summaryRead }),
@@ -785,9 +806,12 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
       )
         result = await runner.run(session, selection, built.command);
       if (result?.kind === "temporarily_unavailable") return unavailableResult;
-      if (result !== undefined && result.kind !== "available") return refused;
-      if (result?.value.outcome === "refused")
+      if (result !== undefined && result.kind !== "available")
+        return refusedBecause("columns", `read_${result.kind}`);
+      if (result?.value.outcome === "refused") {
+        refusedBecause("columns", `read_refused ${result.value.reasonCode}`);
         return { kind: "refused", reasonCode: result.value.reasonCode };
+      }
       const read: GroupedPage | undefined =
         grouped?.kind === "read"
           ? grouped.page
@@ -804,7 +828,7 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
                   : { previousContinuationToken: result.value.previousContinuationToken }),
               }
             : undefined;
-      if (read === undefined) return refused;
+      if (read === undefined) return refusedBecause("columns", "read_not_completed");
       const projectedRows = visibleRows(read.rows, built.fieldIds);
       // The records a link filter names are titled in the same batched read as the page's links.
       const filterLinks = built.narrowing.filters.flatMap(({ fieldId, filter }) => {
@@ -880,7 +904,7 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
         read.rows,
         read.fieldBounds,
       );
-      if (projected === undefined) return refused;
+      if (projected === undefined) return refusedBecause("columns", "projection_unavailable");
       // The projection that draws the controls also decides whether this read's own search and
       // filters were the viewer's to use; a refused read returns none of its rows.
       const narrowingRefusal = recordsTableNarrowingRefusal(

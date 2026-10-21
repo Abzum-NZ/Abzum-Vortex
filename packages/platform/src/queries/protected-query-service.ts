@@ -29,7 +29,7 @@ import {
 } from "./protected-query-contracts";
 import { groupedMembersCommand } from "./protected-query-grouped";
 import { treeLevelCommand } from "./protected-query-tree";
-import { refusal } from "./protected-query-helpers";
+import { refuseInvalidCommand } from "./protected-query-helpers";
 import { summariseCommand, boardSummaryCommand } from "./protected-query-summary";
 import { runCommand } from "./protected-query-table";
 import type { ProtectedQueryServiceDependencies, QueryCache } from "./protected-query-types";
@@ -74,14 +74,11 @@ export const createProtectedQueryService = (dependencies: ProtectedQueryServiceD
     if (caller !== null && typeof caller === "object" && "kind" in caller)
       return { kind: "final", result: { kind: "unavailable" } };
     const command = protectedQueryCommandSchema.safeParse(commandCandidate);
-    if (!command.success) {
-      console.error("[protected-query] request refused", {
-        part: "command",
-        reason: "request_invalid",
-        issues: command.error.issues.map(({ code, path }) => ({ code, path })),
-      });
-      return { kind: "final", result: { kind: "available", value: refusal("request_invalid") } };
-    }
+    if (!command.success)
+      return {
+        kind: "final",
+        result: { kind: "available", value: refuseInvalidCommand(command.error) },
+      };
     if (selection.applicationRootId === undefined)
       return { kind: "final", result: { kind: "unavailable" } };
     const cache: QueryCache | undefined =
@@ -122,7 +119,8 @@ export const createProtectedQueryService = (dependencies: ProtectedQueryServiceD
       if (caller !== null && typeof caller === "object" && "kind" in caller)
         return { kind: "unavailable" };
       const command = protectedQueryBoardMembersCommandSchema.safeParse(commandCandidate);
-      if (!command.success) return { kind: "available", value: refusal("request_invalid") };
+      if (!command.success)
+        return { kind: "available", value: refuseInvalidCommand(command.error) };
       if (selection.applicationRootId === undefined) return { kind: "unavailable" };
       return requests.run(caller, selection, (transaction, scope) =>
         boardMembersCommand(transaction, scope, command.data, continuationKey),
@@ -142,7 +140,7 @@ export const createProtectedQueryService = (dependencies: ProtectedQueryServiceD
         return { kind: "unavailable" };
       const command = boardColumnPagesCommandSchema.safeParse(commandCandidate);
       if (!command.success)
-        return { kind: "available", value: { outcome: "refused", reasonCode: "request_invalid" } };
+        return { kind: "available", value: refuseInvalidCommand(command.error) };
       if (selection.applicationRootId === undefined) return { kind: "unavailable" };
       return requests.run(caller, selection, (transaction, scope) =>
         boardColumnPagesCommand(transaction, scope, command.data, continuationKey),
@@ -158,10 +156,7 @@ export const createProtectedQueryService = (dependencies: ProtectedQueryServiceD
       const personCaller: IdentitySession = caller;
       const command = protectedQueryGroupedMembersCommandSchema.safeParse(commandCandidate);
       if (!command.success)
-        return {
-          kind: "available",
-          value: { outcome: "refused", reasonCode: "request_invalid" },
-        };
+        return { kind: "available", value: refuseInvalidCommand(command.error) };
       if (selection.applicationRootId === undefined) return { kind: "unavailable" };
       return requests.run(personCaller, selection, (transaction, scope) =>
         groupedMembersCommand(transaction, scope, personCaller, command.data, continuationKey),
@@ -177,10 +172,7 @@ export const createProtectedQueryService = (dependencies: ProtectedQueryServiceD
       const personCaller: IdentitySession = caller;
       const command = protectedQueryTreeLevelCommandSchema.safeParse(commandCandidate);
       if (!command.success)
-        return {
-          kind: "available",
-          value: { outcome: "refused", reasonCode: "request_invalid" },
-        };
+        return { kind: "available", value: refuseInvalidCommand(command.error) };
       if (selection.applicationRootId === undefined) return { kind: "unavailable" };
       return requests.run(personCaller, selection, (transaction, scope) =>
         treeLevelCommand(transaction, scope, personCaller, command.data, continuationKey),
@@ -194,7 +186,8 @@ export const createProtectedQueryService = (dependencies: ProtectedQueryServiceD
       if (caller !== null && typeof caller === "object" && "kind" in caller)
         return { kind: "unavailable" };
       const command = protectedQuerySummaryCommandSchema.safeParse(commandCandidate);
-      if (!command.success) return { kind: "available", value: refusal("request_invalid") };
+      if (!command.success)
+        return { kind: "available", value: refuseInvalidCommand(command.error) };
       if (selection.applicationRootId === undefined) return { kind: "unavailable" };
       return requests.run(caller, selection, (transaction, scope) =>
         summariseCommand(transaction, scope, command.data),
@@ -208,7 +201,8 @@ export const createProtectedQueryService = (dependencies: ProtectedQueryServiceD
       if (caller !== null && typeof caller === "object" && "kind" in caller)
         return { kind: "unavailable" };
       const command = protectedQueryBoardSummaryCommandSchema.safeParse(commandCandidate);
-      if (!command.success) return { kind: "available", value: refusal("request_invalid") };
+      if (!command.success)
+        return { kind: "available", value: refuseInvalidCommand(command.error) };
       if (selection.applicationRootId === undefined) return { kind: "unavailable" };
       return requests.run(caller, selection, (transaction, scope) =>
         boardSummaryCommand(transaction, scope, command.data),

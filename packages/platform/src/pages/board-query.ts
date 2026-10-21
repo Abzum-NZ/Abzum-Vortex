@@ -274,6 +274,11 @@ const metricValue = (
   }
 };
 
+const withheldMetrics = (cause: string): undefined => {
+  console.error(`[board] metrics withheld where=projection cause=${cause}`);
+  return undefined;
+};
+
 const projectMetrics = (
   definitions: ModuleQuery["aggregates"],
   declared: RecordsTableBoardMode["totals"],
@@ -284,13 +289,13 @@ const projectMetrics = (
   const values: BoardMetric[] = [];
   for (const metric of declared) {
     const aggregate = aggregatesByAlias.get(metric.alias);
-    if (aggregate === undefined) return undefined;
+    if (aggregate === undefined) return withheldMetrics(`aggregate_not_declared ${metric.alias}`);
     const field =
       aggregate.fieldId === undefined
         ? undefined
         : fieldsById.get(lower(String(aggregate.fieldId)));
     const value = metricValue(aggregate, field, results[metric.alias]);
-    if (value === undefined) return undefined;
+    if (value === undefined) return withheldMetrics(`metric_value_invalid ${metric.alias}`);
     values.push({ key: metric.alias, label: metric.label, value });
   }
   return values;
