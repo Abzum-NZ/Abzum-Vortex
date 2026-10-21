@@ -44,7 +44,7 @@ import type {
 } from "./projected-data";
 import { useRowExpansion } from "./row-expansion";
 import { useRowLines, useRowWrites } from "./sub-rows";
-import { GroupedBody, useGroupedTable } from "./table-groups";
+import { useGroupedTable } from "./table-groups-state";
 import type { CardRenderers } from "./table-cards";
 import { columnWidth, useTablePresentation } from "./table-geometry";
 import { RecordsGrid, type GridRenderers } from "./table-grid";
@@ -52,6 +52,8 @@ import { useGridLayout, type GridColumn } from "./table-layout";
 import { TableLoadingState, useLoadingReveal } from "./table-loading";
 
 const RecordsCards = lazy(async () => ({ default: (await import("./table-cards")).RecordsCards }));
+// Group headers load only for a grouped grid; a plain grid ships none of their code.
+const GroupedBody = lazy(async () => ({ default: (await import("./table-groups")).GroupedBody }));
 
 /** Field identities compare without regard to case, as the Query engine keys them. */
 const sameFieldKey = (left: string, right: string): boolean =>
@@ -674,13 +676,15 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
     if (presentation === undefined) return loading;
     if (grouped !== undefined)
       return (
-        <GroupedBody
-          placementId={placementId}
-          accessibleName={accessibleName}
-          grouped={grouped}
-          loading={loading}
-          members={membersView}
-        />
+        <Suspense fallback={loading}>
+          <GroupedBody
+            placementId={placementId}
+            accessibleName={accessibleName}
+            grouped={grouped}
+            loading={loading}
+            members={membersView}
+          />
+        </Suspense>
       );
     return values.groups?.status === "too_many" ? (
       <div className="flex flex-col gap-2">

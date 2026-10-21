@@ -116,7 +116,8 @@ export async function readBoardColumns(
         [parsedId.data],
         [{ placementId: parsedId.data, request: columnRead.data }],
       );
-    } catch {
+    } catch (error) {
+      console.error("[page] board column read failed", error);
       result = { kind: "temporarily_unavailable" };
     }
     if (

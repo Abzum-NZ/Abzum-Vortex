@@ -185,7 +185,8 @@ export async function rereadApplicationPlacements(
         : undefined,
       includeContent,
     );
-  } catch {
+  } catch (error) {
+    console.error("[page] placement refresh failed", error);
     return {
       kind: "available",
       data: Object.fromEntries(

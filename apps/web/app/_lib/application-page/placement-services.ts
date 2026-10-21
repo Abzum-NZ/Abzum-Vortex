@@ -207,7 +207,10 @@ export const createPlacementReadServices = (
     (context: InstalledRuntimeContext): RecordLinkResolver =>
     async (links) => {
       const read = await recordLinks.readLabels(session, selection, context, links);
-      if (read.outcome !== "read") return undefined;
+      if (read.outcome !== "read") {
+        console.error(`[page] link titles unavailable: outcome=${read.outcome}`);
+        return undefined;
+      }
       return new Map(
         [...read.labels].map(([key, label]): [string, ProjectedRecordLink] => [
           key,

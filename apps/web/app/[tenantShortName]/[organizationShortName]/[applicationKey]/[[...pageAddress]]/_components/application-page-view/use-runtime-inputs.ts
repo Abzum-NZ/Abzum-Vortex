@@ -515,11 +515,18 @@ export function useRuntimeInputs({
                   [placementId]: held.filter((item) => item.recordId !== event.recordId),
                 };
               // Repeated select-all gestures must not replace a previously captured revision.
-              if (
-                held.some((item) => item.recordId === event.recordId) ||
-                held.length >= recordsSelectionMaximumIds
-              )
+              if (held.some((item) => item.recordId === event.recordId)) return current;
+              // Selecting a whole page fires one event per row against the same stale selection,
+              // so the cap is also decided here, where the rows already added are known.
+              if (held.length >= recordsSelectionMaximumIds) {
+                queueMicrotask(() =>
+                  setNotice({
+                    tone: "problem",
+                    text: `Select at most ${recordsSelectionMaximumIds} records. Clear some selections before adding another.`,
+                  }),
+                );
                 return current;
+              }
               return {
                 ...current,
                 [placementId]: [...held, { recordId: event.recordId, revision: event.revision }],

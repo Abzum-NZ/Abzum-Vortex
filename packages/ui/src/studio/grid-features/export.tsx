@@ -31,7 +31,14 @@ export function StudioExportEditor({
   const held = value.properties["max_rows"];
   const formats = value.properties["formats"];
   const selected = formats?.kind === "list" ? formats.items : [];
-  const [typed, setTyped] = useState(held?.kind === "number" ? String(held.value) : "");
+  const heldText = held?.kind === "number" ? String(held.value) : "";
+  const [typed, setTyped] = useState(heldText);
+  // Undo, redo or a reload that changes the stored limit shows it; typing keeps what was typed.
+  const [shownHeld, setShownHeld] = useState(heldText);
+  if (shownHeld !== heldText) {
+    setShownHeld(heldText);
+    if (Number(typed) !== Number(heldText)) setTyped(heldText);
+  }
   return (
     <div className="space-y-2 pb-3">
       <p className="text-sm text-muted-foreground">
