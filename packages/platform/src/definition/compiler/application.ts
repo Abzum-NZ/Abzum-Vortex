@@ -14,8 +14,7 @@ import {
 import { APPLICATION_PLATFORM_COMPATIBILITY_VERSION } from "../platform-compatibility";
 import {
   applicationRoleReviewBytes,
-  maximumApplicationRoleReviewBytes,
-  maximumAcceptedRoleHistoryBytes,
+  applicationRoleReviewRefusal,
 } from "../application-role-review-volume";
 import { compareCanonicalStrings, fingerprintCanonicalValue } from "../canonical-json-definition";
 import {
@@ -684,11 +683,15 @@ export function compileParsedApplicationRequest(
         output.kind === "module" ? [output.canonical.content] : [],
       ),
     );
-    if (
-      roleReview.releaseBytes > maximumApplicationRoleReviewBytes ||
-      roleReview.acceptedHistoryBytes > maximumAcceptedRoleHistoryBytes
-    )
-      fail("vortex.definition.application_role_review_volume", "invalid_value");
+    const roleReviewRefusal = applicationRoleReviewRefusal(roleReview);
+    if (roleReviewRefusal !== undefined)
+      throw new DefinitionCompilationError(
+        "vortex.definition.application_role_review_volume",
+        "invalid_value",
+        undefined,
+        undefined,
+        roleReviewRefusal,
+      );
     const artifact = {
       kind: "application" as const,
       definitionKey: source.key,
