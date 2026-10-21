@@ -17,6 +17,7 @@ import {
 } from "../queries/index";
 import {
   boardColumnReadRequestSchema,
+  boardFilterProblem,
   boardProblem,
   describeFailure,
   exactDecimalTextSchema,
@@ -27,6 +28,8 @@ import {
   sameId,
   type ProjectedItem,
   type RecordsTableBoardMode,
+  type RecordsTableFilterField,
+  type RecordsTableFilterValue,
   type IdentitySession,
   type JsonValue,
   type OrganizationSelectionCandidate,
@@ -299,6 +302,11 @@ export type BoardPlacementValues = Readonly<{
   /** The cards a column should not exceed; a column over it warns. */
   wipLimit?: number;
   quickAdd: boolean;
+  /** The fields people may filter the cards by and the filters this read applied; absent when off. */
+  filters?: Readonly<{
+    fields: readonly RecordsTableFilterField[];
+    applied: readonly RecordsTableFilterValue[];
+  }>;
   cardTitleFieldId: string;
   cardFieldIds: readonly string[];
   columns: readonly (BoardBucketValues & BoardStageValues)[];
@@ -351,6 +359,16 @@ export const projectBoardPlacement = async (
     /** The placement's Board feature, as the one Records table reader read it. */
     board: RecordsTableBoardMode;
     /**
+     * The placement's Column filters as the viewer's address narrowed them: the declared fields,
+     * the condition every column read and total applies and what the filter controls show.
+     */
+    filters?: Readonly<{
+      fieldIds: readonly string[];
+      filter: JsonValue | undefined;
+      fields: readonly RecordsTableFilterField[];
+      applied: readonly RecordsTableFilterValue[];
+    }>;
+    /**
      * The columns the browser shows (their first pages), or one column's continuation. Without it
      * the first read covers one leading stage; the browser measures any further visible columns.
      */
@@ -398,6 +416,14 @@ export const projectBoardPlacement = async (
     const problem = sourceFacts === undefined ? undefined : boardProblem(board, sourceFacts);
     if (recordType === undefined || sourceFacts === undefined || problem !== undefined)
       return unavailable("board_query_unsupported", problem?.reason);
+    // The one filter check publication and Studio run decides whether the declared filter fields
+    // can narrow this board's cards.
+    const filterProblem =
+      input.filters === undefined
+        ? undefined
+        : boardFilterProblem(input.filters.fieldIds, sourceFacts);
+    if (filterProblem !== undefined)
+      return unavailable("board_query_unsupported", filterProblem.reason);
     const choiceFieldId = board.columnField;
     const fields = recordType.fields;
     const pipeline = recordType.pipelines.find((candidate) =>
@@ -435,7 +461,8 @@ export const projectBoardPlacement = async (
       inputValues,
       requestedFieldIds,
       requestedSystemFieldKeys: [],
-      filterableFieldIds: [],
+      ...(input.filters?.filter === undefined ? {} : { filter: input.filters.filter }),
+      filterableFieldIds: input.filters?.fieldIds.map(lower) ?? [],
       choiceFieldId,
       pageSize: binding.query.pageSize,
       pageRequest,
@@ -527,6 +554,10 @@ export const projectBoardPlacement = async (
         choiceFieldRequired: choiceField.required,
         ...(board.wipLimit === undefined ? {} : { wipLimit: board.wipLimit }),
         quickAdd: board.quickAdd,
+        // Filters the viewer cannot read any field of are not offered at all.
+        ...(input.filters === undefined || input.filters.fields.length === 0
+          ? {}
+          : { filters: { fields: input.filters.fields, applied: input.filters.applied } }),
         cardTitleFieldId: board.cardTitleField,
         cardFieldIds: requestedFieldIds,
         columns,
