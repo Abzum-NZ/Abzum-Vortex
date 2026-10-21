@@ -32,7 +32,10 @@ import {
   sourcePageRootSlots,
   type SourcePageData,
 } from "../schema";
-import { FIELD_INPUT_CONTROL_RELEASES } from "./application-composition-catalogue";
+import {
+  FIELD_INPUT_BLOCK_RELEASE,
+  FIELD_INPUT_CONTROL_RELEASES,
+} from "./application-composition-catalogue";
 import { canonicalJson, fingerprintCanonicalValue } from "./canonical-json-definition";
 import {
   DefinitionCompilationError,
@@ -562,6 +565,47 @@ const applyFieldInputDerivation = (
   for (const property of target.properties)
     if (property.required && settings[property.key] === undefined)
       reject("vortex.definition.unsupported_field_type", "unsupported_choice");
+};
+
+/** The plain value of every setting a block release declares a default for. */
+export const plainReleaseDefaults = (release: PlatformBlockRelease): Record<string, unknown> =>
+  Object.fromEntries(
+    releaseSettingDeclarations(release)
+      .filter((declaration) => declaration.defaultValue !== undefined)
+      .map((declaration) => [
+        declaration.key,
+        plainSettingValue(declaration.defaultValue as BlockPropertyValueContract),
+      ]),
+  );
+
+/**
+ * The plain settings the compiler would put on the automatic field input of one module field: the
+ * release defaults, the field reference, and everything derived from the field's type. The runtime
+ * places an input for a field another Module contributed to a record type through this, so a
+ * contributed input is exactly the input a compiled placement of that field would be. A field no
+ * existing control draws exactly is refused with the compiler's `unsupported_field_type`.
+ */
+export const automaticFieldInputSettings = (
+  fieldId: string,
+  field: FieldInputSourceField,
+): Record<string, unknown> => {
+  const release = FIELD_INPUT_BLOCK_RELEASE;
+  const binding = findFieldInputBinding(release.properties);
+  if (binding === undefined) throw new Error("FIELD_INPUT_BINDING_UNAVAILABLE");
+  const settings: Record<string, BlockPropertyValueContract> = {};
+  for (const declaration of releaseSettingDeclarations(release))
+    if (declaration.defaultValue !== undefined)
+      settings[declaration.key] = declaration.defaultValue as BlockPropertyValueContract;
+  settings[binding.key] = {
+    kind: "field_reference",
+    fieldId,
+  } as BlockPropertyValueContract;
+  applyFieldInputDerivation(release, settings, {
+    fieldInput: () => field,
+  } as unknown as ApplicationCompositionResolution);
+  return Object.fromEntries(
+    Object.entries(settings).map(([key, value]) => [key, plainSettingValue(value)]),
+  );
 };
 
 const validateAccessibleName = (

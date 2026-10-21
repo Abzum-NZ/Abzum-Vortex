@@ -108,6 +108,14 @@ import {
 import { projectPageWebMcpTools } from "./webmcp-projection";
 import { platformPermissionSource } from "../platform-permission-source";
 import {
+  contributedFieldIdsOf,
+  omitUnreadableContributedFields,
+  pageHasContributions,
+  readContributedActionAvailability,
+  withContributedActionButtons,
+  withContributedPlacements,
+} from "./contributed-placements";
+import {
   applyFormFieldAccess,
   decideFormFieldAccess,
   flowCreatedRecordTypeIds,
@@ -345,13 +353,23 @@ const loadApplicationPageJoined = async (
   // Field policy and gated choices edit the projection. Pages without field inputs keep the
   // authoritative objects shared with the frame, so RSC can reference them instead of repeating
   // their settings. A field-bearing page gets its own copy before any policy edits.
-  const projectedPlacements = collectPlacements(projectedPage.value);
+  // The fields other installed Modules contributed to the page's record are placed on it before
+  // any field policy is decided; the result is already a private copy when something was placed.
+  const contributedPage = withContributedPlacements(projectedPage.value, context, pageDefinition);
+  const projectedPlacements = collectPlacements(contributedPage);
   const editsProjection =
+    contributedPage !== projectedPage.value ||
+    pageHasContributions(context, pageDefinition) ||
     pageDefinition.type === "form" ||
     projectedPlacements.some(
       (placement) => isEditFieldPlacement(placement) || fieldControl(placement) !== undefined,
     );
-  const page = editsProjection ? structuredClone(projectedPage.value) : projectedPage.value;
+  const page =
+    contributedPage !== projectedPage.value
+      ? contributedPage
+      : editsProjection
+        ? structuredClone(projectedPage.value)
+        : projectedPage.value;
   const bodyContentAvailable =
     pageDefinition.type === "guided_form"
       ? undefined
@@ -589,6 +607,28 @@ const loadApplicationPageJoined = async (
     if (addressedSubject.kind === "temporarily_unavailable")
       return { kind: "temporarily_unavailable" };
     if (addressedSubject.kind !== "read") return { kind: "unavailable" };
+    // A contributed field the viewer's permissions do not let them read is left out of the detail,
+    // not shown as restricted: the person has no relationship to a field they cannot know exists.
+    const contributedIds = contributedFieldIdsOf(context, pageDefinition);
+    if (contributedIds.size > 0) {
+      omitUnreadableContributedFields(
+        page,
+        contributedIds,
+        new Set(Object.keys(addressedSubject.row.values).map((key) => key.toLowerCase())),
+      );
+      allPlacements = collectPlacements(page);
+    }
+    // A contributed action the viewer may run on this record gets its button, decided by the
+    // same preview the named action path uses when the person runs it.
+    const availableActions = await readContributedActionAvailability(
+      session,
+      selection,
+      context,
+      pageDefinition,
+      subjectId.data,
+    );
+    if (withContributedActionButtons(page, context, pageDefinition, availableActions))
+      allPlacements = collectPlacements(page);
   }
 
   if (

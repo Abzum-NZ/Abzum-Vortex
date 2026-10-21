@@ -9,10 +9,15 @@ type InstalledNamedActionDescriptor = Readonly<{
   setsChoice: Readonly<{ fieldId: string; option: string }> | undefined;
 }>;
 
-/** Every installed named action of one release set, with the choice option it declares it sets. */
+/**
+ * Every installed named action of one release set, with the choice option it declares it sets,
+ * and the actions other installed Modules contributed to its record types, each bound to its
+ * owner record type and still owned by its contributor's exact release.
+ */
 export const installedNamedActionDescriptors = (
   application: InstalledRuntimeContext["releaseSet"]["application"],
   modules: InstalledRuntimeContext["releaseSet"]["modules"],
+  contributions: InstalledRuntimeContext["recordContributions"] = [],
 ): InstalledNamedActionDescriptor[] => {
   const descriptors: InstalledNamedActionDescriptor[] = [];
   const addActions = (
@@ -72,6 +77,25 @@ export const installedNamedActionDescriptors = (
       { ownerKind: "module", ownerId: module.rootId, releaseRevision: module.releaseRevision },
       module.content.actions,
     );
+  for (const entry of contributions)
+    for (const action of entry.actions) {
+      const reference = installedNamedActionReferenceSchema.safeParse({
+        ownerKind: "module",
+        ownerId: action.contributorModuleRootId,
+        releaseRevision: action.contributorReleaseRevision,
+        actionId: action.actionId,
+      });
+      if (!reference.success) continue;
+      descriptors.push({
+        key: action.key,
+        named: {
+          action: reference.data,
+          subjectRecordTypeId: entry.recordTypeId,
+          referenceInputTypes: {},
+        },
+        setsChoice: undefined,
+      });
+    }
   return descriptors;
 };
 
@@ -82,10 +106,15 @@ export const installedNamedActionDescriptors = (
 export const installedNamedActions = (
   application: InstalledRuntimeContext["releaseSet"]["application"],
   modules: InstalledRuntimeContext["releaseSet"]["modules"],
+  contributions: InstalledRuntimeContext["recordContributions"] = [],
 ): Map<string, FlowNamedAction> => {
   const namedActions = new Map<string, FlowNamedAction>();
   const ambiguousActionKeys = new Set<string>();
-  for (const { key, named } of installedNamedActionDescriptors(application, modules)) {
+  for (const { key, named } of installedNamedActionDescriptors(
+    application,
+    modules,
+    contributions,
+  )) {
     if (namedActions.has(key) || ambiguousActionKeys.has(key)) {
       namedActions.delete(key);
       ambiguousActionKeys.add(key);
