@@ -43,15 +43,15 @@ export function createDocumentThemeVariables(
 }
 
 /**
- * The variables the platform loader (`BrandLoader`) reads: its colour, the surface it sits on, its
- * cycle and the motion tokens of its timing. Everything else a theme sets (component styles
- * included) is the loaded page's, not the loader's.
+ * The theme variables the platform loader (`BrandLoader`) reads: its colour, the surface it sits on
+ * and its cycle. Its size and timing tokens come only from the platform stylesheet, never from a
+ * theme; everything else a theme sets (component styles included) is the loaded page's.
  */
-const isLoaderVariable = (name: string): boolean =>
-  name === "--primary" ||
-  name === "--background" ||
-  name === "--vortex-loader-cycle" ||
-  name.startsWith("--vortex-motion-");
+const LOADER_VARIABLES: ReadonlySet<string> = new Set([
+  "--primary",
+  "--background",
+  "--vortex-loader-cycle",
+]);
 
 /**
  * The variables an application's theme gives the loader drawn before its frame is composed: the
@@ -63,7 +63,7 @@ export function createLoaderThemeVariables(
 ): CSSProperties {
   return Object.fromEntries(
     Object.entries(createDocumentThemeVariables(theme, platformThemeTokens)).filter(([name]) =>
-      isLoaderVariable(name),
+      LOADER_VARIABLES.has(name),
     ),
   ) as CSSProperties;
 }
