@@ -713,19 +713,19 @@ export function useStudioCanvasTab({
         ? studioSemanticSelectionKey(selectedOwner)
         : undefined;
   const breadcrumbItem =
-    canvasPage !== undefined
+    canvasPage !== undefined && ownerShellKey === undefined
       ? pageLabel(canvasPage.id, canvasPage.name)
       : ownerShellKey === undefined
         ? undefined
         : labels.get(ownerShellKey);
   const outlineOwnerKey =
-    canvasPage !== undefined
+    canvasPage !== undefined && ownerShellKey === undefined
       ? studioSemanticSelectionKey({ kind: "page", pageAlias: canvasPage.id })
       : ownerShellKey;
   const selectedName = selected === null ? undefined : labels.get(selectionKey);
   const usedIn = studioUseTargetOf(selected);
   const title =
-    canvasPage !== undefined
+    canvasPage !== undefined && ownerShellKey === undefined
       ? pageLabel(canvasPage.id, canvasPage.name)
       : inspector.status === "resolved"
         ? (selectedName ?? inspector.descriptor.label)
