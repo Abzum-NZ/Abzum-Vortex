@@ -21,13 +21,15 @@ import type { PlacementModule } from "../placement-read/shared";
 /**
  * Pasted link titles of one batch, resolved to the records they name. Every link cell the paste
  * carries as a title is resolved here, on the server, per person and per field: ONE protected
- * listing read of the field's target record type per link field (the Query engine admits only the
- * records the person may read and applies the field read policy, so a title they may not read never
- * matches), with a title matching exactly one record becoming that record's reference and any other
- * count a problem naming the cell. A dependent link (Region on Country) matches only among records
- * whose declared filter link points at the row's effective parent, the one pasted in the same row
- * or else the stored one; the save's own cascade check stays the authority. Nothing is guessed:
- * the match is exact on the trimmed title as stored.
+ * listing read of the field's target record type for all of the field's distinct titles (the Query
+ * engine admits only the records the person may read and applies the field read policy, so a title
+ * they may not read never matches), with a title matching exactly one record becoming that record's
+ * reference and any other count a problem naming the cell. A dependent link (Region on Country) is
+ * read narrowed to the row's effective parent, the one pasted in the same row or else the stored
+ * one, exactly as the link picker narrows: one read per distinct parent of the paste (bounded), and
+ * one unnarrowed read only to tell a title under another parent from a title nobody may read. The
+ * save's own cascade check stays the authority. Nothing is guessed: the match is exact on the
+ * trimmed title as stored.
  */
 
 /** One pasted title: where it goes and what it says. */
@@ -63,8 +65,12 @@ export const linkTitleCellKey = (recordId: string, field: string): string =>
   `${recordId.toLowerCase()}|${field.toLowerCase()}`;
 
 /** A listing page holds up to 200 records; a title read follows at most this many pages. */
-const pagesPerField = 5;
+const pagesPerRead = 5;
 const pageSize = 200;
+/** A dependent link is read once per distinct parent in the paste, up to this many parents. */
+const parentsPerField = 20;
+
+type Reference = Readonly<{ recordTypeId: string; recordId: string }>;
 
 export type LinkTitleDependencies = Readonly<{
   queries: ReturnType<typeof createProtectedQueryService>;
@@ -192,130 +198,183 @@ export const resolveLinkTitles = async (
       continue;
     }
 
-    // One set-based read: every distinct title of the batch for this field. A number title only
-    // ever equals a number, so other text is left out of the read and matches nothing.
+    // A number title only ever equals a number, so other text is left out of a read and matches
+    // nothing.
     const numeric = titleField.type === "whole_number" || titleField.type === "decimal_number";
-    const titles = [...new Set(fieldCells.map((cell) => cell.title))].filter(
-      (title) => !numeric || Number.isFinite(Number(title)),
-    );
-    const byTitle = new Map<
-      string,
-      Array<Readonly<{ recordId: string; parentRecordId: string | undefined }>>
-    >();
-    let tooMany = false;
-    let token: string | undefined;
-    for (let page = 0; titles.length > 0 && page < pagesPerField; page += 1) {
-      const command: ProtectedQueryCommand = {
-        moduleRootId: moduleRootIdSchema.parse(String(targetModule.rootId)),
-        queryId: queryIdSchema.parse(String(targetType.recordTypeId)),
-        inputValues: {},
-        requestedFieldIds: [
-          titleFieldId,
-          ...(filterFieldId === undefined ? [] : [filterFieldId]),
-        ].map((id) => fieldIdSchema.parse(id)),
-        requestedSystemFieldKeys: [],
-        sort: [],
-        sortableFieldIds: [],
-        filterableFieldIds: [fieldIdSchema.parse(titleFieldId)],
-        searchableFieldIds: [],
-        filter: {
-          kind: "comparison",
-          operator: "in",
-          left: { source: "field", fieldId: fieldIdSchema.parse(titleFieldId) },
-          right: { source: "value", value: titles },
-        },
-        pageSize,
-        ...(token === undefined ? {} : { continuationToken: token }),
-      } as ProtectedQueryCommand;
-      const result = await dependencies.queries.run(session, selection, command);
-      if (result.kind !== "available" || result.value.outcome !== "completed") {
-        console.error(
-          `[records-table] batch edit refused cause=link_title_read field=${field} outcome=${
-            result.kind === "available" ? result.value.outcome : result.kind
-          }`,
-        );
-        return { references, problems, unavailable: true };
+    const titleIn = (titles: readonly string[]) =>
+      ({
+        kind: "comparison",
+        operator: "in",
+        left: { source: "field", fieldId: fieldIdSchema.parse(titleFieldId) },
+        right: { source: "value", value: [...titles] },
+      }) as const;
+    /**
+     * One set-based read of the given titles, narrowed for a dependent link to the records whose
+     * filter link points at one parent (the link picker's own narrowing): title -> record ids.
+     */
+    const read = async (
+      titles: readonly string[],
+      parent: Reference | undefined,
+    ): Promise<Map<string, string[]> | "too_many" | "unavailable"> => {
+      const byTitle = new Map<string, string[]>();
+      const wanted = titles.filter((title) => !numeric || Number.isFinite(Number(title)));
+      const narrowed = parent !== undefined && filterFieldId !== undefined;
+      let token: string | undefined;
+      for (let page = 0; wanted.length > 0; page += 1) {
+        if (page === pagesPerRead) return "too_many";
+        const command = {
+          moduleRootId: moduleRootIdSchema.parse(String(targetModule.rootId)),
+          queryId: queryIdSchema.parse(String(targetType.recordTypeId)),
+          inputValues: {},
+          requestedFieldIds: [fieldIdSchema.parse(titleFieldId)],
+          requestedSystemFieldKeys: [],
+          sort: [],
+          sortableFieldIds: [],
+          filterableFieldIds: [titleFieldId, ...(narrowed ? [filterFieldId] : [])].map((id) =>
+            fieldIdSchema.parse(id),
+          ),
+          searchableFieldIds: [],
+          filter: !narrowed
+            ? titleIn(wanted)
+            : {
+                kind: "all",
+                conditions: [
+                  titleIn(wanted),
+                  {
+                    kind: "comparison",
+                    operator: "in",
+                    left: { source: "field", fieldId: fieldIdSchema.parse(filterFieldId) },
+                    right: {
+                      source: "value",
+                      value: [
+                        {
+                          recordTypeId: parent.recordTypeId.toLowerCase(),
+                          recordId: parent.recordId,
+                        },
+                      ],
+                    },
+                  },
+                ],
+              },
+          pageSize,
+          ...(token === undefined ? {} : { continuationToken: token }),
+        } as ProtectedQueryCommand;
+        const result = await dependencies.queries.run(session, selection, command);
+        if (result.kind !== "available" || result.value.outcome !== "completed") {
+          console.error(
+            `[records-table] batch edit refused cause=link_title_read field=${field} outcome=${
+              result.kind !== "available"
+                ? result.kind
+                : result.value.outcome === "refused"
+                  ? `refused:${result.value.reasonCode}`
+                  : result.value.outcome
+            }`,
+          );
+          return "unavailable";
+        }
+        for (const row of result.value.rows) {
+          const title = titleText(valueOf(row.values, titleFieldId) as JsonValue | undefined);
+          byTitle.set(title, [...(byTitle.get(title) ?? []), row.recordId]);
+        }
+        token = result.value.nextContinuationToken;
+        if (token === undefined) break;
       }
-      for (const row of result.value.rows) {
-        const title = titleText(valueOf(row.values, titleFieldId) as JsonValue | undefined);
-        const parent =
-          filterFieldId === undefined
+      return byTitle;
+    };
+    const tooMany = (cell: PastedTitleCell): void =>
+      problemOf(
+        cell,
+        "link_title_too_many",
+        `There are too many ${targetType.pluralLabel} to match these titles here. Pick the ${labelOf(field)} in the cells instead.`,
+      );
+
+    // Every cell's parent for a dependent link: the one pasted in the same row (resolved above) or
+    // else the stored one; a cell whose parent is missing is named and not read.
+    const parentField = dependency === undefined ? undefined : String(dependency.parentFieldId);
+    const pending: Array<Readonly<{ cell: PastedTitleCell; parent: Reference | undefined }>> = [];
+    for (const cell of fieldCells) {
+      if (parentField === undefined) {
+        pending.push({ cell, parent: undefined });
+        continue;
+      }
+      const row = rows.get(cell.recordId.toLowerCase());
+      const submitted = row === undefined ? undefined : valueOf(row.submitted, parentField);
+      const parent =
+        submitted === undefined
+          ? referenceOf(row === undefined ? undefined : valueOf(row.stored, parentField))
+          : submitted === null
             ? undefined
-            : referenceOf(valueOf(row.values, filterFieldId))?.recordId;
-        const list = byTitle.get(title) ?? [];
-        list.push({ recordId: row.recordId, parentRecordId: parent });
-        byTitle.set(title, list);
-      }
-      token = result.value.nextContinuationToken;
-      if (token === undefined) break;
-      if (page === pagesPerField - 1) tooMany = true;
-    }
-    if (tooMany) {
-      for (const cell of fieldCells)
+            : (references.get(linkTitleCellKey(cell.recordId, parentField)) ??
+              referenceOf(submitted));
+      // A pasted parent that did not resolve is already named; its child waits for it.
+      if (submitted !== undefined && submitted !== null && parent === undefined) continue;
+      if (parent === undefined)
         problemOf(
           cell,
-          "link_title_too_many",
-          `There are too many ${targetType.pluralLabel} to match these titles here. Pick the ${labelOf(field)} in the cells instead.`,
+          "link_title_parent",
+          `Choose ${labelOf(parentField)} before ${labelOf(field)}.`,
         );
+      else pending.push({ cell, parent });
+    }
+    if (pending.length === 0) continue;
+
+    // One read per field; a dependent link reads once per distinct parent (bounded) plus once
+    // unnarrowed, which tells a title under another parent from a title nobody may read.
+    const groups = new Map<string, { parent: Reference | undefined; cells: PastedTitleCell[] }>();
+    for (const { cell, parent } of pending) {
+      const key = parent === undefined ? "" : parent.recordId.toLowerCase();
+      const group = groups.get(key) ?? { parent, cells: [] };
+      group.cells.push(cell);
+      groups.set(key, group);
+    }
+    if (groups.size > parentsPerField) {
+      for (const { cell } of pending) tooMany(cell);
       continue;
     }
-
-    for (const cell of fieldCells) {
-      let candidates = byTitle.get(cell.title) ?? [];
-      if (dependency !== undefined) {
-        const row = rows.get(cell.recordId.toLowerCase());
-        const parentField = String(dependency.parentFieldId);
-        const submitted = row === undefined ? undefined : valueOf(row.submitted, parentField);
-        const parent =
-          submitted === undefined
-            ? referenceOf(row === undefined ? undefined : valueOf(row.stored, parentField))
-            : submitted === null
-              ? undefined
-              : (references.get(linkTitleCellKey(cell.recordId, parentField)) ??
-                referenceOf(submitted));
-        if (submitted !== undefined && submitted !== null && parent === undefined) continue;
-        if (parent === undefined) {
-          problemOf(
-            cell,
-            "link_title_parent",
-            `Choose ${labelOf(parentField)} before ${labelOf(field)}.`,
-          );
+    const unmatched: PastedTitleCell[] = [];
+    for (const { parent, cells: groupCells } of groups.values()) {
+      const byTitle = await read([...new Set(groupCells.map((cell) => cell.title))], parent);
+      if (byTitle === "unavailable") return { references, problems, unavailable: true };
+      for (const cell of groupCells) {
+        if (byTitle === "too_many") {
+          tooMany(cell);
           continue;
         }
-        const readable = candidates.length;
-        candidates = candidates.filter(
-          (candidate) =>
-            candidate.parentRecordId !== undefined &&
-            sameId(candidate.parentRecordId, parent.recordId),
-        );
-        // The title names records the person may read, none of them under this row's parent.
-        if (readable > 0 && candidates.length === 0) {
+        const candidates = byTitle.get(cell.title) ?? [];
+        if (candidates.length === 1)
+          references.set(linkTitleCellKey(cell.recordId, field), {
+            recordTypeId: String(targetType.recordTypeId),
+            recordId: candidates[0]!,
+          });
+        else if (candidates.length > 1)
           problemOf(
             cell,
-            "link_title_parent",
-            `"${cell.title}" is not one of the ${targetType.pluralLabel} of this ${labelOf(parentField)}.`,
+            "link_title_several",
+            `Several ${targetType.pluralLabel} are called "${cell.title}". Pick one in the cell.`,
           );
-          continue;
-        }
+        else unmatched.push(cell);
       }
-      if (candidates.length === 1)
-        references.set(linkTitleCellKey(cell.recordId, field), {
-          recordTypeId: String(targetType.recordTypeId),
-          recordId: candidates[0]!.recordId,
-        });
-      else if (candidates.length === 0)
+    }
+    if (unmatched.length === 0) continue;
+    const anywhere =
+      parentField === undefined
+        ? undefined
+        : await read([...new Set(unmatched.map((cell) => cell.title))], undefined);
+    if (anywhere === "unavailable") return { references, problems, unavailable: true };
+    for (const cell of unmatched)
+      if (parentField !== undefined && anywhere instanceof Map && anywhere.has(cell.title))
+        // The title names records the person may read, none of them under this row's parent.
+        problemOf(
+          cell,
+          "link_title_parent",
+          `"${cell.title}" is not one of the ${targetType.pluralLabel} of this ${labelOf(parentField)}.`,
+        );
+      else
         problemOf(
           cell,
           "link_title_none",
           `No ${targetLabel} called "${cell.title}" that you can see.`,
         );
-      else
-        problemOf(
-          cell,
-          "link_title_several",
-          `Several ${targetType.pluralLabel} are called "${cell.title}". Pick one in the cell.`,
-        );
-    }
   }
   return { references, problems, unavailable: false };
 };

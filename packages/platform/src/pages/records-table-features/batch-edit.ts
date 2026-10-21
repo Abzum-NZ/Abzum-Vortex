@@ -248,7 +248,8 @@ export const createRecordsTableBatchEditService = (
         }
       }
 
-      // Every pasted title of the batch is resolved in one read per link field.
+      // Every pasted title of the batch is resolved in one read per link field (per parent for a
+      // dependent link).
       const resolved = await resolveLinkTitles(
         {
           queries,
