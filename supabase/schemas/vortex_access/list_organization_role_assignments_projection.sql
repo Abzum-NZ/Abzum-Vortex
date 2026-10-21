@@ -124,7 +124,7 @@ begin
       "state": {"sql": "assignment.state::text", "database": "text", "filter": true},
       "temporal_state": {"sql": "(case when assignment.state = 'revoked' then 'revoked' when assignment.starts_at > $7 then 'scheduled' when assignment.expires_at is not null and assignment.expires_at <= $7 then 'expired' else 'active' end)", "database": "text", "filter": true},
       "role_key": {"sql": "role_revision.role_key", "database": "text", "search": true},
-      "role_label": {"sql": "role_revision.label", "database": "text", "search": true}
+      "role_label": {"sql": "role_revision.label", "database": "text", "filter": true, "search": true}
     }$declared$::jsonb,
     8
   );

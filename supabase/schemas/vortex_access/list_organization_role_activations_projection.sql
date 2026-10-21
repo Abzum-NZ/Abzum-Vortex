@@ -126,7 +126,7 @@ begin
       "eligibility_source_kind": {"sql": "activation.eligibility_source_kind::text", "database": "text", "filter": true},
       "state": {"sql": "activation.state::text", "database": "text", "filter": true},
       "temporal_state": {"sql": "(case when activation.state = 'revoked' then 'revoked' when activation.expires_at <= $7 then 'expired' else 'active' end)", "database": "text", "filter": true},
-      "account_display_name": {"sql": "account.display_name", "database": "text", "search": true},
+      "account_display_name": {"sql": "account.display_name", "database": "text", "filter": true, "search": true},
       "role_key": {"sql": "role_revision.role_key", "database": "text", "search": true},
       "role_label": {"sql": "role_revision.label", "database": "text", "search": true}
     }$declared$::jsonb,

@@ -78,7 +78,7 @@ begin
     $declared${
       "state": {"sql": "organization_group.state", "database": "text", "filter": true},
       "key": {"sql": "organization_group.group_key", "database": "text", "search": true},
-      "label": {"sql": "organization_group.label", "database": "text", "search": true}
+      "label": {"sql": "organization_group.label", "database": "text", "filter": true, "search": true}
     }$declared$::jsonb,
     6
   );
