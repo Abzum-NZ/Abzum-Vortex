@@ -231,6 +231,7 @@ export function actionInput(
             ? { maximumLength: validation.maximum_length }
             : {}),
           ...(validation.pattern !== undefined ? { pattern: validation.pattern } : {}),
+          ...(validation.choices !== undefined ? { choices: validation.choices } : {}),
         }
       : input.type === "formatted_text"
         ? {

@@ -41,6 +41,7 @@ import {
   type RelationshipTotalParentMutation,
 } from "./relationship-total-save";
 import { calculateAndFinalize, operationClock } from "./field-candidate";
+import { firstLinkDependencyRefusal } from "./link-dependencies";
 import {
   parentCycleRefusal,
   uniqueValueRefusal,
@@ -934,6 +935,40 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
                 : { ...values.setValues };
             if ("clearFieldIds" in values)
               for (const fieldId of values.clearFieldIds) finalValues[fieldId] = null;
+            if (prepared.recordType.systemProjection === undefined) {
+              const dependency = await firstLinkDependencyRefusal(
+                transaction,
+                prepared.recordType,
+                prepared.existingValues,
+                Object.keys(command.data.submittedValues),
+                finalValues,
+              );
+              if (dependency !== undefined) {
+                // The cause stays in the log; the person is told only which field to choose again.
+                console.error(
+                  `[record] save refused LINK_DEPENDENCY_${dependency.reason.toUpperCase()}: child=${dependency.childFieldId} parent=${dependency.parentFieldId}`,
+                );
+                if (!prepared.readableFieldIds.has(dependency.childFieldId.toLowerCase()))
+                  return safeRefusal(prepared.correlationId, "operation_refused");
+                const labelOf = (fieldId: string): string =>
+                  prepared.recordType.fields.find(
+                    (candidate) =>
+                      String(candidate.fieldId).toLowerCase() === fieldId.toLowerCase(),
+                  )?.label ?? "the field";
+                return saveRecordResultSchema.parse({
+                  contractVersion: "2.0.0",
+                  outcome: "correction_required",
+                  correlationId: prepared.correlationId,
+                  corrections: [
+                    {
+                      code: "field_refused" as const,
+                      fieldId: dependency.childFieldId,
+                      message: `Choose ${labelOf(dependency.childFieldId)} again: it does not belong to the chosen ${labelOf(dependency.parentFieldId)}.`,
+                    },
+                  ],
+                });
+              }
+            }
             if (prepared.recordType.systemProjection !== undefined) {
               // The shipped text input submits an empty string for an unset optional default.
               // Store that as the nullable application reference the settings writer accepts.
