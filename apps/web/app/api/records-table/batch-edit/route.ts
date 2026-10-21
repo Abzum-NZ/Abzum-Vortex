@@ -49,7 +49,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const result = await batchEditService().run(resolved.session, resolved.address, resolved.body);
     return privateResponse(
       result,
-      result.kind === "refused" ? 409 : result.kind === "unavailable" ? 503 : 200,
+      result.kind === "cells_refused"
+        ? 409
+        : result.kind === "refused"
+          ? 403
+          : result.kind === "unavailable"
+            ? 503
+            : 200,
     );
   } catch (error) {
     logRefusal(route, "records table batch edit", "batch_edit_failed", error);
