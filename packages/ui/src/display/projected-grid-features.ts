@@ -6,12 +6,14 @@ import {
   type RecordsTableInlineEditor,
   type RecordsTableBulkActionContract,
   type RecordsTableBulkRefusalReason,
+  type RecordsTableExportFormat,
   type RecordsTableFeatureProjection,
   type RecordsTableFilterField,
   type RecordsTableFilterValue,
   readRecordsTableFieldFilter,
   recordsTableBulkActionRecordLimit,
   recordsTableBulkRefusalReasons,
+  recordsSelectionMaximumIds,
   recordsTableFilterKinds,
   RECORDS_TABLE_EXPORT_MAXIMUM_ROWS,
   recordsTableExportFormats,
@@ -34,6 +36,52 @@ import {
   requirePositiveInteger,
   type TableNarrowing,
 } from "./projected-data";
+
+/** The table's gestures over its explicit selection or sealed matching scope. */
+export type TableSelectionEvent =
+  | Readonly<{
+      event: "selection_changed";
+      recordId: string;
+      /** The drawn row's revision, held until it is deselected. */
+      revision: number;
+      selected: boolean;
+    }>
+  /** Runs a declared bulk named action over the selection the page holds for the table. */
+  | Readonly<{ event: "bulk_action"; action: string }>
+  /** Widens the selection to every matching record, or clears it (and a finished run's summary). */
+  | Readonly<{ event: "selection_scope_changed"; scope: "matching" | "cleared" }>
+  /** Downloads the rows ticked on the page, the records of the current view, or every matching record. */
+  | Readonly<{
+      event: "export_requested";
+      scope: "selected" | "view" | "matching";
+      format: RecordsTableExportFormat;
+    }>
+  /** Stops the export in progress; no file is saved. */
+  | Readonly<{ event: "export_cancelled" }>;
+
+export const parseSelectedRecordIds = (
+  value: unknown,
+  location: DefinitionRenderErrorLocation,
+): readonly string[] | undefined => {
+  if (value === undefined) return undefined;
+  const items = requireArray(value, "Selected record identities must be an array", location);
+  if (items.length > recordsSelectionMaximumIds)
+    fail(`Select at most ${recordsSelectionMaximumIds} records`, location);
+  // Held selections can name a previously drawn row beneath a closed branch.
+  const seen = new Set<string>();
+  return Object.freeze(
+    items.map((item) => {
+      const recordId = requireNonEmptyString(
+        item,
+        "A selected record identity must be a non-empty string",
+        location,
+      );
+      if (seen.has(recordId)) fail(`Duplicate selected record identity '${recordId}'`, location);
+      seen.add(recordId);
+      return recordId;
+    }),
+  );
+};
 
 /** The search and filters a table page was read with: a bounded search and one value per field. */
 export const parseTableNarrowing = (
