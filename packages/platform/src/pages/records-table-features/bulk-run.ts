@@ -342,10 +342,6 @@ export const createRecordsTableBulkService = (dependencies: RecordsTableBulkDepe
           refuse("selection_larger_than_action_limit");
           return report({ kind: "refused" });
         }
-        if (request.selection.items.length > placement.contract.pageSize) {
-          refuse("selection_larger_than_page");
-          return report({ kind: "refused" });
-        }
         const unique = new Set(request.selection.items.map((item) => item.recordId.toLowerCase()));
         if (unique.size !== request.selection.items.length) {
           refuse("selection_duplicated");
