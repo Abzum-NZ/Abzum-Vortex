@@ -660,7 +660,7 @@ export function StudioQueryEditor({
 
       <Section
         title="Grouping and totals"
-        hint="Groups and totals make the query a summary: it then feeds Summary values, Charts and Boards. A Records table lists a query without them."
+        hint="Groups and totals make the query a summary: it then feeds Summary values, Charts, Boards and Grouped tables. A plain Records table lists a query without them."
       >
         <ol className="list-none space-y-1" aria-label="Groups">
           {query.group_by.map((key, index) => (

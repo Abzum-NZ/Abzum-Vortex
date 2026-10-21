@@ -16,6 +16,7 @@ import {
   calendarBlockSourceIsSupported,
   moduleQueryDefinitionSchema,
   checkRecordsTableFeatures,
+  recordsTableGroupingRequired,
   recordsTableEditableFieldTypes,
   type BlockPropertySchemaContract,
   type RecordsTableQueryFacts,
@@ -113,8 +114,9 @@ export function applicationPageRules(scope: ApplicationScope): void {
 
   /**
    * What a Records table's bound query offers its grid features, read from the compiled release:
-   * each selected field (or grouping field of a grouped query) with its type and flags, the record
-   * type's relationships and the named actions whose subject it is.
+   * each selected field (of a grouped query, each selected field it groups by: its groups are
+   * read over the selected fields) with its type and flags, the record type's relationships and
+   * the named actions whose subject it is.
    */
   const recordsTableQueryFacts = (
     bound: JsonObject,
@@ -125,10 +127,11 @@ export function applicationPageRules(scope: ApplicationScope): void {
     const recordTypeId = String(object(bound.recordType).recordTypeId);
     const record = records.get(recordTypeId);
     const grouped = array(bound.groupByFieldIds).length > 0 || array(bound.aggregates).length > 0;
+    const groupedBy = new Set(array(bound.groupByFieldIds).map((id) => String(id).toLowerCase()));
     const offered = new Set(
-      array(grouped ? bound.groupByFieldIds : bound.selectedFieldIds).map((id) =>
-        String(id).toLowerCase(),
-      ),
+      array(bound.selectedFieldIds)
+        .map((id) => String(id).toLowerCase())
+        .filter((id) => !grouped || groupedBy.has(id)),
     );
     return {
       signedIn,
@@ -193,6 +196,8 @@ export function applicationPageRules(scope: ApplicationScope): void {
           acceptsSelection: array(action.inputs).every((input) => input.required !== true),
         })),
       grouped,
+      queryLabel: String(bound.label ?? bound.key ?? ""),
+      groupBy: array(bound.groupByFieldIds).map((id) => String(id)),
       exportable:
         Array.isArray(record?.standardActions) &&
         record.standardActions.some((action) => action === "export"),
@@ -585,18 +590,25 @@ export function applicationPageRules(scope: ApplicationScope): void {
           );
         // Every enabled grid feature must fit the bound query; publication reports the feature's
         // own business sentence, the one Studio shows beside its switch.
+        const tableFacts = recordsTableQueryFacts(
+          bound,
+          bindingFacts,
+          page.type !== "public",
+          table.columns.map((column) => column.field),
+        );
+        // A table that reads a grouped query is refused while Group by is off, since the query
+        // has no flat rows to show.
+        const groupingRequired = recordsTableGroupingRequired(table.features, tableFacts);
         for (const feature of checkRecordsTableFeatures(
           table.features,
-          recordsTableQueryFacts(
-            bound,
-            bindingFacts,
-            page.type !== "public",
-            table.columns.map((column) => column.field),
-          ),
+          tableFacts,
           table.presentation,
           table.pageSize,
         ))
-          if (feature.enabled && feature.check.kind === "not_possible")
+          if (
+            (feature.enabled || (feature.key === "grouping" && groupingRequired)) &&
+            feature.check.kind === "not_possible"
+          )
             failures.push(
               failure(
                 output,
