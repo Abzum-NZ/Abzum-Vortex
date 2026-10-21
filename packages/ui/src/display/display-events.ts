@@ -127,7 +127,7 @@ export type DisplaySemanticEvent =
   | Readonly<{
       event: "pivot_view_changed";
       /** The view to keep in the address: absent shows the ordinary grid. */
-      view: Readonly<{ cursor?: string }> | undefined;
+      view: Readonly<{ cursor?: string | undefined }> | undefined;
     }>
   | Readonly<{
       /** Groups the table by its authored field, or (null) shows the records ungrouped. */

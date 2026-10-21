@@ -1,16 +1,19 @@
 import {
   builderKeySchema,
   fieldIdSchema,
+  conditionalFormatStylesSchema,
   moduleRootIdSchema,
   pipelineStageToneSchema,
   queryIdSchema,
   recordIdSchema,
+  recordsTableFilterFieldsSchema,
   stableDefinitionReleaseVersionSchema,
 } from "@vortex/platform/schema";
 import type { DefinitionRenderErrorLocation } from "../definition-error";
 import {
   fail,
   parseFields,
+  parseProjectedPart,
   parseRowCapabilities,
   parseSummaryMetrics,
   requireArray,
@@ -24,8 +27,7 @@ import {
   type BoardPayload,
   type DisplaySummaryMetric,
 } from "./projected-data";
-import { parseFilterField, parseTableNarrowing } from "./projected-grid-features";
-import { parseFormatStyles } from "./projected-format";
+import { parseTableNarrowing } from "./projected-grid-features";
 
 /**
  * The strict bounded payload a query-bound board renders: its protected columns in pipeline stage
@@ -236,16 +238,12 @@ export const parseBoardPayload = (
   if (record.filters !== undefined) {
     const held = requireRecord(record.filters, "A board's filters must be an object", location);
     requireExactKeys(held, ["fields", "applied"], location);
-    const fields = requireArray(
+    const fields = parseProjectedPart(
+      recordsTableFilterFieldsSchema,
       held.fields,
-      "A board's filter fields must be an array",
+      "A board's filter fields are invalid",
       location,
-    ).map((field) => parseFilterField(field, location));
-    if (
-      fields.length === 0 ||
-      new Set(fields.map((field) => field.fieldId.toLowerCase())).size !== fields.length
-    )
-      fail("A board offers each filter field once", location);
+    );
     const applied = parseTableNarrowing({ search: null, filters: held.applied }, location).filters;
     if (
       applied.some(
@@ -264,7 +262,14 @@ export const parseBoardPayload = (
       location,
     );
     requireExactKeys(held, ["styles"], location);
-    formatting = Object.freeze({ styles: parseFormatStyles(held.styles, location) });
+    formatting = Object.freeze({
+      styles: parseProjectedPart(
+        conditionalFormatStylesSchema,
+        held.styles,
+        "A board's format styles are invalid",
+        location,
+      ),
+    });
   }
   if (typeof record.choiceFieldRequired !== "boolean")
     fail("A board requires its stage field's required setting", location);

@@ -1,7 +1,7 @@
 import "server-only";
 
 import {
-  readRecordsTableContract,
+  recordsTableContractOrLog,
   recordIdSchema,
   sameId,
   type PageDefinition,
@@ -104,7 +104,8 @@ export const resolveProjectedTablePlacement = (
     settings: placementSettings(visited.props),
   };
   if (!isTablePlacement(placement)) return { kind: "refused", reason: "placement_not_a_table" };
-  const contract = readRecordsTableContract(placementSettingsOf(placement));
+  // An unreadable contract is logged with the setting's path by the reader itself.
+  const contract = recordsTableContractOrLog(placementSettingsOf(placement), "table placement");
   if (contract === undefined) return { kind: "refused", reason: "table_contract_invalid" };
   const subjectRecordType = pageSubjectType(input.pageDefinition);
   const subjectRecordId = recordIdSchema.safeParse(input.subjectId);

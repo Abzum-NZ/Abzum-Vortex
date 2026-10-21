@@ -11,6 +11,7 @@ import {
   queryIdSchema,
   recordIdSchema,
   revisionSchema,
+  sortKeySchema,
   stableDefinitionReleaseVersionSchema,
   moduleFieldValueSchemas,
   recordLinkValueSchema,
@@ -24,16 +25,6 @@ import {
 /** A field identifier list is unique without regard to case, as the engine keys fields. */
 const uniqueFieldIds = (fieldIds: readonly string[]): boolean =>
   new Set(fieldIds.map((fieldId) => fieldId.toLowerCase())).size === fieldIds.length;
-
-/**
- * One viewer-chosen sort over a field the bound list component declares sortable. The engine
- * accepts it only when the installed record type also declares the field sortable and the reader
- * is guaranteed to see it, so a user sort never orders on a hidden or non-sortable value.
- */
-export const protectedQuerySortSchema = z
-  .object({ fieldId: fieldIdSchema, direction: z.enum(["ascending", "descending"]) })
-  .strict();
-export type ProtectedQuerySort = z.infer<typeof protectedQuerySortSchema>;
 
 /**
  * One protected Query request. It names only the published Module query and the
@@ -73,7 +64,7 @@ export const protectedQueryCommandSchema = z
      * the installed record type also declares sortable, or the whole request is refused.
      */
     sort: z
-      .array(protectedQuerySortSchema)
+      .array(sortKeySchema)
       .max(20)
       .refine((sorts) => uniqueFieldIds(sorts.map((sort) => sort.fieldId)), {
         message: "Each sort field is named once",

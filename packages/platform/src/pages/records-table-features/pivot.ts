@@ -5,7 +5,8 @@ import {
   moneyValueSchema,
   recordLinkValueSchema,
   readQueryBindings,
-  readRecordsTableContract,
+  recordsTableContractOrLog,
+  UnreadableSettingError,
   type IdentitySession,
   type JsonValue,
   type OrganizationSelectionCandidate,
@@ -142,6 +143,8 @@ const fail = (cause: string): PivotResult => {
 type Dimension = Readonly<{
   field: PlacementField;
   unit?: string;
+  /** The pivot setting that names this axis's calendar unit, for a refusal that has none. */
+  unitSetting: "row_date_unit" | "column_date_unit";
   /** Whether a click on this dimension's heading can open the ordinary grid filtered to it. */
   drillable: boolean;
 }>;
@@ -202,7 +205,11 @@ const axisValue = (
           }),
     };
   }
-  const unit = dimension.unit ?? "day";
+  // Publication refuses a date axis without its calendar unit, so a read that has none is a defect
+  // in what was published, never a unit to guess.
+  const unit = dimension.unit;
+  if (unit === undefined)
+    throw new UnreadableSettingError(`features.pivot.${dimension.unitSetting}`);
   const start = bucketFirstDay(dimension.field.type, value, timeZone);
   return {
     key,
@@ -241,7 +248,7 @@ const measureNames: Readonly<Record<string, string>> = {
 export const readRecordsTablePivot = async (request: PivotRequest): Promise<PivotResult> => {
   const { context, placement } = request;
   const settings = placementSettingsOf(placement);
-  const contract = readRecordsTableContract(settings);
+  const contract = recordsTableContractOrLog(settings, "pivot");
   const feature = contract?.features.pivot;
   if (contract === undefined || feature === undefined || !feature.enabled)
     return refuse("feature_off");
@@ -437,11 +444,13 @@ export const readRecordsTablePivot = async (request: PivotRequest): Promise<Pivo
   const rowDimension: Dimension = {
     field: row,
     ...(feature.rowDateUnit === undefined ? {} : { unit: feature.rowDateUnit }),
+    unitSetting: "row_date_unit",
     drillable: filterable.has(String(row.fieldId).toLowerCase()),
   };
   const columnDimension: Dimension = {
     field: column,
     ...(feature.columnDateUnit === undefined ? {} : { unit: feature.columnDateUnit }),
+    unitSetting: "column_date_unit",
     drillable: filterable.has(String(column.fieldId).toLowerCase()),
   };
   const columns = pivot.columns.map((entry) =>

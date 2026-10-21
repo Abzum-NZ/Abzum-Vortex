@@ -46,7 +46,7 @@ begin
 
   -- A personal rule reads fields that exist and that the author can read now; the projection that
   -- recipients receive is the check, so a rule it would omit for the author is refused here.
-  if p_document is not null and p_document ? 'formatting' then
+  if p_document is not null and pg_catalog.jsonb_array_length(p_document -> 'formatting') > 0 then
     installation := vortex_definition.read_current_active_installation();
     access_plan := vortex_record.resolve_installation_access_plan_internal(installation);
     select distinct (query.value #>> '{recordType,recordTypeId}')::uuid into record_type_id

@@ -2,6 +2,7 @@ import "server-only";
 
 import type { JsonValue } from "../../schema";
 import { projectCalendarPlacement, type CalendarPlacementContract } from "../calendar-query";
+import { addressParameter } from "../records-table-state";
 import {
   firstParameter,
   logPlacementFailure,
@@ -56,8 +57,8 @@ export const readCalendar = async (
     contract,
     timeZone: organizationSettings.value.settings.timeZone,
     inputValues,
-    requestedView: firstParameter(read.parameters[`view.${placementId}`]),
-    requestedDate: firstParameter(read.parameters[`date.${placementId}`]),
+    requestedView: firstParameter(read.parameters[addressParameter("calendar", placementId)]),
+    requestedDate: firstParameter(read.parameters[addressParameter("date", placementId)]),
     queries: read.services.queries,
     session: read.session,
     selection: read.selection,

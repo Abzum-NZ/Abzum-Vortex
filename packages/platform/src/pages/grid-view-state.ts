@@ -1,5 +1,5 @@
-import type { AuthoredGridView } from "../definition/application-composition/records-table-features/saved-views";
 import { z } from "zod";
+import { sortKeySchema } from "../catalogue/common";
 import {
   RECORDS_TABLE_MAXIMUM_SEARCH_LENGTH,
   RECORDS_TABLE_MAXIMUM_SORT_KEYS,
@@ -35,9 +35,9 @@ import {
 const FIELD_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** The most columns one layout names; a Records table declares at most as many. */
-export const GRID_LAYOUT_MAXIMUM_COLUMNS = 200;
+const GRID_LAYOUT_MAXIMUM_COLUMNS = 200;
 
-export const gridLayoutColumnSchema = z
+const gridLayoutColumnSchema = z
   .object({
     fieldId: z
       .string()
@@ -85,7 +85,6 @@ const refineColumns = (
 export const gridLayoutSchema = z.object(gridLayoutShape).strict().superRefine(refineColumns);
 
 export type GridLayout = z.output<typeof gridLayoutSchema>;
-export type GridLayoutColumn = GridLayout["columns"][number];
 
 const fieldIdSchema = z
   .string()
@@ -99,11 +98,11 @@ export const GRID_VIEW_MAXIMUM_FILTER_LENGTH = 4000;
 /** The most personal formatting rules one view stores. */
 export const GRID_VIEW_MAXIMUM_FORMAT_RULES = 20;
 /** The most cells one personal rule may target. */
-export const GRID_VIEW_MAXIMUM_FORMAT_TARGETS = 20;
+const GRID_VIEW_MAXIMUM_FORMAT_TARGETS = 20;
 /** The longest badge label a personal rule shows. */
-export const GRID_VIEW_MAXIMUM_BADGE_LENGTH = 40;
+const GRID_VIEW_MAXIMUM_BADGE_LENGTH = 40;
 /** The longest view name. */
-export const GRID_VIEW_MAXIMUM_NAME_LENGTH = 80;
+const GRID_VIEW_MAXIMUM_NAME_LENGTH = 80;
 
 /**
  * One personal formatting rule: the authored `ConditionalFormatRule` shape (a canonical condition
@@ -111,7 +110,7 @@ export const GRID_VIEW_MAXIMUM_NAME_LENGTH = 80;
  * It is evaluated by the same server evaluator as an authored rule, so it holds no colour and no
  * value the viewer cannot read.
  */
-export const gridViewFormatRuleSchema = z
+const gridViewFormatRuleSchema = z
   .object({
     id: fieldIdSchema,
     enabled: z.boolean(),
@@ -154,15 +153,7 @@ export type GridViewFormatRule = z.output<typeof gridViewFormatRuleSchema>;
 export const gridViewDocumentSchema = z
   .object({
     ...gridLayoutShape,
-    sort: z
-      .array(
-        z
-          .object({ fieldId: fieldIdSchema, direction: z.enum(["ascending", "descending"]) })
-          .strict(),
-      )
-      .min(1)
-      .max(RECORDS_TABLE_MAXIMUM_SORT_KEYS)
-      .optional(),
+    sort: z.array(sortKeySchema).max(RECORDS_TABLE_MAXIMUM_SORT_KEYS),
     filters: z
       .array(
         z
@@ -172,33 +163,31 @@ export const gridViewDocumentSchema = z
           })
           .strict(),
       )
-      .min(1)
-      .max(GRID_VIEW_MAXIMUM_FILTERS)
-      .optional(),
-    search: z.string().min(1).max(RECORDS_TABLE_MAXIMUM_SEARCH_LENGTH).optional(),
-    formatting: z
-      .array(gridViewFormatRuleSchema)
-      .min(1)
-      .max(GRID_VIEW_MAXIMUM_FORMAT_RULES)
-      .optional(),
+      .max(GRID_VIEW_MAXIMUM_FILTERS),
+    search: z.string().min(1).max(RECORDS_TABLE_MAXIMUM_SEARCH_LENGTH).nullable(),
+    formatting: z.array(gridViewFormatRuleSchema).max(GRID_VIEW_MAXIMUM_FORMAT_RULES),
   })
   .strict()
   .superRefine((document, context) => {
     refineColumns(document, context);
-    if (
-      new Set(document.formatting?.map((rule) => rule.id)).size !==
-      (document.formatting?.length ?? 0)
-    )
+    if (new Set(document.formatting.map((rule) => rule.id)).size !== document.formatting.length)
       context.addIssue({ code: "custom", path: ["formatting"], message: "A rule is named twice" });
     for (const part of ["sort", "filters"] as const)
-      if (
-        new Set(document[part]?.map((entry) => entry.fieldId)).size !==
-        (document[part]?.length ?? 0)
-      )
+      if (new Set(document[part].map((entry) => entry.fieldId)).size !== document[part].length)
         context.addIssue({ code: "custom", path: [part], message: "A field is named twice" });
   });
 
 export type GridViewDocument = z.output<typeof gridViewDocumentSchema>;
+
+/** One default view an application page authors: a stored view's document with its audience. */
+export type AuthoredGridView = Readonly<{
+  viewId: string;
+  name: string;
+  /** A role key, or "*" for everyone who can open the application page. */
+  role: string;
+  isDefault: boolean;
+  document: GridViewDocument;
+}>;
 
 export const gridViewNameSchema = z
   .string()
@@ -206,7 +195,6 @@ export const gridViewNameSchema = z
   .refine((name) => name === name.trim() && name.length > 0, "A view name is trimmed text");
 
 export const gridViewScopes = ["personal", "shared", "default"] as const;
-export type GridViewScope = (typeof gridViewScopes)[number];
 
 const revisionSchema = z.number().int().min(1).max(Number.MAX_SAFE_INTEGER);
 
@@ -221,7 +209,7 @@ export const gridViewSharingSchema = z
 export type GridViewSharing = z.output<typeof gridViewSharingSchema>;
 
 /** One view in the switcher: a name and where it comes from, never its document. */
-export const gridViewItemSchema = z
+const gridViewItemSchema = z
   .object({
     viewId: fieldIdSchema,
     name: gridViewNameSchema,
@@ -234,7 +222,7 @@ export const gridViewItemSchema = z
 export type GridViewItem = z.output<typeof gridViewItemSchema>;
 
 /** What a selected view leaves out for this viewer, so the grid can say so. */
-export const gridViewHiddenSchema = z
+const gridViewHiddenSchema = z
   .object({
     columns: z.number().int().min(0),
     filters: z.number().int().min(0),
@@ -242,10 +230,9 @@ export const gridViewHiddenSchema = z
     formatting: z.number().int().min(0),
   })
   .strict();
-export type GridViewHidden = z.output<typeof gridViewHiddenSchema>;
 
 /** The view in effect: its document as applied under this viewer's access, and what was left out. */
-export const selectedGridViewSchema = gridViewItemSchema
+const selectedGridViewSchema = gridViewItemSchema
   .extend({
     document: gridViewDocumentSchema,
     hidden: gridViewHiddenSchema,
@@ -256,9 +243,9 @@ export const selectedGridViewSchema = gridViewItemSchema
 export type SelectedGridView = z.output<typeof selectedGridViewSchema>;
 
 /** Why an addressed view is not in effect. */
-export const gridViewNotices = ["unavailable", "needs_fixing"] as const;
+const gridViewNotices = ["unavailable", "needs_fixing"] as const;
 
-export const gridViewsStateSchema = z
+const gridViewsStateSchema = z
   .object({
     /** The viewer holds the permission that lets them share table views. */
     canShare: z.boolean(),
@@ -280,7 +267,7 @@ export type GridViewsState = z.output<typeof gridViewsStateSchema>;
  * Where a grid's arrangement goes: stored for the person, kept on screen in an application preview,
  * or reported to Studio for capture into the authored default view.
  */
-export const gridLayoutStorages = ["personal", "preview", "canvas"] as const;
+const gridLayoutStorages = ["personal", "preview", "canvas"] as const;
 export type GridLayoutStorage = (typeof gridLayoutStorages)[number];
 
 /** The layout a grid placement shows, as the server sends it with the grid's page. */
@@ -445,13 +432,13 @@ export const resolveSelectedGridView = (
   const arranged = [...kept, ...authored.columns.filter((column) => !named.has(column.fieldId))];
   const readableField = (fieldId: string): boolean =>
     readable === undefined || readable.has(fieldId);
-  const filters = (document.filters ?? []).filter((entry) => readableField(entry.fieldId));
+  const filters = document.filters.filter((entry) => readableField(entry.fieldId));
   if (filters.some((entry) => decodeRecordsTableFieldFilter(entry.filter) === undefined))
     return { selected: null, notice: "needs_fixing" };
-  const sort = (document.sort ?? []).filter((entry) => readableField(entry.fieldId));
+  const sort = document.sort.filter((entry) => readableField(entry.fieldId));
   // A rule stays only while every field it reads is one of the table's columns (the query reads
   // no other field for it, even after a release removes one) and one this viewer can read.
-  const formatting = (personalFormatting ? (document.formatting ?? []) : []).filter((rule) =>
+  const formatting = (personalFormatting ? document.formatting : []).filter((rule) =>
     conditionalFormatRuleFields(rule).every(
       (fieldId) => permitted.has(fieldId.toLowerCase()) && readableField(fieldId.toLowerCase()),
     ),
@@ -460,10 +447,10 @@ export const resolveSelectedGridView = (
     // A view that would show no column of this viewer's falls back to the authored arrangement.
     columns: arranged.some((column) => column.visible) ? arranged : authored.columns,
     ...(document.density === undefined ? {} : { density: document.density }),
-    ...(sort.length === 0 ? {} : { sort }),
-    ...(filters.length === 0 ? {} : { filters }),
-    ...(document.search === undefined ? {} : { search: document.search }),
-    ...(formatting.length === 0 ? {} : { formatting }),
+    sort,
+    filters,
+    search: document.search,
+    formatting,
   };
   return {
     selected: {
@@ -471,10 +458,10 @@ export const resolveSelectedGridView = (
       document: applied,
       hidden: {
         columns: document.columns.length - kept.length,
-        filters: addressed.hiddenFilters + (document.filters ?? []).length - filters.length,
-        sort: addressed.hiddenSorts + (document.sort ?? []).length - sort.length,
+        filters: addressed.hiddenFilters + document.filters.length - filters.length,
+        sort: addressed.hiddenSorts + document.sort.length - sort.length,
         formatting: personalFormatting
-          ? addressed.hiddenFormatting + (document.formatting ?? []).length - formatting.length
+          ? addressed.hiddenFormatting + document.formatting.length - formatting.length
           : 0,
       },
       sharing,
@@ -498,7 +485,7 @@ export type GridViewCommand =
       kind: "create";
       name: string;
       layout: GridLayout;
-      formatting?: readonly GridViewFormatRule[];
+      formatting: readonly GridViewFormatRule[];
     }>
   /** Replaces the document of a view with the grid as it is now and the given formatting rules. */
   | Readonly<{
@@ -506,7 +493,7 @@ export type GridViewCommand =
       viewId: string;
       expectedRevision: number;
       layout: GridLayout;
-      formatting?: readonly GridViewFormatRule[];
+      formatting: readonly GridViewFormatRule[];
     }>
   | Readonly<{ kind: "rename"; viewId: string; expectedRevision: number; name: string }>
   | Readonly<{

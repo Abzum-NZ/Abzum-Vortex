@@ -1,8 +1,10 @@
 import "server-only";
 
-import type { RecordsTableFeatureProjection } from "../records-table-features";
-
-import type { BoardColumnReadRequest, PageDefinition } from "../../schema";
+import type {
+  BoardColumnReadRequest,
+  PageDefinition,
+  RecordsTableFeatureProjection,
+} from "../../schema";
 import type {
   HumanOrganizationRequestResult,
   readCurrentOrganizationRuntimeSettingsAfterAuthorization,

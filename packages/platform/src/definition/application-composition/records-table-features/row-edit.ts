@@ -3,11 +3,11 @@ import {
   featureAvailable,
   featureEnabled,
   featureNotPossible,
-  fieldList,
+  optionalChoice,
+  optionalText,
   recordsTableDependencyMissing,
   recordsTableFieldNotEditableReason,
-  settingOptionalChoice,
-  settingText,
+  requiredFieldList,
   type RecordsTableFeatureDefinition,
 } from "./shared";
 
@@ -26,12 +26,12 @@ export const recordsTableRowEditFeature: RecordsTableFeatureDefinition<RecordsTa
     description: "Change a row's fields and save them together",
     read: (group) => {
       if (!featureEnabled(group)) return { enabled: false };
-      const eventId = settingText(group["event_id"]);
-      const trigger = settingOptionalChoice(group["trigger"], ["button"]);
+      const eventId = optionalText(group["event_id"], "event_id");
+      const trigger = optionalChoice(group["trigger"], ["button"], "trigger");
       return {
         enabled: true,
         ...(eventId === undefined ? {} : { eventId }),
-        fields: fieldList(group["fields"]),
+        fields: requiredFieldList(group["fields"], "fields"),
         ...(trigger === undefined ? {} : { trigger }),
       };
     },

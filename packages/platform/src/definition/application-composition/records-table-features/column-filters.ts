@@ -3,7 +3,7 @@ import {
   featureAvailable,
   featureEnabled,
   featureNotPossible,
-  fieldList,
+  requiredFieldList,
   type RecordsTableFeatureCheck,
   type RecordsTableFeatureDefinition,
   type RecordsTableFieldFacts,
@@ -108,8 +108,8 @@ export const recordsTableColumnFiltersFeature: RecordsTableFeatureDefinition<Rec
     label: "Column filters",
     description: "Filter the rows by the values of chosen fields",
     read: (group) =>
-      featureEnabled(group) === true
-        ? { enabled: true, fields: fieldList(group["fields"]) }
+      featureEnabled(group)
+        ? { enabled: true, fields: requiredFieldList(group["fields"], "fields") }
         : { enabled: false },
     // Every chosen field must be one the bound query selects and people can filter by; a feature
     // that is off needs at least one such field to be possible.

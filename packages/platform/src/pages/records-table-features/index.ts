@@ -1,17 +1,17 @@
 import type {
-  NamedActionAvailability,
-  RecordsTableActionContract,
+  ConditionalFormattingProjection,
   RecordsTableBulkActionContract,
   RecordsTableContract,
+  RecordsTableFeatureProjection,
   RecordsTableFilterField,
-  RecordsTableExportFormat,
-  RecordsTableStatusBarOperation,
+  RecordsTableInlineEditField,
+  RecordsTableInlineEditor,
+  RecordsTablePivotView,
 } from "../../schema";
 import type {
   ProtectedQueryFieldBounds,
   ProtectedQueryRow,
 } from "../../queries/protected-query-contracts";
-import type { ConditionalFormattingProjection } from "./conditional-formatting";
 
 export {
   conditionalFormattingFieldIds,
@@ -20,157 +20,9 @@ export {
   evaluateConditionalFormatting,
   personalFormattingAllowed,
   personalFormattingRules,
-  type ConditionalColumnFormatProjection,
   type ConditionalFormattingContext,
-  type ConditionalFormattingProjection,
   type RecordsTableRowFormat,
 } from "./conditional-formatting";
-
-/**
- * The grid features one viewer may use on one Records table read: each feature the release turns
- * on (publication already refused any that does not fit the bound query), narrowed to what the
- * viewer may do now. It is computed once per read, from the field bound and the per-row
- * capabilities the Query engine decided in that same read under the viewer's current access and
- * field policy, and travels in the table payload; there is no separate request and nothing is
- * cached. The same projection both draws the controls and decides whether the read's own search
- * and filters were allowed. A feature that is off for the viewer is absent, and a table with every
- * feature off carries no projection at all.
- */
-export type RecordsTableFeatureProjection = Readonly<{
-  pinning?: true;
-  spreadsheet?: Readonly<{
-    rangeSelect: boolean;
-    find: boolean;
-    /** Paste, fill down and undo of batches; each is present only when usable now. */
-    paste?: true;
-    fill?: true;
-    undo?: true;
-    /**
-     * The status bar of a selected range: the configured fields (every one is shown, a field the
-     * viewer cannot read as "Not available") and the totals. Absent while the status bar is off.
-     */
-    statusBar?: Readonly<{
-      fields: readonly string[];
-      operations: readonly RecordsTableStatusBarOperation[];
-    }>;
-  }>;
-  /** Present when the viewer can read some field the record type marks searchable. */
-  search?: true;
-  /**
-   * The filterable fields the viewer may filter by, each with its canonical type, filter kind and
-   * what its control needs (choice options, a fixed currency, the organisation time zone).
-   */
-  columnFilters?: readonly RecordsTableFilterField[];
-  /** Present when the viewer can filter by some field or sort by some field it can read. */
-  savedViews?: true;
-  /**
-   * The declared bulk actions. A bounded on-intent availability read decides each action's own
-   * permission and precondition for the visible selection; execution rechecks current authority.
-   */
-  bulkActions?: readonly RecordsTableBulkActionContract[];
-  rowActions?: Readonly<{
-    actions: readonly RecordsTableActionContract[];
-    availability: NamedActionAvailability;
-  }>;
-  /**
-   * The fields the viewer may change on at least one row, each with how a cell edits it, and the
-   * flow binding that commits a change.
-   */
-  inlineEdit?: Readonly<{ eventId: string; fields: readonly RecordsTableInlineEditField[] }>;
-  rowEdit?: Readonly<{
-    eventId: string;
-    trigger: "button";
-    fields: readonly RecordsTableInlineEditField[];
-  }>;
-  /** Rows expand to their related records, read this many at a time. */
-  masterDetail?: Readonly<{ pageSize: number }>;
-  /** Rows expand to the records that name them as their parent, read this many at a time. */
-  tree?: Readonly<{ pageSize: number }>;
-  /**
-   * The viewer may group the table by the authored choice field: it is readable on every record
-   * the viewer may read, so the grouped read never needs a withheld value.
-   */
-  grouping?: Readonly<{
-    fieldId: string;
-    label: string;
-    unassignedLabel: string;
-    /** The authored opening state: the address overrides it (grouped or flat) for this viewer. */
-    opensGrouped: boolean;
-    /** The table reads a grouped query, so it is always grouped and offers no way to ungroup. */
-    required?: true;
-  }>;
-  /** The styles the page's rows name and the numeric columns drawn as bars or scales. */
-  conditionalFormatting?: ConditionalFormattingProjection;
-  /**
-   * The viewer can read the pivot's rows, columns and measure: it shows this many rows a page.
-   * `view` is present when the address opens the table as a pivot, with its row position.
-   */
-  pivot?: Readonly<{ rowPageSize: number; totals: boolean; view?: Readonly<{ cursor?: string }> }>;
-  /**
-   * The viewer may export the records they see: the most records one export holds. Present only
-   * when the feature is on and the viewer's export permission allowed it in this read; the export
-   * route decides both again on every request.
-   */
-  export?: Readonly<{ maxRows: number; formats: readonly RecordsTableExportFormat[] }>;
-}>;
-
-/**
- * How one cell edits one field, from the installed field definition alone: the control to draw and
- * the limits that stop obviously wrong input. It grants nothing; the protected writer validates
- * every value again. `required` says the field cannot be emptied.
- */
-export type RecordsTableInlineEditor = Readonly<{ required: boolean }> &
-  (
-    | Readonly<{
-        kind: "text";
-        /** Which text control: a line, several lines, or an email, phone or web address. */
-        input: "text" | "long_text" | "email" | "phone" | "web";
-        maxLength?: number;
-      }>
-    | Readonly<{ kind: "whole_number"; minimum?: number; maximum?: number; step?: number }>
-    | Readonly<{
-        kind: "decimal";
-        digitsBeforeDecimal: number;
-        decimalPlaces: number;
-        minimum?: string;
-        maximum?: string;
-      }>
-    | Readonly<{ kind: "yes_no" }>
-    | Readonly<{
-        kind: "choice";
-        options: readonly Readonly<{
-          value: string;
-          label: string;
-          parentValues?: readonly string[];
-        }>[];
-        /**
-         * The choice field of the same record type whose chosen option narrows this field's
-         * options, as the table's field identity (lower case): only options listing that parent
-         * option are offered, and changing the parent must clear or flag this field.
-         */
-        dependsOnField?: string;
-      }>
-    | Readonly<{ kind: "date"; earliest?: string; latest?: string }>
-    | Readonly<{ kind: "date_time" }>
-    | Readonly<{
-        /** A single-target link: the person picks one record of the installed target type. */
-        kind: "link";
-        recordTypeId: string;
-        targetLabel: string;
-        /**
-         * The link field of the same record type whose chosen record narrows this field's choices,
-         * as the table's field identity (lower case). The picker offers this field's records only
-         * for that parent, and changing the parent must clear or flag this field.
-         */
-        dependsOnField?: string;
-      }>
-  );
-
-/** One field a viewer may edit in a cell, as the field identity the table's columns use. */
-export type RecordsTableInlineEditField = Readonly<{
-  field: string;
-  editor: RecordsTableInlineEditor;
-}>;
 
 /** The part of a Records table request a refusal names, kept only in the server log. */
 export type RecordsTableRequestPart =
@@ -281,7 +133,7 @@ export const projectRecordsTableFeatures = (
   filterFields: Readonly<Record<string, RecordsTableFilterField>> | undefined,
   editors: Readonly<Record<string, RecordsTableInlineEditor>> | undefined,
   conditionalFormatting?: ConditionalFormattingProjection,
-  pivotView?: Readonly<{ cursor?: string }>,
+  pivotView?: RecordsTablePivotView,
   fieldLabels?: Readonly<Record<string, string>>,
   /** The viewer holds an export permission that reaches every record, decided in this read. */
   exportAllowed?: boolean,

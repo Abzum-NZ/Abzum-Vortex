@@ -2,16 +2,18 @@ import "server-only";
 
 import {
   isRecord,
-  readRecordsTableContract,
+  recordsTableContractOrLog,
   sameId,
   tableColumnLabel,
   type BlockPropertyValueContract,
   type IdentitySession,
   type OrganizationSelectionCandidate,
   type PageDefinition,
+  type RecordsTableInlineEditor,
 } from "../../schema";
 import {
   APPLICATION_LAUNCHER_BLOCK_RELEASE,
+  TABLE_BLOCK_RELEASE,
   type InstalledRuntimeContext,
 } from "../../definition/index";
 import type { ProtectedQueryRow } from "../../queries/index";
@@ -23,7 +25,6 @@ import {
 } from "../component-data-projection";
 import type { BoardPlacementFailureCause } from "../board-query";
 import type { RecordsTableFilterTarget } from "../records-table-query";
-import type { RecordsTableInlineEditor } from "../records-table-features";
 
 export type PlacementModule = InstalledRuntimeContext["releaseSet"]["modules"][number];
 export type PlacementQuery = PlacementModule["content"]["queries"][number];
@@ -150,9 +151,22 @@ export const isApplicationLauncherPlacement = (
   placement: Pick<PlacementReadEntry, "vortex">,
 ): boolean => placementBlockIs(placement, APPLICATION_LAUNCHER_BLOCK_RELEASE);
 
+/**
+ * The data contract of a Data grid placement; undefined for a placement of another block, and,
+ * after logging the unreadable setting, for a grid whose settings cannot be read.
+ */
+export const tablePlacementContract = (
+  placement: Pick<PlacementReadEntry, "settings" | "vortex">,
+  where: string,
+) =>
+  placementBlockIs(placement, TABLE_BLOCK_RELEASE)
+    ? recordsTableContractOrLog(placementSettingsOf(placement), where)
+    : undefined;
+
 /** Whether a Records table placement shows its records as a board (its Board feature is on). */
-export const isBoardPlacement = (placement: Pick<PlacementReadEntry, "settings">): boolean =>
-  readRecordsTableContract(placementSettingsOf(placement))?.features.board.enabled === true;
+export const isBoardPlacement = (
+  placement: Pick<PlacementReadEntry, "settings" | "vortex">,
+): boolean => tablePlacementContract(placement, "board placement")?.features.board.enabled === true;
 
 /** A placement's use: available, unavailable by its operation, or a malformed availability. */
 export const projectedUseAvailability = ({

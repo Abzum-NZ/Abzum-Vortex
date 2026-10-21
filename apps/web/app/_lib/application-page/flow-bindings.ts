@@ -7,7 +7,7 @@ import {
 } from "@vortex/platform/server";
 import {
   type BlockPropertyValueContract,
-  readRecordsTableContract,
+  recordsTableContractOrLog,
   readRecordDetailContract,
   type FlowTask,
   flowTaskChildLists,
@@ -18,7 +18,7 @@ import {
 import type { collectPlacements } from "./placement-helpers";
 import type { PlacementFlowBinding } from "./types";
 import { isEditFieldPlacement, selectedReadInputTypes } from "./placement-helpers";
-import { resolvedQueryRecordTypeId } from "@vortex/platform/server";
+import { isTablePlacement, resolvedQueryRecordTypeId } from "@vortex/platform/server";
 
 export const projectPlacementRecordTypes = (input: {
   allPlacements: ReturnType<typeof collectPlacements>;
@@ -66,7 +66,9 @@ export const projectPlacementRecordTypes = (input: {
       recordTypeByPlacement.set(placementId.toLowerCase(), pageSubjectRecordTypeId);
 
     const settings = placement.settings as Readonly<Record<string, BlockPropertyValueContract>>;
-    const tableContract = readRecordsTableContract(settings);
+    const tableContract = isTablePlacement(placement)
+      ? recordsTableContractOrLog(settings, "flow bindings")
+      : undefined;
     const detailContract =
       tableContract === undefined ? readRecordDetailContract(settings) : undefined;
     const isQueryNoticeBlock =

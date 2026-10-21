@@ -33,7 +33,7 @@ import {
   roleIdSchema,
   semanticVersionSchema,
 } from "../catalogue/identifiers";
-import { labelSchema, safeHttpsUrlSchema } from "../catalogue/common";
+import { labelSchema, safeHttpsUrlSchema, sortKeySchema } from "../catalogue/common";
 import { actionInputValueTypes, applicationExperienceStateSchema } from "../catalogue/catalogues";
 import { permissionDeclarationSchema } from "../access/permissions";
 import {
@@ -237,9 +237,6 @@ export const moduleBindingSchema = z
   })
   .strict();
 
-export const sortSchema = z
-  .object({ fieldId: fieldIdSchema, direction: z.enum(["ascending", "descending"]) })
-  .strict();
 export const aggregateSchema = z
   .object({
     operation: z.enum(["count", "sum", "minimum", "maximum", "average", "distinct_count"]),
@@ -256,7 +253,7 @@ export const queryDefinitionSchema = z
     filter: conditionNodeSchema.nullable().optional(),
     groupByFieldIds: z.array(fieldIdSchema).max(10),
     aggregates: z.array(aggregateSchema).max(20),
-    sort: z.array(sortSchema).min(1).max(20),
+    sort: z.array(sortKeySchema).min(1).max(20),
     pageSize: z.number().int().min(1).max(200),
     relationshipHops: z.number().int().min(0).max(2),
   })

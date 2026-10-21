@@ -7,16 +7,31 @@ import {
 import { readRecordsTableFeatures, type RecordsTableFeatures } from "./records-table-features";
 import type { ComponentSettingValue } from "./block-property-schema";
 import {
-  settingField,
+  UnreadableSettingError,
+  optionalText,
+  recordsTableColumnPins,
+  recordsTableDensities,
+  recordsTableSortDirections,
+  requiredBoolean,
+  requiredChoice,
+  requiredField,
+  requiredFieldList,
+  requiredGroup,
+  requiredItems,
+  requiredNumber,
   settingGroup,
-  settingItems,
-  settingOptionalChoice,
-  settingText,
-  fieldList,
+  settingField,
+  unreadable,
   type SettingsRecord,
 } from "./records-table-features/shared";
+export {
+  UnreadableSettingError,
+  recordsTableColumnPins,
+  recordsTableDensities,
+  recordsTableSortDirections,
+} from "./records-table-features/shared";
 
-export const recordsDisplayFormats = [
+const recordsDisplayFormats = [
   "automatic",
   "text",
   "number",
@@ -28,12 +43,11 @@ export const recordsDisplayFormats = [
 ] as const;
 export type RecordsDisplayFormat = (typeof recordsDisplayFormats)[number];
 
-export const recordsTableColumnWidths = ["auto", "narrow", "medium", "wide"] as const;
+const recordsTableColumnWidths = ["auto", "narrow", "medium", "wide"] as const;
 /** Starting pixel widths shared by the grid and its spreadsheet export. */
 const columnWidths = { auto: 180, narrow: 120, medium: 220, wide: 320 } as const;
 export const recordsTableColumnWidth = (column: RecordsTableColumnContract): number =>
   columnWidths[column.width];
-export const recordsTableColumnPins = ["start", "end", "unpinned"] as const;
 export type RecordsTableColumnPin = (typeof recordsTableColumnPins)[number];
 /**
  * The narrowest and widest a person may resize a column, in pixels. The authored width token is
@@ -41,22 +55,20 @@ export type RecordsTableColumnPin = (typeof recordsTableColumnPins)[number];
  */
 export const RECORDS_TABLE_COLUMN_MINIMUM_WIDTH = 64;
 export const RECORDS_TABLE_COLUMN_MAXIMUM_WIDTH = 640;
-export const recordsTableColumnAlignments = ["start", "center", "end"] as const;
+const recordsTableColumnAlignments = ["start", "center", "end"] as const;
 /** Low priority columns hide first on small screens; an essential column never hides. */
-export const recordsTableColumnPriorities = ["essential", "high", "medium", "low"] as const;
-/** Row height of the grid: comfortable rows are 44px, compact rows 32px. */
-export const recordsTableDensities = ["comfortable", "compact"] as const;
+const recordsTableColumnPriorities = ["essential", "high", "medium", "low"] as const;
 export type RecordsTableDensity = (typeof recordsTableDensities)[number];
 /** How the table presents on a phone: cards built from the column priorities, or the grid. */
-export const recordsTablePhonePresentations = ["cards", "grid"] as const;
-export type RecordsTablePhonePresentation = (typeof recordsTablePhonePresentations)[number];
+const recordsTablePhonePresentations = ["cards", "grid"] as const;
+type RecordsTablePhonePresentation = (typeof recordsTablePhonePresentations)[number];
 /**
  * Where the rows scroll: `bounded` keeps them in the grid's own scroll area (at most 70% of the
  * screen height), under the header when it is sticky; `page` lets the grid grow with its page. A
  * page of more than one hundred rows needs the bounded area.
  */
-export const recordsTableViewports = ["bounded", "page"] as const;
-export type RecordsTableViewport = (typeof recordsTableViewports)[number];
+const recordsTableViewports = ["bounded", "page"] as const;
+type RecordsTableViewport = (typeof recordsTableViewports)[number];
 /** The most rows a page mounts without virtualization; a larger page mounts only its window. */
 export { RECORDS_TABLE_UNVIRTUALIZED_ROW_LIMIT } from "./records-table-features/shared";
 
@@ -78,30 +90,29 @@ export type RecordsTableColumnContract = Readonly<{
   autoSize: boolean;
 }>;
 
-export const recordsTableSortDirections = ["ascending", "descending"] as const;
 export type RecordsTableSortDirection = (typeof recordsTableSortDirections)[number];
 
 /** One key of an ordered sort: a field and its direction. */
-export type RecordsTableSortContract = Readonly<{
+type RecordsTableSortContract = Readonly<{
   field: string;
   direction: RecordsTableSortDirection;
 }>;
 
 /** Authored messages a Records table or Record detail shows in place of its fixed neutral text. */
-export type RecordsDisplayMessages = Readonly<{
+type RecordsDisplayMessages = Readonly<{
   empty?: string;
   refused?: string;
   error?: string;
 }>;
 
 /** A row click held as a binding to a flow; the bound flow decides what opening the row does. */
-export type RecordsTableRowClickContract = Readonly<{
+type RecordsTableRowClickContract = Readonly<{
   eventId: string;
   selectsRecord: boolean;
 }>;
 
 /** The configured row behaviours of one Records table placement: a row click and named row actions. */
-export type RecordsTableRowBehaviourContract = Readonly<{
+type RecordsTableRowBehaviourContract = Readonly<{
   rowClick?: RecordsTableRowClickContract;
   rowActions: readonly RecordsTableActionContract[];
 }>;
@@ -132,23 +143,23 @@ export type RecordsTableContract = Readonly<{
   features: RecordsTableFeatures;
 }>;
 
-export type RecordDetailFieldContract = Readonly<{
+type RecordDetailFieldContract = Readonly<{
   field: string;
   label?: string;
   format: RecordsDisplayFormat;
 }>;
 
 /** The declared list of detail fields a Record detail placement shows. */
-export type RecordDetailContract = Readonly<{
+type RecordDetailContract = Readonly<{
   fields: readonly RecordDetailFieldContract[];
   headingField?: string;
   messages: RecordsDisplayMessages;
 }>;
 
 const displayMessages = (settings: SettingsRecord): RecordsDisplayMessages => {
-  const empty = settingText(settings["empty_message"]);
-  const refused = settingText(settings["refused_message"]);
-  const error = settingText(settings["error_message"]);
+  const empty = optionalText(settings["empty_message"], "empty_message");
+  const refused = optionalText(settings["refused_message"], "refused_message");
+  const error = optionalText(settings["error_message"], "error_message");
   return {
     ...(empty === undefined ? {} : { empty }),
     ...(refused === undefined ? {} : { refused }),
@@ -157,142 +168,129 @@ const displayMessages = (settings: SettingsRecord): RecordsDisplayMessages => {
 };
 
 /**
- * Reads the configured row behaviours from settings that already passed the shared validator. A
- * behaviour appears only when it carries the event identity that names its flow binding, so a
- * partially authored setting never invents a control.
+ * Reads the configured row behaviours: the row click, when the settings declare one, and the row
+ * actions. A click bound to a flow appears only when it names the event that identifies its flow
+ * binding; a row click that is declared but malformed refuses the table.
  */
-const readRowBehaviours = (
-  settings: SettingsRecord,
-): RecordsTableRowBehaviourContract | undefined => {
+const readRowBehaviours = (settings: SettingsRecord): RecordsTableRowBehaviourContract => {
   const rowActions = readRecordsTableRowActions(settings["row_actions"]);
-  if (rowActions === undefined) return undefined;
-  const click = settingGroup(settings["row_click"]);
-  const mode = click?.["mode"]?.kind === "choice" ? click["mode"].value : undefined;
-  const clickEventId = mode === "flow" ? settingText(click?.["event_id"]) : undefined;
+  const click =
+    settings["row_click"] === undefined
+      ? undefined
+      : requiredGroup(settings["row_click"], "row_click");
+  if (click === undefined) return { rowActions };
+  const mode = requiredChoice(click["mode"], ["flow", "select"] as const, "row_click.mode");
+  if (mode === "select")
+    return { rowClick: { eventId: "select", selectsRecord: true }, rowActions };
+  const eventId = optionalText(click["event_id"], "row_click.event_id");
   return {
-    ...(mode === "select"
-      ? { rowClick: { eventId: "select", selectsRecord: true } }
-      : clickEventId === undefined
-        ? {}
-        : { rowClick: { eventId: clickEventId, selectsRecord: false } }),
+    ...(eventId === undefined ? {} : { rowClick: { eventId, selectsRecord: false } }),
     rowActions,
   };
 };
 
-/**
- * Reads a Records table placement's declared data contract from its settings. Returns undefined
- * when the settings do not declare a table's `columns`, or a column leaves a setting undeclared.
- * It reads settings that already passed the
- * shared setting validator and never widens what a release declares; the same reader serves the
- * publication rule, the server query request and the renderer.
- */
-export const readRecordsTableContract = (
-  settings: SettingsRecord,
-): RecordsTableContract | undefined => {
-  const columnItems = settingItems(settings["columns"]);
-  if (columnItems === undefined) return undefined;
-  // Every column declares all of its settings: the catalogue defaults fill them in when a column
-  // is authored, and a column missing one, or naming a value the contract does not offer, makes
-  // the table unreadable, so no renderer chooses a presentation the definition did not.
-  const columns: RecordsTableColumnContract[] = [];
-  for (const item of columnItems) {
-    const column = settingGroup(item);
-    const field = column === undefined ? undefined : settingField(column["field"]);
-    if (column === undefined || field === undefined) continue;
-    const label = settingText(column["label"]);
-    const format = settingOptionalChoice(column["format"], recordsDisplayFormats);
-    const width = settingOptionalChoice(column["width"], recordsTableColumnWidths);
-    const alignment = settingOptionalChoice(column["alignment"], recordsTableColumnAlignments);
-    const priority = settingOptionalChoice(column["priority"], recordsTableColumnPriorities);
-    const visible = column["visible"];
-    const autoSize = column["auto_size"];
-    const pin = settingOptionalChoice(column["pin"], recordsTableColumnPins);
-    if (
-      format === undefined ||
-      width === undefined ||
-      alignment === undefined ||
-      priority === undefined ||
-      visible?.kind !== "boolean" ||
-      autoSize?.kind !== "boolean" ||
-      pin === undefined
-    )
-      return undefined;
-    columns.push({
-      field,
-      ...(label === undefined ? {} : { label }),
-      format,
-      width,
-      alignment,
-      priority,
-      visible: visible.value,
-      pin,
-      autoSize: autoSize.value,
-    });
-  }
-  // Every default sort key declares its field and direction; a key missing either is not read, so
-  // the table never runs an order other than the authored one.
-  const defaultSort: RecordsTableSortContract[] = [];
-  for (const item of settingItems(settings["default_sort"]) ?? []) {
-    const key = settingGroup(item);
-    const field = key === undefined ? undefined : settingField(key["field"]);
-    const direction = key?.["direction"];
-    if (
-      field === undefined ||
-      direction?.kind !== "choice" ||
-      !recordsTableSortDirections.some((candidate) => candidate === direction.value)
-    )
-      return undefined;
-    defaultSort.push({ field, direction: direction.value as RecordsTableSortDirection });
-  }
-  const pageSize = settings["page_size"];
-  // The catalogue default is the only source of the page size; a table without one is not read.
-  if (pageSize?.kind !== "number") return undefined;
-  // The grid presentation settings are equally explicit: the catalogue defaults fill them in, and a
-  // table missing one is not read, so no renderer chooses a presentation the definition did not.
-  const density = settingOptionalChoice(settings["density"], recordsTableDensities);
-  const presentation = settingOptionalChoice(
-    settings["presentation"],
-    recordsTablePhonePresentations,
+const readContract = (settings: SettingsRecord): RecordsTableContract => {
+  const columns = requiredItems(settings["columns"], "columns").map(
+    (item, index): RecordsTableColumnContract => {
+      const at = `columns[${index}]`;
+      const column = requiredGroup(item, at);
+      const label = optionalText(column["label"], `${at}.label`);
+      return {
+        field: requiredField(column["field"], `${at}.field`),
+        ...(label === undefined ? {} : { label }),
+        format: requiredChoice(column["format"], recordsDisplayFormats, `${at}.format`),
+        width: requiredChoice(column["width"], recordsTableColumnWidths, `${at}.width`),
+        alignment: requiredChoice(
+          column["alignment"],
+          recordsTableColumnAlignments,
+          `${at}.alignment`,
+        ),
+        priority: requiredChoice(
+          column["priority"],
+          recordsTableColumnPriorities,
+          `${at}.priority`,
+        ),
+        visible: requiredBoolean(column["visible"], `${at}.visible`),
+        pin: requiredChoice(column["pin"], recordsTableColumnPins, `${at}.pin`),
+        autoSize: requiredBoolean(column["auto_size"], `${at}.auto_size`),
+      };
+    },
   );
-  const phonePresentation = settingOptionalChoice(
-    settings["phone_presentation"],
-    recordsTablePhonePresentations,
+  const defaultSort = requiredItems(settings["default_sort"], "default_sort").map(
+    (item, index): RecordsTableSortContract => {
+      const at = `default_sort[${index}]`;
+      const key = requiredGroup(item, at);
+      return {
+        field: requiredField(key["field"], `${at}.field`),
+        direction: requiredChoice(key["direction"], recordsTableSortDirections, `${at}.direction`),
+      };
+    },
   );
-  const viewport = settingOptionalChoice(settings["viewport"], recordsTableViewports);
-  const stickyHeader = settings["sticky_header"];
-  const allowFullScreen = settings["allow_full_screen"];
   const features = readRecordsTableFeatures(settings["features"]);
-  const rowBehaviours = readRowBehaviours(settings);
-  if (
-    rowBehaviours === undefined ||
-    features === undefined ||
-    density === undefined ||
-    presentation === undefined ||
-    phonePresentation === undefined ||
-    viewport === undefined ||
-    stickyHeader?.kind !== "boolean" ||
-    allowFullScreen?.kind !== "boolean"
-  )
-    return undefined;
+  if (features.kind === "unreadable") return unreadable(features.path);
   return {
     columns,
     defaultSort,
-    sortableFields: fieldList(settings["sortable_fields"]),
-    pageSize: pageSize.value,
+    sortableFields: requiredFieldList(settings["sortable_fields"], "sortable_fields"),
+    pageSize: requiredNumber(settings["page_size"], "page_size"),
     messages: displayMessages(settings),
-    rowBehaviours,
-    density,
-    stickyHeader: stickyHeader.value,
-    allowFullScreen: allowFullScreen.value,
-    presentation,
-    phonePresentation,
-    viewport,
-    features,
+    rowBehaviours: readRowBehaviours(settings),
+    density: requiredChoice(settings["density"], recordsTableDensities, "density"),
+    stickyHeader: requiredBoolean(settings["sticky_header"], "sticky_header"),
+    allowFullScreen: requiredBoolean(settings["allow_full_screen"], "allow_full_screen"),
+    presentation: requiredChoice(
+      settings["presentation"],
+      recordsTablePhonePresentations,
+      "presentation",
+    ),
+    phonePresentation: requiredChoice(
+      settings["phone_presentation"],
+      recordsTablePhonePresentations,
+      "phone_presentation",
+    ),
+    viewport: requiredChoice(settings["viewport"], recordsTableViewports, "viewport"),
+    features: features.features,
   };
 };
 
+/** A Records table's settings read whole, or the path of the setting that cannot be read. */
+type RecordsTableContractRead =
+  | Readonly<{ kind: "read"; contract: RecordsTableContract }>
+  | Readonly<{ kind: "unreadable"; path: string }>;
+
+/**
+ * Reads a Records table placement's declared data contract from its settings. Every setting the
+ * catalogue defaults fill in must be present with its kind, every entry of a list must be whole,
+ * and every feature must be readable; one that is not makes the whole table unreadable and names
+ * where. It reads settings that already passed the shared setting validator and never widens what
+ * a release declares; the same reader serves the publication rule, the server query request and
+ * the renderer.
+ */
+export const readRecordsTableContract = (settings: SettingsRecord): RecordsTableContractRead => {
+  try {
+    return { kind: "read", contract: readContract(settings) };
+  } catch (error) {
+    if (error instanceof UnreadableSettingError) return { kind: "unreadable", path: error.path };
+    throw error;
+  }
+};
+
+/**
+ * The contract of a Records table placement, or undefined after logging where its settings cannot
+ * be read. `where` names the caller, so the log says which read refused the table.
+ */
+export const recordsTableContractOrLog = (
+  settings: SettingsRecord,
+  where: string,
+): RecordsTableContract | undefined => {
+  const read = readRecordsTableContract(settings);
+  if (read.kind === "read") return read.contract;
+  console.error(`[grid] ${where} refused: DATA_GRID_SETTING_UNREADABLE path=${read.path}`);
+  return undefined;
+};
+
 /** A column refusal: its catalogue code and that entry's business sentence. */
-export type RecordsTableColumnProblem = Readonly<{
+type RecordsTableColumnProblem = Readonly<{
   code: "definition_records_table_visible_columns" | "definition_records_table_auto_size";
   reason: string;
 }>;
@@ -328,37 +326,51 @@ export const recordsTableColumnProblems = (
   return problems;
 };
 
-/** Reads a Record detail placement's declared detail fields; undefined when they cannot be read. */
+/**
+ * Reads a Record detail placement's declared detail fields; undefined when the settings are not a
+ * detail's or a field entry cannot be read whole. A placement that is not a detail block has no
+ * `detail_fields`, which is how a caller tells the two apart.
+ */
 export const readRecordDetailContract = (
   settings: SettingsRecord,
 ): RecordDetailContract | undefined => {
-  const items = settingItems(settings["detail_fields"]);
-  if (items === undefined) return undefined;
-  const headingSource = settings["heading_source"];
-  if (headingSource?.kind !== "choice" || !["title", "field"].includes(headingSource.value))
-    return undefined;
-  const headingField =
-    headingSource.value === "field" ? settingField(settings["heading_field"]) : undefined;
-  if (headingSource.value === "field" && headingField === undefined) return undefined;
-  let unreadable = false;
-  const fields = items.flatMap((item): RecordDetailFieldContract[] => {
-    const entry = settingGroup(item);
-    const field = entry === undefined ? undefined : settingField(entry["field"]);
-    if (entry === undefined || field === undefined) return [];
-    const label = settingText(entry["label"]);
-    const format = settingOptionalChoice(entry["format"], recordsDisplayFormats);
-    if (format === undefined) {
-      unreadable = true;
-      return [];
+  if (settings["detail_fields"] === undefined) return undefined;
+  try {
+    const fields = requiredItems(settings["detail_fields"], "detail_fields").map(
+      (item, index): RecordDetailFieldContract => {
+        const at = `detail_fields[${index}]`;
+        const entry = requiredGroup(item, at);
+        const label = optionalText(entry["label"], `${at}.label`);
+        return {
+          field: requiredField(entry["field"], `${at}.field`),
+          ...(label === undefined ? {} : { label }),
+          format: requiredChoice(entry["format"], recordsDisplayFormats, `${at}.format`),
+        };
+      },
+    );
+    const headingSource = requiredChoice(
+      settings["heading_source"],
+      ["title", "field"] as const,
+      "heading_source",
+    );
+    const headingField =
+      headingSource === "field"
+        ? requiredField(settings["heading_field"], "heading_field")
+        : undefined;
+    return {
+      fields,
+      ...(headingField === undefined ? {} : { headingField }),
+      messages: displayMessages(settings),
+    };
+  } catch (error) {
+    if (error instanceof UnreadableSettingError) {
+      console.error(
+        `[grid] record detail refused: DATA_GRID_SETTING_UNREADABLE path=${error.path}`,
+      );
+      return undefined;
     }
-    return [{ field, ...(label === undefined ? {} : { label }), format }];
-  });
-  if (unreadable) return undefined;
-  return {
-    fields,
-    ...(headingField === undefined ? {} : { headingField }),
-    messages: displayMessages(settings),
-  };
+    throw error;
+  }
 };
 
 /** A custom editor reads the same list bound as the catalogue validator. Missing bounds are defects. */

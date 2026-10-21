@@ -10,7 +10,7 @@ import {
   useState,
   type ReactElement,
 } from "react";
-import { readRecordsTableContract, type RecordsTableContract } from "@vortex/platform/schema";
+import { recordsTableContractOrLog, type RecordsTableContract } from "@vortex/platform/schema";
 import { Alert, AlertDescription } from "../components/alert";
 import { Button } from "../components/button";
 import { Empty, EmptyContent, EmptyHeader, EmptyTitle } from "../components/empty";
@@ -105,7 +105,8 @@ const useAnnouncer = (): [string, (message: string) => void] => {
  * the payload that mode needs, so a payload of the other kind is a definition error.
  */
 export function TableDisplay(props: DisplayRenderProps<TablePayload | BoardPayload>): ReactElement {
-  const boardMode = readRecordsTableContract(props.settings)?.features.board.enabled === true;
+  const boardMode =
+    recordsTableContractOrLog(props.settings, "table display")?.features.board.enabled === true;
   const data = props.data;
   const mismatched = data?.status === "ready" && (data.values.kind === "board") !== boardMode;
   if (mismatched)
@@ -154,7 +155,7 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
   const events = useRowWrites(hostEvents, rowWritten);
   // Publication refuses a Records table without its contract, so a missing one is a definition
   // error: it renders the error state below, never a second way of choosing columns or controls.
-  const contract = useMemo(() => readRecordsTableContract(settings), [settings]);
+  const contract = useMemo(() => recordsTableContractOrLog(settings, "table display"), [settings]);
   const presentation = useTablePresentation(contract);
   const projectedColumns = values?.columns;
   const projectedHidden = values?.hiddenColumns;

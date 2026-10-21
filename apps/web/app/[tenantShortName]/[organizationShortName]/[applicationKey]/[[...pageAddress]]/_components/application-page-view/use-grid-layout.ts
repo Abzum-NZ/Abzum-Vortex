@@ -231,7 +231,7 @@ export function useGridLayout({
     (
       placementId: string,
       layout: GridLayout,
-      formatting?: readonly NonNullable<GridViewDocument["formatting"]>[number][],
+      formatting: readonly GridViewDocument["formatting"][number][],
     ): GridViewDocument | undefined => {
       const key = Object.keys(latestData.current).find(
         (key) => key.toLowerCase() === placementId.toLowerCase(),
@@ -249,12 +249,10 @@ export function useGridLayout({
       return {
         columns: layout.columns,
         ...(layout.density === undefined ? {} : { density: layout.density }),
-        ...(query.sort.length === 0 ? {} : { sort: [...query.sort] }),
-        ...(query.filters.length === 0 ? {} : { filters: [...query.filters] }),
-        ...(query.search === null ? {} : { search: query.search }),
-        ...(formatting === undefined || formatting.length === 0
-          ? {}
-          : { formatting: [...formatting] }),
+        sort: [...query.sort],
+        filters: [...query.filters],
+        search: query.search,
+        formatting: [...formatting],
       };
     },
     [],
@@ -414,18 +412,16 @@ export function useGridLayout({
           const current = documentOf(
             placementId,
             state.layout,
-            state.views.selected?.document.formatting,
+            state.views.selected?.document.formatting ?? [],
           );
           const selected = opened.selected;
           // Rows carry the formatting the server evaluated, so a view with other rules is read.
           const queryKey = (document: GridViewDocument) =>
             canonicalJson({
-              sort: document.sort ?? [],
-              filters: [...(document.filters ?? [])].sort((a, b) =>
-                a.fieldId.localeCompare(b.fieldId),
-              ),
-              search: document.search ?? null,
-              formatting: document.formatting ?? [],
+              sort: document.sort,
+              filters: [...document.filters].sort((a, b) => a.fieldId.localeCompare(b.fieldId)),
+              search: document.search,
+              formatting: document.formatting,
             });
           const visible = new Set(
             current?.columns.filter((column) => column.visible).map((column) => column.fieldId),
@@ -533,7 +529,7 @@ export function useGridLayout({
             await adoptOwnLayout(placementId, command.viewId, document);
             // The server evaluates the rules, so the rows are read once when they changed.
             if (
-              canonicalJson(document.formatting ?? []) !==
+              canonicalJson(document.formatting) !==
               canonicalJson(state.views.selected?.document.formatting ?? [])
             )
               await refreshPlacements([placementId]);
@@ -593,8 +589,8 @@ export function useGridLayout({
           tellOutcome(result, "View deleted.");
           if (result.outcome === "done") {
             if (state.views.selected?.viewId === command.viewId) {
-              selectTableViewInPlace(placementId, null, documentOf(placementId, state.layout));
-              if (state.views.selected.document.formatting !== undefined)
+              selectTableViewInPlace(placementId, null, documentOf(placementId, state.layout, []));
+              if (state.views.selected.document.formatting.length > 0)
                 void refreshPlacements([placementId]);
             }
             patchViews(

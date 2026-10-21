@@ -3,7 +3,8 @@ import {
   featureAvailable,
   featureEnabled,
   featureNotPossible,
-  settingField,
+  optionalField,
+  optionalNumber,
   type RecordsTableFeatureDefinition,
 } from "./shared";
 
@@ -28,13 +29,13 @@ export const recordsTableTreeFeature: RecordsTableFeatureDefinition<RecordsTable
   label: "Tree",
   description: "Expand a row to the records that name it as their parent",
   read: (group) => {
-    if (featureEnabled(group) !== true) return { enabled: false };
-    const parentField = settingField(group["parent_field"]);
-    const pageSize = group["child_page_size"];
+    if (!featureEnabled(group)) return { enabled: false };
+    const parentField = optionalField(group["parent_field"], "parent_field");
+    const childPageSize = optionalNumber(group["child_page_size"], "child_page_size");
     return {
       enabled: true,
       ...(parentField === undefined ? {} : { parentField }),
-      ...(pageSize?.kind === "number" ? { childPageSize: pageSize.value } : {}),
+      ...(childPageSize === undefined ? {} : { childPageSize }),
     };
   },
   // The records need a one-record link to their own record type among the query's columns; when
