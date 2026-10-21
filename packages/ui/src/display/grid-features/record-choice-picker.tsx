@@ -21,7 +21,7 @@ import { Icon } from "../../icons/icon";
 import { parseRecordChoicePage, type RecordChoiceOption } from "../../controls/projected-data";
 import type { DisplayEventHandlers, DisplayRow } from "../projected-data";
 import type { LinkDraft } from "./edit-values";
-import { waitingForParent } from "./link-dependency";
+import { waitingForParent } from "../../controls/dependent-field";
 
 /** A search reads once typing pauses this long, so a typed word is one read, not one per key. */
 const SEARCH_DELAY_MS = 300;

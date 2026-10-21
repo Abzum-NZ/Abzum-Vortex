@@ -168,7 +168,15 @@ export function fieldSettings(
                 ),
               }
             : {}),
+          ...(option.parent_values === undefined ? {} : { parentValues: option.parent_values }),
         })),
+        ...(settings.depends_on === undefined
+          ? {}
+          : {
+              dependsOn: {
+                parentFieldId: localField(String(asObject(settings.depends_on).parent_field)),
+              },
+            }),
       };
     case "several_choices":
       return {

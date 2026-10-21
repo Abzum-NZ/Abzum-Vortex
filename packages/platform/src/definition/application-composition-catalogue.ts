@@ -282,6 +282,7 @@ const derivedFieldInputProperty = (key: string): BlockPropertySchemaContract =>
 const derivedChoiceOptionsProperty = derivedFieldInputProperty("options");
 const severalChoicesMaximumSelectionsProperty = derivedFieldInputProperty("maximum_selections");
 const dateTimeDisplayTimeZoneProperty = derivedFieldInputProperty("display_time_zone");
+const dependsOnProperty = derivedFieldInputProperty("depends_on");
 
 /**
  * The existing input release each derived automatic field control delegates to. The compiler
@@ -298,7 +299,10 @@ export const FIELD_INPUT_CONTROL_RELEASES: Readonly<
   boolean: BOOLEAN_INPUT_BLOCK_RELEASE,
   date: DATE_INPUT_BLOCK_RELEASE,
   date_time: derivedFieldInputRelease(DATE_INPUT_BLOCK_RELEASE, [dateTimeDisplayTimeZoneProperty]),
-  choice: derivedFieldInputRelease(CHOICE_INPUT_BLOCK_RELEASE, [derivedChoiceOptionsProperty]),
+  choice: derivedFieldInputRelease(CHOICE_INPUT_BLOCK_RELEASE, [
+    derivedChoiceOptionsProperty,
+    dependsOnProperty,
+  ]),
   several_choices: derivedFieldInputRelease(CHOICE_INPUT_BLOCK_RELEASE, [
     derivedChoiceOptionsProperty,
     severalChoicesMaximumSelectionsProperty,

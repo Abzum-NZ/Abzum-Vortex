@@ -461,7 +461,7 @@ const ownQueries = (source: ApplicationSourceDocument): StudioQueryChoice[] =>
                 ...(isParentLink(module.key, recordType, record, field)
                   ? { parentLink: true }
                   : {}),
-                ...(field.type === "link" &&
+                ...((field.type === "link" || field.type === "choice") &&
                 (field.settings as { depends_on?: { parent_field: string } }).depends_on !==
                   undefined
                   ? {
