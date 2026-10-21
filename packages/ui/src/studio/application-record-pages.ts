@@ -922,6 +922,7 @@ const addDetail = (
       title: record.name,
       heading_source: "field",
       heading_field: field(resolved, resolved.title),
+      row_action_event_id: `row_action_${detailAlias}`.slice(0, 60),
       detail_fields: shown.map((entry) => ({ field: field(resolved, entry), label: entry.label })),
     },
     {},

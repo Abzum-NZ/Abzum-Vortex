@@ -15,7 +15,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Button } from "../components/button";
 import { Card, CardContent, CardDescription, CardHeader } from "../components/card";
 import { DisplayHeader, RecordsEmptyState, RecordsLoadingState } from "./controls";
-import { resolveDisplayContext, type DisplayRenderProps } from "./context";
+import { resolveDisplayContext, rowActionEventIdOf, type DisplayRenderProps } from "./context";
 import { DisplayStateContainer } from "./display-state-container";
 import { formatIsoDate } from "./date-format";
 import { useDateFormatOptions } from "./date-format-context";
@@ -93,6 +93,7 @@ export function CalendarDisplay(props: DisplayRenderProps<CalendarPayload>): Rea
     errorMessage,
     events,
   } = resolveDisplayContext<CalendarPayload>(props, () => false, "No items in this period");
+  const rowActionEventId = events?.row_action === undefined ? undefined : rowActionEventIdOf(props);
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -244,6 +245,7 @@ export function CalendarDisplay(props: DisplayRenderProps<CalendarPayload>): Rea
                             timeZone={values.timeZone}
                             locale={locale}
                             events={events}
+                            rowActionEventId={rowActionEventId}
                             showTime
                           />
                         </li>
@@ -304,6 +306,7 @@ export function CalendarDisplay(props: DisplayRenderProps<CalendarPayload>): Rea
                               timeZone={values.timeZone}
                               locale={locale}
                               events={events}
+                              rowActionEventId={rowActionEventId}
                               showTime={values.view === "week"}
                             />
                           </li>
@@ -326,12 +329,15 @@ const CalendarItemButton = ({
   timeZone,
   locale,
   events,
+  rowActionEventId,
   showTime,
 }: Readonly<{
   item: CalendarPayload["items"][number];
   timeZone: string;
   locale: string | undefined;
   events: DisplayRenderProps<CalendarPayload>["events"];
+  /** The block's `row_action_event_id`; read only while a row action is bound. */
+  rowActionEventId: string | undefined;
   showTime: boolean;
 }>): ReactElement => {
   const label = item.title.trim() || "Untitled item";
@@ -343,7 +349,7 @@ const CalendarItemButton = ({
       <span className="break-words">{label}</span>
     </>
   );
-  return events?.row_action === undefined ? (
+  return events?.row_action === undefined || rowActionEventId === undefined ? (
     <span className="block px-1 py-1 text-xs">{content}</span>
   ) : (
     <Button
@@ -352,7 +358,13 @@ const CalendarItemButton = ({
       size="xs"
       className="h-auto w-full justify-start whitespace-normal text-left"
       aria-label={`Open ${label}${startTime === "" ? "" : ` at ${startTime}`}`}
-      onClick={() => events.row_action?.({ event: "row_action", recordId: item.recordId })}
+      onClick={() =>
+        events.row_action?.({
+          event: "row_action",
+          eventId: rowActionEventId,
+          recordId: item.recordId,
+        })
+      }
     >
       {content}
     </Button>

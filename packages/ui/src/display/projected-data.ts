@@ -384,8 +384,8 @@ export type DisplaySemanticEventName =
  *
  * A row click, row action, bulk action and inline-edit commit carry the stable `eventId` of the
  * exact configured control that fired, because one table placement may declare several named
- * commands that each bind to a different flow. Other displays with a single placement-level
- * action emit `row_action` without an event identity.
+ * commands that each bind to a different flow. A block without a row-action list names its one row
+ * action in its required `row_action_event_id` setting, and every `row_action` it emits carries it.
  *
  * A row action carries the row's server-projected current revision, exactly as an inline-edit commit
  * does, so a command that changes one existing row is bound at the revision the person actually saw
@@ -396,7 +396,7 @@ export type DisplaySemanticEvent =
   | Readonly<{ event: "row_clicked"; eventId: string; recordId: string }>
   | Readonly<{
       event: "row_action";
-      eventId?: string;
+      eventId: string;
       recordId: string;
       /** The record revision the row was read at; a stale one is refused by the server. */
       revision?: number;

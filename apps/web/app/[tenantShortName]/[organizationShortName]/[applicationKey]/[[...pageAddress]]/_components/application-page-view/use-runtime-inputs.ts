@@ -30,7 +30,7 @@ import type {
   placementEventNamesByPage,
   applicationLauncherPlacementIds,
 } from "./placement-helpers";
-import { boardPayloadFor, tablePayloadFor, compatibleBoardRowAction } from "./placement-helpers";
+import { boardPayloadFor, tablePayloadFor } from "./placement-helpers";
 import type {
   DispatchOutcome,
   TableContinuationTarget,
@@ -311,8 +311,6 @@ export function useRuntimeInputs({
       const events: EventHandlers = {};
       const boardData = boardPayloadFor(data);
       const tableData = tablePayloadFor(data);
-      const boardRowActionBinding =
-        boardData === undefined ? undefined : compatibleBoardRowAction(bindings);
       const declaredEvents = placementEventNames[placementId];
       const supportsEvent = (eventName: string): boolean => declaredEvents?.has(eventName) === true;
       const flowFeedback =
@@ -330,19 +328,18 @@ export function useRuntimeInputs({
         for (const kind of ["row_clicked", "row_action"] as const)
           if (
             supportsEvent(kind) &&
-            (kind !== "row_action" ||
-              (!launcherPlacements.has(placementId) && boardData === undefined)) &&
+            (kind !== "row_action" || !launcherPlacements.has(placementId)) &&
             bindings.some((binding) => binding.event === kind)
           )
             events[kind] = (event: DisplaySemanticEvent) => {
-              if (
-                tableData !== undefined &&
-                event.event === "row_action" &&
-                event.eventId === undefined
-              )
-                return;
               const binding = bindingFor(bindings, event);
-              if (binding !== undefined && !busy)
+              if (binding === undefined) {
+                console.error(
+                  `[page] ${kind} names no binding of its placement: ROW_EVENT_BINDING_MISSING`,
+                );
+                return;
+              }
+              if (!busy)
                 return runBinding(
                   placementId,
                   binding,
@@ -350,7 +347,7 @@ export function useRuntimeInputs({
                   event.event === "row_clicked" || event.event === "row_action"
                     ? event.recordId
                     : undefined,
-                  tableData !== undefined &&
+                  (tableData !== undefined || boardData !== undefined) &&
                     event.event === "row_action" &&
                     event.revision !== undefined
                     ? { recordId: event.recordId, revision: event.revision }
@@ -414,23 +411,6 @@ export function useRuntimeInputs({
                       : { corrections: outcome.corrections }),
                   };
             };
-        if (
-          boardData !== undefined &&
-          boardRowActionBinding !== undefined &&
-          supportsEvent("row_action")
-        )
-          events.row_action = async (event: DisplaySemanticEvent) => {
-            if (event.event !== "row_action" || event.eventId !== undefined || busy) return;
-            await runBinding(
-              placementId,
-              boardRowActionBinding,
-              suppliedValues(event),
-              event.recordId,
-              event.revision === undefined
-                ? undefined
-                : { recordId: event.recordId, revision: event.revision },
-            );
-          };
         // A moved card saves the record's choice field through the bound flow. The handler reports
         // whether the server accepted the move, so the board keeps the card pending until the
         // refreshed columns arrive and releases it at once when the move was refused.
