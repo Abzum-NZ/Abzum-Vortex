@@ -192,9 +192,7 @@ declare
   group_key text;
   group_member_matches boolean;
   group_scan_predicate text;
-  group_link_field_id text;
-  group_link_cache jsonb := '{}'::jsonb;
-  group_link_value jsonb;
+  group_link_field_id text; group_link_cache jsonb := '{}'::jsonb; group_link_state jsonb;
   preview_mode boolean := false;
   -- A tree level: the roots of a tree (records with no readable parent) or the
   -- children of one parent, over a one-record link of the record type to itself.
@@ -727,14 +725,8 @@ begin
     filter_predicate := '(' || filter_predicate || ') and (' || group_scan_predicate || ')';
     if fields_by_id -> group_key ->> 'type' = 'link' then
       group_link_field_id := group_key;
-      -- A named target is a group only while the reader may read it now (the same protected
-      -- title batch the summary folds with); a stale or forged selector for one they cannot is refused.
-      if pg_catalog.jsonb_typeof(group_selector_values -> group_key) = 'object'
-        and not exists (
-          select 1 from vortex_record.dimension_value_internal(
-            array[group_selector_values -> group_key], fields_by_id -> group_key
-          ) as target where target.normalized = group_selector_values -> group_key
-        ) then
+      if (vortex_record.group_link_unreadable_internal(group_link_cache, group_selector_values -> group_key,
+        fields_by_id -> group_key) ->> 'matches')::boolean then
         return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'read_forbidden');
       end if;
     end if;
@@ -1291,28 +1283,13 @@ begin
               select 1 from pg_catalog.unnest(group_by_ids) as grouped(id)
               where not (readable_values ? grouped.id)
             );
-            if group_member_matches
-              and group_link_field_id is not null
+            if group_member_matches and group_link_field_id is not null
               and group_selector_values -> group_link_field_id = '"not_available"'::jsonb then
-              -- The group of unreadable targets: the row's link names a target the reader cannot
-              -- read now. Each distinct target is decided once per call, through the protected
-              -- title batch the summary folds with.
-              group_link_value := readable_values -> group_link_field_id;
-              if pg_catalog.jsonb_typeof(group_link_value) = 'object' then
-                if not (group_link_cache ? (group_link_value ->> 'recordId')) then
-                  group_link_cache := group_link_cache || pg_catalog.jsonb_build_object(
-                    group_link_value ->> 'recordId',
-                    exists (
-                      select 1 from vortex_record.dimension_value_internal(
-                        array[group_link_value], fields_by_id -> group_link_field_id
-                      ) as target where target.normalized = group_link_value
-                    )
-                  );
-                end if;
-                group_member_matches := not (group_link_cache ->> (group_link_value ->> 'recordId'))::boolean;
-              else
-                group_member_matches := false;
-              end if;
+              -- The group of unreadable targets: each distinct target is decided once per call.
+              group_link_state := vortex_record.group_link_unreadable_internal(
+                group_link_cache, readable_values -> group_link_field_id, fields_by_id -> group_link_field_id);
+              group_link_cache := group_link_state -> 'cache';
+              group_member_matches := (group_link_state ->> 'matches')::boolean;
             elsif group_member_matches then
               select pg_catalog.jsonb_object_agg(grouped.id, vortex_record.grouping_value_internal(
                 readable_values -> grouped.id, fields_by_id -> grouped.id ->> 'type', p_user_inputs #> '{grouping,dateBucket}'
