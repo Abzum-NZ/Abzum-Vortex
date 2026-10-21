@@ -101,6 +101,11 @@ export const recordsTableSpreadsheetFeature: RecordsTableFeatureDefinition<Recor
             code,
             "Status bar totals need a number, money or date field the query reads",
           );
+        if (!facts.columnFieldIds.some((column) => column.toLowerCase() === field.toLowerCase()))
+          return featureNotPossible(
+            code,
+            "Status bar totals need a field the table shows as a column.",
+          );
       }
       return featureAvailable;
     },

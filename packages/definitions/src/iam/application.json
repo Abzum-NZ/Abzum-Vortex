@@ -3767,6 +3767,28 @@
             }
           },
           {
+            "id": "form_cancelled",
+            "type": "if",
+            "condition": {
+              "op": "not",
+              "arg": {
+                "op": "reference",
+                "reference": {
+                  "source": "task_output",
+                  "task": "form",
+                  "key": "submitted"
+                }
+              }
+            },
+            "then": [
+              {
+                "id": "stop_form_cancelled",
+                "type": "stop",
+                "outcome": "cancelled"
+              }
+            ]
+          },
+          {
             "id": "call",
             "type": "operation.call",
             "version": "1.0.0",

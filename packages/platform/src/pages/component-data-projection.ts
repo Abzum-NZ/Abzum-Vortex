@@ -148,7 +148,7 @@ export type ProjectedTableRow = Readonly<{
   hasChildren?: true;
   /**
    * The exact text of each number and money cell the viewer may read, keyed by column: a decimal as
-   * stored, money as "amount CURRENCY". It rides with the page for the spreadsheet range copy, which
+   * stored, money as "CURRENCY amount". It rides with the page for the spreadsheet range copy, which
    * reads nothing at copy time; present only while Range selection is on, and never for a withheld cell.
    */
   exact?: Readonly<Record<string, string>>;
@@ -359,7 +359,8 @@ const exactTextOf = (stored: JsonValue, cell: ProjectedScalarCellValue): string 
     typeof stored.amount === "string" &&
     typeof stored.currency === "string"
   )
-    return `${stored.amount} ${stored.currency}`;
+    // Code first, as the CSV export writes money: a leading "-" amount would run as a formula.
+    return `${stored.currency} ${stored.amount}`;
   if (cell.kind !== "number") return undefined;
   if (typeof stored === "string" && isExactDecimal(stored)) return stored;
   return typeof stored === "number" && Number.isFinite(stored) ? String(stored) : undefined;

@@ -3,6 +3,7 @@
 import { useId, useState, type ReactElement } from "react";
 import {
   RECORDS_TABLE_EXPORT_MAXIMUM_ROWS,
+  recordsTableExportFormatLabels,
   recordsTableExportFormats,
   type SourceBlockPropertyValueContract,
 } from "@vortex/platform/schema";
@@ -56,7 +57,7 @@ export function StudioExportEditor({
                   });
                 }}
               />
-              <Label htmlFor={`${id}-${format}`}>{format === "csv" ? "CSV" : "Excel"}</Label>
+              <Label htmlFor={`${id}-${format}`}>{recordsTableExportFormatLabels[format]}</Label>
             </div>
           );
         })}

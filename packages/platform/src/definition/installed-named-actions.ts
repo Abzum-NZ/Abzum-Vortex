@@ -10,6 +10,14 @@ type InstalledNamedActionDescriptor = Readonly<{
 }>;
 
 /**
+ * The key a flow calls the action `actionId` contributed to the owner record type `recordTypeId`
+ * by. It cannot equal an authored action key, so a contributed action never shadows or is shadowed
+ * by one, and the generated flow that runs it and the named action map agree on it.
+ */
+export const contributedActionKey = (recordTypeId: string, actionId: string): string =>
+  `contributed:${recordTypeId.toLowerCase()}:${actionId.toLowerCase()}`;
+
+/**
  * Every installed named action of one release set, with the choice option it declares it sets,
  * and the actions other installed Modules contributed to its record types, each bound to its
  * owner record type and still owned by its contributor's exact release.
@@ -77,8 +85,15 @@ export const installedNamedActionDescriptors = (
       { ownerKind: "module", ownerId: module.rootId, releaseRevision: module.releaseRevision },
       module.content.actions,
     );
+  // A contributed action is called by its own key on the owner record type, never by the key its
+  // contributor authored: that key may name the contributor's own action (when this application
+  // binds the contributor too) or an owner action, and an ambiguous key would disable both.
+  const contributedKeys = new Set<string>();
   for (const entry of contributions)
     for (const action of entry.actions) {
+      const key = contributedActionKey(entry.recordTypeId, action.actionId);
+      // The same exact contribution listed again adds nothing.
+      if (contributedKeys.has(key)) continue;
       const reference = installedNamedActionReferenceSchema.safeParse({
         ownerKind: "module",
         ownerId: action.contributorModuleRootId,
@@ -86,8 +101,9 @@ export const installedNamedActionDescriptors = (
         actionId: action.actionId,
       });
       if (!reference.success) continue;
+      contributedKeys.add(key);
       descriptors.push({
-        key: action.key,
+        key,
         named: {
           action: reference.data,
           subjectRecordTypeId: entry.recordTypeId,

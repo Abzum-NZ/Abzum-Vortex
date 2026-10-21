@@ -145,10 +145,12 @@ export const studioRecordsTableQueryFacts = (
   actions: readonly StudioActionChoice[],
   relationships: readonly StudioRelationshipChoice[],
   related: StudioRelatedRecordsChoices,
+  columnFieldIds: readonly string[],
 ): RecordsTableQueryFacts => ({
   signedIn,
   recordTypeLabel: query?.label ?? "",
   maximumPageSize: query?.pageSize,
+  columnFieldIds,
   fields: (query?.fields ?? []).map((field) => ({
     field: field.reference,
     label: field.label,

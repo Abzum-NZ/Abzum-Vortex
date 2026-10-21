@@ -109,10 +109,12 @@ export const recordsTableGroupLinks = (
       );
 
 /**
- * The groups a summary counted. A choice's group is labelled with its choice's label (or the stored
- * value when the choice is no longer offered) and ordered as the field orders its choices; a link's
- * group is its target's readable title, and a date's the heading of its calendar bucket, each in the
- * order the summary returned them. The records that hold no value come last. A label is never a
+ * The groups a summary counted, in the order the summary returned them: the server orders and pages
+ * them, so every page continues the previous one. A choice's group is labelled with its choice's
+ * label (or the stored value when the choice is no longer offered) and comes in the field's option
+ * order, a value no longer offered after every option; a link's group is its target's readable
+ * title, titled groups first, then no value, then Not available; a date's group is the heading of
+ * its calendar bucket. For a choice the records that hold no value come last. A label is never a
  * count of loaded rows: every count comes from the same summary read.
  */
 export const projectRecordsTableGroups = (
@@ -133,15 +135,6 @@ export const projectRecordsTableGroups = (
       count: group.rowCount,
       ...(value === null ? { unassigned: true as const } : {}),
     });
-  }
-  if (field.fieldType === "choice") {
-    const rank = (group: ProjectedTableGroup): number => {
-      if (group.unassigned === true) return Number.MAX_SAFE_INTEGER;
-      const value = parseRecordsTableGroupKey(group.key);
-      const index = field.options.findIndex((option) => option.value === value);
-      return index < 0 ? field.options.length : index;
-    };
-    groups.sort((left, right) => rank(left) - rank(right) || left.label.localeCompare(right.label));
   }
   const next = summary.nextGroupKey ?? undefined;
   return {

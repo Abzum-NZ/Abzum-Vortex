@@ -4,6 +4,7 @@ import { PassThrough, type Transform } from "node:stream";
 import { Temporal } from "@js-temporal/polyfill";
 import { moduleFieldValueSchemas } from "../records/module-field-values";
 import { compareExactDecimals, parseExactDecimal } from "../records/exact-decimal";
+import { spreadsheetText } from "../definition/application-composition/records-table-features/export";
 
 /**
  * Values already projected by the export authority. Links enter only as permitted titles (text),
@@ -37,10 +38,6 @@ export type RecordsExportFormat = Readonly<{
 }>;
 
 const csvQuote = (value: string): string => `"${value.replaceAll('"', '""')}"`;
-
-/** Prefix spreadsheet formula strings, including header labels; quoting alone is insufficient. */
-const spreadsheetText = (value: string): string =>
-  /^[=+\-@\t\r\n\uFF1D\uFF0B\uFF0D\uFF20]/.test(value) ? `'${value}` : value;
 
 const csvText = (value: string): string => csvQuote(spreadsheetText(value));
 
@@ -107,6 +104,11 @@ const excelNumberText = new Intl.NumberFormat("en", {
   useGrouping: false,
   maximumSignificantDigits: 15,
 });
+
+/** The minor digits of a currency (2 for USD, 0 for JPY), as Intl formats its amounts. */
+const currencyScale = (currency: string): number =>
+  new Intl.NumberFormat("en", { style: "currency", currency }).resolvedOptions()
+    .maximumFractionDigits ?? 0;
 
 const excelNumber = (text: string, scale: number): number => {
   const exact = parseExactDecimal(text);
@@ -346,8 +348,15 @@ export const recordsXlsxFormat = async (
               if (column.type !== "decimal_number" && column.type !== "money")
                 throw exportError("column_cell_type_mismatch");
               const amount = cell.type === "money" ? cell.value.amount : cell.value;
+              // Stored amounts are canonical, so `10.50` arrives as `10.5`: money keeps at least
+              // its currency's minor digits, as the grid shows it.
               const scale =
-                column.scale === "value" ? parseExactDecimal(amount)!.scale : column.scale;
+                column.scale === "value"
+                  ? Math.max(
+                      parseExactDecimal(amount)!.scale,
+                      cell.type === "money" ? currencyScale(cell.value.currency) : 0,
+                    )
+                  : column.scale;
               target.value = excelNumber(amount, scale);
               const numberFormat = scale === 0 ? "0" : `0.${"0".repeat(scale)}`;
               target.numFmt =

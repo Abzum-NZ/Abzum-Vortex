@@ -149,7 +149,8 @@ export const compileModuleCandidate = (
 ): CompiledModuleCandidate => {
   if (candidate.draft.source.kind !== "module" || resolution.contractVersion !== "3.0.0")
     return refuse("DEFINITION_COMPILATION_REFUSED");
-  // Dependency resolution already authenticated and parsed these outputs.
+  // Dependency resolution authenticated these outputs and checked that they parse, but passes them
+  // as stored: schema defaults (such as a Module's empty `queries`) are not filled in here.
   const dependencyOutputs = [
     ...dependencies.modules.map((release) => release.compilationOutput),
     ...dependencies.connections.map((release) => release.compilationOutput),
@@ -224,7 +225,8 @@ export const compileApplicationCandidate = (
     dependencies.composition === undefined
   )
     return refuse("DEFINITION_COMPILATION_REFUSED");
-  // Dependency resolution already authenticated and parsed these outputs.
+  // Dependency resolution authenticated these outputs and checked that they parse, but passes them
+  // as stored: schema defaults (such as a Module's empty `queries`) are not filled in here.
   const dependencyOutputs = [
     ...dependencies.modules.map((release) => release.compilationOutput),
     ...dependencies.connections.map((release) => release.compilationOutput),

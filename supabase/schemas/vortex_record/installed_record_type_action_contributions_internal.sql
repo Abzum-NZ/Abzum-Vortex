@@ -1,6 +1,7 @@
 create or replace function vortex_record.installed_record_type_action_contributions_internal(
   p_organization_id uuid,
   p_target_module_root_id uuid,
+  p_target_module_release_revision bigint,
   p_target_record_type_id uuid
 )
 returns jsonb
@@ -12,6 +13,7 @@ as $function$
 declare
   target_content jsonb;
   target_storage_contract_id uuid;
+  field_contributions jsonb;
   contributor record;
   contributor_content jsonb;
   contribution jsonb;
@@ -25,24 +27,28 @@ begin
     or not vortex_platform.is_non_nil_uuid(p_organization_id::text)
     or p_target_module_root_id is null
     or not vortex_platform.is_non_nil_uuid(p_target_module_root_id::text)
+    or p_target_module_release_revision is null
+    or p_target_module_release_revision not between 1 and 9007199254740991
     or p_target_record_type_id is null
     or not vortex_platform.is_non_nil_uuid(p_target_record_type_id::text) then
     raise exception using errcode = '22023',
       message = 'Installed contribution selector is invalid';
   end if;
 
-  -- The owner Module's installed release declares the extension points; the newest release the
-  -- organisation has bound is the one a contribution must still resolve against.
+  -- The owner Module release the calling application binds declares the extension points a
+  -- contribution must resolve against; it counts only while the organisation actively binds it.
   select release.compilation_output #> '{canonical,content}' into target_content
-  from vortex_definition.installation_bindings as binding
-  join vortex_definition.releases as release
-    on release.root_id = binding.module_root_id
-    and release.release_revision = binding.module_release_revision
-  where binding.organization_id = p_organization_id
-    and binding.module_root_id = p_target_module_root_id
-    and binding.state = 'active'
-  order by binding.module_release_revision desc
-  limit 1;
+  from vortex_definition.releases as release
+  where release.root_id = p_target_module_root_id
+    and release.release_revision = p_target_module_release_revision
+    and exists (
+      select 1
+      from vortex_definition.installation_bindings as binding
+      where binding.organization_id = p_organization_id
+        and binding.module_root_id = p_target_module_root_id
+        and binding.module_release_revision = p_target_module_release_revision
+        and binding.state = 'active'
+    );
   if target_content is null then
     return result;
   end if;
@@ -54,6 +60,10 @@ begin
   if target_storage_contract_id is null then
     return result;
   end if;
+  -- The fields contributed to this record type, resolved once for every contributor below.
+  field_contributions := vortex_record.installed_record_type_contributions_internal(
+    p_organization_id, p_target_module_root_id, target_storage_contract_id
+  );
 
   -- Only Modules that depend on the owner can contribute to it, so only their releases are read.
   for contributor in
@@ -84,11 +94,7 @@ begin
     end if;
     select coalesce(pg_catalog.array_agg(pg_catalog.lower(field_entry.value ->> 'contributionId')), array[]::text[])
     into contributed_field_ids
-    from pg_catalog.jsonb_array_elements(
-      vortex_record.installed_record_type_contributions_internal(
-        p_organization_id, p_target_module_root_id, target_storage_contract_id
-      )
-    ) as field_entry(value)
+    from pg_catalog.jsonb_array_elements(field_contributions) as field_entry(value)
     where (field_entry.value ->> 'contributorModuleRootId')::uuid = contributor.module_root_id;
 
     for contribution in
@@ -157,12 +163,12 @@ begin
 end
 $function$;
 
-alter function vortex_record.installed_record_type_action_contributions_internal(uuid,uuid,uuid) owner to vortex_owner;
+alter function vortex_record.installed_record_type_action_contributions_internal(uuid,uuid,bigint,uuid) owner to vortex_owner;
 
-revoke all on function vortex_record.installed_record_type_action_contributions_internal(uuid, uuid, uuid)
+revoke all on function vortex_record.installed_record_type_action_contributions_internal(uuid, uuid, bigint, uuid)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-grant execute on function vortex_record.installed_record_type_action_contributions_internal(uuid, uuid, uuid)
+grant execute on function vortex_record.installed_record_type_action_contributions_internal(uuid, uuid, bigint, uuid)
   to vortex_record_adapter, vortex_owner;
 
-comment on function vortex_record.installed_record_type_action_contributions_internal(uuid, uuid, uuid) is
-  'Private exact installed action contributions of one owner record type in one organisation: the contributor Module''s declared actions, resolved against the owner''s installed extension point, that take no inputs and only set fields the contributor itself contributed to that record type. Owner-only except for the fixed record adapter; it decides no access.';
+comment on function vortex_record.installed_record_type_action_contributions_internal(uuid, uuid, bigint, uuid) is
+  'Private exact installed action contributions of one owner record type in one organisation: the contributor Module''s declared actions, resolved against the extension point of the exact owner release the calling application binds, that take no inputs and only set fields the contributor itself contributed to that record type. Owner-only except for the fixed record adapter; it decides no access.';

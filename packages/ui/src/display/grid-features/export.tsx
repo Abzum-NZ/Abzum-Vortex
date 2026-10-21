@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, useRef, type ReactElement } from "react";
-import type { RecordsTableExportFormat } from "@vortex/platform/schema";
+import {
+  recordsTableExportFormatLabels,
+  type RecordsTableExportFormat,
+} from "@vortex/platform/schema";
 import { Button } from "../../components/button";
 import {
   DropdownMenu,
@@ -64,7 +67,7 @@ function ExportScopeItem({
       <DropdownMenuSubContent>
         {context.features.export?.formats.map((format) => (
           <DropdownMenuItem key={format} onClick={() => request(context, scope, format)}>
-            {format === "csv" ? "CSV" : "Excel"}
+            {recordsTableExportFormatLabels[format]}
           </DropdownMenuItem>
         ))}
       </DropdownMenuSubContent>
@@ -174,7 +177,7 @@ function ExportSelectionBanner({ context }: GridFeaturePointProps): ReactElement
             key={format}
             onClick={() => request(context, allMatching ? "matching" : "selected", format)}
           >
-            {format === "csv" ? "CSV" : "Excel"}
+            {recordsTableExportFormatLabels[format]}
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>

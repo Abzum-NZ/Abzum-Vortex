@@ -1,3 +1,4 @@
+import { spreadsheetText } from "@vortex/platform/schema";
 import type {
   DisplayCellValue,
   DisplayRichTextBlock,
@@ -9,11 +10,11 @@ import type { GridColumn } from "../table-layout";
 /**
  * The canonical text of a selected range, as tab-separated values for the clipboard. It is pure and
  * reads nothing: every value is the one the page already carries for a cell the viewer may read
- * (an exact decimal or "amount CURRENCY" from the page's `exact` values, an ISO date, a link's
+ * (an exact decimal or "CURRENCY amount" from the page's `exact` values, an ISO date, a link's
  * title, a choice's label). A column whose selected cells are all withheld is left out, and a
  * withheld cell inside a readable column is empty; a hidden column is never in the range. A value
- * a spreadsheet would run as a formula (a leading `=`, `+`, `-` or `@`, a tab or a carriage
- * return) is prefixed with an apostrophe so it pastes as text.
+ * a spreadsheet would run as a formula is neutralised by the platform's one `spreadsheetText`, as
+ * export files are, so it pastes as text.
  */
 
 const inlineText = (inline: DisplayRichTextInline): string =>
@@ -25,7 +26,7 @@ const blockText = (block: DisplayRichTextBlock): string =>
     : block.children.map(inlineText).join("");
 
 /** A plain signed decimal: the only text left unprefixed when it starts with a sign. */
-const plainNumber = /^-?\d+(\.\d+)?( [A-Z]{3})?$/;
+const plainNumber = /^-?\d+(\.\d+)?$/;
 
 /** The canonical text of one cell, and whether it is a system-produced number. */
 const cellText = (
@@ -59,9 +60,9 @@ const cellText = (
   }
 };
 
-/** Makes a value that a spreadsheet would run as a formula paste as text. */
-export const neutraliseFormula = (text: string, trustedNumber: boolean): string =>
-  /^[=+\-@\t\r]/.test(text) && !(trustedNumber && plainNumber.test(text)) ? `'${text}` : text;
+/** Makes a value that a spreadsheet would run as a formula paste as text; a system number stays. */
+const neutraliseFormula = (text: string, trustedNumber: boolean): string =>
+  trustedNumber && plainNumber.test(text) ? text : spreadsheetText(text);
 
 /** Quotes a field that holds a tab, a line break or a quote, as spreadsheets write TSV. */
 const quoted = (text: string): string =>

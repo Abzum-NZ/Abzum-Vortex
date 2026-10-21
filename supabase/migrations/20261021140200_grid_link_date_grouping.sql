@@ -57,7 +57,8 @@ begin
     )
     -- Order: named targets by readable title, then Not set, then Not available last. The title's
     -- first 512 characters sort it, so the row key stays within the 4,096-character key contract;
-    -- titles that share that prefix, and targets whose title is empty or withheld, follow record identity.
+    -- titles that share that prefix follow record identity. A target whose title is empty or
+    -- withheld is not readable here, so it folds into Not available.
     select item.value, normalized.value,
       case when normalized.value = 'null'::jsonb then 1
         when normalized.value = '"not_available"'::jsonb then 2 else 0 end,

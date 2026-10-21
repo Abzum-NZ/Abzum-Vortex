@@ -47,11 +47,13 @@ declare
   binding jsonb;
   eligibility jsonb;
   candidate jsonb;
+  source_value jsonb;
   route jsonb;
-  policy jsonb;
+  catalogue_entry vortex_access.permission_catalogue_entries%rowtype;
   policy_readable text[];
   routes jsonb;
   visible text[] := array[]::text[];
+  share_only_fallback text[] := array[]::text[];
   share_loaded boolean := false;
   share_seen boolean := false;
   share_readable text[] := array[]::text[];
@@ -77,15 +79,25 @@ begin
   -- all-records, ownership or relationship route exposes its permission's
   -- declared readable fields. A direct-share route can only narrow them to the
   -- fields of the shares the reader holds now, so the set read is bounded by
-  -- those shares and never by the size of the table.
+  -- those shares and never by the size of the table. An unknown route kind
+  -- contributes nothing.
   for candidate in
     select listed.value
     from pg_catalog.jsonb_array_elements(
       coalesce(eligibility -> 'eligiblePermissions', '[]'::jsonb)
     ) as listed(value)
   loop
-    select entry.field_policy into policy
+    source_value := candidate -> 'source';
+    -- The meaning the caller's role accepted, at the registration revision the
+    -- eligibility names; its registration must still be active.
+    select entry.* into catalogue_entry
     from vortex_access.permission_catalogue_entries as entry
+    join vortex_access.permission_registrations as registration
+      on registration.organization_id = entry.organization_id
+      and registration.registration_kind = entry.registration_kind
+      and registration.registration_owner_id = entry.registration_owner_id
+      and entry.registration_revision <= registration.revision
+      and registration.state = 'active'
     where entry.organization_id = (ctx ->> 'organizationId')::uuid
       and entry.registration_revision = (candidate ->> 'registrationRevision')::bigint
       and entry.application_root_id = (candidate #>> '{permission,applicationRootId}')::uuid
@@ -96,11 +108,21 @@ begin
       raise exception using errcode = '22023',
         message = 'Record field visibility found no catalogue entry';
     end if;
+    if catalogue_entry.source_kind is distinct from (source_value ->> 'kind')
+      or catalogue_entry.source_definition_key is distinct from (source_value ->> 'definitionKey')
+      or catalogue_entry.source_root_id is distinct from (source_value ->> 'rootId')::uuid
+      or catalogue_entry.source_version is distinct from (source_value ->> 'releaseVersion')
+      or catalogue_entry.source_revision is distinct from (source_value ->> 'releaseRevision')::bigint
+      or catalogue_entry.source_validation_contract_version
+        is distinct from (source_value ->> 'validationContractVersion') then
+      raise exception using errcode = '22023',
+        message = 'Record field visibility found a superseded permission source';
+    end if;
     -- No declared field policy contributes no field, as the record decision does.
     select coalesce(pg_catalog.array_agg(pg_catalog.lower(field.value)), array[]::text[])
     into policy_readable
     from pg_catalog.jsonb_array_elements_text(
-      coalesce(policy -> 'readableFieldIds', '[]'::jsonb)
+      coalesce(catalogue_entry.field_policy -> 'readableFieldIds', '[]'::jsonb)
     ) as field(value);
     if pg_catalog.cardinality(policy_readable) = 0 then
       continue;
@@ -111,10 +133,15 @@ begin
     end if;
     for route in select item.value from pg_catalog.jsonb_array_elements(routes) as item(value)
     loop
-      if route ->> 'kind' is distinct from 'direct_share' then
-        visible := visible || policy_readable;
-        continue;
-      end if;
+      case route ->> 'kind'
+        when 'all_records', 'ownership', 'relationship' then
+          visible := visible || policy_readable;
+          continue;
+        when 'direct_share' then
+          null;
+        else
+          continue;
+      end case;
       if not share_loaded then
         select pg_catalog.count(*) > 0,
           coalesce(pg_catalog.array_agg(distinct pg_catalog.lower(field.value::text))
@@ -155,14 +182,24 @@ begin
           );
         share_loaded := true;
       end if;
-      -- With no current share the route admits no record, so it narrows
-      -- nothing: the declared fields stay offered over an empty result.
-      visible := visible || case when share_seen then array(
-        select shared.value from pg_catalog.unnest(policy_readable) as shared(value)
-        where shared.value = any (share_readable)
-      ) else policy_readable end;
+      -- With no current share the route admits no record and adds no column;
+      -- its declared fields are kept only as the share-only fallback below.
+      if share_seen then
+        visible := visible || array(
+          select shared.value from pg_catalog.unnest(policy_readable) as shared(value)
+          where shared.value = any (share_readable)
+        );
+      else
+        share_only_fallback := share_only_fallback || policy_readable;
+      end if;
     end loop;
   end loop;
+
+  -- A reader whose only routes are shares, none current, still sees the
+  -- declared columns over an empty result; any other route's columns win.
+  if pg_catalog.cardinality(visible) = 0 then
+    visible := share_only_fallback;
+  end if;
 
   -- The upper bound, then the one rule for produced fields: a calculation or
   -- total the reader cannot fully read stays withheld.
@@ -182,7 +219,7 @@ revoke all on function vortex_record.resolve_record_type_visible_field_ids_inter
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 
 comment on function vortex_record.resolve_record_type_visible_field_ids_internal(uuid, jsonb) is
-  'Owner-only column visibility of one record type for the validated human context, decided by access route: the declared readable fields of each eligible permission route, narrowed by the fields of the current direct shares on a share route, then by the produced-field rule. It reads no record, so its cost is bounded by routes and shares.';
+  'Owner-only column visibility of one record type for the validated human context, decided by access route: the declared readable fields of each eligible permission route, narrowed by the fields of the current direct shares on a share route (a share route with no current share adds nothing unless no route yields a column), then by the produced-field rule. It reads no record, so its cost is bounded by routes and shares.';
 
 create or replace function vortex_record.read_record_type_visible_field_ids(p_record_type_id uuid)
 returns jsonb

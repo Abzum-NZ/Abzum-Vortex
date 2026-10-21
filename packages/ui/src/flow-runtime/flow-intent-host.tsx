@@ -46,7 +46,6 @@ type Surface =
       kind: "form";
       form: FlowFormIntent;
       settle: (answer: FlowFormAnswer) => void;
-      cancel: () => void;
     }>;
 
 export type FlowIntentHostOptions = Readonly<{
@@ -197,7 +196,7 @@ export function useFlowIntentHost(
 
   const enqueue = useCallback(
     <Result,>(
-      build: (id: number, settle: (result: Result) => void, cancelSurface: () => void) => Surface,
+      build: (id: number, settle: (result: Result) => void) => Surface,
       signal?: AbortSignal,
     ) =>
       new Promise<Result>((resolve, reject) => {
@@ -219,16 +218,12 @@ export function useFlowIntentHost(
           abort();
           return;
         }
-        const surface = build(
-          id,
-          (result) => {
-            if (!abandon.current.delete(id)) return;
-            signal?.removeEventListener("abort", abort);
-            setSurfaces((current) => current.filter((entry) => entry.id !== id));
-            resolve(result);
-          },
-          () => cancel(surfaceCancellationError()),
-        );
+        const surface = build(id, (result) => {
+          if (!abandon.current.delete(id)) return;
+          signal?.removeEventListener("abort", abort);
+          setSurfaces((current) => current.filter((entry) => entry.id !== id));
+          resolve(result);
+        });
         if (abandon.current.has(id)) setSurfaces((current) => [...current, surface]);
       }),
     [],
@@ -239,10 +234,7 @@ export function useFlowIntentHost(
       showMessage: (message, signal) =>
         enqueue<void>((id, settle) => ({ id, kind: "message", message, settle }), signal),
       showForm: (form, signal) =>
-        enqueue<FlowFormAnswer>(
-          (id, settle, cancel) => ({ id, kind: "form", form, settle, cancel }),
-          signal,
-        ),
+        enqueue<FlowFormAnswer>((id, settle) => ({ id, kind: "form", form, settle }), signal),
       confirm: (confirmation, signal) =>
         enqueue<FlowConfirmAnswer>(
           (id, settle) => ({ id, kind: "confirm", confirmation, settle }),
@@ -284,9 +276,9 @@ export function useFlowIntentHost(
       />
     );
   } else if (current?.kind === "form") {
-    const { form, settle, cancel } = current;
+    const { form, settle } = current;
     element = (
-      <FlowDialog key={current.id} title="Form" onDismiss={cancel}>
+      <FlowDialog key={current.id} title="Form" onDismiss={() => settle({ kind: "cancel" })}>
         {options.renderForm(form, {
           submit: (values, choiceEvidence) =>
             settle({
@@ -294,7 +286,7 @@ export function useFlowIntentHost(
               values,
               ...(choiceEvidence === undefined ? {} : { choiceEvidence }),
             }),
-          cancel,
+          cancel: () => settle({ kind: "cancel" }),
         })}
       </FlowDialog>
     );

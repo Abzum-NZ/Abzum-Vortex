@@ -26,6 +26,7 @@ begin
     vortex_record.installed_record_type_action_contributions_internal(
       (p_base_context #>> '{context,organizationId}')::uuid,
       (p_base_context ->> 'moduleRootId')::uuid,
+      (p_base_context ->> 'moduleReleaseRevision')::bigint,
       p_record_type_id
     )
   ) as entry(value)

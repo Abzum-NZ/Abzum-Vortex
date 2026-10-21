@@ -37,9 +37,10 @@ $function$;
 
 alter function vortex_access.condition_field_type_internal(jsonb) owner to vortex_owner;
 
-revoke all on function vortex_access.condition_field_type_internal(jsonb) from public;
+revoke all on function vortex_access.condition_field_type_internal(jsonb)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_access.condition_field_type_internal(jsonb)
-  to vortex_owner, vortex_record_adapter, postgres;
+  to vortex_record_adapter, postgres;
 
 comment on function vortex_access.condition_field_type_internal(jsonb) is
   'Private: the one field-kind to condition semantic-type mapping, mirroring the compiler; calculation and total fields use their declared result type and an unknown kind has no type.';

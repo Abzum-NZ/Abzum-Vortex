@@ -317,8 +317,14 @@ export async function commitGridView(
             document: view.document,
           })),
         );
-        const readable = stored.readable.get(String(query.recordType.recordTypeId).toLowerCase());
-        if (readable === undefined) throw new Error("GRID_VIEW_FIELD_VISIBILITY_MISSING");
+        const openedRecordTypeId = String(query.recordType.recordTypeId).toLowerCase();
+        const readable = stored.readable.get(openedRecordTypeId);
+        if (readable === undefined) {
+          console.error(
+            `[page] grid view columns missing: code=GRID_VIEW_FIELD_VISIBILITY_MISSING recordTypeId=${openedRecordTypeId}`,
+          );
+          throw new Error("GRID_VIEW_FIELD_VISIBILITY_MISSING");
+        }
         const authored = authoredGridLayout(placement.contract, readable);
         if (authored === undefined) return { outcome: "unavailable" };
         const defaults = addressedDefaultGridViews(

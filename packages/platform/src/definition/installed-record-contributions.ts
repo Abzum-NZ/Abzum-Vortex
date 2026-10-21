@@ -10,6 +10,7 @@ import {
 } from "../schema";
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 import { DefinitionError } from "./definition-error";
+import { contributedActionKey } from "./installed-named-actions";
 import { actionDefinitionSchema, moduleFieldSchema } from "./module-contracts";
 
 /**
@@ -179,23 +180,28 @@ const derivedId = (...parts: readonly string[]): string => {
 /**
  * The identities of the control that runs one contributed action on one detail page: the placement
  * the page shows, the binding that starts the flow, its event and the flow itself. Derived only from
- * the page and the action, so the page and the flow endpoint agree on them without sharing state.
+ * the page, the owner record type and the action, so the page and the flow endpoint agree on them
+ * without sharing state, and an action contributed to two record types runs through two flows.
  */
-export const contributedActionControlIds = (pageId: string, actionId: string) =>
+export const contributedActionControlIds = (
+  pageId: string,
+  recordTypeId: string,
+  actionId: string,
+) =>
   Object.freeze({
     controlId: derivedId("control", pageId, actionId),
     bindingId: derivedId("binding", pageId, actionId),
     eventId: derivedId("event", pageId, actionId),
-    flowId: derivedId("flow", actionId),
+    flowId: derivedId("flow", recordTypeId, actionId),
   });
 
 type Application = SystemApplicationBoundReleaseSetResult["application"];
 
 /**
  * The flows and bindings through which a person starts the actions contributed to the record types
- * of the detail pages of `application`: one interactive flow per action that calls the action by
- * its own key, and one `action` binding per detail page of the owner record type. They are
- * ordinary compiled flows and bindings; the flow endpoint runs them exactly as it runs an authored
+ * of the detail pages of `application`: one interactive flow per action and owner record type that
+ * calls the action by its contributed key, and one `action` binding per detail page of the owner
+ * record type. They are ordinary compiled flows and bindings; the flow endpoint runs them exactly as it runs an authored
  * one, and the named action path decides whether the person may run the action on the record.
  */
 const contributedActionFlows = (
@@ -213,7 +219,11 @@ const contributedActionFlows = (
         sameId(candidate.recordTypeId, String(subject.recordTypeId)),
     );
     for (const action of entry?.actions ?? []) {
-      const ids = contributedActionControlIds(String(page.pageId), action.actionId);
+      const ids = contributedActionControlIds(
+        String(page.pageId),
+        String(subject.recordTypeId),
+        action.actionId,
+      );
       if (!flows.has(ids.flowId))
         flows.set(
           ids.flowId,
@@ -233,7 +243,13 @@ const contributedActionFlows = (
                 type: "operation.call",
                 version: "1.0.0",
                 properties: {
-                  operation: { kind: "literal", literal: { type: "text", value: action.key } },
+                  operation: {
+                    kind: "literal",
+                    literal: {
+                      type: "text",
+                      value: contributedActionKey(String(subject.recordTypeId), action.actionId),
+                    },
+                  },
                 },
               },
             ],
@@ -286,6 +302,17 @@ export const withInstalledRecordContributions = (
     });
   });
   const actions = contributedActionFlows(releaseSet.application, contributions.recordTypes);
+  // A contributor this application also binds already serves its action's transaction flow; the
+  // same flow identity is never listed twice.
+  const servedFlowIds = new Set(
+    [
+      ...releaseSet.application.content.flows,
+      ...releaseSet.modules.flatMap((module) => module.content.flows),
+    ].map((flow) => String(flow.id).toLowerCase()),
+  );
+  const actionFlows = contributions.actionFlows.filter(
+    (flow) => !servedFlowIds.has(String(flow.id).toLowerCase()),
+  );
   const application =
     actions.bindings.length === 0
       ? releaseSet.application
@@ -293,11 +320,7 @@ export const withInstalledRecordContributions = (
           ...releaseSet.application,
           content: Object.freeze({
             ...releaseSet.application.content,
-            flows: [
-              ...releaseSet.application.content.flows,
-              ...contributions.actionFlows,
-              ...actions.flows,
-            ],
+            flows: [...releaseSet.application.content.flows, ...actionFlows, ...actions.flows],
             flowBindings: [...releaseSet.application.content.flowBindings, ...actions.bindings],
           }),
         });

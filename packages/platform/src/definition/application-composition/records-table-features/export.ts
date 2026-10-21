@@ -10,6 +10,20 @@ import {
 export const recordsTableExportFormats = ["csv", "xlsx"] as const;
 export type RecordsTableExportFormat = (typeof recordsTableExportFormats)[number];
 
+/** The business name of each file format, as the export menu and Studio show it. */
+export const recordsTableExportFormatLabels: Readonly<Record<RecordsTableExportFormat, string>> = {
+  csv: "CSV",
+  xlsx: "Excel",
+};
+
+/**
+ * The one formula neutraliser for text a spreadsheet receives (export files, header labels and a
+ * copied cell range): text a spreadsheet would run as a formula, including a leading full-width
+ * sign, is prefixed with an apostrophe so it stays text. Quoting alone is insufficient.
+ */
+export const spreadsheetText = (value: string): string =>
+  /^[=+\-@\t\r\n\uFF1D\uFF0B\uFF0D\uFF20]/.test(value) ? `'${value}` : value;
+
 /**
  * The capped selection count shares this ceiling. Excel's 1,048,576-row sheet limit exceeds
  * these 100,000 data rows plus the header.

@@ -39,12 +39,13 @@ import type { ApplicationPageModel } from "../../../../../../_lib/application-pa
 import type { SubmittedForm, Notice } from "./types";
 import { formSurfaceComposition, runtimeInputWithFormDefault } from "./form-surface";
 import { requestRecordChoices } from "./record-choices";
-import { finishedNotice, unavailableNotice, withSaveWarnings } from "./notices";
+import { unavailableNotice } from "./notices";
 
 export function useFlowRuntime({
   application,
   subject,
   continuingFormsRef,
+  formCancelledRef,
   unsavedWorkRegistry,
   submittedFormsRef,
   router,
@@ -67,6 +68,7 @@ export function useFlowRuntime({
   application: ApplicationPageModel["invocation"];
   subject: ApplicationPageModel["subject"];
   continuingFormsRef: RefObject<Map<string, SubmittedForm>>;
+  formCancelledRef: RefObject<boolean>;
   unsavedWorkRegistry: ReturnType<typeof useUnsavedWorkRegistry>;
   submittedFormsRef: RefObject<Map<string, SubmittedForm>>;
   router: ReturnType<typeof useRouter>;
@@ -116,28 +118,20 @@ export function useFlowRuntime({
       },
       ...(subject === undefined ? {} : { subject }),
     };
-    const recordResponse = async (
+    const recordResponse = (
       response: ServerFlowResponse,
       submission: SubmittedForm | undefined,
     ) => {
-      if (submission !== undefined && response.kind === "intent") {
+      if (submission === undefined) return;
+      if (response.kind === "intent") {
         continuingFormsRef.current.set(response.continuation, submission);
       } else if (
-        submission !== undefined &&
         response.kind === "result" &&
         response.failure === undefined &&
         response.descriptor.commit === "confirmed"
       ) {
         // The server has confirmed the submitted values before its Navigate intent is presented.
         unsavedWorkRegistry?.markSaved(submission.formId, submission.values);
-      }
-      if (response.kind === "result" && response.warnings.length > 0) {
-        // Present the committed outcome before navigation can replace the page that saved it.
-        const notice = withSaveWarnings(
-          finishedNotice(response.descriptor.outcome, response.failure?.code),
-          response.warnings,
-        );
-        await host.showMessage({ text: notice.text, tone: "warning" });
       }
     };
     const trackedClient = (client: FlowInvokeClient): FlowInvokeClient => ({
@@ -155,14 +149,15 @@ export function useFlowRuntime({
           signal,
           gestureSubject,
         );
-        await recordResponse(response, submission);
+        recordResponse(response, submission);
         return response;
       },
       resume: async (flowId, continuation, answer, evidence, signal) => {
+        if (answer.kind === "cancel") formCancelledRef.current = true;
         const submission = continuingFormsRef.current.get(continuation);
         continuingFormsRef.current.delete(continuation);
         const response = await client.resume(flowId, continuation, answer, evidence, signal);
-        await recordResponse(response, submission);
+        recordResponse(response, submission);
         return response;
       },
     });
@@ -172,7 +167,7 @@ export function useFlowRuntime({
         createFlowInvokeClient({ ...options, endpoint: "/api/flows/invoke/mcp" }),
       ),
     };
-  }, [application, subject, unsavedWorkRegistry]);
+  }, [application, formCancelledRef, subject, unsavedWorkRegistry]);
   const startPageChange = useApplicationFrame()?.startPageChange;
   const navigationEnvironment = useMemo<LinkNavigationEnvironment>(
     () => ({

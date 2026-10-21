@@ -752,7 +752,9 @@ begin
   group_presence_sql := pg_catalog.array_to_string(group_presence_terms, ' and ');
   -- A grouped table orders its groups by (rank, title, canonical value). A link dimension takes
   -- its rank and title from the one protected title batch pivot axes use, so unreadable targets
-  -- fold into one Not available group; every other dimension keeps its canonical value order.
+  -- fold into one Not available group. A choice dimension follows the field's option order: a
+  -- stored value the field no longer offers follows every option, and no value comes last (rank 1,
+  -- as for a link). Every other dimension keeps its canonical value order.
   if not pivot_mode and pg_catalog.cardinality(group_ids) = 1
     and fields_by_id -> group_ids[1] ->> 'type' = 'link' then
     group_dimension_sql := pg_catalog.format(
@@ -763,6 +765,21 @@ begin
          (select pg_catalog.array_agg(distinct raw.group_values -> %1$L) from raw_dimensions as raw), %2$L::jsonb
        ) as axis',
       group_ids[1], (fields_by_id -> group_ids[1])::text
+    );
+  elsif not pivot_mode and pg_catalog.cardinality(group_ids) = 1
+    and fields_by_id -> group_ids[1] ->> 'type' = 'choice' then
+    group_dimension_sql := pg_catalog.format(
+      'select raw.group_values as value, raw.group_values as normalized,
+         case when coalesce(raw.group_values -> %1$L, ''null''::jsonb) = ''null''::jsonb then 1 else 0 end as sort_rank,
+         case when coalesce(raw.group_values -> %1$L, ''null''::jsonb) = ''null''::jsonb then ''''::text
+           else coalesce((
+             select pg_catalog.lpad(choice_option.ordinal::text, 4, ''0'')
+             from pg_catalog.jsonb_array_elements(%2$L::jsonb) with ordinality as choice_option(item, ordinal)
+             where choice_option.item ->> ''value'' = raw.group_values ->> %1$L
+             order by choice_option.ordinal limit 1
+           ), ''9999'') end as sort_title
+       from (select distinct group_values from raw_dimensions) as raw',
+      group_ids[1], coalesce(fields_by_id #> array[group_ids[1], 'settings', 'options'], '[]'::jsonb)::text
     );
   else
     group_dimension_sql :=

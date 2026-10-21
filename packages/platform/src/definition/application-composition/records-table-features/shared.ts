@@ -190,6 +190,8 @@ export type RecordsTableQueryFacts = Readonly<{
   /** The bound query's ceiling, absent while no query has been chosen in Studio. */
   maximumPageSize: number | undefined;
   fields: readonly RecordsTableFieldFacts[];
+  /** The fields the table shows as columns, as its settings name them. */
+  columnFieldIds: readonly string[];
   relationships: readonly Readonly<{ key: string; label: string }>[];
   /**
    * The record type's named actions. `acceptsSelection` says it can run on several records, each

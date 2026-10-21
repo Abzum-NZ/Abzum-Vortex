@@ -15,7 +15,12 @@ export const readRecordTypeVisibleFieldIds = async (
   const rows = await transaction.query<DatabaseRow & { field_ids: unknown }>`
     select vortex_record.read_record_type_visible_field_ids(${recordTypeId}::uuid) as field_ids
   `;
-  if (rows.length !== 1) throw new Error("RECORD_FIELD_VISIBILITY_RESULT_INVALID");
+  if (rows.length !== 1) {
+    console.error(
+      `[record-fields] code=RECORD_FIELD_VISIBILITY_RESULT_INVALID recordTypeId=${recordTypeId} rows=${rows.length}`,
+    );
+    throw new Error("RECORD_FIELD_VISIBILITY_RESULT_INVALID");
+  }
   const parsed = z.array(z.uuid()).safeParse(rows[0]?.field_ids);
   if (!parsed.success) {
     console.error("[record-fields] code=RECORD_FIELD_VISIBILITY_RESULT_INVALID", parsed.error);

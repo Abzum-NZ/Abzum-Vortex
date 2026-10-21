@@ -18,7 +18,6 @@ export type ServerDrivenResult =
   /** The server ended the run; `descriptor` is its safe result and outputs are as it released them. */
   | Readonly<{
       kind: "finished";
-      warnings: Extract<ServerFlowResponse, { kind: "result" }>["warnings"];
       runId: string;
       descriptor: Extract<ServerFlowResponse, { kind: "result" }>["descriptor"];
       outputs: Readonly<Record<string, JsonValue>>;
@@ -29,8 +28,12 @@ export type ServerDrivenResult =
   /** Unknown, expired, foreign, tampered or not permitted: the one neutral refusal. */
   | Readonly<{ kind: "refused" }>
   | Readonly<{ kind: "unavailable" }>
-  /** The intent surface or caller went away before answering; no continuation answer was sent. */
-  | Readonly<{ kind: "abandoned" }>;
+  /**
+   * The intent surface or caller went away before the run finished. `unanswered` is true when it
+   * went away at a pause before any answer was sent, so this interaction sent nothing after the start;
+   * otherwise an answer was sent or a result arrived and what the run committed is not known here.
+   */
+  | Readonly<{ kind: "abandoned"; unanswered: boolean }>;
 
 const minimumContinuationLength = 16;
 const maximumContinuationLength = 128;
@@ -61,9 +64,14 @@ export async function driveServerFlow(
 ): Promise<ServerDrivenResult> {
   let response = first;
   let awaitingSurface = false;
+  let answerSent = false;
+  const abandoned = (): ServerDrivenResult => ({
+    kind: "abandoned",
+    unanswered: !answerSent && response.kind === "intent",
+  });
   try {
     for (let round = 0; round < maximumRounds; round += 1) {
-      if (signal?.aborted) return { kind: "abandoned" };
+      if (signal?.aborted) return abandoned();
       switch (response.kind) {
         case "reload":
         case "refused":
@@ -75,13 +83,28 @@ export async function driveServerFlow(
             response.descriptor.commit === "partial"
           )
             committed?.();
+          if (
+            response.warnings.length > 0 &&
+            (response.descriptor.commit === "confirmed" || response.descriptor.commit === "partial")
+          ) {
+            // The authored warnings of a committed save come first, before a Navigate intent can
+            // replace the page that saved; the page reports the outcome itself once the run ends.
+            awaitingSurface = true;
+            await host.showMessage(
+              {
+                text: response.warnings.map((warning) => warning.message).join(" "),
+                tone: "warning",
+              },
+              signal,
+            );
+            awaitingSurface = false;
+          }
           for (const intent of response.intents) {
-            if (signal?.aborted) return { kind: "abandoned" };
+            if (signal?.aborted) return abandoned();
             await performPresentationIntent(intent, host, signal);
           }
           return {
             kind: "finished",
-            warnings: response.warnings,
             runId: response.runId,
             descriptor: response.descriptor,
             outputs: response.outputs,
@@ -101,7 +124,7 @@ export async function driveServerFlow(
             if (intent.kind === "show_form" || intent.kind === "confirm")
               return refuseInvalidServerFlowState("unexpected_pause_intent");
             else {
-              if (signal?.aborted) return { kind: "abandoned" };
+              if (signal?.aborted) return abandoned();
               await performPresentationIntent(intent, host, signal);
             }
 
@@ -118,7 +141,8 @@ export async function driveServerFlow(
             awaitingSurface = true;
             const answer = await host.showForm(form, signal);
             awaitingSurface = false;
-            if (signal?.aborted) return { kind: "abandoned" };
+            if (signal?.aborted) return abandoned();
+            answerSent = true;
             response = await client.resume(flowId, continuation, answer, evidence, signal);
           } else {
             const confirmation = readConfirmIntent(waiting);
@@ -127,7 +151,8 @@ export async function driveServerFlow(
             awaitingSurface = true;
             const answer = await host.confirm(confirmation, signal);
             awaitingSurface = false;
-            if (signal?.aborted) return { kind: "abandoned" };
+            if (signal?.aborted) return abandoned();
+            answerSent = true;
             response = await client.resume(
               flowId,
               continuation,
@@ -142,8 +167,8 @@ export async function driveServerFlow(
     }
     return refuseInvalidServerFlowState("round_limit");
   } catch (error) {
-    if (signal?.aborted) return { kind: "abandoned" };
-    if (awaitingSurface && isSurfaceCancellation(error)) return { kind: "abandoned" };
+    if (signal?.aborted) return abandoned();
+    if (awaitingSurface && isSurfaceCancellation(error)) return abandoned();
     console.error(`[flow] server-driven execution failed: ${describeFailure(error)}`);
     return { kind: "unavailable" };
   }

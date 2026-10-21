@@ -68,6 +68,7 @@ begin
       );
       contributions := contributions || vortex_record.installed_record_type_action_contributions_internal(
         organization_id_value, (binding_item ->> 'moduleRootId')::uuid,
+        (binding_item ->> 'moduleReleaseRevision')::bigint,
         (record_type_item ->> 'recordTypeId')::uuid
       );
       if contributions <> '[]'::jsonb then

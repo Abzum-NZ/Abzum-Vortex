@@ -91,7 +91,9 @@ export {
 } from "./row-actions";
 export {
   RECORDS_TABLE_EXPORT_MAXIMUM_ROWS,
+  recordsTableExportFormatLabels,
   recordsTableExportFormats,
+  spreadsheetText,
   type RecordsTableExportFormat,
 } from "./export";
 export { RECORDS_TABLE_RELATED_RECORDS_MAXIMUM_PAGE_SIZE } from "./master-detail";

@@ -108,10 +108,11 @@ import {
 import { projectPageWebMcpTools } from "./webmcp-projection";
 import { platformPermissionSource } from "../platform-permission-source";
 import {
+  availableContributedActions,
+  contributedActionPreviews,
   contributedFieldIdsOf,
   omitUnreadableContributedFields,
   pageHasContributions,
-  readContributedActionAvailability,
   withContributedActionButtons,
   withContributedPlacements,
 } from "./contributed-placements";
@@ -591,6 +592,12 @@ const loadApplicationPageJoined = async (
             pageDefinition.publicFieldIds.some((allowed) => sameId(String(allowed), fieldId)),
         )
       : undefined;
+  // The one subject read of a detail page also previews the actions other installed Modules
+  // contributed to its record type, so their buttons need no second read of the record.
+  const subjectActions =
+    pageDefinition.type === "detail"
+      ? contributedActionPreviews(context, pageDefinition)
+      : undefined;
   const readSubject = (recordTypeId: string, recordId: string): Promise<PageSubjectReadResult> =>
     (subjectRead ??= subjects.read(session, selection, {
       recordTypeId,
@@ -598,6 +605,7 @@ const loadApplicationPageJoined = async (
       ...(requestedSubjectFieldIds === undefined
         ? {}
         : { requestedFieldIds: requestedSubjectFieldIds }),
+      ...(subjectActions === undefined ? {} : { actions: subjectActions }),
     }));
   // A detail address always names one readable record, even if its authored placements do not
   // include a record-detail block. Other-org and unreadable IDs have the same outcome as absence.
@@ -620,13 +628,7 @@ const loadApplicationPageJoined = async (
     }
     // A contributed action the viewer may run on this record gets its button, decided by the
     // same preview the named action path uses when the person runs it.
-    const availableActions = await readContributedActionAvailability(
-      session,
-      selection,
-      context,
-      pageDefinition,
-      subjectId.data,
-    );
+    const availableActions = availableContributedActions(addressedSubject.actionAvailability);
     if (withContributedActionButtons(page, context, pageDefinition, availableActions))
       allPlacements = collectPlacements(page);
   }

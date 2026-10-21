@@ -319,6 +319,12 @@ export const projectRecordsTableFeatures = (
         }
       : undefined;
   const exportSettings = features.export;
+  // A status bar total names only fields the table shows as columns; with none left it is omitted.
+  const statusBarFields = features.spreadsheet.enabled
+    ? features.spreadsheet.statusBarFields.filter((field) =>
+        contract.columns.some((column) => sameField(column.field, field)),
+      )
+    : [];
   const projection: RecordsTableFeatureProjection = {
     ...(exportSettings.enabled &&
     exportAllowed === true &&
@@ -342,13 +348,11 @@ export const projectRecordsTableFeatures = (
             rangeSelect: features.spreadsheet.rangeSelect,
             find: features.spreadsheet.find,
             ...(features.spreadsheet.rangeSelect &&
-            features.spreadsheet.statusBarFields.length > 0 &&
+            statusBarFields.length > 0 &&
             features.spreadsheet.statusBarOperations.length > 0
               ? {
                   statusBar: {
-                    fields: features.spreadsheet.statusBarFields.filter((field) =>
-                      contract.columns.some((column) => sameField(column.field, field)),
-                    ),
+                    fields: statusBarFields,
                     operations: features.spreadsheet.statusBarOperations,
                   },
                 }

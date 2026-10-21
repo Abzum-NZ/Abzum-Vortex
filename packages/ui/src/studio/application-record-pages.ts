@@ -9,6 +9,7 @@ import {
   type SourceItem,
 } from "@vortex/platform/schema";
 import { applyStudioFlowCreate, type StudioFlowCreateCommand } from "./application-flow-create";
+import { STUDIO_ROW_ACTION_EVENT_SETTING, studioRowActionEventId } from "./contextual-palette";
 import { StoredCompositionRefusal, validateStoredZone } from "./stored-composition";
 import {
   blockItem,
@@ -922,7 +923,7 @@ const addDetail = (
       title: record.name,
       heading_source: "field",
       heading_field: field(resolved, resolved.title),
-      row_action_event_id: `row_action_${detailAlias}`.slice(0, 60),
+      [STUDIO_ROW_ACTION_EVENT_SETTING]: studioRowActionEventId(detailAlias),
       detail_fields: shown.map((entry) => ({ field: field(resolved, entry), label: entry.label })),
     },
     {},

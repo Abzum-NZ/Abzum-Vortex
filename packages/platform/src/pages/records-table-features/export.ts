@@ -62,7 +62,6 @@ import {
   type RecordsTableCommandAddress,
   type RecordsTablePlacement,
 } from "./placement";
-import { readRecordTypeVisibleFieldIds } from "../../records/field-visibility";
 import { decideRecordTypeExport } from "./record-type-access";
 import { personalFormattingAllowed } from "./conditional-formatting";
 import type { InstalledRuntimeContext } from "../../definition/index";
@@ -272,11 +271,10 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
     placementId: string,
     viewId: string | undefined,
     recordTypeId: string,
-    readable: ReadonlySet<string> | undefined,
     preview: boolean,
   ): Promise<GridLayout | undefined> => {
-    const authored = authoredGridLayout(placement.contract, readable);
-    if (authored === undefined || preview) return authored;
+    // A preview has no stored layouts or views; its columns are the authored arrangement.
+    if (preview) return authoredGridLayout(placement.contract, undefined);
     const queryId = String(placement.query.queryId).toLowerCase();
     const savedViews = placement.contract.features.savedViews;
     const key = placementId.toLowerCase();
@@ -294,6 +292,16 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
           }))
         : [],
     );
+    // The one field-visibility decision of the request, made by the grid-view read.
+    const readable = stored.readable.get(recordTypeId.toLowerCase());
+    if (readable === undefined) {
+      console.error(
+        `[records-table] export columns missing: code=GRID_VIEW_FIELD_VISIBILITY_MISSING recordTypeId=${recordTypeId.toLowerCase()}`,
+      );
+      throw new Error("GRID_VIEW_FIELD_VISIBILITY_MISSING");
+    }
+    const authored = authoredGridLayout(placement.contract, readable);
+    if (authored === undefined) return undefined;
     const own = stored.layouts.get(key);
     let viewLayout: GridLayout | undefined;
     if (savedViews.enabled) {
@@ -432,9 +440,9 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
         refuse("feature_off");
         return notAvailable;
       }
+      // Judged before the permission decision, so like a disabled export it is logged, not audited.
       if (!feature.formats.includes(request.format)) {
         refuse("format_not_authored");
-        await audit(session, address, recordTypeId, [], "refused");
         return { kind: "refused", reason: "format_not_authored" };
       }
       const maxRows = feature.maxRows;
@@ -456,9 +464,6 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
           recordTypeId,
         );
         if (permission.kind === "refused") return permission;
-        const readable = preview
-          ? undefined
-          : await readRecordTypeVisibleFieldIds(transaction, recordTypeId);
         return {
           kind: "permitted" as const,
           accessVersion: scope.accessVersion,
@@ -470,7 +475,6 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
             request.placementId,
             request.viewId,
             recordTypeId,
-            readable,
             preview,
           ),
         };

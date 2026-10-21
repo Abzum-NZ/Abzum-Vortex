@@ -1,5 +1,4 @@
-import { createHash } from "node:crypto";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import {
   BUTTON_BLOCK_RELEASE,
   FIELD_INPUT_BLOCK_RELEASE,
@@ -11,17 +10,11 @@ import {
   fieldInputSourceField,
   flowLibraryOf,
   plainReleaseDefaults,
-  readSubjectWithNamedActionAvailability,
+  type ActionFlowRunner,
   type InstalledRuntimeContext,
+  type NamedActionAvailability,
 } from "@vortex/platform/server";
-import {
-  type IdentitySession,
-  type OrganizationSelectionCandidate,
-  installedNamedActionReferenceSchema,
-  isRecord,
-  sameId,
-} from "@vortex/platform/schema";
-import { humanOrganizationRequests } from "../server-composition";
+import { installedNamedActionReferenceSchema, isRecord, sameId } from "@vortex/platform/schema";
 import { collectPlacements, isEditFieldPlacement } from "./placement-helpers";
 
 type Application = InstalledRuntimeContext["releaseSet"]["application"];
@@ -153,9 +146,31 @@ const insertAfterPlacement = (
 };
 
 /**
+ * Places `item` at the end of a form's own content, and of that content's tablet and phone orders.
+ * False when the form holds no content list.
+ */
+const appendToFormContent = (
+  formProps: Record<string, unknown>,
+  formVortex: Record<string, unknown>,
+  item: Record<string, unknown>,
+): boolean => {
+  const content = formProps.content;
+  if (!Array.isArray(content)) return false;
+  content.push(item);
+  const orders = isRecord(formVortex.slotOrders) ? formVortex.slotOrders.content : undefined;
+  if (isRecord(orders))
+    for (const breakpoint of ["tablet", "phone"] as const) {
+      const order = orders[breakpoint];
+      if (Array.isArray(order)) order.push(String((item.props as Record<string, unknown>).id));
+    }
+  return true;
+};
+
+/**
  * The page the viewer's projection becomes once the fields other installed Modules contributed to
  * its record type are placed on it: every Record detail of the page's record is extended by the
- * contributed fields, and every edit form of the page's record gets a field input for each. A
+ * contributed fields, and every edit form of the page's record gets a field input for each, after
+ * the form's last field input at any depth, or at the end of the form's content when it has none. A
  * contributed field is placed exactly as the compiler would place that field, from the same field
  * definition, so it reads and writes through the same display, form, flow and record paths as an
  * authored one; what the viewer may read or change is decided afterwards by the same field policy
@@ -222,35 +237,28 @@ export const withContributedPlacements = (
       );
     });
     for (const form of editForms) {
-      const content = form.props.content;
-      if (!Array.isArray(content)) continue;
-      const inputs = content.filter(
-        (item) =>
-          isRecord(item) &&
-          isRecord(item.props) &&
-          isEditFieldPlacement({
-            vortex: isRecord(item.props.vortex) ? item.props.vortex : {},
-            props: item.props,
-            settings: {},
-          }),
+      // Every placement the form holds, at any depth, in document order.
+      const held = placements.filter(
+        (placement) =>
+          placement.formId !== undefined &&
+          sameId(placement.formId, form.placementId) &&
+          !sameId(placement.placementId, form.placementId),
       );
-      const last = inputs.at(-1);
-      if (!isRecord(last) || !isRecord(last.props) || !isRecord(last.props.vortex)) continue;
+      // Contributed inputs follow the form's last field input wherever it sits; a form with no
+      // field input gets them at the end of its own content.
+      const last = held.filter(isEditFieldPlacement).at(-1);
+      if (last === undefined && !Array.isArray(form.props.content)) continue;
+      const responsive = (last ?? form).vortex.responsive;
       const shownFields = new Set(
-        placements
-          .filter(
-            (placement) =>
-              placement.formId !== undefined && sameId(placement.formId, form.placementId),
-          )
-          .flatMap((placement) =>
-            isRecord(placement.settings.field) &&
-            placement.settings.field.kind === "field_reference" &&
-            typeof placement.settings.field.fieldId === "string"
-              ? [placement.settings.field.fieldId.toLowerCase()]
-              : [],
-          ),
+        held.flatMap((placement) =>
+          isRecord(placement.settings.field) &&
+          placement.settings.field.kind === "field_reference" &&
+          typeof placement.settings.field.fieldId === "string"
+            ? [placement.settings.field.fieldId.toLowerCase()]
+            : [],
+        ),
       );
-      let anchor = String(last.props.id);
+      let anchor = last?.placementId;
       for (const field of contributed) {
         const fieldId = String(field.fieldId);
         if (shownFields.has(fieldId.toLowerCase())) continue;
@@ -268,7 +276,7 @@ export const withContributedPlacements = (
           continue;
         }
         const id = contributedPlacementId(form.placementId, fieldId);
-        const placed = insertAfterPlacement(page, anchor, {
+        const item = {
           type: FIELD_INPUT_BLOCK_RELEASE.rendererKey,
           props: {
             id,
@@ -278,13 +286,15 @@ export const withContributedPlacements = (
                 blockId: FIELD_INPUT_BLOCK_RELEASE.blockId,
                 releaseVersion: FIELD_INPUT_BLOCK_RELEASE.releaseVersion,
               },
-              responsive: structuredClone(
-                (last.props.vortex as Record<string, unknown>).responsive,
-              ),
+              responsive: structuredClone(responsive),
               slotOrders: {},
             },
           },
-        });
+        };
+        const placed =
+          anchor === undefined
+            ? appendToFormContent(form.props, form.vortex, item)
+            : insertAfterPlacement(page, anchor, item);
         if (!placed) continue;
         anchor = id;
         changed = true;
@@ -339,26 +349,17 @@ const contributedActionsOf = (context: InstalledRuntimeContext, pageDefinition: 
 };
 
 /**
- * The identities of the contributed actions the viewer may run now on the page's record: the same
- * preview the named action path decides for the person on this exact record (their own permission
- * on the record, the contributor's permission for the action and the action's precondition). A
- * record the viewer cannot read previews nothing. A failure is not "unavailable": it propagates.
+ * The contributed actions the page subject read previews on the page's record, so the one subject
+ * read decides the same preview the named action path decides for the person on this exact record
+ * (their own permission on the record, the contributor's permission for the action and the
+ * action's precondition). Undefined when nothing is contributed to the page's record type.
  */
-export const readContributedActionAvailability = async (
-  session: IdentitySession,
-  selection: OrganizationSelectionCandidate,
+export const contributedActionPreviews = (
   context: InstalledRuntimeContext,
   pageDefinition: PageDefinition,
-  recordId: string,
-): Promise<ReadonlySet<string>> => {
+) => {
   const actions = contributedActionsOf(context, pageDefinition);
-  if (
-    actions.length === 0 ||
-    pageDefinition.type !== "detail" ||
-    pageDefinition.recordType?.state !== "resolved"
-  )
-    return new Set();
-  const recordTypeId = String(pageDefinition.recordType.recordTypeId);
+  if (actions.length === 0) return undefined;
   const flows = new Map<string, unknown>();
   for (const flow of [
     ...context.releaseSet.application.content.flows,
@@ -366,35 +367,36 @@ export const readContributedActionAvailability = async (
   ])
     flows.set(String(flow.id), flow);
   const library = flowLibraryOf(flows);
-  const references = actions.map((action) =>
-    installedNamedActionReferenceSchema.parse({
-      ownerKind: "module",
-      ownerId: action.contributorModuleRootId,
-      releaseRevision: action.contributorReleaseRevision,
-      actionId: action.actionId,
-    }),
-  );
-  const result = await humanOrganizationRequests().run(session, selection, (transaction) =>
-    readSubjectWithNamedActionAvailability(
-      transaction,
-      { recordTypeId, recordId, requestedFieldIds: null },
-      references,
-      new Date().toISOString(),
-      (action) => (seed) => collectActionFlowTasks(library, action.actionId, randomUUID(), seed),
+  return Object.freeze({
+    references: actions.map((action) =>
+      installedNamedActionReferenceSchema.parse({
+        ownerKind: "module",
+        ownerId: action.contributorModuleRootId,
+        releaseRevision: action.contributorReleaseRevision,
+        actionId: action.actionId,
+      }),
     ),
-  );
-  if (result.kind !== "available")
-    throw new Error(`CONTRIBUTED_ACTION_AVAILABILITY_${result.kind}`);
+    runFor: (action: Readonly<{ actionId: string }>) => (seed: Parameters<ActionFlowRunner>[0]) =>
+      collectActionFlowTasks(library, action.actionId, randomUUID(), seed),
+  });
+};
+
+/**
+ * The identities of the contributed actions the viewer may run now, from the availability the page
+ * subject read returned. A record the viewer cannot read previews nothing.
+ */
+export const availableContributedActions = (
+  availability: ReadonlyMap<string, NamedActionAvailability> | undefined,
+): ReadonlySet<string> => {
+  if (availability === undefined) return new Set();
   // A refusal is an ordinary answer (the person may not run the action); only an undecided
   // preview is worth a trace.
-  for (const [actionId, availability] of result.value.availability)
-    if (availability.kind === "undecided")
-      console.info(
-        `[page] contributed action ${actionId} availability undecided: ${availability.reason}`,
-      );
+  for (const [actionId, entry] of availability)
+    if (entry.kind === "undecided")
+      console.info(`[page] contributed action ${actionId} availability undecided: ${entry.reason}`);
   return new Set(
-    [...result.value.availability]
-      .filter(([, availability]) => availability.kind === "available")
+    [...availability]
+      .filter(([, entry]) => entry.kind === "available")
       .map(([actionId]) => actionId.toLowerCase()),
   );
 };
@@ -410,6 +412,9 @@ export const withContributedActionButtons = (
   pageDefinition: PageDefinition,
   available: ReadonlySet<string>,
 ): boolean => {
+  if (pageDefinition.type !== "detail" || pageDefinition.recordType?.state !== "resolved")
+    return false;
+  const recordTypeId = String(pageDefinition.recordType.recordTypeId);
   const actions = contributedActionsOf(context, pageDefinition).filter((action) =>
     available.has(action.actionId.toLowerCase()),
   );
@@ -424,7 +429,11 @@ export const withContributedActionButtons = (
   let anchor = detail.placementId;
   let placed = false;
   for (const action of actions) {
-    const ids = contributedActionControlIds(String(pageDefinition.pageId), action.actionId);
+    const ids = contributedActionControlIds(
+      String(pageDefinition.pageId),
+      recordTypeId,
+      action.actionId,
+    );
     if (collectPlacements(page).some((entry) => sameId(entry.placementId, ids.controlId))) continue;
     if (
       insertAfterPlacement(page, anchor, {
