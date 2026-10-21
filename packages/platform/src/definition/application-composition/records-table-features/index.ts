@@ -11,6 +11,7 @@ export {
 } from "./spreadsheet";
 import type { ComponentSettingValue } from "../block-property-schema";
 import {
+  boardFilterProblem,
   recordsTableBoardFeature,
   type RecordsTableBoardMode,
   type RecordsTableBoardSettings,
@@ -112,7 +113,12 @@ export {
   type RecordsTableGroupingFacts,
   type RecordsTableGroupingFieldType,
 } from "./grouping";
-export { boardAggregateLabel, boardProblem, recordsTableBoardFactsOf } from "./board";
+export {
+  boardAggregateLabel,
+  boardFilterProblem,
+  boardProblem,
+  recordsTableBoardFactsOf,
+} from "./board";
 export {
   RECORDS_TABLE_PIVOT_MAXIMUM_COLUMNS,
   RECORDS_TABLE_PIVOT_MAXIMUM_ROW_PAGE_SIZE,
@@ -324,9 +330,13 @@ export const readRecordsTableFeatures = (
 /**
  * The features a board view implements beside Board itself. A feature not listed is refused when
  * it is on together with Board: the board draws cards, not table rows, and never ignores a feature.
- * A card opens through Row actions, so that feature is the one supported beside Board.
+ * A card opens through Row actions and the cards narrow through Column filters, which a board
+ * reads over every field of its record type.
  */
-const recordsTableBoardSupportedFeatures: readonly RecordsTableFeatureKey[] = ["row_actions"];
+const recordsTableBoardSupportedFeatures: readonly RecordsTableFeatureKey[] = [
+  "row_actions",
+  "column_filters",
+];
 
 /**
  * Whether the table must be grouped to read its query: a grouped query has no flat rows, so a
@@ -371,6 +381,18 @@ export const checkRecordsTableFeature = (
     return featureNotPossible(
       "definition_records_table_tree",
       "Turn Board off to show records as a tree.",
+    );
+  // Paste and fill write through the table's inline edit, so they need it on with a field to change.
+  if (
+    key === "spreadsheet" &&
+    state.enabled &&
+    ((state as { paste?: boolean }).paste === true ||
+      (state as { fill?: boolean }).fill === true) &&
+    (!features.inlineEdit.enabled || features.inlineEdit.fields.length === 0)
+  )
+    return featureNotPossible(
+      "definition_records_table_spreadsheet",
+      "Paste and fill need Inline editing and at least one editable field",
     );
   // A row opens one panel: its related records or the records beneath it, never both.
   if (key === "tree" && state.enabled && features.masterDetail.enabled)
@@ -423,8 +445,20 @@ export const checkRecordsTableFeature = (
     );
   // The board reads its own grouped query, which the board check judges; a table-row check of a
   // feature the board borrows would refuse that query.
-  if (features.board.enabled && key !== "board" && recordsTableBoardSupportedFeatures.includes(key))
+  if (
+    features.board.enabled &&
+    key !== "board" &&
+    recordsTableBoardSupportedFeatures.includes(key)
+  ) {
+    if (key === "column_filters" && state.enabled && facts.board !== undefined)
+      return (
+        boardFilterProblem(
+          (state as Extract<RecordsTableFeatures["columnFilters"], { enabled: true }>).fields,
+          facts.board,
+        ) ?? featureAvailable
+      );
     return featureAvailable;
+  }
   const check = (registry[key].definition as RecordsTableFeatureDefinition<object>).check(
     state,
     facts,

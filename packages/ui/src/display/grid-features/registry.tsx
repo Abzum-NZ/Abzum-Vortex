@@ -199,7 +199,7 @@ const loaders: Readonly<
   Record<GridExtensionKey, () => Promise<{ gridFeature: GridFeatureModule }>>
 > = {
   pinning: () => import("./pinning"),
-  spreadsheet: () => import("./range-selection"),
+  spreadsheet: () => import("./spreadsheet"),
   search: () => import("./search"),
   column_filters: () => import("./column-filters"),
   saved_views: () => import("./saved-views"),

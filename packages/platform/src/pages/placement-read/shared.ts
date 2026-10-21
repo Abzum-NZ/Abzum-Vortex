@@ -76,6 +76,8 @@ export type PlacementFailureReason =
   | "calendar_range_unsupported"
   | "calendar_time_zone_unavailable"
   | "table_time_zone_unavailable"
+  | "board_state_unsupported"
+  | "board_filter_refused"
   | "table_tree_off"
   | "table_grouping_invalid"
   | "table_grouping_required"

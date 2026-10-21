@@ -14,6 +14,7 @@ import {
   saveRecordResultSchema,
   writableSystemProjectionRegistrations,
   type IdentitySession,
+  type JsonValue,
   type ExecutionAuthorityContext,
   type OrganizationSelectionCandidate,
   type RecordSaveFieldCorrection,
@@ -657,6 +658,40 @@ export const readOrganizationRuntimeSettings = async (transaction: RequestDataba
  * The save result plus any before-save rule warnings of a saved attempt. The
  * closed result contract has no warning field, so they travel beside it.
  */
+/** The most records one batch save changes in its one transaction. */
+export const recordBatchSaveMaximum = 200;
+
+/** One record of a batch save: its own command identity, its displayed revision and its changes. */
+export type RecordBatchSaveSubject = Readonly<{
+  commandId: string;
+  recordId: string;
+  expectedConcurrencyNumber: number;
+  submittedValues: Readonly<Record<string, JsonValue>>;
+}>;
+
+/** Why one record (or one of its fields) stopped a batch save. The server log keeps the cause. */
+export type RecordBatchSaveProblem = Readonly<{
+  recordId: string;
+  fieldId?: string;
+  reason: "changed" | "refused" | RecordSaveFieldCorrection["code"];
+  /** A rule's authored message, the only free text that may leave with a problem. */
+  message?: string;
+}>;
+
+export type RecordBatchSaveResult =
+  | Readonly<{
+      kind: "saved";
+      rows: readonly Readonly<{
+        recordId: string;
+        concurrencyNumber: number;
+        /** What the submitted fields held before, for the readable fields; empty on a replay. */
+        previous: Readonly<Record<string, unknown>>;
+      }>[];
+    }>
+  /** Nothing was written; every problem found is listed. */
+  | Readonly<{ kind: "refused"; problems: readonly RecordBatchSaveProblem[] }>
+  | Readonly<{ kind: "unavailable" | "temporarily_unavailable" }>;
+
 export type RecordSaveServiceResult = HumanOrganizationRequestResult<SaveRecordResult> &
   Readonly<{ warnings?: readonly BeforeSaveRuleWarning[] }>;
 
@@ -665,6 +700,192 @@ export type RecordSaveServiceDependencies = HumanOrganizationRequestDependencies
     activityId?: () => string;
     occurrenceId?: () => string;
   }>;
+
+type CalculatedValues =
+  ReturnType<typeof calculateAndFinalize> | ReturnType<typeof calculateLockedRelationshipTotalSave>;
+
+/**
+ * Turns the calculated values of one save into the final values to write, or into the result that
+ * ends the save: a located correction, or a safe refusal with its cause logged. It is the one
+ * decision both the single save and every record of a batch take before anything is written.
+ */
+const finalizeCalculatedValues = async (
+  transaction: RequestDatabaseTransaction,
+  command: SaveRecordCommand,
+  prepared: PreparedSave,
+  totalPreparation: RelationshipTotalPreparationOutcome,
+  values: CalculatedValues,
+  preview: boolean,
+): Promise<SaveRecordResult | Readonly<{ finalValues: Record<string, unknown> }>> => {
+  if (!values.success) {
+    console.error(
+      `[record] save refused RECORD_SAVE_VALUES_INVALID: ${values.issues.map((issue) => ("requirement" in issue && issue.requirement ? `${issue.code}:${issue.requirement.code}` : issue.code)).join(",")}`,
+    );
+    if (totalPreparation.outcome === "prepared") {
+      const parentRefusal = values.issues.find(
+        (issue) =>
+          "recordKey" in issue &&
+          issue.recordKey !== "root" &&
+          (issue.code === beforeSaveRuleRefusedIssueCode || issue.requirement !== undefined),
+      );
+      if (parentRefusal !== undefined && "recordKey" in parentRefusal) {
+        const parent = totalPreparation.records.find(
+          (record) => record.recordKey === parentRefusal.recordKey,
+        );
+        if (parent?.recordId === undefined)
+          throw contractError("RELATIONSHIP_TOTAL_PARENT_MISSING", parentRefusal);
+        console.error(
+          `[record] parent rule refused: rule=${"ruleKey" in parentRefusal ? parentRefusal.ruleKey : parentRefusal.requirement !== undefined && "ruleKey" in parentRefusal.requirement ? parentRefusal.requirement.ruleKey : "unknown"} parent=${parent.recordId} reason=${parentRefusal.requirement?.code ?? parentRefusal.code}`,
+        );
+        return safeRefusal(
+          prepared.correlationId,
+          "operation_refused",
+          parent.canRead && parentRefusal.requirement !== undefined
+            ? {
+                code: parentRefusal.requirement.code,
+                message: parentRefusal.requirement.message,
+              }
+            : {
+                code: "related_record_rule_conflict",
+                message: "This change conflicts with a rule on a related record",
+              },
+        );
+      }
+    }
+    if (
+      values.issues.some(
+        (issue) =>
+          issue.code === "organization_currency_required" ||
+          issue.code === beforeSaveRuleUnavailableIssueCode,
+      )
+    )
+      return safeRefusal(prepared.correlationId, "operation_refused");
+    const corrections = correctionsFor(
+      values.issues
+        .filter((issue) => !("recordKey" in issue) || issue.recordKey === "root")
+        .map((issue) => ({
+          code: issue.code,
+          ...(issue.fieldId === undefined ? {} : { fieldId: issue.fieldId }),
+          path: issue.path,
+          ...("requirement" in issue && issue.requirement !== undefined
+            ? { requirement: issue.requirement }
+            : {}),
+        })),
+      prepared.readableFieldIds,
+      command.operation,
+    );
+    if (corrections === undefined || corrections.length === 0) {
+      // A rule's authored refusal is the one reason safe to show; every other cause stays in the log.
+      return safeRefusal(
+        prepared.correlationId,
+        "operation_refused",
+        values.issues.flatMap((issue) =>
+          issue.code === beforeSaveRuleRefusedIssueCode &&
+          "requirement" in issue &&
+          issue.requirement !== undefined
+            ? [issue.requirement]
+            : [],
+        )[0],
+      );
+    }
+    return saveRecordResultSchema.parse({
+      contractVersion: "2.0.0",
+      outcome: "correction_required",
+      correlationId: prepared.correlationId,
+      corrections,
+    });
+  }
+
+  const unsupportedChecks = values.pendingChecks.filter(
+    (check) =>
+      check.kind !== "record_reference" &&
+      check.kind !== "file_reference" &&
+      !(preview && check.kind === "choice_permission"),
+  );
+  if (unsupportedChecks.length > 0) {
+    if (unsupportedChecks.some((check) => !prepared.readableFieldIds.has(check.fieldId)))
+      return safeRefusal(prepared.correlationId, "operation_refused");
+    const corrections = unsupportedChecks.map((check) => {
+      const message =
+        check.kind === "choice_permission"
+          ? choicePermissionRefusalMessage(prepared.recordType, check)
+          : undefined;
+      if (check.kind === "choice_permission" && message === undefined)
+        console.error(
+          "[record] save refused RECORD_SAVE_CHOICE_LABEL_MISSING: no field or option label for a permission-gated choice",
+        );
+      return {
+        code: "field_refused" as const,
+        fieldId: check.fieldId,
+        ...(message === undefined ? {} : { message }),
+      };
+    });
+    return saveRecordResultSchema.parse({
+      contractVersion: "2.0.0",
+      outcome: "correction_required",
+      correlationId: prepared.correlationId,
+      corrections,
+    });
+  }
+
+  const finalValues: Record<string, unknown> =
+    "sourceFinalValues" in values ? { ...values.sourceFinalValues } : { ...values.setValues };
+  if ("clearFieldIds" in values)
+    for (const fieldId of values.clearFieldIds) finalValues[fieldId] = null;
+  if (prepared.recordType.systemProjection === undefined) {
+    const dependency = await firstLinkDependencyRefusal(
+      transaction,
+      prepared.recordType,
+      prepared.existingValues,
+      Object.keys(command.submittedValues),
+      finalValues,
+    );
+    if (dependency !== undefined) {
+      // The cause stays in the log; the person is told only which field to choose again.
+      console.error(
+        `[record] save refused LINK_DEPENDENCY_${dependency.reason.toUpperCase()}: child=${dependency.childFieldId} parent=${dependency.parentFieldId}`,
+      );
+      if (!prepared.readableFieldIds.has(dependency.childFieldId.toLowerCase()))
+        return safeRefusal(prepared.correlationId, "operation_refused");
+      const labelOf = (fieldId: string): string =>
+        prepared.recordType.fields.find(
+          (candidate) => String(candidate.fieldId).toLowerCase() === fieldId.toLowerCase(),
+        )?.label ?? "the field";
+      return saveRecordResultSchema.parse({
+        contractVersion: "2.0.0",
+        outcome: "correction_required",
+        correlationId: prepared.correlationId,
+        corrections: [
+          {
+            code: "field_refused" as const,
+            fieldId: dependency.childFieldId,
+            message: `Choose ${labelOf(dependency.childFieldId)} again: it does not belong to the chosen ${labelOf(dependency.parentFieldId)}.`,
+          },
+        ],
+      });
+    }
+  }
+  if (prepared.recordType.systemProjection !== undefined) {
+    // The shipped text input submits an empty string for an unset optional default.
+    // Store that as the nullable application reference the settings writer accepts.
+    const defaultApplicationFieldId = settingsFieldId(
+      prepared.recordType,
+      "default_application_root_id",
+    );
+    if (defaultApplicationFieldId !== undefined && finalValues[defaultApplicationFieldId] === "")
+      finalValues[defaultApplicationFieldId] = null;
+    const corrections = invalidSettingsCorrections(prepared, command, finalValues);
+    if (corrections === undefined) return safeRefusal(prepared.correlationId, "operation_refused");
+    if (corrections.length > 0)
+      return saveRecordResultSchema.parse({
+        contractVersion: "2.0.0",
+        outcome: "correction_required",
+        correlationId: prepared.correlationId,
+        corrections,
+      });
+  }
+  return { finalValues };
+};
 
 /**
  * The ordinary-human base save. Every caller supplies the same closed command;
@@ -817,181 +1038,16 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
                       timeZone: settings?.timeZone,
                       rules: attempted.rules,
                     });
-            if (!values.success) {
-              console.error(
-                `[record] save refused RECORD_SAVE_VALUES_INVALID: ${values.issues.map((issue) => ("requirement" in issue && issue.requirement ? `${issue.code}:${issue.requirement.code}` : issue.code)).join(",")}`,
-              );
-              if (totalPreparation.outcome === "prepared") {
-                const parentRefusal = values.issues.find(
-                  (issue) =>
-                    "recordKey" in issue &&
-                    issue.recordKey !== "root" &&
-                    (issue.code === beforeSaveRuleRefusedIssueCode ||
-                      issue.requirement !== undefined),
-                );
-                if (parentRefusal !== undefined && "recordKey" in parentRefusal) {
-                  const parent = totalPreparation.records.find(
-                    (record) => record.recordKey === parentRefusal.recordKey,
-                  );
-                  if (parent?.recordId === undefined)
-                    throw contractError("RELATIONSHIP_TOTAL_PARENT_MISSING", parentRefusal);
-                  console.error(
-                    `[record] parent rule refused: rule=${"ruleKey" in parentRefusal ? parentRefusal.ruleKey : parentRefusal.requirement !== undefined && "ruleKey" in parentRefusal.requirement ? parentRefusal.requirement.ruleKey : "unknown"} parent=${parent.recordId} reason=${parentRefusal.requirement?.code ?? parentRefusal.code}`,
-                  );
-                  return safeRefusal(
-                    prepared.correlationId,
-                    "operation_refused",
-                    parent.canRead && parentRefusal.requirement !== undefined
-                      ? {
-                          code: parentRefusal.requirement.code,
-                          message: parentRefusal.requirement.message,
-                        }
-                      : {
-                          code: "related_record_rule_conflict",
-                          message: "This change conflicts with a rule on a related record",
-                        },
-                  );
-                }
-              }
-              if (
-                values.issues.some(
-                  (issue) =>
-                    issue.code === "organization_currency_required" ||
-                    issue.code === beforeSaveRuleUnavailableIssueCode,
-                )
-              )
-                return safeRefusal(prepared.correlationId, "operation_refused");
-              const corrections = correctionsFor(
-                values.issues
-                  .filter((issue) => !("recordKey" in issue) || issue.recordKey === "root")
-                  .map((issue) => ({
-                    code: issue.code,
-                    ...(issue.fieldId === undefined ? {} : { fieldId: issue.fieldId }),
-                    path: issue.path,
-                    ...("requirement" in issue && issue.requirement !== undefined
-                      ? { requirement: issue.requirement }
-                      : {}),
-                  })),
-                prepared.readableFieldIds,
-                command.data.operation,
-              );
-              if (corrections === undefined || corrections.length === 0) {
-                // A rule's authored refusal is the one reason safe to show; every other cause stays in the log.
-                return safeRefusal(
-                  prepared.correlationId,
-                  "operation_refused",
-                  values.issues.flatMap((issue) =>
-                    issue.code === beforeSaveRuleRefusedIssueCode &&
-                    "requirement" in issue &&
-                    issue.requirement !== undefined
-                      ? [issue.requirement]
-                      : [],
-                  )[0],
-                );
-              }
-              return saveRecordResultSchema.parse({
-                contractVersion: "2.0.0",
-                outcome: "correction_required",
-                correlationId: prepared.correlationId,
-                corrections,
-              });
-            }
-
-            const unsupportedChecks = values.pendingChecks.filter(
-              (check) =>
-                check.kind !== "record_reference" &&
-                check.kind !== "file_reference" &&
-                !(preview && check.kind === "choice_permission"),
+            const finalized = await finalizeCalculatedValues(
+              transaction,
+              command.data,
+              prepared,
+              totalPreparation,
+              values,
+              preview,
             );
-            if (unsupportedChecks.length > 0) {
-              if (unsupportedChecks.some((check) => !prepared.readableFieldIds.has(check.fieldId)))
-                return safeRefusal(prepared.correlationId, "operation_refused");
-              const corrections = unsupportedChecks.map((check) => {
-                const message =
-                  check.kind === "choice_permission"
-                    ? choicePermissionRefusalMessage(prepared.recordType, check)
-                    : undefined;
-                if (check.kind === "choice_permission" && message === undefined)
-                  console.error(
-                    "[record] save refused RECORD_SAVE_CHOICE_LABEL_MISSING: no field or option label for a permission-gated choice",
-                  );
-                return {
-                  code: "field_refused" as const,
-                  fieldId: check.fieldId,
-                  ...(message === undefined ? {} : { message }),
-                };
-              });
-              return saveRecordResultSchema.parse({
-                contractVersion: "2.0.0",
-                outcome: "correction_required",
-                correlationId: prepared.correlationId,
-                corrections,
-              });
-            }
-
-            const finalValues: Record<string, unknown> =
-              "sourceFinalValues" in values
-                ? { ...values.sourceFinalValues }
-                : { ...values.setValues };
-            if ("clearFieldIds" in values)
-              for (const fieldId of values.clearFieldIds) finalValues[fieldId] = null;
-            if (prepared.recordType.systemProjection === undefined) {
-              const dependency = await firstLinkDependencyRefusal(
-                transaction,
-                prepared.recordType,
-                prepared.existingValues,
-                Object.keys(command.data.submittedValues),
-                finalValues,
-              );
-              if (dependency !== undefined) {
-                // The cause stays in the log; the person is told only which field to choose again.
-                console.error(
-                  `[record] save refused LINK_DEPENDENCY_${dependency.reason.toUpperCase()}: child=${dependency.childFieldId} parent=${dependency.parentFieldId}`,
-                );
-                if (!prepared.readableFieldIds.has(dependency.childFieldId.toLowerCase()))
-                  return safeRefusal(prepared.correlationId, "operation_refused");
-                const labelOf = (fieldId: string): string =>
-                  prepared.recordType.fields.find(
-                    (candidate) =>
-                      String(candidate.fieldId).toLowerCase() === fieldId.toLowerCase(),
-                  )?.label ?? "the field";
-                return saveRecordResultSchema.parse({
-                  contractVersion: "2.0.0",
-                  outcome: "correction_required",
-                  correlationId: prepared.correlationId,
-                  corrections: [
-                    {
-                      code: "field_refused" as const,
-                      fieldId: dependency.childFieldId,
-                      message: `Choose ${labelOf(dependency.childFieldId)} again: it does not belong to the chosen ${labelOf(dependency.parentFieldId)}.`,
-                    },
-                  ],
-                });
-              }
-            }
-            if (prepared.recordType.systemProjection !== undefined) {
-              // The shipped text input submits an empty string for an unset optional default.
-              // Store that as the nullable application reference the settings writer accepts.
-              const defaultApplicationFieldId = settingsFieldId(
-                prepared.recordType,
-                "default_application_root_id",
-              );
-              if (
-                defaultApplicationFieldId !== undefined &&
-                finalValues[defaultApplicationFieldId] === ""
-              )
-                finalValues[defaultApplicationFieldId] = null;
-              const corrections = invalidSettingsCorrections(prepared, command.data, finalValues);
-              if (corrections === undefined)
-                return safeRefusal(prepared.correlationId, "operation_refused");
-              if (corrections.length > 0)
-                return saveRecordResultSchema.parse({
-                  contractVersion: "2.0.0",
-                  outcome: "correction_required",
-                  correlationId: prepared.correlationId,
-                  corrections,
-                });
-            }
+            if (!("finalValues" in finalized)) return finalized;
+            const finalValues = finalized.finalValues;
             occurrenceId ??= eventOccurrenceIdSchema.parse(newOccurrenceId());
             const stored = await persist(
               transaction,
@@ -1049,6 +1105,300 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
           : { kind: "available", value };
       }
       return { kind: "temporarily_unavailable" };
+    },
+
+    /**
+     * Saves one to 200 updates of one record type in ONE transaction: every record is prepared
+     * (receipt, current access, revision, field policy) and finalized (type, rules, cascades) by
+     * the same decisions a single save takes, then one writer call saves them all. Any problem
+     * rolls everything back and every problem found is returned; nothing is half written. A
+     * record whose change moves a relationship total is refused, as the ordinary save's writer
+     * refuses it.
+     */
+    async saveBatch(
+      caller: IdentitySession,
+      selection: OrganizationSelectionCandidate,
+      recordTypeId: string,
+      subjects: readonly RecordBatchSaveSubject[],
+    ): Promise<RecordBatchSaveResult> {
+      if (
+        selection.applicationRootId === undefined ||
+        selection.previewInstallationId !== undefined ||
+        subjects.length === 0 ||
+        subjects.length > recordBatchSaveMaximum
+      ) {
+        console.error("[record] batch save refused RECORD_BATCH_SAVE_UNAVAILABLE");
+        return { kind: "unavailable" };
+      }
+      const ordered = [...subjects].sort((left, right) =>
+        left.recordId.toLowerCase() < right.recordId.toLowerCase() ? -1 : 1,
+      );
+      const planned: Array<{
+        subject: RecordBatchSaveSubject;
+        activityId: string;
+        occurrenceId: string;
+      }> = [];
+      const commands: SaveRecordCommand[] = [];
+      try {
+        for (const subject of ordered) {
+          commands.push(
+            saveRecordCommandSchema.parse({
+              contractVersion: "2.0.0",
+              operation: "update",
+              commandId: subject.commandId,
+              recordTypeId,
+              recordId: subject.recordId,
+              expectedConcurrencyNumber: subject.expectedConcurrencyNumber,
+              submittedValues: subject.submittedValues,
+            }),
+          );
+          planned.push({
+            subject,
+            activityId: activityIdSchema.parse(newActivityId()),
+            occurrenceId: eventOccurrenceIdSchema.parse(newOccurrenceId()),
+          });
+        }
+      } catch (error) {
+        console.error(`[record] batch save command invalid: ${describeFailure(error)}`);
+        return { kind: "unavailable" };
+      }
+      const rollback = new Error("RECORD_BATCH_SAVE_ROLLED_BACK");
+      let settled: RecordBatchSaveResult | undefined;
+      const result = await requests.runChange(
+        caller,
+        selection,
+        async (transaction, _scope, issuedAt) => {
+          const settings = await readOrganizationRuntimeSettings(transaction);
+          const problems: RecordBatchSaveProblem[] = [];
+          const previous = new Map<string, Record<string, unknown>>();
+          const finals: Array<Record<string, unknown>> = [];
+          const replays: number[] = [];
+          for (const [position, command] of commands.entries()) {
+            if (command.operation !== "update") throw new Error("RECORD_BATCH_SAVE_NOT_UPDATE");
+            const { subject, activityId } = planned[position]!;
+            const recordId = subject.recordId;
+            const stop = (reason: "changed" | "refused", cause: string): void => {
+              console.error(`[record] batch save refused ${cause} record=${recordId}`);
+              problems.push({ recordId, reason });
+            };
+            const totals = await prepareRelationshipTotals(transaction, command, activityId);
+            if (totals.outcome === "conflict") {
+              stop("changed", "RECORD_BATCH_SAVE_CONFLICT");
+              continue;
+            }
+            if (
+              totals.outcome !== "prepared" &&
+              totals.outcome !== "defer" &&
+              totals.outcome !== "not_required"
+            ) {
+              stop(
+                totals.outcome === "restart" ? "changed" : "refused",
+                `RECORD_BATCH_SAVE_TOTALS_${totals.outcome.toUpperCase()}`,
+              );
+              continue;
+            }
+            // A record type in a relationship is prepared through its locked closure, exactly as
+            // the single save prepares it; only a change that moves a parent total is refused.
+            const root =
+              totals.outcome === "prepared"
+                ? totals.records.find((record) => record.recordKey === "root")
+                : undefined;
+            const prepared: PreparationOutcome =
+              totals.outcome === "prepared"
+                ? root === undefined
+                  ? { outcome: "unavailable" }
+                  : {
+                      outcome: "prepared",
+                      recordType: root.recordType,
+                      existingValues: root.existingValues,
+                      readableFieldIds: new Set(totals.readableFieldIds),
+                      correlationId: totals.correlationId,
+                    }
+                : await prepare(transaction, command, activityId);
+            if (prepared.outcome === "replayed") {
+              if (prepared.result.outcome === "saved")
+                replays[position] = prepared.result.concurrencyNumber;
+              else stop("refused", "RECORD_BATCH_SAVE_REPLAY_NOT_SAVED");
+              continue;
+            }
+            if (prepared.outcome !== "prepared") {
+              stop(
+                prepared.outcome === "conflict" ? "changed" : "refused",
+                `RECORD_BATCH_SAVE_${prepared.outcome.toUpperCase()}`,
+              );
+              continue;
+            }
+            if (prepared.recordType.systemProjection !== undefined) {
+              stop("refused", "RECORD_BATCH_SAVE_RECORD_TYPE_UNSUPPORTED");
+              continue;
+            }
+            let values: CalculatedValues;
+            if (totals.outcome === "prepared") {
+              const closureRules = new Map<string, BeforeSaveRuleExecution>();
+              for (const record of totals.records) {
+                const ruleSet = parseBeforeSaveFlowSet(
+                  record.beforeSaveFlows,
+                  record.recordType.recordTypeId,
+                );
+                if (ruleSet === undefined) break;
+                closureRules.set(record.recordKey, beginBeforeSaveRuleExecution(ruleSet));
+              }
+              const clock = operationClock(
+                totals.records.map((record) => record.recordType),
+                issuedAt,
+                settings?.timeZone,
+              );
+              if (closureRules.size !== totals.records.length || clock === undefined) {
+                stop("refused", "RECORD_BATCH_SAVE_RECORD_TYPE_UNSUPPORTED");
+                continue;
+              }
+              values = calculateLockedRelationshipTotalSave({
+                command,
+                preparation: totals,
+                ...(settings?.currency === undefined
+                  ? {}
+                  : { organizationCurrency: settings.currency }),
+                clock,
+                rules: closureRules,
+              });
+              if (values.success && values.parentMutations.length > 0) {
+                stop("refused", "RECORD_BATCH_SAVE_RELATIONSHIP_TOTALS");
+                continue;
+              }
+            } else {
+              const ruleSet = parseBeforeSaveFlowSet(
+                prepared.beforeSaveFlows,
+                prepared.recordType.recordTypeId,
+              );
+              if (ruleSet === undefined) {
+                stop("refused", "RECORD_BATCH_SAVE_RECORD_TYPE_UNSUPPORTED");
+                continue;
+              }
+              values = calculateAndFinalize({
+                operation: "update",
+                submittedValues: command.submittedValues,
+                recordType: prepared.recordType,
+                existingValues: prepared.existingValues,
+                issuedAt,
+                organizationCurrency: settings?.currency,
+                timeZone: settings?.timeZone,
+                rules: beginBeforeSaveRuleExecution(ruleSet),
+              });
+            }
+            const finalized = await finalizeCalculatedValues(
+              transaction,
+              command,
+              prepared,
+              totals,
+              values,
+              false,
+            );
+            if (!("finalValues" in finalized)) {
+              if (finalized.outcome === "correction_required")
+                for (const correction of finalized.corrections)
+                  problems.push({
+                    recordId,
+                    fieldId: correction.fieldId,
+                    reason: correction.code,
+                    ...(correction.message === undefined ? {} : { message: correction.message }),
+                  });
+              else
+                problems.push({
+                  recordId,
+                  reason:
+                    finalized.outcome === "refused" && finalized.error.code === "conflict"
+                      ? "changed"
+                      : "refused",
+                  ...(finalized.outcome === "refused" &&
+                  "reason" in finalized.error &&
+                  finalized.error.reason !== undefined
+                    ? { message: finalized.error.reason.message }
+                    : {}),
+                });
+              continue;
+            }
+            finals[position] = finalized.finalValues;
+            previous.set(
+              recordId.toLowerCase(),
+              Object.fromEntries(
+                Object.keys(subject.submittedValues)
+                  .filter((field) => prepared.readableFieldIds.has(field))
+                  .map((field) => [field, prepared.existingValues[field] ?? null]),
+              ),
+            );
+          }
+          if (problems.length > 0) {
+            settled = { kind: "refused", problems };
+            throw rollback;
+          }
+          // A replayed batch (the same gesture submitted again) completed before: every record
+          // returns its stored outcome and none is written twice.
+          const replayed = replays.filter((entry) => entry !== undefined).length;
+          if (replayed !== 0 && replayed !== commands.length) {
+            console.error("[record] batch save refused RECORD_BATCH_SAVE_PARTIAL_REPLAY");
+            settled = { kind: "unavailable" };
+            throw rollback;
+          }
+          if (replayed === commands.length)
+            return planned.map(({ subject }, position) => ({
+              recordId: subject.recordId,
+              concurrencyNumber: replays[position]!,
+              previous: {},
+            }));
+          await transaction.query`set local role vortex_runtime`;
+          const rows = await transaction.query<SaveRow>`
+            select vortex_record.save_base_record_set(
+              ${recordTypeId}::uuid,
+              ${JSON.stringify(
+                planned.map(({ subject, activityId, occurrenceId }, position) => ({
+                  commandId: subject.commandId,
+                  recordId: subject.recordId,
+                  expectedConcurrencyNumber: subject.expectedConcurrencyNumber,
+                  submittedValues: subject.submittedValues,
+                  finalValues: finals[position] ?? {},
+                  activityId,
+                  occurrenceId,
+                })),
+              )}::text::jsonb
+            ) as result
+          `;
+          const stored = one(rows).result as Record<string, unknown> | null;
+          const results = stored?.outcome === "completed" ? stored.results : undefined;
+          if (!Array.isArray(results) || results.length !== planned.length) {
+            const subjectResult =
+              typeof stored?.subject === "object" && stored.subject !== null
+                ? (stored.subject as Record<string, unknown>)
+                : stored;
+            const index = typeof stored?.index === "number" ? stored.index : 0;
+            const recordId = planned[index]?.subject.recordId ?? planned[0]!.subject.recordId;
+            console.error(
+              `[record] batch save persistence ${String(subjectResult?.outcome)} (${String(subjectResult?.reasonCode ?? "no reason code")}) record=${recordId}`,
+            );
+            settled = {
+              kind: "refused",
+              problems: [
+                { recordId, reason: subjectResult?.outcome === "conflict" ? "changed" : "refused" },
+              ],
+            };
+            throw rollback;
+          }
+          return results.map((entry, position) => {
+            const saved = entry as Record<string, unknown>;
+            const concurrencyNumber = revision(saved.concurrencyNumber);
+            if (saved.outcome !== "saved" || concurrencyNumber === undefined)
+              throw new Error("RECORD_BATCH_SAVE_RESULT_INVALID");
+            const recordId = planned[position]!.subject.recordId;
+            return {
+              recordId,
+              concurrencyNumber,
+              previous: previous.get(recordId.toLowerCase()) ?? {},
+            };
+          });
+        },
+      );
+      if (settled !== undefined) return settled;
+      if (result.kind !== "available") return result;
+      return { kind: "saved", rows: result.value };
     },
   });
 };

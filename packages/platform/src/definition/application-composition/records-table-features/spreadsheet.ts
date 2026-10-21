@@ -38,6 +38,9 @@ export const recordsTableStatusBarFieldTypes: readonly string[] = Object.freeze(
 export type RecordsTableSpreadsheetSettings = Readonly<{
   rangeSelect?: boolean;
   find?: boolean;
+  paste?: boolean;
+  fill?: boolean;
+  undo?: boolean;
   statusBarFields: readonly string[];
   statusBarOperations: readonly RecordsTableStatusBarOperation[];
 }>;
@@ -58,6 +61,9 @@ export const recordsTableSpreadsheetFeature: RecordsTableFeatureDefinition<Recor
               ? { rangeSelect: group["range_select"].value }
               : {}),
             ...(group["find"]?.kind === "boolean" ? { find: group["find"].value } : {}),
+            ...(group["paste"]?.kind === "boolean" ? { paste: group["paste"].value } : {}),
+            ...(group["fill"]?.kind === "boolean" ? { fill: group["fill"].value } : {}),
+            ...(group["undo"]?.kind === "boolean" ? { undo: group["undo"].value } : {}),
             statusBarFields: fieldList(group["status_bar_fields"]),
             statusBarOperations: (settingItems(group["status_bar_operations"]) ?? []).flatMap(
               (item) =>
@@ -73,9 +79,16 @@ export const recordsTableSpreadsheetFeature: RecordsTableFeatureDefinition<Recor
       if (
         typeof state.rangeSelect !== "boolean" ||
         typeof state.find !== "boolean" ||
+        typeof state.paste !== "boolean" ||
+        typeof state.fill !== "boolean" ||
+        typeof state.undo !== "boolean" ||
         (state.rangeSelect !== true && state.find !== true)
       )
         return featureNotPossible(code);
+      if (state.undo && !state.paste && !state.fill)
+        return featureNotPossible(code, "Undo needs Paste or Fill");
+      if ((state.paste || state.fill) && !state.rangeSelect)
+        return featureNotPossible(code, "Paste and fill need Range selection turned on.");
       const { statusBarFields: fields, statusBarOperations: operations } = state;
       if (fields.length === 0 && operations.length === 0) return featureAvailable;
       if (!state.rangeSelect)

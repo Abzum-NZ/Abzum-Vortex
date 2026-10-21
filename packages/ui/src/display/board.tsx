@@ -1,6 +1,8 @@
 "use client";
 
 import {
+  lazy,
+  Suspense,
   useCallback,
   useEffect,
   useRef,
@@ -35,6 +37,11 @@ import { resolveDisplayContext, type DisplayRenderProps } from "./context";
 import { DisplayStateContainer } from "./display-state-container";
 import type { BoardBucketPayload, BoardPayload, DisplaySemanticEvent } from "./projected-data";
 import { useRowEntrance } from "./row-entrance";
+
+/** The same filters toolbar the table draws, a chunk that loads only for a board that offers filters. */
+const BoardFilters = lazy(async () => ({
+  default: (await import("./grid-features/column-filters")).FiltersToolbar,
+}));
 
 type BoardBucket = Readonly<{
   key: string;
@@ -711,6 +718,18 @@ export function BoardView(props: DisplayRenderProps<BoardPayload>): ReactElement
           aria-label={accessibleName}
         >
           <DisplayHeader title={title} accessibleName={accessibleName} events={events} />
+          {values.filters === undefined ? null : (
+            <Suspense fallback={null}>
+              <BoardFilters
+                context={{
+                  accessibleName,
+                  features: { columnFilters: values.filters.fields },
+                  narrowing: { search: null, filters: values.filters.applied },
+                  events,
+                }}
+              />
+            </Suspense>
+          )}
           <div
             className="flex gap-2 overflow-x-auto md:hidden"
             role="group"
