@@ -21,24 +21,31 @@ export const canonicalJson = (
         throw new TypeError("Canonical JSON accepts finite numbers only");
       return JSON.stringify(entry);
     }
-    if (Array.isArray(entry)) return `[${entry.map(serialize).join(",")}]`;
+    if (Array.isArray(entry)) {
+      let items = "[";
+      for (let index = 0; index < entry.length; index += 1)
+        items += (index === 0 ? "" : ",") + serialize(entry[index]);
+      return `${items}]`;
+    }
     if (typeof entry !== "object") throw new TypeError("Canonical JSON accepts JSON values only");
 
     const object = entry as Record<string, unknown>;
     const keys = Object.keys(object);
-    if (keys.some((key) => object[key] === undefined))
-      throw new TypeError("Canonical JSON does not accept undefined object properties");
     keys.sort(compareKeys);
-    return `{${keys
-      .map((key) => {
-        let encoded = encodedKeys.get(key);
-        if (encoded === undefined) {
-          encoded = JSON.stringify(key);
-          encodedKeys.set(key, encoded);
-        }
-        return `${encoded}:${serialize(object[key])}`;
-      })
-      .join(",")}}`;
+    let members = "{";
+    for (let index = 0; index < keys.length; index += 1) {
+      const key = keys[index]!;
+      const member = object[key];
+      if (member === undefined)
+        throw new TypeError("Canonical JSON does not accept undefined object properties");
+      let encoded = encodedKeys.get(key);
+      if (encoded === undefined) {
+        encoded = JSON.stringify(key);
+        encodedKeys.set(key, encoded);
+      }
+      members += `${index === 0 ? "" : ","}${encoded}:${serialize(member)}`;
+    }
+    return `${members}}`;
   };
   return serialize(value);
 };
