@@ -19,6 +19,7 @@ import {
   type RecordsTableSortKey,
   type RecordsTableSortState,
   RECORDS_TABLE_MAXIMUM_SORT_KEYS,
+  recordsSelectionMaximumIds,
   gridLayoutStateSchema,
   type GridLayout,
   type GridLayoutState,
@@ -401,7 +402,13 @@ export type DisplaySemanticEvent =
       /** The record revision the row was read at; a stale one is refused by the server. */
       revision?: number;
     }>
-  | Readonly<{ event: "selection_changed"; recordId: string; selected: boolean }>
+  | Readonly<{
+      event: "selection_changed";
+      recordId: string;
+      /** The drawn row's revision, held until it is deselected. */
+      revision: number;
+      selected: boolean;
+    }>
   | Readonly<{
       event: "filter_changed";
       /** The filterable field whose control changed. */
@@ -1041,12 +1048,13 @@ const parseColumns = (
 
 const parseSelection = (
   value: unknown,
-  rows: readonly DisplayRow[],
   location: DefinitionRenderErrorLocation,
 ): readonly string[] | undefined => {
   if (value === undefined) return undefined;
   const items = requireArray(value, "Selected record identities must be an array", location);
-  const known = new Set(rows.map((row) => row.recordId));
+  if (items.length > recordsSelectionMaximumIds)
+    fail(`Select at most ${recordsSelectionMaximumIds} records`, location);
+  // Held selections can name a previously drawn row beneath a closed branch.
   const seen = new Set<string>();
   return Object.freeze(
     items.map((item) => {
@@ -1055,8 +1063,6 @@ const parseSelection = (
         "A selected record identity must be a non-empty string",
         location,
       );
-      if (!known.has(recordId))
-        fail(`Selected record identity '${recordId}' is not a projected row`, location);
       if (seen.has(recordId)) fail(`Duplicate selected record identity '${recordId}'`, location);
       seen.add(recordId);
       return recordId;
@@ -1261,7 +1267,7 @@ export const parseTablePayload = (
   if (layoutKeys.size !== carriedKeys.size || [...carriedKeys].some((key) => !layoutKeys.has(key)))
     fail("A projected table layout must arrange exactly the declared columns", location);
   const rows = parseRows(record.rows, location);
-  const selection = parseSelection(record.selectedRecordIds, rows, location);
+  const selection = parseSelection(record.selectedRecordIds, location);
   const page =
     record.page === undefined
       ? undefined

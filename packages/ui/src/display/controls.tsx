@@ -117,6 +117,11 @@ export function SelectionControl({
 }>): ReactElement | null {
   const onSelection = events?.selection_changed;
   if (onSelection === undefined) return null;
+  const revision = row.revision;
+  if (revision === undefined) {
+    console.error("[display] selection needs the drawn row's revision", { recordId: row.recordId });
+    return null;
+  }
   if (mode === "single")
     return (
       <input
@@ -127,7 +132,12 @@ export function SelectionControl({
         checked={selected}
         onClick={(event) => event.stopPropagation()}
         onChange={() =>
-          onSelection({ event: "selection_changed", recordId: row.recordId, selected: true })
+          onSelection({
+            event: "selection_changed",
+            recordId: row.recordId,
+            revision,
+            selected: true,
+          })
         }
       />
     );
@@ -137,7 +147,12 @@ export function SelectionControl({
       checked={selected}
       onClick={(event) => event.stopPropagation()}
       onCheckedChange={(checked) =>
-        onSelection({ event: "selection_changed", recordId: row.recordId, selected: checked })
+        onSelection({
+          event: "selection_changed",
+          recordId: row.recordId,
+          revision,
+          selected: checked,
+        })
       }
     />
   );
@@ -151,13 +166,13 @@ export function SelectionControl({
 export function SelectAllControl({
   allSelected,
   someSelected = false,
-  recordIds,
+  rows,
   accessibleName,
   events,
 }: Readonly<{
   allSelected: boolean;
   someSelected?: boolean;
-  recordIds: readonly string[];
+  rows: readonly DisplayRow[];
   accessibleName: string;
   events: DisplayEventHandlers | undefined;
 }>): ReactElement | null {
@@ -173,14 +188,26 @@ export function SelectAllControl({
       }
       checked={allSelected}
       indeterminate={someSelected}
-      disabled={recordIds.length === 0}
+      disabled={rows.length === 0}
       onCheckedChange={() => {
         if (allSelected && onScope !== undefined) {
           onScope({ event: "selection_scope_changed", scope: "cleared" });
           return;
         }
-        for (const recordId of recordIds)
-          onSelection({ event: "selection_changed", recordId, selected: !allSelected });
+        for (const row of rows) {
+          if (row.revision === undefined) {
+            console.error("[display] selection needs the drawn row's revision", {
+              recordId: row.recordId,
+            });
+            continue;
+          }
+          onSelection({
+            event: "selection_changed",
+            recordId: row.recordId,
+            revision: row.revision,
+            selected: !allSelected,
+          });
+        }
       }}
     />
   );
