@@ -210,7 +210,7 @@ const GridRow = memo(function GridRow({
     <div
       role="row"
       aria-rowindex={index + 2}
-      {...(selectable ? { "aria-selected": selected } : {})}
+      {...(selectable && row.revision !== undefined ? { "aria-selected": selected } : {})}
       {...(pending ? { "aria-busy": true } : {})}
       {...(subExpandable
         ? { "aria-expanded": subExpanded }
@@ -692,28 +692,43 @@ export function RecordsGrid({
     void onSort({ event: "sort_changed", sort: nextRecordsTableSort(sort, column.key, additive) });
   };
 
-  // The selection holds records of the page (each at the revision the page read); a sub-row is not
-  // selectable.
-  const pageRecordIds = new Set(rows.map((row) => row.recordId));
+  // Each gesture selects only its drawn row, at the revision the person saw.
   const toggleSelection = (row: DisplayRow | undefined): void => {
     const onSelection = events?.selection_changed;
-    if (
-      row === undefined ||
-      onSelection === undefined ||
-      selection === undefined ||
-      !pageRecordIds.has(row.recordId)
-    )
+    if (row === undefined || onSelection === undefined || selection === undefined) return;
+    if (row.revision === undefined) {
+      console.error("[display] selection needs the drawn row's revision", {
+        recordId: row.recordId,
+      });
       return;
+    }
     const selected = selectedRecordIds.includes(row.recordId);
     if (selection === "single" && selected) return;
-    void onSelection({ event: "selection_changed", recordId: row.recordId, selected: !selected });
+    void onSelection({
+      event: "selection_changed",
+      recordId: row.recordId,
+      revision: row.revision,
+      selected: !selected,
+    });
   };
   const toggleAll = (): void => {
     const onSelection = events?.selection_changed;
     if (onSelection === undefined || selection !== "multiple") return;
     const all = rows.length > 0 && rows.every((row) => selectedRecordIds.includes(row.recordId));
-    for (const row of rows)
-      void onSelection({ event: "selection_changed", recordId: row.recordId, selected: !all });
+    for (const row of rows) {
+      if (row.revision === undefined) {
+        console.error("[display] selection needs the drawn row's revision", {
+          recordId: row.recordId,
+        });
+        continue;
+      }
+      void onSelection({
+        event: "selection_changed",
+        recordId: row.recordId,
+        revision: row.revision,
+        selected: !all,
+      });
+    }
   };
 
   const resizeBy = (columnId: string, delta: number): void => {
@@ -1168,7 +1183,7 @@ export function RecordsGrid({
           slots={slots}
           rowHeight={rowHeight}
           selected={selectedSet.has(row.recordId)}
-          selectable={selectable && line.level === 1}
+          selectable={selectable}
           activeColumnId={activeRow === index ? active.columnId : undefined}
           pending={pendingRecordId === row.recordId}
           activatable={activateRow !== undefined}

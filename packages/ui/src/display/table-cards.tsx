@@ -177,7 +177,7 @@ export function RecordsCards({
               className={cn(CARD_SPACING[density], selected && "ring-2 ring-primary")}
             >
               <div className="flex min-w-0 items-center gap-2">
-                {selectable && line.level === 1 ? renderers.select(row, selected) : null}
+                {selectable ? renderers.select(row, selected) : null}
                 <h3
                   id={headingId}
                   data-vortex-field-key={heading?.key}
