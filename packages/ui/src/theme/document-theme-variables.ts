@@ -41,3 +41,29 @@ export function createDocumentThemeVariables(
     Object.entries(full).filter(([name, value]) => defaults[name] !== value),
   ) as CSSProperties;
 }
+
+/**
+ * The theme variables the platform loader (`BrandLoader`) reads: its colour, the surface it sits on
+ * and its cycle. Its size and timing tokens come only from the platform stylesheet, never from a
+ * theme; everything else a theme sets (component styles included) is the loaded page's.
+ */
+const LOADER_VARIABLES: ReadonlySet<string> = new Set([
+  "--primary",
+  "--background",
+  "--vortex-loader-cycle",
+]);
+
+/**
+ * The variables an application's theme gives the loader drawn before its frame is composed: the
+ * document variables the loader reads, without the rest of the theme the frame writes itself.
+ */
+export function createLoaderThemeVariables(
+  theme: ApplicationTheme | undefined,
+  platformThemeTokens: PlatformThemeTokens,
+): CSSProperties {
+  return Object.fromEntries(
+    Object.entries(createDocumentThemeVariables(theme, platformThemeTokens)).filter(([name]) =>
+      LOADER_VARIABLES.has(name),
+    ),
+  ) as CSSProperties;
+}

@@ -1,7 +1,7 @@
 import { Suspense, type ReactNode } from "react";
 import { DEFAULT_PLATFORM_THEME_RELEASE } from "@vortex/platform/server";
 import { BrandLoader } from "@vortex/ui";
-import { createDocumentThemeVariables } from "@vortex/ui/theme";
+import { createLoaderThemeVariables } from "@vortex/ui/theme";
 import { loadApplicationFrame, loadApplicationStartTheme } from "../../../_lib/application-frame";
 import { ApplicationFrame } from "./_components/application-frame";
 import { DraftPreviewNotice } from "./_components/draft-preview-notice";
@@ -17,9 +17,10 @@ type Props = Readonly<{ children: ReactNode; params: Promise<Route> }>;
 /**
  * The loader drawn while the frame is composed: the application's own mark in its own theme, as
  * soon as the application is known. Before that the organisation's platform loader shows. It
- * carries only the variables that differ from the platform rule: after a client-side move from
- * another application the document root has already returned to the platform theme, and the frame
- * that replaces the loader puts the application's theme back on the root.
+ * carries only the variables the loader reads, and only those that differ from the platform rule:
+ * after a client-side move from another application the document root has already returned to the
+ * platform theme, and the frame that replaces the loader puts the application's whole theme back
+ * on the root.
  */
 async function ApplicationStartLoader({ route }: { route: Route }) {
   const theme = await loadApplicationStartTheme(
@@ -31,7 +32,7 @@ async function ApplicationStartLoader({ route }: { route: Route }) {
   return (
     <div
       data-vortex-theme=""
-      style={createDocumentThemeVariables(theme, DEFAULT_PLATFORM_THEME_RELEASE.tokens)}
+      style={createLoaderThemeVariables(theme, DEFAULT_PLATFORM_THEME_RELEASE.tokens)}
       className="grid min-h-svh place-items-center"
       aria-busy="true"
     >
