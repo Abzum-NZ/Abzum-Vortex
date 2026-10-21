@@ -55,6 +55,8 @@ export const definitionValidationErrorCodes = [
   "definition_invalid_value",
   "definition_unsupported_choice",
   "definition_records_table_bounded_scrolling",
+  "definition_records_table_visible_columns",
+  "definition_records_table_auto_size",
   "definition_records_table_search",
   "definition_records_table_column_filters",
   "definition_records_table_saved_views",
@@ -126,6 +128,16 @@ const definitionValidationErrorCatalogueSource = {
     order: 30,
     message: "A selected value is not supported.",
     guidance: "Choose one of the values supported by the current contract version.",
+  },
+  definition_records_table_visible_columns: {
+    order: 35,
+    message: "Keep at least one column visible.",
+    guidance: "Choose Visible by default for a column before publishing.",
+  },
+  definition_records_table_auto_size: {
+    order: 35,
+    message: "Auto-size needs a field to measure. Choose a field for the column.",
+    guidance: "Choose the column's field, or turn Auto-size off.",
   },
   definition_records_table_bounded_scrolling: {
     order: 35,
@@ -548,13 +560,12 @@ function makePublicError(
   code: DefinitionValidationErrorCode,
   correlationId: z.infer<typeof correlationIdSchema>,
   location?: DefinitionValidationLocation,
-  sentence?: string,
 ): PublicDefinitionValidationError {
   const entry = definitionValidationErrorCatalogue[code];
   return {
     catalogueVersion: definitionValidationCatalogueVersion,
     code,
-    message: sentence ?? entry.message,
+    message: entry.message,
     guidance: entry.guidance,
     correlationId,
     ...(location ? { location } : {}),
@@ -718,7 +729,6 @@ export function translateDefinitionRuleFailures(
         failure.code ?? failureCodeByFamily[failure.family],
         context.correlationId,
         failure.location ?? context.rootLocation,
-        failure.sentence,
       ),
     ),
     context.correlationId,

@@ -239,7 +239,7 @@ export function validateApplicationSourceCatalogue(
         "vortex.definition.application_block_settings",
         "required_value",
         at("columns"),
-        undefined,
+        problem.code,
         problem.reason,
       );
 

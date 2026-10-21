@@ -1,3 +1,4 @@
+import { definitionValidationErrorCatalogue } from "../../catalogue/validation-errors";
 import catalogueSources from "../../catalogue/catalogue/application-composition-catalogue.source.json";
 import {
   readRecordsTableRowActions,
@@ -293,22 +294,33 @@ export const readRecordsTableContract = (
 /** The column settings every grid must satisfy, before reading a complete table contract. */
 export const recordsTableColumnProblems = (
   value: ComponentSettingValue | undefined,
-): readonly Readonly<{ index?: number; reason: string }>[] => {
+): readonly Readonly<{
+  index?: number;
+  code: "definition_records_table_visible_columns" | "definition_records_table_auto_size";
+  reason: string;
+}>[] => {
   if (value?.kind !== "list") return [];
   const columns = value.items.map((item) => settingGroup(item));
-  const problems: { index?: number; reason: string }[] = [];
+  const problems: {
+    index?: number;
+    code: "definition_records_table_visible_columns" | "definition_records_table_auto_size";
+    reason: string;
+  }[] = [];
   if (!columns.some((column) => column?.["visible"]?.kind === "boolean" && column["visible"].value))
-    problems.push({ reason: "Keep at least one column visible." });
+    problems.push({
+      code: "definition_records_table_visible_columns",
+      reason: definitionValidationErrorCatalogue.definition_records_table_visible_columns.message,
+    });
   columns.forEach((column, index) => {
     if (
       column?.["auto_size"]?.kind === "boolean" &&
       column["auto_size"].value &&
       settingField(column["field"]) === undefined
     ) {
-      const name = settingText(column["label"]) ?? `Column ${index + 1}`;
       problems.push({
         index,
-        reason: `Auto-size is not possible: ${name} has no field to measure.`,
+        code: "definition_records_table_auto_size",
+        reason: definitionValidationErrorCatalogue.definition_records_table_auto_size.message,
       });
     }
   });
