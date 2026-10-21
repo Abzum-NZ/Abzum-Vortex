@@ -13,7 +13,10 @@ export {
   type PlatformThemeTokens,
 } from "./theme-variables";
 
-export { createDocumentThemeVariables } from "./document-theme-variables";
+export {
+  createDocumentThemeVariables,
+  createLoaderThemeVariables,
+} from "./document-theme-variables";
 
 export {
   createVortexStyleRootProps,
