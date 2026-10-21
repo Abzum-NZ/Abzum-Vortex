@@ -77,6 +77,7 @@ export const loadApplicationPivot = async (
     context,
     pageDefinition.pageId,
     subjectId,
+    undefined,
   );
   try {
     const projectedPage = await projectedPageRead;

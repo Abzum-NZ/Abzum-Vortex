@@ -1,6 +1,5 @@
 import { Suspense, type ReactNode } from "react";
-import { DEFAULT_PLATFORM_THEME_RELEASE } from "@vortex/platform/server";
-import { BrandLoader, createThemeRootProps } from "@vortex/ui";
+import { BrandLoader } from "@vortex/ui";
 import { loadApplicationFrame, loadApplicationStartTheme } from "../../../_lib/application-frame";
 import { ApplicationFrame } from "./_components/application-frame";
 import { DraftPreviewNotice } from "./_components/draft-preview-notice";
@@ -15,7 +14,9 @@ type Props = Readonly<{ children: ReactNode; params: Promise<Route> }>;
 
 /**
  * The loader drawn while the frame is composed: the application's own mark in its own theme, as
- * soon as the application is known. Before that the organisation's platform loader shows.
+ * soon as the application is known. Before that the organisation's platform loader shows. The
+ * theme's variables are the document root's (the server render writes the addressed application's
+ * theme there once), so the loader draws with them and repeats none of them.
  */
 async function ApplicationStartLoader({ route }: { route: Route }) {
   const theme = await loadApplicationStartTheme(
@@ -25,11 +26,7 @@ async function ApplicationStartLoader({ route }: { route: Route }) {
   );
   if (theme === undefined) return null;
   return (
-    <div
-      {...createThemeRootProps(theme, DEFAULT_PLATFORM_THEME_RELEASE.tokens)}
-      className="grid min-h-svh place-items-center"
-      aria-busy="true"
-    >
+    <div data-vortex-theme="" className="grid min-h-svh place-items-center" aria-busy="true">
       <BrandLoader {...(theme.loaderMark === undefined ? {} : { mark: theme.loaderMark })} />
     </div>
   );

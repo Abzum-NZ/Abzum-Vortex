@@ -25,6 +25,12 @@ const PLATFORM_STYLE_ATTRIBUTES: Readonly<
   "data-vortex-menu-accent": platformStyle["data-vortex-menu-accent"],
 };
 
+/** The theme variables of a style: its custom properties, in order. */
+const themeVariables = (style: React.CSSProperties | undefined): [string, string][] =>
+  Object.entries(style ?? {}).flatMap(([name, value]) =>
+    name.startsWith("--") && value !== undefined ? [[name, String(value)] as [string, string]] : [],
+  );
+
 /**
  * The document root carries the theme of the application on screen. The server render already gives
  * it the addressed application's theme, so the first paint is right; this keeps it right across
@@ -33,49 +39,58 @@ const PLATFORM_STYLE_ATTRIBUTES: Readonly<
  * default `:root` rule applies with the platform style attributes. The viewer's appearance (colour
  * scheme and mode) is never touched: it stays the document root's own.
  */
-function useDocumentTheme(element: HTMLDivElement | null, enabled: boolean, themeKey: string) {
+function useDocumentTheme(
+  element: HTMLDivElement | null,
+  enabled: boolean,
+  variables: readonly (readonly [string, string])[],
+  attributes: string,
+) {
   React.useLayoutEffect(() => {
     if (!enabled || element === null) return;
     const root = document.documentElement;
-    const properties: string[] = [];
-    for (let index = 0; index < element.style.length; index += 1) {
-      const name = element.style.item(index);
-      if (!name.startsWith("--")) continue;
-      properties.push(name);
-      const value = element.style.getPropertyValue(name);
+    for (const [name, value] of variables)
       if (root.style.getPropertyValue(name) !== value) root.style.setProperty(name, value);
-    }
     for (const name of DOCUMENT_THEME_ATTRIBUTES) {
       const value = element.getAttribute(name);
       if (value !== null && root.getAttribute(name) !== value) root.setAttribute(name, value);
     }
     return () => {
-      for (const name of properties) root.style.removeProperty(name);
+      for (const [name] of variables) root.style.removeProperty(name);
       for (const name of DOCUMENT_THEME_ATTRIBUTES)
         root.setAttribute(name, PLATFORM_STYLE_ATTRIBUTES[name]);
     };
-  }, [element, enabled, themeKey]);
+  }, [element, enabled, variables, attributes]);
 }
 
 /**
  * Keep portalled components inside the application root whose style and theme they inherit. The
- * application surface (`documentTheme`) also gives its theme to the document root.
+ * application surface (`documentTheme`) gives its theme to the document root and not to its own
+ * element: the root carries each variable once (the server render writes it there, and this
+ * surface applies it there after a client-side navigation), and everything below inherits it.
  */
 export function VortexStyleRoot({
   children,
   documentTheme = false,
+  style,
   ...props
 }: React.ComponentProps<"div"> & { documentTheme?: boolean }) {
   const [element, setElement] = React.useState<HTMLDivElement | null>(null);
-  const themeKey = JSON.stringify([
-    props.style,
+  const variablesKey = JSON.stringify(documentTheme ? themeVariables(style) : []);
+  const variables = React.useMemo(
+    () => JSON.parse(variablesKey) as readonly (readonly [string, string])[],
+    [variablesKey],
+  );
+  const attributes = JSON.stringify(
     DOCUMENT_THEME_ATTRIBUTES.map((name) => (props as Record<string, unknown>)[name]),
-  ]);
-  useDocumentTheme(element, documentTheme, themeKey);
+  );
+  useDocumentTheme(element, documentTheme, variables, attributes);
+  const ownStyle = documentTheme
+    ? Object.fromEntries(Object.entries(style ?? {}).filter(([name]) => !name.startsWith("--")))
+    : style;
 
   return (
     <VortexStyleRootContext.Provider value={{ element }}>
-      <div ref={setElement} {...props} data-vortex-style-root="">
+      <div ref={setElement} {...props} style={ownStyle} data-vortex-style-root="">
         {children}
       </div>
     </VortexStyleRootContext.Provider>

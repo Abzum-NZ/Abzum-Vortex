@@ -97,6 +97,7 @@ export const loadApplicationRowDetail = async (
     context,
     pageDefinition.pageId,
     subjectId,
+    undefined,
   );
   try {
     const projectedPage = await projectedPageRead;

@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import type { CSSProperties } from "react";
 import { DEFAULT_PLATFORM_THEME_RELEASE, STUDIO_THEME_ROOT } from "@vortex/platform/server";
 import {
+  createDocumentThemeVariables,
   createThemeRootProps,
   createVortexStyleRootProps,
   resolveVortexStyleSelection,
@@ -62,8 +63,8 @@ type DocumentTheme = Readonly<{
 
 /**
  * The theme the document root carries in the server render: the addressed application's own theme
- * (style, menu attributes and every theme variable), so the first paint is already the
- * application's; otherwise the platform default (its variables come from `PLATFORM_ROOT_CSS`).
+ * (style, menu attributes and each theme variable the platform rule does not already give), so the
+ * first paint is already the application's; otherwise the platform default (its variables come from `PLATFORM_ROOT_CSS`).
  */
 export async function loadDocumentTheme(): Promise<DocumentTheme> {
   const platform: DocumentTheme = {
@@ -95,7 +96,6 @@ export async function loadDocumentTheme(): Promise<DocumentTheme> {
     return platform;
   const theme = await loadApplicationStartTheme(tenant, organization, application);
   if (theme === undefined) return platform;
-  const themeRoot = createThemeRootProps(theme, DEFAULT_PLATFORM_THEME_RELEASE.tokens);
   const styleRoot = createVortexStyleRootProps(resolveVortexStyleSelection(theme.selection));
   return {
     stylesheet: "platform",
@@ -104,6 +104,7 @@ export async function loadDocumentTheme(): Promise<DocumentTheme> {
       "data-vortex-menu": styleRoot["data-vortex-menu"],
       "data-vortex-menu-accent": styleRoot["data-vortex-menu-accent"],
     },
-    style: { ...themeRoot.style, ...styleRoot.style },
+    // Only what differs from the platform rule the document already links: one write per variable.
+    style: createDocumentThemeVariables(theme, DEFAULT_PLATFORM_THEME_RELEASE.tokens),
   };
 }
