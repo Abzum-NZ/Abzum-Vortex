@@ -455,6 +455,7 @@ export const createFlowTaskRunner = (
       }
       if (value.outcome === "correction_required") {
         // Only the form field key, the correction code and a rule's authored message leave the save: never a value.
+        const unlocated: typeof value.corrections = [];
         const located = dedupeFieldCorrections(
           value.corrections.flatMap((correction) => {
             // A rule may refuse for another field than the one submitted; its authored message
@@ -463,24 +464,26 @@ export const createFlowTaskRunner = (
             const field =
               plan.submittedNames.get(fieldId) ??
               (correction.message === undefined ? undefined : plan.fieldKeys.get(fieldId));
-            return field === undefined
-              ? []
-              : [
-                  {
-                    field,
-                    code: correction.code,
-                    ...(correction.message === undefined ? {} : { message: correction.message }),
-                  },
-                ];
+            if (field === undefined) {
+              unlocated.push(correction);
+              return [];
+            }
+            return [
+              {
+                field,
+                code: correction.code,
+                ...(correction.message === undefined ? {} : { message: correction.message }),
+              },
+            ];
           }),
         );
         // Corrections on no field of this save still carry the rule's sentence (for example the
-        // pipeline's), which the person reads as one refusal rather than getting nothing.
-        const ruleRefusal =
-          located.length === 0 ? unlocatedCorrectionsRefusal(value.corrections) : undefined;
+        // pipeline's), which the person reads as one refusal beside the located fields.
+        const ruleRefusal = unlocatedCorrectionsRefusal(unlocated);
         const diagnostic = flowRefusalFeedbackSchema.safeParse({
           code: "invalid_command",
-          ...(ruleRefusal === undefined ? { corrections: located } : { ruleRefusal }),
+          ...(located.length === 0 ? {} : { corrections: located }),
+          ...(ruleRefusal === undefined ? {} : { ruleRefusal }),
         });
         // The caller sees the located fields; the run-ended line carries the stable reason.
         console.error(
@@ -495,8 +498,9 @@ export const createFlowTaskRunner = (
             ? {
                 diagnostic: {
                   code: diagnostic.data.code,
-                  ...(ruleRefusal === undefined
-                    ? {
+                  ...(located.length === 0
+                    ? {}
+                    : {
                         corrections: located.map((correction) => ({
                           field: correction.field,
                           code: correction.code,
@@ -504,8 +508,8 @@ export const createFlowTaskRunner = (
                             ? {}
                             : { message: correction.message }),
                         })),
-                      }
-                    : { ruleRefusal }),
+                      }),
+                  ...(ruleRefusal === undefined ? {} : { ruleRefusal }),
                 },
               }
             : {},

@@ -121,9 +121,10 @@ export type FlowRefusalFeedback = z.infer<typeof flowRefusalFeedbackSchema>;
  * The one refusal sentence for field corrections that name no field the person can see: the
  * corrections' authored messages (the pipeline's "can't move from Discovery to Won"), each once,
  * with the first correction's code. A correction without a message has no sentence of its own.
+ * A rule refusal already given leads, so joining it with unseen corrections drops neither.
  */
 export const unlocatedCorrectionsRefusal = (
-  corrections: readonly Pick<FlowFieldCorrection, "code" | "message">[],
+  corrections: readonly Readonly<{ code: string; message?: string | undefined }>[],
 ): FlowRuleRefusal | undefined => {
   const messages = [
     ...new Set(corrections.flatMap(({ message }) => (message === undefined ? [] : [message]))),

@@ -423,13 +423,15 @@ const surfaceDiagnostic = (
         : parsed.data.corrections.filter((correction) =>
             hasVisibleOwningFormField(installation, binding.controlId, correction.field),
           );
-  // Corrections the person cannot see at a field are never dropped: their messages become the one
-  // refusal sentence, unless the rule already refused with its own.
-  const ruleRefusal =
-    parsed.data.ruleRefusal ??
-    (corrections.length === 0 && parsed.data.corrections !== undefined
-      ? unlocatedCorrectionsRefusal(parsed.data.corrections)
-      : undefined);
+  // Corrections the person cannot see at a field are never dropped: their messages join the rule's
+  // own refusal sentence into the one sentence the person reads.
+  const unseen = (parsed.data.corrections ?? []).filter(
+    (correction) => !corrections.includes(correction),
+  );
+  const ruleRefusal = unlocatedCorrectionsRefusal([
+    ...(parsed.data.ruleRefusal === undefined ? [] : [parsed.data.ruleRefusal]),
+    ...unseen,
+  ]);
   return flowRefusalFeedbackSchema.parse({
     code: parsed.data.code,
     ...(parsed.data.presentation === undefined ? {} : { presentation: parsed.data.presentation }),
