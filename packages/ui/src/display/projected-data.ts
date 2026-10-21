@@ -34,13 +34,13 @@ import {
   type RecordsTableSortState,
   RECORDS_TABLE_MAXIMUM_SORT_KEYS,
   gridLayoutStateSchema,
+  recordsTableFeatureProjectionSchema,
   type GridLayoutState,
   isRecord,
 } from "@vortex/platform/schema";
 import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "../definition-error";
 import { parseRowFormat } from "./projected-format";
 import {
-  parseTableFeatures,
   parseTableGroups,
   parseTableNarrowing,
   parseTableSelectionParts,
@@ -384,6 +384,30 @@ export const isInternalAddress = (value: unknown): value is string =>
 /** A web link opens in a new page; a mail or telephone link hands over to the viewer's own app. */
 export const isWebLinkAddress = (value: string): boolean => /^https?:/i.test(value);
 const ISO_CALENDAR_DATE = /^\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])$/;
+/**
+ * @internal Parses one part of a payload with the platform schema that also describes what the
+ * server builds; a refusal names the part and the setting that does not fit.
+ */
+export const parseProjectedPart = <Output>(
+  schema: {
+    safeParse(value: unknown):
+      | { success: true; data: Output }
+      | {
+          success: false;
+          error: { issues: readonly { path: readonly PropertyKey[]; message: string }[] };
+        };
+  },
+  value: unknown,
+  message: string,
+  location: DefinitionRenderErrorLocation,
+): Output => {
+  const parsed = schema.safeParse(value);
+  if (parsed.success) return parsed.data;
+  const issue = parsed.error.issues[0];
+  const path = (issue?.path ?? []).map(String);
+  return fail(`${message}: ${issue?.message ?? "invalid"}`, location, path);
+};
+
 /** @internal Shared with the board payload parser. */
 export function fail(
   message: string,
@@ -1098,7 +1122,14 @@ export const parseTablePayload = (
   const narrowing =
     record.narrowing === undefined ? undefined : parseTableNarrowing(record.narrowing, location);
   const features =
-    record.features === undefined ? undefined : parseTableFeatures(record.features, location);
+    record.features === undefined
+      ? undefined
+      : parseProjectedPart(
+          recordsTableFeatureProjectionSchema,
+          record.features,
+          "Projected table features are invalid",
+          location,
+        );
   const groups =
     record.groups === undefined ? undefined : parseTableGroups(record.groups, location);
   const selectionParts = parseTableSelectionParts(record, location);

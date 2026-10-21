@@ -28,7 +28,7 @@ import type {
  * Every feature of the Records table registry has exactly one entry, so the Features panel never
  * meets a feature it cannot show.
  */
-export type StudioGridFeatureEditor =
+type StudioGridFeatureEditor =
   | Readonly<{
       kind: "settings";
       /** The bound query's fields the feature's field pickers offer; every field when absent. */

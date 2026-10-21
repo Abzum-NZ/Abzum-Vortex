@@ -3,8 +3,10 @@ import {
   featureAvailable,
   featureEnabled,
   featureNotPossible,
-  fieldList,
-  settingItems,
+  requiredBoolean,
+  requiredChoice,
+  requiredFieldList,
+  requiredItems,
   type RecordsTableFeatureDefinition,
 } from "./shared";
 
@@ -36,11 +38,11 @@ export const recordsTableStatusBarFieldTypes: readonly string[] = Object.freeze(
  * for the selected rows of the shown page only. Both are empty while the status bar is off.
  */
 export type RecordsTableSpreadsheetSettings = Readonly<{
-  rangeSelect?: boolean;
-  find?: boolean;
-  paste?: boolean;
-  fill?: boolean;
-  undo?: boolean;
+  rangeSelect: boolean;
+  find: boolean;
+  paste: boolean;
+  fill: boolean;
+  undo: boolean;
   statusBarFields: readonly string[];
   statusBarOperations: readonly RecordsTableStatusBarOperation[];
 }>;
@@ -53,38 +55,31 @@ export const recordsTableSpreadsheetFeature: RecordsTableFeatureDefinition<Recor
     label: "Spreadsheet controls",
     description: "Select a range, find values and total a range within the loaded page",
     read: (group) =>
-      featureEnabled(group) !== true
+      !featureEnabled(group)
         ? { enabled: false }
         : {
             enabled: true,
-            ...(group["range_select"]?.kind === "boolean"
-              ? { rangeSelect: group["range_select"].value }
-              : {}),
-            ...(group["find"]?.kind === "boolean" ? { find: group["find"].value } : {}),
-            ...(group["paste"]?.kind === "boolean" ? { paste: group["paste"].value } : {}),
-            ...(group["fill"]?.kind === "boolean" ? { fill: group["fill"].value } : {}),
-            ...(group["undo"]?.kind === "boolean" ? { undo: group["undo"].value } : {}),
-            statusBarFields: fieldList(group["status_bar_fields"]),
-            statusBarOperations: (settingItems(group["status_bar_operations"]) ?? []).flatMap(
-              (item) =>
-                item.kind === "choice" &&
-                (recordsTableStatusBarOperations as readonly string[]).includes(item.value)
-                  ? [item.value as RecordsTableStatusBarOperation]
-                  : [],
+            rangeSelect: requiredBoolean(group["range_select"], "range_select"),
+            find: requiredBoolean(group["find"], "find"),
+            paste: requiredBoolean(group["paste"], "paste"),
+            fill: requiredBoolean(group["fill"], "fill"),
+            undo: requiredBoolean(group["undo"], "undo"),
+            statusBarFields: requiredFieldList(group["status_bar_fields"], "status_bar_fields"),
+            statusBarOperations: requiredItems(
+              group["status_bar_operations"],
+              "status_bar_operations",
+            ).map((item, index) =>
+              requiredChoice(
+                item,
+                recordsTableStatusBarOperations,
+                `status_bar_operations[${index}]`,
+              ),
             ),
           },
     check: (state, facts) => {
       if (facts.grouped || facts.fields.length === 0) return featureNotPossible(code);
       if (!state.enabled) return featureAvailable;
-      if (
-        typeof state.rangeSelect !== "boolean" ||
-        typeof state.find !== "boolean" ||
-        typeof state.paste !== "boolean" ||
-        typeof state.fill !== "boolean" ||
-        typeof state.undo !== "boolean" ||
-        (state.rangeSelect !== true && state.find !== true)
-      )
-        return featureNotPossible(code);
+      if (!state.rangeSelect && !state.find) return featureNotPossible(code);
       if (state.undo && !state.paste && !state.fill)
         return featureNotPossible(code, "Undo needs Paste or Fill");
       if ((state.paste || state.fill) && !state.rangeSelect)

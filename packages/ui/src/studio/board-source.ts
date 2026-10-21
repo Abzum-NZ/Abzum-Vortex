@@ -3,7 +3,7 @@ import {
   MODULE_QUERY_MAXIMUM_TOTALS,
   MODULE_MAXIMUM_QUERIES,
   queryNumericTotalFieldTypes,
-  readRecordsTableFeatures,
+  recordsTableFeaturesOrLog,
   type ApplicationSourceDocument,
   type RecordsTableBoardFacts,
   type RecordsTableBoardMode,
@@ -21,7 +21,7 @@ const studioBoardQueryUnavailable =
 export const boardModeOf = (
   settings: Readonly<Record<string, SourceBlockPropertyValueContract>>,
 ): RecordsTableBoardMode | undefined => {
-  const features = readRecordsTableFeatures(settings["features"] as never);
+  const features = recordsTableFeaturesOrLog(settings["features"] as never, "studio board mode");
   return features?.board.enabled ? features.board : undefined;
 };
 
@@ -90,6 +90,7 @@ export const studioBoardPipelines = (
                 columnField: reference,
                 cardFields: [],
                 totals: [],
+                quickAdd: false,
               });
         const unavailableReason =
           stage === undefined
@@ -168,7 +169,7 @@ const boardSumAlias = (fieldKey: string): string => {
 };
 
 /** One total a board column can show: a total of its query, or the sum of a number field. */
-export type StudioBoardTotalChoice = Readonly<{
+type StudioBoardTotalChoice = Readonly<{
   alias: string;
   label: string;
   /** The key of the number field whose sum is added to the query when the board is saved. */

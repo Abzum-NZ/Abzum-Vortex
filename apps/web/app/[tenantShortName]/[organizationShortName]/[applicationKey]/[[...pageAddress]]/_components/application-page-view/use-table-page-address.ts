@@ -196,9 +196,9 @@ export function useTablePageAddress({
       else
         applyRecordsTableView(parameters, placementId, {
           viewId,
-          sort: document.sort ?? [],
-          filters: document.filters ?? [],
-          search: document.search ?? null,
+          sort: document.sort,
+          filters: document.filters,
+          search: document.search,
         });
       // Saving, deleting or applying a layout-only view keeps the rows already shown. Keep their
       // page position too, so reloading the address opens that same page.

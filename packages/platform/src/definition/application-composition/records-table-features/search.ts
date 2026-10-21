@@ -13,7 +13,7 @@ export const recordsTableSearchFeature: RecordsTableFeatureDefinition<RecordsTab
     key: "search",
     label: "Search",
     description: "A search box over the searchable fields",
-    read: (group) => (featureEnabled(group) === true ? { enabled: true } : { enabled: false }),
+    read: (group) => ({ enabled: featureEnabled(group) }),
     // The Query engine searches only the selected fields the record type marks searchable.
     check: (_state, facts) =>
       facts.fields.some((field) => field.searchable)

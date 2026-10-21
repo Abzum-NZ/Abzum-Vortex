@@ -16,12 +16,15 @@ import {
   featureAvailable,
   featureEnabled,
   featureNotPossible,
-  fieldList,
-  settingField,
-  settingGroup,
-  settingItems,
-  settingOptionalChoice,
-  settingText,
+  optionalText,
+  requiredBoolean,
+  requiredChoice,
+  requiredField,
+  requiredFieldList,
+  requiredGroup,
+  requiredItems,
+  requiredText,
+  unreadable,
   type RecordsTableFeatureCheck,
   type RecordsTableFeatureDefinition,
   type RecordsTableFieldFacts,
@@ -125,66 +128,62 @@ export const conditionalColumnFormatFieldTypes: readonly string[] = Object.freez
   "money",
 ]);
 
-const settingBoolean = (value: ComponentSettingValue | undefined): boolean | undefined =>
-  value?.kind === "boolean" ? value.value : undefined;
-
 const readStyle = (
   group: Readonly<Record<string, ComponentSettingValue>>,
-): ConditionalFormatStyle | undefined => {
-  const token = settingOptionalChoice(group["token"], conditionalFormatTokens);
-  if (token === undefined) return undefined;
-  const icon = settingOptionalChoice(group["icon"], conditionalFormatIcons);
-  const badgeLabel = settingText(group["badge_label"]);
+  at: string,
+): ConditionalFormatStyle => {
+  const token = requiredChoice(group["token"], conditionalFormatTokens, `${at}.token`);
+  // The catalogue's "none" is the choice of no icon.
+  const icon = requiredChoice(group["icon"], [...conditionalFormatIcons, "none"], `${at}.icon`);
+  const badgeLabel = optionalText(group["badge_label"], `${at}.badge_label`);
   return {
     token,
-    tint: settingBoolean(group["tint"]) === true,
-    text: settingBoolean(group["text_colour"]) === true,
-    bold: settingBoolean(group["bold"]) === true,
-    strike: settingBoolean(group["strike"]) === true,
-    ...(icon === undefined ? {} : { icon }),
+    tint: requiredBoolean(group["tint"], `${at}.tint`),
+    text: requiredBoolean(group["text_colour"], `${at}.text_colour`),
+    bold: requiredBoolean(group["bold"], `${at}.bold`),
+    strike: requiredBoolean(group["strike"], `${at}.strike`),
+    ...(icon === "none" ? {} : { icon }),
     ...(badgeLabel === undefined ? {} : { badgeLabel }),
   };
 };
 
-const readRule = (value: ComponentSettingValue): ConditionalFormatRule[] => {
-  const group = settingGroup(value);
-  if (group === undefined) return [];
-  const id = settingText(group["rule_id"]);
+const readRule = (value: ComponentSettingValue, at: string): ConditionalFormatRule => {
+  const group = requiredGroup(value, at);
   const condition = group["condition"];
-  const style = readStyle(group);
-  if (id === undefined || condition?.kind !== "condition" || style === undefined) return [];
-  const targetKind = settingOptionalChoice(group["target"], ["row", "cells"] as const);
-  return [
-    {
-      id,
-      enabled: settingBoolean(group["enabled"]) !== false,
-      condition: condition.condition,
-      target:
-        targetKind === "cells"
-          ? { kind: "cells", fields: fieldList(group["fields"]) }
-          : { kind: "row" },
-      style,
-      stopIfTrue: settingBoolean(group["stop_if_true"]) === true,
-    },
-  ];
+  if (condition?.kind !== "condition") return unreadable(`${at}.condition`);
+  const target = requiredChoice(group["target"], ["row", "cells"] as const, `${at}.target`);
+  return {
+    id: requiredText(group["rule_id"], `${at}.rule_id`),
+    enabled: requiredBoolean(group["enabled"], `${at}.enabled`),
+    condition: condition.condition,
+    target:
+      target === "cells"
+        ? { kind: "cells", fields: requiredFieldList(group["fields"], `${at}.fields`) }
+        : { kind: "row" },
+    style: readStyle(group, at),
+    stopIfTrue: requiredBoolean(group["stop_if_true"], `${at}.stop_if_true`),
+  };
 };
 
-const readColumnFormat = (value: ComponentSettingValue): ConditionalColumnFormat[] => {
-  const group = settingGroup(value);
-  const field = settingField(group?.["field"]);
-  if (group === undefined || field === undefined) return [];
-  const kind = settingOptionalChoice(group["kind"], ["data_bar", "colour_scale"] as const);
-  if (kind === "data_bar") {
-    const token = settingOptionalChoice(group["token"], conditionalFormatTokens);
-    return token === undefined ? [] : [{ field, kind, token }];
-  }
-  if (kind !== "colour_scale") return [];
-  const low = settingOptionalChoice(group["low_token"], conditionalFormatTokens);
-  const mid = settingOptionalChoice(group["mid_token"], conditionalFormatTokens);
-  const high = settingOptionalChoice(group["high_token"], conditionalFormatTokens);
-  return low === undefined || mid === undefined || high === undefined
-    ? []
-    : [{ field, kind, tokens: [low, mid, high] }];
+const readColumnFormat = (value: ComponentSettingValue, at: string): ConditionalColumnFormat => {
+  const group = requiredGroup(value, at);
+  const field = requiredField(group["field"], `${at}.field`);
+  const kind = requiredChoice(group["kind"], ["data_bar", "colour_scale"] as const, `${at}.kind`);
+  if (kind === "data_bar")
+    return {
+      field,
+      kind,
+      token: requiredChoice(group["token"], conditionalFormatTokens, `${at}.token`),
+    };
+  return {
+    field,
+    kind,
+    tokens: [
+      requiredChoice(group["low_token"], conditionalFormatTokens, `${at}.low_token`),
+      requiredChoice(group["mid_token"], conditionalFormatTokens, `${at}.mid_token`),
+      requiredChoice(group["high_token"], conditionalFormatTokens, `${at}.high_token`),
+    ],
+  };
 };
 
 /** One operand of a comparison, read from either spelling of a condition. */
@@ -425,11 +424,15 @@ export const recordsTableConditionalFormattingFeature: RecordsTableFeatureDefini
     label: "Formatting",
     description: "Highlight rows and cells that match conditions",
     read: (group) => {
-      if (featureEnabled(group) !== true) return { enabled: false };
+      if (!featureEnabled(group)) return { enabled: false };
       return {
         enabled: true,
-        rules: (settingItems(group["rules"]) ?? []).flatMap(readRule),
-        columnFormats: (settingItems(group["column_formats"]) ?? []).flatMap(readColumnFormat),
+        rules: requiredItems(group["rules"], "rules").map((item, index) =>
+          readRule(item, `rules[${index}]`),
+        ),
+        columnFormats: requiredItems(group["column_formats"], "column_formats").map((item, index) =>
+          readColumnFormat(item, `column_formats[${index}]`),
+        ),
       };
     },
     // Every rule and column format must read fields of the bound query with comparisons that fit

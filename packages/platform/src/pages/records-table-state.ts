@@ -45,7 +45,7 @@ export type RecordsTablePageRequest = Readonly<{
  * The pivot view a table is opened in: absent shows the ordinary grid. `cursor` is the opaque
  * keyset position of the first pivot row on the page; absent starts at the first row.
  */
-export type RecordsTablePivotView = Readonly<{ cursor?: string }>;
+export type RecordsTablePivotView = Readonly<{ cursor?: string | undefined }>;
 
 /**
  * The grouping a table is read in: the field its records are grouped by, the position of the page
@@ -128,30 +128,63 @@ const FIELD_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a
 const PAGE_PATTERN = /^[1-9][0-9]{0,4}$/;
 const TOKEN_PATTERN = /^[A-Za-z0-9_-]{1,65536}$/;
 
-const sortParameter = (placementId: string): string => `sort.${placementId}`;
-const filterPrefix = (placementId: string): string => `filter.${placementId}.`;
-const searchParameter = (placementId: string): string => `search.${placementId}`;
-const pageParameter = (placementId: string): string => `page.${placementId}`;
-const pivotParameter = (placementId: string): string => `pivot.${placementId}`;
-const viewParameter = (placementId: string): string => `view.${placementId}`;
-const groupParameter = (placementId: string): string => `group.${placementId}`;
-const expandParameter = (placementId: string): string => `expand.${placementId}`;
+/**
+ * The one codec table of every `<prefix><placement>` address parameter a data block keeps in the
+ * page address, and what each belongs to. `query` is a table's query state and its saved view: a
+ * change rereads only that table. `display` is a view of the same query state (the pivot, the open
+ * group): changing it reads no rows. `calendar` is a calendar's period: a change reads the page
+ * again. Placement identities are UUIDs, so they never hold a dot.
+ */
+const ADDRESS_PARAMETERS = {
+  sort: { prefix: "sort.", part: "query" },
+  filter: { prefix: "filter.", part: "query" },
+  search: { prefix: "search.", part: "query" },
+  page: { prefix: "page.", part: "query" },
+  view: { prefix: "view.", part: "query" },
+  group: { prefix: "group.", part: "query" },
+  pivot: { prefix: "pivot.", part: "display" },
+  expand: { prefix: "expand.", part: "display" },
+  calendar: { prefix: "calendar.", part: "calendar" },
+  date: { prefix: "date.", part: "calendar" },
+} as const;
+type AddressParameterKind = keyof typeof ADDRESS_PARAMETERS;
 
-// The one codec of every `<kind>.<placement>` address prefix: the query state, and the saved view
-// the table was opened with (#3023).
-const QUERY_STATE_PREFIXES = ["sort.", "filter.", "search.", "page.", "view.", "group."] as const;
+/** The address parameter of one kind for a placement, in the spelling this codec writes. */
+export const addressParameter = (kind: AddressParameterKind, placementId: string): string =>
+  `${ADDRESS_PARAMETERS[kind].prefix}${placementId}`;
+
+/** The kind and placement (lower-cased) an address parameter holds, or undefined for any other. */
+const addressParameterOwner = (
+  name: string,
+): Readonly<{ kind: AddressParameterKind; placementId: string }> | undefined => {
+  for (const [kind, { prefix }] of Object.entries(ADDRESS_PARAMETERS)) {
+    if (!name.startsWith(prefix)) continue;
+    const placementId = name.slice(prefix.length).split(".")[0];
+    return placementId === undefined || !FIELD_ID_PATTERN.test(placementId)
+      ? undefined
+      : { kind: kind as AddressParameterKind, placementId: placementId.toLowerCase() };
+  }
+  return undefined;
+};
+
+const sortParameter = (placementId: string): string => addressParameter("sort", placementId);
+const filterPrefix = (placementId: string): string => `${addressParameter("filter", placementId)}.`;
+const searchParameter = (placementId: string): string => addressParameter("search", placementId);
+const pageParameter = (placementId: string): string => addressParameter("page", placementId);
+const pivotParameter = (placementId: string): string => addressParameter("pivot", placementId);
+const viewParameter = (placementId: string): string => addressParameter("view", placementId);
+const groupParameter = (placementId: string): string => addressParameter("group", placementId);
+const expandParameter = (placementId: string): string => addressParameter("expand", placementId);
 
 /**
  * The placement whose table state an address parameter holds, lower-cased, or undefined for a
- * parameter that is not table state. Placement identities are UUIDs, so they never hold a dot.
+ * parameter that is not table state.
  */
 export const recordsTableParameterPlacement = (name: string): string | undefined => {
-  const prefix = QUERY_STATE_PREFIXES.find((candidate) => name.startsWith(candidate));
-  if (prefix === undefined) return undefined;
-  const placementId = name.slice(prefix.length).split(".")[0];
-  return placementId === undefined || !FIELD_ID_PATTERN.test(placementId)
-    ? undefined
-    : placementId.toLowerCase();
+  const owner = addressParameterOwner(name);
+  return owner !== undefined && ADDRESS_PARAMETERS[owner.kind].part === "query"
+    ? owner.placementId
+    : undefined;
 };
 
 const sameId = (left: string, right: string): boolean => left.toLowerCase() === right.toLowerCase();
@@ -165,7 +198,7 @@ const placementEntries = (
   for (const [name, value] of entries) {
     const owner = recordsTableParameterPlacement(name);
     if (owner === undefined || !sameId(owner, placementId)) continue;
-    const prefix = QUERY_STATE_PREFIXES.find((candidate) => name.startsWith(candidate))!;
+    const prefix = ADDRESS_PARAMETERS[addressParameterOwner(name)!.kind].prefix;
     // Names are kept in the canonical spelling of this placement identity.
     const key = `${prefix}${placementId}${name.slice(prefix.length + placementId.length)}`;
     if (!owned.has(key)) owned.set(key, value);
@@ -203,12 +236,6 @@ export const applyRecordsTablePivotView = (
     parameters.set(pivotParameter(placementId), encodeRecordsTablePivotView(view));
 };
 
-const pivotParameterPlacement = (name: string): string | undefined => {
-  if (!name.startsWith("pivot.")) return undefined;
-  const placementId = name.slice("pivot.".length);
-  return FIELD_ID_PATTERN.test(placementId) ? placementId.toLowerCase() : undefined;
-};
-
 const toBase64Url = (text: string): string => {
   let binary = "";
   for (const byte of new TextEncoder().encode(text)) binary += String.fromCharCode(byte);
@@ -224,12 +251,6 @@ const fromBase64Url = (value: string): string | undefined => {
   } catch {
     return undefined;
   }
-};
-
-const expandParameterPlacement = (name: string): string | undefined => {
-  if (!name.startsWith("expand.")) return undefined;
-  const placementId = name.slice("expand.".length);
-  return FIELD_ID_PATTERN.test(placementId) ? placementId.toLowerCase() : undefined;
 };
 
 /**
@@ -621,13 +642,11 @@ export const recordsTableAddressKey = (
  */
 export const searchWithoutRecordsTableState = (search: string): string => {
   const parameters = new URLSearchParams(search);
-  for (const name of [...parameters.keys()])
-    if (
-      recordsTableParameterPlacement(name) !== undefined ||
-      pivotParameterPlacement(name) !== undefined ||
-      expandParameterPlacement(name) !== undefined
-    )
+  for (const name of [...parameters.keys()]) {
+    const owner = addressParameterOwner(name);
+    if (owner !== undefined && ADDRESS_PARAMETERS[owner.kind].part !== "calendar")
       parameters.delete(name);
+  }
   return parameters.toString();
 };
 

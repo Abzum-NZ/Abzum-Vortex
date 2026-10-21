@@ -86,7 +86,6 @@ export {
   studioCanvasGridReads,
   type StudioCanvasGridArrangement,
   type StudioCanvasGridChange,
-  type StudioCanvasGridQuery,
   type StudioCanvasGridRead,
   type StudioCanvasGridState,
 } from "./studio-canvas-grid";

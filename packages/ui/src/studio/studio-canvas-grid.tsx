@@ -5,7 +5,7 @@ import {
   canonicalJson,
   compiledItemSettings,
   isRecord,
-  readRecordsTableContract,
+  recordsTableContractOrLog,
   plainSourceSettingValue,
   typedSourceSettings,
   type GridLayout,
@@ -27,7 +27,7 @@ export type StudioCanvasGridArrangement = Readonly<{
 }>;
 
 /** The sort, typed filters (address spelling) and search a person chose on the canvas grid. */
-export type StudioCanvasGridQuery = Readonly<{
+type StudioCanvasGridQuery = Readonly<{
   sort: readonly RecordsTableSortKey[];
   filters: readonly Readonly<{ fieldId: string; filter: string }>[];
   search: string | null;
@@ -418,7 +418,10 @@ const gridSetup = (
   compiled: Readonly<Record<string, unknown>>,
   release: PlatformBlockRelease,
 ) => {
-  const contract = readRecordsTableContract(compiledItemSettings(compiled, release));
+  const contract = recordsTableContractOrLog(
+    compiledItemSettings(compiled, release),
+    "studio canvas grid",
+  );
   if (contract === undefined) return undefined;
   const sourceColumns = props.columns;
   if (!Array.isArray(sourceColumns) || sourceColumns.length !== contract.columns.length)
