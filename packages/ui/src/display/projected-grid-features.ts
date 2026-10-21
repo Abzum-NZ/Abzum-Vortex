@@ -14,6 +14,7 @@ import {
   recordsTableBulkRefusalReasons,
   recordsTableFilterKinds,
   RECORDS_TABLE_EXPORT_MAXIMUM_ROWS,
+  recordsTableExportFormats,
   RECORDS_TABLE_MAXIMUM_SEARCH_LENGTH,
   namedActionAvailabilitySchema,
   type NamedActionAvailability,
@@ -567,7 +568,7 @@ export const parseTableFeatures = (
   let exportFeature: RecordsTableFeatureProjection["export"];
   if (record.export !== undefined) {
     const exported = requireRecord(record.export, "Projected export is invalid", location);
-    requireExactKeys(exported, ["maxRows"], location);
+    requireExactKeys(exported, ["maxRows", "formats"], location);
     if (
       typeof exported.maxRows !== "number" ||
       !Number.isInteger(exported.maxRows) ||
@@ -575,7 +576,22 @@ export const parseTableFeatures = (
       exported.maxRows > RECORDS_TABLE_EXPORT_MAXIMUM_ROWS
     )
       fail("Projected export has an invalid row limit", location);
-    exportFeature = Object.freeze({ maxRows: exported.maxRows as number });
+    const formats = requireArray(
+      exported.formats,
+      "Projected export formats are invalid",
+      location,
+    );
+    if (
+      formats.length === 0 ||
+      formats.length > recordsTableExportFormats.length ||
+      new Set(formats).size !== formats.length ||
+      formats.some((format) => !recordsTableExportFormats.some((known) => known === format))
+    )
+      fail("Projected export formats are invalid", location);
+    exportFeature = Object.freeze({
+      maxRows: exported.maxRows as number,
+      formats: Object.freeze(formats as (typeof recordsTableExportFormats)[number][]),
+    });
   }
   let rowEdit: RecordsTableFeatureProjection["rowEdit"];
   if (record.rowEdit !== undefined) {

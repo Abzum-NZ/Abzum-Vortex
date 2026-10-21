@@ -6,11 +6,14 @@ import {
   type RecordsTableFeatureDefinition,
 } from "./shared";
 
-/** The file formats one export offers; Excel joins through the same encoder boundary later. */
-export const recordsTableExportFormats = ["csv"] as const;
+/** The file formats offered through the one export authority and transport. */
+export const recordsTableExportFormats = ["csv", "xlsx"] as const;
 export type RecordsTableExportFormat = (typeof recordsTableExportFormats)[number];
 
-/** The most records one export may hold; the capped selection count shares this ceiling. */
+/**
+ * The capped selection count shares this ceiling. Excel's 1,048,576-row sheet limit exceeds
+ * these 100,000 data rows plus the header.
+ */
 export const RECORDS_TABLE_EXPORT_MAXIMUM_ROWS = 100_000;
 
 /**
@@ -37,7 +40,9 @@ export const recordsTableExportFeature: RecordsTableFeatureDefinition<RecordsTab
       return {
         enabled: true,
         formats: (settingItems(group["formats"]) ?? []).flatMap((item) =>
-          item.kind === "choice" && item.value === "csv" ? (["csv"] as const) : [],
+          item.kind === "choice"
+            ? recordsTableExportFormats.filter((format) => format === item.value)
+            : [],
         ),
         ...(maxRows?.kind === "number" ? { maxRows: maxRows.value } : {}),
       };
@@ -53,7 +58,11 @@ export const recordsTableExportFeature: RecordsTableFeatureDefinition<RecordsTab
           `Export needs the export action on ${facts.recordTypeLabel || "the record type"}`,
         );
       if (!state.enabled) return featureAvailable;
-      if (state.formats.length === 0 || state.formats.length > recordsTableExportFormats.length)
+      if (
+        state.formats.length === 0 ||
+        state.formats.length > recordsTableExportFormats.length ||
+        new Set(state.formats).size !== state.formats.length
+      )
         return featureNotPossible(code, "Choose the file format to export.");
       if (
         state.maxRows === undefined ||
@@ -61,7 +70,12 @@ export const recordsTableExportFeature: RecordsTableFeatureDefinition<RecordsTab
         state.maxRows < 1 ||
         state.maxRows > RECORDS_TABLE_EXPORT_MAXIMUM_ROWS
       )
-        return featureNotPossible(code, "Set a row limit of at most 100,000");
+        return featureNotPossible(
+          code,
+          state.formats.includes("xlsx")
+            ? "Excel export needs a row limit of at most 100,000"
+            : "Set a row limit of at most 100,000",
+        );
       return featureAvailable;
     },
   };

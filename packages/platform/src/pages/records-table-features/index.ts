@@ -4,6 +4,7 @@ import type {
   RecordsTableBulkActionContract,
   RecordsTableContract,
   RecordsTableFilterField,
+  RecordsTableExportFormat,
 } from "../../schema";
 import type {
   ProtectedQueryFieldBounds,
@@ -86,7 +87,7 @@ export type RecordsTableFeatureProjection = Readonly<{
    * when the feature is on and the viewer's export permission allowed it in this read; the export
    * route decides both again on every request.
    */
-  export?: Readonly<{ maxRows: number }>;
+  export?: Readonly<{ maxRows: number; formats: readonly RecordsTableExportFormat[] }>;
 }>;
 
 /**
@@ -303,9 +304,9 @@ export const projectRecordsTableFeatures = (
     ...(exportSettings.enabled &&
     exportAllowed === true &&
     exportSettings.maxRows !== undefined &&
-    exportSettings.formats.includes("csv") &&
+    exportSettings.formats.length > 0 &&
     contract.columns.some((column) => readable(column.field))
-      ? { export: { maxRows: exportSettings.maxRows } }
+      ? { export: { maxRows: exportSettings.maxRows, formats: exportSettings.formats } }
       : {}),
     ...(rowEdit.enabled &&
     rowEdit.eventId !== undefined &&

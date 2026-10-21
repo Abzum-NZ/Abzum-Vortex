@@ -1,11 +1,15 @@
 "use client";
 
 import { useEffect, useRef, type ReactElement } from "react";
+import type { RecordsTableExportFormat } from "@vortex/platform/schema";
 import { Button } from "../../components/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "../../components/dropdown-menu";
 import { toast } from "../../components/sonner";
@@ -36,9 +40,37 @@ const selectionOf = (
     : { matching: undefined, selected: context.selectedRecordIds.length };
 };
 
-const request = (context: GridFeatureContext, scope: TableExportScope): void => {
-  void context.events?.export_requested?.({ event: "export_requested", scope });
+const request = (
+  context: GridFeatureContext,
+  scope: TableExportScope,
+  format: RecordsTableExportFormat,
+): void => {
+  void context.events?.export_requested?.({ event: "export_requested", scope, format });
 };
+
+/** Each scope offers only the file formats the installed table authored for this viewer. */
+function ExportScopeItem({
+  context,
+  scope,
+  label,
+}: Readonly<{
+  context: GridFeatureContext;
+  scope: TableExportScope;
+  label: string;
+}>): ReactElement {
+  return (
+    <DropdownMenuSub>
+      <DropdownMenuSubTrigger>{label}</DropdownMenuSubTrigger>
+      <DropdownMenuSubContent>
+        {context.features.export?.formats.map((format) => (
+          <DropdownMenuItem key={format} onClick={() => request(context, scope, format)}>
+            {format === "csv" ? "CSV" : "Excel"}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuSubContent>
+    </DropdownMenuSub>
+  );
+}
 
 /** The one sentence of a finished, stopped or refused export, shown once as a toast. */
 function useExportToast(run: TableExportRun | undefined): void {
@@ -97,24 +129,20 @@ function ExportToolbarItems({ context }: GridFeaturePointProps): ReactElement | 
         <Icon name="chevron-down" data-icon="inline-end" aria-hidden="true" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        <DropdownMenuItem onClick={() => request(context, "view")}>
-          <span className="flex max-w-72 flex-col gap-1 whitespace-normal">
-            <span>Export this view</span>
-            <span className="text-xs text-muted-foreground">
-              A CSV file of the records that match the view, in the columns shown. Records are
-              listed flat: groups and totals are not exported.
-            </span>
-          </span>
-        </DropdownMenuItem>
+        <ExportScopeItem context={context} scope="view" label="Export this view" />
         {selected > 0 ? (
-          <DropdownMenuItem onClick={() => request(context, "selected")}>
-            Export selected ({numberFormat.format(selected)})
-          </DropdownMenuItem>
+          <ExportScopeItem
+            context={context}
+            scope="selected"
+            label={`Export selected (${numberFormat.format(selected)})`}
+          />
         ) : null}
         {matching !== undefined && matching > 0 ? (
-          <DropdownMenuItem onClick={() => request(context, "matching")}>
-            Export all {numberFormat.format(matching)} matching
-          </DropdownMenuItem>
+          <ExportScopeItem
+            context={context}
+            scope="matching"
+            label={`Export all ${numberFormat.format(matching)} matching`}
+          />
         ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
@@ -123,23 +151,34 @@ function ExportToolbarItems({ context }: GridFeaturePointProps): ReactElement | 
 
 /**
  * Export beside the selection: the rows ticked on this page, or every matching record once they
- * are all selected, as a CSV file in the columns shown. The server decides everything again.
+ * are all selected, in an authored file format. The server decides everything again.
  */
 function ExportSelectionBanner({ context }: GridFeaturePointProps): ReactElement | null {
   const run = context.selection.exportRun;
   if (context.events?.export_requested === undefined || run?.status === "running") return null;
   const { matching, selected } = selectionOf(context);
-  if (matching !== undefined && matching > 0)
-    return (
-      <Button variant="outline" size="sm" onClick={() => request(context, "matching")}>
-        Export all {numberFormat.format(matching)} matching
-      </Button>
-    );
-  if (selected === 0) return null;
+  const allMatching = matching !== undefined && matching > 0;
+  if (!allMatching && selected === 0) return null;
+  const label = allMatching
+    ? `Export all ${numberFormat.format(matching)} matching`
+    : `Export selected (${numberFormat.format(selected)})`;
   return (
-    <Button variant="outline" size="sm" onClick={() => request(context, "selected")}>
-      Export selected ({numberFormat.format(selected)})
-    </Button>
+    <DropdownMenu>
+      <DropdownMenuTrigger render={<Button variant="outline" size="sm" />}>
+        {label}
+        <Icon name="chevron-down" data-icon="inline-end" aria-hidden="true" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent>
+        {context.features.export?.formats.map((format) => (
+          <DropdownMenuItem
+            key={format}
+            onClick={() => request(context, allMatching ? "matching" : "selected", format)}
+          >
+            {format === "csv" ? "CSV" : "Excel"}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
