@@ -115,36 +115,8 @@ const applyFirstInstallRoles = async (
   const containsCustomComponents = environment.containsCustomComponents(releaseSet);
   const isMember = (sourceRoleId: string) => sameId(sourceRoleId, memberRole.sourceRoleId);
 
-  const before = await inInstallerRequest(
-    environment,
-    session,
-    selector,
-    async (transaction, scope, issuedAt) => {
-      const roles = await readInstallationRolesIn(
-        transaction,
-        scope,
-        environment,
-        selector,
-        containsCustomComponents,
-      );
-      const member = roles.roles.find((role) => isMember(role.sourceRoleId));
-      // Taking or giving back the member role is an assignment: prove it before anything changes.
-      const assignmentNeeded =
-        choice.kind === "accept"
-          ? member?.installerAssignment == null
-          : member?.installerAssignment?.selfGranted === true;
-      if (assignmentNeeded)
-        await requireInstallerPermission(
-          transaction,
-          scope,
-          await readInstallationHumanContext(transaction, scope, session, issuedAt, {
-            organizationId: selector.organizationId,
-          }),
-          environment,
-          "platform.organization.assignments.manage",
-        );
-      return roles;
-    },
+  const before = await inInstallerRequest(environment, session, selector, (transaction, scope) =>
+    readInstallationRolesIn(transaction, scope, environment, selector, containsCustomComponents),
   );
 
   const member = before.roles.find((role) => isMember(role.sourceRoleId));
@@ -166,6 +138,13 @@ const applyFirstInstallRoles = async (
     releaseSet,
     changes.map((change) => change.sourceRoleId),
   );
+  // Taking or giving back the member role is an assignment; it is proved last, so the first
+  // missing piece named is always the installation authority's.
+  const assignmentNeeded =
+    choice.kind === "accept"
+      ? member?.installerAssignment == null
+      : member?.installerAssignment?.selfGranted === true;
+  if (assignmentNeeded) await proveAssignmentManagement(environment, session, selector);
   const { notAccepted } = await acceptApplicationRoleChanges(
     environment,
     session,

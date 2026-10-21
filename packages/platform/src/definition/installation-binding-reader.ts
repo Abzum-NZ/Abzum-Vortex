@@ -93,15 +93,16 @@ export const readInstallationBindings = async (
   transaction: RequestDatabaseTransaction,
   rootId: string,
 ): Promise<InstallationBindings> => {
-  // The reader takes the installation authority lock; its refusal is the installer lacking that
-  // authority (the install permission and delegated management of the organisation catalogue).
+  // The reader takes the installation authority lock; its refusal is the installer lacking the
+  // delegated management of the organisation catalogue. Manage applications is proved before it
+  // (the latest release read), so the first missing piece is named in that order.
   const rows = await transaction.query<DatabaseRow>`
       select vortex_definition.read_application_installation_bindings(${rootId}::uuid) as bindings
     `.catch((error: unknown) => {
     if (classifyDatabaseError(error) === "refused")
       throw new InstallationProblem(
-        { kind: "refused", memberRoleRefusal: "installation_authority" },
-        "installation_authority_refused",
+        { kind: "refused", memberRoleRefusal: "member_role_delegation" },
+        "installation_delegation_refused",
         { cause: error },
       );
     throw error;

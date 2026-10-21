@@ -19,6 +19,7 @@ import {
   type SystemApplicationBoundReleaseSetResult,
 } from "../schema";
 import { BuilderAuthorityError, fingerprintPermissionMeaning } from "../access/index";
+import { InstallationProblem } from "./installation-authority";
 import {
   createModuleInstallationStorageRepository,
   type ResolvedContributionBinding,
@@ -108,6 +109,12 @@ export const toCoordinatorError = (
   error: unknown,
 ): DefinitionError<ApplicationInstallationCoordinatorErrorCode> => {
   if (isCoordinatorError(error)) return error;
+  // A stale sign-in keeps its meaning, so the person is told to sign in again.
+  if (error instanceof InstallationProblem && error.problem.kind === "authentication_required")
+    return fail("APPLICATION_INSTALLATION_RECENT_AUTHENTICATION_REQUIRED", error);
+  // A refusal stays a refusal, never a generic failure.
+  if (error instanceof InstallationProblem && error.problem.kind === "refused")
+    return fail("APPLICATION_INSTALLATION_REFUSED", error);
   if (error instanceof BuilderAuthorityError)
     return fail(
       error.code === "BUILDER_RECENT_AUTHENTICATION_REQUIRED"
