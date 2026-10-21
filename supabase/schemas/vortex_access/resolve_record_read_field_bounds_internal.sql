@@ -25,6 +25,7 @@ declare
   policy_readable text[];
   route_readable text[];
   guaranteed text[] := array[]::text[];
+  contributed_readable text[];
   first_route boolean := true;
   covers_all_records boolean := false;
   condition_free boolean := true;
@@ -258,8 +259,25 @@ begin
     end loop;
   end loop;
 
+  -- A field another installed Module contributed to this record type is visible on every record
+  -- the owner's decision admits when the person holds the contributor's own unconditional read
+  -- grant for it, so it is guaranteed whichever owner route admitted the record. The one
+  -- contributor evaluator also serves the exact-record bounds; it never changes which records
+  -- are admitted.
+  select coalesce(pg_catalog.array_agg(pg_catalog.lower(field.value)), array[]::text[])
+  into contributed_readable
+  from pg_catalog.jsonb_array_elements_text(
+    vortex_access.contributor_field_grants_internal(
+      decision_organization_id,
+      (binding ->> 'moduleRootId')::uuid,
+      (binding ->> 'storageContractId')::uuid,
+      'read'
+    ) -> 'readableFieldIds'
+  ) as field(value);
+
   guaranteed := array(
-    select field.value from pg_catalog.unnest(guaranteed) as field(value)
+    select distinct field.value
+    from pg_catalog.unnest(guaranteed || contributed_readable) as field(value)
     order by field.value
   );
 
@@ -279,7 +297,7 @@ grant execute on function vortex_access.resolve_record_read_field_bounds_interna
   to vortex_record_adapter;
 
 comment on function vortex_access.resolve_record_read_field_bounds_internal(jsonb) is
-  'Private whole-record-type field bounds for the fixed record query: from the caller''s own current eligible read alternatives it returns the fields every alternative route is guaranteed to expose on every record it can admit (the intersection over every alternative and route, each direct-share route narrowed by every current share''s own bounds), whether an unconditioned all-records alternative admits every active record, and whether no alternative carries a saved condition; any unknown route or missing policy yields no fields. It only decides which fields a scan may order or filter by and never decides access.';
+  'Private whole-record-type field bounds for the fixed record query: from the caller''s own current eligible read alternatives it returns the fields every alternative route is guaranteed to expose on every record it can admit (the intersection over every alternative and route, each direct-share route narrowed by every current share''s own bounds), plus each field another installed Module contributed that the person holds an unconditional read grant for, whether an unconditioned all-records alternative admits every active record, and whether no alternative carries a saved condition; any unknown route or missing policy yields no fields. It only decides which fields a scan may order or filter by and never decides access.';
 
 alter function vortex_access.resolve_record_read_field_bounds_internal(jsonb)
   owner to vortex_owner;
