@@ -21,10 +21,10 @@ begin
   if exists (
     select 1
     from pg_catalog.jsonb_array_elements(p_targets) as item(value)
-    where pg_catalog.jsonb_typeof(item.value) <> 'object'
-      or pg_catalog.jsonb_typeof(item.value -> 'recordTypeId') <> 'string'
-      or pg_catalog.jsonb_typeof(item.value -> 'titleFieldId') <> 'string'
-      or pg_catalog.jsonb_typeof(item.value -> 'recordIds') <> 'array'
+    where pg_catalog.jsonb_typeof(item.value) is distinct from 'object'
+      or pg_catalog.jsonb_typeof(item.value -> 'recordTypeId') is distinct from 'string'
+      or pg_catalog.jsonb_typeof(item.value -> 'titleFieldId') is distinct from 'string'
+      or pg_catalog.jsonb_typeof(item.value -> 'recordIds') is distinct from 'array'
       or item.value ->> 'recordTypeId' !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
       or item.value ->> 'titleFieldId' !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
   ) or exists (
