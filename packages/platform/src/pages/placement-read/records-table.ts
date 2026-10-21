@@ -92,11 +92,18 @@ export const readRecordsTable = async (
       return (typeof value === "string" ? [value] : (value ?? [])).map((text) => [name, text]);
     },
   );
-  // A table that reads a grouped query has no flat rows: it is grouped by its authored field
-  // whatever the address says, and publication refuses one that is not.
+  // A table that reads a grouped query has no flat rows: it opens grouped by its authored field,
+  // the address may not name flat, and publication refuses one that is not.
   const queryGrouped = bound.query.groupByFieldIds.length > 0 || bound.query.aggregates.length > 0;
   const authoredGrouping = contract.features.grouping;
-  if (queryGrouped && !(authoredGrouping.enabled && authoredGrouping.field !== undefined)) {
+  if (
+    queryGrouped &&
+    !(
+      authoredGrouping.enabled &&
+      authoredGrouping.field !== undefined &&
+      authoredGrouping.opensGrouped === true
+    )
+  ) {
     logPlacementFailure(address, placementId, "table_grouping_required");
     data[placementId] = { status: "error" };
     return;
@@ -104,7 +111,10 @@ export const readRecordsTable = async (
   const addressed = readRecordsTableQueryState(
     placementId,
     addressEntries,
-    queryGrouped && authoredGrouping.enabled ? authoredGrouping.field : undefined,
+    authoredGrouping.enabled && authoredGrouping.opensGrouped === true
+      ? authoredGrouping.field
+      : undefined,
+    queryGrouped,
   );
   if (addressed.kind === "malformed") {
     logPlacementFailure(address, placementId, "table_state_malformed", addressed.part);
@@ -335,6 +345,7 @@ export const readRecordsTable = async (
     (groupingFeature.field === undefined ||
       groupingFeature.unassignedLabel === undefined ||
       groupingFeature.groupPageSize === undefined ||
+      groupingFeature.opensGrouped === undefined ||
       groupingField === undefined ||
       !(recordsTableGroupingFieldTypes as readonly string[]).includes(groupingField.type) ||
       ((groupingField.type === "date" || groupingField.type === "date_time") &&

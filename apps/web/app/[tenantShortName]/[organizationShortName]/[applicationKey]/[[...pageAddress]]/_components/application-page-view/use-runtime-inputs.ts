@@ -157,6 +157,7 @@ export function useRuntimeInputs({
   groupEventsFor: (
     placementId: string,
     fieldId: string,
+    opensGrouped: boolean,
   ) => Readonly<Record<string, (event: DisplaySemanticEvent) => unknown>>;
   requestChoicePageRef: RefObject<
     (
@@ -596,7 +597,14 @@ export function useRuntimeInputs({
         // demand and keeps the open group in the address; only a table whose projection carries
         // grouping offers them.
         if (tableData?.features?.grouping !== undefined && supportsEvent("page_changed"))
-          Object.assign(events, groupEventsFor(placementId, tableData.features.grouping.fieldId));
+          Object.assign(
+            events,
+            groupEventsFor(
+              placementId,
+              tableData.features.grouping.fieldId,
+              tableData.features.grouping.opensGrouped,
+            ),
+          );
         // Saved views change the address and store a view; like the layout they are the person's
         // own and need no flow, so the same declared event gates them.
         if (supportsEvent("columns_changed") && tableData !== undefined)
