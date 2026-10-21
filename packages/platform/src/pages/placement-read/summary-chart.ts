@@ -206,13 +206,18 @@ const projectChart = (input: {
         cause: "A summary group is missing its category or chosen total",
       };
     const cell = summaryAggregateCellValue(aggregate, measureField, result);
-    const numeric =
-      cell?.kind === "number"
+    const money =
+      measureField?.type === "money" && result.outcome !== "refused"
+        ? moneyValueSchema.safeParse(result.value)
+        : undefined;
+    const numeric = money?.success
+      ? { value: Number(money.data.amount), text: `${money.data.currency} ${money.data.amount}` }
+      : cell?.kind === "number"
         ? { value: cell.value, text: String(cell.value) }
         : cell?.kind === "text" && exactDecimalTextSchema.safeParse(cell.text).success
           ? { value: Number(cell.text), text: cell.text }
           : undefined;
-    if (numeric === undefined)
+    if (numeric === undefined || !Number.isFinite(numeric.value))
       return {
         ok: false,
         code: "chart_measure_invalid",
