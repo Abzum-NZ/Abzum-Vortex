@@ -1,6 +1,7 @@
 import { recordsTableFilterKindOf } from "./column-filters";
 import {
   conditionalFormatRuleIssue,
+  conditionalFormatRuleFields,
   type RecordsTableConditionalFormattingSettings,
 } from "./conditional-formatting";
 import {
@@ -226,7 +227,7 @@ export const boardFilterProblem = (
  * Why the formatting a board's cards would get cannot be applied, as one business sentence, or
  * undefined when it can. A card is one block, so a rule colours the whole card and a number format
  * (a bar or scale over a column of cells) has nothing to draw on; a rule reads any field of the
- * board's record type, whether or not the card shows it.
+ * board's record type that the query selects, whether or not the card shows it.
  */
 export const boardFormattingProblem = (
   settings: RecordsTableConditionalFormattingSettings,
@@ -250,6 +251,15 @@ export const boardFormattingProblem = (
       return refuse("A board formats whole cards: choose the whole row for every rule.");
     const issue = conditionalFormatRuleIssue(rule, board);
     if (issue !== undefined) return refuse(issue.replace("the bound query", board.queryLabel));
+    if (rule.enabled)
+      for (const field of conditionalFormatRuleFields(rule))
+        if (!board.selected.some((candidate) => same(candidate, field))) {
+          const label =
+            board.fields.find((candidate) => same(candidate.field, field))?.label ?? field;
+          return refuse(
+            `${label} is not selected by ${board.queryLabel}. Add it to the query to format these cards.`,
+          );
+        }
   }
   return undefined;
 };
