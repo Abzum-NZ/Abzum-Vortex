@@ -1,6 +1,6 @@
 -- #3382: a tree honours the query's authored filter at every level, and a level's examination budget leaves a parent undecided instead of refusing the page.
 
-set local role vortex_owner;
+set local role vortex_record_adapter;
 
 drop function vortex_record.read_query_tree_relatives_internal(boolean,uuid[],uuid,uuid,uuid,jsonb,uuid,jsonb,jsonb,jsonb,jsonb,boolean,jsonb);
 
