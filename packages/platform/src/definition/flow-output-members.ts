@@ -11,7 +11,8 @@ import {
  * The one answer to "which named members does this step's JSON output declare?". The flow
  * validator uses it to refuse a reference to a member the step does not declare; Studio uses it
  * to offer every declared member whether or not anything reads it yet. An output with no declared
- * shape returns `undefined`: it is offered and read as the whole value only.
+ * shape returns `undefined`: it is offered and read as the whole value only. Members are one level;
+ * each is read as a whole, including a form answer whose value is a map or JSON object.
  */
 
 export type FlowOutputMember = Readonly<{

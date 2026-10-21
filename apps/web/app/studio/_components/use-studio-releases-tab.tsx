@@ -76,11 +76,11 @@ const publicationProblemText = (
   if (reason === "identity_retired" && sentence !== undefined) return sentence;
   // A compilation refusal names what it is about (the field, query or block) so it can be fixed.
   if (reason?.startsWith("compilation_") === true) {
-    if (compileProblem !== undefined)
-      return `This draft does not compile, so it cannot be published. ${compileProblem} Then try again.`;
     // A rule with its own business sentence (a Records table feature check) says it as Studio does.
     if (sentence !== undefined)
       return `This draft cannot be published: ${sentence} Change it and try again.`;
+    if (compileProblem !== undefined)
+      return `This draft does not compile, so it cannot be published. ${compileProblem} Then try again.`;
     const rule = reason
       .slice("compilation_".length)
       .replace(/^vortex.definition./u, "")
