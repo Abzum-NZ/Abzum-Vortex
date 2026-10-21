@@ -436,13 +436,13 @@ const resolveRemoval = (
   if (resolved === undefined) return { kind: "invalid" };
   const { source, target, alias } = resolved;
   const page = target.region.ordinaryMain === true ? target.region.page : undefined;
-  if (
-    page === undefined ||
-    (page.type !== "list" && page.type !== "detail" && page.type !== "dashboard") ||
-    source.body.public_addresses.some((address) => address.page === page.id) ||
-    source.body.experiences?.some((experience) => experience.page === page.key)
-  )
-    return { kind: "unsupported" };
+  // A layout's own blocks are removable; a page's only when it is an ordinary main area.
+  const removablePage =
+    page !== undefined &&
+    (page.type === "list" || page.type === "detail" || page.type === "dashboard") &&
+    !source.body.public_addresses.some((address) => address.page === page.id) &&
+    !source.body.experiences?.some((experience) => experience.page === page.key);
+  if (!removablePage && target.region.shell === undefined) return { kind: "unsupported" };
   const release = releaseFor(catalogue, target.item);
   if (
     release === undefined ||
@@ -451,7 +451,7 @@ const resolveRemoval = (
     !manifestMatches(catalogue, source, target.region.zone.items)
   )
     return { kind: "unsupported" };
-  validateStoredZone(catalogue, target.region.zone);
+  validateRegion(catalogue, target.region);
   let zone = target.region.zone;
   for (const step of target.steps) {
     const parent = zone.items.find((item) => item.props.id === step.parentAlias);
