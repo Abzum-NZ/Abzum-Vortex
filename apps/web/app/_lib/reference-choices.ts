@@ -38,13 +38,11 @@ type ChoicePlacementSettings = Readonly<{
   fieldKey: string;
   queryId: string;
   labelFieldId: string;
-  dependency?: Readonly<{ key: string; fromField: string }>;
 }>;
 
 export type ReferenceChoiceFormField = Readonly<{
   fieldKey: string;
   command: RecordReferenceChoiceCommand;
-  dependency?: Readonly<{ key: string; fromField: string }>;
 }>;
 
 type ReferenceChoiceFormFieldIndex = ReadonlyMap<string, ReferenceChoiceFormField>;
@@ -90,27 +88,11 @@ const placementSettings = (placement: PlacedParts): ChoicePlacementSettings | un
   )
     return undefined;
   const fieldKey = builderKeySchema.safeParse(name.value);
-  let dependency: ChoicePlacementSettings["dependency"];
-  if (source.properties.input !== undefined) {
-    const input = source.properties.input;
-    if (
-      input.kind !== "group" ||
-      Object.keys(input.properties).length !== 2 ||
-      input.properties.key?.kind !== "text" ||
-      input.properties.from_field?.kind !== "text"
-    )
-      return undefined;
-    const key = builderKeySchema.safeParse(input.properties.key.value);
-    const from = builderKeySchema.safeParse(input.properties.from_field.value);
-    if (!key.success || !from.success) return undefined;
-    dependency = { key: key.data, fromField: from.data };
-  }
   return fieldKey.success
     ? {
         fieldKey: fieldKey.data,
         queryId: source.properties.query.queryId,
         labelFieldId: source.properties.label_field.fieldId,
-        ...(dependency === undefined ? {} : { dependency }),
       }
     : undefined;
 };
@@ -150,60 +132,7 @@ const referenceChoiceFieldForPlacement = (
   if (settings === undefined) return undefined;
   const command = queryCommand(settings, modules);
   if (command === undefined) return undefined;
-  if (settings.dependency !== undefined) {
-    const input = command.source.query.inputs[0];
-    if (
-      command.source.query.inputs.length !== 1 ||
-      input?.required !== true ||
-      input.type !== "text" ||
-      input.key !== settings.dependency.key
-    )
-      return undefined;
-  }
-  return {
-    fieldKey: settings.fieldKey,
-    command,
-    ...(settings.dependency === undefined ? {} : { dependency: settings.dependency }),
-  };
-};
-
-/** One unbound record Choice in this exact Form is the only permitted parent shape. */
-const validDependencies = (fields: ReferenceChoiceFormFieldIndex): boolean => {
-  for (const field of fields.values()) {
-    if (field.dependency === undefined) continue;
-    const parent = fields.get(field.dependency.fromField);
-    if (
-      parent === undefined ||
-      parent === field ||
-      parent.dependency !== undefined ||
-      parent.command.source.query.inputs.length !== 0
-    )
-      return false;
-  }
-  return true;
-};
-
-/** The caller must have re-resolved this option through the current parent's protected Query. */
-export const bindReferenceChoiceField = (
-  fields: ReferenceChoiceFormFieldIndex,
-  field: ReferenceChoiceFormField,
-  parentChoice: ReferenceChoiceOption,
-): ReferenceChoiceFormField | undefined => {
-  const dependency = field.dependency;
-  if (
-    dependency === undefined ||
-    !validDependencies(fields) ||
-    !fields.has(dependency.fromField) ||
-    !("recordId" in parentChoice.value)
-  )
-    return undefined;
-  return {
-    ...field,
-    command: {
-      ...field.command,
-      boundInput: { key: dependency.key, value: parentChoice.value.recordId },
-    },
-  };
+  return { fieldKey: settings.fieldKey, command };
 };
 
 const formPlacementsOnPage = (
@@ -282,7 +211,7 @@ const referenceChoiceFieldsForForm = (
     if (index.has(field.fieldKey)) return undefined;
     index.set(field.fieldKey, field);
   }
-  return validDependencies(index) ? index : undefined;
+  return index;
 };
 
 /** Uses only the visible, usable Form subtree of the viewer's projected addressed page. */
@@ -337,7 +266,7 @@ export const projectedReferenceChoiceForm = (
     return currentlyUsable;
   };
   for (const [, child] of itemPropSlots(target)) walkPlacements(child, collect, true);
-  return invalid || !validDependencies(fields) ? undefined : { fields, placements };
+  return invalid ? undefined : { fields, placements };
 };
 
 type ReferenceChoiceService = ReturnType<typeof createReferenceChoiceService>;
@@ -392,56 +321,37 @@ export const resolveReferenceChoiceFormValues = async (
     if (!fields.has(fieldKey) || typeof args.values[fieldKey] !== "string") return undefined;
 
   const resolved: Record<string, unknown> = { ...args.values };
-  const parents = new Map<string, ReferenceChoiceOption>();
   // One field's submitted key, rechecked against the page its evidence names. Undefined refuses.
   const resolveField = async (
     fieldKey: string,
     field: ReferenceChoiceFormField,
-  ): Promise<Readonly<{ value: unknown; selected: ReferenceChoiceOption }> | null | undefined> => {
+  ): Promise<unknown> => {
     const submitted = values[fieldKey];
     if (submitted === null) return Object.hasOwn(parsedEvidence.data, fieldKey) ? undefined : null;
     if (typeof submitted !== "string") return undefined;
     const evidence: ReferenceChoiceSelectionEvidence | undefined = parsedEvidence.data[fieldKey];
     if (evidence === undefined) return undefined;
-    let currentField = field;
-    if (field.dependency !== undefined) {
-      const parent = parents.get(field.dependency.fromField);
-      if (parent === undefined) return undefined;
-      const bound = bindReferenceChoiceField(fields, field, parent);
-      if (bound === undefined) return undefined;
-      currentField = bound;
-    }
     const choices = await choicesForEvidence(
       args.service,
       args.session,
       args.selection,
-      currentField,
+      field,
       evidence,
     );
     if (choices === undefined) return undefined;
     const value = resolveReferenceChoiceSelection(choices, submitted);
-    if (value === undefined || value === null) return undefined;
-    const selected = choices.find((choice) => choice.key === submitted);
-    return selected === undefined ? undefined : { value, selected };
+    return value === undefined || value === null ? undefined : value;
   };
-  // Independent fields are rechecked together, each in its own request; a dependent field is
-  // rechecked after the parent it is bound to, so it is read for that parent's verified choice.
-  const submittedFields = [...fields].filter(([fieldKey]) => Object.hasOwn(values, fieldKey));
-  for (const dependent of [false, true]) {
-    const round = submittedFields.filter(
-      ([, field]) => (field.dependency !== undefined) === dependent,
-    );
-    const results = await Promise.all(
-      round.map(
-        async ([fieldKey, field]) => [fieldKey, await resolveField(fieldKey, field)] as const,
-      ),
-    );
-    for (const [fieldKey, result] of results) {
-      if (result === undefined) return undefined;
-      if (result === null) continue;
-      if (!dependent) parents.set(fieldKey, result.selected);
-      resolved[fieldKey] = result.value;
-    }
+  // Each submitted field is rechecked in its own request, all together.
+  const results = await Promise.all(
+    [...fields]
+      .filter(([fieldKey]) => Object.hasOwn(values, fieldKey))
+      .map(async ([fieldKey, field]) => [fieldKey, await resolveField(fieldKey, field)] as const),
+  );
+  for (const [fieldKey, result] of results) {
+    if (result === undefined) return undefined;
+    if (result === null) continue;
+    resolved[fieldKey] = result;
   }
   const parsedValues = jsonValueSchema.safeParse(resolved);
   if (!parsedValues.success || !isRecord(parsedValues.data)) return undefined;

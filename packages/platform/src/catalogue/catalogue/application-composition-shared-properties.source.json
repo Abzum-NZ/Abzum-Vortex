@@ -122,6 +122,10 @@
             {
               "key": "organisation",
               "label": "Organisation"
+            },
+            {
+              "key": "team",
+              "label": "Team"
             }
           ],
           "showWhen": {

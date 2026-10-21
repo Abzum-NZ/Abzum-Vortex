@@ -47,8 +47,6 @@ export type ReferenceChoiceInputValues = Readonly<{
   optionEvidence: Readonly<Record<string, ReferenceChoiceSelectionEvidence>>;
   nextContinuationToken?: string;
   error?: string;
-  /** New-release reset context; it is an opaque offered parent key, never authority. */
-  dependencyKey?: string | null;
 }>;
 
 const refusal = (reasonCode: ReferenceChoiceRefusalReasonCode): ReferenceChoiceRefusal =>
@@ -88,7 +86,6 @@ export function projectReferenceChoiceInputValues(
     continuationToken?: string;
     nextContinuationToken?: string;
     optionEvidenceOverrides?: Readonly<Record<string, ReferenceChoiceSelectionEvidence>>;
-    dependencyKey?: string | null;
   }> = {},
 ): ReferenceChoiceInputValues {
   const options = Object.freeze(
@@ -121,7 +118,6 @@ export function projectReferenceChoiceInputValues(
     kind: "choice_input",
     options,
     optionEvidence,
-    ...(page.dependencyKey === undefined ? {} : { dependencyKey: page.dependencyKey }),
     ...(page.nextContinuationToken === undefined
       ? {}
       : { nextContinuationToken: page.nextContinuationToken }),
@@ -196,15 +192,7 @@ const recordChoices = async (
 ): Promise<HumanOrganizationRequestResult<ReferenceChoiceResult>> => {
   const { source } = command;
   const target = source.query.recordType;
-  const bound = command.boundInput;
-  const input = source.query.inputs[0];
-  const validInputs =
-    bound === undefined
-      ? !source.query.inputs.some((declaration) => declaration.required)
-      : source.query.inputs.length === 1 &&
-        input?.required === true &&
-        input.type === "text" &&
-        input.key === bound.key;
+  const validInputs = !source.query.inputs.some((declaration) => declaration.required);
   if (
     !allowsRecordType(command.allowedRecordTypes, target) ||
     !source.query.selectedFieldIds.some((fieldId) => sameId(fieldId, command.labelFieldId)) ||
@@ -217,7 +205,7 @@ const recordChoices = async (
   const result = await queries.run(session, selection, {
     moduleRootId: source.moduleRootId,
     queryId: source.query.queryId,
-    inputValues: bound === undefined ? {} : { [bound.key]: bound.value },
+    inputValues: {},
     requestedFieldIds: [command.labelFieldId],
     searchableFieldIds: [command.labelFieldId],
     // A selected record is re-read by identity alone: the search only narrows pages of choices.

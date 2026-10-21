@@ -142,6 +142,9 @@ export function applicationPageRules(scope: ApplicationScope): void {
               recordsTableEditableFieldTypes.includes(String(field.type)) &&
               (field.type !== "link" ||
                 object(object(field.settings ?? {}).target).state === "resolved"),
+            ...(field.type === "link" && object(field.settings ?? {}).dependsOn !== undefined
+              ? { dependsOn: String(object(object(field.settings).dependsOn).parentFieldId) }
+              : {}),
             // A one-record link from the record type to itself names each record's parent.
             parentLink:
               field.type === "link" &&
@@ -381,7 +384,9 @@ export function applicationPageRules(scope: ApplicationScope): void {
             "vortex.definition.application_block_settings",
             "invalid_value",
             undefined,
-            "definition_query_binding",
+            problem.reason === undefined
+              ? "definition_query_binding"
+              : "definition_query_binding_choice",
             problem.sentence,
           ),
         );
@@ -539,12 +544,7 @@ export function applicationPageRules(scope: ApplicationScope): void {
           table.presentation,
           table.pageSize,
         ))
-          // A grid in Board mode shows none of the table's other features, so only the board is judged.
-          if (
-            feature.enabled &&
-            feature.check.kind === "not_possible" &&
-            (!table.features.board.enabled || feature.key === "board")
-          )
+          if (feature.enabled && feature.check.kind === "not_possible")
             failures.push(
               failure(
                 output,
