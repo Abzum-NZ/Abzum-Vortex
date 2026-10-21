@@ -90,10 +90,11 @@ export type RecordChoiceQueryRunner = Readonly<{
   ): Promise<HumanOrganizationRequestResult<ProtectedQueryResult>>;
 }>;
 
-const maximumTitleLength = 200;
+/** The longest title a record is picked or pasted by. */
+export const recordTitleMaximumLength = 200;
 
 /** The text a record is picked by: its title as the viewer may read it. */
-const titleText = (value: JsonValue | undefined): string => {
+export const titleText = (value: JsonValue | undefined): string => {
   const text =
     typeof value === "string"
       ? value.trim()
@@ -102,7 +103,7 @@ const titleText = (value: JsonValue | undefined): string => {
         : "";
   return text.length === 0
     ? "Untitled record"
-    : Array.from(text).slice(0, maximumTitleLength).join("");
+    : Array.from(text).slice(0, recordTitleMaximumLength).join("");
 };
 
 /**
