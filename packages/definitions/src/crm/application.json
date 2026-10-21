@@ -245,6 +245,15 @@
         "action_kind": "named",
         "named_action": "opportunity_create",
         "administrative": false
+      },
+      {
+        "id": "app_permission_activity_create",
+        "key": "application.crm.activity.create",
+        "label": "Open activity creation",
+        "description": "Allows opening activity creation.",
+        "action_kind": "named",
+        "named_action": "activity_create",
+        "administrative": false
       }
     ],
     "roles": [
@@ -294,6 +303,7 @@
           "vortex.crm.activities.activity.create",
           "vortex.crm.activities.activity.read",
           "application.crm.activity.read",
+          "application.crm.activity.create",
           "vortex.crm.activities.activity.update",
           "vortex.crm.activities.activity.soft_delete",
           "vortex.crm.activities.activity.restore",
@@ -367,6 +377,7 @@
           "vortex.crm.activities.activity.create",
           "vortex.crm.activities.activity.read",
           "application.crm.activity.read",
+          "application.crm.activity.create",
           "vortex.crm.activities.activity.update",
           "vortex.crm.activities.activity.soft_delete",
           "vortex.crm.activities.activity.restore",
@@ -1395,6 +1406,33 @@
             "props": {
               "slot_primary": [
                 {
+                  "type": "platform.renderer.button",
+                  "props": {
+                    "id": "button_new_activity",
+                    "label": "New activity",
+                    "action_kind": "action",
+                    "variant": "secondary",
+                    "vortex": {
+                      "block": {
+                        "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                        "release_version": "1.0.0"
+                      },
+                      "view_permission": "application.crm.activity.create",
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
                   "type": "platform.renderer.table",
                   "props": {
                     "presentation": "grid",
@@ -1413,6 +1451,12 @@
                       {
                         "field": "vortex.crm.activities:activity.activity_type",
                         "label": "Type",
+                        "visible": true,
+                        "pin": "unpinned"
+                      },
+                      {
+                        "field": "vortex.crm.activities:activity.outcome",
+                        "label": "Outcome",
                         "visible": true,
                         "pin": "unpinned"
                       },
@@ -1469,6 +1513,340 @@
                       },
                       "spreadsheet": {
                         "enabled": false
+                      },
+                      "inline_edit": {
+                        "enabled": true,
+                        "event_id": "event_edit_activity_cell",
+                        "fields": [
+                          "vortex.crm.activities:activity.activity_type",
+                          "vortex.crm.activities:activity.outcome"
+                        ]
+                      },
+                      "row_edit": {
+                        "enabled": true,
+                        "event_id": "event_save_activity_row",
+                        "trigger": "button",
+                        "fields": [
+                          "vortex.crm.activities:activity.activity_type",
+                          "vortex.crm.activities:activity.outcome"
+                        ]
+                      }
+                    }
+                  }
+                }
+              ],
+              "vortex": {
+                "shell": "shell_crm",
+                "slot_orders": {}
+              }
+            }
+          },
+          "content": []
+        }
+      },
+      {
+        "id": "page_crm_activity_create",
+        "key": "crm_activity_create",
+        "name": "New activity",
+        "type": "form",
+        "record_type": "vortex.crm.activities:activity",
+        "permission": "application.crm.activity.create",
+        "composition": {
+          "root": {
+            "props": {
+              "slot_primary": [
+                {
+                  "type": "platform.renderer.container",
+                  "props": {
+                    "id": "form_crm_activity_create_frame",
+                    "direction": "column",
+                    "gap": "medium",
+                    "padding": "medium",
+                    "content_width": "readable",
+                    "content": [
+                      {
+                        "type": "platform.renderer.form_container",
+                        "props": {
+                          "id": "form_crm_activity_create",
+                          "title": "New activity",
+                          "content": [
+                            {
+                              "type": "platform.renderer.field_input",
+                              "props": {
+                                "id": "input_crm_activity_create_subject",
+                                "field": "vortex.crm.activities:activity.subject",
+                                "vortex": {
+                                  "block": {
+                                    "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                                    "release_version": "1.0.0"
+                                  },
+                                  "responsive": {
+                                    "desktop": {
+                                      "visible": true,
+                                      "width": {
+                                        "kind": "fill"
+                                      },
+                                      "height": {
+                                        "kind": "content"
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            {
+                              "type": "platform.renderer.field_input",
+                              "props": {
+                                "id": "input_crm_activity_create_activity_type",
+                                "field": "vortex.crm.activities:activity.activity_type",
+                                "vortex": {
+                                  "block": {
+                                    "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                                    "release_version": "1.0.0"
+                                  },
+                                  "responsive": {
+                                    "desktop": {
+                                      "visible": true,
+                                      "width": {
+                                        "kind": "fill"
+                                      },
+                                      "height": {
+                                        "kind": "content"
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            {
+                              "type": "platform.renderer.field_input",
+                              "props": {
+                                "id": "input_crm_activity_create_outcome",
+                                "field": "vortex.crm.activities:activity.outcome",
+                                "vortex": {
+                                  "block": {
+                                    "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                                    "release_version": "1.0.0"
+                                  },
+                                  "responsive": {
+                                    "desktop": {
+                                      "visible": true,
+                                      "width": {
+                                        "kind": "fill"
+                                      },
+                                      "height": {
+                                        "kind": "content"
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            {
+                              "type": "platform.renderer.field_input",
+                              "props": {
+                                "id": "input_crm_activity_create_due_at",
+                                "field": "vortex.crm.activities:activity.due_at",
+                                "vortex": {
+                                  "block": {
+                                    "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                                    "release_version": "1.0.0"
+                                  },
+                                  "responsive": {
+                                    "desktop": {
+                                      "visible": true,
+                                      "width": {
+                                        "kind": "fill"
+                                      },
+                                      "height": {
+                                        "kind": "content"
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            {
+                              "type": "platform.renderer.field_input",
+                              "props": {
+                                "id": "input_crm_activity_create_completed",
+                                "field": "vortex.crm.activities:activity.completed",
+                                "vortex": {
+                                  "block": {
+                                    "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                                    "release_version": "1.0.0"
+                                  },
+                                  "responsive": {
+                                    "desktop": {
+                                      "visible": true,
+                                      "width": {
+                                        "kind": "fill"
+                                      },
+                                      "height": {
+                                        "kind": "content"
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            {
+                              "type": "platform.renderer.field_input",
+                              "props": {
+                                "id": "input_crm_activity_create_duration_minutes",
+                                "field": "vortex.crm.activities:activity.duration_minutes",
+                                "vortex": {
+                                  "block": {
+                                    "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                                    "release_version": "1.0.0"
+                                  },
+                                  "responsive": {
+                                    "desktop": {
+                                      "visible": true,
+                                      "width": {
+                                        "kind": "fill"
+                                      },
+                                      "height": {
+                                        "kind": "content"
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            {
+                              "type": "platform.renderer.field_input",
+                              "props": {
+                                "id": "input_crm_activity_create_regarding",
+                                "field": "vortex.crm.activities:activity.regarding",
+                                "vortex": {
+                                  "block": {
+                                    "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                                    "release_version": "1.0.0"
+                                  },
+                                  "responsive": {
+                                    "desktop": {
+                                      "visible": true,
+                                      "width": {
+                                        "kind": "fill"
+                                      },
+                                      "height": {
+                                        "kind": "content"
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            {
+                              "type": "platform.renderer.field_input",
+                              "props": {
+                                "id": "input_crm_activity_create_owner",
+                                "field": "vortex.crm.activities:activity.owner",
+                                "vortex": {
+                                  "block": {
+                                    "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                                    "release_version": "1.0.0"
+                                  },
+                                  "responsive": {
+                                    "desktop": {
+                                      "visible": true,
+                                      "width": {
+                                        "kind": "fill"
+                                      },
+                                      "height": {
+                                        "kind": "content"
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            {
+                              "type": "platform.renderer.field_input",
+                              "props": {
+                                "id": "input_crm_activity_create_notes",
+                                "field": "vortex.crm.activities:activity.notes",
+                                "vortex": {
+                                  "block": {
+                                    "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                                    "release_version": "1.0.0"
+                                  },
+                                  "responsive": {
+                                    "desktop": {
+                                      "visible": true,
+                                      "width": {
+                                        "kind": "fill"
+                                      },
+                                      "height": {
+                                        "kind": "content"
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            {
+                              "type": "platform.renderer.button",
+                              "props": {
+                                "id": "submit_crm_activity_create",
+                                "label": "Save",
+                                "action_kind": "submit",
+                                "vortex": {
+                                  "block": {
+                                    "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                                    "release_version": "1.0.0"
+                                  },
+                                  "responsive": {
+                                    "desktop": {
+                                      "visible": true,
+                                      "width": {
+                                        "kind": "fill"
+                                      },
+                                      "height": {
+                                        "kind": "content"
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          ],
+                          "vortex": {
+                            "block": {
+                              "block_id": "476e2c35-07d6-40cc-bf01-6ddb22ccca44",
+                              "release_version": "1.0.0"
+                            },
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    ],
+                    "vortex": {
+                      "block": {
+                        "block_id": "11d1a889-531f-4880-a1a4-5dda5289e5ff",
+                        "release_version": "1.3.0"
+                      },
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
                       }
                     }
                   }
@@ -3780,6 +4158,10 @@
                         "label": "Type"
                       },
                       {
+                        "field": "vortex.crm.activities:activity.outcome",
+                        "label": "Outcome"
+                      },
+                      {
                         "field": "vortex.crm.activities:activity.due_at",
                         "label": "Due at"
                       },
@@ -4857,6 +5239,38 @@
         "key": "vortex.app.events.edit_opportunity_cell",
         "label": "Edit opportunity cell",
         "record_type": "vortex.crm.opportunities:opportunity",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "event_edit_activity_cell",
+        "key": "vortex.app.events.edit_activity_cell",
+        "label": "Edit activity cell",
+        "record_type": "vortex.crm.activities:activity",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "event_save_activity_row",
+        "key": "vortex.app.events.save_activity_row",
+        "label": "Save activity row",
+        "record_type": "vortex.crm.activities:activity",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "event_new_activity",
+        "key": "vortex.app.events.new_activity",
+        "label": "New activity",
+        "record_type": "vortex.crm.activities:activity",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "event_create_activity",
+        "key": "vortex.app.events.create_activity",
+        "label": "Create activity",
+        "record_type": "vortex.crm.activities:activity",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
       }
@@ -6778,6 +7192,168 @@
           }
         ],
         "outputs": {}
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "save_activity_row",
+        "key": "save_activity_row",
+        "labels": {
+          "name": "Save activity row"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "recordInput": "record",
+        "inputs": {
+          "record": {
+            "type": "record_reference",
+            "required": true,
+            "recordTypeIds": ["vortex.crm.activities:activity"]
+          },
+          "values": {
+            "type": "json",
+            "required": true
+          }
+        },
+        "tasks": [
+          {
+            "id": "save_row",
+            "type": "record.save",
+            "version": "1.0.0",
+            "properties": {
+              "record_type": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "vortex.crm.activities:activity"
+                }
+              },
+              "record": {
+                "kind": "reference",
+                "reference": {
+                  "source": "input",
+                  "name": "record"
+                }
+              },
+              "values": {
+                "kind": "reference",
+                "reference": {
+                  "source": "input",
+                  "name": "values"
+                }
+              }
+            }
+          }
+        ],
+        "outputs": {}
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "create_activity",
+        "key": "create_activity",
+        "description": "Creates an activity and opens its detail page.",
+        "labels": {
+          "name": "Create activity"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {
+          "values": {
+            "type": "json",
+            "required": true
+          }
+        },
+        "tasks": [
+          {
+            "id": "save",
+            "type": "record.save",
+            "version": "1.0.0",
+            "properties": {
+              "record_type": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "vortex.crm.activities:activity"
+                }
+              },
+              "values": {
+                "kind": "reference",
+                "reference": {
+                  "source": "input",
+                  "name": "values"
+                }
+              }
+            }
+          },
+          {
+            "id": "open_detail",
+            "type": "interface.navigate",
+            "version": "1.0.0",
+            "properties": {
+              "page": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "crm_activity_detail"
+                }
+              },
+              "parameters": {
+                "kind": "map",
+                "entries": {
+                  "record_id": "{{ outputs.save.record }}"
+                }
+              }
+            }
+          }
+        ],
+        "outputs": {
+          "record": {
+            "type": "record_reference",
+            "recordTypeIds": ["vortex.crm.activities:activity"],
+            "value": {
+              "kind": "reference",
+              "reference": {
+                "source": "task_output",
+                "task": "save",
+                "key": "record"
+              }
+            }
+          }
+        }
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "navigate_new_activity",
+        "key": "navigate_new_activity",
+        "description": "Opens the activity creation form.",
+        "labels": {
+          "name": "New activity"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "inputs": {},
+        "tasks": [
+          {
+            "id": "open_page",
+            "type": "interface.navigate",
+            "version": "1.0.0",
+            "properties": {
+              "page": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "crm_activity_create"
+                }
+              }
+            }
+          }
+        ],
+        "outputs": {}
       }
     ],
     "flow_bindings": [
@@ -7240,6 +7816,61 @@
             "name": "values"
           }
         }
+      },
+      {
+        "id": "binding_save_activity_row",
+        "control": "content_5",
+        "event_id": "event_save_activity_row",
+        "event": "row_edit",
+        "flow": "save_activity_row",
+        "inputs": {
+          "record": {
+            "kind": "caller",
+            "name": "record_id"
+          },
+          "values": {
+            "kind": "caller",
+            "name": "values"
+          }
+        }
+      },
+      {
+        "id": "binding_edit_activity_cell",
+        "control": "content_5",
+        "event_id": "event_edit_activity_cell",
+        "event": "inline_edit",
+        "flow": "save_activity_row",
+        "inputs": {
+          "record": {
+            "kind": "caller",
+            "name": "record_id"
+          },
+          "values": {
+            "kind": "caller",
+            "name": "values"
+          }
+        }
+      },
+      {
+        "id": "binding_create_activity",
+        "control": "form_crm_activity_create",
+        "event_id": "event_create_activity",
+        "event": "form_submit",
+        "flow": "create_activity",
+        "inputs": {
+          "values": {
+            "kind": "caller",
+            "name": "values"
+          }
+        }
+      },
+      {
+        "id": "binding_new_activity",
+        "control": "button_new_activity",
+        "event_id": "event_new_activity",
+        "event": "action",
+        "flow": "navigate_new_activity",
+        "inputs": {}
       }
     ]
   }
