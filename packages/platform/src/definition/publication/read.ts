@@ -389,6 +389,23 @@ const materialisePlatformThemeRelease = (
 export const createImmutableDefinitionPublicationCatalogue = (
   input: ImmutableDefinitionPublicationCatalogueDefinition,
 ): ImmutableDefinitionPublicationCatalogue => {
+  let catalogue = immutableCatalogues.get(input);
+  if (catalogue === undefined) {
+    catalogue = buildImmutableDefinitionPublicationCatalogue(input);
+    immutableCatalogues.set(input, catalogue);
+  }
+  return catalogue;
+};
+
+// Pure and frozen: one catalogue per definition object, not one per request.
+const immutableCatalogues = new WeakMap<
+  ImmutableDefinitionPublicationCatalogueDefinition,
+  ImmutableDefinitionPublicationCatalogue
+>();
+
+const buildImmutableDefinitionPublicationCatalogue = (
+  input: ImmutableDefinitionPublicationCatalogueDefinition,
+): ImmutableDefinitionPublicationCatalogue => {
   const { permissions, ...catalogueInput } = input;
   const parsed = catalogueDefinitionSchema.safeParse(catalogueInput);
   const definition = parsed.success ? parsed.data : duplicate();
