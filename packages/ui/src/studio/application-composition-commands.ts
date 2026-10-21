@@ -421,8 +421,11 @@ type Removal = {
   source: ApplicationSourceDocument;
   target: Target;
   alias: string;
-  willRemoveUnusedRelease: boolean;
+  /** Releases no block uses once the block and everything inside it leave the draft. */
+  unusedReleases: readonly string[];
 };
+const releaseKey = (block: { block_id: string; release_version: string }): string =>
+  `${block.block_id}@${block.release_version}`;
 type ResolvedRemoval =
   | { kind: "available"; removal: Removal }
   | Exclude<StudioCompositionRemovalModel, { kind: "available" }>;
@@ -436,19 +439,20 @@ const resolveRemoval = (
   if (resolved === undefined) return { kind: "invalid" };
   const { source, target, alias } = resolved;
   const page = target.region.ordinaryMain === true ? target.region.page : undefined;
-  // A layout's own blocks are removable; a page's only when it is an ordinary main area.
+  // Any of a layout's own blocks leaves with everything inside it, as any of them can be added.
+  // A page removes one display item, and only from an ordinary main area.
+  const layout = target.region.shell !== undefined;
   const removablePage =
     page !== undefined &&
     (page.type === "list" || page.type === "detail" || page.type === "dashboard") &&
     !source.body.public_addresses.some((address) => address.page === page.id) &&
     !source.body.experiences?.some((experience) => experience.page === page.key);
-  if (!removablePage && target.region.shell === undefined) return { kind: "unsupported" };
+  if (!removablePage && !layout) return { kind: "unsupported" };
   const release = releaseFor(catalogue, target.item);
   if (
     release === undefined ||
-    !eligibleAddRelease(release) ||
-    itemSlots(catalogue, target.item).size !== 0 ||
-    !manifestMatches(catalogue, source, target.region.zone.items)
+    !manifestMatches(catalogue, source, target.region.zone.items) ||
+    (!layout && (!eligibleAddRelease(release) || itemSlots(catalogue, target.item).size !== 0))
   )
     return { kind: "unsupported" };
   validateRegion(catalogue, target.region);
@@ -468,29 +472,32 @@ const resolveRemoval = (
       return { kind: "blocked", reason: "required_slot" };
     zone = child;
   }
+  const removed = sourceItemTree([target.item]);
   const aliases = new Set<string>();
-  let releaseUses = 0;
+  const releaseUses = new Map<string, number>();
   for (const region of regions(source))
     for (const item of sourceItemTree(region.zone.items)) {
       const id = item.props.id;
       if (aliases.has(id)) return { kind: "invalid" };
       aliases.add(id);
-      const block = item.props.vortex.block;
-      if (block.block_id === release.blockId && block.release_version === release.releaseVersion)
-        releaseUses += 1;
+      const key = releaseKey(item.props.vortex.block);
+      releaseUses.set(key, (releaseUses.get(key) ?? 0) + 1);
     }
-  const reason = studioPlacementRemovalReference(source, alias, aliases);
-  return reason === undefined
-    ? {
-        kind: "available",
-        removal: {
-          source,
-          target,
-          alias,
-          willRemoveUnusedRelease: releaseUses === 1,
-        },
-      }
-    : { kind: "blocked", reason };
+  for (const item of removed) {
+    const reason = studioPlacementRemovalReference(source, item.props.id, aliases);
+    if (reason !== undefined) return { kind: "blocked", reason };
+    const key = releaseKey(item.props.vortex.block);
+    releaseUses.set(key, releaseUses.get(key)! - 1);
+  }
+  return {
+    kind: "available",
+    removal: {
+      source,
+      target,
+      alias,
+      unusedReleases: [...releaseUses].filter(([, uses]) => uses === 0).map(([key]) => key),
+    },
+  };
 };
 
 export const describeStudioCompositionRemoval = (
@@ -503,7 +510,7 @@ export const describeStudioCompositionRemoval = (
       ? {
           kind: "available",
           placementAlias: resolved.removal.alias,
-          willRemoveUnusedRelease: resolved.removal.willRemoveUnusedRelease,
+          willRemoveUnusedRelease: resolved.removal.unusedReleases.length > 0,
         }
       : resolved;
   } catch {
@@ -520,12 +527,12 @@ const applyRemoval = (
   const resolved = resolveRemoval(current, selection);
   if (resolved.kind !== "available")
     return { kind: resolved.kind === "invalid" ? "invalid" : "unsupported" };
-  const { source, target, alias, willRemoveUnusedRelease } = resolved.removal;
+  const { source, target, alias, unusedReleases } = resolved.removal;
   const working = workingCopy(target.region);
   const zone = zoneHandle(working, target.steps);
   const remaining = zone.items.filter((item) => item.props.id !== alias);
   if (remaining.length !== zone.items.length - 1) return { kind: "invalid" };
-  // The block also leaves every declared tablet and phone order of its slot.
+  // The block and everything inside it leave the slot and its declared tablet and phone orders.
   zone.set(
     remaining,
     adjustedSlotOrder(
@@ -535,13 +542,9 @@ const applyRemoval = (
   );
   commitWorking(current.catalogue, target.region, working);
   validateStoredApplicationOutlets(current.catalogue, source);
-  const block = target.item.props.vortex.block;
-  if (willRemoveUnusedRelease)
-    source.body.platform_block_dependencies = source.body.platform_block_dependencies.filter(
-      (dependency) =>
-        dependency.block_id !== block.block_id ||
-        dependency.release_version !== block.release_version,
-    );
+  source.body.platform_block_dependencies = source.body.platform_block_dependencies.filter(
+    (dependency) => !unusedReleases.includes(releaseKey(dependency)),
+  );
   const parsed = applicationSourceDocumentSchema.parse(source);
   return sameValue(parsed, current.source)
     ? { kind: "invalid" }
