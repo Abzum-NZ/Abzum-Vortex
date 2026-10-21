@@ -1,11 +1,16 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
-import { flowSchema, flowTaskChildLists, sameId, type ComponentFlowBinding } from "../../schema";
+import {
+  flowSchema,
+  flowTaskChildLists,
+  sameId,
+  type ComponentFlowBinding,
+  type RecordsTableFeatureProjection,
+} from "../../schema";
 import type { RequestDatabaseTransaction } from "../../db";
 import type { FlowNamedAction } from "../../definition/flow-orchestrator-types";
 import { collectActionFlowTasks, flowLibraryOf } from "../../rules";
-import type { RecordsTableFeatureProjection } from ".";
 import { projectNamedActionAvailability } from "./named-action-availability";
 
 type RowActions = NonNullable<RecordsTableFeatureProjection["rowActions"]>;

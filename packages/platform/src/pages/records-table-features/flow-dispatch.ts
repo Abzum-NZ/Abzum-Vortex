@@ -2,7 +2,7 @@ import "server-only";
 
 import {
   isRecord,
-  readRecordsTableContract,
+  recordsTableContractOrLog,
   recordIdSchema,
   fieldIdSchema,
   sameId,
@@ -129,7 +129,7 @@ export const recordsTableBindingRefusal = async (
       ? undefined
       : recordsTableRequestRefusal(event, "command_not_declared");
   }
-  const contract = readRecordsTableContract(placementSettings(props));
+  const contract = recordsTableContractOrLog(placementSettings(props), "flow dispatch");
   if (contract === undefined)
     return recordsTableRequestRefusal("contract", "placement_contract_unreadable");
   // A bulk action runs a named action through the table's own bulk run, never a flow binding.

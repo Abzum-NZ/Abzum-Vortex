@@ -1,5 +1,17 @@
 import { z } from "zod";
-import { builderKeySchema, platformIdSchema } from "./identifiers";
+import { builderKeySchema, fieldIdSchema, platformIdSchema } from "./identifiers";
+
+/**
+ * One sort key: a field, spelled in lower case whatever the sender wrote, and a direction. It is
+ * the one shape of a sort in a query definition, a protected query request, a stored view and a
+ * Studio canvas read.
+ */
+export const sortKeySchema = z
+  .object({
+    fieldId: fieldIdSchema.transform((fieldId) => fieldId.toLowerCase()),
+    direction: z.enum(["ascending", "descending"]),
+  })
+  .strict();
 
 export const labelSchema = z.string().trim().min(1).max(60);
 export const descriptionSchema = z.string().trim().min(1).max(1_000);

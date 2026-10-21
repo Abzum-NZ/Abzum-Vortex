@@ -1,9 +1,10 @@
 import "server-only";
 
-import type {
-  JsonValue,
-  RecordsTableGroupingFieldType,
-  RecordsTablePivotDateUnit,
+import {
+  UnreadableSettingError,
+  type JsonValue,
+  type RecordsTableGroupingFieldType,
+  type RecordsTablePivotDateUnit,
 } from "../../schema";
 import type { ProtectedQuerySummaryCompleted } from "../../queries/index";
 import {
@@ -167,6 +168,11 @@ const groupLabel = (
     return typeof value === "string"
       ? "Not available"
       : (recordLinkPlainText(value, recordLinks) ?? "Not available");
-  const unit = field.dateUnit ?? "day";
-  return bucketLabel(bucketFirstDay(field.fieldType, String(value), field.timeZone), unit);
+  // Publication refuses a grouped date field without its calendar unit, so a read that has none is
+  // a defect in what was published, never a unit to guess.
+  if (field.dateUnit === undefined) throw new UnreadableSettingError("features.grouping.date_unit");
+  return bucketLabel(
+    bucketFirstDay(field.fieldType, String(value), field.timeZone),
+    field.dateUnit,
+  );
 };

@@ -4,7 +4,6 @@
  * filter control, the page address carries its spelling, and the server validates it against the
  * installed field before it builds a Query condition from it.
  */
-import type { RecordsTableFilterKind } from "../definition/application-composition/records-table-features/column-filters";
 import {
   compareExactDecimals,
   normalizeExactDecimal,
@@ -36,22 +35,6 @@ export type RecordsTableFieldFilter =
 export type RecordsTableFilterValue = Readonly<{
   fieldId: string;
   filter: RecordsTableFieldFilter;
-}>;
-
-/**
- * What the viewer's grid knows of one filterable field: its canonical type, the filter kind that
- * type takes and what the control needs (a choice field's options, a fixed money currency, and for
- * a date-and-time field the organisation time zone its days are taken in).
- */
-export type RecordsTableFilterField = Readonly<{
-  fieldId: string;
-  label: string;
-  /** The canonical field type, for example `choice` or `date_time`. */
-  type: string;
-  kind: RecordsTableFilterKind;
-  options?: readonly Readonly<{ value: string; label: string }>[];
-  currency?: string;
-  timeZone?: string;
 }>;
 
 const DECIMAL_PATTERN = /^(-?)([0-9]{1,30})(?:\.([0-9]{1,20}))?$/;

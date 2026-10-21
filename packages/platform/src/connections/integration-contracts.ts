@@ -6,6 +6,7 @@ import {
   jsonValueSchema,
   safeHttpsUrlSchema,
   secretReferenceSchema,
+  sortKeySchema,
 } from "../catalogue/common";
 import { accessGrantSchema, grantConsentDecisionSchema } from "../access/identity-access";
 import { conditionNodeSchema } from "../definition/module-foundation-contracts";
@@ -548,13 +549,7 @@ export const federatedQuerySchema = z
         })
         .strict(),
     ),
-    sort: z
-      .array(
-        z
-          .object({ fieldId: fieldIdSchema, direction: z.enum(["ascending", "descending"]) })
-          .strict(),
-      )
-      .min(1),
+    sort: z.array(sortKeySchema).min(1),
     page: boundedPageSchema,
     countRequested: z.boolean(),
   })
