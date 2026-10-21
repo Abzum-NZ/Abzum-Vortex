@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   flowBindingInvocationSchema,
   logRefusal,
+  recordIdSchema,
   type ProtectedOperationChannel,
 } from "@vortex/platform/schema";
 import { invokeInstalledFlow } from "@vortex/platform/server";
@@ -42,6 +43,7 @@ const requestSchema = z
     organizationShortName: z.string().min(1).max(200),
     applicationKey: z.string().min(1).max(200),
     pageKey: z.string().min(1).max(200),
+    pageRecordId: recordIdSchema.optional(),
     invocation: flowBindingInvocationSchema,
   })
   .strict();

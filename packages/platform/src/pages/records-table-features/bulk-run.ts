@@ -137,6 +137,7 @@ export const createRecordsTableBulkService = (dependencies: RecordsTableBulkDepe
       session,
       selection: selectionOf(address),
       installationRevision: placement.installed.applicationReleaseRevision,
+      pageId: address.pageId,
       placementId,
     });
     if (descriptor === undefined) return undefined;
