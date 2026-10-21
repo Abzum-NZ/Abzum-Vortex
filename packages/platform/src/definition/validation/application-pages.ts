@@ -384,7 +384,9 @@ export function applicationPageRules(scope: ApplicationScope): void {
             "vortex.definition.application_block_settings",
             "invalid_value",
             undefined,
-            "definition_query_binding",
+            problem.reason === undefined
+              ? "definition_query_binding"
+              : "definition_query_binding_choice",
             problem.sentence,
           ),
         );

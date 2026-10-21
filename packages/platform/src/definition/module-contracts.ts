@@ -742,6 +742,35 @@ const exactActionInputValidationSchema = z
     { path: ["maximum"], message: "Maximum cannot be below minimum" },
   );
 
+export const actionInputChoiceSchema = z
+  .object({ value: z.string().min(1).max(120), label: labelSchema })
+  .strict();
+
+/** A choice input lists its choices and nothing else constrains it: no pattern, no minimum length. */
+export const refineCompiledTextInputChoices = (
+  validation:
+    | {
+        choices?: readonly { value: string }[] | undefined;
+        pattern?: string | undefined;
+        minimumLength?: number | undefined;
+        maximumLength?: number | undefined;
+      }
+    | undefined,
+  context: z.RefinementCtx,
+): void => {
+  const choices = validation?.choices;
+  if (validation === undefined || choices === undefined) return;
+  const invalid = (path: string, message: string) =>
+    context.addIssue({ code: "custom", path: ["validation", path], message });
+  if (validation.pattern !== undefined || validation.minimumLength !== undefined)
+    invalid("choices", "A list of choices cannot be combined with a pattern or a minimum length");
+  if (new Set(choices.map((choice) => choice.value)).size !== choices.length)
+    invalid("choices", "Choice values must be unique");
+  const maximumLength = validation.maximumLength;
+  if (maximumLength !== undefined && choices.some((choice) => choice.value.length > maximumLength))
+    invalid("maximumLength", "Every choice value must fit the maximum length");
+};
+
 export const actionInputDefinitionSchema = z
   .discriminatedUnion("type", [
     z
@@ -753,6 +782,7 @@ export const actionInputDefinitionSchema = z
             minimumLength: z.number().int().min(0).optional(),
             maximumLength: z.number().int().positive().optional(),
             pattern: z.string().min(1).max(500).optional(),
+            choices: z.array(actionInputChoiceSchema).min(1).max(200).optional(),
           })
           .strict()
           .optional(),
@@ -848,6 +878,7 @@ export const actionInputDefinitionSchema = z
         path: ["validation", "maximumLength"],
         message: "Maximum length cannot be below minimum length",
       });
+    if (value.type === "text") refineCompiledTextInputChoices(value.validation, context);
     if (
       value.type === "whole_number" &&
       value.validation?.minimum !== undefined &&

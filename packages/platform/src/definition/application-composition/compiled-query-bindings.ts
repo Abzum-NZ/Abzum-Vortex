@@ -148,6 +148,14 @@ export const compiledQueryInputs = (query: JsonObject): readonly QueryBindingInp
     key: String(input.key),
     label: String(input.label),
     required: input.required === true,
+    ...(input.type === "text" && object(input.validation ?? {}).choices !== undefined
+      ? {
+          choices: array(object(input.validation).choices).map((choice) => ({
+            value: String(choice.value),
+            label: String(choice.label),
+          })),
+        }
+      : {}),
     type: queryInputValueType({
       type: String(input.type),
       recordTypes: array(input.recordTypes ?? []).flatMap((recordType) =>
