@@ -1222,6 +1222,7 @@
         "opportunity_number",
         "name",
         "company",
+        "primary_contact",
         "value",
         "net_value",
         "stage",
