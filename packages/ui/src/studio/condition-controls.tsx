@@ -11,6 +11,7 @@ import {
 import { Plus, RotateCcw } from "lucide-react";
 import { useState } from "react";
 import { StudioOptionControl } from "./studio-setting-controls";
+import { StudioOptionsControl } from "./studio-options-control";
 import { StudioEntryList, StudioIconButton, useStudioEntryKeys } from "./studio-entry-list";
 import { StudioInspectorActions } from "./studio-inspector-actions";
 import {
@@ -53,6 +54,7 @@ import {
   pointerForPath,
   studioConditionOperatorsFor,
   unaryOperators,
+  usesChoiceOptionControl,
   validateStudioCondition,
   withDraftIssues,
 } from "./condition-model";
@@ -249,8 +251,6 @@ function TreeEditor({
 
   if (!isComparisonCondition(condition)) return null;
 
-  const usesChoiceOptions =
-    condition.operator !== "contains" && condition.operator !== "not_contains";
   const leftInfo = infoForOperand(condition.left, context);
   const availableOperators = studioConditionOperatorsFor(
     condition.left,
@@ -329,14 +329,23 @@ function TreeEditor({
       if (side === "left") onReplace({ ...condition, left: replacement }, pathToOperand);
       else onReplace({ ...condition, right: replacement }, pathToOperand);
     };
-    // Substring comparisons edit text; other choice comparisons use their options.
-    const choiceOptions = usesChoiceOptions ? choiceOptionsFor(other, context) : undefined;
-    if (
-      choiceOptions !== undefined &&
-      choiceOptions.length > 0 &&
-      (operand.value === null || typeof operand.value === "string")
-    ) {
+    if (usesChoiceOptionControl(condition.operator, other, context)) {
+      const choiceOptions = choiceOptionsFor(other, context)!;
       const optionError = errorForPath(validation, pathToOperand);
+      if (condition.operator === "in" || condition.operator === "not_in")
+        return (
+          <StudioField label="Options" error={optionError}>
+            {(control) => (
+              <StudioOptionsControl
+                {...control}
+                aria-label="Options"
+                value={Array.isArray(operand.value) ? operand.value : []}
+                options={choiceOptions}
+                onChange={commitLiteral}
+              />
+            )}
+          </StudioField>
+        );
       return (
         <label className="flex flex-col gap-2 text-sm">
           Option
@@ -412,8 +421,7 @@ function TreeEditor({
     const literalOwnsError =
       operand.source === "value" &&
       context.allowLiteralValues &&
-      (operand.value !== null ||
-        (usesChoiceOptions && (choiceOptionsFor(other, context)?.length ?? 0) > 0));
+      (operand.value !== null || usesChoiceOptionControl(condition.operator, other, context));
     const operandError = literalOwnsError ? undefined : errorForPath(validation, pathToOperand);
     const referenceOptions = context.allowedOperands.filter((option) =>
       compatibleOperand(side, option.operand),
@@ -460,8 +468,15 @@ function TreeEditor({
   };
 
   const rightOptions = availableOperators;
-  const rightForOperator = (operator: ConditionOperator): ConditionOperand | undefined =>
-    defaultRightForOperator(operator, condition.left, context);
+  const rightForOperator = (operator: ConditionOperator): ConditionOperand | undefined => {
+    if (
+      context.allowLiteralValues &&
+      condition.right?.source === "value" &&
+      usesChoiceOptionControl(operator, condition.left, context)
+    )
+      return { source: "value", value: operator === "in" || operator === "not_in" ? [] : null };
+    return defaultRightForOperator(operator, condition.left, context);
+  };
 
   const currentOperatorLabel =
     operatorOptions.find((option) => option.operator === condition.operator)?.label ??

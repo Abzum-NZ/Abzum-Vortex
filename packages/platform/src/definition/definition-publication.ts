@@ -148,6 +148,7 @@ export type ApplicationDraftConditionContext = Readonly<{
 const conditionFieldTypes = new Set([
   "text",
   "long_text",
+  "choice",
   "whole_number",
   "yes_no",
   "date",
