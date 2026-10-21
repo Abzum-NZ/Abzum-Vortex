@@ -2,6 +2,7 @@
 
 import type { ReactElement } from "react";
 import {
+  addressParameter,
   calendarAddDays as addDays,
   calendarDaysInMonth,
   calendarDaysSinceMonday,
@@ -164,7 +165,7 @@ export function CalendarDisplay(props: DisplayRenderProps<CalendarPayload>): Rea
                 disabled={!calendarPeriodSupported(values.view, previousDate, values.timeZone)}
                 onClick={() =>
                   replaceParameters((parameters) =>
-                    parameters.set(`date.${placementId}`, previousDate),
+                    parameters.set(addressParameter("date", placementId), previousDate),
                   )
                 }
               >
@@ -175,7 +176,10 @@ export function CalendarDisplay(props: DisplayRenderProps<CalendarPayload>): Rea
                 variant="outline"
                 onClick={() =>
                   replaceParameters((parameters) =>
-                    parameters.set(`date.${placementId}`, localToday(values.timeZone)),
+                    parameters.set(
+                      addressParameter("date", placementId),
+                      localToday(values.timeZone),
+                    ),
                   )
                 }
               >
@@ -187,7 +191,9 @@ export function CalendarDisplay(props: DisplayRenderProps<CalendarPayload>): Rea
                 aria-label="Next period"
                 disabled={!calendarPeriodSupported(values.view, nextDate, values.timeZone)}
                 onClick={() =>
-                  replaceParameters((parameters) => parameters.set(`date.${placementId}`, nextDate))
+                  replaceParameters((parameters) =>
+                    parameters.set(addressParameter("date", placementId), nextDate),
+                  )
                 }
               >
                 Next
@@ -208,7 +214,9 @@ export function CalendarDisplay(props: DisplayRenderProps<CalendarPayload>): Rea
                   aria-pressed={values.view === view}
                   disabled={!calendarPeriodSupported(view, values.date, values.timeZone)}
                   onClick={() =>
-                    replaceParameters((parameters) => parameters.set(`view.${placementId}`, view))
+                    replaceParameters((parameters) =>
+                      parameters.set(addressParameter("calendar", placementId), view),
+                    )
                   }
                 >
                   {view === "agenda" ? "Agenda" : view[0]!.toUpperCase() + view.slice(1)}

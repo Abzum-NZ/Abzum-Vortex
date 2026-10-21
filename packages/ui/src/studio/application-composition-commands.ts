@@ -13,7 +13,7 @@ import {
   repeatableSlotKey,
   isRepeatableSlotIdentity,
   conditionalFormatRuleFields,
-  readRecordsTableFeatures,
+  recordsTableFeaturesOrLog,
   type ApplicationSourceDocument,
   type PlatformBlockRelease,
   type SourceBlockPropertyValueContract,
@@ -337,7 +337,10 @@ const applySettings = (
   // pipeline binds the grid to the query that groups by it (an existing one, or a new one written
   // like any other query, editable in Data); every other board setting is judged against it.
   const board = boardModeOf(settings);
-  const formatting = readRecordsTableFeatures(settings["features"] as never)?.conditionalFormatting;
+  const formatting = recordsTableFeaturesOrLog(
+    settings["features"] as never,
+    "studio board rules",
+  )?.conditionalFormatting;
   const ruleFields =
     board !== undefined && formatting?.enabled
       ? [

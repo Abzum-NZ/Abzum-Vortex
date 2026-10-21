@@ -2,7 +2,7 @@ import "server-only";
 
 import {
   isRecord,
-  readRecordsTableContract,
+  recordsTableContractOrLog,
   sameId,
   type IdentitySession,
   type OrganizationSelectionCandidate,
@@ -80,7 +80,7 @@ export const loadRecordsTablePlacement = async (
     return { refused: "placement_metadata_unreadable" };
   if (vortex.block.blockId !== TABLE_BLOCK_RELEASE.blockId) return { refused: "not_a_table" };
   const settings = placementSettings(props);
-  const contract = readRecordsTableContract(settings);
+  const contract = recordsTableContractOrLog(settings, "table placement");
   if (contract === undefined) return { refused: "contract_unreadable" };
   const queryId = vortex.queryId;
   const bound = installed.releaseSet.modules.flatMap((module) =>

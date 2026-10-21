@@ -2,7 +2,7 @@ import "server-only";
 
 import {
   readQueryBindings,
-  readRecordsTableContract,
+  recordsTableContractOrLog,
   sameId,
   type BlockPropertyValueContract,
   type IdentitySession,
@@ -94,7 +94,7 @@ export const readRecordsTableRowDetail = async (
   request: RowDetailRequest,
 ): Promise<RowDetailResult> => {
   const { context, placement } = request;
-  const contract = readRecordsTableContract(placementSettingsOf(placement));
+  const contract = recordsTableContractOrLog(placementSettingsOf(placement), "row detail");
   const feature = contract?.features.masterDetail;
   if (feature === undefined || !feature.enabled) return refuse("feature_off");
   const { relationship, childQuery, childColumns, childPageSize } = feature;

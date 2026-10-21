@@ -17,6 +17,8 @@ as $function$
         when 'current_layout' then array['columns', 'density']
         else array['columns', 'density', 'sort', 'filters', 'search', 'formatting'] end)
     )
+    -- A named view states every part of its query state, empty or not.
+    and (p_kind = 'current_layout' or p_document ?& array['sort', 'filters', 'search', 'formatting'])
     and pg_catalog.jsonb_typeof(p_document -> 'columns') = 'array'
     and pg_catalog.jsonb_array_length(p_document -> 'columns') between 1 and 200
     and not exists (
@@ -44,9 +46,9 @@ as $function$
     and (not p_document ? 'density' or (
       pg_catalog.jsonb_typeof(p_document -> 'density') = 'string'
       and p_document ->> 'density' in ('compact', 'comfortable')))
-    and (not p_document ? 'sort' or (
+    and (p_kind = 'current_layout' or (
       pg_catalog.jsonb_typeof(p_document -> 'sort') = 'array'
-      and pg_catalog.jsonb_array_length(p_document -> 'sort') between 1 and 20
+      and pg_catalog.jsonb_array_length(p_document -> 'sort') between 0 and 20
       and not exists (
         select 1 from pg_catalog.jsonb_array_elements(p_document -> 'sort') as entry(value)
         where pg_catalog.jsonb_typeof(entry.value) <> 'object'
@@ -58,9 +60,9 @@ as $function$
       and (select pg_catalog.count(distinct pg_catalog.lower(entry.value ->> 'fieldId'))
         from pg_catalog.jsonb_array_elements(p_document -> 'sort') as entry(value))
         = pg_catalog.jsonb_array_length(p_document -> 'sort')))
-    and (not p_document ? 'filters' or (
+    and (p_kind = 'current_layout' or (
       pg_catalog.jsonb_typeof(p_document -> 'filters') = 'array'
-      and pg_catalog.jsonb_array_length(p_document -> 'filters') between 1 and 50
+      and pg_catalog.jsonb_array_length(p_document -> 'filters') between 0 and 50
       and not exists (
         select 1 from pg_catalog.jsonb_array_elements(p_document -> 'filters') as entry(value)
         where pg_catalog.jsonb_typeof(entry.value) <> 'object'
@@ -73,13 +75,14 @@ as $function$
       and (select pg_catalog.count(distinct pg_catalog.lower(entry.value ->> 'fieldId'))
         from pg_catalog.jsonb_array_elements(p_document -> 'filters') as entry(value))
         = pg_catalog.jsonb_array_length(p_document -> 'filters')))
-    and (not p_document ? 'search' or (
-      pg_catalog.jsonb_typeof(p_document -> 'search') = 'string'
-      and pg_catalog.char_length(p_document ->> 'search') between 1 and 200))
+    and (p_kind = 'current_layout' or (
+      pg_catalog.jsonb_typeof(p_document -> 'search') = 'null'
+      or (pg_catalog.jsonb_typeof(p_document -> 'search') = 'string'
+        and pg_catalog.char_length(p_document ->> 'search') between 1 and 200)))
     -- Personal formatting rules have the authored conditional-format rule shape.
-    and (not p_document ? 'formatting' or (
+    and (p_kind = 'current_layout' or (
       pg_catalog.jsonb_typeof(p_document -> 'formatting') = 'array'
-      and pg_catalog.jsonb_array_length(p_document -> 'formatting') between 1 and 20
+      and pg_catalog.jsonb_array_length(p_document -> 'formatting') between 0 and 20
       and not exists (
         select 1 from pg_catalog.jsonb_array_elements(p_document -> 'formatting') as entry(value)
         where not vortex_platform.grid_view_format_rule_valid_internal(entry.value)

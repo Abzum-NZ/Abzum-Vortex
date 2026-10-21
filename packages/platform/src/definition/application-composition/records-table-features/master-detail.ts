@@ -5,7 +5,9 @@ import {
   featureAvailable,
   featureEnabled,
   featureNotPossible,
-  fieldList,
+  optionalNumber,
+  requiredFieldList,
+  unreadable,
   type RecordsTableFeatureDefinition,
 } from "./shared";
 
@@ -28,19 +30,23 @@ export type RecordsTableMasterDetailSettings = Readonly<{
   bindings: QueryBindingsRead;
 }>;
 
-const settingRelationship = (value: ComponentSettingValue | undefined): string | undefined =>
-  value?.kind !== "relationship_reference"
-    ? undefined
-    : "relationshipId" in value
-      ? String(value.relationshipId)
-      : String(value.relationship);
+const settingRelationship = (
+  value: ComponentSettingValue | undefined,
+  path: string,
+): string | undefined => {
+  if (value === undefined) return undefined;
+  if (value.kind !== "relationship_reference") return unreadable(path);
+  return "relationshipId" in value ? String(value.relationshipId) : String(value.relationship);
+};
 
-const settingQuery = (value: ComponentSettingValue | undefined): string | undefined =>
-  value?.kind !== "query_reference"
-    ? undefined
-    : "queryId" in value
-      ? String(value.queryId)
-      : String(value.query);
+const settingQuery = (
+  value: ComponentSettingValue | undefined,
+  path: string,
+): string | undefined => {
+  if (value === undefined) return undefined;
+  if (value.kind !== "query_reference") return unreadable(path);
+  return "queryId" in value ? String(value.queryId) : String(value.query);
+};
 
 const same = (left: string, right: string): boolean => left.toLowerCase() === right.toLowerCase();
 
@@ -52,16 +58,16 @@ export const recordsTableMasterDetailFeature: RecordsTableFeatureDefinition<Reco
     label: "Related records",
     description: "Expand a row to the records linked to it",
     read: (group) => {
-      if (featureEnabled(group) !== true) return { enabled: false };
-      const relationship = settingRelationship(group["relationship"]);
-      const childQuery = settingQuery(group["child_query"]);
-      const pageSize = group["child_page_size"];
+      if (!featureEnabled(group)) return { enabled: false };
+      const relationship = settingRelationship(group["relationship"], "relationship");
+      const childQuery = settingQuery(group["child_query"], "child_query");
+      const childPageSize = optionalNumber(group["child_page_size"], "child_page_size");
       return {
         enabled: true,
         ...(relationship === undefined ? {} : { relationship }),
         ...(childQuery === undefined ? {} : { childQuery }),
-        childColumns: fieldList(group["child_columns"]),
-        ...(pageSize?.kind === "number" ? { childPageSize: pageSize.value } : {}),
+        childColumns: requiredFieldList(group["child_columns"], "child_columns"),
+        ...(childPageSize === undefined ? {} : { childPageSize }),
         bindings: readQueryBindings(group),
       };
     },

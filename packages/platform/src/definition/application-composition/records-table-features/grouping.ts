@@ -3,13 +3,14 @@ import {
   featureAvailable,
   featureEnabled,
   featureNotPossible,
+  optionalChoice,
+  optionalField,
+  optionalNumber,
+  optionalText,
   recordsTablePivotDateUnits,
-  settingBoolean,
-  settingField,
-  settingOptionalChoice,
-  settingText,
-  type RecordsTableFeatureDefinition,
+  requiredBoolean,
   type RecordsTableFeatureCheck,
+  type RecordsTableFeatureDefinition,
   type RecordsTableFeatureState,
   type RecordsTableFieldFacts,
   type RecordsTablePivotDateUnit,
@@ -169,19 +170,18 @@ export const recordsTableGroupingFeature: RecordsTableFeatureDefinition<RecordsT
     label: "Group by",
     description: "Group the records by a choice, stage, link or date field, counted on the server",
     read: (group) => {
-      if (featureEnabled(group) !== true) return { enabled: false };
-      const field = settingField(group["field"]);
-      const unassignedLabel = settingText(group["unassigned_label"]);
-      const dateUnit = settingOptionalChoice(group["date_unit"], recordsTablePivotDateUnits);
-      const groupPageSize = group["group_page_size"];
-      const opensGrouped = settingBoolean(group["opens_grouped"]);
+      if (!featureEnabled(group)) return { enabled: false };
+      const field = optionalField(group["field"], "field");
+      const unassignedLabel = optionalText(group["unassigned_label"], "unassigned_label");
+      const dateUnit = optionalChoice(group["date_unit"], recordsTablePivotDateUnits, "date_unit");
+      const groupPageSize = optionalNumber(group["group_page_size"], "group_page_size");
       return {
         enabled: true,
         ...(field === undefined ? {} : { field }),
         ...(dateUnit === undefined ? {} : { dateUnit }),
-        ...(groupPageSize?.kind === "number" ? { groupPageSize: groupPageSize.value } : {}),
+        ...(groupPageSize === undefined ? {} : { groupPageSize }),
         ...(unassignedLabel === undefined ? {} : { unassignedLabel }),
-        ...(opensGrouped === undefined ? {} : { opensGrouped }),
+        opensGrouped: requiredBoolean(group["opens_grouped"], "opens_grouped"),
       };
     },
     check: checkRecordsTableGrouping,

@@ -14,7 +14,7 @@ import {
   type GridViewSharing,
 } from "./grid-view-state";
 import {
-  readRecordsTableContract,
+  recordsTableContractOrLog,
   type RecordsTableContract,
 } from "../definition/application-composition/records-display";
 import {
@@ -348,7 +348,7 @@ export const gridViewPlacement = (
   let found: Readonly<{ queryId: string; contract: RecordsTableContract }> | undefined;
   walkPageComposition(page.composition, (placement) => {
     if (placement.placementId.toLowerCase() !== placementId.toLowerCase()) return;
-    const contract = readRecordsTableContract(placementSettings(placement.props));
+    const contract = recordsTableContractOrLog(placementSettings(placement.props), "grid views");
     if (
       contract === undefined ||
       !contract.features.savedViews.enabled ||
@@ -373,7 +373,7 @@ const layoutFitsPlacement = (
   let permitted = false;
   walkPageComposition(page.composition, (placement) => {
     if (placement.placementId.toLowerCase() !== placementId.toLowerCase()) return;
-    const contract = readRecordsTableContract(placementSettings(placement.props));
+    const contract = recordsTableContractOrLog(placementSettings(placement.props), "grid views");
     if (
       contract === undefined ||
       typeof placement.vortex.queryId !== "string" ||

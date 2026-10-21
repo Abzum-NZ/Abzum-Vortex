@@ -15,11 +15,5 @@ export * from "./records-range-summary";
 export * from "./records-table-export-request";
 export * from "./records-table-batch-edit-request";
 export * from "./named-action-availability-schema";
-export type {
-  ConditionalColumnFormatProjection,
-  ConditionalFormattingProjection,
-  RecordsTableFeatureProjection,
-  RecordsTableInlineEditField,
-  RecordsTableInlineEditor,
-  RecordsTableRowFormat,
-} from "./records-table-features";
+export * from "./records-table-feature-projection";
+export type { RecordsTableRowFormat } from "./records-table-features";

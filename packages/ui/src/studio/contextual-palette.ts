@@ -45,7 +45,7 @@ export type StudioPaletteChoice = Readonly<{
   unavailableWhenFilled?: string;
 }>;
 
-export type StudioPaletteGroup = Readonly<{
+type StudioPaletteGroup = Readonly<{
   group: BlockPaletteGroup;
   label: string;
   choices: readonly StudioPaletteChoice[];
@@ -74,7 +74,7 @@ const editableKinds = new Set<BlockPropertySchemaContract["kind"]>([
 ]);
 
 /** Whether Studio's typed setting controls edit a setting of this declaration, nested settings included. */
-export const studioSettingEditable = (property: BlockPropertySchemaContract): boolean =>
+const studioSettingEditable = (property: BlockPropertySchemaContract): boolean =>
   property.kind === "group"
     ? property.properties.every(studioSettingEditable)
     : property.kind === "list"

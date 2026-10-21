@@ -1,14 +1,16 @@
 import {
+  factsOf,
   featureAvailable,
   featureEnabled,
   featureNotPossible,
-  factsOf,
-  settingField,
-  settingOptionalChoice,
+  optionalChoice,
+  optionalField,
+  optionalNumber,
   recordsTablePivotDateUnits,
+  requiredBoolean,
   type RecordsTableFeatureDefinition,
-  type RecordsTablePivotDateUnit,
   type RecordsTableFieldFacts,
+  type RecordsTablePivotDateUnit,
 } from "./shared";
 
 /** The most values a pivot's column dimension may hold; the server refuses a wider one. */
@@ -89,21 +91,26 @@ export const recordsTablePivotFeature: RecordsTableFeatureDefinition<RecordsTabl
   label: "Pivot",
   description: "Show records as rows crossed with columns, totalled on the server",
   read: (group) => {
-    if (featureEnabled(group) !== true) return { enabled: false };
-    const rowField = settingField(group["row_field"]);
-    const columnField = settingField(group["column_field"]);
-    const measureField = settingField(group["measure_field"]);
-    const rowDateUnit = settingOptionalChoice(group["row_date_unit"], recordsTablePivotDateUnits);
-    const columnDateUnit = settingOptionalChoice(
+    if (!featureEnabled(group)) return { enabled: false };
+    const rowField = optionalField(group["row_field"], "row_field");
+    const columnField = optionalField(group["column_field"], "column_field");
+    const measureField = optionalField(group["measure_field"], "measure_field");
+    const rowDateUnit = optionalChoice(
+      group["row_date_unit"],
+      recordsTablePivotDateUnits,
+      "row_date_unit",
+    );
+    const columnDateUnit = optionalChoice(
       group["column_date_unit"],
       recordsTablePivotDateUnits,
+      "column_date_unit",
     );
-    const measureFunction = settingOptionalChoice(
+    const measureFunction = optionalChoice(
       group["measure_function"],
       recordsTablePivotMeasureFunctions,
+      "measure_function",
     );
-    const rowPageSize = group["row_page_size"];
-    const totals = group["totals"];
+    const rowPageSize = optionalNumber(group["row_page_size"], "row_page_size");
     return {
       enabled: true,
       ...(rowField === undefined ? {} : { rowField }),
@@ -112,8 +119,8 @@ export const recordsTablePivotFeature: RecordsTableFeatureDefinition<RecordsTabl
       ...(columnDateUnit === undefined ? {} : { columnDateUnit }),
       ...(measureFunction === undefined ? {} : { measureFunction }),
       ...(measureField === undefined ? {} : { measureField }),
-      totals: totals?.kind === "boolean" && totals.value,
-      ...(rowPageSize?.kind === "number" ? { rowPageSize: rowPageSize.value } : {}),
+      totals: requiredBoolean(group["totals"], "totals"),
+      ...(rowPageSize === undefined ? {} : { rowPageSize }),
     };
   },
   // A pivot needs two different dimensions the bound query selects: a choice field (at most 50

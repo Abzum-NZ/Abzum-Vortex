@@ -21,7 +21,9 @@ declare
   omitted_formatting integer := 0;
   document jsonb := p_document;
 begin
-  if not (p_document ? 'filters') and not (p_document ? 'sort') and not (p_document ? 'formatting') then
+  if pg_catalog.jsonb_array_length(p_document -> 'filters') = 0
+    and pg_catalog.jsonb_array_length(p_document -> 'sort') = 0
+    and pg_catalog.jsonb_array_length(p_document -> 'formatting') = 0 then
     return pg_catalog.jsonb_build_object(
       'document', document, 'hiddenFilters', 0, 'hiddenSorts', 0, 'hiddenFormatting', 0);
   end if;
@@ -65,10 +67,7 @@ begin
       with ordinality as filter(value, ordinal)
     where pg_catalog.lower(filter.value ->> 'fieldId') = any(readable);
     omitted := pg_catalog.jsonb_array_length(p_document -> 'filters') - pg_catalog.jsonb_array_length(filters);
-    document := document - 'filters';
-    if pg_catalog.jsonb_array_length(filters) > 0 then
-      document := document || pg_catalog.jsonb_build_object('filters', filters);
-    end if;
+    document := document || pg_catalog.jsonb_build_object('filters', filters);
   end if;
   if p_document ? 'sort' then
     select coalesce(pg_catalog.jsonb_agg(sort.value order by sort.ordinal), '[]'::jsonb)
@@ -77,10 +76,7 @@ begin
       with ordinality as sort(value, ordinal)
     where pg_catalog.lower(sort.value ->> 'fieldId') = any(readable);
     omitted_sorts := pg_catalog.jsonb_array_length(p_document -> 'sort') - pg_catalog.jsonb_array_length(sorts);
-    document := document - 'sort';
-    if pg_catalog.jsonb_array_length(sorts) > 0 then
-      document := document || pg_catalog.jsonb_build_object('sort', sorts);
-    end if;
+    document := document || pg_catalog.jsonb_build_object('sort', sorts);
   end if;
   if p_document ? 'formatting' then
     -- A rule leaves with everything it stores (its comparison values and targets) unless every
@@ -101,10 +97,7 @@ begin
       );
     omitted_formatting := pg_catalog.jsonb_array_length(p_document -> 'formatting')
       - pg_catalog.jsonb_array_length(formatting);
-    document := document - 'formatting';
-    if pg_catalog.jsonb_array_length(formatting) > 0 then
-      document := document || pg_catalog.jsonb_build_object('formatting', formatting);
-    end if;
+    document := document || pg_catalog.jsonb_build_object('formatting', formatting);
   end if;
   if omitted > 0 or omitted_sorts > 0 or omitted_formatting > 0 then
     raise log 'Grid view state omitted code=GRID_VIEW_FIELDS_WITHHELD filters=% sorts=% formatting=%',
