@@ -27,6 +27,9 @@ const studioStyle = createVortexStyleRootProps(
 export const STUDIO_DOCUMENT_THEME = {
   ...studioTheme,
   ...studioStyle,
+  // Studio's own marker: the Studio rule below matches only while Studio is on screen, never an
+  // application that happens to pick Studio's style, menu and accent.
+  "data-vortex-surface": "studio",
   style: { ...studioTheme.style, ...studioStyle.style },
 };
 
@@ -45,8 +48,9 @@ export const PLATFORM_ROOT_CSS = variablesRule(":root", {
 });
 
 // Studio's fixed definition also supplies its first paint through a cached stylesheet. A surface
-// overrides these variables inline. Leaving a surface restores the platform attributes, which no
-// longer match this selector, so the platform defaults apply even if the stylesheet stays loaded.
+// overrides these variables inline. Leaving Studio removes its surface marker, which no longer
+// matches this selector, so the platform defaults apply even if the stylesheet stays loaded (an
+// application writes only the variables that differ from them).
 const { style: studioDocumentStyle, ...studioDocumentAttributes } = STUDIO_DOCUMENT_THEME;
 export const STUDIO_ROOT_CSS = variablesRule(
   `:root${Object.entries(studioDocumentAttributes)

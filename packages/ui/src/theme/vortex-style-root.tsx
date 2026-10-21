@@ -25,6 +25,9 @@ const PLATFORM_STYLE_ATTRIBUTES: Readonly<
   "data-vortex-menu-accent": platformStyle["data-vortex-menu-accent"],
 };
 
+/** The marker of a surface with its own document rule (Studio); the root has none elsewhere. */
+const SURFACE_ATTRIBUTE = "data-vortex-surface";
+
 /** The theme variables of a style: its custom properties, in order. */
 const themeVariables = (style: React.CSSProperties | undefined): [string, string][] =>
   Object.entries(style ?? {}).flatMap(([name, value]) =>
@@ -54,7 +57,12 @@ function useDocumentTheme(
       const value = element.getAttribute(name);
       if (value !== null && root.getAttribute(name) !== value) root.setAttribute(name, value);
     }
+    const surface = element.getAttribute(SURFACE_ATTRIBUTE);
+    if (surface === null) root.removeAttribute(SURFACE_ATTRIBUTE);
+    else if (root.getAttribute(SURFACE_ATTRIBUTE) !== surface)
+      root.setAttribute(SURFACE_ATTRIBUTE, surface);
     return () => {
+      root.removeAttribute(SURFACE_ATTRIBUTE);
       for (const [name] of variables) root.style.removeProperty(name);
       for (const name of DOCUMENT_THEME_ATTRIBUTES)
         root.setAttribute(name, PLATFORM_STYLE_ATTRIBUTES[name]);
@@ -81,7 +89,9 @@ export function VortexStyleRoot({
     [variablesKey],
   );
   const attributes = JSON.stringify(
-    DOCUMENT_THEME_ATTRIBUTES.map((name) => (props as Record<string, unknown>)[name]),
+    [...DOCUMENT_THEME_ATTRIBUTES, SURFACE_ATTRIBUTE].map(
+      (name) => (props as Record<string, unknown>)[name],
+    ),
   );
   useDocumentTheme(element, documentTheme, variables, attributes);
   const ownStyle = documentTheme
