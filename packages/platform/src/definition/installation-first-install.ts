@@ -11,9 +11,13 @@ import {
   type OrganizationId,
   type SystemApplicationBoundReleaseSetResult,
 } from "../schema";
-import { DefinitionError } from "./definition-error";
+import { DefinitionError, classifyDatabaseError } from "./definition-error";
 import { createDatabaseFirstInstallApplicationReleaseSetService } from "./application-bound-release-set";
-import { installationProblem, type InstallationHumanContext } from "./installation-authority";
+import {
+  installationProblem,
+  refuseInstallationAuthority,
+  type InstallationHumanContext,
+} from "./installation-authority";
 import { releaseSetModuleTuples, type InstallationBindings } from "./installation-binding-reader";
 import type { ImmutableDefinitionPublicationCatalogueDefinition } from "./publication/read";
 
@@ -182,7 +186,9 @@ export const readApplicationLatestRelease = async (
       select vortex_definition.read_application_latest_release(${rootId}::uuid) as latest
     `;
   } catch (error) {
-    return installationProblem("latest_release_unreadable", "refused", undefined, { cause: error });
+    // The database reads the latest release only for a person who may manage applications.
+    if (classifyDatabaseError(error) === "refused") return refuseInstallationAuthority(error);
+    throw error;
   }
   if (rows.length !== 1) return installationProblem("latest_release_unreadable", "temporarily_unavailable");
   if (rows[0]?.latest === null) return firstInstallUnavailable("release_not_published");
