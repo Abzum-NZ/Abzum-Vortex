@@ -4,6 +4,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { z } from "zod";
 import {
   executeNamedActionCommandSchema,
+  flowWarningNoticeSchema,
   executionAuthorityContextSchema,
   flowMaximumServerSeconds,
   identitySessionSchema,
@@ -85,13 +86,15 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
       const failedTaskId = step.result.failure.taskId;
       // A task the platform could not run ends the run as not available, never as a refusal.
       const notAvailable =
-        failedTaskId !== undefined && run.unavailable.some((notice) => notice.taskId === failedTaskId);
+        failedTaskId !== undefined &&
+        run.unavailable.some((notice) => notice.taskId === failedTaskId);
       if (failedTaskId === undefined || !run.refusalLoggedTaskIds.includes(failedTaskId))
         console.error(
           `[flows] run ${step.state.runId} of flow ${run.flowId} ended ${step.result.failure.outcome} (${step.result.failure.code}) at task ${failedTaskId ?? "(none)"}${step.result.failure.reason === undefined ? "" : `: ${step.result.failure.reason}`}`,
         );
       return {
         kind: "finished",
+        warnings: run.warnings,
         runId: step.state.runId,
         outcome: step.result.failure.outcome,
         committedEffects: step.state.committedEffects,
@@ -109,6 +112,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
     }
     return {
       kind: "finished",
+      warnings: run.warnings,
       runId: step.state.runId,
       outcome: step.state.committedEffects > 0 ? "committed" : "completed",
       committedEffects: step.state.committedEffects,
@@ -123,6 +127,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
 
   const limitExceeded = (run: Run, state: FlowRunState): FlowOrchestratorResponse => ({
     kind: "finished",
+    warnings: run.warnings,
     runId: state.runId,
     outcome: "failed",
     committedEffects: state.committedEffects,
@@ -131,7 +136,6 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
     intents: [],
     unavailable: run.unavailable,
   });
-
 
   /**
    * The record a flow with a record input runs for, read afresh for the verified initiator: at the
@@ -147,14 +151,19 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
     if (flow?.recordInput === undefined) return undefined;
     const recordTypeId = flow.inputs[flow.recordInput]?.recordTypeIds?.[0];
     if (recordTypeId === undefined || typeof recordId !== "string" || recordId.length === 0) {
-      console.error(`[flows] flow ${flow.id} was started without the record its input ${flow.recordInput} names`);
+      console.error(
+        `[flows] flow ${flow.id} was started without the record its input ${flow.recordInput} names`,
+      );
       return "unavailable";
     }
     if (dependencies.currentRecords === undefined) {
       console.error(`[flows] flow ${flow.id} reads its record, but this host reads no records`);
       return "unavailable";
     }
-    const read = await dependencies.currentRecords.read(session, selection, { recordTypeId, recordId });
+    const read = await dependencies.currentRecords.read(session, selection, {
+      recordTypeId,
+      recordId,
+    });
     if (read.outcome === "read") return read.values;
     console.error(`[flows] the record of flow ${flow.id} is not available to the initiator`);
     return "unavailable";
@@ -171,6 +180,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
     if (run.selectedRecordReadSeen)
       return {
         kind: "finished",
+        warnings: run.warnings,
         runId: step.state.runId,
         outcome: "failed",
         committedEffects: step.state.committedEffects,
@@ -196,7 +206,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
           identityId: session.identityId,
           flowId: run.flowId,
           releaseKey: run.release.releaseKey,
-          state,
+          state: { state, warnings: run.warnings },
           elapsedMilliseconds: Math.min(elapsedMilliseconds(run), 3_600_000),
           lifetimeSeconds: flowContinuationLifetimeSeconds,
         });
@@ -207,6 +217,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
     if (stored === undefined)
       return {
         kind: "finished",
+        warnings: run.warnings,
         runId: step.state.runId,
         outcome: "failed",
         committedEffects: step.state.committedEffects,
@@ -341,7 +352,10 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
     ): Promise<NamedActionExecutionResult> {
       try {
         const parsed = z
-          .object({ session: identitySessionSchema, selection: organizationSelectionCandidateSchema })
+          .object({
+            session: identitySessionSchema,
+            selection: organizationSelectionCandidateSchema,
+          })
           .safeParse({ session, selection });
         const command = executeNamedActionCommandSchema.safeParse(commandCandidate);
         if (!parsed.success || !command.success) return { kind: "unavailable" };
@@ -388,6 +402,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
           carriedMilliseconds: 0,
           segmentStart: clock(),
           unavailable: [],
+          warnings: [],
           refusalLoggedTaskIds: [],
           sensitive: [],
           selectedRecordReadSeen: false,
@@ -478,7 +493,8 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
         if (
           principal.state !== "active" ||
           principal.actor.kind !== flow.runAs.kind ||
-          principal.executionBindingId.toLowerCase() !== flow.runAs.executionBindingId.toLowerCase() ||
+          principal.executionBindingId.toLowerCase() !==
+            flow.runAs.executionBindingId.toLowerCase() ||
           principal.organizationId.toLowerCase() !== intent.organizationId.toLowerCase() ||
           principal.applicationRootId.toLowerCase() !== intent.applicationRootId.toLowerCase() ||
           principal.releaseVersion !== intent.applicationReleaseVersion ||
@@ -515,6 +531,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
           carriedMilliseconds: 0,
           segmentStart: clock(),
           unavailable: [],
+          warnings: [],
           refusalLoggedTaskIds: [],
           sensitive: [],
           selectedRecordReadSeen: false,
@@ -567,7 +584,11 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
           releaseKey: prepared.release.releaseKey,
         });
         if (stored === undefined) return refused;
-        const state = stored.state as FlowRunState;
+        const snapshot = z
+          .object({ state: z.unknown(), warnings: z.array(flowWarningNoticeSchema) })
+          .strict()
+          .parse(stored.state);
+        const state = snapshot.state as FlowRunState;
         // The stored run must be the run the row is bound to; anything else is never resumed.
         if (!isRecord(state) || state.runId !== stored.runId) return refused;
         if (!subjectSchema.optional().safeParse(state.subject).success) return refused;
@@ -593,7 +614,9 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
           session,
           selection,
           rootFlow,
-          rootFlow?.recordInput === undefined ? undefined : root?.inputs[rootFlow.recordInput]?.value,
+          rootFlow?.recordInput === undefined
+            ? undefined
+            : root?.inputs[rootFlow.recordInput]?.value,
         );
         if (triggerRecord === "unavailable") return refused;
         const run: Run = {
@@ -606,6 +629,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
           carriedMilliseconds: stored.elapsedMilliseconds,
           segmentStart: clock(),
           unavailable: [],
+          warnings: snapshot.warnings,
           refusalLoggedTaskIds: [],
           sensitive: [],
           selectedRecordReadSeen: false,

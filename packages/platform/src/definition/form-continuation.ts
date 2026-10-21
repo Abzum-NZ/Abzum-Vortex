@@ -71,7 +71,8 @@ const refuse = (reason: FormContinuationRefusalReason): FormContinuationOutcome 
  * `uncertain`, which is never reported as success or as a clean failure.
  */
 const finishedResult = (
-  outcome: "committed" | "completed" | "refused" | "conflict" | "validation" | "uncertain" | "failed",
+  outcome:
+    "committed" | "completed" | "refused" | "conflict" | "validation" | "uncertain" | "failed",
   committedEffects: number,
 ): SafeFlowResultKind =>
   outcome === "committed" || outcome === "completed" || outcome === "uncertain"
@@ -131,6 +132,7 @@ export const createFormContinuationService = (
     const result = finishedResult(response.outcome, response.committedEffects);
     return {
       kind: "finished",
+      warnings: [...response.warnings],
       runId: response.runId,
       receipt: { runId: response.runId, committedEffects: response.committedEffects },
       result,

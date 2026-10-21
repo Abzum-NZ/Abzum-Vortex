@@ -21,6 +21,7 @@ import { requestDependencies, loadInstalledContext } from "./load";
 import type { DateTimeZones, PageDataState } from "./types";
 import { platformPermissionSource } from "../platform-permission-source";
 import { formFieldOf } from "./form-field-access";
+import { withContributedPlacements } from "./contributed-placements";
 
 export type ReferenceChoicePageResult =
   | Readonly<{ kind: "completed"; values: ReferenceChoiceInputValues }>
@@ -101,7 +102,15 @@ export const projectReferenceChoicePage = async (
   }).project(session, selection);
   if (projected.kind === "temporarily_unavailable") return { kind: "temporarily_unavailable" };
   if (projected.kind !== "available" || projected.value === undefined) return { kind: "refused" };
-  return { kind: "available", page: projected.value, context, selection, dependencies };
+  // The page a form submit is checked against carries the same contributed field inputs the
+  // viewer was shown.
+  return {
+    kind: "available",
+    page: withContributedPlacements(projected.value, context, pageDefinition),
+    context,
+    selection,
+    dependencies,
+  };
 };
 
 /** A form field may show only a value the page subject read returned for its own record type. */

@@ -120,6 +120,7 @@ export function applicationPageRules(scope: ApplicationScope): void {
     bound: JsonObject,
     page: RecordsTableRelatedRecordsFacts["page"],
     signedIn: boolean,
+    columnFieldIds: readonly string[],
   ): RecordsTableQueryFacts => {
     const recordTypeId = String(object(bound.recordType).recordTypeId);
     const record = records.get(recordTypeId);
@@ -133,6 +134,7 @@ export function applicationPageRules(scope: ApplicationScope): void {
       signedIn,
       recordTypeLabel: String(record?.singularLabel ?? ""),
       maximumPageSize: typeof bound.pageSize === "number" ? bound.pageSize : undefined,
+      columnFieldIds,
       fields: array(record?.fields)
         .filter((field) => offered.has(String(field.fieldId).toLowerCase()))
         .map((field) => {
@@ -585,7 +587,12 @@ export function applicationPageRules(scope: ApplicationScope): void {
         // own business sentence, the one Studio shows beside its switch.
         for (const feature of checkRecordsTableFeatures(
           table.features,
-          recordsTableQueryFacts(bound, bindingFacts, page.type !== "public"),
+          recordsTableQueryFacts(
+            bound,
+            bindingFacts,
+            page.type !== "public",
+            table.columns.map((column) => column.field),
+          ),
           table.presentation,
           table.pageSize,
         ))

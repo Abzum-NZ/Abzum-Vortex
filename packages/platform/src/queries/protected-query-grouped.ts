@@ -65,7 +65,7 @@ const readGroupedMemberPage = async (
         groupMember: selector,
       })}::text::jsonb,
       ${command.pageDirection ?? "forward"}::text,
-      ${null}::uuid
+      ${null}::uuid[]
     ) as result
   `;
   return groupedMemberPageReadSchema.parse(one(rows));

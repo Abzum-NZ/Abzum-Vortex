@@ -212,7 +212,9 @@ const read = async (
           sortableFieldIds: [],
           filterableFieldIds: [],
           searchableFieldIds: [],
-        })}::text::jsonb
+        })}::text::jsonb,
+        'forward'::text,
+        null::uuid[]
       ) as result`;
     const milliseconds = performance.now() - started;
     const result = row!.result as {

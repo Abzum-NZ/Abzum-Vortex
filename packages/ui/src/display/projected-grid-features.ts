@@ -14,7 +14,11 @@ import {
   recordsTableBulkRefusalReasons,
   recordsTableFilterKinds,
   RECORDS_TABLE_EXPORT_MAXIMUM_ROWS,
+  recordsTableExportFormats,
   RECORDS_TABLE_MAXIMUM_SEARCH_LENGTH,
+  RECORDS_TABLE_STATUS_BAR_MAXIMUM_FIELDS,
+  recordsTableStatusBarOperations,
+  type RecordsTableStatusBarOperation,
   namedActionAvailabilitySchema,
   type NamedActionAvailability,
 } from "@vortex/platform/schema";
@@ -596,7 +600,7 @@ export const parseTableFeatures = (
   let exportFeature: RecordsTableFeatureProjection["export"];
   if (record.export !== undefined) {
     const exported = requireRecord(record.export, "Projected export is invalid", location);
-    requireExactKeys(exported, ["maxRows"], location);
+    requireExactKeys(exported, ["maxRows", "formats"], location);
     if (
       typeof exported.maxRows !== "number" ||
       !Number.isInteger(exported.maxRows) ||
@@ -604,7 +608,22 @@ export const parseTableFeatures = (
       exported.maxRows > RECORDS_TABLE_EXPORT_MAXIMUM_ROWS
     )
       fail("Projected export has an invalid row limit", location);
-    exportFeature = Object.freeze({ maxRows: exported.maxRows as number });
+    const formats = requireArray(
+      exported.formats,
+      "Projected export formats are invalid",
+      location,
+    );
+    if (
+      formats.length === 0 ||
+      formats.length > recordsTableExportFormats.length ||
+      new Set(formats).size !== formats.length ||
+      formats.some((format) => !recordsTableExportFormats.some((known) => known === format))
+    )
+      fail("Projected export formats are invalid", location);
+    exportFeature = Object.freeze({
+      maxRows: exported.maxRows as number,
+      formats: Object.freeze(formats as (typeof recordsTableExportFormats)[number][]),
+    });
   }
   let rowEdit: RecordsTableFeatureProjection["rowEdit"];
   if (record.rowEdit !== undefined) {
@@ -706,16 +725,51 @@ export const parseTableFeatures = (
       "Projected spreadsheet controls are invalid",
       location,
     );
-    requireExactKeys(controls, ["rangeSelect", "find"], location);
+    requireExactKeys(controls, ["rangeSelect", "find", "statusBar"], location);
     if (
       typeof controls.rangeSelect !== "boolean" ||
       typeof controls.find !== "boolean" ||
       (!controls.rangeSelect && !controls.find)
     )
       fail("Projected spreadsheet controls need an enabled control", location);
+    let statusBar: NonNullable<RecordsTableFeatureProjection["spreadsheet"]>["statusBar"];
+    if (controls.statusBar !== undefined) {
+      const bar = requireRecord(
+        controls.statusBar,
+        "The projected status bar is invalid",
+        location,
+      );
+      requireExactKeys(bar, ["fields", "operations"], location);
+      const fields = requireArray(bar.fields, "The status bar fields are invalid", location).map(
+        (field) => requireFieldKey(field, "A status bar field needs a stable key", location),
+      );
+      const operations = requireArray(
+        bar.operations,
+        "The status bar totals are invalid",
+        location,
+      ).map(
+        (operation) =>
+          recordsTableStatusBarOperations.find((known) => known === operation) ??
+          fail(`Unknown status bar total '${String(operation)}'`, location),
+      ) as RecordsTableStatusBarOperation[];
+      if (
+        controls.rangeSelect !== true ||
+        fields.length === 0 ||
+        operations.length === 0 ||
+        fields.length > RECORDS_TABLE_STATUS_BAR_MAXIMUM_FIELDS ||
+        new Set(fields).size !== fields.length ||
+        new Set(operations).size !== operations.length
+      )
+        fail("The projected status bar needs a range and distinct fields and totals", location);
+      statusBar = Object.freeze({
+        fields: Object.freeze(fields),
+        operations: Object.freeze(operations),
+      });
+    }
     spreadsheet = Object.freeze({
       rangeSelect: controls.rangeSelect as boolean,
       find: controls.find as boolean,
+      ...(statusBar === undefined ? {} : { statusBar }),
     });
   }
   return Object.freeze({
@@ -752,7 +806,8 @@ export type TableGroup = Readonly<{
 /**
  * The groups a grouped table was read with: one bounded count per group from the same read as the
  * table's filters and search, or the statement that there are too many filtered records to count
- * them in groups. The open group's key is one of the groups.
+ * them in groups. The open group's key is one of the groups. The groups continue in pages: `page`
+ * says whether this is the first and where the next one starts.
  */
 export type TableGroups =
   | Readonly<{
@@ -761,6 +816,8 @@ export type TableGroups =
       groups: readonly TableGroup[];
       total: number;
       expanded?: string;
+      /** Where this page of groups sits: the first one, and the opaque position of the next page. */
+      page: Readonly<{ first: boolean; next?: string }>;
     }>
   | Readonly<{ status: "too_many" }>;
 
@@ -774,7 +831,15 @@ export const parseTableGroups = (
     return Object.freeze({ status: "too_many" as const });
   }
   if (record.status !== "ready") return fail("Projected groups need a status", location);
-  requireExactKeys(record, ["status", "fieldId", "groups", "total", "expanded"], location);
+  requireExactKeys(record, ["status", "fieldId", "groups", "total", "expanded", "page"], location);
+  const position = requireRecord(record.page, "Projected groups need their page", location);
+  requireExactKeys(position, ["first", "next"], location);
+  if (typeof position.first !== "boolean")
+    fail("A group page says whether it is the first", location);
+  const next =
+    position.next === undefined
+      ? undefined
+      : requireNonEmptyString(position.next, "The next group page needs its position", location);
   const groups = requireArray(record.groups, "Projected groups must be an array", location).map(
     (item): TableGroup => {
       const group = requireRecord(item, "A projected group must be an object", location);
@@ -807,5 +872,9 @@ export const parseTableGroups = (
     groups: Object.freeze(groups),
     total: record.total as number,
     ...(expanded === undefined ? {} : { expanded }),
+    page: Object.freeze({
+      first: position.first as boolean,
+      ...(next === undefined ? {} : { next }),
+    }),
   });
 };

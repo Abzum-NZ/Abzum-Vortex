@@ -1,6 +1,13 @@
 import "server-only";
 
-import { describeFailure, sameId, type JsonValue, type RecordsTableContract } from "../../schema";
+import {
+  describeFailure,
+  recordsTableGroupingFieldTypes,
+  sameId,
+  type JsonValue,
+  type RecordsTableContract,
+  type RecordsTableGroupingFieldType,
+} from "../../schema";
 import {
   decodeRecordsTableFieldFilter,
   readRecordsTableQueryState,
@@ -228,14 +235,25 @@ export const readRecordsTable = async (
       ([fieldId]) => readable === undefined || readable.has(fieldId),
     ),
   );
-  const timeZone = contract.features.columnFilters.enabled
-    ? await filterTimeZone(
-        read,
-        contract.features.columnFilters.fields.some(
-          (field) => filterTargets[field.toLowerCase()]?.type === "date_time",
-        ),
-      )
-    : undefined;
+  // A grouping by a date field buckets it in the same zone, read only while the address groups.
+  const groupingFeature = contract.features.grouping;
+  const groupingField =
+    groupingFeature.enabled && groupingFeature.field !== undefined
+      ? bound.module.content.recordTypes
+          .flatMap((candidate) => candidate.fields)
+          .find((field) => sameId(String(field.fieldId), groupingFeature.field!))
+      : undefined;
+  const groupingDates =
+    addressed.state.group !== undefined &&
+    (groupingField?.type === "date" || groupingField?.type === "date_time");
+  const timeZone = await filterTimeZone(
+    read,
+    (contract.features.columnFilters.enabled &&
+      contract.features.columnFilters.fields.some(
+        (field) => filterTargets[field.toLowerCase()]?.type === "date_time",
+      )) ||
+      groupingDates,
+  );
   if (timeZone === "unavailable") {
     logPlacementFailure(address, placementId, "table_time_zone_unavailable");
     data[placementId] = { status: "error" };
@@ -299,10 +317,15 @@ export const readRecordsTable = async (
   // authored one: the address may only switch grouping on or off, never name another field. A
   // members-only read (an open group's own pages) counts no group and takes its page position
   // from the group read, never from the address.
-  const groupingFeature = contract.features.grouping;
   if (
     groupingFeature.enabled &&
-    (groupingFeature.field === undefined || groupingFeature.unassignedLabel === undefined)
+    (groupingFeature.field === undefined ||
+      groupingFeature.unassignedLabel === undefined ||
+      groupingFeature.groupPageSize === undefined ||
+      groupingField === undefined ||
+      !(recordsTableGroupingFieldTypes as readonly string[]).includes(groupingField.type) ||
+      ((groupingField.type === "date" || groupingField.type === "date_time") &&
+        groupingFeature.dateUnit === undefined))
   ) {
     logPlacementFailure(address, placementId, "table_grouping_invalid");
     data[placementId] = { status: "error" };
@@ -330,9 +353,16 @@ export const readRecordsTable = async (
     groupingFeature.enabled &&
     groupingFeature.field !== undefined &&
     groupingFeature.unassignedLabel !== undefined &&
+    groupingFeature.groupPageSize !== undefined &&
+    groupingField !== undefined &&
     addressedGroup !== undefined
       ? {
           fieldId: groupingFeature.field.toLowerCase(),
+          fieldType: groupingField.type as RecordsTableGroupingFieldType,
+          ...(groupingFeature.dateUnit === undefined ? {} : { dateUnit: groupingFeature.dateUnit }),
+          ...(timeZone === undefined ? {} : { timeZone }),
+          pageSize: groupingFeature.groupPageSize,
+          after: addressedGroup.after,
           unassignedLabel: groupingFeature.unassignedLabel,
           expanded: groupMembers?.groupKey ?? addressedGroup.expanded,
           membersOnly: groupMembers !== undefined,
@@ -420,7 +450,11 @@ export const readRecordsTable = async (
     console.error(
       `[page] data placement refused: class=${resolved.reasonCode === undefined ? "records_table" : "protected_query"} code=${resolved.reasonCode ?? "query_refused"}`,
     );
-    data[placementId] = { status: "refused", reason: "not_permitted" };
+    // A date group that left the supported years has its own business sentence.
+    data[placementId] = {
+      status: "refused",
+      reason: resolved.reasonCode === "value_out_of_range" ? "value_out_of_range" : "not_permitted",
+    };
   } else if (resolved.display.status === "empty") data[placementId] = { status: "empty" };
   else {
     let values = resolved.display.values;
@@ -435,12 +469,15 @@ export const readRecordsTable = async (
       );
       values = { ...values, features: { ...values.features, rowActions } };
     }
-    // Bulk actions may run over every matching record: the read seals what it matched (release,
-    // resolved inputs and query state minus the page) for this viewer, with no extra read.
+    // Bulk actions may run over every matching record, an export over the shown rows, and the
+    // status bar totals the shown rows: the read seals what it matched (release, resolved inputs
+    // and query state minus the page) for this viewer, with no extra read.
     const seal = read.services.tables.sealSelection;
     const selectionToken =
       seal === undefined ||
-      (values.features?.bulkActions === undefined && values.features?.export === undefined)
+      (values.features?.bulkActions === undefined &&
+        values.features?.export === undefined &&
+        values.features?.spreadsheet?.statusBar === undefined)
         ? undefined
         : seal({
             installationRevision: read.context.applicationReleaseRevision,

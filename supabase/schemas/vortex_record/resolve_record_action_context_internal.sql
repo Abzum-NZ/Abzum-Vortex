@@ -69,6 +69,13 @@ begin
     from vortex_definition.runtime_releases as release
     where release.root_id = module_root_id_value
       and release.release_revision = module_release_revision_value;
+    -- The owner record type this action context resolves carries the fields other installed
+    -- Modules contributed to it; a preview runs its own storage and receives none.
+    if preview_installation_id_value is null then
+      module_content := vortex_record.with_installed_record_contributions_internal(
+        module_content, (context_value ->> 'organizationId')::uuid, module_root_id_value
+      );
+    end if;
 
     select item.value into candidate_record_type_value
     from pg_catalog.jsonb_array_elements(module_content -> 'recordTypes') as item(value)

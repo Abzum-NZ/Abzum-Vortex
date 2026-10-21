@@ -10,7 +10,7 @@ import {
   type RecordChoiceCommand,
   type RecordLinkResolver,
   type InstalledRuntimeContext,
-  decideRecordTypeFieldIds,
+  readRecordTypeVisibleFieldIds,
 } from "@vortex/platform/server";
 import {
   isRecord,
@@ -313,8 +313,7 @@ export const loadRecordChoicePage = async (
     const readable = await createHumanOrganizationRequestService(dependencies).run(
       session,
       selection,
-      (transaction, scope) =>
-        decideRecordTypeFieldIds(transaction, scope, context, filtered.sourceRecordTypeId, "read"),
+      (transaction) => readRecordTypeVisibleFieldIds(transaction, filtered.sourceRecordTypeId),
     );
     if (readable.kind === "temporarily_unavailable") return readable;
     if (readable.kind !== "available" || !readable.value.has(request.fieldId.toLowerCase()))
@@ -346,14 +345,7 @@ export const loadRecordChoicePage = async (
       const readable = await createHumanOrganizationRequestService(dependencies).run(
         session,
         selection,
-        (transaction, scope) =>
-          decideRecordTypeFieldIds(
-            transaction,
-            scope,
-            context,
-            boundField.sourceRecordTypeId,
-            "read",
-          ),
+        (transaction) => readRecordTypeVisibleFieldIds(transaction, boundField.sourceRecordTypeId),
       );
       if (readable.kind === "temporarily_unavailable") return readable;
       if (readable.kind !== "available") return { kind: "refused", cause: "link_field_withheld" };

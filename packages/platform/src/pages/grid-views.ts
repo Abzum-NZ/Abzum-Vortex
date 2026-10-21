@@ -71,6 +71,7 @@ const storedViewRowsSchema = z
         shareGroupIds: z.array(idSchema),
         document: z.unknown().optional(),
         hiddenFilters: z.number().int().min(0).optional(),
+        hiddenSorts: z.number().int().min(0).optional(),
         hiddenFormatting: z.number().int().min(0).optional(),
       })
       .strict(),
@@ -79,6 +80,7 @@ const storedViewRowsSchema = z
 
 const storedReadSchema = z
   .object({
+    visibleFields: z.record(idSchema, z.array(idSchema)),
     defaultDocuments: z
       .array(
         z
@@ -86,6 +88,7 @@ const storedReadSchema = z
             viewId: idSchema,
             document: z.unknown(),
             hiddenFilters: z.number().int().min(0),
+            hiddenSorts: z.number().int().min(0),
             hiddenFormatting: z.number().int().min(0),
           })
           .strict(),
@@ -138,15 +141,23 @@ export type StoredNamedGridView = Readonly<{
   sharing: GridViewSharing;
   document: GridViewDocument | undefined;
   hiddenFilters: number;
+  hiddenSorts: number;
   hiddenFormatting: number;
 }>;
 
 /** Everything one page read returns of the store: layouts keyed by placement, views by placement. */
 export type StoredGridViews = Readonly<{
+  /** The columns the person may read, by access route, per requested record type (lower-cased). */
+  readable: ReadonlyMap<string, ReadonlySet<string>>;
   /** Authored documents narrowed by the same current field bounds as stored shared views. */
   defaultDocuments: ReadonlyMap<
     string,
-    Readonly<{ document: GridViewDocument; hiddenFilters: number; hiddenFormatting: number }>
+    Readonly<{
+      document: GridViewDocument;
+      hiddenFilters: number;
+      hiddenSorts: number;
+      hiddenFormatting: number;
+    }>
   >;
   roleKeys: ReadonlySet<string>;
   /** The placements (lower-cased) whose tables name a share permission the person holds now. */
@@ -216,6 +227,7 @@ export const readGridViews = async (
   pageId: string,
   placementIds: readonly string[],
   selectedViewIds: readonly string[],
+  recordTypeIds: readonly string[],
   defaultViews: readonly Readonly<{
     viewId: string;
     queryId: string;
@@ -227,7 +239,8 @@ export const readGridViews = async (
       ${pageId}::uuid,
       array(select pg_catalog.jsonb_array_elements_text(${JSON.stringify(placementIds)}::text::jsonb)::uuid),
       array(select pg_catalog.jsonb_array_elements_text(${JSON.stringify(selectedViewIds)}::text::jsonb)::uuid),
-      ${JSON.stringify(defaultViews)}::text::jsonb
+      ${JSON.stringify(defaultViews)}::text::jsonb,
+      array(select pg_catalog.jsonb_array_elements_text(${JSON.stringify(recordTypeIds)}::text::jsonb)::uuid)
     ) as result
   `;
   const read = stored("read", pageId, storedReadSchema, only(rows));
@@ -248,6 +261,7 @@ export const readGridViews = async (
         groupIds: row.shareGroupIds.map((id) => id.toLowerCase()),
       },
       hiddenFilters: row.hiddenFilters ?? 0,
+      hiddenSorts: row.hiddenSorts ?? 0,
       hiddenFormatting: row.hiddenFormatting ?? 0,
       document:
         row.document === undefined
@@ -257,12 +271,19 @@ export const readGridViews = async (
     views.set(placementId, [...(views.get(placementId) ?? []), named]);
   }
   return {
+    readable: new Map(
+      Object.entries(read.visibleFields).map(([recordTypeId, ids]) => [
+        recordTypeId.toLowerCase(),
+        new Set(ids.map((id) => id.toLowerCase())),
+      ]),
+    ),
     defaultDocuments: new Map(
       read.defaultDocuments.map((row) => [
         row.viewId.toLowerCase(),
         {
           document: stored("default view", row.viewId, gridViewDocumentSchema, row.document),
           hiddenFilters: row.hiddenFilters,
+          hiddenSorts: row.hiddenSorts,
           hiddenFormatting: row.hiddenFormatting,
         },
       ]),
@@ -309,6 +330,7 @@ export const addressedGridView = (
     },
     document: view.document,
     hiddenFilters: view.hiddenFilters,
+    hiddenSorts: view.hiddenSorts,
     hiddenFormatting: view.hiddenFormatting,
     sharing: view.mine || canShare ? view.sharing : null,
   };

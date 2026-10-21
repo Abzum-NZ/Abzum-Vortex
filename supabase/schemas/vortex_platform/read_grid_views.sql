@@ -2,7 +2,8 @@ create or replace function vortex_platform.read_grid_views(
   p_page_id uuid,
   p_placement_ids uuid[],
   p_selected_view_ids uuid[],
-  p_default_views jsonb
+  p_default_views jsonb,
+  p_record_type_ids uuid[]
 )
 returns jsonb
 language plpgsql
@@ -16,6 +17,8 @@ declare
   shareable uuid[] := '{}'::uuid[];
   installation jsonb;
   access_plan jsonb;
+  record_type_id uuid;
+  visible_fields jsonb := '{}'::jsonb;
 begin
   if p_page_id is null or not vortex_platform.is_non_nil_uuid(p_page_id::text)
     or p_placement_ids is null
@@ -24,6 +27,9 @@ begin
     or p_selected_view_ids is null
     or pg_catalog.cardinality(p_selected_view_ids) > 500
     or pg_catalog.array_position(p_selected_view_ids, null) is not null
+    or p_record_type_ids is null
+    or pg_catalog.cardinality(p_record_type_ids) not between 1 and 500
+    or pg_catalog.array_position(p_record_type_ids, null) is not null
     or p_default_views is null
     or pg_catalog.jsonb_typeof(p_default_views) is distinct from 'array'
  then
@@ -57,24 +63,27 @@ begin
   end if;
 
   installation := vortex_definition.read_current_active_installation();
-  if exists (select 1 from vortex_platform.grid_views as selected
-    where selected.organization_id = scope.organization_id
-      and selected.application_root_id = scope.application_root_id
-      and selected.view_id = any(p_selected_view_ids)
-      and (selected.document ? 'filters' or selected.document ? 'formatting'))
-    or exists (select 1 from pg_catalog.jsonb_array_elements(p_default_views) as supplied(value)
-      where supplied.value -> 'document' ? 'filters' or supplied.value -> 'document' ? 'formatting') then
-    access_plan := vortex_record.resolve_installation_access_plan_internal(installation);
-  end if;
+  access_plan := vortex_record.resolve_installation_access_plan_internal(installation);
+  -- One column decision per record type of this layout request, by access route, from the plan
+  -- resolved once here; it stays a local value and never enters caller-writable state.
+  for record_type_id in select distinct id from pg_catalog.unnest(p_record_type_ids) as requested(id)
+  loop
+    visible_fields := visible_fields || pg_catalog.jsonb_build_object(
+      pg_catalog.lower(record_type_id::text),
+      vortex_record.resolve_record_type_visible_field_ids_internal(record_type_id, access_plan)
+    );
+  end loop;
 
   -- The person's current layouts and every named view they may see, for all the page's grids, in
   -- one bounded read. Only the views the address selected carry their document.
   return pg_catalog.jsonb_build_object(
+    'visibleFields', visible_fields,
     'defaultDocuments', coalesce((
       select pg_catalog.jsonb_agg(
         pg_catalog.jsonb_build_object('viewId', supplied.value ->> 'viewId')
         || vortex_platform.grid_view_document_for_viewer_internal(
-          (supplied.value ->> 'queryId')::uuid, supplied.value -> 'document', installation, access_plan
+          (supplied.value ->> 'queryId')::uuid, supplied.value -> 'document', installation, access_plan,
+          visible_fields
         )
       )
       from pg_catalog.jsonb_array_elements(p_default_views) as supplied(value)
@@ -122,7 +131,7 @@ begin
         'shareGroupIds', listed.share_group_ids
       ) || case when listed.view_id = any (p_selected_view_ids)
         then vortex_platform.grid_view_document_for_viewer_internal(
-          listed.query_id, listed.document, installation, access_plan
+          listed.query_id, listed.document, installation, access_plan, visible_fields
         ) else '{}'::jsonb end
         order by listed.placement_id, pg_catalog.lower(listed.name), listed.view_id)
       from (
@@ -148,11 +157,11 @@ begin
 end
 $function$;
 
-revoke all on function vortex_platform.read_grid_views(uuid, uuid[], uuid[], jsonb)
+revoke all on function vortex_platform.read_grid_views(uuid, uuid[], uuid[], jsonb, uuid[])
   from public, anon, authenticated, service_role, vortex_runtime, vortex_record_adapter;
-grant execute on function vortex_platform.read_grid_views(uuid, uuid[], uuid[], jsonb) to vortex_request;
+grant execute on function vortex_platform.read_grid_views(uuid, uuid[], uuid[], jsonb, uuid[]) to vortex_request;
 
-comment on function vortex_platform.read_grid_views(uuid, uuid[], uuid[], jsonb) is
-  'Reads the current person''s current layouts and visible named views, and narrows authored default documents through the same current field bounds, in one bounded call.';
+comment on function vortex_platform.read_grid_views(uuid, uuid[], uuid[], jsonb, uuid[]) is
+  'Reads the current person''s current layouts and visible named views, and decides the readable columns of the requested record types by access route, and narrows authored default documents through the same current field bounds, in one bounded call.';
 
-alter function vortex_platform.read_grid_views(uuid, uuid[], uuid[], jsonb) owner to vortex_owner;
+alter function vortex_platform.read_grid_views(uuid, uuid[], uuid[], jsonb, uuid[]) owner to vortex_owner;
