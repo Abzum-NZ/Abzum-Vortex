@@ -28,7 +28,11 @@ import { applyStudioFlowCreate } from "./application-flow-create";
 import { ensureStudioBoardQuickAdd } from "./board-quick-add";
 import { studioLayoutOutletPlacementUses } from "./application-layout-outlets";
 import { createStudioDiscoveryAdapter } from "./discovery-adapter";
-import { studioQueryOffered, studioReleaseReadsQuery } from "./contextual-palette";
+import {
+  studioOwnsSetting,
+  studioQueryOffered,
+  studioReleaseReadsQuery,
+} from "./contextual-palette";
 import {
   adjustedSlotOrder,
   StoredCompositionRefusal,
@@ -313,6 +317,11 @@ const applySettings = (
   if (resolved.kind !== "available") return resolved;
   const { source, target, alias, release } = resolved;
   const settings = commandSettings(input.settings, release.properties);
+  // Studio owns some settings: a settings edit keeps each exactly as stored.
+  const stored = itemReading(current.catalogue, target.item).settings;
+  for (const key of Object.keys(settings)) if (studioOwnsSetting(key)) delete settings[key];
+  for (const [key, value] of Object.entries(stored))
+    if (studioOwnsSetting(key)) settings[key] = value;
   restoreStudioGridFeatureBindings(settings, release.properties, source.body.flow_bindings, alias);
   let query = input.query;
   if (

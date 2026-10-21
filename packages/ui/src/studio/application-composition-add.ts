@@ -18,7 +18,13 @@ import {
 import { studioStarterSlots } from "./composition-starters";
 import { studioPageAreaLabel } from "./application-page-layout";
 import { createStudioDiscoveryAdapter } from "./discovery-adapter";
-import { studioPaletteChoices, studioQueryOffered } from "./contextual-palette";
+import {
+  STUDIO_ROW_ACTION_EVENT_SETTING,
+  studioOwnsSetting,
+  studioPaletteChoices,
+  studioQueryOffered,
+  studioRowActionEventId,
+} from "./contextual-palette";
 import {
   adjustedSlotOrder,
   freshBlockName,
@@ -258,6 +264,10 @@ export const newBlockItem = (
     props: {
       id: alias,
       ...plainSettings(settings),
+      // A block with one row action names that action's event from its own block name.
+      ...(release.properties.some((property) => property.key === STUDIO_ROW_ACTION_EVENT_SETTING)
+        ? { [STUDIO_ROW_ACTION_EVENT_SETTING]: studioRowActionEventId(alias) }
+        : {}),
       ...Object.fromEntries(
         release.slots.filter((slot) => slot.repeats === undefined).map((slot) => [slot.key, []]),
       ),
@@ -282,8 +292,8 @@ export const newBlockItem = (
 };
 
 /**
- * Adds one new block at one place on a page: a fresh block name, the catalogue's defaults for
- * every setting the person does not give, an empty list for every fixed slot and the default
+ * Adds one new block at one place on a page: a fresh block name, the settings Studio owns, the
+ * catalogue's defaults for every setting the person does not give, an empty list for every fixed slot and the default
  * layout. The required settings the catalogue has no default for, and the query of a data block,
  * come with the command. The edited slot is judged as stored data, and a block release the source
  * does not depend on yet becomes a dependency.
@@ -349,6 +359,8 @@ export const applyAdd = (
   // The settings the person gave (the setup asks for each required one without a default), each
   // of its declared kind; every other setting takes its catalogue default.
   const settings = commandSettings(input.settings, release.properties);
+  // Studio owns some settings and writes them itself, so a command never supplies them.
+  if (Object.keys(settings).some(studioOwnsSetting)) return { kind: "invalid" };
   const query = input.query;
   if (
     choice.needsQuery !== (query !== null) ||

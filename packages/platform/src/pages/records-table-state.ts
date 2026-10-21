@@ -48,34 +48,63 @@ export type RecordsTablePageRequest = Readonly<{
 export type RecordsTablePivotView = Readonly<{ cursor?: string }>;
 
 /**
- * The grouping a table is read in: the choice field its records are grouped by and the one group
- * that is open, as its group key, or null while every group is collapsed. A group key is the
- * canonical JSON text of the group's value, a choice value or `null` for the records with none,
- * so it never holds a display label.
+ * The grouping a table is read in: the field its records are grouped by, the position of the page
+ * of groups (`after`, the opaque keyset position of the last group of the page before, or null for
+ * the first page) and the one group that is open, as its group key, or null while every group is
+ * collapsed. A group key is the canonical JSON text of the group's value (a choice value, a date
+ * bucket start, a linked record's `{ recordTypeId, recordId }`, the text `not_available` for the
+ * links the viewer cannot read, or `null` for the records with none), so it never holds a label.
  */
-export type RecordsTableGroupState = Readonly<{ fieldId: string; expanded: string | null }>;
+export type RecordsTableGroupState = Readonly<{
+  fieldId: string;
+  after: string | null;
+  expanded: string | null;
+}>;
 
-/** The longest choice value a group key can carry; the Query engine accepts the same bound. */
+/** The value one group stands for: see `RecordsTableGroupState`. */
+export type RecordsTableGroupValue =
+  string | null | Readonly<{ recordTypeId: string; recordId: string }>;
+
+/** The longest text value a group key can carry; the Query engine accepts the same bound. */
 const GROUP_VALUE_MAXIMUM_LENGTH = 120;
+/** The longest position of a page of groups: a link group's title is part of its position. */
+const GROUP_AFTER_MAXIMUM_LENGTH = 4096;
 
-/** The group key of a group's value: the choice value, or null for records with no value. */
-export const recordsTableGroupKey = (value: string | null): string => JSON.stringify(value);
+/** The group key of a group's value: its canonical JSON text. */
+export const recordsTableGroupKey = (value: RecordsTableGroupValue): string =>
+  JSON.stringify(
+    typeof value === "object" && value !== null
+      ? { recordTypeId: value.recordTypeId, recordId: value.recordId }
+      : value,
+  );
 
 /** The value a group key names; undefined for text that is not a key this codec writes. */
-export const parseRecordsTableGroupKey = (key: string): string | null | undefined => {
+export const parseRecordsTableGroupKey = (key: string): RecordsTableGroupValue | undefined => {
   let parsed: unknown;
   try {
     parsed = JSON.parse(key);
   } catch {
     return undefined;
   }
-  return parsed === null ||
-    (typeof parsed === "string" &&
-      parsed.length >= 1 &&
+  if (parsed === null) return null;
+  if (typeof parsed === "string")
+    return parsed.length >= 1 &&
       parsed.length <= GROUP_VALUE_MAXIMUM_LENGTH &&
-      recordsTableGroupKey(parsed) === key)
-    ? parsed
-    : undefined;
+      recordsTableGroupKey(parsed) === key
+      ? parsed
+      : undefined;
+  if (typeof parsed !== "object" || Array.isArray(parsed)) return undefined;
+  const { recordTypeId, recordId, ...rest } = parsed as Record<string, unknown>;
+  if (
+    Object.keys(rest).length > 0 ||
+    typeof recordTypeId !== "string" ||
+    typeof recordId !== "string" ||
+    !FIELD_ID_PATTERN.test(recordTypeId) ||
+    !FIELD_ID_PATTERN.test(recordId)
+  )
+    return undefined;
+  const value = { recordTypeId, recordId };
+  return recordsTableGroupKey(value) === key ? value : undefined;
 };
 
 export type RecordsTableQueryState = Readonly<{
@@ -218,6 +247,26 @@ export const applyRecordsTableGroupExpansion = (
   if (expanded !== null) parameters.set(expandParameter(placementId), toBase64Url(expanded));
 };
 
+/**
+ * The grouping an address value names: `<field>` for the first page of groups, `<field>.<position>`
+ * for a later page, the position being the base64url text of the last group's key. A value that is
+ * not one of these is malformed.
+ */
+const decodeGroupParameter = (
+  value: string | undefined,
+): Readonly<{ fieldId: string; after: string | null }> | undefined | "malformed" => {
+  if (value === undefined) return undefined;
+  const dot = value.indexOf(".");
+  const fieldId = dot < 0 ? value : value.slice(0, dot);
+  if (!FIELD_ID_PATTERN.test(fieldId)) return "malformed";
+  if (dot < 0) return { fieldId: fieldId.toLowerCase(), after: null };
+  const encoded = value.slice(dot + 1);
+  const after = /^[A-Za-z0-9_-]{1,6000}$/.test(encoded) ? fromBase64Url(encoded) : undefined;
+  return after === undefined || after.length > GROUP_AFTER_MAXIMUM_LENGTH
+    ? "malformed"
+    : { fieldId: fieldId.toLowerCase(), after };
+};
+
 const decodeGroupExpansion = (value: string | undefined): string | null | undefined => {
   if (value === undefined) return null;
   if (!/^[A-Za-z0-9_-]{1,400}$/.test(value)) return undefined;
@@ -319,9 +368,8 @@ export const readRecordsTableQueryState = (
       return { kind: "malformed", part: "filter" };
     filters.push({ fieldId: fieldId.toLowerCase(), filter });
   }
-  const groupField = owned.get(groupParameter(placementId));
-  if (groupField !== undefined && !FIELD_ID_PATTERN.test(groupField))
-    return { kind: "malformed", part: "group" };
+  const group = decodeGroupParameter(owned.get(groupParameter(placementId)));
+  if (group === "malformed") return { kind: "malformed", part: "group" };
   const expanded = decodeGroupExpansion(
     addressed.find(
       ([name]) => name.toLowerCase() === expandParameter(placementId).toLowerCase(),
@@ -340,7 +388,7 @@ export const readRecordsTableQueryState = (
           ([name]) => name.toLowerCase() === pivotParameter(placementId).toLowerCase(),
         )?.[1],
       ),
-      group: groupField === undefined ? undefined : { fieldId: groupField.toLowerCase(), expanded },
+      group: group === undefined ? undefined : { ...group, expanded },
     },
   };
 };
@@ -410,6 +458,8 @@ export type RecordsTableQueryChange =
   | Readonly<{ kind: "search"; text: string }>
   /** Groups the table by a field (null leaves the grouping); every group starts closed. */
   | Readonly<{ kind: "group"; fieldId: string | null }>
+  /** Shows another page of the groups (null `after` is the first page); every group is closed. */
+  | Readonly<{ kind: "groupPage"; fieldId: string; after: string | null }>
   /**
    * A pivot cell opens the ordinary grid on the records it counts: every filter is set at once and
    * the pivot view is closed, so the one address change reads one bounded page.
@@ -491,6 +541,14 @@ export const applyRecordsTableQueryChange = (
       return;
     case "group":
       set(groupParameter(placementId), change.fieldId ?? undefined);
+      applyRecordsTableGroupExpansion(parameters, placementId, null);
+      settleView();
+      return;
+    case "groupPage":
+      set(
+        groupParameter(placementId),
+        change.after === null ? change.fieldId : `${change.fieldId}.${toBase64Url(change.after)}`,
+      );
       applyRecordsTableGroupExpansion(parameters, placementId, null);
       settleView();
       return;

@@ -115,6 +115,13 @@ export const organizationLauncherShell = applicationShellSchema.parse({
 
 export const organizationLauncherPlacementId = "8f31d589-1897-4d31-b27c-e79ebda3f001";
 
+/**
+ * The one row-action identity of an application launcher tile: it opens the application the tile
+ * names. The platform page declares it here, where it declares the block, and the open action
+ * accepts only a `row_action` that carries it.
+ */
+export const applicationLauncherOpenEventId = "open_application";
+
 const launcherItems = [
   platformPageItem(HEADING_BLOCK_RELEASE, "f0299e44-84f3-4ab1-a822-90b28584f001", {
     text: "Choose an application you can open",
@@ -123,7 +130,7 @@ const launcherItems = [
   platformPageItem(
     APPLICATION_LAUNCHER_BLOCK_RELEASE,
     organizationLauncherPlacementId,
-    { title: "Available applications" },
+    { title: "Available applications", row_action_event_id: applicationLauncherOpenEventId },
     ["side_panel"],
   ),
 ];

@@ -4,6 +4,8 @@ import type {
   RecordsTableBulkActionContract,
   RecordsTableContract,
   RecordsTableFilterField,
+  RecordsTableExportFormat,
+  RecordsTableStatusBarOperation,
 } from "../../schema";
 import type {
   ProtectedQueryFieldBounds,
@@ -36,7 +38,18 @@ export {
  */
 export type RecordsTableFeatureProjection = Readonly<{
   pinning?: true;
-  spreadsheet?: Readonly<{ rangeSelect: boolean; find: boolean }>;
+  spreadsheet?: Readonly<{
+    rangeSelect: boolean;
+    find: boolean;
+    /**
+     * The status bar of a selected range: the configured fields (every one is shown, a field the
+     * viewer cannot read as "Not available") and the totals. Absent while the status bar is off.
+     */
+    statusBar?: Readonly<{
+      fields: readonly string[];
+      operations: readonly RecordsTableStatusBarOperation[];
+    }>;
+  }>;
   /** Present when the viewer can read some field the record type marks searchable. */
   search?: true;
   /**
@@ -86,7 +99,7 @@ export type RecordsTableFeatureProjection = Readonly<{
    * when the feature is on and the viewer's export permission allowed it in this read; the export
    * route decides both again on every request.
    */
-  export?: Readonly<{ maxRows: number }>;
+  export?: Readonly<{ maxRows: number; formats: readonly RecordsTableExportFormat[] }>;
 }>;
 
 /**
@@ -119,6 +132,12 @@ export type RecordsTableInlineEditor = Readonly<{ required: boolean }> &
         kind: "link";
         recordTypeId: string;
         targetLabel: string;
+        /**
+         * The link field of the same record type whose chosen record narrows this field's choices,
+         * as the table's field identity (lower case). The picker offers this field's records only
+         * for that parent, and changing the parent must clear or flag this field.
+         */
+        dependsOnField?: string;
       }>
   );
 
@@ -144,7 +163,8 @@ export type RecordsTableRequestPart =
   | "row_clicked"
   | "row_detail"
   | "tree_level"
-  | "group";
+  | "group"
+  | "range_summary";
 
 /**
  * Why the server refused a Records table request: the part and the cause. The viewer only ever
@@ -299,13 +319,19 @@ export const projectRecordsTableFeatures = (
         }
       : undefined;
   const exportSettings = features.export;
+  // A status bar total names only fields the table shows as columns; with none left it is omitted.
+  const statusBarFields = features.spreadsheet.enabled
+    ? features.spreadsheet.statusBarFields.filter((field) =>
+        contract.columns.some((column) => sameField(column.field, field)),
+      )
+    : [];
   const projection: RecordsTableFeatureProjection = {
     ...(exportSettings.enabled &&
     exportAllowed === true &&
     exportSettings.maxRows !== undefined &&
-    exportSettings.formats.includes("csv") &&
+    exportSettings.formats.length > 0 &&
     contract.columns.some((column) => readable(column.field))
-      ? { export: { maxRows: exportSettings.maxRows } }
+      ? { export: { maxRows: exportSettings.maxRows, formats: exportSettings.formats } }
       : {}),
     ...(rowEdit.enabled &&
     rowEdit.eventId !== undefined &&
@@ -321,6 +347,16 @@ export const projectRecordsTableFeatures = (
           spreadsheet: {
             rangeSelect: features.spreadsheet.rangeSelect,
             find: features.spreadsheet.find,
+            ...(features.spreadsheet.rangeSelect &&
+            statusBarFields.length > 0 &&
+            features.spreadsheet.statusBarOperations.length > 0
+              ? {
+                  statusBar: {
+                    fields: statusBarFields,
+                    operations: features.spreadsheet.statusBarOperations,
+                  },
+                }
+              : {}),
           },
         }
       : {}),

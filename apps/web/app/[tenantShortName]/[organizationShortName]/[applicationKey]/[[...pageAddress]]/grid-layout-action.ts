@@ -31,7 +31,6 @@ import {
   writeGridView,
   type GridViewConflict,
   type GridViewOperationOutcome,
-  decideRecordTypeFieldIds,
 } from "@vortex/platform/server";
 import { z } from "zod";
 import { continueSessionOrEnd } from "../../../../auth/_lib/session-redirect";
@@ -298,34 +297,36 @@ export async function commitGridView(
       (recordType) => String(recordType.recordTypeId).toLowerCase() === recordTypeId,
     )?.fields ?? [];
 
-  const result = await opened.run(async (transaction, scope): Promise<GridViewCommandResult> => {
+  const result = await opened.run(async (transaction): Promise<GridViewCommandResult> => {
     switch (requested.kind) {
       case "open": {
         const query = opened.context.releaseSet.modules
           .flatMap((module) => module.content.queries)
           .find((query) => String(query.queryId).toLowerCase() === queryId);
         if (query?.recordType.state !== "resolved") return { outcome: "unavailable" };
-        const readable = await decideRecordTypeFieldIds(
-          transaction,
-          scope,
-          opened.context,
-          String(query.recordType.recordTypeId),
-          "read",
-        );
-        const authored = authoredGridLayout(placement.contract, readable);
-        if (authored === undefined || !placement.contract.features.savedViews.enabled)
-          return { outcome: "unavailable" };
+        if (!placement.contract.features.savedViews.enabled) return { outcome: "unavailable" };
         const stored = await readGridViews(
           transaction,
           pageId,
           [requested.placementId],
           [requested.viewId],
+          [String(query.recordType.recordTypeId)],
           placement.contract.features.savedViews.defaultViews.map((view) => ({
             viewId: view.viewId,
             queryId,
             document: view.document,
           })),
         );
+        const openedRecordTypeId = String(query.recordType.recordTypeId).toLowerCase();
+        const readable = stored.readable.get(openedRecordTypeId);
+        if (readable === undefined) {
+          console.error(
+            `[page] grid view columns missing: code=GRID_VIEW_FIELD_VISIBILITY_MISSING recordTypeId=${openedRecordTypeId}`,
+          );
+          throw new Error("GRID_VIEW_FIELD_VISIBILITY_MISSING");
+        }
+        const authored = authoredGridLayout(placement.contract, readable);
+        if (authored === undefined) return { outcome: "unavailable" };
         const defaults = addressedDefaultGridViews(
           placement.contract.features.savedViews.defaultViews,
           stored.roleKeys,

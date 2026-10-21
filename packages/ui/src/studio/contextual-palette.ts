@@ -16,8 +16,8 @@ import { studioHasSlotStarter } from "./composition-starters";
 /**
  * The Studio block palette for one place on a page: the one release of each block the catalogue
  * admits there, by name, description and group, and what a new block of it needs before it can be
- * stored. A new block gets its catalogue defaults; a required setting without a default is asked
- * for when the block is added.
+ * stored. A new block gets its catalogue defaults and the settings Studio owns; any other required
+ * setting without a default is asked for when the block is added.
  */
 
 export type StudioPaletteChoice = Readonly<{
@@ -75,6 +75,20 @@ export const studioSettingEditable = (property: BlockPropertySchemaContract): bo
       ? studioSettingEditable(property.item)
       : editableKinds.has(property.kind);
 
+/**
+ * The setting that names the event of a block's one row action. Studio owns it: a new block gets
+ * it from its block name when it is added, the inspector never shows it, and binding a flow to the
+ * row action keeps it.
+ */
+export const STUDIO_ROW_ACTION_EVENT_SETTING = "row_action_event_id";
+
+/** The event identity of the one row action of a new block, made from the block's name. */
+export const studioRowActionEventId = (placementAlias: string): string =>
+  `row_action_${placementAlias}`.slice(0, 60);
+
+/** Whether Studio, not the person, sets this top-level block setting. */
+export const studioOwnsSetting = (key: string): boolean => key === STUDIO_ROW_ACTION_EVENT_SETTING;
+
 /** Whether a block of this release reads its records from a query the person chooses. */
 export const studioReleaseReadsQuery = (release: PlatformBlockRelease): boolean =>
   release.paletteGroup === "data" || release.paletteGroup === "figures";
@@ -93,6 +107,8 @@ const choiceFor = (
       continue;
     }
     if (!property.required || property.defaultValue !== undefined) continue;
+    // Studio writes the settings it owns when it adds the block.
+    if (studioOwnsSetting(property.key)) continue;
     if (studioSettingEditable(property)) setup.push(property);
     else unavailable ??= `It needs its ${property.label} setting, which Studio can't set yet.`;
   }
@@ -212,6 +228,8 @@ export type StudioQueryField = Readonly<{
   resultType?: string;
   /** The field is a one-record link from its record type to itself, so a record names its parent. */
   parentLink?: boolean;
+  /** The field of the same record type whose chosen record narrows this link's choices. */
+  dependsOn?: string;
 }>;
 
 /** The facts of one draft field, as a query field carries them. */
@@ -261,6 +279,8 @@ export type StudioQueryInput = Readonly<{
   required: boolean;
   /** For a record input, the record types it accepts, as `<module>:<record>`. */
   recordTypes?: readonly string[];
+  /** For a text input limited to a list, the choices a person picks from. */
+  choices?: readonly Readonly<{ value: string; label: string }>[];
 }>;
 
 /** A query a data block can read, and the fields it reads. */
@@ -435,6 +455,13 @@ const ownQueries = (source: ApplicationSourceDocument): StudioQueryChoice[] =>
                 ...(isParentLink(module.key, recordType, record, field)
                   ? { parentLink: true }
                   : {}),
+                ...(field.type === "link" &&
+                (field.settings as { depends_on?: { parent_field: string } }).depends_on !==
+                  undefined
+                  ? {
+                      dependsOn: `${recordType}.${(field.settings as { depends_on: { parent_field: string } }).depends_on.parent_field}`,
+                    }
+                  : {}),
               }),
             ];
       });
@@ -444,6 +471,9 @@ const ownQueries = (source: ApplicationSourceDocument): StudioQueryChoice[] =>
           label: input.label,
           type: input.type,
           required: input.required,
+          ...(input.type === "text" && input.validation?.choices !== undefined
+            ? { choices: input.validation.choices }
+            : {}),
           ...(input.type === "record_reference"
             ? {
                 recordTypes: Object.freeze(

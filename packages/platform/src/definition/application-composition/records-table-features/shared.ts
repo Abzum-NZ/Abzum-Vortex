@@ -37,6 +37,9 @@ export const settingOptionalChoice = <Choice extends string>(
   value?.kind === "choice" && (allowed as readonly string[]).includes(value.value)
     ? (value.value as Choice)
     : undefined;
+/** The calendar units a date dimension (a pivot axis or a grouping) buckets by. */
+export const recordsTablePivotDateUnits = ["day", "week", "month", "quarter", "year"] as const;
+export type RecordsTablePivotDateUnit = (typeof recordsTablePivotDateUnits)[number];
 export const fieldList = (value: ComponentSettingValue | undefined): string[] =>
   (settingItems(value) ?? []).flatMap((item) => settingField(item) ?? []);
 
@@ -76,7 +79,32 @@ export type RecordsTableFieldFacts = Readonly<{
   resultType?: string;
   /** The field is a one-record link from the record type to itself, so a record names its parent. */
   parentLink: boolean;
+  /** A link that takes its choices from another link field of the record type: that field, spelled as `field` is. */
+  dependsOn?: string;
 }>;
+
+/**
+ * Why a chosen edit field cannot be edited without the link field it depends on, or undefined
+ * when it has no such dependency or the parent is chosen as well: a parent's chosen record is what
+ * narrows the child's choices, and changing it must be able to clear the child in the same draft.
+ */
+export const recordsTableDependencyMissing = (
+  facts: RecordsTableQueryFacts,
+  chosen: readonly string[],
+): string | undefined => {
+  for (const name of chosen) {
+    const field = facts.fields.find(
+      (candidate) => candidate.field.toLowerCase() === name.toLowerCase(),
+    );
+    if (field?.dependsOn === undefined) continue;
+    if (chosen.some((other) => other.toLowerCase() === field.dependsOn!.toLowerCase())) continue;
+    const parent = facts.fields.find(
+      (candidate) => candidate.field.toLowerCase() === field.dependsOn!.toLowerCase(),
+    );
+    return `${field.label} depends on ${parent?.label ?? "another field"}: choose ${parent?.label ?? "it"} as well`;
+  }
+  return undefined;
+};
 
 /** The type of value a field holds: a calculation's or total's result type, else its own type. */
 export const factsValueType = (
@@ -162,6 +190,8 @@ export type RecordsTableQueryFacts = Readonly<{
   /** The bound query's ceiling, absent while no query has been chosen in Studio. */
   maximumPageSize: number | undefined;
   fields: readonly RecordsTableFieldFacts[];
+  /** The fields the table shows as columns, as its settings name them. */
+  columnFieldIds: readonly string[];
   relationships: readonly Readonly<{ key: string; label: string }>[];
   /**
    * The record type's named actions. `acceptsSelection` says it can run on several records, each

@@ -15,7 +15,6 @@ import {
   type ProjectedReferenceChoiceForm,
   projectedReferenceChoiceForm,
   resolveReferenceChoiceOption,
-  bindReferenceChoiceField,
 } from "./reference-choices";
 import {
   type ReferenceChoiceAddress,
@@ -88,7 +87,6 @@ export const loadReferenceChoicePage = async (
     continuationToken?: string;
     selectedKey?: string;
     selectedEvidence?: ReferenceChoiceSelectionEvidence;
-    dependencyChoice?: Readonly<{ key: string; evidence: ReferenceChoiceSelectionEvidence }>;
   }>,
 ): Promise<ReferenceChoicePageResult> => {
   try {
@@ -109,30 +107,7 @@ export const loadReferenceChoicePage = async (
     if (field === undefined || form === undefined) return { kind: "refused" };
 
     const service = createReferenceChoiceService({ ...dependencies, continuationKey });
-    let currentField = field;
-    let dependencyKey: string | null | undefined;
-    if (field.dependency !== undefined) {
-      if (request.dependencyChoice === undefined)
-        return {
-          kind: "completed",
-          values: projectReferenceChoiceInputValues([], null, undefined, { dependencyKey: null }),
-        };
-      const parent = form.fields.get(field.dependency.fromField);
-      if (parent === undefined) return { kind: "refused" };
-      const selected = await resolveReferenceChoiceOption({
-        service,
-        session,
-        selection,
-        field: parent,
-        key: request.dependencyChoice.key,
-        evidence: request.dependencyChoice.evidence,
-      });
-      if (selected === undefined) return { kind: "refused" };
-      const bound = bindReferenceChoiceField(form.fields, field, selected);
-      if (bound === undefined) return { kind: "refused" };
-      currentField = bound;
-      dependencyKey = selected.key;
-    } else if (request.dependencyChoice !== undefined) return { kind: "refused" };
+    const currentField = field;
     const result = await service.run(session, selection, {
       ...currentField.command,
       ...(request.search === undefined || request.search.trim() === ""
@@ -176,7 +151,6 @@ export const loadReferenceChoicePage = async (
     return {
       kind: "completed",
       values: projectReferenceChoiceInputValues(choices, selectedChoice?.key ?? null, undefined, {
-        ...(dependencyKey === undefined ? {} : { dependencyKey }),
         ...(request.search === undefined ? {} : { search: request.search }),
         ...(request.continuationToken === undefined
           ? {}

@@ -376,6 +376,7 @@ export const readStudioCanvasRecords = async (
             : () => readSubject(String(subjectType.recordTypeId), subjectId.data),
         subjectRecordTypeId:
           subjectType === undefined ? undefined : String(subjectType.recordTypeId),
+        readViewerTeams: services.readViewerTeams,
         readTimeZone: async () => {
           const read = await services.readCalendarSettings();
           return read.kind === "available" ? read.value.settings?.timeZone : undefined;
@@ -403,6 +404,7 @@ export const readStudioCanvasRecords = async (
       gridLayouts: {
         storage: "canvas",
         stored: {
+          readable: new Map(),
           roleKeys: new Set(),
           shareable: new Set(),
           layouts,

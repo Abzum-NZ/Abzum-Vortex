@@ -63,6 +63,7 @@ export const definitionValidationErrorCodes = [
   "definition_records_table_row_edit",
   "definition_records_table_row_actions",
   "definition_records_table_row_action_limit",
+  "definition_records_table_board_row_action",
   "definition_records_table_master_detail",
   "definition_records_table_tree",
   "definition_records_table_grouping",
@@ -73,6 +74,7 @@ export const definitionValidationErrorCodes = [
   "definition_records_table_board",
   "definition_records_table_export",
   "definition_query_binding",
+  "definition_query_binding_choice",
   "definition_unknown_property",
   "definition_too_few_items",
   "definition_too_many_items",
@@ -171,6 +173,11 @@ const definitionValidationErrorCatalogueSource = {
     message: "At most three actions can sit beside the row; move the rest to the menu",
     guidance: "Choose Row menu for the remaining actions.",
   },
+  definition_records_table_board_row_action: {
+    order: 39,
+    message: "A board opens a card through one row action.",
+    guidance: "Keep one row action that opens the record, or turn Board off to offer more.",
+  },
   definition_records_table_row_actions: {
     order: 39,
     message: "Row actions need a query that returns individual records",
@@ -201,8 +208,9 @@ const definitionValidationErrorCatalogueSource = {
   // Grouping names its own part (the field, its choice count) in its sentence.
   definition_records_table_grouping: {
     order: 39,
-    message: "Group by needs a choice or stage field in the bound query.",
-    guidance: "Choose the choice or stage field the records are grouped by, or turn Group by off.",
+    message: "Group by needs a choice, stage, link or date field in the bound query.",
+    guidance:
+      "Choose the choice, stage, link or date field the records are grouped by, or turn Group by off.",
   },
   definition_records_table_conditional_formatting: {
     order: 39,
@@ -245,6 +253,11 @@ const definitionValidationErrorCatalogueSource = {
     message: "A query input of a block has no valid source.",
     guidance:
       "Open the block's Query inputs and choose a source of the input's type for each input.",
+  },
+  definition_query_binding_choice: {
+    order: 39,
+    message: "A fixed value is not one of the choices of its query input.",
+    guidance: "Open the block's Query inputs and pick one of the choices the input now offers.",
   },
   definition_unknown_property: {
     order: 40,

@@ -807,7 +807,8 @@
                           }
                         }
                       }
-                    }
+                    },
+                    "row_action_event_id": "row_action_content_2"
                   }
                 },
                 {
@@ -1552,7 +1553,8 @@
                           }
                         }
                       }
-                    }
+                    },
+                    "row_action_event_id": "row_action_content_5"
                   }
                 },
                 {
@@ -1677,7 +1679,8 @@
                           }
                         }
                       }
-                    }
+                    },
+                    "row_action_event_id": "row_action_content_6"
                   }
                 }
               ],
@@ -2044,7 +2047,8 @@
                           }
                         }
                       }
-                    }
+                    },
+                    "row_action_event_id": "row_action_detail_sd_service_level"
                   }
                 },
                 {
@@ -2252,7 +2256,8 @@
                           }
                         }
                       }
-                    }
+                    },
+                    "row_action_event_id": "row_action_detail_sd_customer"
                   }
                 },
                 {
@@ -2527,7 +2532,8 @@
                           }
                         }
                       }
-                    }
+                    },
+                    "row_action_event_id": "row_action_detail_sd_requester"
                   }
                 }
               ],

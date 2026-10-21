@@ -2,6 +2,13 @@ import {
   recordsTableSpreadsheetFeature,
   type RecordsTableSpreadsheetSettings,
 } from "./spreadsheet";
+
+export {
+  RECORDS_TABLE_STATUS_BAR_MAXIMUM_FIELDS,
+  recordsTableStatusBarFieldTypes,
+  recordsTableStatusBarOperations,
+  type RecordsTableStatusBarOperation,
+} from "./spreadsheet";
 import type { ComponentSettingValue } from "../block-property-schema";
 import {
   recordsTableBoardFeature,
@@ -51,9 +58,11 @@ import { recordsTablePivotFeature, type RecordsTablePivotSettings } from "./pivo
 import { recordsTableGroupingFeature, type RecordsTableGroupingSettings } from "./grouping";
 import { recordsTableExportFeature, type RecordsTableExportSettings } from "./export";
 import {
+  featureAvailable,
   featureNotPossible,
   settingGroup,
   type RecordsTableFeatureCheck,
+  type RecordsTableFeatureRefusalCode,
   type RecordsTableFeatureDefinition,
   type RecordsTableFeatureState,
   type RecordsTableQueryFacts,
@@ -61,6 +70,7 @@ import {
 
 export {
   factsValueType,
+  recordsTablePivotDateUnits,
   recordsTableEditableFieldTypes,
   recordsTableFieldNotEditableReason,
   type RecordsTableBoardFacts,
@@ -68,6 +78,7 @@ export {
   type RecordsTableFeatureRefusalCode,
   type RecordsTableFeatureState,
   type RecordsTableFieldFacts,
+  type RecordsTablePivotDateUnit,
   type RecordsTableQueryFacts,
   type RecordsTableRelatedQueryFacts,
   type RecordsTableRelatedRecordsFacts,
@@ -80,7 +91,9 @@ export {
 } from "./row-actions";
 export {
   RECORDS_TABLE_EXPORT_MAXIMUM_ROWS,
+  recordsTableExportFormatLabels,
   recordsTableExportFormats,
+  spreadsheetText,
   type RecordsTableExportFormat,
 } from "./export";
 export { RECORDS_TABLE_RELATED_RECORDS_MAXIMUM_PAGE_SIZE } from "./master-detail";
@@ -88,15 +101,16 @@ export { RECORDS_TABLE_TREE_MAXIMUM_PAGE_SIZE } from "./tree";
 export {
   RECORDS_TABLE_GROUPING_MAXIMUM_CHOICES,
   RECORDS_TABLE_GROUPING_MAXIMUM_LABEL_LENGTH,
+  RECORDS_TABLE_GROUPING_MAXIMUM_PAGE_SIZE,
+  recordsTableGroupingFieldTypes,
+  type RecordsTableGroupingFieldType,
 } from "./grouping";
 export { boardAggregateLabel, boardProblem, recordsTableBoardFactsOf } from "./board";
 export {
   RECORDS_TABLE_PIVOT_MAXIMUM_COLUMNS,
   RECORDS_TABLE_PIVOT_MAXIMUM_ROW_PAGE_SIZE,
-  recordsTablePivotDateUnits,
   recordsTablePivotMeasureFieldTypes,
   recordsTablePivotMeasureFunctions,
-  type RecordsTablePivotDateUnit,
   type RecordsTablePivotMeasureFunction,
 } from "./pivot";
 export {
@@ -301,6 +315,13 @@ export const readRecordsTableFeatures = (
 };
 
 /**
+ * The features a board view implements beside Board itself. A feature not listed is refused when
+ * it is on together with Board: the board draws cards, not table rows, and never ignores a feature.
+ * A card opens through Row actions, so that feature is the one supported beside Board.
+ */
+const recordsTableBoardSupportedFeatures: readonly RecordsTableFeatureKey[] = ["row_actions"];
+
+/**
  * The one capability check of one feature against the bound query's facts. Publication runs it on
  * the compiled release for every enabled feature and refuses with its sentence; Studio runs it on
  * the draft's facts beside each switch, so the two never disagree.
@@ -367,6 +388,24 @@ export const checkRecordsTableFeature = (
         `Turn ${other} off to group the records.`,
       );
   }
+  // A board draws cards, not table rows, so a feature the board view does not implement is
+  // refused rather than silently ignored. Grouping and tree carry their own sentences above.
+  if (
+    state.enabled &&
+    features.board.enabled &&
+    key !== "board" &&
+    key !== "grouping" &&
+    key !== "tree" &&
+    !recordsTableBoardSupportedFeatures.includes(key)
+  )
+    return featureNotPossible(
+      `definition_records_table_${key}` as RecordsTableFeatureRefusalCode,
+      `${registry[key].definition.label} is not available on a board yet: turn Board off to use it, or turn ${registry[key].definition.label} off.`,
+    );
+  // The board reads its own grouped query, which the board check judges; a table-row check of a
+  // feature the board borrows would refuse that query.
+  if (features.board.enabled && key !== "board" && recordsTableBoardSupportedFeatures.includes(key))
+    return featureAvailable;
   const check = (registry[key].definition as RecordsTableFeatureDefinition<object>).check(
     state,
     facts,

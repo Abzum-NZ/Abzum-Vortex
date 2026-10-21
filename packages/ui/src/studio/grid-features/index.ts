@@ -4,6 +4,7 @@ import {
   type BlockPropertySchemaContract,
   recordsTableEditableFieldTypes,
   recordsTableFieldFilterable,
+  recordsTableGroupingFieldTypes,
   type QueryBindingField,
   type QueryBindingPageFacts,
   type RecordsTableFeatureKey,
@@ -67,8 +68,13 @@ export const studioGridFeatureEditors: Readonly<
   master_detail: { kind: "settings" },
   // Only the links from a record type to itself can name a record's parent.
   tree: { kind: "settings", offers: (field) => field.parentLink === true },
-  // Only choice (and stage) fields people can filter by can be grouped; the check names the rest.
-  grouping: { kind: "settings", offers: (field) => field.type === "choice" && field.filterable },
+  // Only choice (and stage), link and date fields people can filter by can be grouped; the check names the rest.
+  grouping: {
+    kind: "settings",
+    offers: (field) =>
+      field.filterable &&
+      (recordsTableGroupingFieldTypes as readonly string[]).includes(field.type),
+  },
   conditional_formatting: { kind: "custom" },
   // The catalogue restricts the row and column pickers to choice, link and date fields and the measure
   // picker to number and money fields, so Studio offers only fields a pivot can use.
@@ -90,13 +96,19 @@ export const studioGridFeatureStartSettings: Readonly<
   spreadsheet: {
     range_select: { kind: "boolean", value: true },
     find: { kind: "boolean", value: true },
+    status_bar_fields: { kind: "list", items: [] },
+    status_bar_operations: { kind: "list", items: [] },
   },
   // Related records read ten at a time unless the builder chooses otherwise.
   master_detail: { child_page_size: { kind: "number", value: 10 } },
   // A tree reads forty records of a level at a time unless the builder chooses otherwise.
   tree: { child_page_size: { kind: "number", value: 40 } },
-  // Records with no value are named "Unassigned" unless the builder chooses otherwise.
-  grouping: { unassigned_label: { kind: "text", value: "Unassigned" } },
+  // Records with no value are named "Unassigned" and groups read forty at a time unless the
+  // builder chooses otherwise.
+  grouping: {
+    unassigned_label: { kind: "text", value: "Unassigned" },
+    group_page_size: { kind: "number", value: 40 },
+  },
   // Export starts as CSV with the authored default row limit.
   export: {
     formats: { kind: "list", items: [{ kind: "choice", value: "csv" }] },
@@ -133,10 +145,12 @@ export const studioRecordsTableQueryFacts = (
   actions: readonly StudioActionChoice[],
   relationships: readonly StudioRelationshipChoice[],
   related: StudioRelatedRecordsChoices,
+  columnFieldIds: readonly string[],
 ): RecordsTableQueryFacts => ({
   signedIn,
   recordTypeLabel: query?.label ?? "",
   maximumPageSize: query?.pageSize,
+  columnFieldIds,
   fields: (query?.fields ?? []).map((field) => ({
     field: field.reference,
     label: field.label,
@@ -146,6 +160,7 @@ export const studioRecordsTableQueryFacts = (
     searchable: field.searchable,
     editable: query?.grouped !== true && recordsTableEditableFieldTypes.includes(field.type),
     parentLink: field.parentLink === true,
+    ...(field.dependsOn === undefined ? {} : { dependsOn: field.dependsOn }),
     ...(field.choiceCount === undefined ? {} : { choiceCount: field.choiceCount }),
     ...(field.choiceValues === undefined ? {} : { choiceValues: field.choiceValues }),
     ...(field.resultType === undefined ? {} : { resultType: field.resultType }),

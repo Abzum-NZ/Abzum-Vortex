@@ -1,10 +1,7 @@
 import {
   useCallback,
-  useEffect,
   useMemo,
   useRef,
-  type ReactElement,
-  type ReactNode,
   type Dispatch,
   type SetStateAction,
   type RefObject,
@@ -32,7 +29,6 @@ import {
 import {
   formContinuationAnswerSchema,
   type ReferenceChoiceSelectionEvidenceMap,
-  type ReferenceChoiceSelectionEvidence,
   isRecord,
   sameId,
 } from "@vortex/platform/schema";
@@ -42,33 +38,8 @@ import { useApplicationFrame } from "../../../_components/application-frame-stat
 import type { ApplicationPageModel } from "../../../../../../_lib/application-page";
 import type { SubmittedForm, Notice } from "./types";
 import { formSurfaceComposition, runtimeInputWithFormDefault } from "./form-surface";
-import { choiceScopeKey } from "./event-values";
 import { requestRecordChoices } from "./record-choices";
 import { unavailableNotice } from "./notices";
-
-/** The keyed Show Form body owns its choice request lifetime, including Escape dismissal. */
-function ChoiceFormLifetime({
-  children,
-  mount,
-  unmount,
-  context,
-  baseline,
-}: Readonly<{
-  children: ReactNode;
-  mount: () => void;
-  unmount: () => void;
-  context: unknown;
-  baseline: unknown;
-}>): ReactElement {
-  const callbacks = useRef({ mount, unmount });
-  callbacks.current = { mount, unmount };
-  useEffect(() => {
-    const current = callbacks.current;
-    current.mount();
-    return current.unmount;
-  }, [context, baseline]);
-  return <>{children}</>;
-}
 
 export function useFlowRuntime({
   application,
@@ -85,16 +56,11 @@ export function useFlowRuntime({
   platformComponentRegistry,
   runtimeInputsRef,
   choicePayloadFor,
-  choiceDefaultContextsRef,
   fieldInputControlReleases,
-  choiceSelectionsRef,
   setNotice,
   choiceEvidenceFor,
   requestChoicePageRef,
-  changeChoiceField,
-  initializeChoiceForm,
   currentData,
-  clearChoiceForm,
   dialogFormRef,
   platformThemeTokens,
   committed,
@@ -113,11 +79,7 @@ export function useFlowRuntime({
   platformComponentRegistry: ReturnType<typeof createPlatformComponentRegistryForReleases>;
   runtimeInputsRef: RefObject<Readonly<Record<string, unknown>>>;
   choicePayloadFor: (placementId: string, formId?: string) => ChoiceInputPayload | undefined;
-  choiceDefaultContextsRef: RefObject<Record<string, boolean>>;
   fieldInputControlReleases: FieldInputControlReleaseMap;
-  choiceSelectionsRef: RefObject<
-    Record<string, Readonly<{ key: string; evidence: ReferenceChoiceSelectionEvidence }>>
-  >;
   setNotice: Dispatch<SetStateAction<Notice | undefined>>;
   choiceEvidenceFor: (
     formId: string,
@@ -131,18 +93,7 @@ export function useFlowRuntime({
       formId?: string,
     ) => Promise<void>
   >;
-  changeChoiceField: (
-    placementId: string,
-    event: ControlSemanticEvent,
-    dialogFormId?: string,
-  ) => void;
-  initializeChoiceForm: (
-    formId: string,
-    dialogFormId?: string,
-    defaults?: Readonly<Record<string, unknown>>,
-  ) => void;
   currentData: ApplicationPageModel["data"];
-  clearChoiceForm: (formId: string, dialogFormId?: string) => void;
   dialogFormRef: RefObject<HTMLDivElement | null>;
   platformThemeTokens: PlatformThemeTokens;
   /** Re-reads what a binding writes once one of its server runs committed. */
@@ -153,8 +104,8 @@ export function useFlowRuntime({
    * and the runtime carries out every pause (another form or a confirmation) through a continuation,
    * which is returned exactly as the server issued it.
    */
-  const flowClient = useMemo<FlowInvokeClient>(() => {
-    const client = createFlowInvokeClient({
+  const { flowClient, webMcpClient } = useMemo(() => {
+    const options = {
       address: {
         tenantShortName: application.tenantShortName,
         organizationShortName: application.organizationShortName,
@@ -166,7 +117,7 @@ export function useFlowRuntime({
         releaseKey: application.releaseKey,
       },
       ...(subject === undefined ? {} : { subject }),
-    });
+    };
     const recordResponse = (
       response: ServerFlowResponse,
       submission: SubmittedForm | undefined,
@@ -183,7 +134,7 @@ export function useFlowRuntime({
         unsavedWorkRegistry?.markSaved(submission.formId, submission.values);
       }
     };
-    return {
+    const trackedClient = (client: FlowInvokeClient): FlowInvokeClient => ({
       startBinding: async (binding, callerInputs, clickId, signal, gestureSubject) => {
         const submission = submittedFormsRef.current.get(binding.bindingId);
         submittedFormsRef.current.delete(binding.bindingId);
@@ -209,26 +160,14 @@ export function useFlowRuntime({
         recordResponse(response, submission);
         return response;
       },
+    });
+    return {
+      flowClient: trackedClient(createFlowInvokeClient(options)),
+      webMcpClient: trackedClient(
+        createFlowInvokeClient({ ...options, endpoint: "/api/flows/invoke/mcp" }),
+      ),
     };
   }, [application, formCancelledRef, subject, unsavedWorkRegistry]);
-  const webMcpClient = useMemo(
-    () =>
-      createFlowInvokeClient({
-        address: {
-          tenantShortName: application.tenantShortName,
-          organizationShortName: application.organizationShortName,
-          applicationKey: application.applicationKey,
-          pageKey: application.pageKey,
-        },
-        installation: {
-          installationRevision: application.installationRevision,
-          releaseKey: application.releaseKey,
-        },
-        ...(subject === undefined ? {} : { subject }),
-        endpoint: "/api/flows/invoke/mcp",
-      }),
-    [application, subject],
-  );
   const startPageChange = useApplicationFrame()?.startPageChange;
   const navigationEnvironment = useMemo<LinkNavigationEnvironment>(
     () => ({
@@ -313,41 +252,14 @@ export function useFlowRuntime({
           typeof settings.name.value === "string"
             ? settings.name.value
             : undefined;
-        const choiceField = model.referenceChoiceInputs.find(
-          (field) => field.placementId === placementId,
-        );
         const defaultValue = name === undefined ? undefined : form.inputs[name];
-        const defaultEvidence =
-          typeof defaultValue === "string"
-            ? dialogChoicePage?.optionEvidence?.[defaultValue]
-            : undefined;
-        const dependentDefaultOffered =
-          choiceField?.dependency === undefined ||
-          (choiceDefaultContextsRef.current[choiceScopeKey(placementId, form.formId)] === true &&
-            defaultEvidence !== undefined &&
-            dialogChoicePage?.options?.some((option) => option.key === defaultValue) === true);
-        if (
-          placement !== undefined &&
-          name !== undefined &&
-          Object.hasOwn(form.inputs, name) &&
-          dependentDefaultOffered
-        ) {
+        if (placement !== undefined && name !== undefined && Object.hasOwn(form.inputs, name)) {
           input = runtimeInputWithFormDefault(
             input,
             placement,
-            form.inputs[name],
+            defaultValue,
             platformComponentRegistry,
           );
-          if (
-            choiceField?.dependency !== undefined &&
-            typeof defaultValue === "string" &&
-            defaultEvidence !== undefined
-          ) {
-            choiceSelectionsRef.current[choiceScopeKey(placementId, form.formId)] = {
-              key: defaultValue,
-              evidence: defaultEvidence,
-            };
-          }
         }
         const events: Record<string, unknown> = {};
         if (placementId.toLowerCase() === form.formId.toLowerCase())
@@ -376,27 +288,13 @@ export function useFlowRuntime({
             if (event.event !== "records_requested") return;
             return requestRecordChoices(model, placementId, event, () => router.refresh());
           };
-        if (isReferenceChoice)
-          events.field_changed = (event: ControlSemanticEvent) =>
-            changeChoiceField(placementId, event, form.formId);
-        if (placementId.toLowerCase() === form.formId.toLowerCase())
-          events.form_reset = (event: ControlSemanticEvent) => {
-            if (event.event === "form_reset")
-              initializeChoiceForm(form.formId, form.formId, form.inputs);
-          };
         const modalInput: Record<string, unknown> = {};
         if (input.data !== undefined) modalInput.data = input.data;
         if (Object.keys(events).length > 0) modalInput.events = events;
         if (Object.keys(modalInput).length > 0) scopedInputs[placementId] = modalInput;
       }
       return (
-        <ChoiceFormLifetime
-          key={form.taskId}
-          context={model}
-          baseline={currentData}
-          mount={() => initializeChoiceForm(form.formId, form.formId, form.inputs)}
-          unmount={() => clearChoiceForm(form.formId, form.formId)}
-        >
+        <div key={form.taskId}>
           <div ref={dialogFormRef} className="flex flex-col gap-4">
             <UnsavedWorkProvider>
               <PagePuckRenderer
@@ -424,20 +322,10 @@ export function useFlowRuntime({
               </Button>
             </DialogFooter>
           </div>
-        </ChoiceFormLifetime>
+        </div>
       );
     },
-    [
-      choiceEvidenceFor,
-      choicePayloadFor,
-      changeChoiceField,
-      clearChoiceForm,
-      currentData,
-      initializeChoiceForm,
-      model,
-      resolvePageHref,
-      router,
-    ],
+    [choiceEvidenceFor, choicePayloadFor, currentData, model, resolvePageHref, router],
   );
   const { host, element: intentHostElement } = useFlowIntentHost({
     renderForm,

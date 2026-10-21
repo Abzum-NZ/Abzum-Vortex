@@ -99,7 +99,6 @@ export type ApplicationPageModel = Readonly<{
     placementId: string;
     formId: string;
     fieldKey: string;
-    dependency?: Readonly<{ fieldKey: string; placementId: string }>;
   }>[];
   /** The link fields' record pickers within the viewer's projected page, by placement identity. */
   linkInputPlacementIds: readonly string[];

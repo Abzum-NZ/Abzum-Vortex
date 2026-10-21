@@ -149,6 +149,7 @@ export function StudioGridFeatures({
     choices.actions,
     choices.relationships,
     related,
+    tableColumnFields(tableSettings),
   );
   // Related records pick a link to this table's record type, a query of the linked record type and
   // that query's fields, never the table's own fields; This row binds the query's input.
@@ -206,9 +207,10 @@ export function StudioGridFeatures({
           const declaration = property.properties.find((feature) => feature.key === key);
           const { label, description } = recordsTableFeatureDescription(key);
           const enabled = features !== undefined && recordsTableFeatureState(features, key).enabled;
-          // In Board mode the grid shows none of the table's other features: only the board is judged.
+          // In Board mode a feature that is off is not judged; one that is on is refused unless the
+          // board implements it.
           const check =
-            features === undefined || (features.board.enabled && key !== "board")
+            features === undefined || (features.board.enabled && key !== "board" && !enabled)
               ? undefined
               : checkRecordsTableFeature(
                   key,
@@ -284,6 +286,8 @@ export function StudioGridFeatures({
               {enabled && key === "spreadsheet" ? (
                 <StudioSpreadsheetEditor
                   value={current}
+                  facts={facts}
+                  columns={tableColumnFields(tableSettings)}
                   disabled={disabled}
                   onChange={(next) => write(key, next)}
                 />

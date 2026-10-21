@@ -2,6 +2,8 @@ import {
   describeFailure,
   flowBindingInvocationSchema,
   flowRefusalFeedbackSchema,
+  flowWarningNoticeSchema,
+  type FlowWarningNotice,
   formContinuationReceiptSchema,
   formContinuationTargetSchema,
   type FlowBindingInvocation,
@@ -44,6 +46,7 @@ export type ServerFlowResponse =
   | Readonly<{ kind: "reload"; installationRevision: number }>
   | Readonly<{
       kind: "result";
+      warnings: readonly FlowWarningNotice[];
       runId: string;
       descriptor: Readonly<{ outcome: string; commit: string; outputs: string; recovery: string }>;
       outputs: Readonly<Record<string, JsonValue>>;
@@ -155,6 +158,8 @@ export const parseServerFlowResponse = (candidate: unknown): ServerFlowResponse 
       };
     }
     case "result": {
+      const warnings = flowWarningNoticeSchema.array().safeParse(candidate.warnings);
+      if (!warnings.success) return invalidServerResponse(warnings.error);
       const intents = parseIntents(candidate.intents);
       const descriptor = candidate.descriptor;
       if (
@@ -197,6 +202,7 @@ export const parseServerFlowResponse = (candidate: unknown): ServerFlowResponse 
       }
       return {
         kind: "result",
+        warnings: warnings.data,
         runId: candidate.runId,
         descriptor: {
           outcome: descriptor.outcome,

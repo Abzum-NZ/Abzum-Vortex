@@ -69,7 +69,6 @@ import {
 type ProjectedFormField = Readonly<{
   fieldKey: string;
   command: RecordReferenceChoiceCommand;
-  dependency?: Readonly<{ key: string; fromField: string }>;
 }>;
 type ProjectedForm = Readonly<{ fields: ReadonlyMap<string, ProjectedFormField> }>;
 type GuidedControl = Readonly<{
@@ -950,7 +949,11 @@ export async function invokeInstalledFlow(
     const selectedReadContext = installedSelectedRecordReadContext(application, releaseSet.modules);
     if (selectedReadContext === undefined)
       throw new Error("SELECTED_RECORD_READ_BINDING_UNAVAILABLE");
-    const installedActions = installedNamedActionDescriptors(application, releaseSet.modules);
+    const installedActions = installedNamedActionDescriptors(
+      application,
+      releaseSet.modules,
+      installation.recordContributions,
+    );
     // Each record type's fields by key and by identity, for the values of a Save record task,
     // and the named action that declares it sets each choice option.
     const recordTypes = new Map<string, FlowRecordType>();
@@ -973,7 +976,11 @@ export async function invokeInstalledFlow(
       }
       recordTypes.set(String(recordType.recordTypeId).toLowerCase(), { fieldIds, optionActions });
     }
-    const namedActions = installedNamedActions(application, releaseSet.modules);
+    const namedActions = installedNamedActions(
+      application,
+      releaseSet.modules,
+      installation.recordContributions,
+    );
     const installed: InstalledFlowBindings = {
       organizationId: installation.organizationId,
       applicationRootId: address.application.applicationRootId,

@@ -89,7 +89,10 @@ begin
               or pg_catalog.substr(group_selector_value #>> '{}', 18, 2) between '00' and '59')
             and pg_catalog.pg_input_is_valid(group_selector_value #>> '{}', 'timestamp with time zone');
         when 'link', 'link_to_one_of_several' then
-          group_value_valid := case when pg_catalog.jsonb_typeof(group_selector_value) = 'object' then
+          -- The group of links to targets the reader cannot read is the one fixed text.
+          group_value_valid := case
+            when group_field_type = 'link' and group_selector_value = '"not_available"'::jsonb then true
+            when pg_catalog.jsonb_typeof(group_selector_value) = 'object' then
             group_selector_value - array['recordTypeId', 'recordId']::text[] = '{}'::jsonb
             and group_selector_value ? 'recordTypeId' and group_selector_value ? 'recordId'
             and pg_catalog.jsonb_typeof(group_selector_value -> 'recordTypeId') = 'string'
@@ -121,4 +124,4 @@ grant execute on function vortex_record.group_member_selector_internal(jsonb)
   to vortex_record_adapter;
 
 comment on function vortex_record.group_member_selector_internal(jsonb) is
-  'Owner-only parser of a generic group member selector: the typed grouping values keyed by lower-case field identity with their declared field types, or null when the selector is malformed.';
+  'Owner-only parser of a generic group member selector: the typed grouping values keyed by lower-case field identity with their declared field types (a link is a target identity or the fixed not_available text), or null when the selector is malformed.';

@@ -10,10 +10,11 @@ import {
   type RecordChoiceCommand,
   type RecordLinkResolver,
   type InstalledRuntimeContext,
-  decideRecordTypeFieldIds,
+  readRecordTypeVisibleFieldIds,
 } from "@vortex/platform/server";
 import {
   isRecord,
+  queryIdSchema,
   readRecordsTableContract,
   recordIdSchema,
   sameId,
@@ -158,7 +159,13 @@ const tableLinkFieldTarget = (
   fieldId: string,
   purpose: "filter" | "edit",
 ):
-  | Readonly<{ moduleRootId: string; recordTypeId: string; sourceRecordTypeId: string }>
+  | Readonly<{
+      moduleRootId: string;
+      recordTypeId: string;
+      sourceRecordTypeId: string;
+      /** The declared dependency on another link field of the same record type, if any. */
+      dependency?: LinkDependency;
+    }>
   | undefined => {
   const contract = readRecordsTableContract(
     settings as Readonly<Record<string, BlockPropertyValueContract>>,
@@ -174,16 +181,49 @@ const tableLinkFieldTarget = (
   for (const module of context.releaseSet.modules)
     for (const recordType of module.content.recordTypes)
       for (const field of recordType.fields)
-        if (sameId(String(field.fieldId), fieldId))
-          return field.type === "link" && field.settings.target.state === "resolved"
-            ? {
-                sourceRecordTypeId: String(recordType.recordTypeId),
-                moduleRootId: String(field.settings.target.moduleRootId),
-                recordTypeId: String(field.settings.target.recordTypeId),
-              }
-            : undefined;
+        if (sameId(String(field.fieldId), fieldId)) {
+          if (field.type !== "link" || field.settings.target.state !== "resolved") return undefined;
+          const declared = field.settings.dependsOn;
+          const parent =
+            declared === undefined
+              ? undefined
+              : recordType.fields.find((candidate) =>
+                  sameId(String(candidate.fieldId), String(declared.parentFieldId)),
+                );
+          const parentTarget =
+            parent?.type === "link" && parent.settings.target.state === "resolved"
+              ? parent.settings.target
+              : undefined;
+          return {
+            sourceRecordTypeId: String(recordType.recordTypeId),
+            moduleRootId: String(field.settings.target.moduleRootId),
+            recordTypeId: String(field.settings.target.recordTypeId),
+            ...(declared === undefined
+              ? {}
+              : {
+                  dependency: {
+                    parentFieldId: String(declared.parentFieldId),
+                    filterFieldId: String(declared.filterFieldId),
+                    parentTarget:
+                      parentTarget === undefined
+                        ? undefined
+                        : {
+                            moduleRootId: String(parentTarget.moduleRootId),
+                            recordTypeId: String(parentTarget.recordTypeId),
+                          },
+                  },
+                }),
+          };
+        }
   return undefined;
 };
+
+/** A link field's declared dependency, resolved against the installed release. */
+type LinkDependency = Readonly<{
+  parentFieldId: string;
+  filterFieldId: string;
+  parentTarget: Readonly<{ moduleRootId: string; recordTypeId: string }> | undefined;
+}>;
 
 export type RecordChoicePageResult =
   | Readonly<{
@@ -212,6 +252,8 @@ export const loadRecordChoicePage = async (
     installationRevision: number;
     releaseKey: string;
     subjectRecordId?: string;
+    /** For a dependent link field: the record chosen in the field it depends on, in the editor's draft. */
+    parentRecordId?: string;
     search?: string;
     pageSize?: number;
     continuationToken?: string;
@@ -225,6 +267,8 @@ export const loadRecordChoicePage = async (
   const placement = placements.find((entry) => sameId(entry.placementId, request.placementId));
   if (placement === undefined) return { kind: "refused", cause: "placement_not_found" };
   let declaredTargets: readonly Readonly<{ moduleRootId: string; recordTypeId: string }>[];
+  /** For a dependent field being edited: the parent the viewer chose, which narrows the choices. */
+  let dependency: Readonly<{ link: LinkDependency; parentRecordId: string }> | undefined;
   if (request.fieldId !== undefined) {
     // A Records table's link picker offers the target records of one declared field.
     if (request.purpose === undefined) return { kind: "refused", cause: "purpose_missing" };
@@ -245,12 +289,24 @@ export const loadRecordChoicePage = async (
     const readable = await createHumanOrganizationRequestService(dependencies).run(
       session,
       selection,
-      (transaction, scope) =>
-        decideRecordTypeFieldIds(transaction, scope, context, filtered.sourceRecordTypeId, "read"),
+      (transaction) => readRecordTypeVisibleFieldIds(transaction, filtered.sourceRecordTypeId),
     );
     if (readable.kind === "temporarily_unavailable") return readable;
     if (readable.kind !== "available" || !readable.value.has(request.fieldId.toLowerCase()))
       return { kind: "refused", cause: "link_field_withheld" };
+    if (request.purpose === "edit" && filtered.dependency !== undefined) {
+      // The parent is the editor's draft, never authority: it must be a parent link the viewer may
+      // read, and the record itself is read again below under the viewer's access.
+      const link = filtered.dependency;
+      const detail = `child=${request.fieldId} parent=${link.parentFieldId}`;
+      if (request.parentRecordId === undefined)
+        return { kind: "refused", cause: `dependency_parent_missing ${detail}` };
+      if (link.parentTarget === undefined)
+        return { kind: "refused", cause: `dependency_parent_not_a_link ${detail}` };
+      if (!readable.value.has(link.parentFieldId.toLowerCase()))
+        return { kind: "refused", cause: `dependency_parent_withheld ${detail}` };
+      dependency = { link, parentRecordId: request.parentRecordId };
+    }
     declaredTargets = [filtered];
   } else {
     if (!isLinkInputPlacement(placement))
@@ -285,11 +341,12 @@ export const loadRecordChoicePage = async (
     });
   }
   if (targets.length === 0) return { kind: "refused", cause: "no_targets" };
-  const demand = await prepareRuntimePreviewChoices(
-    session,
-    context,
-    targets.map((target) => target.recordTypeId),
-  );
+  const demand = await prepareRuntimePreviewChoices(session, context, [
+    ...targets.map((target) => target.recordTypeId),
+    ...(dependency?.link.parentTarget === undefined
+      ? []
+      : [dependency.link.parentTarget.recordTypeId]),
+  ]);
   if (demand.kind !== "ready")
     return demand.kind === "temporarily_unavailable"
       ? { kind: "temporarily_unavailable" }
@@ -299,8 +356,50 @@ export const loadRecordChoicePage = async (
     ...dependencies,
     continuationKey: getQueryContinuationKey(),
   });
+  let narrowedBy: RecordChoiceCommand["narrowedBy"];
+  if (dependency !== undefined && dependency.link.parentTarget !== undefined) {
+    const parentTarget = dependency.link.parentTarget;
+    const parentModule = context.releaseSet.modules.find((candidate) =>
+      sameId(String(candidate.rootId), parentTarget.moduleRootId),
+    );
+    const parentType = parentModule?.content.recordTypes.find((candidate) =>
+      sameId(String(candidate.recordTypeId), parentTarget.recordTypeId),
+    );
+    if (parentModule === undefined || parentType === undefined)
+      return { kind: "refused", cause: "dependency_parent_not_installed" };
+    // The chosen parent must be a record the viewer may read now; otherwise the picker is refused.
+    const parentRead = await queries.run(session, selection, {
+      moduleRootId: String(parentModule.rootId),
+      queryId: queryIdSchema.parse(String(parentType.recordTypeId)),
+      inputValues: {},
+      requestedFieldIds: [String(parentType.titleFieldId)],
+      requestedSystemFieldKeys: [],
+      sort: [],
+      sortableFieldIds: [],
+      filterableFieldIds: [],
+      searchableFieldIds: [],
+      pageSize: 1,
+      exactRecordId: dependency.parentRecordId,
+    });
+    if (parentRead.kind === "temporarily_unavailable") return { kind: "temporarily_unavailable" };
+    if (
+      parentRead.kind !== "available" ||
+      parentRead.value.outcome !== "completed" ||
+      parentRead.value.rows.length !== 1
+    )
+      return {
+        kind: "refused",
+        cause: `dependency_parent_unreadable child=${request.fieldId} parent=${dependency.link.parentFieldId}`,
+      };
+    narrowedBy = {
+      fieldId: dependency.link.filterFieldId,
+      recordTypeId: parentTarget.recordTypeId,
+      recordId: dependency.parentRecordId,
+    } as RecordChoiceCommand["narrowedBy"];
+  }
   const read = await createRecordChoiceReader(queries).read(session, selection, {
     targets,
+    ...(narrowedBy === undefined ? {} : { narrowedBy }),
     ...(request.search === undefined || request.search.trim() === ""
       ? {}
       : { search: request.search }),

@@ -5,7 +5,6 @@ import {
   type HumanOrganizationRequestDependencies,
   type InstalledRuntimeContext,
   type StoredGridViews,
-  decideRecordTypeFieldIds,
 } from "@vortex/platform/server";
 import { readRecordsTableViewId, type GridLayoutStorage } from "@vortex/platform/schema";
 import type {
@@ -24,7 +23,7 @@ export type PageGridLayouts = Readonly<{
   storage: GridLayoutStorage;
   stored: StoredGridViews;
   /**
-   * The fields the person can read on at least one record, by lower-cased record type identity:
+   * The columns the person may read now, decided by access route, by lower-cased record type identity:
    * a grid lists, reads and offers only these columns. Undefined in a preview, whose builder sees
    * every field.
    */
@@ -32,6 +31,7 @@ export type PageGridLayouts = Readonly<{
 }>;
 
 const NONE: StoredGridViews = {
+  readable: new Map(),
   roleKeys: new Set(),
   shareable: new Set(),
   layouts: new Map(),
@@ -87,7 +87,7 @@ export const pageGridLayoutRequest = (
 
 /**
  * Reads every stored layout of the named grid placements, and the person's current field policy
- * for the record types those grids read, in one protected request, so a page with several grids
+ * for the record types those grids read (decided by access route, never by scanning records), in one protected request, so a page with several grids
  * makes one layout read. A preview stores nothing. A failed read is logged and refused; silently
  * showing a different projection would disregard the person's saved layout.
  */
@@ -95,7 +95,6 @@ export const readPageGridLayouts = async (
   session: IdentitySession,
   dependencies: HumanOrganizationRequestDependencies,
   selection: OrganizationSelectionCandidate,
-  context: InstalledRuntimeContext,
   pageId: string,
   grids: readonly PageGrid[],
 ): Promise<PageGridLayouts> => {
@@ -106,21 +105,16 @@ export const readPageGridLayouts = async (
   const result = await createHumanOrganizationRequestService(dependencies).run(
     session,
     selection,
-    async (transaction, scope) => {
+    async (transaction) => {
       const stored = await readGridViews(
         transaction,
         pageId,
         grids.map((grid) => grid.placementId),
         grids.flatMap((grid) => (grid.selectedViewId === undefined ? [] : [grid.selectedViewId])),
+        recordTypeIds,
         grids.flatMap((grid) => grid.defaultViews),
       );
-      const readable = new Map<string, ReadonlySet<string>>();
-      for (const recordTypeId of recordTypeIds)
-        readable.set(
-          recordTypeId,
-          await decideRecordTypeFieldIds(transaction, scope, context, recordTypeId, "read"),
-        );
-      return { stored, readable };
+      return { stored, readable: stored.readable };
     },
   );
   if (result.kind === "available") return { storage: "personal", ...result.value };

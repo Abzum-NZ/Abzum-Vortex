@@ -18,6 +18,7 @@ import {
   type RecordsTableFilterValue,
   type RecordsTableSortKey,
   type RecordsTableSortState,
+  type RecordsTableExportFormat,
   RECORDS_TABLE_MAXIMUM_SORT_KEYS,
   gridLayoutStateSchema,
   type GridLayout,
@@ -120,6 +121,8 @@ export type DisplayRow = Readonly<{
   format?: RecordsTableRowFormat;
   /** A tree row the viewer may read a child of, decided on the server. */
   hasChildren?: true;
+  /** The exact text of each readable number and money cell, for the range copy (see the server). */
+  exact?: Readonly<Record<string, string>>;
 }>;
 
 /** One declared table column; only declared columns are ever rendered. */
@@ -359,6 +362,11 @@ export type DisplaySemanticEventName =
   | "export_requested"
   | "export_cancelled"
   /**
+   * A Records table's status bar asks the page for the totals of the selected range of the shown
+   * page; the handler resolves to the server's answer. It is a read, not a flow event.
+   */
+  | "range_summary_requested"
+  /**
    * A Records table's pivot asks for one page of its rows, opens the pivot or closes it, or a cell
    * opens the ordinary grid on the records it counts. These are the Pivot feature's own reads and
    * address changes, not flow events.
@@ -372,6 +380,7 @@ export type DisplaySemanticEventName =
    * without a read). These are the Group by feature's own reads and address changes, not flow events.
    */
   | "group_changed"
+  | "group_page_changed"
   | "group_requested"
   | "group_opened"
   /** The Saved views feature asks the host to open, store, share or delete a view. */
@@ -384,8 +393,8 @@ export type DisplaySemanticEventName =
  *
  * A row click, row action, bulk action and inline-edit commit carry the stable `eventId` of the
  * exact configured control that fired, because one table placement may declare several named
- * commands that each bind to a different flow. Other displays with a single placement-level
- * action emit `row_action` without an event identity.
+ * commands that each bind to a different flow. A block without a row-action list names its one row
+ * action in its required `row_action_event_id` setting, and every `row_action` it emits carries it.
  *
  * A row action carries the row's server-projected current revision, exactly as an inline-edit commit
  * does, so a command that changes one existing row is bound at the revision the person actually saw
@@ -396,7 +405,7 @@ export type DisplaySemanticEvent =
   | Readonly<{ event: "row_clicked"; eventId: string; recordId: string }>
   | Readonly<{
       event: "row_action";
-      eventId?: string;
+      eventId: string;
       recordId: string;
       /** The record revision the row was read at; a stale one is refused by the server. */
       revision?: number;
@@ -415,6 +424,8 @@ export type DisplaySemanticEvent =
       field: string;
       /** Why the records are read: to filter by them, or to choose one in an edited cell. */
       purpose: "filter" | "edit";
+      /** For a dependent link field: the record chosen in the field it depends on, in the draft. */
+      parentRecordId?: string;
       search?: string;
       continuationToken?: string;
     }>
@@ -433,6 +444,11 @@ export type DisplaySemanticEvent =
       /** Groups the table by its authored field, or (null) shows the records ungrouped. */
       event: "group_changed";
       grouped: boolean;
+    }>
+  | Readonly<{
+      /** Shows another page of the groups: the position of the page before it, or null for the first. */
+      event: "group_page_changed";
+      after: string | null;
     }>
   | Readonly<{
       /** Asks for one page of the members of one group; its handler resolves to that page. */
@@ -494,9 +510,24 @@ export type DisplaySemanticEvent =
   /** Widens the selection to every matching record, or clears it (and a finished run's summary). */
   | Readonly<{ event: "selection_scope_changed"; scope: "matching" | "cleared" }>
   /** Downloads the rows ticked on the page, the records of the current view, or every matching record. */
-  | Readonly<{ event: "export_requested"; scope: "selected" | "view" | "matching" }>
+  | Readonly<{
+      event: "export_requested";
+      scope: "selected" | "view" | "matching";
+      format: RecordsTableExportFormat;
+    }>
   /** Stops the export in progress; no file is saved. */
   | Readonly<{ event: "export_cancelled" }>
+  /**
+   * Asks for the totals of the selected range: the shown page's record identities and the columns
+   * the status bar offers. The handler resolves to a `RecordsRangeSummaryResult`; `signal` aborts
+   * a request the range has moved past.
+   */
+  | Readonly<{
+      event: "range_summary_requested";
+      recordIds: readonly string[];
+      fieldIds: readonly string[];
+      signal: AbortSignal;
+    }>
   | Readonly<{
       event: "row_edit";
       eventId: string;
@@ -595,6 +626,7 @@ export const DISPLAY_EVENT_NAMES: readonly DisplaySemanticEventName[] = Object.f
   "pivot_view_changed",
   "pivot_drilled",
   "group_changed",
+  "group_page_changed",
   "group_requested",
   "group_opened",
   "grid_view_requested",
@@ -606,6 +638,7 @@ export const DISPLAY_EVENT_NAMES: readonly DisplaySemanticEventName[] = Object.f
   "selection_scope_changed",
   "export_requested",
   "export_cancelled",
+  "range_summary_requested",
   "inline_edit",
   "row_edit",
   "card_moved",
@@ -928,6 +961,20 @@ const parseEditValues = (
   return Object.freeze(values);
 };
 
+/** The exact number and money texts of a row's cells, keyed by column. */
+const parseExactValues = (
+  value: unknown,
+  location: DefinitionRenderErrorLocation,
+): Readonly<Record<string, string>> => {
+  const record = requireRecord(value, "A projected row's exact values must be an object", location);
+  const values: Record<string, string> = {};
+  for (const [key, held] of Object.entries(record)) {
+    const field = requireFieldKey(key, `Invalid projected exact key '${key}'`, location);
+    values[field] = requireNonEmptyString(held, "A projected exact value must be text", location);
+  }
+  return Object.freeze(values);
+};
+
 const parseRows = (
   value: unknown,
   location: DefinitionRenderErrorLocation,
@@ -940,7 +987,7 @@ const parseRows = (
       const record = requireRecord(item, "A projected row must be an object", rowLocation);
       requireExactKeys(
         record,
-        ["recordId", "revision", "capabilities", "edit", "cells", "format", "hasChildren"],
+        ["recordId", "revision", "capabilities", "edit", "cells", "format", "hasChildren", "exact"],
         rowLocation,
       );
       if (record.hasChildren !== undefined && record.hasChildren !== true)
@@ -993,8 +1040,16 @@ const parseRows = (
               ...rowLocation,
               propertyPath: [`rows[${index}]`, "format"],
             });
+      const exact =
+        record.exact === undefined
+          ? undefined
+          : parseExactValues(record.exact, {
+              ...rowLocation,
+              propertyPath: [`rows[${index}]`, "exact"],
+            });
       return Object.freeze({
         recordId,
+        ...(exact === undefined ? {} : { exact }),
         ...(revision === undefined ? {} : { revision }),
         ...(capabilities === undefined ? {} : { capabilities }),
         ...(edit === undefined ? {} : { edit }),

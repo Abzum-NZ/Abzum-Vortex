@@ -26,6 +26,7 @@ import {
   type SourceSlotOrder,
 } from "../schema";
 import { applicationModuleKeys } from "./application-module-sources";
+import { sourceAliasSchema } from "./definition-source-common";
 import { IMMUTABLE_PLATFORM_BLOCK_CATALOGUE } from "./application-composition-catalogue";
 
 /**
@@ -167,6 +168,26 @@ export function validateApplicationSourceCatalogue(
     location: readonly Segment[],
     release: PlatformBlockRelease,
   ): void => {
+    // A block with one row action (no list of them) declares its event identity in
+    // `row_action_event_id`; a flow binding of that block's `row_action` must carry exactly it.
+    const declaredRowAction = settings.row_action_event_id;
+    if (declaredRowAction?.kind === "text") {
+      if (!sourceAliasSchema.safeParse(declaredRowAction.value).success)
+        report("vortex.definition.application_block_settings", "invalid_value", [
+          ...location,
+          ...keySegment("setting", "row_action_event_id"),
+        ]);
+      for (const binding of source.body.flow_bindings)
+        if (
+          binding.control === placementAlias &&
+          binding.event === "row_action" &&
+          binding.event_id !== declaredRowAction.value
+        )
+          report("vortex.definition.application_block_references", "broken_reference", [
+            ...location,
+            ...keySegment("setting", "row_action_event_id"),
+          ]);
+    }
     const table = readRecordsTableContract(settings);
     const detail = table === undefined ? readRecordDetailContract(settings) : undefined;
     if (
@@ -228,7 +249,7 @@ export function validateApplicationSourceCatalogue(
         report(
           "vortex.definition.application_block_settings",
           "unsupported_choice",
-          at(refusal === "definition_records_table_row_action_limit" ? "row_actions" : "viewport"),
+          at(refusal === "definition_records_table_bounded_scrolling" ? "viewport" : "row_actions"),
           refusal,
         );
       // The default order is a sort a person could choose: each key is a declared sortable field.
