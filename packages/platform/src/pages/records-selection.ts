@@ -99,6 +99,9 @@ export type RecordsTableBulkRefusalReason = (typeof recordsTableBulkRefusalReaso
 
 const countSchema = z.number().int().nonnegative();
 
+/** Maximum distinct authored warning messages carried by one bulk summary. */
+export const recordsTableBulkWarningMaximum = 100;
+
 /**
  * The lines a bulk run streams back: progress after every batch, then one summary. `total` is the
  * number of records the selection held when the run resolved it; `changed` counts the records the
@@ -117,6 +120,9 @@ export const recordsTableBulkRunLineSchema = z.discriminatedUnion("kind", [
       kind: z.literal("summary"),
       total: countSchema,
       done: countSchema,
+      warnings: z
+        .array(z.object({ message: z.string().min(1), count: z.number().int().min(1) }).strict())
+        .max(recordsTableBulkWarningMaximum),
       refused: z
         .array(
           z.object({ reason: z.enum(recordsTableBulkRefusalReasons), count: countSchema }).strict(),
