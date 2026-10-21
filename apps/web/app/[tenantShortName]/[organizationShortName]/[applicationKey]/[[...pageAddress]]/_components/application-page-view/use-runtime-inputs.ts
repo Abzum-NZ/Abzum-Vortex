@@ -315,10 +315,7 @@ export function useRuntimeInputs({
             await onOpenApplication(event);
           };
         for (const kind of ["row_clicked", "row_action"] as const)
-          if (
-            supportsEvent(kind) &&
-            bindings.some((binding) => binding.event === kind)
-          )
+          if (supportsEvent(kind) && bindings.some((binding) => binding.event === kind))
             events[kind] = (event: DisplaySemanticEvent) => {
               const binding = bindingFor(bindings, event);
               if (binding === undefined) {

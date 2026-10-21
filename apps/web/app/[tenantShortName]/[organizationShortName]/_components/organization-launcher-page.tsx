@@ -91,10 +91,7 @@ export function OrganizationLauncherPage({
                   console.error("[launcher] open refused: ROW_ACTION_EVENT_UNKNOWN");
                   return;
                 }
-                if (
-                  studio !== undefined &&
-                  event.recordId === studio.tileId
-                ) {
+                if (studio !== undefined && event.recordId === studio.tileId) {
                   router.push(studio.href);
                   return;
                 }
