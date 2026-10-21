@@ -41,6 +41,11 @@ export type RecordsTableGroupRead = Readonly<{
   unassignedLabel: string;
   expanded: string | null;
   membersOnly: boolean;
+  /**
+   * The table reads a grouped query, so it has no flat rows: when its groups cannot be counted
+   * for this viewer it is refused instead of read flat.
+   */
+  required: boolean;
 }>;
 
 /** The typed selector that names one group's members: the group's value in the field's own type. */

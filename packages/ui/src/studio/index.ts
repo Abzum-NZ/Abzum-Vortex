@@ -45,6 +45,7 @@ export type { StudioCompileFailure } from "./compile-failure";
 export * from "./studio-setting-controls";
 export * from "./studio-grid-features";
 export * from "./grid-features";
+export * from "./grouped-table-preset";
 export {
   StudioRowActionsBindings,
   applyStudioRowActionChange,

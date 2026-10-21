@@ -676,8 +676,11 @@ export const parseTableFeatures = (
   let grouping: RecordsTableFeatureProjection["grouping"];
   if (record.grouping !== undefined) {
     const held = requireRecord(record.grouping, "Projected grouping is invalid", location);
-    requireExactKeys(held, ["fieldId", "label", "unassignedLabel"], location);
+    requireExactKeys(held, ["fieldId", "label", "unassignedLabel", "required"], location);
+    if (held.required !== undefined && held.required !== true)
+      fail("A projected grouping says whether it is required", location);
     grouping = Object.freeze({
+      ...(held.required === true ? { required: true as const } : {}),
       fieldId: requireNonEmptyString(held.fieldId, "Grouping needs its field", location),
       label: requireNonEmptyString(held.label, "Grouping needs its field's name", location),
       unassignedLabel: requireNonEmptyString(
