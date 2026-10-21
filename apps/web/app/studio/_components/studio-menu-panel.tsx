@@ -71,6 +71,9 @@ export function StudioMenuPanel({
   const [editing, setEditing] = useState<string | null>(null);
   const treeHost = useRef<HTMLDivElement>(null);
   const [newPage, setNewPage] = useState("");
+  const [addingHeading, setAddingHeading] = useState(false);
+  const [headingName, setHeadingName] = useState("");
+  const [firstPage, setFirstPage] = useState("");
   const pages = useMemo(() => studioMenuPageChoices(source), [source]);
   const library = source.body.theme.selection.icon_library;
 
@@ -161,6 +164,11 @@ export function StudioMenuPanel({
     });
   };
   const remove = async (item: StudioMenuItem) => {
+    const position = studioMenuPosition(source, item.id);
+    if (position?.headingAlias !== null && position?.length === 1) {
+      run({ kind: "remove", alias: item.id });
+      return;
+    }
     if (
       !(await confirm({
         title: `Remove "${item.label}" from the menu?`,
@@ -266,6 +274,27 @@ export function StudioMenuPanel({
             ...action,
             label: index === 0 ? "Move up" : "Move down",
           })),
+          ...(item.type === "heading"
+            ? []
+            : source.body.navigation
+                .filter((entry) => entry.type === "heading")
+                .filter((entry) => entry.id !== position.headingAlias)
+                .map((heading) => ({
+                  label: `Move under heading: ${heading.label}`,
+                  icon: "chevron-right" as const,
+                  disabled,
+                  onClick: () => {
+                    if (
+                      run({
+                        kind: "move",
+                        alias: item.id,
+                        headingAlias: heading.id,
+                        index: heading.children.length,
+                      })
+                    )
+                      focusRow(item.id);
+                  },
+                }))),
           ...(position.headingAlias !== null
             ? [
                 {
@@ -333,6 +362,74 @@ export function StudioMenuPanel({
             The theme names an icon library Studio does not offer, so icons here are drawn with
             Lucide. Choose an icon library in Theme.
           </p>
+        )}
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={disabled}
+          aria-expanded={addingHeading}
+          onClick={() => setAddingHeading((open) => !open)}
+        >
+          Add a heading
+        </Button>
+        {addingHeading && (
+          <form
+            aria-label="New menu heading"
+            className="space-y-3 rounded-md border p-3"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (
+                run({
+                  kind: "add_heading",
+                  label: headingName,
+                  first: { kind: "page", pageKey: firstPage },
+                })
+              ) {
+                setHeadingName("");
+                setFirstPage("");
+                setAddingHeading(false);
+              }
+            }}
+          >
+            <StudioField label="Heading name">
+              {(control) => (
+                <Input
+                  {...control}
+                  value={headingName}
+                  required
+                  maxLength={60}
+                  disabled={disabled}
+                  onChange={(event) => setHeadingName(event.target.value)}
+                />
+              )}
+            </StudioField>
+            <StudioField label="First page">
+              {(control) => (
+                <NativeSelect
+                  {...control}
+                  value={firstPage}
+                  required
+                  disabled={disabled}
+                  onChange={(event) => setFirstPage(event.target.value)}
+                >
+                  <NativeSelectOption value="">Choose a page…</NativeSelectOption>
+                  {pages.map((page) => (
+                    <NativeSelectOption key={page.key} value={page.key}>
+                      {page.label}
+                    </NativeSelectOption>
+                  ))}
+                </NativeSelect>
+              )}
+            </StudioField>
+            <Button
+              type="submit"
+              size="sm"
+              disabled={disabled || headingName.trim().length === 0 || firstPage.length === 0}
+            >
+              Create heading
+            </Button>
+          </form>
         )}
         <form onSubmit={addEntry} className="flex items-end gap-2" aria-label="New menu entry">
           <StudioField
@@ -455,7 +552,6 @@ function StudioMenuEntryEditor({
   const [headingLabel, setHeadingLabel] = useState("");
   const pages = useMemo(() => studioMenuPageChoices(source), [source]);
   const permissions = useMemo(() => studioAccessGateChoices(source), [source]);
-  const headings = source.body.navigation.filter((entry) => entry.type === "heading");
   const permission =
     item.type === "heading"
       ? undefined
@@ -577,48 +673,18 @@ function StudioMenuEntryEditor({
           A heading shows when a person can see at least one entry under it.
         </p>
       )}
-      {item.type !== "heading" && headings.length > 0 && (
-        <StudioField label="Put under a heading">
-          {(control) => (
-            <NativeSelect
-              {...control}
-              value={position.headingAlias ?? ""}
-              disabled={disabled}
-              onChange={(event) => {
-                const target = headings.find((heading) => heading.id === event.target.value);
-                run(
-                  target === undefined
-                    ? {
-                        kind: "move",
-                        alias: item.id,
-                        headingAlias: null,
-                        index: source.body.navigation.length,
-                      }
-                    : {
-                        kind: "move",
-                        alias: item.id,
-                        headingAlias: target.id,
-                        index: target.type === "heading" ? target.children.length : 0,
-                      },
-                );
-              }}
-            >
-              <NativeSelectOption value="">No heading (top level)</NativeSelectOption>
-              {headings.map((heading) => (
-                <NativeSelectOption key={heading.id} value={heading.id}>
-                  {heading.label}
-                </NativeSelectOption>
-              ))}
-            </NativeSelect>
-          )}
-        </StudioField>
-      )}
       {item.type !== "heading" && position.headingAlias === null && (
         <form
           className="flex items-end gap-2"
           onSubmit={(event) => {
             event.preventDefault();
-            if (run({ kind: "add_heading", label: headingLabel, aroundAlias: item.id }))
+            if (
+              run({
+                kind: "add_heading",
+                label: headingLabel,
+                first: { kind: "item", alias: item.id },
+              })
+            )
               setHeadingLabel("");
           }}
         >
