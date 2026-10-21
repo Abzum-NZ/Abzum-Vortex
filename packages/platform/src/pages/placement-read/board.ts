@@ -9,7 +9,7 @@ import {
 } from "../../schema";
 import { buildRecordsTableNarrowing } from "../records-table-query";
 import { logRecordsTableRequestRefusal } from "../records-table-features";
-import { readRecordsTableQueryState } from "../records-table-state";
+import { readRecordsTableQueryState, readRecordsTableView } from "../records-table-state";
 import { projectBoardPlacement } from "../board-query";
 import { filterTimeZone } from "./records-table";
 import {
@@ -26,8 +26,8 @@ import type { PlacementReadInput } from "./types";
  * A Records table in Board mode: only requested columns carry counts, totals and member pages.
  * The viewer's filters come from the page address through the one table state codec, are checked
  * against the declared Column filters and the fields the viewer can read, and narrow every column
- * read and total; a board has no sort, search, grouping or page position of its own, so an address
- * naming one is refused rather than ignored.
+ * read and total; a board has no sort, search, grouping, page position or saved view of its own, so
+ * an address naming one is refused rather than ignored.
  */
 export const readBoard = async (
   read: PlacementReadInput,
@@ -58,7 +58,8 @@ export const readBoard = async (
     state.search !== null ||
     state.page !== undefined ||
     state.group !== undefined ||
-    state.pivot !== undefined
+    state.pivot !== undefined ||
+    readRecordsTableView(placementId, addressEntries) !== undefined
   ) {
     logPlacementFailure(read.address, placementId, "board_state_unsupported");
     read.data[placementId] = { status: "refused", reason: "not_permitted" };
