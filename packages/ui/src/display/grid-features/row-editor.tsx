@@ -21,7 +21,6 @@ import { Label } from "../../components/label";
 import { NativeSelect, NativeSelectOption } from "../../components/native-select";
 import { Popover, PopoverContent, PopoverTrigger } from "../../components/popover";
 import { Textarea } from "../../components/textarea";
-import { toast } from "../../components/sonner";
 import { useUnsavedWorkRegistry } from "../../controls/unsaved-work";
 import { Pencil } from "lucide-react";
 import { useDateFormatOptions } from "../date-format-context";
@@ -255,30 +254,29 @@ function RowEditScope({ context, children, retainRow }: GridFeatureScopeProps): 
         typeof answer.message === "string" &&
         typeof answer.changed === "boolean"
       ) {
-        setMessage(answer.message);
-        if (!answer.changed) toast.error(answer.message);
         setConflict(answer.changed);
-        // Rules without a field location apply to the row as a whole. Attach their safe message
-        // to every submitted cell as well as announcing it at the row's Save control.
         const corrections =
-          answer.corrections === undefined
+          answer.changed || answer.corrections === undefined
             ? []
             : flowFieldCorrectionSchema.array().parse(answer.corrections);
         const located = corrections.filter((correction) =>
           Object.keys(values).some((field) => same(field, correction.field)),
         );
-        setErrors(
-          Object.fromEntries(
-            located.length === 0
-              ? Object.keys(values).map((field) => [field, answer.message as string])
-              : located.map((correction) => [
-                  Object.keys(values).find((field) => same(field, correction.field))!,
-                  correction.message ??
-                    (correction.code === "required_value"
-                      ? "This field is required."
-                      : "Check this value."),
-                ]),
-          ),
+        const fieldErrors = Object.fromEntries(
+          located.map((correction) => [
+            Object.keys(values).find((field) => same(field, correction.field))!,
+            correction.message ??
+              (correction.code === "required_value"
+                ? "This field is required."
+                : "Check this value."),
+          ]),
+        );
+        const count = Object.keys(fieldErrors).length;
+        setErrors(fieldErrors);
+        setMessage(
+          count === 0
+            ? answer.message
+            : `Correct ${count} ${count === 1 ? "field" : "fields"} before saving.`,
         );
       } else fail("A row save returned an invalid outcome", { propertyPath: ["row_edit"] });
     } catch (error) {
@@ -334,9 +332,11 @@ function RowEditScope({ context, children, retainRow }: GridFeatureScopeProps): 
   return (
     <RowEditingContext.Provider value={editing}>
       {children}
-      <span role="status" aria-live="polite" className="sr-only">
-        {message}
-      </span>
+      {context.presentation === "cards" && draft === undefined ? (
+        <span role="status" aria-live="polite" className="sr-only">
+          {message}
+        </span>
+      ) : null}
     </RowEditingContext.Provider>
   );
 }
