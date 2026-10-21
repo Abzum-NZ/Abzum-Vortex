@@ -134,8 +134,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       case "temporarily_unavailable":
         logRefusal("record-choices", "record choice page", "temporarily_unavailable");
         return privateResponse({ kind: "temporarily_unavailable" }, 503);
-      default:
-        return refusedResponse(`record_choices_${result.cause}`);
+      default: {
+        // A cause may name the fields involved after its code; those stay in the log.
+        const [code, ...detail] = result.cause.split(" ");
+        return refusedResponse(
+          `record_choices_${code}`,
+          detail.length === 0 ? undefined : detail.join(" "),
+        );
+      }
     }
   } catch (error) {
     logRefusal("record-choices", "record choice page", "record_choices_failed", error);
