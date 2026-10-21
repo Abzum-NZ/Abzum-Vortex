@@ -4474,6 +4474,10 @@
                 "enabled": {
                   "kind": "boolean",
                   "value": false
+                },
+                "opens_grouped": {
+                  "kind": "boolean",
+                  "value": false
                 }
               }
             },
@@ -4544,6 +4548,17 @@
                 "integer": true,
                 "minimum": 1,
                 "maximum": 200
+              },
+              {
+                "kind": "boolean",
+                "key": "opens_grouped",
+                "label": "Open grouped",
+                "help": "Show the table in groups when it opens; people can still ungroup it. Off shows the records flat until someone groups them",
+                "required": false,
+                "defaultValue": {
+                  "kind": "boolean",
+                  "value": false
+                }
               }
             ]
           },
@@ -5126,6 +5141,10 @@
               "kind": "group",
               "properties": {
                 "enabled": {
+                  "kind": "boolean",
+                  "value": false
+                },
+                "opens_grouped": {
                   "kind": "boolean",
                   "value": false
                 }
