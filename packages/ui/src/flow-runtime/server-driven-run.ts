@@ -5,6 +5,7 @@ import {
   isSurfaceCancellation,
   readConfirmIntent,
   readFormIntent,
+  readMessageIntent,
   type FlowIntent,
   type FlowIntentHost,
 } from "./intents";
@@ -101,6 +102,14 @@ export async function driveServerFlow(
           }
           for (const intent of response.intents) {
             if (signal?.aborted) return abandoned();
+            // A success message of a run that ended refused or failed described an outcome that
+            // did not happen; the page tells the person why it ended instead.
+            if (
+              response.failure !== undefined &&
+              intent.kind === "show_message" &&
+              readMessageIntent(intent)?.tone === "success"
+            )
+              continue;
             await performPresentationIntent(intent, host, signal);
           }
           return {

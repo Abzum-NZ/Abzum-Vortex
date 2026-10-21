@@ -24,11 +24,13 @@ import {
   type SelectedOrganizationScope,
   type SystemApplicationBoundReleaseSetResult,
 } from "../schema";
+import { builderPermissionKeys } from "./builder-authority";
 import { classifyDatabaseError } from "./definition-error";
 import {
   InstallationProblem,
   installationOperation,
   installationProblem,
+  readInstallationHumanContext,
   readInstallationPermissionDeadline,
   requireInstallationAuthority,
   type InstallationHumanContext,
@@ -578,14 +580,28 @@ export const requireRoleAcceptanceAuthority = async (
     templatePermissions(releaseSet, sourceRoleId).map((entry) => entry.reference),
   );
   if (conferred.length === 0) return;
-  await inInstallerRequest(environment, session, selector, (transaction, scope) =>
-    named("installation_roles_delegation_refused", "member_role_delegation", () =>
+  await inInstallerRequest(environment, session, selector, async (transaction, scope, issuedAt) => {
+    // The first missing piece is named: Manage applications, then the delegated scope; a stale
+    // sign-in keeps its own meaning and is decided with the delegated scope.
+    const context = await readInstallationHumanContext(transaction, scope, session, issuedAt, {
+      organizationId: selector.organizationId,
+    });
+    await named("installation_roles_applications_manage_refused", "installation_authority", () =>
+      readInstallationPermissionDeadline(
+        transaction,
+        scope,
+        context,
+        environment.permissions,
+        builderPermissionKeys.applicationsManage,
+      ),
+    );
+    await named("installation_roles_delegation_refused", "member_role_delegation", () =>
       requireInstallationAuthority(transaction, scope, environment.permissions, {
         ...installationOperation(selector.rootId, containsCustomComponents),
         acceptedPermissions: conferred,
       }),
-    ),
-  );
+    );
+  });
 };
 
 /** Whether prepared evidence names exactly the permissions, with their meaning, the release's template grants. */

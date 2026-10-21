@@ -90,6 +90,12 @@ const refusalFeedbackText = (feedback: Extract<FormFlowFeedback, { kind: "refusa
       return "Accepting application role changes keeps the role settings. Use Manage roles to change its name, description, classification or assignment and activation settings.";
     case "application_storage_incompatible":
       return "This version changes stored fields in a way existing records cannot accept. Keep existing choice options unchanged when adding options, and preserve field types, storage and ownership settings.";
+    case "applications_manage_required":
+      return "Installing or upgrading applications needs the Manage applications permission. An organisation steward can give you a role that has it in IAM.";
+    case "installation_delegation_required":
+      return "Installing this application needs app-installation authority over the permissions its roles grant. An organisation steward can grant it in IAM > People with Grant app-installation authority.";
+    case "assignments_manage_required":
+      return "Taking this application's role yourself needs the Manage access assignments permission. Install without taking the role, or ask an organisation steward for that permission in IAM.";
     default:
       return "The supplied inputs are invalid.";
   }

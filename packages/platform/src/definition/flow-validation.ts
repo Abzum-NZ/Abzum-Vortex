@@ -87,7 +87,25 @@ export type FlowValidationOptions = Readonly<{
    * checked; its value type belongs to the record type and is checked by the evaluator.
    */
   triggerRecordFieldExists?: (field: string) => boolean;
+  /**
+   * The declared inputs, with their types, of the operation a Call protected operation task names
+   * by its readable key. Without it, the inputs the task maps are not checked against the
+   * operation; with it, a mapped input must be one the operation declares, every required one
+   * must be mapped, and each value must be of the declared type.
+   */
+  operationInputs?: (key: string) => ReadonlyMap<string, OperationInputDeclaration> | undefined;
 }>;
+
+/** One declared input of a callable operation. */
+export type OperationInputDeclaration = Readonly<{ required: boolean; type: string }>;
+
+/**
+ * Whether a value of the given static type fills an operation input of the declared type. This is
+ * the one rule for both the publication check and Studio's offer: a value whose type is not known
+ * here is left to run time, and a set of values (a form's whole answer set) never fills one scalar.
+ */
+export const operationInputAccepts = (actual: string | undefined, expected: string): boolean =>
+  actual === undefined || valueTypesCompatible(actual, expected, "operation_input");
 
 const placementCodes: Readonly<
   Record<
@@ -722,6 +740,7 @@ export function validateFlow(
     accepted: readonly string[] | undefined,
     where: Where,
     path: Path,
+    operationInput = false,
   ) => {
     const actual = valueType(value, where, path);
     if (accepted === undefined) return;
@@ -738,6 +757,16 @@ export function validateFlow(
       return;
     }
     if (actual === undefined) return;
+    if (operationInput) {
+      if (accepted.some((expected) => operationInputAccepts(actual, expected))) return;
+      add(
+        path,
+        "vortex.definition.source_type_compatibility",
+        "invalid_value",
+        `Expected ${describe(accepted)}, found ${actual === "json" ? "a set of values" : actual}`,
+      );
+      return;
+    }
     const literal = value.kind === "literal";
     if (
       literal
@@ -793,6 +822,36 @@ export function validateFlow(
             "required_value",
             `The target flow requires the input ${name}`,
           );
+  };
+
+  /** Checks the inputs a Call protected operation task maps against the operation's declared inputs. */
+  const checkOperationInputs = (
+    operation: ReadonlyMap<string, OperationInputDeclaration>,
+    mapped: Extract<FlowValue, { kind: "map" }>,
+    where: Where,
+    path: Path,
+  ) => {
+    for (const [name, entry] of Object.entries(mapped.entries)) {
+      const declared = operation.get(name);
+      const entryPath = [...path, "entries", name];
+      if (declared === undefined) {
+        valueType(entry, where, entryPath);
+        add(
+          entryPath,
+          "vortex.definition.workflow_action_inputs",
+          "unknown_property",
+          `The operation declares no input named ${name}`,
+        );
+      } else checkValue(entry, [declared.type], where, entryPath, true);
+    }
+    for (const [name, declared] of operation)
+      if (declared.required && !Object.hasOwn(mapped.entries, name))
+        add(
+          path,
+          "vortex.definition.workflow_action_inputs",
+          "required_value",
+          `The operation requires the input ${name}`,
+        );
   };
 
   const checkProperty = (
@@ -856,6 +915,19 @@ export function validateFlow(
         `${name} needs named inputs, never an array of values`,
       );
       return;
+    }
+    if (task.type === "operation.call" && name === "inputs" && value.kind === "map") {
+      const operationKey = task.properties.operation;
+      const operation =
+        options.operationInputs !== undefined && isTextLiteral(operationKey)
+          ? options.operationInputs(
+              String((operationKey as { literal: { value: unknown } }).literal.value),
+            )
+          : undefined;
+      if (operation !== undefined) {
+        checkOperationInputs(operation, value, where, path);
+        return;
+      }
     }
     checkValue(value, acceptedTypes(declared.type), where, path);
     if (task.type === "data.set_variable" && name === "value") {

@@ -3,6 +3,7 @@ import {
   flowTaskChildLists,
   platformOperationKey,
   canonicalizeProtectedOperationReferences,
+  valueTypesCompatible,
   type DefinitionRuleFailureFamily,
   type FlowDefinition,
   type FlowTask,
@@ -11,6 +12,7 @@ import {
   type SourceFlow,
 } from "../schema";
 import type { DefinitionCompilerRefusalCode } from "./compilation-error";
+import type { OperationInputDeclaration } from "./flow-validation";
 
 /**
  * Checks every Call protected operation task of a set of compiled flows against the operations
@@ -21,12 +23,13 @@ import type { DefinitionCompilerRefusalCode } from "./compilation-error";
  *
  * When a task supplies no `inputs`, it passes the flow's own inputs to the operation by name, so
  * the flow's declarations are the typed input map and must match the operation's own: every input
- * the flow declares is one the operation takes, and every input the operation requires is one the
- * flow declares.
+ * the flow declares is one the operation takes, of a type it accepts, and every input the
+ * operation requires is one the flow declares. A task that maps `inputs` is checked by the flow
+ * validator (`validateFlow` with the operation's declared inputs), on the same declarations.
  */
 
-/** The operation's inputs by name, each with whether it is required. */
-type CallableOperationInputs = ReadonlyMap<string, boolean>;
+/** The operation's inputs by name, each with whether it is required and its declared type. */
+export type CallableOperationInputs = ReadonlyMap<string, OperationInputDeclaration>;
 
 /** Finds the operation a key names, or nothing when it names none. */
 type CallableOperationLookup = (key: string) => CallableOperationInputs | undefined;
@@ -65,7 +68,7 @@ const platformOperations: ReadonlyMap<string, CallableOperationInputs> = new Map
     new Map(
       Object.entries(operation.descriptor.inputs).map(([name, declaration]) => [
         name,
-        declaration.required,
+        { required: declaration.required, type: declaration.type },
       ]),
     ),
   ]),
@@ -76,8 +79,9 @@ export const platformOperationLookup: CallableOperationLookup = (key) => platfor
 
 /** A named action's callable inputs, from an action's key and its declared inputs. */
 export const namedActionInputs = (
-  inputs: readonly Readonly<{ key: string; required: boolean }>[],
-): CallableOperationInputs => new Map(inputs.map((input) => [input.key, input.required]));
+  inputs: readonly Readonly<{ key: string; required: boolean; type: string }>[],
+): CallableOperationInputs =>
+  new Map(inputs.map((input) => [input.key, { required: input.required, type: input.type }]));
 
 const operationKeyOf = (task: FlowTask): string | undefined => {
   const value = (task as Extract<FlowTask, { properties: unknown }>).properties?.operation;
@@ -326,10 +330,15 @@ export function findOperationCallIssue(
         return issue("vortex.definition.workflow_node_references", "broken_reference");
       const properties = (task as Extract<FlowTask, { properties: unknown }>).properties;
       if (properties.inputs !== undefined) continue;
-      if (Object.keys(flow.inputs).some((name) => !operation.has(name)))
-        return issue("vortex.definition.workflow_action_inputs", "unknown_property");
-      for (const [name, required] of operation)
-        if (required && !Object.hasOwn(flow.inputs, name))
+      for (const [name, declared] of Object.entries(flow.inputs)) {
+        const accepted = operation.get(name);
+        if (accepted === undefined)
+          return issue("vortex.definition.workflow_action_inputs", "unknown_property");
+        if (!valueTypesCompatible(declared.type, accepted.type, "operation_input"))
+          return issue("vortex.definition.source_type_compatibility", "invalid_value");
+      }
+      for (const [name, declared] of operation)
+        if (declared.required && !Object.hasOwn(flow.inputs, name))
           return issue("vortex.definition.workflow_action_inputs", "required_value");
     }
   return undefined;

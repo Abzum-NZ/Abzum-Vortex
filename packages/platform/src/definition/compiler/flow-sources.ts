@@ -40,6 +40,7 @@ function compileOwnedFlowSources(
   source: JsonObject,
   resolution: Resolution,
   dependencyOutputs: readonly DefinitionCompilationOutput[],
+  callableOperation: (key: string) => ReturnType<typeof namedActionInputs> | undefined,
 ) {
   const parsed = sourceFlowCollectionSchema.safeParse(asObject(source.body).flows);
   if (!parsed.success) fail("vortex.definition.source_shape", "invalid_value");
@@ -136,6 +137,7 @@ function compileOwnedFlowSources(
   return compileFlowSources({
     flows: parsed.data,
     declaredDefinitionKeys,
+    operationInputs: callableOperation,
     resolver: {
       definitionKey: ownKey,
       flow: (alias) => owned("flow", alias),
@@ -188,7 +190,6 @@ export function compileCheckedFlowSources(
   resolution: Resolution,
   dependencyOutputs: readonly DefinitionCompilationOutput[],
 ) {
-  const flowSet = compileOwnedFlowSources(source, resolution, dependencyOutputs);
   const actions = new Map<string, ReturnType<typeof namedActionInputs>>();
   const remember = (candidates: unknown) => {
     for (const action of (Array.isArray(candidates) ? candidates : []) as JsonObject[])
@@ -198,6 +199,7 @@ export function compileCheckedFlowSources(
           (Array.isArray(action.inputs) ? (action.inputs as JsonObject[]) : []).map((input) => ({
             key: String(input.key),
             required: input.required === true,
+            type: String(input.type),
           })),
         ),
       );
@@ -205,14 +207,12 @@ export function compileCheckedFlowSources(
   remember(asObject(source.body).actions);
   for (const output of dependencyOutputs)
     if (output.kind === "module") remember(output.canonical.content.actions);
-  const issue = findOperationCallIssue(
-    flowSet.flows,
-    // Only an Application pins a platform operation's release in its manifest, so only an
-    // Application may call one.
-    (key) =>
-      (source.kind === "application" ? platformOperationLookup(key) : undefined) ??
-      actions.get(key),
-  );
+  // Only an Application pins a platform operation's release in its manifest, so only an
+  // Application may call one.
+  const callableOperation = (key: string) =>
+    (source.kind === "application" ? platformOperationLookup(key) : undefined) ?? actions.get(key);
+  const flowSet = compileOwnedFlowSources(source, resolution, dependencyOutputs, callableOperation);
+  const issue = findOperationCallIssue(flowSet.flows, callableOperation);
   if (issue !== undefined)
     throw new DefinitionCompilationError(
       issue.ruleCode,

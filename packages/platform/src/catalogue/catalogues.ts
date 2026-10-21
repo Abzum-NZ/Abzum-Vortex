@@ -129,9 +129,15 @@ export type PersonalDataClass = z.infer<typeof personalDataClassSchema>;
 export type SearchPriority = z.infer<typeof searchPrioritySchema>;
 
 export type ValueTypeCompatibilityContext =
-  "value" | "flow" | "exact" | "condition" | "mapping" | "cross_format";
+  "value" | "flow" | "operation_input" | "exact" | "condition" | "mapping" | "cross_format";
 
 const numericValueTypes: ReadonlySet<string> = new Set(["whole_number", "decimal_number"]);
+const operationTextValueTypes: ReadonlySet<string> = new Set([
+  "formatted_text",
+  "choice",
+  "record_reference",
+  "organization_account_reference",
+]);
 const crossFormatValueTypes: ReadonlySet<string> = new Set([
   "text",
   "whole_number",
@@ -178,6 +184,13 @@ export function valueTypesCompatible(
         actual === expected ||
         (expected === "record_reference" && actual === "organization_account_reference") ||
         expected === "json"
+      );
+    // An operation input of text takes any value that is one text on the wire: a record or account
+    // identity, a choice or a formatted text. A set of values (json) fills only a json input.
+    case "operation_input":
+      return (
+        valueTypesCompatible(actual, expected, "flow") ||
+        (expected === "text" && operationTextValueTypes.has(actual))
       );
     case "value":
       return (

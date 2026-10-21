@@ -49,6 +49,11 @@ export const finishedNotice = (outcome: string | undefined, failureCode: unknown
     ? notAvailableNotice
     : (outcomeNotices[outcome ?? "failed"] ?? unavailableNotice);
 
+const iamPeople = {
+  link_label: "Open IAM People",
+  destination: { application_key: "vortex.app.iam", page_key: "iam_people" },
+} as const;
+
 export const refusalNotices: Readonly<
   Record<Extract<FormFlowFeedback, { kind: "refusal" }>["code"], Notice>
 > = {
@@ -72,4 +77,33 @@ export const refusalNotices: Readonly<
     tone: "problem",
     text: "This version changes stored fields in a way existing records cannot accept. Keep existing choice options unchanged when adding options, and preserve field types, storage and ownership settings.",
   },
+  applications_manage_required: {
+    tone: "problem",
+    text: "Installing or upgrading applications needs the Manage applications permission. An organisation steward can give you a role that has it in IAM.",
+  },
+  installation_delegation_required: {
+    tone: "problem",
+    text: "Installing this application needs app-installation authority over the permissions its roles grant. An organisation steward can grant it in IAM > People with Grant app-installation authority.",
+  },
+  assignments_manage_required: {
+    tone: "problem",
+    text: "Taking this application's role yourself needs the Manage access assignments permission. Install without taking the role, or ask an organisation steward for that permission in IAM.",
+  },
+};
+
+/**
+ * Where a refusal that names a missing permission sends the person: the platform's IAM People
+ * page, opened through the same destination resolution an authored presentation uses.
+ */
+export const refusalDestinations: Readonly<
+  Partial<
+    Record<
+      keyof typeof refusalNotices,
+      Readonly<{ link_label: string; destination: { application_key: string; page_key: string } }>
+    >
+  >
+> = {
+  applications_manage_required: iamPeople,
+  installation_delegation_required: iamPeople,
+  assignments_manage_required: iamPeople,
 };
