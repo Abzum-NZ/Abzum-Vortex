@@ -86,8 +86,11 @@ const describeFlowFailure = (
     flow !== undefined &&
     task !== undefined
   ) {
+    // A platform-service operation is not one of the draft's actions; its inputs are not known here.
     const action = operationOf(source, task);
-    const declared = new Set(action?.inputs.map((input) => input.key));
+    if (action === undefined)
+      return `${where}: the flow's inputs do not match what the operation takes. Map them in the step's inputs.`;
+    const declared = new Set(action.inputs.map((input) => input.key));
     if (failure.family === "unknown_property") {
       const unknown = Object.keys(flow.inputs)
         .filter((name) => !declared.has(name))
@@ -95,7 +98,7 @@ const describeFlowFailure = (
       return `${where}: the operation does not take ${unknown.length === 0 ? "one of the flow's inputs" : unknown.join(", ")}. Map ${unknown.length === 1 ? "it" : "them"} in the step's inputs or remove ${unknown.length === 1 ? "it" : "them"}.`;
     }
     if (failure.family === "required_value") {
-      const missing = (action?.inputs ?? [])
+      const missing = action.inputs
         .filter((input) => input.required && !Object.hasOwn(flow.inputs, input.key))
         .map((input) => input.label);
       return `${where}: the operation needs ${missing.length === 0 ? "an input the flow does not have" : missing.join(", ")}. Map ${missing.length === 1 ? "it" : "them"} in the step's inputs.`;

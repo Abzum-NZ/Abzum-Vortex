@@ -8,10 +8,7 @@ import { NativeSelect, NativeSelectOption } from "@vortex/ui/components/native-s
 import { RadioGroup, RadioGroupItem } from "@vortex/ui/components/radio-group";
 import { Textarea } from "@vortex/ui/components/textarea";
 import type { ApplicationSourceDocument } from "@vortex/platform/schema";
-import { studioFlowEventLabels, type StudioFlowCreateChoices, type StudioFlowCreateCommand } from "@vortex/ui/studio";
-
-/** A board's card move and a table's inline edit save the change themselves and take no chosen step. */
-const savesChange = (event: string): boolean => event === "card_moved" || event === "inline_edit" || event === "row_edit";
+import { studioFlowCreateSavesChange, studioFlowEventLabels, type StudioFlowCreateChoices, type StudioFlowCreateCommand } from "@vortex/ui/studio";
 
 /**
  * A new flow with the minimum valid shape, for a control's action. A rule that runs before a record
@@ -42,7 +39,7 @@ export function StudioNewFlowDialog({ open, onOpenChange, choices, source, onCre
   const existingFlow = source.body.flows.find((flow) => flow.key === flowKey);
   const suppliedFor = (input: string): string => mapping[input] ?? chosen?.callerNames.find((entry) =>
     entry.name === input || (input === existingFlow?.recordInput && entry.name === (chosen.event === "form_submit" ? "record" : "record_id")))?.name ?? "";
-  const asksStep = existingFlow === undefined && chosen !== undefined && !savesChange(chosen.event);
+  const asksStep = existingFlow === undefined && chosen !== undefined && !studioFlowCreateSavesChange(chosen.event, chosen.recordType);
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (chosen === undefined) { setProblem("Choose the control that starts the flow."); return; }

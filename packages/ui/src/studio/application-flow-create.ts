@@ -101,6 +101,16 @@ const controlEventRecordType = (
   return pageRecord;
 };
 
+/**
+ * A board's card move and a table's inline edit on a record type save the change themselves: the
+ * new flow gets its Save record step and takes no step chosen by the builder.
+ */
+export const studioFlowCreateSavesChange = (
+  event: StudioFlowAuthoringEvent,
+  recordType: string | null,
+): boolean =>
+  (event === "card_moved" || event === "inline_edit" || event === "row_edit") && recordType !== null;
+
 export type StudioFlowCreateStep =
   | Readonly<{ kind: "operation"; operation: string }>
   | Readonly<{ kind: "message"; message: string }>;
@@ -581,10 +591,8 @@ export const applyStudioFlowCreate = (
     let binding: Readonly<{ id: string; eventId: string }>;
     if (
       command.kind === "action" &&
-      (command.event === "card_moved" ||
-        command.event === "inline_edit" ||
-        command.event === "row_edit") &&
-      command.recordType !== null
+      command.recordType !== null &&
+      studioFlowCreateSavesChange(command.event, command.recordType)
     ) {
       // A board's card move and a table's inline edit each save the changed value of one record
       // through the one Save record task: the record and the changed field with its new value.
