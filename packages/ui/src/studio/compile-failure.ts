@@ -11,4 +11,7 @@ export type StudioCompileFailure = Readonly<{
   recordTypeKey?: string;
   fieldKey?: string;
   queryKey?: string;
+  /** The flow and the step in it the refusal is about. */
+  flowKey?: string;
+  taskId?: string;
 }>;
