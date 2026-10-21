@@ -92,6 +92,25 @@ export const queryTotalOperationLabels = {
   distinct_count: "Number of different values",
 } as const satisfies Record<InlineQueryAggregate["operation"], string>;
 
+/** The business name of a query total, shared by its editor, pickers and charts. */
+export const queryTotalLabel = (operation: string, fieldLabel: string | undefined): string => {
+  const label = queryTotalOperationLabels[operation as InlineQueryAggregate["operation"]];
+  if (label === undefined) throw new Error(`Unknown query total operation: ${operation}`);
+  return operation === "count" ? label : `${label} of ${fieldLabel ?? "records"}`;
+};
+
+/** A total reference is chosen from exactly the totals of its bound query. */
+export const queryTotalReferenceProblem = (
+  label: string,
+  alias: string,
+  totals: readonly Readonly<{ alias: string; label: string }>[],
+): string | undefined =>
+  totals.some((total) => total.alias === alias)
+    ? undefined
+    : totals.length === 0
+      ? `${label} needs a total. Add a total to the query first.`
+      : `${label} must be one of the query's totals: ${totals.map((total) => total.label).join(", ")}`;
+
 /** What a query edit makes of the Application source, or why it was refused, in plain words. */
 export type InlineQueryResult =
   | Readonly<{
