@@ -62,7 +62,8 @@ import {
   type RecordsTableCommandAddress,
   type RecordsTablePlacement,
 } from "./placement";
-import { decideRecordTypeExport, decideRecordTypeFieldIds } from "./record-type-access";
+import { readRecordTypeVisibleFieldIds } from "../../records/field-visibility";
+import { decideRecordTypeExport } from "./record-type-access";
 import { personalFormattingAllowed } from "./conditional-formatting";
 import type { InstalledRuntimeContext } from "../../definition/index";
 
@@ -270,6 +271,7 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
     pageId: string,
     placementId: string,
     viewId: string | undefined,
+    recordTypeId: string,
     readable: ReadonlySet<string> | undefined,
     preview: boolean,
   ): Promise<GridLayout | undefined> => {
@@ -283,6 +285,7 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
       pageId,
       [placementId],
       savedViews.enabled && viewId !== undefined ? [viewId] : [],
+      [recordTypeId],
       savedViews.enabled
         ? savedViews.defaultViews.map((view) => ({
             viewId: view.viewId,
@@ -455,7 +458,7 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
         if (permission.kind === "refused") return permission;
         const readable = preview
           ? undefined
-          : await decideRecordTypeFieldIds(transaction, scope, installed, recordTypeId, "read");
+          : await readRecordTypeVisibleFieldIds(transaction, recordTypeId);
         return {
           kind: "permitted" as const,
           accessVersion: scope.accessVersion,
@@ -466,6 +469,7 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
             String(page.pageId),
             request.placementId,
             request.viewId,
+            recordTypeId,
             readable,
             preview,
           ),

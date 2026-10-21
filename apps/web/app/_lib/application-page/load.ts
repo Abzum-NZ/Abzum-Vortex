@@ -746,7 +746,6 @@ const loadApplicationPageJoined = async (
     session,
     dependencies,
     selection,
-    context,
     String(pageDefinition.pageId),
     placements.filter(isTablePlacement).flatMap(({ placementId, vortex }) => {
       const recordTypeId =
