@@ -18,6 +18,7 @@ import {
   studioPlacementRemovalReference,
   type StudioCompositionRemovalReason,
 } from "./application-composition-commands";
+import type { StudioPlacementReference } from "./composition-references";
 import type { StudioSemanticSelection } from "./semantic-selection";
 import { applyStudioItemLabels } from "./application-item-labels";
 import {
@@ -115,6 +116,14 @@ const flowReferenceWords: Readonly<Record<StudioCompositionRemovalReason, string
   unresolved_target: "is named by a flow step that cannot be checked",
 };
 
+/** The flow, and its step, that names a block, in words. */
+export const flowStepWords = (reference: StudioPlacementReference): string =>
+  reference.flow === undefined
+    ? ""
+    : reference.step === undefined
+      ? ` (flow ${quoted(reference.flow)})`
+      : ` (flow ${quoted(reference.flow)}, step ${quoted(reference.step)})`;
+
 /**
  * Blocks leaving the draft: their own flow bindings go with them; a flow task that still targets
  * one of them refuses the removal, naming the block.
@@ -129,13 +138,13 @@ const removeBlocks = (
   const removed = new Set(leaving.map((item) => item.props.id));
   removeFlowBindingsOf(source.body, removed);
   for (const item of leaving) {
-    const reason = studioPlacementRemovalReference(source, item.props.id, aliases);
-    if (reason !== undefined) {
+    const reference = studioPlacementRemovalReference(source, item.props.id, aliases);
+    if (reference !== undefined) {
       const block =
         context.describePlacement({ block: item.props.vortex.block, settings: settingsOf(item) }) ??
         "A block";
       refuse(
-        `${what} cannot be removed: its block ${quoted(block)} ${flowReferenceWords[reason]}. Change that flow first.`,
+        `${what} cannot be removed: its block ${quoted(block)} ${flowReferenceWords[reference.reason]}${flowStepWords(reference)}. Change that flow first.`,
       );
     }
   }

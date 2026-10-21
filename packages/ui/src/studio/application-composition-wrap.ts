@@ -9,6 +9,7 @@ import {
   validateStoredApplicationOutlets,
 } from "./stored-composition";
 import type { StudioSemanticSelection } from "./semantic-selection";
+import type { StudioPaletteChoice } from "./contextual-palette";
 import type {
   StudioCompositionContext,
   StudioCompositionOwner,
@@ -30,7 +31,8 @@ import {
   validateRegion,
   plainSource,
 } from "./application-composition-regions";
-import { addPlaces, newBlockItem } from "./application-composition-add";
+import { addPlaces, commandSettings, newBlockItem } from "./application-composition-add";
+import { studioOwnsSetting } from "./contextual-palette";
 
 /** The page or layout that owns a region. */
 export const regionOwner = (region: Region): StudioCompositionOwner | undefined =>
@@ -46,6 +48,7 @@ export type WrapContainer = Readonly<{
   slotKey: string;
   slotLabel: string;
   unavailable?: string;
+  choice: StudioPaletteChoice;
 }>;
 
 /**
@@ -100,10 +103,12 @@ export const resolveWrap = (
         ),
       ),
     ];
+    // The wrapped block fills the container's required area, so only the reasons that remain count;
+    // the container's required settings are asked for before it wraps.
     const unavailable =
-      choice.unavailable ??
-      (choice.setup.length > 0 || choice.needsQuery
-        ? "It needs its own setup first. Add it from the Blocks panel, then move this block into it."
+      choice.unavailableWhenFilled ??
+      (choice.needsQuery
+        ? "It reads its own data. Add it from the Blocks panel, then move this block into it."
         : accepting === undefined
           ? `${release.name} takes only ${taken.join(", ")} blocks, not ${PALETTE_GROUP_TITLES[moved.paletteGroup].toLowerCase()} blocks.`
           : undefined);
@@ -113,6 +118,7 @@ export const resolveWrap = (
       description: choice.description,
       slotKey: slot.key,
       slotLabel: slot.label,
+      choice,
       ...(unavailable === undefined ? {} : { unavailable }),
     });
   }
@@ -134,6 +140,7 @@ export const describeStudioCompositionWrap = (
         name: container.release.name,
         description: container.description,
         slotLabel: container.slotLabel,
+        choice: container.choice,
         ...(container.unavailable === undefined ? {} : { unavailable: container.unavailable }),
       })),
     };
@@ -153,7 +160,7 @@ export const applyWrap = (
   selection: StudioSemanticSelection | null,
   command: unknown,
 ): StudioCompositionCommandResult => {
-  const input = closedPlain(command, ["kind", "blockId", "releaseVersion"]);
+  const input = closedPlain(command, ["kind", "blockId", "releaseVersion", "settings"]);
   if (
     input.kind !== "wrap" ||
     typeof input.blockId !== "string" ||
@@ -180,11 +187,13 @@ export const applyWrap = (
       reason: `${container.release.name} can't wrap ${moved.name}. ${container.unavailable}`,
     };
   }
+  const settings = commandSettings(input.settings, container.release.properties);
+  if (Object.keys(settings).some(studioOwnsSetting)) return { kind: "invalid" };
   const { alias: wrapperAlias, item: wrapper } = newBlockItem(
     current.catalogue,
     source,
     container.release,
-    {},
+    settings,
     null,
   );
   try {

@@ -41,6 +41,8 @@ export type StudioPaletteChoice = Readonly<{
   groupedTable?: StudioGroupedTablePreset;
   /** Why the block cannot be added yet; absent when it can. */
   unavailable?: string;
+  /** Why the block cannot be created even around a block that fills its required area, when it cannot. */
+  unavailableWhenFilled?: string;
 }>;
 
 export type StudioPaletteGroup = Readonly<{
@@ -123,6 +125,7 @@ const choiceFor = (
       slot.repeats === undefined &&
       !studioHasSlotStarter(catalogue, release, slot.key),
   );
+  const unavailableWhenFilled = unavailable;
   if (requiredSlot !== undefined)
     unavailable ??= `Its ${requiredSlot.label} area must hold a block, so it can't start empty.`;
   return Object.freeze({
@@ -140,6 +143,7 @@ const choiceFor = (
     setup: Object.freeze(setup),
     ...(groupedTable === undefined ? {} : { groupedTable }),
     ...(unavailable === undefined ? {} : { unavailable }),
+    ...(unavailableWhenFilled === undefined ? {} : { unavailableWhenFilled }),
   });
 };
 

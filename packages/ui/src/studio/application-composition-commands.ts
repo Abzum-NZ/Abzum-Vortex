@@ -86,6 +86,7 @@ import { applyWrap } from "./application-composition-wrap";
 export type * from "./application-composition-model";
 export {
   studioPlacementRemovalReference,
+  studioPlacementReferenceSentence,
   type StudioCompositionRemovalReason,
 } from "./composition-references";
 export { describeStudioCompositionAddTargets } from "./application-composition-add";
@@ -503,8 +504,8 @@ const resolveRemoval = (
       releaseUses.set(key, (releaseUses.get(key) ?? 0) + 1);
     }
   for (const item of removed) {
-    const reason = studioPlacementRemovalReference(source, item.props.id, aliases);
-    if (reason !== undefined) return { kind: "blocked", reason };
+    const reference = studioPlacementRemovalReference(source, item.props.id, aliases);
+    if (reference !== undefined) return { kind: "blocked", ...reference };
     const key = releaseKey(item.props.vortex.block);
     releaseUses.set(key, releaseUses.get(key)! - 1);
   }

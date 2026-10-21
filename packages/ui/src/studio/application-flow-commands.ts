@@ -34,6 +34,8 @@ import {
   type StudioFlowStepDraft,
 } from "./application-flow-step-form";
 import { studioFlowEventChoices } from "./application-flow-values";
+import { addStudioFlowShownForm, studioFlowCanCreateShownForm } from "./application-flow-shown-form";
+import { studioFlowLabel } from "./semantic-selection";
 
 /**
  * The flow commands: one checked edit of the stored flow definition each, taken by the draft
@@ -109,6 +111,9 @@ const flowRecordType = (flow: SourceFlow): string | undefined => {
   );
 };
 
+/** The pick that asks for a new form on the page of the flow's button instead of an existing one. */
+export const studioNewFormChoice = "new_form";
+
 /** One builder decision a step needs before it is inserted: what the setting points at. */
 export type StudioFlowStepBuilderChoice = Readonly<{
   property: string;
@@ -144,8 +149,12 @@ const builderChoiceOptions = (
       flow,
     });
   switch (type) {
-    case "form_id":
-      return draft().forms.map((form) => ({ value: form.alias, label: form.label }));
+    case "form_id": {
+      const forms = draft().forms.map((form) => ({ value: form.alias, label: form.label }));
+      return studioFlowCanCreateShownForm(context.catalogue, source as ApplicationSourceDocument, flow)
+        ? [...forms, { value: studioNewFormChoice, label: "Create a form for this step" }]
+        : forms;
+    }
     case "protected_operation_key":
       return draft().actions.map((action) => ({ value: action.key, label: action.label }));
     case "page_id":
@@ -594,6 +603,23 @@ export const applyStudioFlowCommand = (
           }
         : undefined;
 
+    /** A Show form step that asks for a new form gets it on the page of the flow's button first. */
+    const stepInputs = (taskType: string, settings: StudioFlowNewStepSettings) => {
+      if (taskType !== "interface.show_form" || settings.choices?.form !== studioNewFormChoice)
+        return { source: current.source, settings };
+      const added = addStudioFlowShownForm(
+        current.catalogue,
+        candidate,
+        original.flow,
+        studioFlowLabel(original.flow),
+      );
+      if (!added.ok) return { refused: { kind: "invalid", reason: added.reason } as const };
+      return {
+        source: candidate as Readonly<ApplicationSourceDocument>,
+        settings: { ...settings, choices: { ...settings.choices, form: added.alias } },
+      };
+    };
+
     if (command.kind === "insert_task") {
       const target = studioFlowListAt(detached, command.listPath);
       if (
@@ -604,13 +630,15 @@ export const applyStudioFlowCommand = (
       )
         return staleEdit("That place in the flow changed. Select a step again and retry.");
       if (full !== undefined) return full;
+      const inputs = stepInputs(command.taskType, command.settings);
+      if ("refused" in inputs) return inputs.refused;
       const task = newStep(
         original.flow,
-        current.source,
+        inputs.source,
         command.taskType,
         used,
         current,
-        command.settings,
+        inputs.settings,
       );
       if ("kind" in task && !("id" in task)) return task;
       target.splice(command.index, 0, task as SourceFlowTask);
@@ -670,13 +698,15 @@ export const applyStudioFlowCommand = (
       }
       case "add_branch": {
         if (full !== undefined) return full;
+        const inputs = stepInputs(command.taskType, command.settings);
+        if ("refused" in inputs) return inputs.refused;
         const task = newStep(
           original.flow,
-          current.source,
+          inputs.source,
           command.taskType,
           used,
           current,
-          command.settings,
+          inputs.settings,
         );
         if ("kind" in task && !("id" in task)) return task;
         const owner = list[index]!;
