@@ -149,6 +149,7 @@ export function StudioGridFeatures({
     choices.actions,
     choices.relationships,
     related,
+    tableColumnFields(tableSettings),
   );
   // Related records pick a link to this table's record type, a query of the linked record type and
   // that query's fields, never the table's own fields; This row binds the query's input.
@@ -285,6 +286,8 @@ export function StudioGridFeatures({
               {enabled && key === "spreadsheet" ? (
                 <StudioSpreadsheetEditor
                   value={current}
+                  facts={facts}
+                  columns={tableColumnFields(tableSettings)}
                   disabled={disabled}
                   onChange={(next) => write(key, next)}
                 />

@@ -3,6 +3,7 @@ import {
   recordsTableExportRefusalSchema,
   type RecordsSelectionInput,
   type RecordsTableExportRefusal,
+  type RecordsTableExportFormat,
 } from "@vortex/platform/schema";
 import type {
   DisplaySemanticEvent,
@@ -35,6 +36,8 @@ const refusalMessage = (refusal: RecordsTableExportRefusal): string => {
       return "The table changed since you made this selection, or nothing is left to export. Select the records again.";
     case "not_available":
       return "Export is not available for this table or your access right now.";
+    case "format_not_authored":
+      return "This file format is not offered by this table. Choose an available format.";
   }
 };
 
@@ -43,7 +46,8 @@ const filenameOf = (response: Response): string => {
   const match = /filename="([^"\\]{1,120})"/.exec(
     response.headers.get("content-disposition") ?? "",
   );
-  return match?.[1] ?? "records.csv";
+  if (match === null) throw new Error("The export response has no valid filename");
+  return match[1]!;
 };
 
 /** How often the running export reports its bytes, so a large file does not redraw the table per chunk. */
@@ -96,6 +100,7 @@ export function useRecordsExport({
       table: TablePayload,
       held: SelectedRecords | undefined,
       scope: TableExportScope,
+      format: RecordsTableExportFormat,
     ): Promise<void> => {
       if (controllers.current.has(placementId)) return;
       let selection: RecordsSelectionInput;
@@ -127,7 +132,7 @@ export function useRecordsExport({
           body: JSON.stringify({
             ...addressOf(model),
             placementId,
-            format: "csv",
+            format,
             selection,
             ...(token === undefined ? {} : { token }),
             // The saved view the grid showed is a candidate; the server decides the columns.
@@ -147,6 +152,8 @@ export function useRecordsExport({
         const expectedHeader = Number(response.headers.get("x-vortex-export-records"));
         const expected = Number.isSafeInteger(expectedHeader) ? expectedHeader : undefined;
         const filename = filenameOf(response);
+        const mediaType = response.headers.get("content-type");
+        if (mediaType === null) throw new Error("The export response has no media type");
         const chunks: Uint8Array[] = [];
         let bytes = 0;
         let reported = 0;
@@ -167,9 +174,7 @@ export function useRecordsExport({
           }
         }
         // The stream ended cleanly: only now is there a whole file to hand over.
-        const url = URL.createObjectURL(
-          new Blob(chunks as BlobPart[], { type: "text/csv;charset=utf-8" }),
-        );
+        const url = URL.createObjectURL(new Blob(chunks as BlobPart[], { type: mediaType }));
         const link = document.createElement("a");
         link.href = url;
         link.download = filename;
@@ -196,7 +201,7 @@ export function useRecordsExport({
     (placementId: string, table: TablePayload, held: SelectedRecords | undefined) => ({
       export_requested: (event: DisplaySemanticEvent) => {
         if (event.event !== "export_requested") return;
-        return start(placementId, table, held, event.scope);
+        return start(placementId, table, held, event.scope, event.format);
       },
       export_cancelled: (event: DisplaySemanticEvent) => {
         if (event.event !== "export_cancelled") return;

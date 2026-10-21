@@ -22,9 +22,20 @@ begin
     when 'choice' then p_storage_type = 'text'
     when 'date' then p_storage_type = 'date'
     when 'date_time' then p_storage_type = 'timestamp_with_time_zone'
+    when 'link' then p_storage_type = 'json'
     else false end) then return null; end if;
   if p_value = 'null'::jsonb then
-    return pg_catalog.format('stored.%I is null', p_column);
+    return case when p_field_type = 'link'
+      then pg_catalog.format('(stored.%1$I is null or stored.%1$I = ''null''::jsonb)', p_column)
+      else pg_catalog.format('stored.%I is null', p_column) end;
+  end if;
+  -- A link names one target, or the group of targets the reader cannot read (any set link: the
+  -- reader decides each row's target against the current access, so the scan only narrows).
+  if p_field_type = 'link' then
+    if p_value = '"not_available"'::jsonb then
+      return pg_catalog.format('(stored.%1$I is not null and stored.%1$I <> ''null''::jsonb)', p_column);
+    end if;
+    return pg_catalog.format('stored.%I @> %L::jsonb', p_column, p_value::text);
   end if;
   -- Only canonical bucket starts may select members. The upper bound is the next
   -- local calendar boundary, so a DST day can contain 23 or 25 hours. A selector
@@ -62,4 +73,4 @@ revoke all on function vortex_record.grouping_member_predicate_internal(text,tex
 grant execute on function vortex_record.grouping_member_predicate_internal(text,text,text,jsonb,jsonb) to vortex_record_adapter;
 
 comment on function vortex_record.grouping_member_predicate_internal(text,text,text,jsonb,jsonb) is
-  'Protected group member scan predicate over a validated stored field and selector. Date buckets use typed half-open calendar ranges suitable for storage indexes, with local DST-aware upper boundaries and an exact projection recheck by the reader. Raises SQLSTATE V3187 for a selector outside the supported year domain.';
+  'Protected group member scan predicate over a validated stored field and selector. A link group scans by target containment, or every set link for the group of unreadable targets, which the reader rechecks per row. Date buckets use typed half-open calendar ranges suitable for storage indexes, with local DST-aware upper boundaries and an exact projection recheck by the reader. Raises SQLSTATE V3187 for a selector outside the supported year domain.';

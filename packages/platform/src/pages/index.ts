@@ -11,11 +11,13 @@ export {
 
 export {
   organizationChooserEmptyPage,
+  organizationChooserOpenEventId,
   organizationChooserPage,
   organizationChooserPlacementId,
   organizationChooserShell,
 } from "./organization-chooser-page";
 export {
+  applicationLauncherOpenEventId,
   organizationLauncherPage,
   organizationLauncherPlacementId,
   organizationLauncherShell,
@@ -108,12 +110,16 @@ export {
   type RecordsTableBulkDependencies,
 } from "./records-table-features/bulk-run";
 export {
+  createRecordsRangeSummaryService,
+  type RecordsRangeSummaryDependencies,
+} from "./records-table-features/range-summary";
+export {
   createRecordsTableExportService,
   type RecordsTableExportDependencies,
 } from "./records-table-features/export";
 export {
   decideRecordTypeExport,
-  decideRecordTypeFieldIds,
+  decideRecordTypeCreatableFieldIds,
 } from "./records-table-features/record-type-access";
 export {
   readNamedActionEligibility,

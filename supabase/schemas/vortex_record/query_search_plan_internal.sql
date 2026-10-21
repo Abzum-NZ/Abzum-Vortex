@@ -1,5 +1,5 @@
 create or replace function vortex_record.query_search_plan_internal(
-  p_user_inputs jsonb, fields_by_id jsonb, declared_searchable_ids text[], p_exact_record_id uuid
+  p_user_inputs jsonb, fields_by_id jsonb, declared_searchable_ids text[]
 )
 returns jsonb
 language plpgsql
@@ -25,11 +25,6 @@ begin
   if user_search is not null and pg_catalog.length(user_search) > 200 then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
   end if;
-  -- An exact record id resolves one identity; the search only narrows pages of a list, so it is
-  -- ignored here while the published filter and the viewer's authority still apply unchanged.
-  if p_exact_record_id is not null then
-    user_search := null;
-  end if;
   -- Search authority: the record type's own declared search priority. A component
   -- with only a search box declares no per-field list, so an empty declared set
   -- searches every field the record type marks searchable; a declared set narrows
@@ -52,6 +47,6 @@ begin
     'fieldIds', pg_catalog.to_jsonb(search_field_ids));
 end
 $function$;
-alter function vortex_record.query_search_plan_internal(jsonb,jsonb,text[],uuid) owner to vortex_record_adapter;
-revoke all on function vortex_record.query_search_plan_internal(jsonb,jsonb,text[],uuid)
+alter function vortex_record.query_search_plan_internal(jsonb,jsonb,text[]) owner to vortex_record_adapter;
+revoke all on function vortex_record.query_search_plan_internal(jsonb,jsonb,text[])
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;

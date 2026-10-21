@@ -59,7 +59,8 @@ begin
       'applicationRootId', application_root_id_value,
       'applicationReleaseRevision', application_release_revision_value,
       'moduleBindings', current_bindings
-    )
+    ),
+    false
   );
   if resolved_plan is null
     or (resolved_plan ->> 'organizationId')::uuid is distinct from organization_id_value

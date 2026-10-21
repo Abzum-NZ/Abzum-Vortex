@@ -131,13 +131,34 @@ export function useTablePageAddress({
     (placementId: string, change: Exclude<RecordsTableQueryChange, { kind: "page" }>) => {
       const parameters = new URLSearchParams(window.location.search);
       const before = recordsTableAddressKey(placementId, [...parameters]);
+      // An automatic default can supply the shown query without naming it in the address.
+      // Adopt it before editing, so clearing one part preserves the rest and clearing every
+      // part uses the codec's explicit cleared-view form instead of reapplying the default.
+      if (before === "") {
+        const held = Object.keys(currentData).find(
+          (candidate) => candidate.toLowerCase() === placementId.toLowerCase(),
+        );
+        const selected =
+          held === undefined
+            ? undefined
+            : tablePayloadFor(currentData[held])?.layout.views?.selected;
+        if (selected?.scope === "default") {
+          const { sort, filters, search } = selected.document;
+          applyRecordsTableView(parameters, placementId, {
+            viewId: selected.viewId,
+            sort: sort ?? [],
+            filters: filters ?? [],
+            search: search ?? null,
+          });
+        }
+      }
       applyRecordsTableQueryChange(parameters, placementId, change);
       if (recordsTableAddressKey(placementId, [...parameters]) === before) return;
       pendingRef.current.set(placementId.toLowerCase(), CHANGED);
       clearSelection(placementId);
       push(parameters);
     },
-    [clearSelection],
+    [clearSelection, currentData],
   );
 
   /**

@@ -31,7 +31,7 @@ import type {
   placementEventNamesByPage,
   applicationLauncherPlacementIds,
 } from "./placement-helpers";
-import { boardPayloadFor, tablePayloadFor, compatibleBoardRowAction } from "./placement-helpers";
+import { boardPayloadFor, tablePayloadFor } from "./placement-helpers";
 import type {
   DispatchOutcome,
   PageSelection,
@@ -49,6 +49,7 @@ import {
 } from "./published-control-data";
 import { usePageParameters } from "./use-page-parameters";
 import { useBulkSelection } from "./use-bulk-selection";
+import { useRangeSummary } from "./use-range-summary";
 import { useRecordsExport } from "./use-records-export";
 import { requestRecordChoices } from "./record-choices";
 
@@ -234,6 +235,8 @@ export function useRuntimeInputs({
   });
   // Export: the file of the records a person selected, streamed by the server.
   const exported = useRecordsExport({ model, navigationKey, matchingOf: bulk.matchingOf });
+  // The spreadsheet status bar's totals of a selected range, read from the server per settled range.
+  const rangeSummary = useRangeSummary({ model });
   const titles = useRef<{ scope: string; values: PublishedRecordTitles }>({
     scope: navigationKey,
     values: new Map(),
@@ -298,8 +301,6 @@ export function useRuntimeInputs({
       const events: EventHandlers = {};
       const boardData = boardPayloadFor(data);
       const tableData = tablePayloadFor(data);
-      const boardRowActionBinding =
-        boardData === undefined ? undefined : compatibleBoardRowAction(bindings);
       const declaredEvents = placementEventNames[placementId];
       const supportsEvent = (eventName: string): boolean => declaredEvents?.has(eventName) === true;
       const flowFeedback =
@@ -307,7 +308,11 @@ export function useRuntimeInputs({
       // Runtime data alone does not identify a display: forms can have projected owner-group data.
       // Give each placement only the display callbacks its own registered release declares.
       if (data !== undefined && model.guidedForm === undefined) {
-        if (launcherPlacements.has(placementId) && supportsEvent("row_action"))
+        if (
+          launcherPlacements.has(placementId) &&
+          supportsEvent("row_action") &&
+          !bindings.some((binding) => binding.event === "row_action")
+        )
           events.row_action = async (event: DisplaySemanticEvent) => {
             if (event.event !== "row_action" || busy) return;
             if (unsavedWork.hasUnsavedWork() && !(await unsavedWork.confirmDiscardUnsavedWork()))
@@ -315,21 +320,16 @@ export function useRuntimeInputs({
             await onOpenApplication(event);
           };
         for (const kind of ["row_clicked", "row_action"] as const)
-          if (
-            supportsEvent(kind) &&
-            (kind !== "row_action" ||
-              (!launcherPlacements.has(placementId) && boardData === undefined)) &&
-            bindings.some((binding) => binding.event === kind)
-          )
+          if (supportsEvent(kind) && bindings.some((binding) => binding.event === kind))
             events[kind] = (event: DisplaySemanticEvent) => {
-              if (
-                tableData !== undefined &&
-                event.event === "row_action" &&
-                event.eventId === undefined
-              )
-                return;
               const binding = bindingFor(bindings, event);
-              if (binding !== undefined && !busy)
+              if (binding === undefined) {
+                console.error(
+                  `[page] ${kind} names no binding of its placement: ROW_EVENT_BINDING_MISSING`,
+                );
+                return;
+              }
+              if (!busy)
                 return runBinding(
                   placementId,
                   binding,
@@ -337,7 +337,7 @@ export function useRuntimeInputs({
                   event.event === "row_clicked" || event.event === "row_action"
                     ? event.recordId
                     : undefined,
-                  tableData !== undefined &&
+                  (tableData !== undefined || boardData !== undefined) &&
                     event.event === "row_action" &&
                     event.revision !== undefined
                     ? { recordId: event.recordId, revision: event.revision }
@@ -401,23 +401,6 @@ export function useRuntimeInputs({
                       : { corrections: outcome.corrections }),
                   };
             };
-        if (
-          boardData !== undefined &&
-          boardRowActionBinding !== undefined &&
-          supportsEvent("row_action")
-        )
-          events.row_action = async (event: DisplaySemanticEvent) => {
-            if (event.event !== "row_action" || event.eventId !== undefined || busy) return;
-            await runBinding(
-              placementId,
-              boardRowActionBinding,
-              suppliedValues(event),
-              event.recordId,
-              event.revision === undefined
-                ? undefined
-                : { recordId: event.recordId, revision: event.revision },
-            );
-          };
         // A moved card saves the record's choice field through the bound flow. The handler reports
         // whether the server accepted the move, so the board keeps the card pending until the
         // refreshed columns arrive and releases it at once when the move was refused.
@@ -492,6 +475,8 @@ export function useRuntimeInputs({
         // A table's Export streams a file from the server over the same selection, never a flow.
         if (tableData?.features?.export !== undefined)
           Object.assign(events, exported.eventsFor(placementId, tableData, selection[placementId]));
+        if (tableData?.features?.spreadsheet?.statusBar !== undefined)
+          Object.assign(events, rangeSummary.eventsFor(placementId, tableData));
         if (supportsEvent("selection_changed"))
           events.selection_changed = (event: DisplaySemanticEvent) => {
             if (event.event !== "selection_changed") return;
@@ -985,6 +970,7 @@ export function useRuntimeInputs({
     continueTablePage,
     bulk,
     exported,
+    rangeSummary,
   ]);
 
   runtimeInputsRef.current = runtimeInputs;
