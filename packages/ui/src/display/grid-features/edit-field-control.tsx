@@ -13,7 +13,7 @@ import { optionsForParent } from "./link-dependency";
 import { LinkDraftPicker } from "./record-choice-picker";
 
 /** The field a dependent choice or link waits for, and what is chosen there now. */
-export type EditFieldParent = Readonly<{
+type EditFieldParent = Readonly<{
   /** The parent's chosen option or record, undefined while it is empty or not readable. */
   choiceKey: string | undefined;
   label: string;
