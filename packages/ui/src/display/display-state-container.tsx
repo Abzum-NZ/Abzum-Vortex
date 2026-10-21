@@ -17,7 +17,7 @@ const REFUSAL_MESSAGES: Readonly<Record<DisplayRefusalReason, string>> = Object.
   dataset_limit_exceeded:
     "There are too many records to summarise at once. Narrow them with search or filters.",
   grouping_unavailable:
-    "This table shows its records in groups, and you cannot see the field they are grouped by, so there is nothing to show you.",
+    "This table groups its records by a field you cannot see, so it has nothing to show you.",
 });
 
 /**

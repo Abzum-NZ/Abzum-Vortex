@@ -1,6 +1,5 @@
 import {
   checkRecordsTableGrouping,
-  groupingDefaultsFromQuery,
   readRecordsTableFeatures,
   type BlockPropertySchemaContract,
   type PlatformBlockRelease,
@@ -8,7 +7,11 @@ import {
 } from "@vortex/platform/schema";
 import type { StudioCompositionSettings } from "./application-composition-model";
 import type { StudioQueryChoice } from "./contextual-palette";
-import { studioGridFeatureStartSettings, studioGroupingFacts } from "./grid-features";
+import {
+  studioGridFeatureStartSettings,
+  studioGroupingFacts,
+  studioGroupingStart,
+} from "./grid-features";
 
 type GroupValue = Extract<SourceBlockPropertyValueContract, { kind: "group" }>;
 
@@ -62,17 +65,7 @@ export const studioTablePresetProperty = (
 /** What a Grouped table asks for at first: the field the bound query already groups by. */
 export const studioGroupedTableStart = (
   query: StudioQueryChoice | undefined,
-): StudioCompositionSettings => {
-  const defaults = groupingDefaultsFromQuery(studioGroupingFacts(query));
-  return defaults === undefined
-    ? {}
-    : {
-        field: { kind: "field_reference", field: defaults.field },
-        ...(defaults.dateUnit === undefined
-          ? {}
-          : { date_unit: { kind: "choice", value: defaults.dateUnit } }),
-      };
-};
+): StudioCompositionSettings => studioGroupingStart(studioGroupingFacts(query));
 
 /**
  * The settings a new Grouped table is added with, or the business sentence that says why the

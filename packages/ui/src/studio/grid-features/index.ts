@@ -125,27 +125,32 @@ export const studioGridFeatureStartSettings: Readonly<
 };
 
 /**
- * The settings a feature starts with for this bound query. Group by also starts with what the
- * query already groups by (its first grouping field, and a calendar unit for a date), written once
- * into the definition so the table reads only its own settings.
+ * What Group by starts with when the bound query already groups: its first grouping field, and a
+ * calendar unit for a date. Studio writes these once into the definition (when Group by is switched
+ * on or a Grouped table is added), so the table reads only its own settings.
  */
+export const studioGroupingStart = (
+  facts: Pick<RecordsTableQueryFacts, "fields" | "groupBy">,
+): Readonly<Record<string, SourceBlockPropertyValueContract>> => {
+  const defaults = groupingDefaultsFromQuery(facts);
+  return defaults === undefined
+    ? {}
+    : {
+        field: { kind: "field_reference", field: defaults.field },
+        ...(defaults.dateUnit === undefined
+          ? {}
+          : { date_unit: { kind: "choice", value: defaults.dateUnit } }),
+      };
+};
+
+/** The settings a feature starts with for this bound query; Group by also starts as the query groups. */
 export const studioGridFeatureStart = (
   key: RecordsTableFeatureKey,
   facts: Pick<RecordsTableQueryFacts, "fields" | "groupBy">,
-): Readonly<Record<string, SourceBlockPropertyValueContract>> => {
-  const defaults = key === "grouping" ? groupingDefaultsFromQuery(facts) : undefined;
-  return {
-    ...studioGridFeatureStartSettings[key],
-    ...(defaults === undefined
-      ? {}
-      : {
-          field: { kind: "field_reference", field: defaults.field },
-          ...(defaults.dateUnit === undefined
-            ? {}
-            : { date_unit: { kind: "choice", value: defaults.dateUnit } }),
-        }),
-  };
-};
+): Readonly<Record<string, SourceBlockPropertyValueContract>> => ({
+  ...studioGridFeatureStartSettings[key],
+  ...(key === "grouping" ? studioGroupingStart(facts) : {}),
+});
 
 /**
  * What the draft offers a row's related records: every query and link it can read, the page's

@@ -96,8 +96,9 @@ export function StudioBlockSetupDialog({
   const choosePreset = (next: StudioCompositionSettings) => {
     const preset = next["presentation"];
     const groupedPreset = preset?.kind === "choice" && preset.value === STUDIO_GROUPED_TABLE_PRESET;
+    // Switching to Grouped table starts it as the query groups; other edits keep the chosen field.
+    if (groupedPreset && !grouped) setGroupValues(studioGroupedTableStart(queryChoice));
     setGrouped(groupedPreset);
-    if (groupedPreset) setGroupValues(studioGroupedTableStart(queryChoice));
     setValues(groupedPreset ? { ...next, presentation: { kind: "choice", value: "grid" } } : next);
   };
   if (request === null) return null;
