@@ -468,8 +468,15 @@ function TreeEditor({
   };
 
   const rightOptions = availableOperators;
-  const rightForOperator = (operator: ConditionOperator): ConditionOperand | undefined =>
-    defaultRightForOperator(operator, condition.left, context);
+  const rightForOperator = (operator: ConditionOperator): ConditionOperand | undefined => {
+    if (
+      context.allowLiteralValues &&
+      condition.right?.source === "value" &&
+      usesChoiceOptionControl(operator, condition.left, context)
+    )
+      return { source: "value", value: operator === "in" || operator === "not_in" ? [] : null };
+    return defaultRightForOperator(operator, condition.left, context);
+  };
 
   const currentOperatorLabel =
     operatorOptions.find((option) => option.operator === condition.operator)?.label ??
