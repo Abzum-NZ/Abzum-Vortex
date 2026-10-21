@@ -36,7 +36,7 @@ const requestSchema = z
     installationRevision: revisionSchema,
     releaseKey: z.string().min(1).max(512),
     subjectRecordId: recordIdSchema.optional(),
-    /** For a dependent link field: the record chosen in the field it depends on, in the draft. */
+    /** For a dependent link field: the record chosen in the field it depends on, in the draft (a form field or an edited cell). */
     parentRecordId: recordIdSchema.optional(),
     search: z.string().trim().max(100).optional(),
     pageSize: z.number().int().min(1).max(200).optional(),
@@ -46,9 +46,11 @@ const requestSchema = z
   .refine((body) => (body.fieldId === undefined) === (body.purpose === undefined), {
     message: "A table link picker names its field and its purpose together",
   })
-  .refine((body) => body.parentRecordId === undefined || body.purpose === "edit", {
-    message: "Only an edited cell's picker names a parent record",
-  });
+  .refine(
+    (body) =>
+      body.parentRecordId === undefined || body.purpose === "edit" || body.fieldId === undefined,
+    { message: "Only an edited field's picker names a parent record" },
+  );
 
 const refusedResponse = (code: string, cause?: unknown): NextResponse => {
   logRefusal("record-choices", "record choice page", code, cause);
@@ -135,12 +137,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         logRefusal("record-choices", "record choice page", "temporarily_unavailable");
         return privateResponse({ kind: "temporarily_unavailable" }, 503);
       default: {
-        // A cause may name the fields involved after its code; those stay in the log.
+        // A cause may name the fields involved after its code; those stay in the log only.
         const [code, ...detail] = result.cause.split(" ");
-        return refusedResponse(
-          `record_choices_${code}`,
-          detail.length === 0 ? undefined : detail.join(" "),
+        logRefusal(
+          "record-choices",
+          "record choice page",
+          [`record_choices_${code}`, ...detail].join(" "),
         );
+        return privateResponse({ kind: "refused", code: `record_choices_${code}` }, 404);
       }
     }
   } catch (error) {

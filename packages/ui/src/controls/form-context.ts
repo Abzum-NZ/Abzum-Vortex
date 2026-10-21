@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useRef } from "react";
+import { createContext, useContext, useEffect, useRef, useSyncExternalStore } from "react";
 import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "../definition-error";
 import type { FormFieldDraftFeedback } from "./draft-feedback";
 import type { TypedFieldValue } from "./projected-data";
@@ -27,6 +27,10 @@ export type FormScope = Readonly<{
   draftFeedbackFor: (fieldKey: string) => FormFieldDraftFeedback | undefined;
   /** Reports that a field's value or registration changed, so settled feedback is rechecked. */
   reportFieldChanged: () => void;
+  /** The current typed value of one registered field, or undefined while it is not registered. */
+  valueOf: (fieldKey: string) => TypedFieldValue | undefined;
+  /** Calls `listener` whenever any field's value or registration changes; returns its removal. */
+  subscribe: (listener: () => void) => () => void;
 }>;
 
 /**
@@ -66,6 +70,7 @@ export const useFormScope = (): FormScope | undefined => useContext(FormScopeCon
  */
 export function createFormFieldRegistry(location: DefinitionRenderErrorLocation): Readonly<{
   register: FormScope["register"];
+  valueOf: FormScope["valueOf"];
   values: () => Readonly<Record<string, TypedFieldValue>>;
   validationErrors: () => Readonly<Record<string, string>>;
 }> {
@@ -84,6 +89,7 @@ export function createFormFieldRegistry(location: DefinitionRenderErrorLocation)
         if (fields.get(fieldKey) === field) fields.delete(fieldKey);
       };
     },
+    valueOf: (fieldKey) => fields.get(fieldKey)?.read(),
     values: () =>
       Object.freeze(
         Object.fromEntries([...fields].map(([fieldKey, field]) => [fieldKey, field.read()])),
@@ -163,4 +169,20 @@ export function useRequiredFormField(
     requirement.missing ? () => `${requirement.label} is required.` : undefined,
   );
   return useFormFieldError(fieldKey);
+}
+
+const neverChanges = (): (() => void) => () => undefined;
+
+/**
+ * The current value of another field of the enclosing form, so a field that depends on it can
+ * offer only what fits and clear itself when it changes. Undefined without a form, without a named
+ * field, or while that field is not registered (for example one the person may not read).
+ */
+export function useFormFieldValue(fieldKey: string | undefined): TypedFieldValue | undefined {
+  const scope = useFormScope();
+  return useSyncExternalStore(
+    scope?.subscribe ?? neverChanges,
+    () => (fieldKey === undefined ? undefined : scope?.valueOf(fieldKey)),
+    () => undefined,
+  );
 }

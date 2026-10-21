@@ -28,7 +28,8 @@ import {
   useFieldIds,
   useSeededState,
 } from "./field-parts";
-import { useRequiredFormField } from "./form-context";
+import { useFormFieldValue, useRequiredFormField } from "./form-context";
+import { waitingForParent } from "./dependent-field";
 import {
   parseRecordChoicePage,
   type LinkInputPayload,
@@ -75,6 +76,14 @@ export function LinkInput(props: LinkInputProps): ReactElement {
   const draftFeedback = useFieldFeedback(fieldKey);
   const disabled =
     context.inactive || settings.boolean("disabled") || draftFeedback?.disabled === true;
+  // A dependent link offers only the records of what the form's draft holds in its parent field.
+  const dependsOn = settings.dependsOn();
+  const parentValue = useFormFieldValue(dependsOn?.fieldKey);
+  const parentRecordId =
+    typeof parentValue === "object" && parentValue !== null && "recordId" in parentValue
+      ? parentValue.recordId
+      : undefined;
+  const waiting = dependsOn !== undefined && parentRecordId === undefined;
   const allowedRecordTypeIds = settings.recordTypeIds("record_types").map((id) => id.toLowerCase());
   const severalTypes = allowedRecordTypeIds.length > 1;
   const projectedError = context.values?.error;
@@ -108,6 +117,8 @@ export function LinkInput(props: LinkInputProps): ReactElement {
   const generation = useRef(0);
   const requestRecords = useRef(context.events?.records_requested);
   requestRecords.current = context.events?.records_requested;
+  const parent = useRef(parentRecordId);
+  parent.current = parentRecordId;
   const location = useRef(context.location);
   location.current = context.location;
 
@@ -125,6 +136,7 @@ export function LinkInput(props: LinkInputProps): ReactElement {
         event: "records_requested",
         ...(bounded === "" ? {} : { search: bounded }),
         ...(continuationToken === undefined ? {} : { continuationToken }),
+        ...(parent.current === undefined ? {} : { parentRecordId: parent.current }),
       }),
     )
       .then((answer) => {
@@ -172,6 +184,22 @@ export function LinkInput(props: LinkInputProps): ReactElement {
       ? choices
       : [pickedOption, ...choices];
 
+  // A changed parent leaves this field holding a record the server would refuse: it clears with it,
+  // in the same draft, and the records offered are read again for the new parent.
+  const previousParent = useRef(parentRecordId);
+  useEffect(() => {
+    const before = previousParent.current;
+    previousParent.current = parentRecordId;
+    // A parent that was not registered yet (a form starting with its stored values) is no change.
+    if (before === undefined || before === parentRecordId) return;
+    setChoices([]);
+    setNext(undefined);
+    if (picked !== null) {
+      setPicked(null);
+      context.events?.field_changed?.({ event: "field_changed", fieldKey, value: null });
+    }
+  }, [parentRecordId]);
+
   const change = (item: RecordChoiceOption | null): void => {
     if (disabled || readOnly) return;
     const reference =
@@ -188,7 +216,8 @@ export function LinkInput(props: LinkInputProps): ReactElement {
 
   const described = describedBy(ids, help, error, note, draftFeedback);
   const ariaRequired = required || described["aria-required"] === true;
-  const inactive = disabled || readOnly;
+  const inactive = disabled || readOnly || waiting;
+  const shownPlaceholder = waiting ? waitingForParent(dependsOn.label) : placeholder;
 
   return (
     <Field
@@ -228,7 +257,7 @@ export function LinkInput(props: LinkInputProps): ReactElement {
         <InputGroup>
           <ComboboxInput
             id={ids.control}
-            placeholder={placeholder}
+            placeholder={shownPlaceholder}
             disabled={inactive}
             readOnly={readOnly}
             aria-labelledby={ids.label}

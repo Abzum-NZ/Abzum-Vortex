@@ -172,6 +172,13 @@ type ControlSettings = Readonly<{
   recordTypeIds: (key: string) => readonly string[];
   /** The required authored field key, validated as a builder key. */
   fieldKey: () => string;
+  /**
+   * The field of the same form this one depends on (its key and the name it is shown by), when
+   * the placement declares one: this field offers choices only for what is chosen there.
+   */
+  dependsOn: () => Readonly<{ fieldKey: string; label: string }> | undefined;
+  /** For each option of a list setting, the parent options it belongs to; absent without a dependency. */
+  optionParents: (key: string) => ReadonlyMap<string, readonly string[]>;
 }>;
 
 export function readControlSettings(
@@ -244,6 +251,37 @@ export function readControlSettings(
           return item.properties;
         }),
       );
+    },
+    dependsOn: () => {
+      // Only a release that declares the dependency (the automatic field input's controls) has one.
+      if (!metadata.properties.some((candidate) => candidate.key === "depends_on"))
+        return undefined;
+      const value = read("depends_on", "group");
+      if (value?.kind !== "group") return undefined;
+      const field = value.properties.field;
+      const label = value.properties.label;
+      if (field?.kind !== "text" || label?.kind !== "text")
+        return fail("A field dependency names its field and its label", {
+          ...location,
+          propertyPath: ["depends_on"],
+        });
+      return Object.freeze({ fieldKey: field.value, label: label.value });
+    },
+    optionParents: (key) => {
+      const value = read(key, "list");
+      const parents = new Map<string, readonly string[]>();
+      if (value?.kind !== "list") return parents;
+      for (const item of value.items) {
+        if (item.kind !== "group") continue;
+        const optionKey = item.properties.key;
+        const parentValues = item.properties.parent_values;
+        if (optionKey?.kind !== "text" || parentValues?.kind !== "list") continue;
+        parents.set(
+          optionKey.value,
+          parentValues.items.flatMap((entry) => (entry.kind === "text" ? [entry.value] : [])),
+        );
+      }
+      return parents;
     },
     fieldKey: () => {
       const parsed = builderKeySchema.safeParse(text("name"));

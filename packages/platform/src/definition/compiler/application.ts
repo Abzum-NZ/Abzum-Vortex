@@ -611,7 +611,9 @@ const applicationCompositionResolution = (
     fieldInput: (fieldId) => {
       const pair = valueIndex.fieldById(fieldId);
       // Only a field of an exactly bound module release can drive an automatic field input.
-      return pair === undefined ? undefined : fieldInputSourceField(pair.field);
+      return pair === undefined
+        ? undefined
+        : fieldInputSourceField(pair.field, (parentId) => valueIndex.fieldById(parentId)?.field);
     },
     relationship: (reference) => {
       const [recordType, alias] = splitMember(

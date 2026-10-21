@@ -262,7 +262,12 @@ export const withContributedPlacements = (
       for (const field of contributed) {
         const fieldId = String(field.fieldId);
         if (shownFields.has(fieldId.toLowerCase())) continue;
-        const source = fieldInputSourceField(field as unknown as Record<string, unknown>);
+        const source = fieldInputSourceField(
+          field as unknown as Record<string, unknown>,
+          (parentId) =>
+            contributed.find((candidate) => sameId(String(candidate.fieldId), parentId)) as
+              Record<string, unknown> | undefined,
+        );
         let settings: Record<string, unknown>;
         try {
           if (source === undefined) throw new Error("FIELD_INPUT_SOURCE_UNAVAILABLE");

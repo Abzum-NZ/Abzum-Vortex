@@ -13,17 +13,8 @@
       "storage_contract_id": "srt_00000001",
       "storage_scope": "organization_shared",
       "ownership_mode": "group",
-      "standard_actions": [
-        "create",
-        "read",
-        "update",
-        "soft_delete",
-        "restore",
-        "export"
-      ],
-      "custom_actions": [
-        "act_company_merge"
-      ],
+      "standard_actions": ["create", "read", "update", "soft_delete", "restore", "export"],
+      "custom_actions": ["act_company_merge"],
       "fields": [
         {
           "id": "fld_company_number",
@@ -175,9 +166,7 @@
           "public_display": "allowed",
           "type": "web_address",
           "settings": {
-            "allowed_schemes": [
-              "https"
-            ]
+            "allowed_schemes": ["https"]
           }
         },
         {
@@ -209,12 +198,7 @@
           "public_display": "allowed",
           "type": "formatted_text",
           "settings": {
-            "allowed_blocks": [
-              "paragraph",
-              "heading",
-              "list",
-              "link"
-            ]
+            "allowed_blocks": ["paragraph", "heading", "list", "link"]
           }
         },
         {
@@ -247,9 +231,7 @@
           "public_display": "allowed",
           "type": "attachment",
           "settings": {
-            "allowed_kinds": [
-              "image"
-            ],
+            "allowed_kinds": ["image"],
             "max_file_size_mb": 5,
             "multiple": false
           }
@@ -266,6 +248,68 @@
           "public_display": "refused",
           "type": "date",
           "settings": {}
+        },
+        {
+          "id": "fld_company_country",
+          "key": "country",
+          "label": "Country",
+          "required": false,
+          "unique": false,
+          "filterable": true,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "link",
+          "settings": {
+            "target": "vortex.crm.locations:country",
+            "reverse_key": "companies",
+            "reverse_name": "Companies",
+            "on_parent_delete": "empty_optional"
+          }
+        },
+        {
+          "id": "fld_company_region",
+          "key": "region",
+          "label": "Region",
+          "required": false,
+          "unique": false,
+          "filterable": true,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "link",
+          "settings": {
+            "target": "vortex.crm.locations:region",
+            "reverse_key": "companies",
+            "reverse_name": "Companies",
+            "on_parent_delete": "empty_optional",
+            "depends_on": {
+              "parent_field": "country",
+              "filter_field": "country"
+            }
+          }
+        },
+        {
+          "id": "fld_company_city",
+          "key": "city",
+          "label": "City",
+          "required": false,
+          "unique": false,
+          "filterable": true,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "link",
+          "settings": {
+            "target": "vortex.crm.locations:city",
+            "reverse_key": "companies",
+            "reverse_name": "Companies",
+            "on_parent_delete": "empty_optional",
+            "depends_on": {
+              "parent_field": "region",
+              "filter_field": "region"
+            }
+          }
         }
       ],
       "pipelines": [],
@@ -275,6 +319,30 @@
           "key": "parent_company",
           "from_field": "parent_company",
           "to_record_type": "vortex.crm.organisations:company",
+          "cardinality": "many_to_one",
+          "on_parent_delete": "empty_optional"
+        },
+        {
+          "id": "fld_company_country_relationship",
+          "key": "country",
+          "from_field": "country",
+          "to_record_type": "vortex.crm.locations:country",
+          "cardinality": "many_to_one",
+          "on_parent_delete": "empty_optional"
+        },
+        {
+          "id": "fld_company_region_relationship",
+          "key": "region",
+          "from_field": "region",
+          "to_record_type": "vortex.crm.locations:region",
+          "cardinality": "many_to_one",
+          "on_parent_delete": "empty_optional"
+        },
+        {
+          "id": "fld_company_city_relationship",
+          "key": "city",
+          "from_field": "city",
+          "to_record_type": "vortex.crm.locations:city",
           "cardinality": "many_to_one",
           "on_parent_delete": "empty_optional"
         }
@@ -310,7 +378,10 @@
           "description",
           "parent_company",
           "logo",
-          "customer_since"
+          "customer_since",
+          "country",
+          "region",
+          "city"
         ],
         "changeable_fields": [
           "name",
@@ -323,7 +394,10 @@
           "description",
           "parent_company",
           "logo",
-          "customer_since"
+          "customer_since",
+          "country",
+          "region",
+          "city"
         ]
       }
     },
@@ -355,7 +429,10 @@
           "description",
           "parent_company",
           "logo",
-          "customer_since"
+          "customer_since",
+          "country",
+          "region",
+          "city"
         ],
         "changeable_fields": []
       }
@@ -388,7 +465,10 @@
           "description",
           "parent_company",
           "logo",
-          "customer_since"
+          "customer_since",
+          "country",
+          "region",
+          "city"
         ],
         "changeable_fields": [
           "name",
@@ -401,7 +481,10 @@
           "description",
           "parent_company",
           "logo",
-          "customer_since"
+          "customer_since",
+          "country",
+          "region",
+          "city"
         ]
       }
     },
@@ -473,7 +556,10 @@
           "description",
           "parent_company",
           "logo",
-          "customer_since"
+          "customer_since",
+          "country",
+          "region",
+          "city"
         ],
         "changeable_fields": []
       }
@@ -495,9 +581,7 @@
         ]
       },
       "field_policy": {
-        "readable_fields": [
-          "parent_company"
-        ],
+        "readable_fields": ["parent_company"],
         "changeable_fields": []
       }
     }
@@ -516,9 +600,7 @@
           "label": "Duplicate Company",
           "required": true,
           "type": "record_reference",
-          "record_types": [
-            "vortex.crm.organisations:company"
-          ]
+          "record_types": ["vortex.crm.organisations:company"]
         }
       ],
       "tasks": [
@@ -529,9 +611,7 @@
             "changes": [
               {
                 "kind": "copy_relationships",
-                "relationships": [
-                  "parent_company"
-                ],
+                "relationships": ["parent_company"],
                 "target_input": "duplicate_company"
               }
             ]
@@ -558,11 +638,7 @@
       "key": "vortex.crm.organisations.company.created",
       "label": "Company created",
       "record_type": "company",
-      "carries": [
-        "company_number",
-        "name",
-        "company_kind"
-      ],
+      "carries": ["company_number", "name", "company_kind"],
       "personal_or_sensitive_values_allowed": false
     },
     {
@@ -570,9 +646,7 @@
       "key": "vortex.crm.organisations.company.merged",
       "label": "Company merged",
       "record_type": "company",
-      "carries": [
-        "company_number"
-      ],
+      "carries": ["company_number"],
       "personal_or_sensitive_values_allowed": false
     }
   ],
@@ -654,17 +728,13 @@
       "id": "ext_company_fields",
       "key": "company_fields",
       "record_type": "company",
-      "accepts": [
-        "field"
-      ]
+      "accepts": ["field"]
     },
     {
       "id": "ext_company_actions",
       "key": "company_actions",
       "record_type": "company",
-      "accepts": [
-        "action"
-      ]
+      "accepts": ["action"]
     }
   ],
   "sharing_conditions": [],
@@ -681,7 +751,10 @@
         "name",
         "industry",
         "phone",
-        "website"
+        "website",
+        "country",
+        "region",
+        "city"
       ],
       "filter": null,
       "group_by": [],
