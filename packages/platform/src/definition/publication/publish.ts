@@ -466,6 +466,12 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
       state.root.organizationId !== state.draft.organizationId ||
       state.root.kind !== state.draft.kind ||
       state.root.key !== state.draft.key ||
+      (state.draft.kind === "application" &&
+        (state.draft.source.kind !== state.draft.kind ||
+          state.draft.source.key !== state.draft.key ||
+          state.draft.createdAt !== state.root.createdAt ||
+          String(state.draft.createdBy).toLowerCase() !==
+            String(state.root.createdBy).toLowerCase())) ||
       state.root.currentReleaseRevision !== (state.draft.publishedRevision ?? null) ||
       !currentIdentityLookupMatches(state.draft.source, state.identities) ||
       state.root.currentReleaseRevision !== state.historyLatestReleaseRevision ||

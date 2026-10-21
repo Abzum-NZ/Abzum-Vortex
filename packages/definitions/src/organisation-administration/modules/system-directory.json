@@ -22,7 +22,8 @@
         "organization_field": "organization_id",
         "revision_field": "revision",
         "filterable_fields": [
-          "state"
+          "state",
+          "display_name"
         ],
         "sortable_fields": [
           "display_name",
@@ -64,7 +65,7 @@
           "label": "Display name",
           "required": false,
           "unique": false,
-          "filterable": false,
+          "filterable": true,
           "sortable": true,
           "search_priority": "first",
           "personal_data": "personal",
@@ -154,7 +155,8 @@
         "organization_field": "organization_id",
         "revision_field": "revision",
         "filterable_fields": [
-          "state"
+          "state",
+          "invited_email"
         ],
         "sortable_fields": [
           "invited_email",
@@ -196,7 +198,7 @@
           "label": "Invited email",
           "required": false,
           "unique": false,
-          "filterable": false,
+          "filterable": true,
           "sortable": true,
           "search_priority": "first",
           "personal_data": "personal",
@@ -290,7 +292,8 @@
         "organization_field": "organization_id",
         "revision_field": "revision",
         "filterable_fields": [
-          "state"
+          "state",
+          "label"
         ],
         "sortable_fields": [
           "key",
@@ -349,7 +352,7 @@
           "label": "Label",
           "required": false,
           "unique": false,
-          "filterable": false,
+          "filterable": true,
           "sortable": true,
           "search_priority": "normal",
           "personal_data": "none",
@@ -408,7 +411,8 @@
           "group_id",
           "organization_account_id",
           "state",
-          "temporal_state"
+          "temporal_state",
+          "account_display_name"
         ],
         "sortable_fields": [
           "starts_at",
@@ -481,7 +485,7 @@
           "label": "Account display name",
           "required": false,
           "unique": false,
-          "filterable": false,
+          "filterable": true,
           "sortable": false,
           "search_priority": "first",
           "personal_data": "personal",
@@ -602,7 +606,8 @@
           "lifecycle",
           "role_kind",
           "privilege_classification",
-          "assignment_policy"
+          "assignment_policy",
+          "label"
         ],
         "sortable_fields": [
           "key",
@@ -661,7 +666,7 @@
           "label": "Label",
           "required": false,
           "unique": false,
-          "filterable": false,
+          "filterable": true,
           "sortable": true,
           "search_priority": "normal",
           "personal_data": "none",
@@ -816,7 +821,8 @@
           "group_id",
           "assignment_kind",
           "state",
-          "temporal_state"
+          "temporal_state",
+          "role_label"
         ],
         "sortable_fields": [
           "starts_at",
@@ -890,7 +896,7 @@
           "label": "Role label",
           "required": false,
           "unique": false,
-          "filterable": false,
+          "filterable": true,
           "sortable": false,
           "search_priority": "first",
           "personal_data": "none",
@@ -1090,7 +1096,8 @@
           "role_id",
           "eligibility_source_kind",
           "state",
-          "temporal_state"
+          "temporal_state",
+          "account_display_name"
         ],
         "sortable_fields": [
           "activated_at",
@@ -1148,7 +1155,7 @@
           "label": "Account display name",
           "required": false,
           "unique": false,
-          "filterable": false,
+          "filterable": true,
           "sortable": false,
           "search_priority": "first",
           "personal_data": "personal",
@@ -1561,7 +1568,8 @@
         "organization_field": "organization_id",
         "revision_field": "revision",
         "filterable_fields": [
-          "state"
+          "state",
+          "display_name"
         ],
         "sortable_fields": [
           "short_name",
@@ -1652,7 +1660,7 @@
           "label": "Display name",
           "required": false,
           "unique": false,
-          "filterable": false,
+          "filterable": true,
           "sortable": true,
           "search_priority": "normal",
           "personal_data": "none",
@@ -1746,7 +1754,8 @@
         "organization_field": "organization_id",
         "revision_field": "revision",
         "filterable_fields": [
-          "state"
+          "state",
+          "identity_id"
         ],
         "sortable_fields": [
           "starts_at",
@@ -1803,7 +1812,7 @@
           "label": "Identity",
           "required": false,
           "unique": false,
-          "filterable": false,
+          "filterable": true,
           "sortable": false,
           "search_priority": "first",
           "personal_data": "personal",

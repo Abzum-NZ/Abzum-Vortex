@@ -65,7 +65,7 @@ begin
     $declared${
       "application_root_id": {"sql": "continuity.application_root_id::text", "database": "text", "filter": true},
       "key": {"sql": "continuity.key", "database": "text", "search": true},
-      "label": {"sql": "continuity.label", "database": "text", "search": true}
+      "label": {"sql": "continuity.label", "database": "text", "filter": true, "search": true}
     }$declared$::jsonb,
     6
   );

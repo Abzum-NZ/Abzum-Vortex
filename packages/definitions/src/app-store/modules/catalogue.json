@@ -19,7 +19,7 @@
         "protected_view": "application_store_entries",
         "organization_field": "organization_id",
         "revision_field": "revision",
-        "filterable_fields": [],
+        "filterable_fields": ["name"],
         "sortable_fields": ["key"],
         "refresh_while": {
           "field": "record_update_status",
@@ -78,7 +78,7 @@
           "label": "Application",
           "required": false,
           "unique": false,
-          "filterable": false,
+          "filterable": true,
           "sortable": false,
           "search_priority": "first",
           "personal_data": "none",

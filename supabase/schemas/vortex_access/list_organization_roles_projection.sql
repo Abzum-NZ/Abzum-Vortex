@@ -86,7 +86,7 @@ begin
     p_predicate,
     $declared${
       "key": {"sql": "role_revision.role_key", "database": "text", "search": true},
-      "label": {"sql": "role_revision.label", "database": "text", "search": true},
+      "label": {"sql": "role_revision.label", "database": "text", "filter": true, "search": true},
       "lifecycle": {"sql": "role_revision.lifecycle::text", "database": "text", "filter": true},
       "role_kind": {"sql": "role.role_kind::text", "database": "text", "filter": true},
       "privilege_classification": {"sql": "role_revision.privilege_classification::text", "database": "text", "filter": true},

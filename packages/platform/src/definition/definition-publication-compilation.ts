@@ -277,7 +277,24 @@ export const assertReleasable = (
   );
 };
 
-/** The stored draft re-read, of this organisation and at exactly the expected root and revision. */
+/** A parsed draft of this organisation, at exactly the expected root and revision, with its source's own fingerprint. */
+const checkedDraft = (
+  context: SessionContext,
+  draft: StoredDefinitionDraft,
+  command: PrepareDefinitionPublicationCommand,
+): StoredDefinitionDraft => {
+  if (draft.organizationId !== context.organizationId) refuse("DEFINITION_ORGANIZATION_MISMATCH");
+  if (
+    String(draft.rootId) !== String(command.rootId) ||
+    draft.draftRevision !== command.expectedDraftRevision
+  )
+    refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
+  if (draft.sourceFingerprint !== fingerprintCanonicalValue(draft.source))
+    refuse("DEFINITION_SOURCE_EVIDENCE_MISMATCH");
+  return draft;
+};
+
+/** A draft supplied by a caller is parsed here, since nothing has parsed it yet. */
 const validatedDraft = (
   context: SessionContext,
   supplied: StoredDefinitionDraft,
@@ -285,16 +302,7 @@ const validatedDraft = (
 ): StoredDefinitionDraft => {
   const draft = storedDefinitionDraftSchema.safeParse(supplied);
   if (!draft.success) return refuse("DEFINITION_HISTORY_INVALID");
-  if (draft.data.organizationId !== context.organizationId)
-    refuse("DEFINITION_ORGANIZATION_MISMATCH");
-  if (
-    String(draft.data.rootId) !== String(command.rootId) ||
-    draft.data.draftRevision !== command.expectedDraftRevision
-  )
-    refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
-  if (draft.data.sourceFingerprint !== fingerprintCanonicalValue(draft.data.source))
-    refuse("DEFINITION_SOURCE_EVIDENCE_MISMATCH");
-  return draft.data;
+  return checkedDraft(context, draft.data, command);
 };
 
 /** A builder's draft compile: the draft as `validateCandidate` checks it, and its current version. */
@@ -304,7 +312,8 @@ export const validateDraftCandidate = (
   command: PrepareDefinitionPublicationCommand,
 ): DefinitionDraftCandidate => {
   if (candidateInput === undefined) return refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
-  const draft = validatedDraft(context, candidateInput.draft, command);
+  // The reader parsed this draft with the stored-draft schema when it read it; it is not parsed again.
+  const draft = checkedDraft(context, candidateInput.draft, command);
   if ((draft.publishedRevision === undefined) !== (candidateInput.currentReleaseVersion === null))
     refuse("DEFINITION_HISTORY_INVALID");
   return {

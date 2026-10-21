@@ -21,16 +21,6 @@ declare
   predicate_plan jsonb;
   predicate_matches boolean;
 begin
-  -- This reader declares no filterable or searchable key: a filter is refused, and a
-  -- search over no searchable key matches no row.
-  predicate_plan := vortex_record.compile_projection_predicate_internal(p_predicate, '{}'::jsonb, 1);
-  if predicate_plan ->> 'predicate' is not null then
-    execute 'select (' || (predicate_plan ->> 'predicate') || ') is true'
-      into predicate_matches using predicate_plan -> 'parameters';
-    if not predicate_matches then
-      return;
-    end if;
-  end if;
   -- One settings row per organisation, so ordering is irrelevant: record_id and the projection's
   -- declared sortable field (language) are both accepted.
   if p_sort_key is null or p_sort_key not in ('record_id', 'language')
@@ -69,6 +59,27 @@ begin
   if settings_row.organization_id is null
     or settings_row.organization_id is distinct from scope_row.organization_id then
     return;
+  end if;
+  -- The organisation is the record title and the one filterable key; it is the single row's own
+  -- value, so the predicate is evaluated against that value as a literal. There is no searchable key.
+  predicate_plan := vortex_record.compile_projection_predicate_internal(
+    p_predicate,
+    pg_catalog.jsonb_build_object(
+      'organization_id',
+      pg_catalog.jsonb_build_object(
+        'sql', pg_catalog.format('%L::text', settings_row.organization_id::text),
+        'database', 'text',
+        'filter', true
+      )
+    ),
+    1
+  );
+  if predicate_plan ->> 'predicate' is not null then
+    execute 'select (' || (predicate_plan ->> 'predicate') || ') is true'
+      into predicate_matches using predicate_plan -> 'parameters';
+    if not predicate_matches then
+      return;
+    end if;
   end if;
   if p_record_ids is not null
     and not (settings_row.organization_id = any(p_record_ids)) then

@@ -40,7 +40,7 @@ export const activityRecordType = {
     protected_view: "activity_entry",
     organization_field: "organization_id",
     revision_field: "revision",
-    filterable_fields: [],
+    filterable_fields: ["action"],
     sortable_fields: ["occurred_at"],
   },
   fields: fields.map((field) => ({
@@ -49,7 +49,7 @@ export const activityRecordType = {
     label: field.label,
     required: !["changed_field_count", "actor"].includes(field.key),
     unique: false,
-    filterable: false,
+    filterable: field.key === "action",
     sortable: field.key === "occurred_at",
     personal_data: field.key === "actor" ? "personal" : "none",
     public_display: "refused",

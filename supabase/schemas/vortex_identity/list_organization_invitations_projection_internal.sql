@@ -82,7 +82,7 @@ begin
     p_predicate,
     $declared${
       "state": {"sql": "(case when invitation.accepted_at is not null then 'accepted' when invitation.revoked_at is not null then 'revoked' when invitation.expires_at <= pg_catalog.statement_timestamp() then 'expired' else 'pending' end)", "database": "text", "filter": true},
-      "invited_email": {"sql": "invitation.invited_email", "database": "text", "search": true}
+      "invited_email": {"sql": "invitation.invited_email", "database": "text", "filter": true, "search": true}
     }$declared$::jsonb,
     7
   );

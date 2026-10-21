@@ -91,7 +91,7 @@ begin
     p_predicate,
     $declared${
       "state": {"sql": "account.state", "database": "text", "filter": true},
-      "display_name": {"sql": "account.display_name", "database": "text", "search": true}
+      "display_name": {"sql": "account.display_name", "database": "text", "filter": true, "search": true}
     }$declared$::jsonb,
     7
   );

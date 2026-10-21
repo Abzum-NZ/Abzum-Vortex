@@ -78,7 +78,7 @@ begin
     p_predicate,
     $declared${
       "key": {"sql": "entry.permission_key", "database": "text", "search": true},
-      "label": {"sql": "entry.label", "database": "text", "search": true},
+      "label": {"sql": "entry.label", "database": "text", "filter": true, "search": true},
       "owner_kind": {"sql": "entry.owner_kind", "database": "text", "filter": true},
       "action_kind": {"sql": "entry.action_kind", "database": "text", "filter": true},
       "administrative": {"sql": "entry.administrative", "database": "boolean", "filter": true}

@@ -38,9 +38,14 @@ declare
   scan_sql text;
   predicate_plan jsonb;
 begin
-  -- This reader declares no filterable or searchable key: a filter is refused, and a
-  -- search over no searchable key matches no row.
-  predicate_plan := vortex_record.compile_projection_predicate_internal(p_predicate, '{}'::jsonb, 10);
+  -- The action is the one filterable key (the record title); there is no searchable key.
+  predicate_plan := vortex_record.compile_projection_predicate_internal(
+    p_predicate,
+    $declared${
+      "action": {"sql": "entry.action", "database": "text", "filter": true}
+    }$declared$::jsonb,
+    10
+  );
   if p_sort_key <> 'occurred_at' or p_direction not in ('ascending', 'descending')
     or p_sort_key is null or p_direction is null
     or (p_limit is not null and p_limit < 1) then

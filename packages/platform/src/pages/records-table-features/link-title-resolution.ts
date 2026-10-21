@@ -44,12 +44,7 @@ export type LinkTitleProblem = Readonly<{
   recordId: string;
   field: string;
   /** For the server log; never carries a title or an id. */
-  cause:
-    | "link_title_none"
-    | "link_title_several"
-    | "link_title_too_many"
-    | "link_title_parent"
-    | "link_title_not_filterable";
+  cause: "link_title_none" | "link_title_several" | "link_title_too_many" | "link_title_parent";
   message: string;
 }>;
 
@@ -187,14 +182,10 @@ export const resolveLinkTitles = async (
     const titleField = targetType.fields.find((candidate) =>
       sameId(String(candidate.fieldId), titleFieldId),
     );
-    // The Query engine matches only a filterable field; a title it cannot filter is named per cell.
-    if (titleField?.filterable !== true) {
+    // A record type's title field is always filterable (a compile rule of the definition).
+    if (titleField === undefined) {
       for (const cell of fieldCells)
-        problemOf(
-          cell,
-          "link_title_not_filterable",
-          `${targetType.pluralLabel} can't be found by title here. Pick the ${labelOf(field)} in the cell.`,
-        );
+        problemOf(cell, "link_title_none", `${labelOf(field)} can't be filled from a title here.`);
       continue;
     }
 

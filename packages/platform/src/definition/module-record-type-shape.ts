@@ -393,6 +393,7 @@ export const setInlineRecordTitleField = (
     };
   const previousTitle = record.title_field;
   (record as { title_field: string }).title_field = field.key;
+  (field as { filterable: boolean }).filterable = true;
   // Headings and search entries that followed the old title keep following its chosen title.
   const reference = `${change.moduleKey}:${record.key}`;
   for (const page of source.body.pages)
