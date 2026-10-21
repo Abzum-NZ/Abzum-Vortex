@@ -317,6 +317,7 @@ export function useBulkSelection({
                   summary: {
                     total: last.total,
                     done: last.done,
+                    warnings: last.warnings,
                     refused: last.refused,
                     notProcessed: last.notProcessed,
                     limited: last.limited,

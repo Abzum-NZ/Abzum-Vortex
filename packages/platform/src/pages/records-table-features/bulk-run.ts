@@ -41,7 +41,7 @@ import {
   fieldLinkTypesOf,
 } from "../placement-read/shared";
 import { buildRecordsTableQueryCommand } from "../records-table-query";
-import { recordsSelectionCountCeiling } from "../records-selection";
+import { recordsSelectionCountCeiling, recordsTableBulkWarningMaximum } from "../records-selection";
 import { openRecordsSelection, type RecordsSelectionDescriptor } from "../records-selection-seal";
 import {
   loadRecordsTablePlacement,
@@ -370,6 +370,9 @@ export const createRecordsTableBulkService = (dependencies: RecordsTableBulkDepe
       }
 
       const total = targets.length;
+      const warningRecords = new Map<string, Set<string>>();
+      const warningCodes = new Map<string, Set<string>>();
+      let warningsTruncated = false;
       const refusals = new Map<RecordsTableBulkRefusalReason, number>();
       const refused = (reason: RecordsTableBulkRefusalReason, count = 1): void => {
         refusals.set(reason, (refusals.get(reason) ?? 0) + count);
@@ -381,6 +384,10 @@ export const createRecordsTableBulkService = (dependencies: RecordsTableBulkDepe
         kind: "summary",
         total,
         done,
+        warnings: [...warningRecords].map(([message, records]) => ({
+          message,
+          count: records.size,
+        })),
         refused: [...refusals.entries()].map(([reason, count]) => ({ reason, count })),
         notProcessed,
         limited,
@@ -461,6 +468,21 @@ export const createRecordsTableBulkService = (dependencies: RecordsTableBulkDepe
           );
           if (result.kind === "completed") {
             done += result.results.length;
+            for (const { message, code, recordId } of result.warnings) {
+              const coded = warningCodes.get(code) ?? new Set<string>();
+              coded.add(recordId);
+              warningCodes.set(code, coded);
+              let records = warningRecords.get(message);
+              if (records === undefined) {
+                if (warningRecords.size === recordsTableBulkWarningMaximum) {
+                  warningsTruncated = true;
+                  continue;
+                }
+                records = new Set<string>();
+                warningRecords.set(message, records);
+              }
+              records.add(recordId);
+            }
           } else if (result.kind === "refused") {
             refused(reasonOfResult(result.result));
             notProcessed += runnable.length - 1;
@@ -469,6 +491,14 @@ export const createRecordsTableBulkService = (dependencies: RecordsTableBulkDepe
         processed = Math.min(total, start + batch.length);
         report({ kind: "progress", total, processed });
       }
+      for (const [code, records] of warningCodes)
+        console.info(
+          `[records-bulk] warnings code=${code} count=${records.size} action=${request.action} commandId=${request.commandId}`,
+        );
+      if (warningsTruncated)
+        console.error(
+          `[records-bulk] cause=bulk_warnings_truncated max=${recordsTableBulkWarningMaximum} action=${request.action} commandId=${request.commandId}`,
+        );
       report(summary());
     },
   });
