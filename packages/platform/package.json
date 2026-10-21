@@ -3,6 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "sideEffects": false,
   "exports": {
     "./schema": "./src/schema.ts",
     "./server": "./src/server.ts"
@@ -12,6 +13,7 @@
   },
   "dependencies": {
     "@js-temporal/polyfill": "catalog:",
+    "@noble/hashes": "catalog:",
     "@supabase/supabase-js": "catalog:",
     "exceljs": "catalog:",
     "file-type": "catalog:",
