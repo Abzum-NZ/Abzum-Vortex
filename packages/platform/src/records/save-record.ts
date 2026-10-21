@@ -1186,16 +1186,35 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
               stop("changed", "RECORD_BATCH_SAVE_CONFLICT");
               continue;
             }
-            if (totals.outcome !== "defer" && totals.outcome !== "not_required") {
+            if (
+              totals.outcome !== "prepared" &&
+              totals.outcome !== "defer" &&
+              totals.outcome !== "not_required"
+            ) {
               stop(
-                "refused",
-                totals.outcome === "prepared"
-                  ? "RECORD_BATCH_SAVE_RELATIONSHIP_TOTALS"
-                  : `RECORD_BATCH_SAVE_TOTALS_${totals.outcome.toUpperCase()}`,
+                totals.outcome === "restart" ? "changed" : "refused",
+                `RECORD_BATCH_SAVE_TOTALS_${totals.outcome.toUpperCase()}`,
               );
               continue;
             }
-            const prepared = await prepare(transaction, command, activityId);
+            // A record type in a relationship is prepared through its locked closure, exactly as
+            // the single save prepares it; only a change that moves a parent total is refused.
+            const root =
+              totals.outcome === "prepared"
+                ? totals.records.find((record) => record.recordKey === "root")
+                : undefined;
+            const prepared: PreparationOutcome =
+              totals.outcome === "prepared"
+                ? root === undefined
+                  ? { outcome: "unavailable" }
+                  : {
+                      outcome: "prepared",
+                      recordType: root.recordType,
+                      existingValues: root.existingValues,
+                      readableFieldIds: new Set(totals.readableFieldIds),
+                      correlationId: totals.correlationId,
+                    }
+                : await prepare(transaction, command, activityId);
             if (prepared.outcome === "replayed") {
               if (prepared.result.outcome === "saved")
                 replays[position] = prepared.result.concurrencyNumber;
@@ -1209,24 +1228,63 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
               );
               continue;
             }
-            const ruleSet = parseBeforeSaveFlowSet(
-              prepared.beforeSaveFlows,
-              prepared.recordType.recordTypeId,
-            );
-            if (ruleSet === undefined || prepared.recordType.systemProjection !== undefined) {
+            if (prepared.recordType.systemProjection !== undefined) {
               stop("refused", "RECORD_BATCH_SAVE_RECORD_TYPE_UNSUPPORTED");
               continue;
             }
-            const values = calculateAndFinalize({
-              operation: "update",
-              submittedValues: command.submittedValues,
-              recordType: prepared.recordType,
-              existingValues: prepared.existingValues,
-              issuedAt,
-              organizationCurrency: settings?.currency,
-              timeZone: settings?.timeZone,
-              rules: beginBeforeSaveRuleExecution(ruleSet),
-            });
+            let values: CalculatedValues;
+            if (totals.outcome === "prepared") {
+              const closureRules = new Map<string, BeforeSaveRuleExecution>();
+              for (const record of totals.records) {
+                const ruleSet = parseBeforeSaveFlowSet(
+                  record.beforeSaveFlows,
+                  record.recordType.recordTypeId,
+                );
+                if (ruleSet === undefined) break;
+                closureRules.set(record.recordKey, beginBeforeSaveRuleExecution(ruleSet));
+              }
+              const clock = operationClock(
+                totals.records.map((record) => record.recordType),
+                issuedAt,
+                settings?.timeZone,
+              );
+              if (closureRules.size !== totals.records.length || clock === undefined) {
+                stop("refused", "RECORD_BATCH_SAVE_RECORD_TYPE_UNSUPPORTED");
+                continue;
+              }
+              values = calculateLockedRelationshipTotalSave({
+                command,
+                preparation: totals,
+                ...(settings?.currency === undefined
+                  ? {}
+                  : { organizationCurrency: settings.currency }),
+                clock,
+                rules: closureRules,
+              });
+              if (values.success && values.parentMutations.length > 0) {
+                stop("refused", "RECORD_BATCH_SAVE_RELATIONSHIP_TOTALS");
+                continue;
+              }
+            } else {
+              const ruleSet = parseBeforeSaveFlowSet(
+                prepared.beforeSaveFlows,
+                prepared.recordType.recordTypeId,
+              );
+              if (ruleSet === undefined) {
+                stop("refused", "RECORD_BATCH_SAVE_RECORD_TYPE_UNSUPPORTED");
+                continue;
+              }
+              values = calculateAndFinalize({
+                operation: "update",
+                submittedValues: command.submittedValues,
+                recordType: prepared.recordType,
+                existingValues: prepared.existingValues,
+                issuedAt,
+                organizationCurrency: settings?.currency,
+                timeZone: settings?.timeZone,
+                rules: beginBeforeSaveRuleExecution(ruleSet),
+              });
+            }
             const finalized = await finalizeCalculatedValues(
               transaction,
               command,
