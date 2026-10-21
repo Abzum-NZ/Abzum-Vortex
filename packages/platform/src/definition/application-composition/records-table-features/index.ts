@@ -355,6 +355,18 @@ export const checkRecordsTableFeature = (
       "definition_records_table_tree",
       "Turn Board off to show records as a tree.",
     );
+  // Paste and fill write through the table's inline edit, so they need it on with a field to change.
+  if (
+    key === "spreadsheet" &&
+    state.enabled &&
+    ((state as { paste?: boolean }).paste === true ||
+      (state as { fill?: boolean }).fill === true) &&
+    (!features.inlineEdit.enabled || features.inlineEdit.fields.length === 0)
+  )
+    return featureNotPossible(
+      "definition_records_table_spreadsheet",
+      "Paste and fill need Inline editing and at least one editable field",
+    );
   // A row opens one panel: its related records or the records beneath it, never both.
   if (key === "tree" && state.enabled && features.masterDetail.enabled)
     return featureNotPossible(

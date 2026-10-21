@@ -52,6 +52,40 @@ export const installedPlacementProps = (
 };
 
 /**
+ * Why one inline-edited cell may not be written now, or undefined when it may: the field must be
+ * changeable on this row by this viewer, readable on it, edited by an installed editor, and a link
+ * is cleared or names a record of the field's installed target, never of the caller's choice of
+ * type; the writer still decides whether the viewer may read it. Shared by the single edit and
+ * every cell of a batch edit, so both decide a cell the same way.
+ */
+export const inlineEditCellRefusal = (
+  row: Parameters<typeof rowMayChangeField>[0] &
+    Readonly<{ values: Readonly<Record<string, unknown>> }>,
+  field: string,
+  editors: ReturnType<typeof fieldEditorsOf>,
+  value: unknown,
+): string | undefined => {
+  if (
+    !rowMayChangeField(row, field) ||
+    !Object.keys(row.values).some((key) => sameId(key, field)) ||
+    editors[field.toLowerCase()] === undefined
+  )
+    return `field_not_permitted:${field}`;
+  const editor = editors[field.toLowerCase()];
+  if (editor?.kind === "link" && value !== null) {
+    if (
+      !isRecord(value) ||
+      Object.keys(value).length !== 2 ||
+      typeof value.recordTypeId !== "string" ||
+      !sameId(value.recordTypeId, editor.recordTypeId)
+    )
+      return `link_target_type_mismatch:${field}`;
+    if (!recordIdSchema.safeParse(value.recordId).success) return `link_record_invalid:${field}`;
+  }
+  return undefined;
+};
+
+/**
  * Re-project the requested row command under current access before starting any flow. All selected
  * rows are read in one database call; neither a browser projection nor a previous page read grants
  * authority. The rows come from the gesture's own inputs, never from the page subject: a table on a
@@ -260,29 +294,13 @@ export const recordsTableBindingRefusal = async (
               return recordsTableRequestRefusal(event, `field_not_projected:${field}`);
         }
         for (const field of editedFields) {
-          if (
-            !rowMayChangeField(row, field) ||
-            !Object.keys(row.values).some((key) => sameId(key, field)) ||
-            editors[field.toLowerCase()] === undefined
-          )
-            return recordsTableRequestRefusal(event, `field_not_permitted:${field}`);
-          // A link is cleared or names a record of the field's installed target, never of the
-          // caller's choice of type; the writer still decides whether the viewer may read it.
-          const editor = editors[field.toLowerCase()];
-          if (editor?.kind === "link") {
-            const value = isRecord(inputs.values) ? inputs.values[field] : undefined;
-            if (value !== null) {
-              if (
-                !isRecord(value) ||
-                Object.keys(value).length !== 2 ||
-                typeof value.recordTypeId !== "string" ||
-                !sameId(value.recordTypeId, editor.recordTypeId)
-              )
-                return recordsTableRequestRefusal(event, `link_target_type_mismatch:${field}`);
-              if (!recordIdSchema.safeParse(value.recordId).success)
-                return recordsTableRequestRefusal(event, `link_record_invalid:${field}`);
-            }
-          }
+          const cause = inlineEditCellRefusal(
+            row,
+            field,
+            editors,
+            isRecord(inputs.values) ? inputs.values[field] : undefined,
+          );
+          if (cause !== undefined) return recordsTableRequestRefusal(event, cause);
         }
       }
     }

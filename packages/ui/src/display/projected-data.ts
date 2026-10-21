@@ -19,6 +19,8 @@ import {
   type RecordsTableSortKey,
   type RecordsTableSortState,
   type RecordsTableExportFormat,
+  type RecordsTableBatchEditRequest,
+  type RecordsTableBatchEditResult,
   RECORDS_TABLE_MAXIMUM_SORT_KEYS,
   gridLayoutStateSchema,
   type GridLayout,
@@ -367,6 +369,12 @@ export type DisplaySemanticEventName =
    */
   | "range_summary_requested"
   /**
+   * A Records table's Paste, Fill and Undo send one batch of cell changes (or undo or redo the last
+   * batch the person committed) and read the depth of the session's undo stack. The page posts the
+   * batch to the server, which validates every cell and commits all or nothing. Not a flow event.
+   */
+  | "batch_edit_requested"
+  /**
    * A Records table's pivot asks for one page of its rows, opens the pivot or closes it, or a cell
    * opens the ordinary grid on the records it counts. These are the Pivot feature's own reads and
    * address changes, not flow events.
@@ -528,6 +536,17 @@ export type DisplaySemanticEvent =
       fieldIds: readonly string[];
       signal: AbortSignal;
     }>
+  /**
+   * A batch of cell changes on the shown page (`commit`), the inverse of the last committed batch
+   * (`undo`), that inverse undone again (`redo`), or just the stack depths (`state`). The handler
+   * resolves to a `DisplayBatchEditAnswer`.
+   */
+  | Readonly<{
+      event: "batch_edit_requested";
+      action: "commit" | "undo" | "redo" | "state";
+      /** The rows of a `commit`: record, displayed revision and the cells it changes. */
+      rows?: RecordsTableBatchEditRequest["rows"];
+    }>
   | Readonly<{
       event: "row_edit";
       eventId: string;
@@ -598,6 +617,13 @@ export type DisplayInlineEditResult =
       corrections?: readonly FlowFieldCorrection[];
     }>;
 
+/** What a batch edit request came to, with how many batches the session can now undo and redo. */
+export type DisplayBatchEditAnswer = Readonly<{
+  result: RecordsTableBatchEditResult | undefined;
+  undoDepth: number;
+  redoDepth: number;
+}>;
+
 /** A handler may return the promise of the flow it started; the control stays busy until it settles. */
 export type DisplayEventHandler = (event: DisplaySemanticEvent) => void | Promise<unknown>;
 
@@ -639,6 +665,7 @@ export const DISPLAY_EVENT_NAMES: readonly DisplaySemanticEventName[] = Object.f
   "export_requested",
   "export_cancelled",
   "range_summary_requested",
+  "batch_edit_requested",
   "inline_edit",
   "row_edit",
   "card_moved",
