@@ -28,11 +28,29 @@ declare
   preview_table_token text;
   record_columns text[];
   field_columns text[];
-  readable_columns text[];
   copied_columns text;
   copied_count bigint := 0;
-  live_record record;
   row_read record;
+  -- Page decisions take at most 201 candidates; a batch is the round number below that.
+  batch_size constant integer := 200;
+  after_id uuid;
+  batch_ids uuid[];
+  candidate_id uuid;
+  page_loaded jsonb;
+  page_declaration jsonb;
+  page_eligibility jsonb;
+  page_envelope jsonb;
+  page_narrowed boolean;
+  decided_ids uuid[];
+  decided_decisions jsonb[];
+  decided_bounds jsonb[];
+  decided_index integer;
+  readable_bounds jsonb;
+  readable_field_ids jsonb;
+  readable_ids uuid[];
+  readable_columns_by_record text[];
+  column_sets jsonb := '{}'::jsonb;
+  bounds_key text;
 begin
   if not vortex_platform.is_non_nil_uuid(p_preview_installation_id::text)
     or not vortex_platform.is_non_nil_uuid(p_record_type_id::text)
@@ -107,44 +125,120 @@ begin
   -- the builder reads there; every other field of a copied record is left empty. Row security
   -- limits the live table to the request's organisation and Application. The bound counts only
   -- readable records, in record order, so the builder gets the first records they can see.
-  for live_record in
-    execute pg_catalog.format(
-      'select record_id from record_data.%I order by record_id', live_table_token
-    )
+  -- Candidates are scanned in record order in keyset batches. Each batch is decided together by
+  -- the page read pass, with the page facts, eligibility and envelope built inside this
+  -- invocation from the request's own context, and the readable records of a batch are copied by
+  -- one statement per distinct set of readable fields.
   loop
-    scanned_count := scanned_count + 1;
-    exit when scanned_count > scan_limit;
-    select projected.projection, projected.read_bounds, projected.read_facts into row_read
-    from vortex_record.read_record_projection_internal(
-      p_record_type_id, live_record.record_id
-    ) as projected;
-    continue when row_read.projection ->> 'outcome' is distinct from 'allowed';
-    -- The row decision and the raw values must refer to the same authoritative storage,
-    -- including if the installed pin set changed since the source was resolved.
-    if (row_read.read_facts #>> '{facts,binding,storageContractId}')::uuid
-      is distinct from p_live_storage_contract_id then
-      raise exception using errcode = '42501', message = 'Preview seed authorization storage changed';
-    end if;
-    if copied_count = copy_limit then
-      bounded := true;
-      exit;
-    end if;
-    select coalesce(pg_catalog.array_agg(field_column.value order by field_column.value), array[]::text[])
-    into readable_columns
-    from pg_catalog.unnest(field_columns) as field_column(value)
-    where field_column.value in (
-      select 'f_' || pg_catalog.replace(pg_catalog.lower(readable.value #>> '{}'), '-', '')
-      from pg_catalog.jsonb_array_elements(row_read.read_bounds -> 'readableFieldIds') as readable(value)
-    );
-    select pg_catalog.string_agg(pg_catalog.quote_ident(copied.value), ', ')
-    into copied_columns
-    from pg_catalog.unnest(record_columns || readable_columns) as copied(value);
     execute pg_catalog.format(
-      'insert into record_data.%I (storage_contract_id, %s) select %L::uuid, %s from record_data.%I where record_id = $1',
-      preview_table_token, copied_columns, p_preview_storage_contract_id, copied_columns,
+      'select coalesce(pg_catalog.array_agg(candidate.record_id order by candidate.record_id), array[]::uuid[]) from (select record_id from record_data.%I where $1::uuid is null or record_id > $1 order by record_id limit $2) as candidate',
       live_table_token
-    ) using live_record.record_id;
-    copied_count := copied_count + 1;
+    ) into batch_ids using after_id, least(batch_size, scan_limit - scanned_count);
+    exit when pg_catalog.cardinality(batch_ids) = 0;
+    after_id := batch_ids[pg_catalog.cardinality(batch_ids)];
+    scanned_count := scanned_count + pg_catalog.cardinality(batch_ids);
+
+    -- The page facts come from the batch's first record, loaded by the exact loader. A record
+    -- type the page pass cannot decide (a protected projection, or readable through another
+    -- record) leaves its records to the exact single-record decision.
+    decided_ids := array[]::uuid[];
+    decided_decisions := array[]::jsonb[];
+    decided_bounds := array[]::jsonb[];
+    page_eligibility := null;
+    page_loaded := vortex_record.load_record_access_facts_from_installation_internal(
+      p_record_type_id, 'read', batch_ids[1], null,
+      vortex_definition.read_current_active_installation(), null
+    );
+    if page_loaded ->> 'outcome' = 'loaded'
+      and pg_catalog.jsonb_typeof(page_loaded -> 'declaration') = 'object' then
+      page_declaration := page_loaded -> 'declaration';
+      -- The row decisions and the raw values must refer to the same authoritative storage,
+      -- including if the installed pin set changed since the source was resolved.
+      if (page_loaded #>> '{facts,binding,storageContractId}')::uuid
+          is distinct from p_live_storage_contract_id
+        or page_loaded #>> '{recordTypeMeta,table}' is distinct from live_table_token then
+        raise exception using errcode = '42501', message = 'Preview seed authorization storage changed';
+      end if;
+      page_eligibility := vortex_access.evaluate_organization_record_permission_eligibility_internal(
+        page_declaration, checked_context, pg_catalog.clock_timestamp()
+      );
+      select page.envelope, page.narrowed into page_envelope, page_narrowed
+      from vortex_record.read_record_page_envelope_internal(p_record_type_id, page_loaded) as page;
+      select coalesce(pg_catalog.array_agg(decided.record_id), array[]::uuid[]),
+        coalesce(pg_catalog.array_agg(decided.decision), array[]::jsonb[]),
+        coalesce(pg_catalog.array_agg(decided.bounds), array[]::jsonb[])
+      into decided_ids, decided_decisions, decided_bounds
+      from vortex_record.read_record_page_decisions_internal(
+        p_record_type_id, page_loaded, page_declaration, page_eligibility,
+        batch_ids, page_envelope, page_narrowed
+      ) as decided;
+    end if;
+
+    readable_ids := array[]::uuid[];
+    readable_columns_by_record := array[]::text[];
+    foreach candidate_id in array batch_ids loop
+      decided_index := pg_catalog.array_position(decided_ids, candidate_id);
+      if decided_index is not null
+        and decided_decisions[decided_index] ->> 'outcome' is distinct from 'allowed' then
+        continue;
+      end if;
+      if decided_index is not null
+        and (decided_decisions[decided_index] ->> 'validUntil')::timestamptz
+          > pg_catalog.clock_timestamp()
+        and page_eligibility ->> 'outcome' = 'eligible'
+        and (page_eligibility ->> 'validUntil')::timestamptz > pg_catalog.clock_timestamp() then
+        readable_bounds := decided_bounds[decided_index];
+      else
+        -- A record the page pass did not decide, or decided only for a moment that has passed,
+        -- keeps the exact single-record decision.
+        select projected.projection, projected.read_bounds, projected.read_facts into row_read
+        from vortex_record.read_record_projection_internal(p_record_type_id, candidate_id) as projected;
+        continue when row_read.projection ->> 'outcome' is distinct from 'allowed';
+        if (row_read.read_facts #>> '{facts,binding,storageContractId}')::uuid
+          is distinct from p_live_storage_contract_id then
+          raise exception using errcode = '42501', message = 'Preview seed authorization storage changed';
+        end if;
+        readable_bounds := row_read.read_bounds;
+      end if;
+      if copied_count + pg_catalog.cardinality(readable_ids) = copy_limit then
+        bounded := true;
+        exit;
+      end if;
+      readable_field_ids := coalesce(readable_bounds -> 'readableFieldIds', '[]'::jsonb);
+      bounds_key := readable_field_ids::text;
+      if not column_sets ? bounds_key then
+        select pg_catalog.string_agg(pg_catalog.quote_ident(copied.value), ', ')
+        into copied_columns
+        from pg_catalog.unnest(record_columns || coalesce((
+          select pg_catalog.array_agg(field_column.value order by field_column.value)
+          from pg_catalog.unnest(field_columns) as field_column(value)
+          where field_column.value in (
+            select 'f_' || pg_catalog.replace(pg_catalog.lower(readable.value #>> '{}'), '-', '')
+            from pg_catalog.jsonb_array_elements(readable_field_ids) as readable(value)
+          )
+        ), array[]::text[])) as copied(value);
+        column_sets := column_sets || pg_catalog.jsonb_build_object(bounds_key, copied_columns);
+      end if;
+      readable_ids := readable_ids || candidate_id;
+      readable_columns_by_record := readable_columns_by_record || (column_sets ->> bounds_key);
+    end loop;
+
+    for copied_columns in
+      select distinct set_columns.value
+      from pg_catalog.unnest(readable_columns_by_record) as set_columns(value)
+    loop
+      execute pg_catalog.format(
+        'insert into record_data.%I (storage_contract_id, %s) select %L::uuid, %s from record_data.%I where record_id = any ($1)',
+        preview_table_token, copied_columns, p_preview_storage_contract_id, copied_columns,
+        live_table_token
+      ) using (
+        select pg_catalog.array_agg(member.record_id)
+        from pg_catalog.unnest(readable_ids, readable_columns_by_record) as member(record_id, columns)
+        where member.columns = copied_columns
+      );
+    end loop;
+    copied_count := copied_count + pg_catalog.cardinality(readable_ids);
+    exit when bounded or scanned_count >= scan_limit;
   end loop;
 
   -- Each reference-number counter continues after the highest number among the copied records,
