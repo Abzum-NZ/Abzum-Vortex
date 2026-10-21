@@ -21,6 +21,7 @@ import type {
   TableSelectionScope,
 } from "@vortex/ui";
 import type { ApplicationPageModel } from "../../../../../../_lib/application-page";
+import { recordsTableAddress } from "./records-table-address";
 import { tablePayloadFor } from "./placement-helpers";
 import type { PageSelection, SelectedRecords } from "./types";
 
@@ -46,14 +47,6 @@ const without = <Value>(
   delete next[key];
   return next;
 };
-
-/** The application page a bulk request addresses; the server resolves it again. */
-const addressOf = (model: ApplicationPageModel) => ({
-  tenantShortName: model.invocation.tenantShortName,
-  organizationShortName: model.invocation.organizationShortName,
-  applicationKey: model.invocation.applicationKey,
-  pageKey: model.invocation.pageKey,
-});
 
 /**
  * The selection of a Records table's drawn rows, and its bulk runs. Explicit selections hold the
@@ -125,7 +118,7 @@ export function useBulkSelection({
         void import("./read-action-availability")
           .then(({ readActionAvailability }) =>
             readActionAvailability(
-              { ...addressOf(model), placementId, targets: selected },
+              { ...recordsTableAddress(model), placementId, targets: selected },
               controller.signal,
             ),
           )
@@ -184,7 +177,7 @@ export function useBulkSelection({
           headers: { "content-type": "application/json" },
           credentials: "same-origin",
           cache: "no-store",
-          body: JSON.stringify({ ...addressOf(model), placementId, token }),
+          body: JSON.stringify({ ...recordsTableAddress(model), placementId, token }),
         });
         const result = recordsSelectionCountResultSchema.safeParse(await response.json());
         if (!result.success) throw new Error(`SELECTION_COUNT_UNREADABLE: ${response.status}`);
@@ -252,7 +245,7 @@ export function useBulkSelection({
             credentials: "same-origin",
             cache: "no-store",
             body: JSON.stringify({
-              ...addressOf(model),
+              ...recordsTableAddress(model),
               placementId,
               action: action.action,
               commandId: crypto.randomUUID(),

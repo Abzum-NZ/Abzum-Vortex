@@ -6,6 +6,7 @@ import {
 } from "@vortex/platform/schema";
 import type { DisplaySemanticEvent, TablePayload } from "@vortex/ui";
 import type { ApplicationPageModel } from "../../../../../../_lib/application-page";
+import { recordsTableAddress } from "./records-table-address";
 
 /** The page position of a table's placement in the address: where the shown page was read from. */
 const pagePositionOf = (placementId: string) =>
@@ -33,10 +34,7 @@ export function useRangeSummary({ model }: Readonly<{ model: ApplicationPageMode
           cache: "no-store",
           signal: event.signal,
           body: JSON.stringify({
-            tenantShortName: model.invocation.tenantShortName,
-            organizationShortName: model.invocation.organizationShortName,
-            applicationKey: model.invocation.applicationKey,
-            pageKey: model.invocation.pageKey,
+            ...recordsTableAddress(model),
             placementId,
             token: table.selectionToken,
             ...(page === undefined
