@@ -774,14 +774,16 @@ export function ApplicationDraftAgentTools({
               message:
                 removal.reason === "required_slot"
                   ? "This slot requires its remaining placement."
-                  : removal.reason === "unresolved_target"
-                    ? "A declared placement target cannot be resolved safely. Removal is unavailable."
-                    : "A Flow still refers to this placement. Removal is unavailable.",
+                  : removal.reason === "content_outlet"
+                    ? "This placement holds a content outlet of its layout. Retarget the outlet first."
+                    : removal.reason === "unresolved_target"
+                      ? "A declared placement target cannot be resolved safely. Removal is unavailable."
+                      : "A Flow still refers to this placement. Removal is unavailable.",
             };
           return commandOutcome(
             applyCommand(placement, { kind: "remove" }),
             "remove_placement",
-            "Removal is available only for supported presentation placements in private list, detail or dashboard main regions. Nothing changed.",
+            "Removal is available only for supported presentation placements in a layout or in private list, detail or dashboard main regions. Nothing changed.",
           );
         }
         // change_placement_settings: the Settings form sends the complete set, so merge onto the current one.

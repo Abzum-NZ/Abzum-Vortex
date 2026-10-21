@@ -189,6 +189,8 @@ export {
   createRecordChoiceReader,
   recordChoicePageSizes,
   recordChoiceTargetSchema,
+  recordTitleMaximumLength,
+  titleText,
   type RecordChoice,
   type RecordChoiceCommand,
   type RecordChoiceRead,

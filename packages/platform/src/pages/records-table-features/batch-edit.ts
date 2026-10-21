@@ -2,6 +2,7 @@ import "server-only";
 
 import {
   fieldIdSchema,
+  pastedLinkTitleOf,
   recordsTableBatchEditMaximumRows,
   sameId,
   type IdentitySession,
@@ -16,6 +17,7 @@ import {
   type HumanOrganizationRequestDependencies,
 } from "../../access/index";
 import { createRecordSaveService, type RecordBatchSaveProblem } from "../../records/index";
+import { createProtectedQueryService, type QueryContinuationKey } from "../../queries/index";
 import { fieldEditorsOf } from "../placement-read/shared";
 import { pageSubjectFromRead } from "../page-subject-read";
 import { inlineEditCellRefusal } from "./flow-dispatch";
@@ -25,6 +27,12 @@ import {
   type RecordsTableCommandAddress,
   type RecordsTablePlacement,
 } from "./placement";
+import {
+  linkTitleCellKey,
+  resolveLinkTitles,
+  type LinkTitleDependencies,
+  type PastedTitleCell,
+} from "./link-title-resolution";
 import { recordCommandId } from "./record-command-id";
 
 /**
@@ -36,8 +44,17 @@ import { recordCommandId } from "./record-command-id";
  * goes through the same type, rule and cascade decisions a single inline edit takes. All records
  * are saved in ONE transaction through the ordinary protected save: every change commits or none
  * does, and a refusal lists every problem found, per record and field.
+ *
+ * A pasted link arrives as the title the person copied. It is resolved here, before the cell is
+ * decided, to the one record of the field's target the person may read; the resolved reference then
+ * goes through the same decisions and the same save as a link picked in a cell.
  */
-export type RecordsTableBatchEditDependencies = HumanOrganizationRequestDependencies;
+export type RecordsTableBatchEditDependencies = HumanOrganizationRequestDependencies &
+  Readonly<{
+    continuationKey: QueryContinuationKey;
+    /** Makes a Studio preview's link target record types readable, as the link picker does. */
+    prepareLinkTargets: LinkTitleDependencies["prepareTargets"];
+  }>;
 
 const log = (cause: string): void => {
   console.error(`[records-table] batch edit refused cause=${cause}`);
@@ -95,6 +112,7 @@ export const createRecordsTableBatchEditService = (
 ) => {
   const requests = createHumanOrganizationRequestService(dependencies);
   const records = createRecordSaveService(dependencies);
+  const queries = createProtectedQueryService(dependencies);
 
   /** The feature switches of the installed placement, and what the request may name. */
   const placementFor = async (
@@ -165,6 +183,14 @@ export const createRecordsTableBatchEditService = (
       if (read.kind !== "available") return { kind: "unavailable" };
       const rows = new Map(read.value.map((entry) => [entry.record_id.toLowerCase(), entry]));
       const problems: RecordsTableBatchEditProblem[] = [];
+      const pasted: PastedTitleCell[] = [];
+      const known = new Map<
+        string,
+        {
+          stored: Readonly<Record<string, unknown>>;
+          submitted: Readonly<Record<string, JsonValue>>;
+        }
+      >();
       for (const submitted of request.rows) {
         const stored = rows.get((submitted.recordId as string).toLowerCase());
         const current =
@@ -177,6 +203,10 @@ export const createRecordsTableBatchEditService = (
           continue;
         }
         const row = current.row;
+        known.set((submitted.recordId as string).toLowerCase(), {
+          stored: row.values,
+          submitted: submitted.values as Readonly<Record<string, JsonValue>>,
+        });
         if (row.revision !== submitted.revision) {
           log(`revision_not_current:${submitted.recordId}`);
           problems.push(problem(submitted.recordId, "changed"));
@@ -192,13 +222,19 @@ export const createRecordsTableBatchEditService = (
           undefined,
           editors,
         );
-        for (const [field, value] of Object.entries(submitted.values)) {
+        for (const [field, submittedValue] of Object.entries(submitted.values)) {
+          // A pasted title is decided as the link it will become; the reference is not known yet.
+          const title = pastedLinkTitleOf(submittedValue);
+          const value = title === undefined ? submittedValue : null;
           const cause = !projected?.inlineEdit?.fields.some((allowed) =>
             sameId(allowed.field, field),
           )
             ? `field_not_projected:${field}`
             : inlineEditCellRefusal(row, field, editors, value);
-          if (cause === undefined) continue;
+          if (cause === undefined) {
+            if (title !== undefined) pasted.push({ recordId: submitted.recordId, field, title });
+            continue;
+          }
           log(`${cause}:${submitted.recordId}`);
           problems.push(
             problem(
@@ -211,7 +247,42 @@ export const createRecordsTableBatchEditService = (
           );
         }
       }
+
+      // Every pasted title of the batch is resolved in one read per link field (per parent for a
+      // dependent link).
+      const resolved = await resolveLinkTitles(
+        {
+          queries,
+          prepareTargets: dependencies.prepareLinkTargets,
+        },
+        session,
+        address.selection,
+        installed,
+        module,
+        recordTypeId,
+        pasted,
+        known,
+      );
+      if (resolved.unavailable) return { kind: "unavailable" };
+      for (const refused of resolved.problems)
+        problems.push(problem(refused.recordId, "invalid", refused.field, refused.message));
       if (problems.length > 0) return { kind: "refused", problems };
+      // Every pasted title is now a reference; a title left unresolved never reaches the save.
+      if (
+        pasted.some((cell) => !resolved.references.has(linkTitleCellKey(cell.recordId, cell.field)))
+      ) {
+        log("link_title_unresolved");
+        return { kind: "unavailable" };
+      }
+      const valuesOf = (row: RecordsTableBatchEditRequest["rows"][number]) =>
+        Object.fromEntries(
+          Object.entries(row.values).map(([field, value]) => [
+            field,
+            pastedLinkTitleOf(value) === undefined
+              ? value
+              : resolved.references.get(linkTitleCellKey(row.recordId, field)),
+          ]),
+        ) as Readonly<Record<string, JsonValue>>;
 
       const saved = await records.saveBatch(
         session,
@@ -221,7 +292,7 @@ export const createRecordsTableBatchEditService = (
           commandId: recordCommandId("records.batch-edit", request.commandId, row.recordId),
           recordId: row.recordId,
           expectedConcurrencyNumber: row.revision,
-          submittedValues: row.values as Readonly<Record<string, JsonValue>>,
+          submittedValues: valuesOf(row),
         })),
       );
       if (saved.kind === "refused")
