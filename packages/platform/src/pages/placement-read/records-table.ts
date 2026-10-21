@@ -345,6 +345,7 @@ export const readRecordsTable = async (
     (groupingFeature.field === undefined ||
       groupingFeature.unassignedLabel === undefined ||
       groupingFeature.groupPageSize === undefined ||
+      groupingFeature.opensGrouped === undefined ||
       groupingField === undefined ||
       !(recordsTableGroupingFieldTypes as readonly string[]).includes(groupingField.type) ||
       ((groupingField.type === "date" || groupingField.type === "date_time") &&

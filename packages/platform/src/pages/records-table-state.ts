@@ -533,15 +533,15 @@ export const applyRecordsTableQueryChange = (
   else if (parseRecordsTablePivotView(pivotValue) !== undefined)
     set(pivotParameter(placementId), "on");
   const settleView = (): void => {
-    // A selected view brings its own query state only while the address names none: once the
-    // person has cleared it all, the address says so explicitly.
+    // A selected view brings its own sort, filters and search only while the address names none:
+    // once the person has cleared them all, the address says so explicitly. Grouping is not part
+    // of a view's query state, so a grouped or flat address neither keeps nor clears the view's.
     const view = readRecordsTableView(placementId, parameters);
     if (view === undefined) return;
     const queried = [...parameters.keys()].some(
       (name) =>
         recordsTableParameterPlacement(name) === placementId.toLowerCase() &&
-        !name.toLowerCase().startsWith("view.") &&
-        !name.toLowerCase().startsWith("page."),
+        ["sort.", "filter.", "search."].some((prefix) => name.toLowerCase().startsWith(prefix)),
     );
     set(viewParameter(placementId), queried ? view.viewId : `${view.viewId}${VIEW_CLEARED_SUFFIX}`);
   };
@@ -583,7 +583,6 @@ export const applyRecordsTableQueryChange = (
           : (change.fieldId ?? undefined),
       );
       applyRecordsTableGroupExpansion(parameters, placementId, null);
-      settleView();
       return;
     case "groupPage":
       set(
@@ -595,7 +594,6 @@ export const applyRecordsTableQueryChange = (
           : `${change.fieldId}.${toBase64Url(change.after)}`,
       );
       applyRecordsTableGroupExpansion(parameters, placementId, null);
-      settleView();
       return;
   }
 };
