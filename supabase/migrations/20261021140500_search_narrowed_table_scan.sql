@@ -72,7 +72,7 @@ create or replace function vortex_record.run_module_query(
   p_requested_system_field_keys jsonb,
   p_user_inputs jsonb,
   p_direction text,
-  p_exact_record_id uuid
+  p_exact_record_ids uuid[]
 )
 returns jsonb
 language plpgsql
@@ -81,11 +81,10 @@ security definer
 set search_path = ''
 as $function$
 declare
-  -- The most candidate rows one request examines. A page that the budget ends
-  -- early still returns a position, so a later request resumes exactly there.
+  -- A page ending at this candidate budget still returns its position for the next request.
   scan_limit constant integer := 500;
-  uuid_pattern constant text :=
-    '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
+  uuid_pattern constant text := '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
+  exact_ids_refusal text;
   prepared_plan jsonb;
   storage_plan jsonb;
   context_organization_id uuid;
@@ -179,8 +178,7 @@ declare
   lookahead_record record;
   lookahead_ids uuid[];
   page_first_loaded jsonb;
-  -- What every row of the page shares, built once in this invocation: the
-  -- validated active installation, the facts envelope and the read-time inputs.
+  -- Every row shares the validated installation, facts envelope and read-time inputs.
   page_shared jsonb; page_narrowed boolean;
   decided_ids uuid[] := array[]::uuid[];
   decided_loaded jsonb[];
@@ -268,11 +266,29 @@ declare
   tree_candidates uuid[];
   tree_root_child_ids uuid[] := array[]::uuid[];
   tree_root_nonroot_ids uuid[];
-
 begin
   -- Request shape. Nothing here is authority; it only bounds the work.
   if p_direction not in ('forward', 'backward') or p_direction is null then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
+  end if;
+  -- An exact read names 1..200 distinct, non-nil record ids and asks for exactly that many rows.
+  if p_exact_record_ids is not null then
+    -- CASE checks dimensions before array_position, which requires one dimension.
+    exact_ids_refusal := case
+      when pg_catalog.cardinality(p_exact_record_ids) > 200 then 'exact_ids_too_many'
+      when pg_catalog.array_ndims(p_exact_record_ids) is distinct from 1
+        or pg_catalog.cardinality(p_exact_record_ids) = 0 then 'exact_ids_invalid'
+      when pg_catalog.array_position(p_exact_record_ids, null) is not null
+        or '00000000-0000-0000-0000-000000000000'::uuid = any (p_exact_record_ids)
+        or (select pg_catalog.count(distinct exact_id.id) from pg_catalog.unnest(p_exact_record_ids) as exact_id(id))
+          <> pg_catalog.cardinality(p_exact_record_ids) then 'exact_ids_invalid'
+      when p_page_size is distinct from pg_catalog.cardinality(p_exact_record_ids)
+        or (p_after is not null and p_after <> 'null'::jsonb) then 'exact_ids_page_invalid'
+    end;
+    if exact_ids_refusal is not null then
+      raise log '%', pg_catalog.jsonb_build_object('part', 'exact_ids', 'reason', exact_ids_refusal);
+      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
+    end if;
   end if;
   if p_requested_field_ids is null
     or pg_catalog.jsonb_typeof(p_requested_field_ids) <> 'array'
@@ -320,7 +336,7 @@ begin
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
   end if;
   -- A board's first pages: every requested column, each from its start.
-  if board_columns_mode and (p_direction <> 'forward' or p_exact_record_id is not null
+  if board_columns_mode and (p_direction <> 'forward' or p_exact_record_ids is not null
     or (p_after is not null and p_after <> 'null'::jsonb)) then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
   end if;
@@ -336,7 +352,7 @@ begin
   end if;
   tree_mode := p_user_inputs ? 'tree';
   if tree_mode and (board_member_mode or group_member_mode or p_user_inputs ? 'grouping'
-    or p_exact_record_id is not null) then
+    or p_exact_record_ids is not null) then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
   end if;
   if group_member_mode then
@@ -403,7 +419,7 @@ begin
   if board_member_mode and (
     pg_catalog.jsonb_array_length(user_sort) <> 0
     -- The search plan is read further down; a board member read carries no search term at all.
-    or (p_exact_record_id is null and nullif(pg_catalog.btrim(p_user_inputs ->> 'search'), '') is not null)
+    or nullif(pg_catalog.btrim(p_user_inputs ->> 'search'), '') is not null
     or pg_catalog.cardinality(declared_sortable_ids) <> 0
     or pg_catalog.cardinality(declared_searchable_ids) <> 0
   ) then
@@ -438,7 +454,7 @@ begin
   context_organization_id := (prepared_plan #>> '{scope,organizationId}')::uuid;
   context_application_root_id := (prepared_plan #>> '{scope,applicationRootId}')::uuid;
   preview_mode := prepared_plan ? 'preview';
-  if p_exact_record_id is not null and record_type_item ? 'systemProjection' then
+  if p_exact_record_ids is not null and record_type_item ? 'systemProjection' then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
   end if;
   for field_item in
@@ -482,7 +498,7 @@ begin
   if coalesce((query_item ->> 'relationshipHops')::integer, 0) <> 0 then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'relationship_invalid');
   end if;
-  if p_page_size > coalesce((query_item ->> 'pageSize')::integer, 0) then
+  if p_exact_record_ids is null and p_page_size > coalesce((query_item ->> 'pageSize')::integer, 0) then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'page_size_invalid');
   end if;
   prepared_plan := vortex_record.prepare_module_query_internal(
@@ -536,7 +552,7 @@ begin
     tree_relationship_id := (tree_item ->> 'relationshipId')::uuid;
   end if;
   search_plan := vortex_record.query_search_plan_internal(
-    p_user_inputs, fields_by_id, declared_searchable_ids, p_exact_record_id);
+    p_user_inputs, fields_by_id, declared_searchable_ids);
   if search_plan ->> 'outcome' <> 'completed' then return search_plan; end if;
   user_search := search_plan ->> 'search';
   select coalesce(pg_catalog.array_agg(item.value), array[]::text[]) into search_field_ids
@@ -1130,7 +1146,7 @@ begin
      from %s
      where stored.organisation_id = $1
        and stored.lifecycle_state = ''active''
-       and ($12 is null or stored.record_id = $12)
+       and ($12::uuid[] is null or stored.record_id = any ($12))
        and %s
        and (%s)
         and (case when (%s) then true else false end)%s%s
@@ -1169,7 +1185,7 @@ begin
     using context_organization_id, context_application_root_id, after_sort_key,
       after_record_id, scan_limit + 1, access_owner_account_id,
       access_owner_group_ids, access_shared_record_ids,
-      filter_parameters, access_parameters, projection_batch, p_exact_record_id,
+      filter_parameters, access_parameters, projection_batch, p_exact_record_ids,
       board_column_value, board_option_values, group_selector_values, tree_parent_id, search_field_ids, user_search;
   cursor_position := 0;
   loop
@@ -1561,13 +1577,13 @@ begin
   ) else '{}'::jsonb end;
 end
 $function$;
-alter function vortex_record.run_module_query(uuid,uuid,bigint,jsonb,jsonb,integer,jsonb,jsonb,jsonb,text,uuid) owner to vortex_record_adapter;
-revoke all on function vortex_record.run_module_query(uuid, uuid, bigint, jsonb, jsonb, integer, jsonb, jsonb, jsonb, text, uuid)
+alter function vortex_record.run_module_query(uuid,uuid,bigint,jsonb,jsonb,integer,jsonb,jsonb,jsonb,text,uuid[]) owner to vortex_record_adapter;
+revoke all on function vortex_record.run_module_query(uuid, uuid, bigint, jsonb, jsonb, integer, jsonb, jsonb, jsonb, text, uuid[])
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-grant execute on function vortex_record.run_module_query(uuid, uuid, bigint, jsonb, jsonb, integer, jsonb, jsonb, jsonb, text, uuid)
+grant execute on function vortex_record.run_module_query(uuid, uuid, bigint, jsonb, jsonb, integer, jsonb, jsonb, jsonb, text, uuid[])
   to vortex_request;
-comment on function vortex_record.run_module_query(uuid, uuid, bigint, jsonb, jsonb, integer, jsonb, jsonb, jsonb, text, uuid) is
-  'One bounded keyset page of rows readable through read_record for one installed Module query, or one exact current human-owned preview query over isolated preview storage, each carrying the record''s concurrency number and the per-row capabilities from read_record_capabilities, each action decided exactly as its own writer decides it, with only the declared Record system values, or one refusal before any row is exposed; accepts a bound list component''s declared sortable, filterable and searchable field sets together with the viewer''s chosen sort, typed filter and search term, refuses a sort or filter outside the declared sets, keeps a user sort only over a field the record type declares sortable and the reader is guaranteed to see, ANDs the user filter with the published filter so it can only narrow, and matches a search only through searchable fields the returned row exposes to the reader; returns with every plain page and board column read, even an empty one, the reader''s current field bound (the fields it is guaranteed to see on every record it may read, and whether any searchable field is among them) so a list offers and accepts its filter, search and sort controls from the same read; requires every filtered field to be declared filterable; pushes a filter or a sort into the candidate scan only for fields the reader is guaranteed to see for the whole record type, evaluates a filter on a possibly-withheld field per row, and keeps the keyset cursor over readable sort values and a record identity so no cursor carries a hidden field value and the scan order and budget never depend on one; narrows an installed scan with one predicate that OR-s every eligible alternative''s exact owner, owner-group and direct-share route test with its saved condition compiled over the record''s own catalogue columns where that condition can be expressed as a superset of the per-row decision, leaves the installed scan unrestricted where a route or condition has no exact stored form, and still decides every returned row through read_record; validates every preview stage against the current human, candidate revision and exact release and storage pins, uses only active preview catalogue mappings and preview field bounds, and never falls through to installed resolution; works out read-time fields, such as a deadline-passed calculation, inside an installed query at one statement timestamp in the organisation time zone, so no installed query is refused for freshness; admits board members only through a separately validated board selector over the sole filterable choice grouping key, reads one column''s member page or, for a board''s first pages, the first page of every requested column in one invocation with its own budget and position per column, classifies those columns from current readable values and, when the choice field is guaranteed readable on every scanned row, narrows each column''s candidate scan to its own stored choice value so a column reads only its own cards, and admits generic grouped members only when every installed grouping value is present in the current readable projection and JSONB-equal to the closed typed selector; missing or withheld values belong to no generic group while JSON null is a value, and generic group membership never uses hidden stored values, and a grid dimension narrows the stored candidate scan only after the field is proven guaranteed readable, with date bucket membership using the same authored-zone canonical value as the summary and typed half-open calendar ranges; reads one level of a tree over a one-record link of the record type to itself, either the roots (records whose parent no access-readable record holds, so an unreadable parent is never revealed) or the children of one parent, through the same keyset order, access scan and exact per-row decision as a plain page, requiring the parent link to be a field the reader is guaranteed to see and reporting for every returned record, from one bounded set of rounds over the whole page rather than one query per row, whether the reader may read a child of it; orders board pages by record identity and generic members by the requested or query order with bidirectional keysets, returns generic group identity and the reader''s field bound even for empty pages, and binds each member operation, selector and projection in its own uncached continuation; reads the copied records of a preview like installed ones and refuses a system projection in a preview.';
+comment on function vortex_record.run_module_query(uuid, uuid, bigint, jsonb, jsonb, integer, jsonb, jsonb, jsonb, text, uuid[]) is
+  'One bounded keyset page of rows readable through read_record for one installed Module query, or one exact current human-owned preview query over isolated preview storage, each carrying the record''s concurrency number and the per-row capabilities from read_record_capabilities, each action decided exactly as its own writer decides it, with only the declared Record system values, or one refusal before any row is exposed; accepts a bound list component''s declared sortable, filterable and searchable field sets together with the viewer''s chosen sort, typed filter and search term, refuses a sort or filter outside the declared sets, keeps a user sort only over a field the record type declares sortable and the reader is guaranteed to see, ANDs the user filter with the published filter so it can only narrow, and matches a search only through searchable fields the returned row exposes to the reader; returns with every plain page and board column read, even an empty one, the reader''s current field bound (the fields it is guaranteed to see on every record it may read, and whether any searchable field is among them) so a list offers and accepts its filter, search and sort controls from the same read; requires every filtered field to be declared filterable; pushes a filter or a sort into the candidate scan only for fields the reader is guaranteed to see for the whole record type, evaluates a filter on a possibly-withheld field per row, and keeps the keyset cursor over readable sort values and a record identity so no cursor carries a hidden field value and the scan order and budget never depend on one; narrows an installed scan with one predicate that OR-s every eligible alternative''s exact owner, owner-group and direct-share route test with its saved condition compiled over the record''s own catalogue columns where that condition can be expressed as a superset of the per-row decision, leaves the installed scan unrestricted where a route or condition has no exact stored form, and still decides every returned row through read_record; validates every preview stage against the current human, candidate revision and exact release and storage pins, uses only active preview catalogue mappings and preview field bounds, and never falls through to installed resolution; works out read-time fields, such as a deadline-passed calculation, inside an installed query at one statement timestamp in the organisation time zone, so no installed query is refused for freshness; admits board members only through a separately validated board selector over the sole filterable choice grouping key, reads one column''s member page or, for a board''s first pages, the first page of every requested column in one invocation with its own budget and position per column, classifies those columns from current readable values and, when the choice field is guaranteed readable on every scanned row, narrows each column''s candidate scan to its own stored choice value so a column reads only its own cards, and admits generic grouped members only when every installed grouping value is present in the current readable projection and JSONB-equal to the closed typed selector; missing or withheld values belong to no generic group while JSON null is a value, and generic group membership never uses hidden stored values, and a grid dimension narrows the stored candidate scan only after the field is proven guaranteed readable, with date bucket membership using the same authored-zone canonical value as the summary and typed half-open calendar ranges; reads one level of a tree over a one-record link of the record type to itself, either the roots (records whose parent no access-readable record holds, so an unreadable parent is never revealed) or the children of one parent, through the same keyset order, access scan and exact per-row decision as a plain page, requiring the parent link to be a field the reader is guaranteed to see and reporting for every returned record, from one bounded set of rounds over the whole page rather than one query per row, whether the reader may read a child of it; orders board pages by record identity and generic members by the requested or query order with bidirectional keysets, returns generic group identity and the reader''s field bound even for empty pages, and binds each member operation, selector and projection in its own uncached continuation; reads the copied records of a preview like installed ones and refuses a system projection in a preview; with a list of 1 to 200 distinct record ids it reads exactly those records in one page, each under the same scope, release, filter, search and readability decision as any row, and returns only those readable now.';
 
 set local role vortex_owner;
 
@@ -1645,16 +1661,15 @@ declare
   group_page_limit integer;
   group_after text := p_user_inputs ->> 'groupAfter';
   pivot_mode boolean := false;
-  grouping_link boolean := false;
-  axis_after jsonb;
+  group_cursor jsonb;
   pivot_row_field_id text;
   pivot_column_field_id text;
   pivot_measure_field_id text;
   pivot_buckets jsonb := '{}'::jsonb;
   group_bucket jsonb;
   pivot_column_limit constant integer := 50;
-  group_by_sql text;
   group_presence_sql text;
+  group_dimension_sql text;
   aggregate_object_sql text := '';
   summary_totals_sql text;
   aggregate_result_sql text;
@@ -1727,6 +1742,23 @@ begin
       pg_catalog.lower(p_user_inputs #>> '{grouping,fieldId}'), p_user_inputs #> '{grouping,dateBucket}'
     );
   end if;
+  -- A group continuation is the jsonb text [rank, title, canonical group value] of the last group
+  -- a page returned, for pivot rows and grouped tables alike; anything else is forged.
+  if group_after is not null then
+    begin
+      group_cursor := group_after::jsonb;
+      if pg_catalog.jsonb_typeof(group_cursor) <> 'array'
+        or pg_catalog.jsonb_array_length(group_cursor) <> 3
+        or (group_cursor ->> 0) not in ('0', '1', '2')
+        or pg_catalog.jsonb_typeof(group_cursor -> 0) <> 'number'
+        or pg_catalog.jsonb_typeof(group_cursor -> 1) <> 'string'
+        or pg_catalog.jsonb_typeof(group_cursor -> 2) <> 'string' then
+        raise exception using errcode = '22023', message = 'Group cursor is not a group key';
+      end if;
+    exception when others then
+      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
+    end;
+  end if;
   group_page_limit := case
     when pivot_mode then ((p_user_inputs #>> '{pivot,rowLimit}')::numeric)::integer
     when p_user_inputs ? 'grouping' then ((p_user_inputs #>> '{grouping,limit}')::numeric)::integer
@@ -1794,27 +1826,6 @@ begin
       fast_field_ids := pg_catalog.array_append(fast_field_ids, field_key);
     end if;
   end loop;
-
-  grouping_link := p_user_inputs ? 'grouping'
-    and pg_catalog.cardinality(group_ids) = 1
-    and fields_by_id -> group_ids[1] ->> 'type' = 'link';
-  -- An ordered axis key (a pivot row, or a link group) is the jsonb text [rank, title, canonical
-  -- value]; anything else is forged.
-  if (pivot_mode or grouping_link) and group_after is not null then
-    begin
-      axis_after := group_after::jsonb;
-      if pg_catalog.jsonb_typeof(axis_after) <> 'array'
-        or pg_catalog.jsonb_array_length(axis_after) <> 3
-        or (axis_after ->> 0) not in ('0', '1', '2')
-        or pg_catalog.jsonb_typeof(axis_after -> 0) <> 'number'
-        or pg_catalog.jsonb_typeof(axis_after -> 1) <> 'string'
-        or pg_catalog.jsonb_typeof(axis_after -> 2) <> 'string' then
-        raise exception using errcode = '22023', message = 'Axis cursor is not an ordered key';
-      end if;
-    exception when others then
-      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
-    end;
-  end if;
 
   if board_summary_mode then
     if pg_catalog.cardinality(group_ids) <> 1
@@ -2327,8 +2338,26 @@ begin
     );
   end loop;
   group_values_sql := 'pg_catalog.jsonb_build_object(' || pg_catalog.array_to_string(group_value_pairs, ', ') || ')';
-  group_by_sql := pg_catalog.array_to_string(group_by_terms, ', ');
   group_presence_sql := pg_catalog.array_to_string(group_presence_terms, ' and ');
+  -- A grouped table orders its groups by (rank, title, canonical value). A link dimension takes
+  -- its rank and title from the one protected title batch pivot axes use, so unreadable targets
+  -- fold into one Not available group; every other dimension keeps its canonical value order.
+  if not pivot_mode and pg_catalog.cardinality(group_ids) = 1
+    and fields_by_id -> group_ids[1] ->> 'type' = 'link' then
+    group_dimension_sql := pg_catalog.format(
+      'select pg_catalog.jsonb_build_object(%1$L, axis.value) as value,
+         pg_catalog.jsonb_build_object(%1$L, axis.normalized) as normalized,
+         axis.sort_rank, axis.sort_title
+       from vortex_record.dimension_value_internal(
+         (select pg_catalog.array_agg(distinct raw.group_values -> %1$L) from raw_dimensions as raw), %2$L::jsonb
+       ) as axis',
+      group_ids[1], (fields_by_id -> group_ids[1])::text
+    );
+  else
+    group_dimension_sql :=
+      'select raw.group_values as value, raw.group_values as normalized, 0 as sort_rank, ''''::text as sort_title
+       from (select distinct group_values from raw_dimensions) as raw';
+  end if;
 
   if fast_path then
     candidate_sql := pg_catalog.format(
@@ -2753,7 +2782,7 @@ begin
       (fields_by_id -> pivot_row_field_id)::text,
       (fields_by_id -> pivot_column_field_id)::text,
       aggregate_object_sql,
-      group_after, axis_after ->> 0, axis_after ->> 1, axis_after ->> 2,
+      group_after, group_cursor ->> 0, group_cursor ->> 1, group_cursor ->> 2,
       group_page_limit + 1, group_page_limit,
       summary_candidate_limit,
       pivot_column_limit,
@@ -2765,98 +2794,9 @@ begin
       pivot_row_field_id,
       pivot_column_field_id
     );
-  elsif grouping_link then
-    -- A link groups by the readable title of its target, through the one protected title batch a
-    -- pivot axis uses (dimension_value_internal): targets the reader cannot read share one Not
-    -- available group, so no identity or title of one leaves the database. Groups are ordered by
-    -- (rank, title, canonical value) and keyset-paged on that key.
-    summary_sql := pg_catalog.format(
-      'with candidate as materialized (%s),
-       candidate_count as (select pg_catalog.count(*)::integer as value from candidate),
-       selected as materialized (%s),
-       selected_count as (select pg_catalog.count(*)::integer as value from selected),
-       totals as (%s),
-       raw_dimensions as materialized (
-         select candidate.projected_values, coalesce(%s, ''null''::jsonb) as group_value
-         from selected as candidate
-         where %s and (select value from candidate_count) <= %s
-       ),
-       dimension_values as materialized (
-         select * from vortex_record.dimension_value_internal(
-           (select pg_catalog.array_agg(distinct group_value) from raw_dimensions), %L::jsonb
-         )
-       ),
-       dimensions as materialized (
-         select source.projected_values, dimension.normalized as group_value,
-           dimension.sort_rank as group_rank, dimension.sort_title as group_title
-         from raw_dimensions as source
-         join dimension_values as dimension on dimension.value = source.group_value
-       ),
-       grouped as (
-         select candidate.group_rank, candidate.group_title, candidate.group_value,
-           pg_catalog.jsonb_build_array(
-             candidate.group_rank, candidate.group_title, candidate.group_value::text
-           )::text as group_key,
-           pg_catalog.count(*)::integer as row_count,
-           pg_catalog.jsonb_build_object(%s) as aggregates
-         from dimensions as candidate
-         group by candidate.group_rank, candidate.group_title, candidate.group_value
-       ),
-       paged_groups as materialized (
-         select * from grouped
-         where %L::text is null or (
-           grouped.group_rank, grouped.group_title collate "C", grouped.group_value::text collate "C"
-         ) > (%L::integer, %L::text collate "C", %L::text collate "C")
-         order by grouped.group_rank, grouped.group_title collate "C", grouped.group_value::text collate "C"
-         limit %s
-       ),
-       visible_groups as materialized (
-         select * from paged_groups
-         order by group_rank, group_title collate "C", group_value::text collate "C" limit %s
-       )
-       select case when candidate_count.value > %s
-         then pg_catalog.jsonb_build_object(''outcome'', ''refused'', ''reasonCode'', ''dataset_limit_exceeded'')
-         else pg_catalog.jsonb_build_object(
-           ''outcome'', ''completed'',
-           ''moduleRootId'', %L,
-           ''moduleReleaseVersion'', %L,
-           ''queryId'', %L,
-           ''groupByFieldIds'', %L::jsonb,
-           ''totalRowCount'', selected_count.value,
-           ''groups'', (select coalesce(pg_catalog.jsonb_agg(
-             pg_catalog.jsonb_build_object(
-               ''groupKey'', visible.group_key,
-               ''groupValues'', pg_catalog.jsonb_build_object(%L, visible.group_value),
-               ''rowCount'', visible.row_count,
-               ''aggregates'', visible.aggregates
-             ) order by visible.group_rank, visible.group_title collate "C", visible.group_value::text collate "C"
-           ), ''[]''::jsonb) from visible_groups as visible),
-           ''aggregates'', totals.aggregate_values,
-           ''nextGroupKey'', case when (select pg_catalog.count(*) from paged_groups) > %s
-             then (select group_key from visible_groups
-               order by group_rank desc, group_title collate "C" desc, group_value::text collate "C" desc limit 1)
-             else null end
-         ) end
-       from candidate_count cross join selected_count cross join totals',
-      candidate_sql,
-      selected_sql,
-      summary_totals_sql,
-      group_by_terms[1],
-      group_presence_sql,
-      summary_candidate_limit,
-      (fields_by_id -> group_ids[1])::text,
-      aggregate_object_sql,
-      group_after, axis_after ->> 0, axis_after ->> 1, axis_after ->> 2,
-      group_page_limit + 1, group_page_limit,
-      summary_candidate_limit,
-      p_module_root_id::text,
-      resolved ->> 'moduleReleaseVersion',
-      p_query_id::text,
-      pg_catalog.to_jsonb(group_ids)::text,
-      group_ids[1],
-      group_page_limit
-    );
   elsif pg_catalog.cardinality(group_ids) > 0 then
+    -- Groups are ordered and keyset-paged on (rank, title, canonical value); the group key a member
+    -- read selects by stays the canonical value text.
     groups_json_sql := pg_catalog.format(
       '(select coalesce(pg_catalog.jsonb_agg(
          pg_catalog.jsonb_build_object(
@@ -2864,7 +2804,7 @@ begin
            ''groupValues'', grouped.group_values,
            ''rowCount'', grouped.row_count,
            ''aggregates'', grouped.aggregates
-         ) order by grouped.group_values::text collate "C"
+         ) order by grouped.sort_rank, grouped.sort_title collate "C", grouped.group_values::text collate "C"
        ), ''[]''::jsonb) from visible_groups as grouped)'
     );
     summary_sql := pg_catalog.format(
@@ -2873,21 +2813,35 @@ begin
        selected as materialized (%s),
        selected_count as (select pg_catalog.count(*)::integer as value from selected),
        totals as (%s),
+       raw_dimensions as materialized (
+         select candidate.projected_values, %s as group_values
+         from selected as candidate
+         where %s and (select value from candidate_count) <= %s
+       ),
+       axis_values as materialized (%s),
+       dimensions as materialized (
+         select source.projected_values, axis.normalized as group_values, axis.sort_rank, axis.sort_title
+         from raw_dimensions as source
+         join axis_values as axis on axis.value = source.group_values
+       ),
        grouped as (
-         select %s as group_values,
+         select candidate.group_values, candidate.sort_rank, candidate.sort_title,
            pg_catalog.count(*)::integer as row_count,
            pg_catalog.jsonb_build_object(%s) as aggregates
-         from selected as candidate
-         where %s
-         group by %s
+         from dimensions as candidate
+         group by candidate.group_values, candidate.sort_rank, candidate.sort_title
        ),
        paged_groups as materialized (
          select * from grouped
-         where %L::text is null or group_values::text collate "C" > %L::text collate "C"
-         order by group_values::text collate "C" limit %s
+         where %L::text is null or (
+           grouped.sort_rank, grouped.sort_title collate "C", grouped.group_values::text collate "C"
+         ) > (%L::integer, %L::text collate "C", %L::text collate "C")
+         order by grouped.sort_rank, grouped.sort_title collate "C", grouped.group_values::text collate "C"
+         limit %s
        ),
        visible_groups as materialized (
-         select * from paged_groups order by group_values::text collate "C" limit %s
+         select * from paged_groups
+         order by sort_rank, sort_title collate "C", group_values::text collate "C" limit %s
        )
        select case when candidate_count.value > %s
          then pg_catalog.jsonb_build_object(''outcome'', ''refused'', ''reasonCode'', ''dataset_limit_exceeded'')
@@ -2901,7 +2855,9 @@ begin
            ''groups'', %s,
            ''aggregates'', totals.aggregate_values,
            ''nextGroupKey'', case when (select pg_catalog.count(*) from paged_groups) > %s
-             then (select group_values::text from visible_groups order by group_values::text collate "C" desc limit 1)
+             then (select pg_catalog.jsonb_build_array(sort_rank, sort_title, group_values::text)::text
+               from visible_groups
+               order by sort_rank desc, sort_title collate "C" desc, group_values::text collate "C" desc limit 1)
              else null end
          ) end
        from candidate_count cross join selected_count cross join totals',
@@ -2909,10 +2865,12 @@ begin
       selected_sql,
       summary_totals_sql,
       group_values_sql,
-      aggregate_object_sql,
       group_presence_sql,
-      group_by_sql,
-      group_after, group_after, group_page_limit + 1, group_page_limit,
+      summary_candidate_limit,
+      group_dimension_sql,
+      aggregate_object_sql,
+      group_after, group_cursor ->> 0, group_cursor ->> 1, group_cursor ->> 2,
+      group_page_limit + 1, group_page_limit,
       summary_candidate_limit,
       p_module_root_id::text,
       resolved ->> 'moduleReleaseVersion',
@@ -2989,4 +2947,5 @@ grant execute on function vortex_record.run_module_query_summary_internal(uuid,u
 
 comment on function vortex_record.run_module_query_summary_internal(uuid,uuid,bigint,jsonb,jsonb,jsonb) is
   'Owner-only summary execution over the access plan prepared by the protected adapter entry point; explicit organisation and application scope and the exact read plan bound every aggregate scan, including a pivot crossed in one grouping-sets statement and a link grouping folded through one protected title batch; a grid''s grouped read also returns the reader''s guaranteed field bound.';
+
 reset role;
