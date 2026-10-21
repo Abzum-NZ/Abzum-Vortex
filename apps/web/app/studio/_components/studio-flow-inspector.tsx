@@ -324,7 +324,6 @@ export function StudioFlowInspector({
         <StudioHelp hint="Select a step on the canvas to change its settings, move it or add a step after it." />
         {main !== undefined && (
           <StudioFlowStepPicker
-            forms={choices.forms}
             context={pickerContext([...main.path, main.tasks.length])}
             id="flow-add-last"
             label="Add a step at the end"
@@ -487,7 +486,6 @@ export function StudioFlowInspector({
       </StudioInspectorGroup>
       <StudioInspectorGroup title="Add steps">
         <StudioFlowStepPicker
-          forms={choices.forms}
           context={pickerContext([...listPath, index + 1])}
           id="flow-add-after"
           label="Add a step after this one"
@@ -509,7 +507,6 @@ export function StudioFlowInspector({
         />
         {step.children.map((child) => (
           <StudioFlowStepPicker
-            forms={choices.forms}
             key={JSON.stringify(child.path)}
             context={pickerContext([...child.path, child.tasks.length])}
             id={`flow-add-in-${JSON.stringify(child.path)}`}
@@ -533,7 +530,6 @@ export function StudioFlowInspector({
         ))}
         {actions.branch !== null && (
           <StudioFlowStepPicker
-            forms={choices.forms}
             context={pickerContext(step.path)}
             id="flow-add-branch"
             label={`Add the ${actions.branch} branch, starting with`}

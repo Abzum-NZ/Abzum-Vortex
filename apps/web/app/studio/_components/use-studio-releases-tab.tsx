@@ -191,6 +191,22 @@ export function useStudioReleasesTab({
       setPrepared(null);
   }, [draft.state, draft.saved, draft.lifetime, readSnapshot, setPrepared]);
 
+  /** A flow refusal the platform reported when publishing, in the words Studio shows for it. */
+  const flowRefusalOf = (
+    result: Readonly<{ reason?: string; flowKey?: string; taskId?: string; family?: string }>,
+  ): string | undefined =>
+    result.flowKey === undefined || result.reason === undefined
+      ? undefined
+      : describeStudioCompileFailure(
+          {
+            reasonCode: result.reason.slice("compilation_".length),
+            family: result.family ?? "unknown",
+            flowKey: result.flowKey,
+            ...(result.taskId === undefined ? {} : { taskId: result.taskId }),
+          },
+          latest.current.parsed(latest.current.view.source),
+        ).message;
+
   /** The saved draft's compile refusal in words, when the workspace's compile is of this revision. */
   const compileProblemOf = (draftRevision: number): string | undefined => {
     const view = latest.current.view;
@@ -292,7 +308,7 @@ export function useStudioReleasesTab({
             result.kind,
             result.reason,
             "blockAlias" in result ? result.blockAlias : undefined,
-            compileProblemOf(snapshot.draftRevision),
+            flowRefusalOf(result) ?? compileProblemOf(snapshot.draftRevision),
             "sentence" in result ? result.sentence : undefined,
           ),
         );
@@ -336,7 +352,7 @@ export function useStudioReleasesTab({
           result.kind,
           result.reason,
           "blockAlias" in result ? result.blockAlias : undefined,
-          compileProblemOf(snapshot.draftRevision),
+          flowRefusalOf(result) ?? compileProblemOf(snapshot.draftRevision),
           "sentence" in result ? result.sentence : undefined,
         ),
       );
