@@ -174,7 +174,7 @@ export type FlowInvocationRequest = Readonly<{
   applicationKey: string;
   pageKey: string;
   /** The record the addressed page was opened for (an address candidate, never authority). */
-  pageRecordId?: string;
+  pageRecordId?: string | undefined;
   invocation: FlowBindingInvocation;
 }>;
 
