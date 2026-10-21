@@ -15,6 +15,9 @@ import {
   recordsTableFilterKinds,
   RECORDS_TABLE_EXPORT_MAXIMUM_ROWS,
   RECORDS_TABLE_MAXIMUM_SEARCH_LENGTH,
+  RECORDS_TABLE_STATUS_BAR_MAXIMUM_FIELDS,
+  recordsTableStatusBarOperations,
+  type RecordsTableStatusBarOperation,
   namedActionAvailabilitySchema,
   type NamedActionAvailability,
 } from "@vortex/platform/schema";
@@ -684,16 +687,51 @@ export const parseTableFeatures = (
       "Projected spreadsheet controls are invalid",
       location,
     );
-    requireExactKeys(controls, ["rangeSelect", "find"], location);
+    requireExactKeys(controls, ["rangeSelect", "find", "statusBar"], location);
     if (
       typeof controls.rangeSelect !== "boolean" ||
       typeof controls.find !== "boolean" ||
       (!controls.rangeSelect && !controls.find)
     )
       fail("Projected spreadsheet controls need an enabled control", location);
+    let statusBar: NonNullable<RecordsTableFeatureProjection["spreadsheet"]>["statusBar"];
+    if (controls.statusBar !== undefined) {
+      const bar = requireRecord(
+        controls.statusBar,
+        "The projected status bar is invalid",
+        location,
+      );
+      requireExactKeys(bar, ["fields", "operations"], location);
+      const fields = requireArray(bar.fields, "The status bar fields are invalid", location).map(
+        (field) => requireFieldKey(field, "A status bar field needs a stable key", location),
+      );
+      const operations = requireArray(
+        bar.operations,
+        "The status bar totals are invalid",
+        location,
+      ).map(
+        (operation) =>
+          recordsTableStatusBarOperations.find((known) => known === operation) ??
+          fail(`Unknown status bar total '${String(operation)}'`, location),
+      ) as RecordsTableStatusBarOperation[];
+      if (
+        controls.rangeSelect !== true ||
+        fields.length === 0 ||
+        operations.length === 0 ||
+        fields.length > RECORDS_TABLE_STATUS_BAR_MAXIMUM_FIELDS ||
+        new Set(fields).size !== fields.length ||
+        new Set(operations).size !== operations.length
+      )
+        fail("The projected status bar needs a range and distinct fields and totals", location);
+      statusBar = Object.freeze({
+        fields: Object.freeze(fields),
+        operations: Object.freeze(operations),
+      });
+    }
     spreadsheet = Object.freeze({
       rangeSelect: controls.rangeSelect as boolean,
       find: controls.find as boolean,
+      ...(statusBar === undefined ? {} : { statusBar }),
     });
   }
   return Object.freeze({

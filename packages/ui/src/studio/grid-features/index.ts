@@ -96,6 +96,8 @@ export const studioGridFeatureStartSettings: Readonly<
   spreadsheet: {
     range_select: { kind: "boolean", value: true },
     find: { kind: "boolean", value: true },
+    status_bar_fields: { kind: "list", items: [] },
+    status_bar_operations: { kind: "list", items: [] },
   },
   // Related records read ten at a time unless the builder chooses otherwise.
   master_detail: { child_page_size: { kind: "number", value: 10 } },

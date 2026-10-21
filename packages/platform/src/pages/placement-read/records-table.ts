@@ -469,12 +469,15 @@ export const readRecordsTable = async (
       );
       values = { ...values, features: { ...values.features, rowActions } };
     }
-    // Bulk actions may run over every matching record: the read seals what it matched (release,
-    // resolved inputs and query state minus the page) for this viewer, with no extra read.
+    // Bulk actions may run over every matching record, an export over the shown rows, and the
+    // status bar totals the shown rows: the read seals what it matched (release, resolved inputs
+    // and query state minus the page) for this viewer, with no extra read.
     const seal = read.services.tables.sealSelection;
     const selectionToken =
       seal === undefined ||
-      (values.features?.bulkActions === undefined && values.features?.export === undefined)
+      (values.features?.bulkActions === undefined &&
+        values.features?.export === undefined &&
+        values.features?.spreadsheet?.statusBar === undefined)
         ? undefined
         : seal({
             installationRevision: read.context.applicationReleaseRevision,
