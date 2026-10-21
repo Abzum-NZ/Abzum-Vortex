@@ -211,7 +211,6 @@ export const protectedQueryGroupValueSchema = z.discriminatedUnion("fieldType", 
   groupTypedValue("phone_number", groupStringValueSchema),
   groupTypedValue("web_address", groupStringValueSchema),
   groupTypedValue("link", z.union([recordLinkValueSchema, groupNotAvailableValueSchema])),
-  groupTypedValue("link_to_one_of_several", recordLinkValueSchema),
 ]);
 export type ProtectedQueryGroupValue = z.infer<typeof protectedQueryGroupValueSchema>;
 

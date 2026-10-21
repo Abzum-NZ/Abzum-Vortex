@@ -42,7 +42,6 @@ export const queryGroupFieldTypes: ReadonlySet<string> = new Set([
   "phone_number",
   "web_address",
   "link",
-  "link_to_one_of_several",
 ]);
 /** Field types a sum or an average adds up. */
 export const queryNumericTotalFieldTypes: ReadonlySet<string> = new Set([

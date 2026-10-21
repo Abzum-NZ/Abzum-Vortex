@@ -22,6 +22,7 @@ import {
   type StudioCompositionContext,
   type StudioCompositionDestination,
   type StudioCompositionOutcome,
+  type StudioCompositionOwner,
   type StudioBorrowedChoices,
   type StudioRecordReader,
   type StudioSemanticOutline,
@@ -54,6 +55,7 @@ import { readWhenPreviewReady } from "../_lib/studio-preview-gate";
 import { applyStudioItemLabels, type StudioPlacementDescriber } from "@vortex/ui/studio";
 import { studioDraftNavigation } from "../_lib/studio-draft-navigation";
 import { studioUseTargetOf } from "../_lib/studio-places";
+import { pageUsingLayout } from "../_lib/studio-view-request";
 import type { StudioApplicationCanvasFrames } from "../../_lib/studio-application-draft";
 import { studioMenuPosition } from "@vortex/ui/studio";
 import { ApplicationCompositionEditor } from "./application-composition-editor";
@@ -239,22 +241,45 @@ export function useStudioCanvasTab({
       : undefined;
   const pageAliasOfKey = (pageKey: string | undefined) =>
     source.body.pages.find((page) => page.key === pageKey)?.id;
+  // A selected layout, or a block of one, is drawn on the page the view reads for it.
+  const layoutAlias =
+    selected?.kind === "shell"
+      ? selected.shellAlias
+      : selectedOwner?.kind === "shell"
+        ? selectedOwner.shellAlias
+        : undefined;
+  const previewPageAlias = pageUsingLayout(source, layoutAlias);
   const canvasPageAlias =
     selected?.kind === "page"
       ? selected.pageAlias
       : selectedOwner?.kind === "page"
         ? selectedOwner.pageAlias
-        : selectedEntry?.type === "page"
-          ? (pageAliasOfKey(selectedEntry.page) ?? pageAliasOfKey(source.body.home_page))
-          : tab === "menu" || tab === "theme"
-            ? pageAliasOfKey(source.body.home_page)
-            : undefined;
+        : layoutAlias !== undefined
+          ? previewPageAlias
+          : selectedEntry?.type === "page"
+            ? (pageAliasOfKey(selectedEntry.page) ?? pageAliasOfKey(source.body.home_page))
+            : tab === "menu" || tab === "theme"
+              ? pageAliasOfKey(source.body.home_page)
+              : undefined;
   const canvasPage =
     canvasPageAlias === undefined
       ? undefined
       : source.body.pages.find((page) => page.id === canvasPageAlias);
   const canvasPageRef = useRef(canvasPage?.id);
   canvasPageRef.current = canvasPage?.id;
+  // New blocks go to the selected layout, otherwise to the page on the canvas.
+  const addOwner: StudioCompositionOwner | undefined =
+    layoutAlias !== undefined
+      ? { kind: "layout", shellAlias: layoutAlias }
+      : canvasPage === undefined
+        ? undefined
+        : { kind: "page", pageAlias: canvasPage.id };
+  const addOwnerKey =
+    addOwner === undefined
+      ? ""
+      : `${addOwner.kind}:${"shellAlias" in addOwner ? addOwner.shellAlias : addOwner.pageAlias}`;
+  const addOwnerRef = useRef(addOwner);
+  addOwnerRef.current = addOwner;
   // A previewed role holds what the compiled saved draft grants it, which is what the running application installs.
   const viewAsGrants = viewAs === null ? undefined : view.frames?.roles[viewAs];
   const viewAsRole =
@@ -379,15 +404,15 @@ export function useStudioCanvasTab({
   };
   const addTargets = useMemo(
     () =>
-      canvasPage === undefined
+      canvasPage === undefined || addOwner === undefined
         ? null
-        : describeStudioCompositionAddTargets(compositionContext, canvasPage.id),
-    [compositionContext, canvasPage?.id],
+        : describeStudioCompositionAddTargets(compositionContext, addOwner),
+    [compositionContext, canvasPage?.id, addOwnerKey],
   );
   // A block for one place: added at once, or after its setup when it needs settings or data.
   const addBlock = (request: StudioCanvasAddRequest): boolean => {
-    const pageAlias = canvasPageRef.current;
-    if (pageAlias === undefined || addTargets?.kind !== "available") return false;
+    const owner = addOwnerRef.current;
+    if (owner === undefined || addTargets?.kind !== "available") return false;
     const target = addTargets.targets.find(
       (candidate) =>
         candidate.area === request.area &&
@@ -405,7 +430,7 @@ export function useStudioCanvasTab({
     if (release === undefined) return false;
     const command = {
       kind: "add",
-      pageAlias,
+      owner,
       area: request.area,
       destination: request.destination,
       index: request.index,
@@ -418,7 +443,10 @@ export function useStudioCanvasTab({
       choice.unavailable === undefined &&
       (choice.setup.length > 0 || choice.needsQuery)
     ) {
-      const page = source.body.pages.find((candidate) => candidate.id === pageAlias);
+      const page =
+        owner.kind === "page"
+          ? source.body.pages.find((candidate) => candidate.id === owner.pageAlias)
+          : undefined;
       setPaletteMessage("");
       setBlockSetup({
         choice,
@@ -685,19 +713,19 @@ export function useStudioCanvasTab({
         ? studioSemanticSelectionKey(selectedOwner)
         : undefined;
   const breadcrumbItem =
-    canvasPage !== undefined
+    canvasPage !== undefined && ownerShellKey === undefined
       ? pageLabel(canvasPage.id, canvasPage.name)
       : ownerShellKey === undefined
         ? undefined
         : labels.get(ownerShellKey);
   const outlineOwnerKey =
-    canvasPage !== undefined
+    canvasPage !== undefined && ownerShellKey === undefined
       ? studioSemanticSelectionKey({ kind: "page", pageAlias: canvasPage.id })
       : ownerShellKey;
   const selectedName = selected === null ? undefined : labels.get(selectionKey);
   const usedIn = studioUseTargetOf(selected);
   const title =
-    canvasPage !== undefined
+    canvasPage !== undefined && ownerShellKey === undefined
       ? pageLabel(canvasPage.id, canvasPage.name)
       : inspector.status === "resolved"
         ? (selectedName ?? inspector.descriptor.label)
@@ -720,7 +748,11 @@ export function useStudioCanvasTab({
       />
       <StudioPanelShell
         title="Blocks"
-        description="Blocks to add to the page on the canvas."
+        description={
+          addOwner?.kind === "layout"
+            ? "Blocks to add to the selected layout."
+            : "Blocks to add to the page on the canvas."
+        }
         hidden={tab !== "blocks"}
       >
         {/* The canvas's editor draws the palette here, so its blocks drag with the canvas's own drag and drop. */}
@@ -732,7 +764,11 @@ export function useStudioCanvasTab({
                 <Icon name="blocks" />
               </EmptyMedia>
               <EmptyTitle>No page open</EmptyTitle>
-              <EmptyDescription>Choose a page in Structure to add blocks.</EmptyDescription>
+              <EmptyDescription>
+                {layoutAlias === undefined
+                  ? "Choose a page in Structure to add blocks."
+                  : "No page uses this layout yet. Give a page this layout in Structure to add blocks to it."}
+              </EmptyDescription>
             </EmptyHeader>
           </Empty>
         )}
@@ -970,6 +1006,7 @@ export function useStudioCanvasTab({
                     : {
                         host: paletteHost,
                         targets: addTargets,
+                        owner: addOwner?.kind ?? "page",
                         message: paletteMessage,
                         onAdd: addBlock,
                       }

@@ -10,7 +10,8 @@ create or replace function vortex_record.prepare_named_action_set_announce_inter
   p_expected_concurrency_number bigint,
   p_inputs jsonb,
   p_activity_id uuid,
-  p_read_loaded jsonb
+  p_read_loaded jsonb,
+  p_action_context jsonb
 )
 returns jsonb
 language plpgsql
@@ -88,10 +89,12 @@ begin
     return projection;
   end if;
 
-  action_context := vortex_record.resolve_named_action_context_internal(
+  -- The context depends only on the action and the record type: a page that previews
+  -- one action for many records resolves it once and passes it here; null resolves it now.
+  action_context := coalesce(p_action_context, vortex_record.resolve_named_action_context_internal(
     p_action_owner_kind, p_action_owner_id, p_action_release_revision,
     p_action_id, p_record_type_id
-  );
+  ));
   if pg_catalog.jsonb_typeof(action_context -> 'action' -> 'tasks') is distinct from 'array'
     or pg_catalog.jsonb_array_length(action_context -> 'action' -> 'tasks') not between 1 and 10
     or exists (
@@ -310,12 +313,12 @@ exception
 end
 $function$;
 
-alter function vortex_record.prepare_named_action_set_announce_internal(boolean,uuid,text,uuid,bigint,uuid,uuid,uuid,bigint,jsonb,uuid,jsonb) owner to vortex_record_adapter;
+alter function vortex_record.prepare_named_action_set_announce_internal(boolean,uuid,text,uuid,bigint,uuid,uuid,uuid,bigint,jsonb,uuid,jsonb,jsonb) owner to vortex_record_adapter;
 
 revoke all on function vortex_record.prepare_named_action_set_announce_internal(
-  boolean, uuid, text, uuid, bigint, uuid, uuid, uuid, bigint, jsonb, uuid, jsonb
+  boolean, uuid, text, uuid, bigint, uuid, uuid, uuid, bigint, jsonb, uuid, jsonb, jsonb
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 comment on function vortex_record.prepare_named_action_set_announce_internal(
-  boolean, uuid, text, uuid, bigint, uuid, uuid, uuid, bigint, jsonb, uuid, jsonb
+  boolean, uuid, text, uuid, bigint, uuid, uuid, uuid, bigint, jsonb, uuid, jsonb, jsonb
 ) is
   'Private named-action preparation: replays or refuses by command receipt, then returns the facts, permission decision and bounds of the exact installed action, writing nothing; a preview may reuse the read facts its fixed adapter caller loaded for the same record in this invocation when they are exactly the facts the named loader would build.';

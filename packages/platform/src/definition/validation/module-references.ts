@@ -30,6 +30,7 @@ import {
   actionFieldByKey,
 } from "./action-values";
 import { evaluateSavedSharingCondition } from "./saved-conditions";
+import { queryGroupFieldTypes } from "../module-query-edit";
 import { linkDependencyProblem, type LinkDependencyField } from "../module-link-dependencies";
 
 /** A canonical record type's fields as the one link-dependency judgement reads them. */
@@ -947,21 +948,6 @@ export function moduleReferenceRule(context: PreparedValidationContext): Definit
       const aggregateAliases = array(query.aggregates).map((aggregate) => String(aggregate.alias));
       const selectedFieldKeys = selectedFieldIds.map((id) => String(fieldMap.get(id)?.key));
       const unique = (values: readonly string[]) => new Set(values).size === values.length;
-      const summaryGroupFieldTypes = new Set([
-        "text",
-        "whole_number",
-        "decimal_number",
-        "yes_no",
-        "date",
-        "date_time",
-        "choice",
-        "reference_number",
-        "email_address",
-        "phone_number",
-        "web_address",
-        "link",
-        "link_to_one_of_several",
-      ]);
       const numericAggregateFieldTypes = new Set(["whole_number", "decimal_number", "money"]);
       const extremaFieldTypes = new Set([
         "text",
@@ -985,7 +971,7 @@ export function moduleReferenceRule(context: PreparedValidationContext): Definit
       };
       for (const fieldId of groupByFieldIds) {
         const field = fieldMap.get(fieldId);
-        if (field && !summaryGroupFieldTypes.has(String(field.type)))
+        if (field && !queryGroupFieldTypes.has(String(field.type)))
           refuseSummaryField("vortex.definition.module_query_group_field_type", field);
       }
       for (const aggregate of array(query.aggregates)) {
