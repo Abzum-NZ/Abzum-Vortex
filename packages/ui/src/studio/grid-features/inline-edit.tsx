@@ -1,22 +1,14 @@
 "use client";
 
-import { useId, type ReactElement } from "react";
+import type { ReactElement } from "react";
 import {
   recordsTableFieldNotEditableReason,
   type RecordsTableQueryFacts,
   type SourceBlockPropertyValueContract,
 } from "@vortex/platform/schema";
 import { Badge } from "../../components/badge";
-import {
-  Item,
-  ItemActions,
-  ItemContent,
-  ItemDescription,
-  ItemGroup,
-  ItemTitle,
-} from "../../components/item";
-import { Label } from "../../components/label";
-import { Switch } from "../../components/switch";
+import { Item, ItemContent, ItemDescription, ItemGroup, ItemTitle } from "../../components/item";
+import { StudioGridFieldPicker } from "./field-picker";
 
 type Group = Extract<SourceBlockPropertyValueContract, { kind: "group" }>;
 
@@ -41,7 +33,6 @@ export function StudioInlineEditEditor({
   disabled: boolean;
   onChange: (next: Group) => void;
 }>): ReactElement {
-  const id = useId();
   const held = value.properties["fields"];
   const chosen =
     held?.kind === "list"
@@ -85,35 +76,13 @@ export function StudioInlineEditEditor({
       {shown.length === 0 ? (
         <ItemDescription>Add the columns people may edit to the table first.</ItemDescription>
       ) : (
-        shown.map((field) => {
-          const reason = recordsTableFieldNotEditableReason(field);
-          const on = chosen.includes(field.field);
-          const switchId = `${id}-${field.field}`;
-          return (
-            <Item key={field.field} size="sm" className="px-0">
-              <ItemContent>
-                <ItemTitle>
-                  <Label htmlFor={switchId}>{field.label}</Label>
-                </ItemTitle>
-                {reason === undefined ? null : <ItemDescription>{reason}</ItemDescription>}
-              </ItemContent>
-              <ItemActions>
-                <Switch
-                  id={switchId}
-                  checked={on}
-                  disabled={disabled || (reason !== undefined && !on)}
-                  onCheckedChange={(next: boolean) =>
-                    write(
-                      next
-                        ? [...chosen, field.field]
-                        : chosen.filter((candidate) => candidate !== field.field),
-                    )
-                  }
-                />
-              </ItemActions>
-            </Item>
-          );
-        })
+        <StudioGridFieldPicker
+          fields={shown}
+          chosen={chosen}
+          disabled={disabled}
+          reason={recordsTableFieldNotEditableReason}
+          onChange={write}
+        />
       )}
     </ItemGroup>
   );

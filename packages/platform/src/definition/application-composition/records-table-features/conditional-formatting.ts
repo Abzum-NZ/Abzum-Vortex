@@ -307,9 +307,9 @@ export const conditionalFormatFactsOf = (
   }),
 });
 
-/** A field's business name, or the last part of its reference when the query does not offer it. */
+/** A field's business name; a removed reference never exposes its internal key. */
 const fieldName = (facts: ConditionalFormatFacts, field: string): string =>
-  factsOf(facts, field)?.label ?? field.split(/[.:]/).at(-1) ?? field;
+  factsOf(facts, field)?.label ?? "A removed item";
 
 /** A rule whose style colours a value conveys status, so it needs an icon or a label as well. */
 const showsStatusByColour = (style: ConditionalFormatStyle): boolean => style.tint || style.text;

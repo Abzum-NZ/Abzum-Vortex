@@ -101,6 +101,7 @@ const field = (
   fieldId: string,
 ): SourceBlockPropertyValueContract => {
   const reference = fields.get(fieldId.toLowerCase());
+  // reduceStudioCanvasGrid refuses unmapped fields first, so reaching this is a defect.
   if (reference === undefined) throw new Error("STUDIO_CANVAS_GRID_FIELD_UNMAPPED");
   return { kind: "field_reference", field: reference };
 };
@@ -160,14 +161,51 @@ const noQuery: StudioCanvasGridState["query"] = {
   state: queryGroup({ sort: [], filters: [], search: null }, new Map()),
 };
 
+/** A grid event the canvas refuses, with the business reason it shows and the cause it logs. */
+export type StudioCanvasGridNotice = Readonly<{
+  kind: "refused";
+  code: "field_unmapped";
+  reason: string;
+  cause: Readonly<{
+    placementAlias: string;
+    event: StudioCanvasGridChange["kind"];
+    fieldIds: readonly string[];
+  }>;
+}>;
+
 /**
  * Applies one grid event to the held state. A change under another key starts afresh, so an
- * earlier arrangement or query never outlives the table settings it was made for.
+ * earlier arrangement or query never outlives the table settings it was made for. A change that
+ * names a field the draft no longer maps is refused as a notice and leaves the state unchanged.
  */
 export const reduceStudioCanvasGrid = (
   held: StudioCanvasGridState | undefined,
   change: StudioCanvasGridChange,
-): StudioCanvasGridState | undefined => {
+): StudioCanvasGridState | StudioCanvasGridNotice | undefined => {
+  const usedFields =
+    change.kind === "layout"
+      ? change.layout.columns.map((column) => column.fieldId)
+      : change.kind === "sort"
+        ? change.keys.map((key) => key.fieldId)
+        : change.kind === "filter"
+          ? [change.fieldId]
+          : [];
+  if (change.kind === "sort" || change.kind === "filter" || change.kind === "search") {
+    const previous = held?.key === change.key ? held.query.query : undefined;
+    usedFields.push(
+      ...(change.kind === "sort" ? [] : (previous?.sort.map((key) => key.fieldId) ?? [])),
+      ...(previous?.filters.map((entry) => entry.fieldId) ?? []),
+    );
+  }
+  const unmapped = usedFields.filter((id) => !change.fields.has(id.toLowerCase()));
+  if (unmapped.length > 0)
+    return {
+      kind: "refused",
+      code: "field_unmapped",
+      reason:
+        "This grid change could not be applied because a field changed. Save the draft and reload the canvas, then try again.",
+      cause: { placementAlias: change.placementAlias, event: change.kind, fieldIds: unmapped },
+    };
   if (change.kind === "sync")
     return held === undefined || held.currentKey === change.key
       ? held

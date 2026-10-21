@@ -234,7 +234,7 @@ export function ConditionalFormatStyleControls({
   const cells = target.kind === "cells" ? target.fields : [];
   const [cellChoice, setCellChoice] = useState("");
   const cellLabel = (field: string): string =>
-    cellOptions.find((candidate) => candidate.value === field)?.label ?? field;
+    cellOptions.find((candidate) => candidate.value === field)?.label ?? "A removed item";
   const withStyle = (changes: Partial<ConditionalFormatStyle>): void =>
     onChange({ style: { ...style, ...changes } });
   return (

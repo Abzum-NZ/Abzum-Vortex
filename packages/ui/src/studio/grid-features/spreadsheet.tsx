@@ -16,6 +16,7 @@ import {
   ItemGroup,
   ItemTitle,
 } from "../../components/item";
+import { StudioGridFieldPicker } from "./field-picker";
 import { Label } from "../../components/label";
 import { Switch } from "../../components/switch";
 
@@ -114,33 +115,20 @@ export function StudioSpreadsheetEditor({
           </ItemDescription>
         </ItemContent>
       </Item>
-      {offered.map((field) => (
-        <Item key={field.field} size="sm" className="px-0">
-          <ItemContent>
-            <ItemTitle>
-              <Label htmlFor={`${id}-field-${field.field}`}>{field.label}</Label>
-            </ItemTitle>
-          </ItemContent>
-          <ItemActions>
-            <Switch
-              id={`${id}-field-${field.field}`}
-              checked={fields.includes(field.field)}
-              disabled={disabled}
-              onCheckedChange={(checked) =>
-                write({
-                  status_bar_fields: {
-                    kind: "list",
-                    items: (checked
-                      ? [...fields, field.field]
-                      : fields.filter((held) => held !== field.field)
-                    ).map((reference) => ({ kind: "field_reference" as const, field: reference })),
-                  },
-                })
-              }
-            />
-          </ItemActions>
-        </Item>
-      ))}
+      <StudioGridFieldPicker
+        fields={offered}
+        chosen={fields}
+        disabled={disabled}
+        reason={() => undefined}
+        onChange={(next) =>
+          write({
+            status_bar_fields: {
+              kind: "list",
+              items: next.map((field) => ({ kind: "field_reference", field })),
+            },
+          })
+        }
+      />
       {offered.length === 0
         ? null
         : recordsTableStatusBarOperations.map((operation) => (
