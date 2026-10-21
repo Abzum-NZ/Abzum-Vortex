@@ -28,7 +28,14 @@ import { useDateFormatOptions } from "../date-format-context";
 import { fail, requireRecord, type DisplayEventHandlers, type DisplayRow } from "../projected-data";
 import type { RowLine } from "../sub-rows";
 import { LinkDraftPicker, linkedRecordTitle } from "./record-choice-picker";
-import { dependentsToClear, draftRecordId, parentFieldOf } from "./link-dependency";
+import {
+  clearedDraft,
+  dependentsToClear,
+  draftChoiceKey,
+  optionsForParent,
+  parentFieldOf,
+} from "./link-dependency";
+import { waitingForParent } from "../../controls/dependent-field";
 import {
   readEditDraft,
   sameEditDraft,
@@ -305,7 +312,7 @@ function RowEditScope({ context, children, retainRow }: GridFeatureScopeProps): 
         ...draft,
         fields: updated.map((entry) =>
           cleared.some((dependent) => same(dependent.field, entry.field))
-            ? { ...entry, draft: null }
+            ? { ...entry, draft: clearedDraft(entry.editor) }
             : entry,
         ),
       });
@@ -383,7 +390,7 @@ function FieldControl({
           ? {}
           : {
               dependency: {
-                parentRecordId: draftRecordId(parent?.draft),
+                parentRecordId: draftChoiceKey(parent?.draft),
                 parentLabel: parent?.label ?? "the field it depends on",
               },
             })}
@@ -402,24 +409,29 @@ function FieldControl({
         onCheckedChange={(value) => editing.change(field.field, value)}
       />
     );
-  else if (editor.kind === "choice")
+  else if (editor.kind === "choice") {
+    // A dependent choice offers only the options of the parent's chosen option, and waits for it.
+    const waiting = parentField !== undefined && draftChoiceKey(parent?.draft) === undefined;
+    const waitingText = waiting ? waitingForParent(parent?.label ?? "the field it depends on") : "";
     control = (
       <NativeSelect
         {...props}
+        disabled={props.disabled || waiting}
+        {...(waiting ? { title: waitingText, "aria-description": waitingText } : {})}
         className="w-full"
         size="sm"
         value={text}
         onChange={(event) => editing.change(field.field, event.currentTarget.value)}
       >
         {!editor.required ? <NativeSelectOption value="">None</NativeSelectOption> : null}
-        {editor.options.map((option) => (
+        {optionsForParent(editor, draftChoiceKey(parent?.draft)).map((option) => (
           <NativeSelectOption key={option.value} value={option.value}>
             {option.label}
           </NativeSelectOption>
         ))}
       </NativeSelect>
     );
-  else if (editor.kind === "text" && editor.input === "long_text")
+  } else if (editor.kind === "text" && editor.input === "long_text")
     control = (
       <Textarea
         {...props}

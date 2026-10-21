@@ -1,0 +1,345 @@
+{
+  "id": "mod_crm_locations",
+  "key": "vortex.crm.locations",
+  "name": "CRM Locations",
+  "description": "Countries, regions and cities that companies are located in; each level is chosen within the one above.",
+  "record_types": [
+    {
+      "id": "rt_crm_country",
+      "key": "country",
+      "name": "Country",
+      "plural_name": "Countries",
+      "title_field": "name",
+      "storage_contract_id": "srt_00000040",
+      "storage_scope": "organization_shared",
+      "ownership_mode": "group",
+      "standard_actions": ["create", "read", "update"],
+      "custom_actions": [],
+      "fields": [
+        {
+          "id": "fld_country_name",
+          "key": "name",
+          "label": "Name",
+          "required": true,
+          "unique": true,
+          "filterable": true,
+          "sortable": true,
+          "search_priority": "first",
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "text",
+          "settings": {
+            "max_length": 120
+          }
+        }
+      ],
+      "pipelines": [],
+      "relationships": []
+    },
+    {
+      "id": "rt_crm_region",
+      "key": "region",
+      "name": "Region",
+      "plural_name": "Regions",
+      "title_field": "name",
+      "storage_contract_id": "srt_00000041",
+      "storage_scope": "organization_shared",
+      "ownership_mode": "group",
+      "standard_actions": ["create", "read", "update"],
+      "custom_actions": [],
+      "fields": [
+        {
+          "id": "fld_region_name",
+          "key": "name",
+          "label": "Name",
+          "required": true,
+          "unique": false,
+          "filterable": true,
+          "sortable": true,
+          "search_priority": "first",
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "text",
+          "settings": {
+            "max_length": 120
+          }
+        },
+        {
+          "id": "fld_region_country",
+          "key": "country",
+          "label": "Country",
+          "required": true,
+          "unique": false,
+          "filterable": true,
+          "sortable": true,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "link",
+          "settings": {
+            "target": "vortex.crm.locations:country",
+            "reverse_key": "regions",
+            "reverse_name": "Regions",
+            "on_parent_delete": "refuse"
+          }
+        }
+      ],
+      "pipelines": [],
+      "relationships": [
+        {
+          "id": "fld_region_country_relationship",
+          "key": "country",
+          "from_field": "country",
+          "to_record_type": "vortex.crm.locations:country",
+          "cardinality": "many_to_one",
+          "on_parent_delete": "refuse"
+        }
+      ]
+    },
+    {
+      "id": "rt_crm_city",
+      "key": "city",
+      "name": "City",
+      "plural_name": "Cities",
+      "title_field": "name",
+      "storage_contract_id": "srt_00000042",
+      "storage_scope": "organization_shared",
+      "ownership_mode": "group",
+      "standard_actions": ["create", "read", "update"],
+      "custom_actions": [],
+      "fields": [
+        {
+          "id": "fld_city_name",
+          "key": "name",
+          "label": "Name",
+          "required": true,
+          "unique": false,
+          "filterable": true,
+          "sortable": true,
+          "search_priority": "first",
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "text",
+          "settings": {
+            "max_length": 120
+          }
+        },
+        {
+          "id": "fld_city_region",
+          "key": "region",
+          "label": "Region",
+          "required": true,
+          "unique": false,
+          "filterable": true,
+          "sortable": true,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "link",
+          "settings": {
+            "target": "vortex.crm.locations:region",
+            "reverse_key": "cities",
+            "reverse_name": "Cities",
+            "on_parent_delete": "refuse"
+          }
+        }
+      ],
+      "pipelines": [],
+      "relationships": [
+        {
+          "id": "fld_city_region_relationship",
+          "key": "region",
+          "from_field": "region",
+          "to_record_type": "vortex.crm.locations:region",
+          "cardinality": "many_to_one",
+          "on_parent_delete": "refuse"
+        }
+      ]
+    }
+  ],
+  "permissions": [
+    {
+      "id": "perm_country_create",
+      "key": "vortex.crm.locations.country.create",
+      "label": "Create country",
+      "description": "Allows the standard create operation for country records.",
+      "record_type": "country",
+      "action_kind": "create",
+      "administrative": false,
+      "record_scope": {
+        "routes": [
+          {
+            "kind": "all_records"
+          }
+        ]
+      },
+      "field_policy": {
+        "readable_fields": ["name"],
+        "changeable_fields": ["name"]
+      }
+    },
+    {
+      "id": "perm_country_read",
+      "key": "vortex.crm.locations.country.read",
+      "label": "Read country",
+      "description": "Allows the standard read operation for country records.",
+      "record_type": "country",
+      "action_kind": "read",
+      "administrative": false,
+      "record_scope": {
+        "routes": [
+          {
+            "kind": "all_records"
+          }
+        ]
+      },
+      "field_policy": {
+        "readable_fields": ["name"],
+        "changeable_fields": []
+      }
+    },
+    {
+      "id": "perm_country_update",
+      "key": "vortex.crm.locations.country.update",
+      "label": "Update country",
+      "description": "Allows the standard update operation for country records.",
+      "record_type": "country",
+      "action_kind": "update",
+      "administrative": false,
+      "record_scope": {
+        "routes": [
+          {
+            "kind": "all_records"
+          }
+        ]
+      },
+      "field_policy": {
+        "readable_fields": ["name"],
+        "changeable_fields": ["name"]
+      }
+    },
+    {
+      "id": "perm_region_create",
+      "key": "vortex.crm.locations.region.create",
+      "label": "Create region",
+      "description": "Allows the standard create operation for region records.",
+      "record_type": "region",
+      "action_kind": "create",
+      "administrative": false,
+      "record_scope": {
+        "routes": [
+          {
+            "kind": "all_records"
+          }
+        ]
+      },
+      "field_policy": {
+        "readable_fields": ["name", "country"],
+        "changeable_fields": ["name", "country"]
+      }
+    },
+    {
+      "id": "perm_region_read",
+      "key": "vortex.crm.locations.region.read",
+      "label": "Read region",
+      "description": "Allows the standard read operation for region records.",
+      "record_type": "region",
+      "action_kind": "read",
+      "administrative": false,
+      "record_scope": {
+        "routes": [
+          {
+            "kind": "all_records"
+          }
+        ]
+      },
+      "field_policy": {
+        "readable_fields": ["name", "country"],
+        "changeable_fields": []
+      }
+    },
+    {
+      "id": "perm_region_update",
+      "key": "vortex.crm.locations.region.update",
+      "label": "Update region",
+      "description": "Allows the standard update operation for region records.",
+      "record_type": "region",
+      "action_kind": "update",
+      "administrative": false,
+      "record_scope": {
+        "routes": [
+          {
+            "kind": "all_records"
+          }
+        ]
+      },
+      "field_policy": {
+        "readable_fields": ["name", "country"],
+        "changeable_fields": ["name", "country"]
+      }
+    },
+    {
+      "id": "perm_city_create",
+      "key": "vortex.crm.locations.city.create",
+      "label": "Create city",
+      "description": "Allows the standard create operation for city records.",
+      "record_type": "city",
+      "action_kind": "create",
+      "administrative": false,
+      "record_scope": {
+        "routes": [
+          {
+            "kind": "all_records"
+          }
+        ]
+      },
+      "field_policy": {
+        "readable_fields": ["name", "region"],
+        "changeable_fields": ["name", "region"]
+      }
+    },
+    {
+      "id": "perm_city_read",
+      "key": "vortex.crm.locations.city.read",
+      "label": "Read city",
+      "description": "Allows the standard read operation for city records.",
+      "record_type": "city",
+      "action_kind": "read",
+      "administrative": false,
+      "record_scope": {
+        "routes": [
+          {
+            "kind": "all_records"
+          }
+        ]
+      },
+      "field_policy": {
+        "readable_fields": ["name", "region"],
+        "changeable_fields": []
+      }
+    },
+    {
+      "id": "perm_city_update",
+      "key": "vortex.crm.locations.city.update",
+      "label": "Update city",
+      "description": "Allows the standard update operation for city records.",
+      "record_type": "city",
+      "action_kind": "update",
+      "administrative": false,
+      "record_scope": {
+        "routes": [
+          {
+            "kind": "all_records"
+          }
+        ]
+      },
+      "field_policy": {
+        "readable_fields": ["name", "region"],
+        "changeable_fields": ["name", "region"]
+      }
+    }
+  ],
+  "actions": [],
+  "events": [],
+  "flows": [],
+  "extension_points": [],
+  "sharing_conditions": []
+}

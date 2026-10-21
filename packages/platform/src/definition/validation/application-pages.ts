@@ -3,8 +3,10 @@ import {
   FORM_CONTAINER_BLOCK_RELEASE,
   FIELD_INPUT_BLOCK_RELEASE,
   FIELD_INPUT_CONTROL_RELEASES,
+  placementSettings,
 } from "../application-composition-catalogue";
 import { registeredBlockReleases, type JsonObject } from "./context";
+import { walkPageComposition } from "../../pages/placement-walk";
 import {
   readRecordsTableContract,
   gridViewDocumentSchema,
@@ -43,6 +45,11 @@ export function applicationPageRules(scope: ApplicationScope): void {
     failures,
     walkValues,
   } = scope;
+  /** The automatic field input releases a dependent field renders with. */
+  const dependentInputBlocks = new Set([
+    String(FIELD_INPUT_BLOCK_RELEASE.blockId),
+    ...Object.values(FIELD_INPUT_CONTROL_RELEASES).map((release) => String(release.blockId)),
+  ]);
 
   /**
    * What the compiled release offers a row's related records: each link from another record type
@@ -144,7 +151,8 @@ export function applicationPageRules(scope: ApplicationScope): void {
               recordsTableEditableFieldTypes.includes(String(field.type)) &&
               (field.type !== "link" ||
                 object(object(field.settings ?? {}).target).state === "resolved"),
-            ...(field.type === "link" && object(field.settings ?? {}).dependsOn !== undefined
+            ...((field.type === "link" || field.type === "choice") &&
+            object(field.settings ?? {}).dependsOn !== undefined
               ? { dependsOn: String(object(object(field.settings).dependsOn).parentFieldId) }
               : {}),
             // A one-record link from the record type to itself names each record's parent.
@@ -352,6 +360,43 @@ export function applicationPageRules(scope: ApplicationScope): void {
           problem.sentence,
         ),
       );
+    // A dependent field input offers choices only for what its form's draft holds in the field it
+    // depends on, so that field must be placed in the same form (a guided form is one form).
+    const formInputs = new Map<string, { names: Set<string>; dependents: [string, string][] }>();
+    walkPageComposition<string>(
+      page.composition,
+      ({ placementId, props, vortex }, owner) => {
+        const blockId = String(object(vortex.block).blockId);
+        if (blockId === String(FORM_CONTAINER_BLOCK_RELEASE.blockId))
+          return page.type === "guided_form" ? owner : placementId.toLowerCase();
+        if (!dependentInputBlocks.has(blockId)) return owner;
+        const settings = placementSettings(props);
+        const name = object(settings.name ?? {});
+        const dependsOn = object(object(settings.depends_on ?? {}).properties ?? {});
+        const entry = formInputs.get(owner) ?? { names: new Set<string>(), dependents: [] };
+        formInputs.set(owner, entry);
+        if (name.kind === "text") entry.names.add(String(name.value));
+        const parent = object(dependsOn.field ?? {});
+        const label = object(dependsOn.label ?? {});
+        if (parent.kind === "text")
+          entry.dependents.push([String(parent.value), String(label.value ?? parent.value)]);
+        return owner;
+      },
+      "page",
+    );
+    for (const { names, dependents } of formInputs.values())
+      for (const [parentKey, parentLabel] of dependents)
+        if (!names.has(parentKey))
+          failures.push(
+            failure(
+              output,
+              "vortex.definition.application_block_settings",
+              "broken_reference",
+              { kind: "page", key: String(page.key) },
+              "definition_form_field_dependency",
+              `A field on this page offers choices that depend on ${parentLabel}, which is not in the same form`,
+            ),
+          );
     // A Records table or Record detail may map only fields its bound Module query selects, and
     // may order only by fields the query can order (a grouped or aggregating query orders by its
     // grouping fields). The default sort must be the query's leading sort, the order the Query
