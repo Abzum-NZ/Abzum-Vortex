@@ -26,6 +26,12 @@ export {
   type FlowValidationIssue,
   type FlowValidationOptions,
 } from "./flow-validation";
+export {
+  flowTaskOutputMembers,
+  type FlowOutputMember,
+  type FlowOutputMemberOptions,
+  type FlowOutputMembers,
+} from "./flow-output-members";
 export * from "./canonical-json";
 export * from "./definitions";
 export * from "./definition-source";
