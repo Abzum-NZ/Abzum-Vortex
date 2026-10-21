@@ -125,7 +125,8 @@ export type StudioCompositionDestinationModel =
         label: string;
       }>[];
     }>
-  | Readonly<{ kind: "invalid" | "unsupported" }>;
+  | Readonly<{ kind: "unsupported"; reason: "page_kind" | "manifest_mismatch" }>
+  | Readonly<{ kind: "invalid" }>;
 
 export type StudioCompositionCommandResult =
   /** `placementAlias` names the new block of an add. */

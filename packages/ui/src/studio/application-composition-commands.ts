@@ -121,9 +121,18 @@ type MoveDestination = {
   steps: readonly SlotStep[];
 };
 
-/** The regions whose blocks move: a page's ordinary main content and a layout's own blocks. */
+/** A display page's content is its main area or the content slot its layout opens for it. */
+const pageContentRegion = (
+  region: Region,
+): region is Region & { page: NonNullable<Region["page"]> } =>
+  (region.ordinaryMain === true || region.parent !== undefined) &&
+  (region.page?.type === "list" ||
+    region.page?.type === "detail" ||
+    region.page?.type === "dashboard");
+
+/** The regions whose blocks move: a display page's content and a layout's own blocks. */
 const movableRegion = (region: Region): boolean =>
-  region.ordinaryMain === true || region.shell !== undefined;
+  region.shell !== undefined || pageContentRegion(region);
 
 /**
  * Only actual non-repeatable slots in this original movable region are destinations. A layout
@@ -441,20 +450,12 @@ const resolveRemoval = (
   const resolved = resolve(context, selection);
   if (resolved === undefined) return { kind: "invalid" };
   const { source, target, alias } = resolved;
-  // A page's content is its main area, or the layout content slot its layout opens for it.
-  const page =
-    target.region.ordinaryMain === true || target.region.parent !== undefined
-      ? target.region.page
-      : undefined;
   // Any of a layout's own blocks leaves with everything inside it, as any of them can be added.
   // A page removes one display item, and only from its content.
   const layout = target.region.shell !== undefined;
   if (!layout) {
-    if (
-      page === undefined ||
-      (page.type !== "list" && page.type !== "detail" && page.type !== "dashboard")
-    )
-      return { kind: "unsupported", reason: "page_kind" };
+    if (!pageContentRegion(target.region)) return { kind: "unsupported", reason: "page_kind" };
+    const page = target.region.page;
     if (
       source.body.public_addresses.some((address) => address.page === page.id) ||
       source.body.experiences?.some((experience) => experience.page === page.key)
@@ -579,11 +580,13 @@ export const describeStudioCompositionDestinations = (
     if (resolved === undefined) return { kind: "invalid" };
     const catalogue = context.catalogue;
     const { target, source, alias } = resolved;
+    if (!movableRegion(target.region)) return { kind: "unsupported", reason: "page_kind" };
     if (
-      !movableRegion(target.region) ||
-      !manifestMatches(catalogue, source, target.region.zone.items)
+      !manifestMatches(catalogue, source, target.region.zone.items) ||
+      (target.region.parent !== undefined &&
+        !pinnedRelease(catalogue, source, target.region.parent))
     )
-      return { kind: "unsupported" };
+      return { kind: "unsupported", reason: "manifest_mismatch" };
     validateRegion(catalogue, target.region);
     return {
       kind: "available",
@@ -592,7 +595,8 @@ export const describeStudioCompositionDestinations = (
         label,
       })),
     };
-  } catch {
+  } catch (error) {
+    console.error("[studio] move model failed", error);
     return { kind: "invalid" };
   }
 };
