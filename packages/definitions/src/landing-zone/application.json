@@ -424,7 +424,8 @@
                         "source": "control",
                         "control_placement": "home_favourites_filter"
                       }
-                    ]
+                    ],
+                    "row_action_event_id": "row_action_home_favourites_remove_tile"
                   }
                 },
                 {
@@ -486,7 +487,8 @@
                         "source": "control",
                         "control_placement": "home_applications_filter"
                       }
-                    ]
+                    ],
+                    "row_action_event_id": "open_application"
                   }
                 }
               ],
@@ -582,7 +584,8 @@
                         "source": "control",
                         "control_placement": "favourites_filter"
                       }
-                    ]
+                    ],
+                    "row_action_event_id": "row_action_favourites_tiles_remove_tile"
                   }
                 }
               ],
@@ -678,7 +681,8 @@
                         "source": "control",
                         "control_placement": "bookmarks_filter"
                       }
-                    ]
+                    ],
+                    "row_action_event_id": "row_action_bookmarks_tiles_remove_tile"
                   }
                 }
               ],
@@ -1029,7 +1033,8 @@
                         "source": "control",
                         "control_placement": "all_applications_filter"
                       }
-                    ]
+                    ],
+                    "row_action_event_id": "open_application"
                   }
                 }
               ],

@@ -623,7 +623,8 @@
                           }
                         }
                       }
-                    }
+                    },
+                    "row_action_event_id": "row_action_hr_department_detail"
                   }
                 },
                 {
@@ -1066,7 +1067,8 @@
                           }
                         }
                       }
-                    }
+                    },
+                    "row_action_event_id": "row_action_hr_position_detail"
                   }
                 },
                 {
@@ -1587,7 +1589,8 @@
                           }
                         }
                       }
-                    }
+                    },
+                    "row_action_event_id": "row_action_hr_employee_detail"
                   }
                 },
                 {
@@ -2260,7 +2263,8 @@
                           }
                         }
                       }
-                    }
+                    },
+                    "row_action_event_id": "row_action_hr_leave_request_detail"
                   }
                 },
                 {
@@ -2961,7 +2965,8 @@
                           }
                         }
                       }
-                    }
+                    },
+                    "row_action_event_id": "row_action_hr_leave_entitlement_detail"
                   }
                 },
                 {
@@ -3450,7 +3455,8 @@
                           }
                         }
                       }
-                    }
+                    },
+                    "row_action_event_id": "row_action_hr_team_calendar_leave"
                   }
                 }
               ],

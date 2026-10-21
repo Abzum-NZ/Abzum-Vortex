@@ -1,5 +1,6 @@
 create or replace function vortex_record.resolve_installation_access_plan_internal(
-  p_installation jsonb
+  p_installation jsonb,
+  p_include_contributions boolean default true
 )
 returns jsonb
 language plpgsql
@@ -38,6 +39,7 @@ declare
   value_expression text;
   plan jsonb;
   cacheable boolean;
+  contribution_pins text := '';
 begin
   -- The plan is keyed by the exact installation pins. A binding revision is
   -- advanced by every installation lifecycle transition, and a release revision
@@ -82,12 +84,27 @@ begin
       message = 'Record installation is unavailable';
   end if;
 
+  -- The fields other installed Modules contributed to the pinned Modules' record types are part
+  -- of what the plan holds, so their exact pins are part of its key. A preview runs its own
+  -- storage and receives no contributions, and the plan an installation prepares is the exact
+  -- plan of its release set alone (p_include_contributions false).
+  if preview_installation_id_value is null and p_include_contributions then
+    contribution_pins := vortex_record.installed_contribution_pins_internal(
+      organization_id_value,
+      array(
+        select (item.value ->> 'moduleRootId')::uuid
+        from pg_catalog.jsonb_array_elements(p_installation -> 'moduleBindings') as item(value)
+      )
+    );
+  end if;
+
   plan_key_value := 'sha256:' || pg_catalog.encode(
     pg_catalog.sha256(pg_catalog.convert_to(
       organization_id_value::text || '|' || application_root_id_value::text || '|'
         || application_release_revision_value::text || '|'
         || case when preview_installation_id_value is null then ''
-          else preview_installation_id_value::text || '|' end || coalesce((
+          else preview_installation_id_value::text || '|' end
+        || contribution_pins || '|' || coalesce((
           select pg_catalog.string_agg(
             (item.value ->> 'moduleRootId') || ':'
               || (item.value ->> 'moduleReleaseRevision') || ':'
@@ -148,6 +165,11 @@ begin
     if pg_catalog.jsonb_typeof(release_content -> 'recordTypes') <> 'array' then
       raise exception using errcode = '55000',
         message = 'Installed Module definition is unavailable';
+    end if;
+    if preview_installation_id_value is null and p_include_contributions then
+      release_content := vortex_record.with_installed_record_contributions_internal(
+        release_content, organization_id_value, module_root_value
+      );
     end if;
 
     for record_type_item in
@@ -448,12 +470,12 @@ exception
 end
 $function$;
 
-alter function vortex_record.resolve_installation_access_plan_internal(jsonb) owner to vortex_record_adapter;
+alter function vortex_record.resolve_installation_access_plan_internal(jsonb, boolean) owner to vortex_record_adapter;
 
-revoke all on function vortex_record.resolve_installation_access_plan_internal(jsonb)
+revoke all on function vortex_record.resolve_installation_access_plan_internal(jsonb, boolean)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-grant execute on function vortex_record.resolve_installation_access_plan_internal(jsonb)
+grant execute on function vortex_record.resolve_installation_access_plan_internal(jsonb, boolean)
   to vortex_record_adapter, vortex_owner;
 
-comment on function vortex_record.resolve_installation_access_plan_internal(jsonb) is
+comment on function vortex_record.resolve_installation_access_plan_internal(jsonb, boolean) is
   'Private installation access plan builder and cache: resolves definitions, column maps, permission alternatives and saved conditions once per all-active installation binding revision; a detached pin set is resolved afresh.';

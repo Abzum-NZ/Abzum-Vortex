@@ -19,15 +19,16 @@ import {
   type FlowReadFieldsScalarType,
   type FlowRefusalFeedback,
   type FlowTriggerOrigin,
+  type FlowWarningNotice,
   type IdentitySession,
   type InstalledNamedActionReference,
   type JsonValue,
   type OrganizationSelectionCandidate,
   type SaveRecordCommand,
-  type SaveRecordResult,
   type ViewerSafeRecordPinAcquisitionResult,
   type ViewerSafeRecordPinSelector,
 } from "../schema";
+import type { RecordSaveServiceResult } from "../records/save-record";
 import type { HumanOrganizationRequestResult } from "../access/index";
 import type {
   ActionFlowRunner,
@@ -38,10 +39,7 @@ import type {
   FlowLibrary,
   FlowRuntimeValues,
 } from "../rules/index";
-import type {
-  FlowContinuationStore,
-  FlowEffectLedger,
-} from "./flow-continuation-store";
+import type { FlowContinuationStore, FlowEffectLedger } from "./flow-continuation-store";
 import type { ProtectedOperationExecutor } from "./protected-operation-executor";
 
 /**
@@ -145,7 +143,9 @@ export const committedFlowStartIntentSchema = z
   });
 type CommittedFlowStartIntent = z.infer<typeof committedFlowStartIntentSchema>;
 
-export const releaseIdentityForIntent = (intent: CommittedFlowStartIntent): FlowReleaseIdentity => ({
+export const releaseIdentityForIntent = (
+  intent: CommittedFlowStartIntent,
+): FlowReleaseIdentity => ({
   organizationId: intent.organizationId,
   applicationRootId: intent.applicationRootId,
   applicationReleaseRevision: intent.applicationReleaseRevision,
@@ -201,7 +201,7 @@ type RecordSaveTaskPort = Readonly<{
     session: IdentitySession,
     selection: OrganizationSelectionCandidate,
     command: SaveRecordCommand,
-  ): Promise<HumanOrganizationRequestResult<SaveRecordResult>>;
+  ): Promise<RecordSaveServiceResult>;
 }>;
 
 /** Confirms that the initiator can currently read a claimed page subject of the exact record type. */
@@ -238,8 +238,7 @@ type FlowSelectedRecordReadPort = Readonly<{
  * not read is unavailable, indistinguishably from one that does not exist.
  */
 export type FlowCurrentRecordRead =
-  | Readonly<{ outcome: "read"; values: FlowRuntimeValues }>
-  | Readonly<{ outcome: "unavailable" }>;
+  Readonly<{ outcome: "read"; values: FlowRuntimeValues }> | Readonly<{ outcome: "unavailable" }>;
 
 type FlowCurrentRecordPort = Readonly<{
   read(
@@ -298,10 +297,7 @@ export type FlowOrchestratorDependencies = Readonly<{
    * Resolves the flows of the release the organisation runs for a flow id, from trusted
    * installation state. `undefined` refuses the start without saying why.
    */
-  resolveRelease: (
-    organizationId: string,
-    flowId: string,
-  ) => Promise<FlowRelease | undefined>;
+  resolveRelease: (organizationId: string, flowId: string) => Promise<FlowRelease | undefined>;
   /** Reads a committed Event intent by ID; the caller cannot supply its tenant, release or actor. */
   readCommittedStartIntent?: (intentId: string) => Promise<unknown>;
   /** Resolves the exact immutable release named by the committed intent, never the current pointer. */
@@ -398,6 +394,7 @@ export type SafeIntent = Readonly<{
 export type FlowOrchestratorResponse =
   | Readonly<{
       kind: "finished";
+      warnings: readonly FlowWarningNotice[];
       runId: string;
       /**
        * `committed` when at least one protected effect committed, `completed` when the flow ran to
@@ -464,6 +461,7 @@ export type Run = {
   carriedMilliseconds: number;
   segmentStart: number;
   unavailable: FlowUnavailableNotice[];
+  warnings: FlowWarningNotice[];
   /** Tasks whose refusal the named-action port already logged with its reason. */
   refusalLoggedTaskIds: string[];
   /**

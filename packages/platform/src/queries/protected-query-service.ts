@@ -61,7 +61,14 @@ export const createProtectedQueryService = (dependencies: ProtectedQueryServiceD
       if (caller !== null && typeof caller === "object" && "kind" in caller)
         return { kind: "unavailable" };
       const command = protectedQueryCommandSchema.safeParse(commandCandidate);
-      if (!command.success) return { kind: "available", value: refusal("request_invalid") };
+      if (!command.success) {
+        console.error("[protected-query] request refused", {
+          part: "command",
+          reason: "request_invalid",
+          issues: command.error.issues.map(({ code, path }) => ({ code, path })),
+        });
+        return { kind: "available", value: refusal("request_invalid") };
+      }
       if (selection.applicationRootId === undefined) return { kind: "unavailable" };
       const cache: QueryCache | undefined =
         sharedCacheStore === undefined || resolveQueryCacheContext === undefined
