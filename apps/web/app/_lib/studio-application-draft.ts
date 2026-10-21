@@ -593,6 +593,7 @@ export const loadStudioApplicationDraft = async (
             );
             const fieldsByRecord: Record<string, readonly ModuleField[]> = {};
             const borrowed: StudioQueryChoice[] = [];
+            const resolvedRecordTypes: string[] = [];
             const borrowedActions: StudioActionChoice[] = [];
             const borrowedRelationships: StudioRelationshipChoice[] = [];
             const used: StudioDataModule[] = [];
@@ -774,58 +775,65 @@ export const loadStudioApplicationDraft = async (
                           .replaceAll("_", " ")
                           .replace(/^./u, (first) => first.toUpperCase()),
                       recordType: `${release.key}:${recordType.key}`,
-                      fields: query.selectedFieldIds.flatMap((fieldId) => {
-                        const field = recordType.fields.find((candidate) =>
-                          sameId(String(candidate.fieldId), String(fieldId)),
-                        );
-                        const options =
-                          field?.type === "choice" ? field.settings.options : undefined;
-                        return field === undefined
-                          ? []
-                          : [
-                              {
-                                reference: `${release!.key}:${recordType.key}.${field.key}`,
-                                label: field.label,
-                                type: field.type,
-                                sortable: field.sortable,
-                                filterable: field.filterable,
-                                searchable: field.searchPriority !== undefined,
-                                ...(options === undefined
-                                  ? {}
-                                  : {
-                                      choiceCount: options.length,
-                                      choiceValues: options.map((option) => option.value),
-                                    }),
-                                ...(field.type === "calculation" || field.type === "total"
-                                  ? { resultType: field.settings.resultType }
-                                  : {}),
-                                // A one-record link from the record type to itself names each
-                                // record's parent, judged as publication judges it.
-                                ...(field.type === "link" &&
-                                recordType.relationships.some(
-                                  (relationship) =>
-                                    sameId(
-                                      String(relationship.fromFieldId),
-                                      String(field.fieldId),
-                                    ) &&
-                                    relationship.cardinality === "many_to_one" &&
-                                    relationship.toRecordType?.state === "resolved" &&
-                                    sameId(
-                                      String(relationship.toRecordType.recordTypeId),
-                                      String(recordType.recordTypeId),
-                                    ),
-                                )
-                                  ? { parentLink: true }
-                                  : {}),
-                                ...((field.type === "link" || field.type === "choice") &&
-                                field.settings.dependsOn !== undefined
-                                  ? {
-                                      dependsOn: `${release!.key}:${recordType.key}.${recordType.fields.find((candidate) => sameId(String(candidate.fieldId), String(field.settings.dependsOn!.parentFieldId)))?.key ?? ""}`,
-                                    }
-                                  : {}),
-                              },
-                            ];
-                      }),
+                      recordTypeLabel: recordType.singularLabel,
+                      allFields: recordType.fields
+                        .map((field) => String(field.fieldId))
+                        .flatMap((fieldId) => {
+                          const field = recordType.fields.find((candidate) =>
+                            sameId(String(candidate.fieldId), String(fieldId)),
+                          );
+                          const options =
+                            field?.type === "choice" ? field.settings.options : undefined;
+                          return field === undefined
+                            ? []
+                            : [
+                                {
+                                  reference: `${release!.key}:${recordType.key}.${field.key}`,
+                                  label: field.label,
+                                  type: field.type,
+                                  sortable: field.sortable,
+                                  filterable: field.filterable,
+                                  searchable: field.searchPriority !== undefined,
+                                  linkTargetResolved:
+                                    field.type !== "link" ||
+                                    field.settings.target.state === "resolved",
+                                  ...(options === undefined
+                                    ? {}
+                                    : {
+                                        choiceCount: options.length,
+                                        choiceValues: options.map((option) => option.value),
+                                      }),
+                                  ...(field.type === "calculation" || field.type === "total"
+                                    ? { resultType: field.settings.resultType }
+                                    : {}),
+                                  // A one-record link from the record type to itself names each
+                                  // record's parent, judged as publication judges it.
+                                  ...(field.type === "link" &&
+                                  recordType.relationships.some(
+                                    (relationship) =>
+                                      sameId(
+                                        String(relationship.fromFieldId),
+                                        String(field.fieldId),
+                                      ) &&
+                                      relationship.cardinality === "many_to_one" &&
+                                      relationship.toRecordType?.state === "resolved" &&
+                                      sameId(
+                                        String(relationship.toRecordType.recordTypeId),
+                                        String(recordType.recordTypeId),
+                                      ),
+                                  )
+                                    ? { parentLink: true }
+                                    : {}),
+                                  ...((field.type === "link" || field.type === "choice") &&
+                                  field.settings.dependsOn !== undefined
+                                    ? {
+                                        dependsOn: `${release!.key}:${recordType.key}.${recordType.fields.find((candidate) => sameId(String(candidate.fieldId), String(field.settings.dependsOn!.parentFieldId)))?.key ?? ""}`,
+                                      }
+                                    : {}),
+                                },
+                              ];
+                        }),
+                      fields: [],
                       grouped: query.groupByFieldIds.length > 0 || query.aggregates.length > 0,
                       groupBy: query.groupByFieldIds.flatMap((fieldId) => {
                         const field = recordType.fields.find((candidate) =>
@@ -840,6 +848,23 @@ export const loadStudioApplicationDraft = async (
                       exposure: query.exposure,
                       exportable: recordType.standardActions.some((action) => action === "export"),
                     });
+                    const choice = borrowed[borrowed.length - 1]!;
+                    const selected = new Set(
+                      query.selectedFieldIds.map((id) => String(id).toLowerCase()),
+                    );
+                    borrowed[borrowed.length - 1] = {
+                      ...choice,
+                      fields: choice.allFields.filter((field) => {
+                        const declared = recordType.fields.find(
+                          (candidate) =>
+                            `${release.key}:${recordType.key}.${candidate.key}` === field.reference,
+                        );
+                        return (
+                          declared !== undefined &&
+                          selected.has(String(declared.fieldId).toLowerCase())
+                        );
+                      }),
+                    };
                   }
                   // Its actions and relationships are chosen as they are too: they belong to its own application.
                   for (const action of content.actions.filter((action) =>
@@ -881,6 +906,9 @@ export const loadStudioApplicationDraft = async (
                       });
                     }
                 }
+                resolvedRecordTypes.push(
+                  ...records.map((record) => `${release.key}:${record.key}`),
+                );
                 // The compiled fields of every record type the draft binds, for the typed condition
                 // controls of a query filter and of a Records table's formatting rules.
                 if (data || canvas)
@@ -891,6 +919,7 @@ export const loadStudioApplicationDraft = async (
             borrowedChoices = choices
               ? {
                   usesSignature: studioUsesSignature(draft.source),
+                  recordTypes: resolvedRecordTypes,
                   queries: borrowed,
                   actions: borrowedActions,
                   relationships: borrowedRelationships,

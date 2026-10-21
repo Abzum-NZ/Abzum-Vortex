@@ -79,6 +79,8 @@ export const ensureStudioBoardQuickAdd = (
 
   // The stage input publishes the page parameter the flow fills: the one it already publishes, or
   // one named after the stage field that no other input of the form publishes.
+  const stageLabel =
+    typeof stageInput.props["label"] === "string" ? stageInput.props["label"] : "Stage";
   const published = stageInput.props["publishes_parameter"];
   const parameter =
     typeof published === "string"
@@ -98,7 +100,7 @@ export const ensureStudioBoardQuickAdd = (
     )
       return {
         kind: "refused",
-        reason: `Another input of ${create.name} already publishes the page parameter ${parameter}. Make the stage input publish its own page parameter first.`,
+        reason: `Another input of ${create.name} already uses the address value needed by ${stageLabel}. Give ${stageLabel} its own address value first.`,
       };
   }
 
@@ -119,7 +121,7 @@ export const ensureStudioBoardQuickAdd = (
     if (declared !== undefined && declared.type !== "text")
       return {
         kind: "refused",
-        reason: `The flow ${opening.labels.name} already has a ${stageInputName} input that is not text. Rename that input, then add from a column.`,
+        reason: `The flow ${opening.labels.name} already has an input for ${stageLabel} that is not text. Rename that input, then add from a column.`,
       };
     if (
       Object.entries(opening.inputs).some(
@@ -140,7 +142,7 @@ export const ensureStudioBoardQuickAdd = (
     if (filled !== undefined && filled !== stageValue)
       return {
         kind: "refused",
-        reason: `The flow ${opening.labels.name} already fills the page parameter ${parameter} with another value. Change it to the stage, then add from a column.`,
+        reason: `The flow ${opening.labels.name} already fills ${stageLabel} with another value. Change it to the column?s stage, then add from a column.`,
       };
     if (declared === undefined)
       opening.inputs[stageInputName] = {

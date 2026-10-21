@@ -95,7 +95,9 @@ export function StudioExportEditor({
           });
         }}
       />
-      <p className="text-xs text-muted-foreground">Up to 100,000 records.</p>
+      <p className="text-xs text-muted-foreground">
+        Up to {RECORDS_TABLE_EXPORT_MAXIMUM_ROWS.toLocaleString("en-US")} records.
+      </p>
     </div>
   );
 }

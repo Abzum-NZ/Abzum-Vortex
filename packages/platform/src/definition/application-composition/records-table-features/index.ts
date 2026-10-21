@@ -1,3 +1,4 @@
+import { RECORDS_TABLE_UNVIRTUALIZED_ROW_LIMIT } from "./shared";
 import {
   recordsTableSpreadsheetFeature,
   type RecordsTableSpreadsheetSettings,
@@ -337,7 +338,7 @@ export const recordsTableGroupingRequired = (
  * the draft's facts beside each switch, so the two never disagree.
  */
 export const checkRecordsTableFeature = (
-  key: RecordsTableFeatureKey,
+  key: RecordsTableFeatureKey | "viewport",
   state: RecordsTableFeatureState<object>,
   facts: RecordsTableQueryFacts,
   presentation: "grid" | "cards",
@@ -345,6 +346,25 @@ export const checkRecordsTableFeature = (
   /** The table's own page size; the tree's opened levels share one row budget with it. */
   tablePageSize: number | undefined,
 ): RecordsTableFeatureCheck => {
+  if (key === "viewport")
+    return facts.table.viewport === "page" &&
+      tablePageSize !== undefined &&
+      tablePageSize > RECORDS_TABLE_UNVIRTUALIZED_ROW_LIMIT
+      ? featureNotPossible("definition_records_table_bounded_scrolling")
+      : featureAvailable;
+  if (
+    key === "board" &&
+    state.enabled &&
+    features.rowActions.enabled &&
+    facts.table.rowActions.length !== 1
+  )
+    return featureNotPossible("definition_records_table_board_row_action");
+  if (
+    key === "row_actions" &&
+    state.enabled &&
+    facts.table.rowActions.filter((action) => action.placement === "inline").length > 3
+  )
+    return featureNotPossible("definition_records_table_row_action_limit");
   if (presentation === "cards" && key === "spreadsheet")
     return featureNotPossible(
       "definition_records_table_spreadsheet",
@@ -476,18 +496,31 @@ export const checkRecordsTableFeatures = (
   presentation: "grid" | "cards",
   tablePageSize: number | undefined,
 ): readonly Readonly<{
-  key: RecordsTableFeatureKey;
+  key: RecordsTableFeatureKey | "viewport";
   enabled: boolean;
   check: RecordsTableFeatureCheck;
-}>[] =>
-  recordsTableFeatureKeys.map((key) => {
+}>[] => [
+  {
+    key: "viewport",
+    enabled: true,
+    check: checkRecordsTableFeature(
+      "viewport",
+      { enabled: true },
+      facts,
+      presentation,
+      features,
+      tablePageSize,
+    ),
+  },
+  ...recordsTableFeatureKeys.map((key) => {
     const state = recordsTableFeatureState(features, key);
     return {
       key,
       enabled: state.enabled,
       check: checkRecordsTableFeature(key, state, facts, presentation, features, tablePageSize),
     };
-  });
+  }),
+];
 
 /**
  * The feature whose controls raise each Records table event it owns, and the switch of that

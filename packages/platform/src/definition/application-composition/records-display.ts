@@ -1,9 +1,10 @@
+import catalogueSources from "../../catalogue/catalogue/application-composition-catalogue.source.json";
 import {
   readRecordsTableRowActions,
   type RecordsTableActionContract,
 } from "./records-table-features/row-actions";
-import type { DefinitionValidationErrorCode } from "../../catalogue/validation-errors";
 import { readRecordsTableFeatures, type RecordsTableFeatures } from "./records-table-features";
+import type { ComponentSettingValue } from "./block-property-schema";
 import {
   settingField,
   settingGroup,
@@ -56,7 +57,7 @@ export type RecordsTablePhonePresentation = (typeof recordsTablePhonePresentatio
 export const recordsTableViewports = ["bounded", "page"] as const;
 export type RecordsTableViewport = (typeof recordsTableViewports)[number];
 /** The most rows a page mounts without virtualization; a larger page mounts only its window. */
-export const RECORDS_TABLE_UNVIRTUALIZED_ROW_LIMIT = 100;
+export { RECORDS_TABLE_UNVIRTUALIZED_ROW_LIMIT } from "./records-table-features/shared";
 
 /**
  * One declared Records table column. `field` is the authored qualified field when read from a
@@ -289,34 +290,30 @@ export const readRecordsTableContract = (
   };
 };
 
-/**
- * Why a readable Records table contract cannot be published as authored, as the validation
- * catalogue code whose message is the business sentence, or undefined when it can. The grid mounts
- * only the visible window of a page of more than one hundred rows, which needs its own bounded
- * scroll area; a board card opens through one row action.
- */
-export const recordsTableContractRefusal = (
-  contract: RecordsTableContract,
-):
-  | Extract<
-      DefinitionValidationErrorCode,
-      | "definition_records_table_bounded_scrolling"
-      | "definition_records_table_row_action_limit"
-      | "definition_records_table_board_row_action"
-    >
-  | undefined =>
-  contract.viewport === "page" && contract.pageSize > RECORDS_TABLE_UNVIRTUALIZED_ROW_LIMIT
-    ? "definition_records_table_bounded_scrolling"
-    : // A board card opens through exactly one row action; it has no row menu for more.
-      contract.features.board.enabled &&
-        contract.features.rowActions.enabled &&
-        contract.rowBehaviours.rowActions.length !== 1
-      ? "definition_records_table_board_row_action"
-      : contract.features.rowActions.enabled &&
-          contract.rowBehaviours.rowActions.filter((action) => action.placement === "inline")
-            .length > 3
-        ? "definition_records_table_row_action_limit"
-        : undefined;
+/** The column settings every grid must satisfy, before reading a complete table contract. */
+export const recordsTableColumnProblems = (
+  value: ComponentSettingValue | undefined,
+): readonly Readonly<{ index?: number; reason: string }>[] => {
+  if (value?.kind !== "list") return [];
+  const columns = value.items.map((item) => settingGroup(item));
+  const problems: { index?: number; reason: string }[] = [];
+  if (!columns.some((column) => column?.["visible"]?.kind === "boolean" && column["visible"].value))
+    problems.push({ reason: "Keep at least one column visible." });
+  columns.forEach((column, index) => {
+    if (
+      column?.["auto_size"]?.kind === "boolean" &&
+      column["auto_size"].value &&
+      settingField(column["field"]) === undefined
+    ) {
+      const name = settingText(column["label"]) ?? `Column ${index + 1}`;
+      problems.push({
+        index,
+        reason: `Auto-size is not possible: ${name} has no field to measure.`,
+      });
+    }
+  });
+  return problems;
+};
 
 /** Reads a Record detail placement's declared detail fields; undefined when they cannot be read. */
 export const readRecordDetailContract = (
@@ -349,4 +346,26 @@ export const readRecordDetailContract = (
     ...(headingField === undefined ? {} : { headingField }),
     messages: displayMessages(settings),
   };
+};
+
+/** A custom editor reads the same list bound as the catalogue validator. Missing bounds are defects. */
+export const recordsTableSettingMaximumItems = (...path: readonly string[]): number => {
+  let properties: readonly {
+    key?: string | undefined;
+    kind?: string | undefined;
+    maximumItems?: number | undefined;
+    properties?: readonly unknown[] | undefined;
+  }[] = catalogueSources.TABLE_BLOCK_RELEASE.properties;
+  for (const [index, key] of path.entries()) {
+    const property = properties.find((candidate) => candidate.key === key);
+    if (
+      index === path.length - 1 &&
+      property?.kind === "list" &&
+      typeof property.maximumItems === "number"
+    )
+      return property.maximumItems;
+    if (property?.kind !== "group" || property.properties === undefined) break;
+    properties = property.properties as typeof properties;
+  }
+  throw new Error(`Data grid catalogue list limit is missing: ${path.join(".")}`);
 };

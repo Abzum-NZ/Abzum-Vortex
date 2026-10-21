@@ -6,6 +6,8 @@ import {
   authoredRecordsTableEventAvailable,
   sourcePageItems,
   recordsTableRowActionIcons,
+  recordsTableActionCapabilities,
+  recordsTableSettingMaximumItems,
   type ApplicationSourceDocument,
   type JsonValue,
 } from "@vortex/platform/schema";
@@ -76,12 +78,10 @@ export const applyStudioRowActionChange = (
       kind: "refused",
       reason: "The row actions changed. Reload the inspector and try again.",
     };
-  if (next.length > 20)
-    return { kind: "refused", reason: "A table can have at most 20 row actions" };
-  if (next.filter((action) => action.placement === "inline").length > 3)
+  if (next.length > recordsTableSettingMaximumItems("row_actions"))
     return {
       kind: "refused",
-      reason: "At most three actions can sit beside the row; move the rest to the menu",
+      reason: `A table can have at most ${recordsTableSettingMaximumItems("row_actions")} row actions`,
     };
   const candidate = structuredClone(source);
   const item = placementOf(candidate, alias);
@@ -165,7 +165,7 @@ export function StudioRowActionsBindings({
         })),
         ...flows.map((flow) => ({
           value: `flow:${flow.key}`,
-          label: flow.labels.name ?? flow.key,
+          label: flow.labels.name ?? "A removed item",
           group: "Workflows",
           disabled: flowReason(flow) !== undefined,
           description: flowReason(flow),
@@ -219,7 +219,7 @@ export function StudioRowActionsBindings({
           controlAlias: placementAlias,
           event: "row_action",
           flowKey: flow.key,
-          rowActionLabel: flow.labels.name ?? flow.key,
+          rowActionLabel: flow.labels.name ?? "A removed item",
           bindingInputs: { [record[0]]: { kind: "caller", name: "record_id" } },
         });
       }}
@@ -251,10 +251,6 @@ export function StudioRowActionsEditor({
     const next = actions.map((action, i) =>
       i === index ? ({ ...action, [key]: value } as StudioRowAction) : action,
     );
-    if (next.filter((action) => action.placement === "inline").length > 3) {
-      setProblem("At most three actions can sit beside the row; move the rest to the menu");
-      return;
-    }
     commit(next);
   };
   return (
@@ -324,9 +320,11 @@ export function StudioRowActionsEditor({
                 }}
               >
                 <NativeSelectOption value="">None</NativeSelectOption>
-                <NativeSelectOption value="update">Update</NativeSelectOption>
-                <NativeSelectOption value="delete">Delete</NativeSelectOption>
-                <NativeSelectOption value="restore">Restore</NativeSelectOption>
+                {recordsTableActionCapabilities.map((capability) => (
+                  <NativeSelectOption key={capability} value={capability}>
+                    {{ update: "Update", delete: "Delete", restore: "Restore" }[capability]}
+                  </NativeSelectOption>
+                ))}
               </NativeSelect>
             </div>
           ),
@@ -343,7 +341,7 @@ export function StudioRowActionsEditor({
           value=""
           unset="Add a row action"
           options={choices}
-          disabled={disabled || actions.length >= 20}
+          disabled={disabled || actions.length >= recordsTableSettingMaximumItems("row_actions")}
           onChange={(choice) => {
             if (choice === "") return;
             const result = onAdd(choice);

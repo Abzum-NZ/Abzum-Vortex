@@ -1,5 +1,7 @@
 import {
   boardAggregateLabel,
+  MODULE_QUERY_MAXIMUM_TOTALS,
+  MODULE_MAXIMUM_QUERIES,
   queryNumericTotalFieldTypes,
   readRecordsTableFeatures,
   type ApplicationSourceDocument,
@@ -10,10 +12,6 @@ import {
 import { uniqueKey } from "./application-structure-common";
 import { studioBoardFacts } from "./contextual-palette";
 import type { StudioSettingChoices } from "./studio-setting-controls";
-
-/** Why a pipeline whose stage field people cannot filter by cannot make columns. */
-const stageFilterError =
-  "Make this pipeline's stage field filterable in Data to use it for board columns.";
 
 /** The refusal when the record type has no room for the query a board reads. */
 const studioBoardQueryUnavailable =
@@ -93,17 +91,23 @@ export const studioBoardPipelines = (
                 cardFields: [],
                 totals: [],
               });
-        const selectable =
-          stage?.type === "choice" &&
-          stage.filterable &&
-          title !== undefined &&
-          moveProblem === undefined;
+        const unavailableReason =
+          stage === undefined
+            ? "This pipeline's stage field was removed. Choose a stage field in Data."
+            : stage.type !== "choice"
+              ? "This pipeline needs a choice field for its stages. Choose one in Data."
+              : !stage.filterable
+                ? "Make this pipeline's stage field filterable in Data to use it for board columns."
+                : title === undefined
+                  ? "This record type's title field was removed. Choose a title field in Data."
+                  : moveProblem;
+        const selectable = unavailableReason === undefined;
         return {
           reference,
           label: `${record.plural_name}: ${pipeline.name}`,
           titleField: title === undefined ? undefined : `${module.key}:${record.key}.${title.key}`,
           selectable,
-          ...(selectable ? {} : { unavailableReason: moveProblem ?? stageFilterError }),
+          ...(selectable ? {} : { unavailableReason }),
         };
       }),
     ),
@@ -150,9 +154,6 @@ export const studioBoardQueryFits = (
   );
 };
 
-/** The most totals a query holds, as the query contract allows. */
-const queryMaximumTotals = 20;
-
 /**
  * The alias of the sum a board total of a number field adds to its query: `sum_` and the field key,
  * shortened with a stable suffix when that would pass the 40 characters a query key may have.
@@ -188,7 +189,7 @@ export const studioBoardTotalChoices = (
     ...facts.aggregates.map((aggregate) => aggregate.alias),
   ]);
   const sums =
-    facts.aggregates.length >= queryMaximumTotals
+    facts.aggregates.length >= MODULE_QUERY_MAXIMUM_TOTALS
       ? []
       : facts.fields.flatMap((field) => {
           const alias = boardSumAlias(keyOf(field.field));
@@ -252,7 +253,8 @@ export const createStudioBoardQuery = (
     board.cardTitleField === undefined
   )
     return { problem: "Choose a pipeline of this application" };
-  if (!pipeline.selectable) return { problem: pipeline.unavailableReason ?? stageFilterError };
+  if (!pipeline.selectable)
+    return { problem: pipeline.unavailableReason ?? "Choose an available pipeline in Data." };
   const [moduleKey, rest] = board.columnField.split(":");
   const [recordKey, stageKey] = rest!.split(".");
   const module = source.body.modules.find((candidate) => candidate.key === moduleKey)!;
@@ -302,7 +304,8 @@ export const createStudioBoardQuery = (
             ),
         );
   if (existing !== undefined) return { query: `${module.key}:${existing.key}` };
-  if (module.queries.length >= 100) return { problem: studioBoardQueryUnavailable };
+  if (module.queries.length >= MODULE_MAXIMUM_QUERIES)
+    return { problem: studioBoardQueryUnavailable };
   const key = uniqueKey(
     `${record.key}_by_${stageKey}`,
     "",

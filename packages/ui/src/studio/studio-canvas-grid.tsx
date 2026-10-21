@@ -101,8 +101,8 @@ const field = (
   fieldId: string,
 ): SourceBlockPropertyValueContract => {
   const reference = fields.get(fieldId.toLowerCase());
-  if (reference === undefined) throw new Error("STUDIO_CANVAS_GRID_FIELD_UNMAPPED");
-  return { kind: "field_reference", field: reference };
+
+  return { kind: "field_reference", field: reference! };
 };
 
 const layoutGroup = (layout: GridLayout, fields: ReadonlyMap<string, string>): Group => ({
@@ -164,10 +164,45 @@ const noQuery: StudioCanvasGridState["query"] = {
  * Applies one grid event to the held state. A change under another key starts afresh, so an
  * earlier arrangement or query never outlives the table settings it was made for.
  */
+export type StudioCanvasGridNotice = Readonly<{
+  kind: "refused";
+  code: "field_unmapped";
+  reason: string;
+  cause: Readonly<{
+    placementAlias: string;
+    event: StudioCanvasGridChange["kind"];
+    fieldIds: readonly string[];
+  }>;
+}>;
+
 export const reduceStudioCanvasGrid = (
   held: StudioCanvasGridState | undefined,
   change: StudioCanvasGridChange,
-): StudioCanvasGridState | undefined => {
+): StudioCanvasGridState | StudioCanvasGridNotice | undefined => {
+  const usedFields =
+    change.kind === "layout"
+      ? change.layout.columns.map((column) => column.fieldId)
+      : change.kind === "sort"
+        ? change.keys.map((key) => key.fieldId)
+        : change.kind === "filter"
+          ? [change.fieldId]
+          : [];
+  if (change.kind === "sort" || change.kind === "filter" || change.kind === "search") {
+    const previous = held?.key === change.key ? held.query.query : undefined;
+    usedFields.push(
+      ...(change.kind === "sort" ? [] : (previous?.sort.map((key) => key.fieldId) ?? [])),
+      ...(previous?.filters.map((entry) => entry.fieldId) ?? []),
+    );
+  }
+  const unmapped = usedFields.filter((id) => !change.fields.has(id.toLowerCase()));
+  if (unmapped.length > 0)
+    return {
+      kind: "refused",
+      code: "field_unmapped",
+      reason:
+        "This grid change could not be applied because a field changed. Save the draft and reload the canvas, then try again.",
+      cause: { placementAlias: change.placementAlias, event: change.kind, fieldIds: unmapped },
+    };
   if (change.kind === "sync")
     return held === undefined || held.currentKey === change.key
       ? held

@@ -193,6 +193,11 @@ export type RecordsTableBoardFacts = Readonly<{
 export type RecordsTableQueryFacts = Readonly<{
   /** The page requires a person to sign in before using its table. */
   signedIn: boolean;
+  /** Authored table behaviour, judged with the query by the one feature check. */
+  table: Readonly<{
+    rowActions: readonly Readonly<{ placement: string }>[];
+    viewport: "bounded" | "page";
+  }>;
   recordTypeLabel: string;
   /** The bound query's ceiling, absent while no query has been chosen in Studio. */
   maximumPageSize: number | undefined;
@@ -262,6 +267,9 @@ export const recordsTableFieldNotEditableReason = (
 /** A feature's codes: each is a validation catalogue entry whose message is the business sentence. */
 export type RecordsTableFeatureRefusalCode = Extract<
   DefinitionValidationErrorCode,
+  | "definition_records_table_bounded_scrolling"
+  | "definition_records_table_row_action_limit"
+  | "definition_records_table_board_row_action"
   | "definition_records_table_search"
   | "definition_records_table_column_filters"
   | "definition_records_table_saved_views"
@@ -318,3 +326,5 @@ export type RecordsTableFeatureDefinition<Settings extends object> = Readonly<{
     facts: RecordsTableQueryFacts,
   ): RecordsTableFeatureCheck;
 }>;
+
+export const RECORDS_TABLE_UNVIRTUALIZED_ROW_LIMIT = 100;
