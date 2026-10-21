@@ -666,6 +666,7 @@ export function FiltersToolbar({
   });
   const editing =
     fields.find((field) => chosenField !== undefined && sameKey(field.fieldId, chosenField)) ??
+    active[0]?.field ??
     fields[0]!;
   return (
     <div
