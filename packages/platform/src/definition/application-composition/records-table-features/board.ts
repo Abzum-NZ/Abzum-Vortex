@@ -1,4 +1,4 @@
-import { queryTotalLabel } from "../../module-query-edit";
+import { queryTotalLabel, queryTotalOperationLabels } from "../../module-query-edit";
 import { recordsTableFilterKindOf } from "./column-filters";
 import {
   conditionalFormatRuleIssue,
@@ -310,7 +310,11 @@ export const recordsTableBoardFactsOf = (
   const aggregates: RecordsTableBoardFacts["aggregates"][number][] = [];
   for (const aggregate of query["aggregates"]) {
     const held = record(aggregate);
-    if (typeof held?.["alias"] !== "string" || typeof held["operation"] !== "string")
+    if (
+      typeof held?.["alias"] !== "string" ||
+      typeof held["operation"] !== "string" ||
+      !Object.hasOwn(queryTotalOperationLabels, held["operation"])
+    )
       return undefined;
     const fieldId = held["fieldId"];
     aggregates.push({

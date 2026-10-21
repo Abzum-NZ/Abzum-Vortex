@@ -221,7 +221,7 @@ const projectChart = (input: {
       return {
         ok: false,
         code: "chart_measure_invalid",
-        cause: `Total ${aggregate.alias} (${aggregate.operation}) did not produce a numeric chart value for group ${group.groupKey}`,
+        cause: `Total ${aggregate.alias} (${aggregate.operation}) did not produce a numeric chart value`,
       };
     points.push({ key: group.groupKey, label, ...numeric });
   }

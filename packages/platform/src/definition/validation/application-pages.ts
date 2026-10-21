@@ -446,8 +446,10 @@ export function applicationPageRules(scope: ApplicationScope): void {
           for (const item of array(held.items)) checkTotalReferences(declaration.item, item);
         }
       };
-      for (const declaration of release?.properties ?? [])
-        checkTotalReferences(declaration, object(placement.settings)[declaration.key]);
+      // An unbound placement's totals are judged once its query binding is; that failure names it.
+      if (bound !== undefined)
+        for (const declaration of release?.properties ?? [])
+          checkTotalReferences(declaration, object(placement.settings)[declaration.key]);
       if (bound === undefined) {
         if (blockKey === "platform.display.calendar")
           failures.push(
