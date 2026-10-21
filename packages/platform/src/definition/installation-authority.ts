@@ -25,7 +25,11 @@ import {
   type OrganizationAccessDeclaration,
   type SelectedOrganizationScope,
 } from "../schema";
-import { builderRecentAuthentication, deriveBuilderRequirements } from "./builder-authority";
+import {
+  builderPermissionKeys,
+  builderRecentAuthentication,
+  deriveBuilderRequirements,
+} from "./builder-authority";
 import type { prepareApplicationRoleTemplatesForHumanRequest } from "../access/application-role-template-adapter";
 
 type InstallationProblemKind =
@@ -261,6 +265,15 @@ export const installationOperation = (rootId: string, containsCustomComponents: 
     acceptedPermissions: [],
   }) satisfies BuilderOperation;
 
+/** A refusal of the installation permissions, named so the person is told what is missing. */
+export const refuseInstallationAuthority = (cause: unknown): never => {
+  throw new InstallationProblem(
+    { kind: "refused", memberRoleRefusal: "installation_authority" },
+    "installation_authority_refused",
+    { cause },
+  );
+};
+
 const readRequirementDeadlines = async (
   transaction: RequestDatabaseTransaction,
   scope: SelectedOrganizationScope,
@@ -270,27 +283,26 @@ const readRequirementDeadlines = async (
 ): Promise<string[]> => {
   const deadlines: string[] = [];
   for (const [index, key] of requirements.permissionKeys.entries()) {
+    const deadline = readInstallationPermissionDeadline(
+      transaction,
+      scope,
+      context,
+      permissions,
+      key,
+      requirements.recentAuthentication && index === 0,
+    );
+    // Only a refused Manage applications is named; another requirement (custom code) stays untyped.
     deadlines.push(
-      await readInstallationPermissionDeadline(
-        transaction,
-        scope,
-        context,
-        permissions,
-        key,
-        requirements.recentAuthentication && index === 0,
-      ),
+      await (key === builderPermissionKeys.applicationsManage
+        ? deadline.catch((error: unknown) => {
+            if (error instanceof InstallationProblem && error.problem.kind === "refused")
+              return refuseInstallationAuthority(error);
+            throw error;
+          })
+        : deadline),
     );
   }
   return deadlines;
-};
-
-/** A refusal of the installation permissions, named so the person is told what is missing. */
-export const refuseInstallationAuthority = (cause: unknown): never => {
-  throw new InstallationProblem(
-    { kind: "refused", memberRoleRefusal: "installation_authority" },
-    "installation_authority_refused",
-    { cause },
-  );
 };
 
 /** The database deadline of every permission an install or upgrade of this application needs. */
@@ -311,15 +323,7 @@ export const readInstallationAuthorityDeadlines = async (
     requirements.delegatedPermissions.length !== 0
   )
     installationProblem("installation_requirements_refused", "refused");
-  try {
-    return await readRequirementDeadlines(transaction, scope, context, permissions, requirements);
-  } catch (error) {
-    // The requirements are the installation permissions themselves: naming the refusal lets the
-    // caller say that Manage applications is missing, with the cause kept in the log.
-    if (error instanceof InstallationProblem && error.problem.kind === "refused")
-      return refuseInstallationAuthority(error);
-    throw error;
-  }
+  return readRequirementDeadlines(transaction, scope, context, permissions, requirements);
 };
 
 type PreparedFirstInstallRegistration = ReturnType<
