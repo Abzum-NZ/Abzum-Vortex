@@ -266,7 +266,7 @@ export const createRecordsTableBatchEditService = (
       if (resolved.unavailable) return { kind: "unavailable" };
       for (const refused of resolved.problems)
         problems.push(problem(refused.recordId, "invalid", refused.field, refused.message));
-      if (problems.length > 0) return { kind: "refused", problems };
+      if (problems.length > 0) return { kind: "cells_refused", problems };
       // Every pasted title is now a reference; a title left unresolved never reaches the save.
       if (
         pasted.some((cell) => !resolved.references.has(linkTitleCellKey(cell.recordId, cell.field)))
@@ -296,7 +296,7 @@ export const createRecordsTableBatchEditService = (
         })),
       );
       if (saved.kind === "refused")
-        return { kind: "refused", problems: saved.problems.map(problemOfSave) };
+        return { kind: "cells_refused", problems: saved.problems.map(problemOfSave) };
       if (saved.kind !== "saved") return { kind: "unavailable" };
       return {
         kind: "saved",

@@ -50,6 +50,15 @@ const placementCommandBase = {
   placementId: z.string().min(1).max(200),
 };
 
+/** Safe reasons shared by every Records table request gate; detailed causes stay in the log. */
+export const recordsTableRequestRejectionSchema = z
+  .object({
+    kind: z.literal("refused"),
+    reason: z.enum(["request_invalid", "not_available"]),
+  })
+  .strict();
+export type RecordsTableRequestRejection = z.infer<typeof recordsTableRequestRejectionSchema>;
+
 /** The count behind "Select all matching records", read once, when the person asks for it. */
 export const recordsSelectionCountRequestSchema = z
   .object({ ...placementCommandBase, token: selectionTokenSchema })
@@ -63,7 +72,7 @@ export const recordsSelectionCountResultSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("counted"), count: z.number().int().nonnegative() }).strict(),
   /** More records match than the count ceiling. */
   z.object({ kind: z.literal("too_many") }).strict(),
-  z.object({ kind: z.literal("refused") }).strict(),
+  recordsTableRequestRejectionSchema,
   z.object({ kind: z.literal("unavailable") }).strict(),
 ]);
 export type RecordsSelectionCountResult = z.infer<typeof recordsSelectionCountResultSchema>;
@@ -134,7 +143,7 @@ export const recordsTableBulkRunLineSchema = z.discriminatedUnion("kind", [
       limited: z.boolean(),
     })
     .strict(),
-  z.object({ kind: z.literal("refused") }).strict(),
+  recordsTableRequestRejectionSchema,
   z.object({ kind: z.literal("unavailable") }).strict(),
 ]);
 export type RecordsTableBulkRunLine = z.infer<typeof recordsTableBulkRunLineSchema>;

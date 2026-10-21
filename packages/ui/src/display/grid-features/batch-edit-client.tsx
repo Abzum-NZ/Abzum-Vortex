@@ -259,7 +259,7 @@ export function useBatchEdit(
           refresh?.({ event: "refresh" });
           return answer;
         }
-        if (result.kind === "refused") {
+        if (result.kind === "cells_refused") {
           const lineOf = (recordId: string): number =>
             latest.current.lines.findIndex(
               (line) => line.kind === "row" && same(line.row.recordId, recordId),

@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { recordIdSchema, revisionSchema } from "../catalogue/identifiers";
-import { recordsSelectionMaximumIds, recordsTableBulkRefusalReasons } from "./records-selection";
+import {
+  recordsSelectionMaximumIds,
+  recordsTableBulkRefusalReasons,
+  recordsTableRequestRejectionSchema,
+} from "./records-selection";
 
 const targetSchema = z.object({ recordId: recordIdSchema, revision: revisionSchema }).strict();
 
@@ -62,7 +66,7 @@ export type NamedActionAvailability = z.infer<typeof namedActionAvailabilitySche
 
 export const namedActionAvailabilityResultSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("available"), records: namedActionAvailabilitySchema }).strict(),
-  z.object({ kind: z.literal("refused") }).strict(),
+  recordsTableRequestRejectionSchema,
   z.object({ kind: z.literal("unavailable") }).strict(),
 ]);
 export type NamedActionAvailabilityResult = z.infer<typeof namedActionAvailabilityResultSchema>;

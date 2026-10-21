@@ -48,6 +48,8 @@ export type RecordsTableExportRequest = z.infer<typeof recordsTableExportRequest
  * message is chosen from. The cause behind a refusal stays in the server log.
  */
 export const recordsTableExportRefusalReasons = [
+  /** The request could not be read or did not match the request contract. */
+  "request_invalid",
   /** Export is not on, not permitted now, or the request does not fit this table. */
   "not_available",
   /** This format is known, but the installed table does not offer it. */

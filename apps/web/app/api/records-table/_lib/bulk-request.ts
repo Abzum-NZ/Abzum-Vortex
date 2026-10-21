@@ -2,7 +2,11 @@ import "server-only";
 
 import type { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { logRefusal, type IdentitySession } from "@vortex/platform/schema";
+import {
+  logRefusal,
+  type IdentitySession,
+  type RecordsTableRequestRejection,
+} from "@vortex/platform/schema";
 import {
   createRecordsTableBulkService,
   createRecordsTableExportService,
@@ -66,9 +70,15 @@ export const resolveBulkRequest = async <Body extends { pageKey: string }>(
   bodySchema: z.ZodType<Body>,
   maximumRequestBodyLength = defaultMaximumRequestBodyLength,
 ): Promise<ResolvedBulkRequest<Body>> => {
-  const refused = (code: string, status = 404, cause?: unknown): ResolvedBulkRequest<Body> => {
+  const refused = (
+    code: string,
+    reason: RecordsTableRequestRejection["reason"],
+    status: number,
+    cause?: unknown,
+  ): ResolvedBulkRequest<Body> => {
     logRefusal(route, "records table bulk request", code, cause);
-    return { kind: "response", response: privateResponse({ kind: "refused" }, status) };
+    const refusal: RecordsTableRequestRejection = { kind: "refused", reason };
+    return { kind: "response", response: privateResponse(refusal, status) };
   };
   const origin = request.headers.get("origin");
   const contentType = request.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase();
@@ -77,19 +87,19 @@ export const resolveBulkRequest = async <Body extends { pageKey: string }>(
     origin !== new URL(getIdentityJourneyConfiguration().siteUrl).origin ||
     contentType !== "application/json"
   )
-    return refused("request_not_from_own_site", 403);
+    return refused("request_not_from_own_site", "not_available", 403);
   const identity = await resolveIdentitySession();
   if (identity.kind === "temporarily_unavailable")
     return { kind: "response", response: privateResponse({ kind: "unavailable" }, 503) };
-  if (identity.kind !== "active") return refused("identity_not_active", 401);
+  if (identity.kind !== "active") return refused("identity_not_active", "not_available", 403);
   const read = await readBoundedRequestText(request, maximumRequestBodyLength);
-  if (read.kind === "too_large") return refused("body_too_large", 413);
-  if (read.kind !== "read") return refused("body_unreadable");
+  if (read.kind === "too_large") return refused("body_too_large", "request_invalid", 413);
+  if (read.kind !== "read") return refused("body_unreadable", "request_invalid", 400);
   let candidate: unknown;
   try {
     candidate = JSON.parse(read.text);
   } catch (error) {
-    return refused("body_not_json", 404, error);
+    return refused("body_not_json", "request_invalid", 400, error);
   }
   const addressPart =
     candidate !== null && typeof candidate === "object"
@@ -99,14 +109,15 @@ export const resolveBulkRequest = async <Body extends { pageKey: string }>(
           applicationKey: (candidate as Record<string, unknown>).applicationKey,
         })
       : undefined;
-  if (addressPart === undefined || !addressPart.success) return refused("address_invalid");
+  if (addressPart === undefined || !addressPart.success)
+    return refused("address_invalid", "request_invalid", 400);
   const addressKeys = new Set(Object.keys(addressSchema.shape));
   const body = bodySchema.safeParse(
     Object.fromEntries(
       Object.entries(candidate as Record<string, unknown>).filter(([key]) => !addressKeys.has(key)),
     ),
   );
-  if (!body.success) return refused("body_invalid", 404, body.error);
+  if (!body.success) return refused("body_invalid", "request_invalid", 400, body.error);
   const address = await resolveApplicationAddress(
     identity.session,
     addressPart.data.tenantShortName,
@@ -116,7 +127,8 @@ export const resolveBulkRequest = async <Body extends { pageKey: string }>(
   );
   if (address.kind === "temporarily_unavailable")
     return { kind: "response", response: privateResponse({ kind: "unavailable" }, 503) };
-  if (address.kind !== "application_page") return refused(`address_${address.kind}`);
+  if (address.kind !== "application_page")
+    return refused(`address_${address.kind}`, "not_available", 403);
   return {
     kind: "resolved",
     session: identity.session,

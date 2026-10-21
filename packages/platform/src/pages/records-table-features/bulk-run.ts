@@ -244,7 +244,7 @@ export const createRecordsTableBulkService = (dependencies: RecordsTableBulkDepe
       request: RecordsSelectionCountRequest,
     ): Promise<RecordsSelectionCountResult> {
       const placement = await placementFor(session, address, request.placementId, "count");
-      if (placement === undefined) return { kind: "refused" };
+      if (placement === undefined) return { kind: "refused", reason: "not_available" };
       const descriptor = descriptorFor(
         session,
         address,
@@ -252,9 +252,9 @@ export const createRecordsTableBulkService = (dependencies: RecordsTableBulkDepe
         request.placementId,
         request.token,
       );
-      if (descriptor === undefined) return { kind: "refused" };
+      if (descriptor === undefined) return { kind: "refused", reason: "not_available" };
       const built = commandFor(placement, descriptor);
-      if (built === undefined) return { kind: "refused" };
+      if (built === undefined) return { kind: "refused", reason: "not_available" };
       const summary = await queries.summarise(session, selectionOf(address), {
         moduleRootId: built.command.moduleRootId,
         queryId: built.command.queryId,
@@ -265,12 +265,12 @@ export const createRecordsTableBulkService = (dependencies: RecordsTableBulkDepe
         searchableFieldIds: built.command.searchableFieldIds,
       });
       if (summary.kind === "temporarily_unavailable") return { kind: "unavailable" };
-      if (summary.kind !== "available") return { kind: "refused" };
+      if (summary.kind !== "available") return { kind: "refused", reason: "not_available" };
       if (summary.value.outcome === "completed")
         return { kind: "counted", count: summary.value.totalRowCount };
       if (summary.value.reasonCode === "dataset_limit_exceeded") return { kind: "too_many" };
       console.error(`[records-table] selection count refused code=${summary.value.reasonCode}`);
-      return { kind: "refused" };
+      return { kind: "refused", reason: "not_available" };
     },
 
     /**
@@ -287,19 +287,19 @@ export const createRecordsTableBulkService = (dependencies: RecordsTableBulkDepe
     ): Promise<void> {
       const selection = selectionOf(address);
       const placement = await placementFor(session, address, request.placementId, "run");
-      if (placement === undefined) return report({ kind: "refused" });
+      if (placement === undefined) return report({ kind: "refused", reason: "not_available" });
       const bulk = placement.contract.features.bulkActions;
       const declared: RecordsTableBulkActionContract | undefined = bulk.enabled
         ? bulk.actions.find((action) => sameId(action.action, request.action))
         : undefined;
-      if (declared === undefined) return report({ kind: "refused" });
+      if (declared === undefined) return report({ kind: "refused", reason: "not_available" });
       const application = placement.installed.releaseSet.application;
       const named = installedNamedActions(application, placement.installed.releaseSet.modules).get(
         declared.action,
       );
       if (named === undefined || !sameId(named.subjectRecordTypeId, placement.recordTypeId)) {
         refuse("action_not_installed");
-        return report({ kind: "refused" });
+        return report({ kind: "refused", reason: "not_available" });
       }
       // The action's own compiled transaction flow, from the exact installed release.
       const flows = new Map<string, unknown>();
@@ -318,7 +318,7 @@ export const createRecordsTableBulkService = (dependencies: RecordsTableBulkDepe
         flow.triggers.length > 0
       ) {
         refuse("action_flow_unavailable");
-        return report({ kind: "refused" });
+        return report({ kind: "refused", reason: "not_available" });
       }
       const runId = randomUUID();
       const runner: ActionFlowRunner = (seed) =>
@@ -330,12 +330,12 @@ export const createRecordsTableBulkService = (dependencies: RecordsTableBulkDepe
       if (request.selection.kind === "ids") {
         if (request.selection.items.length > declared.maxRecords) {
           refuse("selection_larger_than_action_limit");
-          return report({ kind: "refused" });
+          return report({ kind: "refused", reason: "not_available" });
         }
         const unique = new Set(request.selection.items.map((item) => item.recordId.toLowerCase()));
         if (unique.size !== request.selection.items.length) {
           refuse("selection_duplicated");
-          return report({ kind: "refused" });
+          return report({ kind: "refused", reason: "not_available" });
         }
         targets = request.selection.items.map((item) => ({
           recordId: item.recordId.toLowerCase(),
@@ -350,7 +350,7 @@ export const createRecordsTableBulkService = (dependencies: RecordsTableBulkDepe
           request.selection.token,
         );
         const built = descriptor === undefined ? undefined : commandFor(placement, descriptor);
-        if (built === undefined) return report({ kind: "refused" });
+        if (built === undefined) return report({ kind: "refused", reason: "not_available" });
         const matching = await resolveMatching(
           session,
           selection,
@@ -360,7 +360,7 @@ export const createRecordsTableBulkService = (dependencies: RecordsTableBulkDepe
           declared.maxRecords,
         );
         if (matching === undefined) return report({ kind: "unavailable" });
-        if (matching === "too_many") return report({ kind: "refused" });
+        if (matching === "too_many") return report({ kind: "refused", reason: "not_available" });
         limited = matching.length > declared.maxRecords;
         targets = matching.slice(0, declared.maxRecords).map((recordId) => ({ recordId }));
       }

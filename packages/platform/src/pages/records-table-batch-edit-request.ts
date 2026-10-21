@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { recordsTableRequestRejectionSchema } from "./records-selection";
 import {
   fieldIdSchema,
   platformIdSchema,
@@ -119,8 +120,8 @@ export const recordsTableBatchEditProblemSchema = z
 export type RecordsTableBatchEditProblem = z.infer<typeof recordsTableBatchEditProblemSchema>;
 
 /**
- * All changes were written, or none were. A refusal lists every problem found, per record and
- * field; `unavailable` means nothing is known to have been written and the same command may be
+ * All changes were written, or none were. `cells_refused` lists every problem found, per record
+ * and field; `refused` is a request the gate rejected before any cell was read; `unavailable` means nothing is known to have been written and the same command may be
  * submitted again.
  */
 export const recordsTableBatchEditResultSchema = z.discriminatedUnion("kind", [
@@ -144,10 +145,11 @@ export const recordsTableBatchEditResultSchema = z.discriminatedUnion("kind", [
     .strict(),
   z
     .object({
-      kind: z.literal("refused"),
+      kind: z.literal("cells_refused"),
       problems: z.array(recordsTableBatchEditProblemSchema).min(1).max(1000),
     })
     .strict(),
+  recordsTableRequestRejectionSchema,
   z.object({ kind: z.literal("unavailable") }).strict(),
 ]);
 export type RecordsTableBatchEditResult = z.infer<typeof recordsTableBatchEditResultSchema>;

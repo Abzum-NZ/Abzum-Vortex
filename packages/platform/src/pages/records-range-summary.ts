@@ -4,7 +4,10 @@ import {
   RECORDS_TABLE_STATUS_BAR_MAXIMUM_FIELDS,
   recordsTableStatusBarOperations,
 } from "../definition/application-composition/records-table-features/spreadsheet";
-import { recordsSelectionMaximumIds } from "./records-selection";
+import {
+  recordsSelectionMaximumIds,
+  recordsTableRequestRejectionSchema,
+} from "./records-selection";
 
 const readTokenSchema = z
   .string()
@@ -81,7 +84,7 @@ export const recordsRangeSummaryResultSchema = z.discriminatedUnion("kind", [
       fields: z.array(recordsRangeSummaryFieldSchema).max(RECORDS_TABLE_STATUS_BAR_MAXIMUM_FIELDS),
     })
     .strict(),
-  z.object({ kind: z.literal("refused") }).strict(),
+  recordsTableRequestRejectionSchema,
   z.object({ kind: z.literal("unavailable") }).strict(),
 ]);
 export type RecordsRangeSummaryResult = z.infer<typeof recordsRangeSummaryResultSchema>;

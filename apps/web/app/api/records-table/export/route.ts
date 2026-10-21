@@ -18,11 +18,13 @@ const route = "/api/records-table/export";
 const statusOf = (refusal: RecordsTableExportRefusal): number =>
   refusal.kind === "unavailable"
     ? 503
-    : refusal.reason === "too_many"
-      ? 413
-      : refusal.reason === "changed"
-        ? 409
-        : 403;
+    : refusal.reason === "request_invalid"
+      ? 400
+      : refusal.reason === "too_many"
+        ? 413
+        : refusal.reason === "changed"
+          ? 409
+          : 403;
 
 /**
  * Downloads the records a person selected in a Records table as a file: the rows they ticked, the
