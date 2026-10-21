@@ -155,6 +155,8 @@ export function useRecordsExport({
         const expectedHeader = Number(response.headers.get("x-vortex-export-records"));
         const expected = Number.isSafeInteger(expectedHeader) ? expectedHeader : undefined;
         const filename = filenameOf(response);
+        const mediaType = response.headers.get("content-type");
+        if (mediaType === null) throw new Error("The export response has no media type");
         const chunks: Uint8Array[] = [];
         let bytes = 0;
         let reported = 0;
@@ -175,9 +177,7 @@ export function useRecordsExport({
           }
         }
         // The stream ended cleanly: only now is there a whole file to hand over.
-        const url = URL.createObjectURL(
-          new Blob(chunks as BlobPart[], { type: response.headers.get("content-type") ?? "" }),
-        );
+        const url = URL.createObjectURL(new Blob(chunks as BlobPart[], { type: mediaType }));
         const link = document.createElement("a");
         link.href = url;
         link.download = filename;
