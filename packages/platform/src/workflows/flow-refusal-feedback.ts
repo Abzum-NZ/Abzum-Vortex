@@ -13,7 +13,27 @@ export const flowRefusalFeedbackCodeSchema = z.enum([
   "recent_authentication_required",
   "role_settings_change_required",
   "application_storage_incompatible",
+  "applications_manage_required",
+  "installation_delegation_required",
+  "assignments_manage_required",
 ]);
+
+/**
+ * The confirmed refusals whose platform guidance a flow's authored refusal handler must not
+ * replace: the run ends with the diagnostic so the person is told exactly what is missing.
+ */
+const platformGuidanceCodes: ReadonlySet<string> = new Set<FlowRefusalFeedbackCode>([
+  "recent_authentication_required",
+  "application_storage_incompatible",
+  "applications_manage_required",
+  "installation_delegation_required",
+  "assignments_manage_required",
+]);
+
+export const refusalKeepsPlatformGuidance = (code: string | undefined): boolean =>
+  code !== undefined && platformGuidanceCodes.has(code);
+
+type FlowRefusalFeedbackCode = z.infer<typeof flowRefusalFeedbackCodeSchema>;
 
 /** Definition-authored guidance and a page to open within the current organization. */
 export const flowRefusalPresentationSchema = z

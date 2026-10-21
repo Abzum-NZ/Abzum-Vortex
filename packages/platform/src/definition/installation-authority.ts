@@ -29,11 +29,7 @@ import { builderRecentAuthentication, deriveBuilderRequirements } from "./builde
 import type { prepareApplicationRoleTemplatesForHumanRequest } from "../access/application-role-template-adapter";
 
 type InstallationProblemKind =
-  | "conflict"
-  | "refused"
-  | "authentication_required"
-  | "temporarily_unavailable"
-  | "failed";
+  "conflict" | "refused" | "authentication_required" | "temporarily_unavailable" | "failed";
 
 export type InstallationUnavailableReason =
   | "not_installed"
@@ -158,7 +154,8 @@ export const installationTargetFacts = async (
   _scope: SelectedOrganizationScope,
   rootId: string | undefined,
 ) => {
-  if (rootId === undefined) installationProblem("application_root_missing", "refused", "unsupported_root");
+  if (rootId === undefined)
+    installationProblem("application_root_missing", "refused", "unsupported_root");
   return readInstallationOrdinaryRoot(transaction, rootId);
 };
 
@@ -186,10 +183,7 @@ export const installationPermissionDeclaration = (
   });
 };
 
-const eligibleUntil = (
-  decisionValue: unknown,
-  context: InstallationHumanContext,
-): string => {
+const eligibleUntil = (decisionValue: unknown, context: InstallationHumanContext): string => {
   const parsed = organizationPermissionEligibilitySchema.safeParse({
     ...(decisionValue as object),
     outcome: "eligible",
@@ -248,7 +242,8 @@ export const requireInstallationAuthority = async (
     if (
       error instanceof Error &&
       "code" in error &&
-      String((error as { readonly code?: unknown }).code) === "BUILDER_RECENT_AUTHENTICATION_REQUIRED"
+      String((error as { readonly code?: unknown }).code) ===
+        "BUILDER_RECENT_AUTHENTICATION_REQUIRED"
     )
       installationProblem("recent_authentication_required", "authentication_required", undefined, {
         cause: error,
@@ -257,10 +252,7 @@ export const requireInstallationAuthority = async (
   });
 };
 
-export const installationOperation = (
-  rootId: string,
-  containsCustomComponents: boolean,
-) =>
+export const installationOperation = (rootId: string, containsCustomComponents: boolean) =>
   ({
     kind: "installation" as const,
     applicationRootId: rootId,
@@ -292,6 +284,15 @@ const readRequirementDeadlines = async (
   return deadlines;
 };
 
+/** A refusal of the installation permissions, named so the person is told what is missing. */
+export const refuseInstallationAuthority = (cause: unknown): never => {
+  throw new InstallationProblem(
+    { kind: "refused", memberRoleRefusal: "installation_authority" },
+    "installation_authority_refused",
+    { cause },
+  );
+};
+
 /** The database deadline of every permission an install or upgrade of this application needs. */
 export const readInstallationAuthorityDeadlines = async (
   transaction: RequestDatabaseTransaction,
@@ -310,7 +311,15 @@ export const readInstallationAuthorityDeadlines = async (
     requirements.delegatedPermissions.length !== 0
   )
     installationProblem("installation_requirements_refused", "refused");
-  return readRequirementDeadlines(transaction, scope, context, permissions, requirements);
+  try {
+    return await readRequirementDeadlines(transaction, scope, context, permissions, requirements);
+  } catch (error) {
+    // The requirements are the installation permissions themselves: naming the refusal lets the
+    // caller say that Manage applications is missing, with the cause kept in the log.
+    if (error instanceof InstallationProblem && error.problem.kind === "refused")
+      return refuseInstallationAuthority(error);
+    throw error;
+  }
 };
 
 type PreparedFirstInstallRegistration = ReturnType<

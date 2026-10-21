@@ -11,6 +11,7 @@ import {
   flowTaskRegistry,
   platformOperationKey,
   recordLinkValueSchema,
+  refusalKeepsPlatformGuidance,
   type FlowDefinition,
   type FlowExecutionKind,
   type FormContinuationAnswer,
@@ -1189,13 +1190,12 @@ export const resumeFlowRun = (
       resume.outcome === "refused" ||
       resume.outcome === "conflict" ||
       resume.outcome === "validation";
-    // Authentication recovery and incompatible storage need their confirmed guidance;
-    // an authored handler for ordinary permission refusals must not replace it.
+    // Confirmed guidance (sign-in recovery, incompatible storage, a named missing installation
+    // permission) is never replaced by an authored handler for ordinary refusals.
     if (
       awaiting.allowRefusal &&
       branchable &&
-      resume.diagnostic?.code !== "recent_authentication_required" &&
-      resume.diagnostic?.code !== "application_storage_incompatible"
+      !refusalKeepsPlatformGuidance(resume.diagnostic?.code)
     ) {
       replaceTop(machine, storeTaskOutputs(activation, awaiting.taskId, outputs));
       return drive(machine, observer);
