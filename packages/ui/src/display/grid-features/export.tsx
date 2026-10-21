@@ -77,10 +77,10 @@ function ExportScopeItem({
 
 /** The one sentence of a finished, stopped or refused export, shown once as a toast. */
 function useExportToast(run: TableExportRun | undefined): void {
-  const announced = useRef<TableExportRun | undefined>(undefined);
+  const announced = useRef<string | undefined>(undefined);
   useEffect(() => {
-    if (run === undefined || run.status === "running" || announced.current === run) return;
-    announced.current = run;
+    if (run === undefined || run.status === "running" || announced.current === run.runId) return;
+    announced.current = run.runId;
     // The file holds the records still readable now, so the count is never promised here.
     if (run.status === "finished") toast.success(`Export saved as ${run.filename}`);
     else if (run.status === "refused") toast.error(run.message);
