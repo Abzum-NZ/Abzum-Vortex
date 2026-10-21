@@ -12,6 +12,7 @@ import { flowRunsOnlyInBrowser } from "./browser-eligibility";
 import {
   performPresentationIntent,
   confirmAnswer,
+  isSurfaceCancellation,
   readConfirmIntent,
   readFormIntent,
   type FlowIntent,
@@ -47,8 +48,6 @@ const toIntent = (intent: FlowInterfaceIntent): FlowIntent => ({
 });
 
 const maximumSuspensions = 50;
-const isSurfaceCancellation = (error: unknown): boolean =>
-  error instanceof Error && error.name === "AbortError";
 
 /**
  * Runs a browser-only flow entirely in the page with the shared pure interpreter. The page carries

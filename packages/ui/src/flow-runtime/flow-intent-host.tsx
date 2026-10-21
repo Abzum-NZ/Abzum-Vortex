@@ -31,6 +31,7 @@ import type {
   FlowIntentHost,
   FlowMessageIntent,
 } from "./intents";
+import { surfaceCancellationError } from "./intents";
 
 type Surface =
   | Readonly<{ id: number; kind: "message"; message: FlowMessageIntent; settle: () => void }>
@@ -45,6 +46,7 @@ type Surface =
       kind: "form";
       form: FlowFormIntent;
       settle: (answer: FlowFormAnswer) => void;
+      cancel: () => void;
     }>;
 
 export type FlowIntentHostOptions = Readonly<{
@@ -70,11 +72,6 @@ export type FlowIntentHostOptions = Readonly<{
 
 /** Flow surface width, the same 36rem the theme's medium dialog scale used. */
 const FLOW_SURFACE_CLASS = "max-h-[calc(100%-2rem)] overflow-y-auto sm:max-w-xl";
-const flowExecutionAbortError = (): Error => {
-  const error = new Error("Flow surface cancelled");
-  error.name = "AbortError";
-  return error;
-};
 
 /**
  * One modal flow surface on the shadcn Dialog (Base UI), like every other surface in the product.
@@ -200,7 +197,7 @@ export function useFlowIntentHost(
 
   const enqueue = useCallback(
     <Result,>(
-      build: (id: number, settle: (result: Result) => void) => Surface,
+      build: (id: number, settle: (result: Result) => void, cancelSurface: () => void) => Surface,
       signal?: AbortSignal,
     ) =>
       new Promise<Result>((resolve, reject) => {
@@ -211,23 +208,27 @@ export function useFlowIntentHost(
           if (removeSurface) setSurfaces((current) => current.filter((entry) => entry.id !== id));
           reject(reason);
         };
-        const abort = (): void => cancel(signal?.reason ?? flowExecutionAbortError());
+        const abort = (): void => cancel(signal?.reason ?? surfaceCancellationError());
         if (signal?.aborted) {
-          reject(signal.reason ?? flowExecutionAbortError());
+          reject(signal.reason ?? surfaceCancellationError());
           return;
         }
-        abandon.current.set(id, () => cancel(new Error("FLOW_SURFACE_ABANDONED"), false));
+        abandon.current.set(id, () => cancel(surfaceCancellationError(), false));
         signal?.addEventListener("abort", abort, { once: true });
         if (signal?.aborted) {
           abort();
           return;
         }
-        const surface = build(id, (result) => {
-          if (!abandon.current.delete(id)) return;
-          signal?.removeEventListener("abort", abort);
-          setSurfaces((current) => current.filter((entry) => entry.id !== id));
-          resolve(result);
-        });
+        const surface = build(
+          id,
+          (result) => {
+            if (!abandon.current.delete(id)) return;
+            signal?.removeEventListener("abort", abort);
+            setSurfaces((current) => current.filter((entry) => entry.id !== id));
+            resolve(result);
+          },
+          () => cancel(surfaceCancellationError()),
+        );
         if (abandon.current.has(id)) setSurfaces((current) => [...current, surface]);
       }),
     [],
@@ -238,7 +239,10 @@ export function useFlowIntentHost(
       showMessage: (message, signal) =>
         enqueue<void>((id, settle) => ({ id, kind: "message", message, settle }), signal),
       showForm: (form, signal) =>
-        enqueue<FlowFormAnswer>((id, settle) => ({ id, kind: "form", form, settle }), signal),
+        enqueue<FlowFormAnswer>(
+          (id, settle, cancel) => ({ id, kind: "form", form, settle, cancel }),
+          signal,
+        ),
       confirm: (confirmation, signal) =>
         enqueue<FlowConfirmAnswer>(
           (id, settle) => ({ id, kind: "confirm", confirmation, settle }),
@@ -280,9 +284,9 @@ export function useFlowIntentHost(
       />
     );
   } else if (current?.kind === "form") {
-    const { form, settle } = current;
+    const { form, settle, cancel } = current;
     element = (
-      <FlowDialog key={current.id} title="Form" onDismiss={() => settle({ kind: "cancel" })}>
+      <FlowDialog key={current.id} title="Form" onDismiss={cancel}>
         {options.renderForm(form, {
           submit: (values, choiceEvidence) =>
             settle({
@@ -290,7 +294,7 @@ export function useFlowIntentHost(
               values,
               ...(choiceEvidence === undefined ? {} : { choiceEvidence }),
             }),
-          cancel: () => settle({ kind: "cancel" }),
+          cancel,
         })}
       </FlowDialog>
     );

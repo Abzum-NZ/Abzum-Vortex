@@ -30,9 +30,6 @@ export const outcomeNotices: Readonly<Record<string, Notice>> = {
   failed: { tone: "problem", text: "That did not work. Try again." },
 };
 
-/** A board move the person backed out of at its form: nothing was saved. */
-export const cancelledMoveNotice: Notice = { tone: "info", text: "Move cancelled." };
-
 export const unavailableNotice: Notice = {
   tone: "problem",
   text: "That is not available right now.",

@@ -39,7 +39,7 @@ import type {
   EventHandlers,
 } from "./types";
 import { bindingFor, suppliedValues, bindingOfEvent, asComponentBinding } from "./event-values";
-import { cancelledMoveNotice, unavailableNotice } from "./notices";
+import { unavailableNotice } from "./notices";
 import {
   publishedControlData,
   rememberPublishedChoices,
@@ -87,7 +87,6 @@ export function useRuntimeInputs({
   setFormFeedback,
   choiceEvidenceFor,
   submittedFormsRef,
-  formCancelledRef,
   applyDispatch,
   formBlock,
   selection,
@@ -185,7 +184,6 @@ export function useRuntimeInputs({
     surface?: "page" | "dialog",
   ) => ReferenceChoiceSelectionEvidenceMap | undefined;
   submittedFormsRef: RefObject<Map<string, SubmittedForm>>;
-  formCancelledRef: RefObject<boolean>;
   applyDispatch: (
     dispatch: Promise<FlowDispatchResult | undefined>,
     formPlacementId?: string,
@@ -438,7 +436,6 @@ export function useRuntimeInputs({
               return false;
             }
             let accepted = false;
-            formCancelledRef.current = false;
             await runBinding(
               placementId,
               binding,
@@ -446,9 +443,6 @@ export function useRuntimeInputs({
               event.recordId,
               { recordId: event.recordId, revision: event.revision },
               async () => {
-                // A flow whose form the person cancelled finishes as completed without saving, so
-                // the move is not accepted and the card goes back to its column.
-                if (formCancelledRef.current) return cancelledMoveNotice;
                 accepted = true;
                 return undefined;
               },
@@ -916,8 +910,7 @@ export function useRuntimeInputs({
     applyDispatch,
     busy,
     formBlock,
-    formCancelledRef,
-    formFeedback,
+      formFeedback,
     formOwners,
     launcherPlacements,
     choiceEvidenceFor,
