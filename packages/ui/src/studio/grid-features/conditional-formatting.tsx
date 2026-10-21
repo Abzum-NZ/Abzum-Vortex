@@ -146,6 +146,13 @@ export function StudioConditionalFormattingEditor({
       const held = propertiesOf(item)["rule_id"];
       return held?.kind === "text" && held.value === id;
     });
+  // A column format is found in the authored list by its field (one format per field), never by
+  // its place among readable formats.
+  const formatIndex = (field: string): number =>
+    formatItems.findIndex((item) => {
+      const held = propertiesOf(item)["field"];
+      return held?.kind === "field_reference" && String(held.field) === field;
+    });
   const moveRule = (fromRule: number, toRule: number): void => {
     const from = rawIndex(rules[fromRule]?.id);
     const to = rawIndex(rules[toRule]?.id);
@@ -160,8 +167,13 @@ export function StudioConditionalFormattingEditor({
     const written =
       initial === undefined ? undefined : writeStudioQueryFilter(initial, referenceOf);
     if (written === undefined || written === null) return;
-    const used = new Set(rules.map((rule) => rule.id));
-    let number = rules.length + 1;
+    const used = new Set(
+      ruleItems.flatMap((item) => {
+        const held = propertiesOf(item)["rule_id"];
+        return held?.kind === "text" ? [held.value] : [];
+      }),
+    );
+    let number = ruleItems.length + 1;
     while (used.has(`rule_${number}`)) number += 1;
     const id = `rule_${number}`;
     write({
@@ -390,11 +402,17 @@ export function StudioConditionalFormattingEditor({
               disabled={disabled}
               onChange={(next) =>
                 write({
-                  formats: formatItems.map((item, position) => (position === index ? next : item)),
+                  formats: formatItems.map((item, position) =>
+                    position === formatIndex(format.field) ? next : item,
+                  ),
                 })
               }
               onRemove={() =>
-                write({ formats: formatItems.filter((_, position) => position !== index) })
+                write({
+                  formats: formatItems.filter(
+                    (_, position) => position !== formatIndex(format.field),
+                  ),
+                })
               }
             />
           ))}

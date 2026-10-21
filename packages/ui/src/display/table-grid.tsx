@@ -743,8 +743,12 @@ export function RecordsGrid({
   const moveColumnBy = (columnId: string, offset: number): void => {
     const column = columnsById.get(columnId);
     const position = layout.moveColumn(columnId, offset);
-    if (column !== undefined && position !== undefined)
-      announce(`${column.label} moved to column ${position}`);
+    if (column !== undefined)
+      announce(
+        position === undefined
+          ? `${column.label} cannot move past a column pinned differently`
+          : `${column.label} moved to column ${position}`,
+      );
     focusRequested.current = true;
   };
 
@@ -960,6 +964,21 @@ export function RecordsGrid({
 
   // Header drag-and-drop reorder; the keyboard alternative is Alt+Shift+Left/Right.
   const dragged = useRef<string | undefined>(undefined);
+  // A resize drag released inside its own heading ends in a click on that heading; it must not sort.
+  const resizing = useRef(false);
+  const startResize = (release: "mouseup" | "touchend"): void => {
+    resizing.current = true;
+    document.addEventListener(
+      release,
+      () => {
+        layout.commit();
+        setTimeout(() => {
+          resizing.current = false;
+        }, 0);
+      },
+      { once: true },
+    );
+  };
   const onHeaderDrop = (event: DragEvent<HTMLDivElement>, targetId: string): void => {
     const source = dragged.current;
     dragged.current = undefined;
@@ -1016,7 +1035,7 @@ export function RecordsGrid({
         )}
         style={slot.style}
         onClick={(event) => {
-          if (sortable) sortBy(slot.id, event.shiftKey);
+          if (sortable && !resizing.current) sortBy(slot.id, event.shiftKey);
         }}
         onDragOver={(event) => {
           if (slot.kind === "data" && dragged.current !== undefined) event.preventDefault();
@@ -1098,11 +1117,11 @@ export function RecordsGrid({
                 // the pointer is released.
                 onMouseDown={(event) => {
                   header.getResizeHandler()(event);
-                  document.addEventListener("mouseup", layout.commit, { once: true });
+                  startResize("mouseup");
                 }}
                 onTouchStart={(event) => {
                   header.getResizeHandler()(event);
-                  document.addEventListener("touchend", layout.commit, { once: true });
+                  startResize("touchend");
                 }}
                 onDoubleClick={() => {
                   header.column.resetSize();

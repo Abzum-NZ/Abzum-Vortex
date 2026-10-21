@@ -310,8 +310,9 @@ export const useGridLayout = ({
       if (from === to) return from + 1;
       const target = order[to]!.toLowerCase();
       const moved = key.toLowerCase();
-      // A move never silently changes a pin; move within the same group or choose a new pin.
-      if (pinning && pins[target] !== pins[moved]) return from + 1;
+      // A move never silently changes a pin; move within the same group or choose a new pin. A refused
+      // move answers undefined so nothing is announced as moved.
+      if (pinning && pins[target] !== pins[moved]) return undefined;
       change((held) => {
         const rest = held.columns.filter((entry) => entry.fieldId !== moved);
         const entry = held.columns.find((candidate) => candidate.fieldId === moved);
@@ -505,10 +506,16 @@ export const useGridLayout = ({
       void store();
     }, COMMIT_DELAY_MS);
   }, [commits, store]);
+  // Leaving the page within the coalescing delay still stores the last change.
+  const storeRef = useRef(store);
+  storeRef.current = store;
   useEffect(
     () => () => {
       const held = writer.current;
-      if (held.timer !== undefined) clearTimeout(held.timer);
+      if (held.timer === undefined) return;
+      clearTimeout(held.timer);
+      held.timer = undefined;
+      void storeRef.current();
     },
     [],
   );
