@@ -97,6 +97,8 @@ export type StudioCanvasPalette = Readonly<{
   host: HTMLElement | null;
   /** The places on the open page a new block can go. */
   targets: StudioCompositionAddTargetsModel;
+  /** Whose blocks the palette adds to: the open page's content areas, or its layout. */
+  owner: "page" | "layout";
   message: string;
   /** Adds a block through Studio's one add command; `false` when nothing was added yet. */
   onAdd: (request: StudioCanvasAddRequest) => boolean;
@@ -680,7 +682,9 @@ function ApplicationPageSlotPuckEditor({
     inPalette(palette, <CanvasEmpty title="Blocks unavailable" description={text} />);
   const placesHere =
     palette?.targets.kind === "available"
-      ? palette.targets.targets.filter((target) => target.area === at.key)
+      ? palette.targets.targets.filter(
+          (target) => palette.owner === "layout" || target.area === at.key,
+        )
       : [];
 
   if (page === undefined || slot === undefined)
@@ -782,6 +786,7 @@ function ApplicationPageSlotPuckEditor({
                             <StudioBlockPalette
                               targets={placesHere}
                               editable={editable}
+                              owner={palette.owner}
                               message={palette.message}
                               onAdd={(request) => {
                                 palette.onAdd(request);
