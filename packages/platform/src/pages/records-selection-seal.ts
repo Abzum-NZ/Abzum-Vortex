@@ -19,7 +19,7 @@ import {
 import type { QueryContinuationKey } from "../queries/index";
 
 /**
- * The sealed "every matching record" descriptor of one Records table read: the placement and the
+ * The sealed "every matching record" descriptor of one Records table read: the page and placement and the
  * exact installed release it was read from, the query inputs its parameter bindings resolved to on
  * the server, and the query state minus the page (sort, filters, search). It is bound to the
  * person, organisation and application like a continuation token, and it is encrypted as well as
@@ -34,6 +34,7 @@ const selectionDescriptorSchema = z
     applicationRootId: applicationRootIdSchema,
     previewInstallationId: z.string().uuid().optional(),
     installationRevision: revisionSchema,
+    pageId: z.string().min(1).max(200),
     placementId: z.string().min(1).max(200),
     moduleRootId: moduleRootIdSchema,
     queryId: queryIdSchema,
@@ -64,6 +65,7 @@ const cipherKey = (key: QueryContinuationKey): Buffer => {
 /** What one table read knows that the descriptor carries, beside who reads it. */
 export type RecordsSelectionTarget = Readonly<{
   installationRevision: number;
+  pageId: string;
   placementId: string;
   moduleRootId: string;
   queryId: string;
@@ -94,6 +96,7 @@ export const createRecordsSelectionSealer =
         ? {}
         : { previewInstallationId: selection.previewInstallationId }),
       installationRevision: target.installationRevision,
+      pageId: target.pageId,
       placementId: target.placementId,
       moduleRootId: target.moduleRootId,
       queryId: target.queryId,
@@ -126,6 +129,7 @@ export type RecordsSelectionExpectation = Readonly<{
   session: IdentitySession;
   selection: OrganizationSelectionCandidate;
   installationRevision: number;
+  pageId: string;
   placementId: string;
 }>;
 
@@ -178,6 +182,7 @@ export const openRecordsSelection = (
     return refuse("other_scope");
   if (descriptor.installationRevision !== expected.installationRevision)
     return refuse("release_changed");
+  if (!sameId(descriptor.pageId, expected.pageId)) return refuse("other_page");
   if (!sameId(descriptor.placementId, expected.placementId)) return refuse("other_placement");
   if (now() - descriptor.issuedAt > descriptorLifetimeMilliseconds) return refuse("expired");
   return descriptor;

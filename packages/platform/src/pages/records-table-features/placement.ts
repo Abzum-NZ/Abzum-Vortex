@@ -18,8 +18,12 @@ import type { InstalledRuntimeContext } from "../../definition/index";
 import type { PlacementModule, PlacementQuery } from "../placement-read/shared";
 import { installedPlacementProps } from "./flow-dispatch";
 
-/** The application the request's own address resolved, and the installed context it read. */
+/**
+ * The application the request's own address resolved, the installed context it read, and the page
+ * (by its permanent identity) the request addressed.
+ */
 export type RecordsTableCommandAddress = Readonly<{
+  pageId: string;
   selection: OrganizationSelectionCandidate & Readonly<{ applicationRootId: string }>;
   installedContext?: InstalledRuntimeContext;
 }>;

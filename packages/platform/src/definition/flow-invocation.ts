@@ -42,6 +42,8 @@ import {
 } from "../pages/form-request";
 import { createPageSubjectReader } from "../pages/page-subject-read";
 import { logRecordsTableRequestRefusal } from "../pages/records-table-features";
+import { requireProjectedPlacement } from "../pages/projected-placement-gate";
+import { createStoredPageCapabilityService } from "../pages/stored-page-capability";
 import { recordsTableBindingRefusal } from "../pages/records-table-features/flow-dispatch";
 import { createNamedActionRecordPort } from "../records/action-record-port";
 import { createRecordSaveService } from "../records/save-record";
@@ -56,6 +58,7 @@ import { flowReadFieldsScalarTypeForField } from "./flow-compilation";
 import { createHumanInstalledPageBundleContextLoader } from "./installed-page-bundle-context";
 import type { InstalledRuntimeContext } from "./installed-runtime-context";
 import { installedNamedActionDescriptors, installedNamedActions } from "./installed-named-actions";
+import { runtimeContextSelection } from "./preview-runtime-context";
 import { createProtectedOperationExecutor } from "./protected-operation-executor";
 import type { ApplicationStoreService } from "./installation-application-store";
 import { createViewerSafeRecordLinkService } from "./viewer-safe-record-link";
@@ -170,6 +173,8 @@ export type FlowInvocationRequest = Readonly<{
   organizationShortName: string;
   applicationKey: string;
   pageKey: string;
+  /** The record the addressed page was opened for (an address candidate, never authority). */
+  pageRecordId?: string | undefined;
   invocation: FlowBindingInvocation;
 }>;
 
@@ -1003,11 +1008,11 @@ export async function invokeInstalledFlow(
     return installed;
   };
 
-  /** The trusted active installation for the initiator's own selection; never from the request. */
-  const readInstalled = async (
+  /** The trusted active installed context for the initiator's own selection; never from the request. */
+  const readInstalledContext = async (
     session: IdentitySession,
     selection: OrganizationSelectionCandidate,
-  ): Promise<InstalledFlowBindings | undefined> => {
+  ): Promise<InstalledRuntimeContext | undefined> => {
     // The address resolution of this same request already read the installed context under the
     // person's own verified scope for exactly this organisation and application; it is reused, so
     // the request does not decide the same access twice. The next request reads again.
@@ -1018,25 +1023,32 @@ export async function invokeInstalledFlow(
       sameId(carried.organizationId, selection.organizationId) &&
       sameId(carried.applicationRootId, selection.applicationRootId)
     )
-      return installedFlowBindings(carried);
+      return carried;
     const read = await requests.run(session, selection, async (transaction, scope) => {
       if (scope.applicationRootId === undefined)
         throw new Error("INSTALLED_FLOW_BINDINGS_SCOPE_UNAVAILABLE");
-      return installedFlowBindings(
-        await createHumanInstalledPageBundleContextLoader({
-          transaction,
-          scope: {
-            organizationId: scope.organizationId,
-            organizationAccountId: scope.organizationAccountId,
-            applicationRootId: scope.applicationRootId,
-            ...(scope.previewInstallationId === undefined
-              ? {}
-              : { previewInstallationId: scope.previewInstallationId }),
-          },
-        }).load(),
-      );
+      return createHumanInstalledPageBundleContextLoader({
+        transaction,
+        scope: {
+          organizationId: scope.organizationId,
+          organizationAccountId: scope.organizationAccountId,
+          applicationRootId: scope.applicationRootId,
+          ...(scope.previewInstallationId === undefined
+            ? {}
+            : { previewInstallationId: scope.previewInstallationId }),
+        },
+      }).load();
     });
     return read.kind === "available" ? read.value : undefined;
+  };
+
+  /** The flow bindings of the trusted active installation for the initiator's own selection. */
+  const readInstalled = async (
+    session: IdentitySession,
+    selection: OrganizationSelectionCandidate,
+  ): Promise<InstalledFlowBindings | undefined> => {
+    const context = await readInstalledContext(session, selection);
+    return context === undefined ? undefined : installedFlowBindings(context);
   };
 
   /**
@@ -1156,6 +1168,43 @@ export async function invokeInstalledFlow(
   };
 
   const invocation = body.invocation;
+  /**
+   * Projects the addressed page for this person and requires the control on it, once and usable.
+   * The client only learns that the invocation is refused; the cause is logged.
+   */
+  const gateBindingToAddressedPage = async (
+    context: InstalledRuntimeContext,
+    controlId: string,
+  ): Promise<boolean> => {
+    const page = context.releaseSet.application.content.pages.find(
+      (candidate) => candidate.key === body.pageKey,
+    );
+    if (page === undefined) {
+      logFlowRefusal("BINDING_CONTROL_NOT_ON_PAGE page_not_installed");
+      return false;
+    }
+    const projected = await createStoredPageCapabilityService({
+      ...requestDependencies,
+      context,
+      permissions: dependencies.releaseCatalogue.permissions,
+      // The page's own record decides its record-based visibility conditions and action
+      // availability; a gesture's subject (a row of a table on the page) never stands in for it.
+      selection: {
+        pageId: String(page.pageId),
+        ...(body.pageRecordId === undefined ? {} : { subjectRecordId: body.pageRecordId }),
+      },
+    }).project(identity.session, runtimeContextSelection(context));
+    if (projected.kind !== "available" || projected.value === undefined) {
+      logFlowRefusal(`BINDING_CONTROL_NOT_ON_PAGE page_projection_${projected.kind}`);
+      return false;
+    }
+    const gate = requireProjectedPlacement(projected.value, controlId);
+    if (gate.kind === "refused") {
+      logFlowRefusal(`BINDING_CONTROL_NOT_ON_PAGE ${gate.reason}`);
+      return false;
+    }
+    return true;
+  };
   const selection = {
     organizationId: address.read.organizationId,
     applicationRootId: address.application.applicationRootId,
@@ -1165,16 +1214,27 @@ export async function invokeInstalledFlow(
   };
   // Use the same installed snapshot for this gate and the endpoint. A crafted action on a
   // guided page must not start a flow before its final form submit is confirmed.
+  const bindingContext =
+    invocation.kind === "binding"
+      ? await readInstalledContext(identity.session, selection)
+      : undefined;
   const bindingInstallation =
-    invocation.kind === "binding" ? await readInstalled(identity.session, selection) : undefined;
+    bindingContext === undefined ? undefined : installedFlowBindings(bindingContext);
   if (invocation.kind === "binding") {
-    if (bindingInstallation === undefined) {
+    if (bindingContext === undefined || bindingInstallation === undefined) {
       logFlowRefusal("BINDING_INSTALLATION_NOT_CURRENT");
       return { kind: "refused" };
     }
     const binding = bindingInstallation.bindings.find(
       (candidate) => candidate.bindingId.toLowerCase() === invocation.bindingId.toLowerCase(),
     );
+    // The control must be on the addressed page as projected for this person now: a binding of
+    // another page, or of a control a visibility condition or permission removed for them, never
+    // runs from this page's address.
+    if (binding !== undefined) {
+      if (!(await gateBindingToAddressedPage(bindingContext, binding.controlId)))
+        return { kind: "refused" };
+    }
     const guided =
       binding === undefined ? undefined : guidedControls.get(binding.controlId.toLowerCase());
     if (

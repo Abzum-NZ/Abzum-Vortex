@@ -390,6 +390,7 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
       session,
       selection: address.selection,
       installationRevision: placement.installed.applicationReleaseRevision,
+      pageId: address.pageId,
       placementId: request.placementId,
     });
     if (descriptor === undefined) return refuse("descriptor_unopened");
