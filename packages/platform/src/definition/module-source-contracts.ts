@@ -826,6 +826,10 @@ const moduleSourceQueryAggregateSchema = z
   })
   .strict();
 
+/** The most totals one query holds and the most queries one Module holds. */
+export const MODULE_QUERY_MAXIMUM_TOTALS = 20;
+export const MODULE_MAXIMUM_QUERIES = 100;
+
 /**
  * One authored Module-owned query. It names a local or dependency-qualified record type,
  * typed inputs, the fields it returns, a typed filter tree, grouping, totals, a stable sort,
@@ -833,9 +837,6 @@ const moduleSourceQueryAggregateSchema = z
  * `exposure` says whether an Application that uses the Module may read it ("exposed") or only
  * the Module's own Application ("private").
  */
-export const MODULE_QUERY_MAXIMUM_TOTALS = 20;
-export const MODULE_MAXIMUM_QUERIES = 100;
-
 const moduleSourceQuerySchema = z
   .object({
     id: sourceProvenanceTarget(sourceAliasSchema, ["queryId"]),

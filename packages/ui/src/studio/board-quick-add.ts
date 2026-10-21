@@ -142,7 +142,7 @@ export const ensureStudioBoardQuickAdd = (
     if (filled !== undefined && filled !== stageValue)
       return {
         kind: "refused",
-        reason: `The flow ${opening.labels.name} already fills ${stageLabel} with another value. Change it to the column?s stage, then add from a column.`,
+        reason: `The flow ${opening.labels.name} already fills ${stageLabel} with another value. Change it to the column's stage, then add from a column.`,
       };
     if (declared === undefined)
       opening.inputs[stageInputName] = {

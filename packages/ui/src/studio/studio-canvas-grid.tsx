@@ -101,8 +101,9 @@ const field = (
   fieldId: string,
 ): SourceBlockPropertyValueContract => {
   const reference = fields.get(fieldId.toLowerCase());
-
-  return { kind: "field_reference", field: reference! };
+  // reduceStudioCanvasGrid refuses unmapped fields first, so reaching this is a defect.
+  if (reference === undefined) throw new Error("STUDIO_CANVAS_GRID_FIELD_UNMAPPED");
+  return { kind: "field_reference", field: reference };
 };
 
 const layoutGroup = (layout: GridLayout, fields: ReadonlyMap<string, string>): Group => ({
@@ -160,10 +161,7 @@ const noQuery: StudioCanvasGridState["query"] = {
   state: queryGroup({ sort: [], filters: [], search: null }, new Map()),
 };
 
-/**
- * Applies one grid event to the held state. A change under another key starts afresh, so an
- * earlier arrangement or query never outlives the table settings it was made for.
- */
+/** A grid event the canvas refuses, with the business reason it shows and the cause it logs. */
 export type StudioCanvasGridNotice = Readonly<{
   kind: "refused";
   code: "field_unmapped";
@@ -175,6 +173,11 @@ export type StudioCanvasGridNotice = Readonly<{
   }>;
 }>;
 
+/**
+ * Applies one grid event to the held state. A change under another key starts afresh, so an
+ * earlier arrangement or query never outlives the table settings it was made for. A change that
+ * names a field the draft no longer maps is refused as a notice and leaves the state unchanged.
+ */
 export const reduceStudioCanvasGrid = (
   held: StudioCanvasGridState | undefined,
   change: StudioCanvasGridChange,

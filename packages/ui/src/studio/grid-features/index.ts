@@ -174,8 +174,8 @@ export type StudioRelatedRecordsChoices = Readonly<{
 /** What Group by and the Grouped table preset read of the shared query facts. */
 export const studioGroupingFacts = (
   query: StudioQueryChoice | undefined,
-): RecordsTableGroupingFacts & Pick<RecordsTableQueryFacts, "groupBy"> => {
-  const facts = recordsTableQueryFacts({
+): RecordsTableGroupingFacts & Pick<RecordsTableQueryFacts, "groupBy"> =>
+  recordsTableQueryFacts({
     recordTypeLabel: query?.recordTypeLabel ?? "",
     fields: (query?.allFields ?? []).map((field) => ({
       ...field,
@@ -188,8 +188,6 @@ export const studioGroupingFacts = (
     queryLabel: query?.label ?? "",
     groupBy: query?.groupBy ?? [],
   });
-  return facts;
-};
 
 /**
  * The bound query's facts as the draft holds them, in the spelling the table's settings use

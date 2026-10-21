@@ -462,41 +462,34 @@ const ownQueries = (
         ?.record_types.find((candidate) => candidate.key === recordKey);
       const selected =
         query.select.length === 0 ? (record?.fields ?? []).map((field) => field.key) : query.select;
-      const allFields = (record?.fields ?? []).flatMap((field) => {
-        return field === undefined
-          ? []
-          : [
-              Object.freeze({
-                reference: `${recordType}.${field.key}`,
-                label: field.label,
-                type: field.type,
-                ...studioFieldFacts(field),
-                linkTargetResolved:
-                  field.type !== "link" ||
-                  (() => {
-                    const target = (field.settings as { target: string }).target;
-                    const qualified = target.includes(":") ? target : `${moduleKey}:${target}`;
-                    return (
-                      source.body.modules.some((owner) =>
-                        owner.record_types.some(
-                          (targetRecord) => `${owner.key}:${targetRecord.key}` === qualified,
-                        ),
-                      ) || borrowed?.recordTypes.includes(qualified) === true
-                    );
-                  })(),
-                ...(isParentLink(module.key, recordType, record, field)
-                  ? { parentLink: true }
-                  : {}),
-                ...((field.type === "link" || field.type === "choice") &&
-                (field.settings as { depends_on?: { parent_field: string } }).depends_on !==
-                  undefined
-                  ? {
-                      dependsOn: `${recordType}.${(field.settings as { depends_on: { parent_field: string } }).depends_on.parent_field}`,
-                    }
-                  : {}),
-              }),
-            ];
-      });
+      const allFields = (record?.fields ?? []).map((field) =>
+        Object.freeze({
+          reference: `${recordType}.${field.key}`,
+          label: field.label,
+          type: field.type,
+          ...studioFieldFacts(field),
+          linkTargetResolved:
+            field.type !== "link" ||
+            (() => {
+              const target = (field.settings as { target: string }).target;
+              const qualified = target.includes(":") ? target : `${moduleKey}:${target}`;
+              return (
+                source.body.modules.some((owner) =>
+                  owner.record_types.some(
+                    (targetRecord) => `${owner.key}:${targetRecord.key}` === qualified,
+                  ),
+                ) || borrowed?.recordTypes.includes(qualified) === true
+              );
+            })(),
+          ...(isParentLink(module.key, recordType, record, field) ? { parentLink: true } : {}),
+          ...((field.type === "link" || field.type === "choice") &&
+          (field.settings as { depends_on?: { parent_field: string } }).depends_on !== undefined
+            ? {
+                dependsOn: `${recordType}.${(field.settings as { depends_on: { parent_field: string } }).depends_on.parent_field}`,
+              }
+            : {}),
+        }),
+      );
       const inputs = query.inputs.map((input) =>
         Object.freeze({
           key: input.key,
@@ -524,8 +517,8 @@ const ownQueries = (
         recordTypeLabel: record?.name ?? "",
         allFields: Object.freeze(allFields),
         fields: Object.freeze(
-          allFields.filter((field) =>
-            selected.some((key) => field.reference === `${recordType}.${key}`),
+          selected.flatMap((key) =>
+            allFields.filter((field) => field.reference === `${recordType}.${key}`),
           ),
         ),
         grouped: query.group_by.length > 0 || query.aggregates.length > 0,
