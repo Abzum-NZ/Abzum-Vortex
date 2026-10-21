@@ -4,6 +4,7 @@ import type { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import {
   logRefusal,
+  recordIdSchema,
   type IdentitySession,
   type RecordsTableRequestRejection,
 } from "@vortex/platform/schema";
@@ -27,12 +28,17 @@ import { resolveIdentitySession } from "../../../auth/_lib/session-server";
 
 const defaultMaximumRequestBodyLength = 65_536;
 
-/** The organisation and application of the page the person works on; the body names the rest. */
+/**
+ * The organisation and application of the page the person works on; the body names the rest. The
+ * record a detail page was opened for is an address candidate, never authority: the page's declared
+ * subject decides whether it counts.
+ */
 const addressSchema = z
   .object({
     tenantShortName: z.string().min(1).max(200),
     organizationShortName: z.string().min(1).max(200),
     applicationKey: z.string().min(1).max(200),
+    pageRecordId: recordIdSchema.optional(),
   })
   .strict();
 
@@ -114,6 +120,7 @@ export const resolveBulkRequest = async <Body extends { pageKey: string; placeme
           tenantShortName: (candidate as Record<string, unknown>).tenantShortName,
           organizationShortName: (candidate as Record<string, unknown>).organizationShortName,
           applicationKey: (candidate as Record<string, unknown>).applicationKey,
+          pageRecordId: (candidate as Record<string, unknown>).pageRecordId,
         })
       : undefined;
   if (addressPart === undefined || !addressPart.success)
@@ -146,7 +153,12 @@ export const resolveBulkRequest = async <Body extends { pageKey: string; placeme
     ...humanOrganizationRequestDependencies(),
     context,
     permissions: platformPermissionSource,
-    selection: { pageId: String(page.pageId) },
+    selection: {
+      pageId: String(page.pageId),
+      ...(addressPart.data.pageRecordId === undefined
+        ? {}
+        : { subjectRecordId: addressPart.data.pageRecordId }),
+    },
   }).project(identity.session, runtimeContextSelection(context));
   if (projected.kind === "temporarily_unavailable")
     return { kind: "response", response: privateResponse({ kind: "unavailable" }, 503) };
@@ -154,7 +166,12 @@ export const resolveBulkRequest = async <Body extends { pageKey: string; placeme
     return refused(`page_projection_${projected.kind}`, "not_available", 403);
   // The table must be on this page as projected for the person now, once, and usable by them.
   const gate = requireProjectedPlacement(projected.value, body.data.placementId);
-  if (gate.kind === "refused") return refused(gate.reason, "not_available", 403);
+  if (gate.kind === "refused")
+    return refused(
+      `${gate.reason} page=${address.pageKey} placement=${JSON.stringify(body.data.placementId)} page_record=${addressPart.data.pageRecordId === undefined ? "none" : "given"}`,
+      "not_available",
+      403,
+    );
   if (!isTablePlacement(gate.placement))
     return refused("placement_not_a_table", "not_available", 403);
   return {
