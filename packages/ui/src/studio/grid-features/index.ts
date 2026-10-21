@@ -1,4 +1,5 @@
 import {
+  groupingDefaultsFromQuery,
   queryInputValueType,
   recordsTableFeatureOfEvent,
   type BlockPropertySchemaContract,
@@ -8,6 +9,7 @@ import {
   type QueryBindingField,
   type QueryBindingPageFacts,
   type RecordsTableFeatureKey,
+  type RecordsTableGroupingFacts,
   type RecordsTableQueryFacts,
   type SourceBlockPropertyValueContract,
 } from "@vortex/platform/schema";
@@ -126,6 +128,34 @@ export const studioGridFeatureStartSettings: Readonly<
 };
 
 /**
+ * What Group by starts with when the bound query already groups: its first grouping field, and a
+ * calendar unit for a date. Studio writes these once into the definition (when Group by is switched
+ * on or a Grouped table is added), so the table reads only its own settings.
+ */
+export const studioGroupingStart = (
+  facts: Pick<RecordsTableQueryFacts, "fields" | "groupBy">,
+): Readonly<Record<string, SourceBlockPropertyValueContract>> => {
+  const defaults = groupingDefaultsFromQuery(facts);
+  return defaults === undefined
+    ? {}
+    : {
+        field: { kind: "field_reference", field: defaults.field },
+        ...(defaults.dateUnit === undefined
+          ? {}
+          : { date_unit: { kind: "choice", value: defaults.dateUnit } }),
+      };
+};
+
+/** The settings a feature starts with for this bound query; Group by also starts as the query groups. */
+export const studioGridFeatureStart = (
+  key: RecordsTableFeatureKey,
+  facts: Pick<RecordsTableQueryFacts, "fields" | "groupBy">,
+): Readonly<Record<string, SourceBlockPropertyValueContract>> => ({
+  ...studioGridFeatureStartSettings[key],
+  ...(key === "grouping" ? studioGroupingStart(facts) : {}),
+});
+
+/**
  * What the draft offers a row's related records: every query and link it can read, the page's
  * binding facts and the fields of the table's record type a This row binding may name.
  */
@@ -136,6 +166,37 @@ export type StudioRelatedRecordsChoices = Readonly<{
   page: QueryBindingPageFacts;
   rowFields: readonly QueryBindingField[];
 }>;
+
+/**
+ * The fields of the bound query as the feature checks judge them. A grouped query reads only the
+ * fields it groups by, as publication judges it.
+ */
+const studioFieldFacts = (query: StudioQueryChoice | undefined): RecordsTableQueryFacts["fields"] =>
+  (query?.fields ?? [])
+    .filter((field) => query?.grouped !== true || query.groupBy.includes(field.reference))
+    .map((field) => ({
+      field: field.reference,
+      label: field.label,
+      type: field.type,
+      sortable: field.sortable,
+      filterable: field.filterable,
+      searchable: field.searchable,
+      editable: query?.grouped !== true && recordsTableEditableFieldTypes.includes(field.type),
+      parentLink: field.parentLink === true,
+      ...(field.dependsOn === undefined ? {} : { dependsOn: field.dependsOn }),
+      ...(field.choiceCount === undefined ? {} : { choiceCount: field.choiceCount }),
+      ...(field.choiceValues === undefined ? {} : { choiceValues: field.choiceValues }),
+      ...(field.resultType === undefined ? {} : { resultType: field.resultType }),
+    }));
+
+/** What Group by and the Grouped table preset read of the bound query. */
+export const studioGroupingFacts = (
+  query: StudioQueryChoice | undefined,
+): RecordsTableGroupingFacts & Pick<RecordsTableQueryFacts, "groupBy"> => ({
+  recordTypeLabel: query?.label ?? "",
+  fields: studioFieldFacts(query),
+  groupBy: query?.groupBy ?? [],
+});
 
 /**
  * The bound query's facts as the draft holds them, in the spelling the table's settings use
@@ -154,20 +215,7 @@ export const studioRecordsTableQueryFacts = (
   recordTypeLabel: query?.label ?? "",
   maximumPageSize: query?.pageSize,
   columnFieldIds,
-  fields: (query?.fields ?? []).map((field) => ({
-    field: field.reference,
-    label: field.label,
-    type: field.type,
-    sortable: field.sortable,
-    filterable: field.filterable,
-    searchable: field.searchable,
-    editable: query?.grouped !== true && recordsTableEditableFieldTypes.includes(field.type),
-    parentLink: field.parentLink === true,
-    ...(field.dependsOn === undefined ? {} : { dependsOn: field.dependsOn }),
-    ...(field.choiceCount === undefined ? {} : { choiceCount: field.choiceCount }),
-    ...(field.choiceValues === undefined ? {} : { choiceValues: field.choiceValues }),
-    ...(field.resultType === undefined ? {} : { resultType: field.resultType }),
-  })),
+  fields: studioFieldFacts(query),
   relationships: relationships
     .filter((relationship) => relationship.recordType === query?.recordType)
     .map((relationship) => ({ key: relationship.reference, label: relationship.label })),
@@ -179,6 +227,8 @@ export const studioRecordsTableQueryFacts = (
       acceptsSelection: action.acceptsSelection,
     })),
   grouped: query?.grouped === true,
+  queryLabel: query?.label ?? "",
+  groupBy: query?.groupBy ?? [],
   exportable: query?.exportable === true,
   board: query?.board,
   relatedRecords: {

@@ -204,6 +204,10 @@ export type RecordsTableQueryFacts = Readonly<{
   actions: readonly Readonly<{ key: string; label: string; acceptsSelection: boolean }>[];
   /** The query groups or aggregates its rows, so rows are not records a person can act on. */
   grouped: boolean;
+  /** The bound query's business name, for the sentences that name it. */
+  queryLabel: string;
+  /** The fields the bound query groups by, in its order, as the table's settings spell them. */
+  groupBy: readonly string[];
   /** The record type declares the standard export action, so its records can be exported. */
   exportable: boolean;
   relatedRecords: RecordsTableRelatedRecordsFacts;
