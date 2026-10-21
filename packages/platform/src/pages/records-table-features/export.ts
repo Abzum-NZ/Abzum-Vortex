@@ -83,9 +83,9 @@ export type RecordsTableExportDependencies = HumanOrganizationRequestDependencie
   Readonly<{ continuationKey: QueryContinuationKey }>;
 
 /**
- * The most records one protected read returns and the most record ids one exact read names. An
- * export streams, it does not display, so every page is this size whatever page size the table
- * authored.
+ * The most records one export page holds and the most record ids one exact read names. A keyset
+ * read is refused above the query's authored page size, so a page of every matching record is
+ * that many authored-size reads in one request transaction.
  */
 const recordsPerRead = 200;
 
@@ -699,9 +699,42 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
         );
       };
 
+      // A keyset read is refused above the authored page size; an exact read names its own ids.
+      const keysetPageSize = Math.min(recordsPerRead, placement.query.pageSize);
+      const keysetReadsPerPage = Math.max(1, Math.floor(recordsPerRead / keysetPageSize));
+
+      /** One validated protected read, or the reason it is refused. */
+      const prepare = (
+        extra: Readonly<{ exactRecordIds?: readonly string[]; continuationToken?: string }>,
+      ) => {
+        const prepared = queries.prepareRead(session, address.selection, {
+          ...command,
+          pageSize:
+            extra.exactRecordIds === undefined ? keysetPageSize : extra.exactRecordIds.length,
+          ...(extra.exactRecordIds === undefined
+            ? {}
+            : { exactRecordIds: [...extra.exactRecordIds] }),
+          ...(extra.continuationToken === undefined
+            ? {}
+            : { pageDirection: "forward" as const, continuationToken: extra.continuationToken }),
+        });
+        if (prepared.kind === "ready") return prepared;
+        const { result } = prepared;
+        return {
+          kind: "final" as const,
+          reason:
+            result.kind !== "available"
+              ? `read_${result.kind}`
+              : result.value.outcome === "refused"
+                ? `read_refused_${result.value.reasonCode}`
+                : "read_unavailable",
+        };
+      };
+
       /**
-       * One page: the export permission and fields decided again, then the protected read, in the
-       * one request transaction of the page. A revocation stops the stream at the next page.
+       * One page: the export permission and fields decided again, then up to 200 records of
+       * protected reads, in the one request transaction of the page. A revocation stops the stream
+       * at the next page. A scan-limited read ends its page, so the enumeration ceiling counts reads.
        */
       const readPage = async (
         extra: Readonly<{ exactRecordIds?: readonly string[]; continuationToken?: string }>,
@@ -712,26 +745,6 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
           scanLimited: boolean;
         }>
       > => {
-        const prepared = queries.prepareRead(session, address.selection, {
-          ...command,
-          pageSize:
-            extra.exactRecordIds === undefined ? recordsPerRead : extra.exactRecordIds.length,
-          ...(extra.exactRecordIds === undefined
-            ? {}
-            : { exactRecordIds: [...extra.exactRecordIds] }),
-          ...(extra.continuationToken === undefined
-            ? {}
-            : { pageDirection: "forward" as const, continuationToken: extra.continuationToken }),
-        });
-        if (prepared.kind === "final") {
-          const { result } = prepared;
-          if (result.kind !== "available") throw exportFailure(`read_${result.kind}`);
-          throw exportFailure(
-            result.value.outcome === "refused"
-              ? `read_refused_${result.value.reasonCode}`
-              : "read_unavailable",
-          );
-        }
         const page = await requests.run(session, address.selection, async (transaction, scope) => {
           const current = await decideRecordTypeExport(transaction, scope, installed, recordTypeId);
           if (current.kind === "refused")
@@ -739,18 +752,29 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
           const allowed = current.fieldIds;
           if (allowed !== undefined && columnIds.some((fieldId) => !allowed.has(fieldId)))
             return { kind: "denied" as const, reason: "export_fields_changed" };
-          return { kind: "read" as const, result: await prepared.read(transaction, scope) };
+          const rows: ProtectedQueryRow[] = [];
+          let next: string | undefined;
+          let scanLimited = false;
+          const reads = extra.exactRecordIds === undefined ? keysetReadsPerPage : 1;
+          for (let call = 0; call < reads; call += 1) {
+            const prepared = prepare(
+              call === 0 || next === undefined ? extra : { continuationToken: next },
+            );
+            if (prepared.kind === "final")
+              return { kind: "denied" as const, reason: prepared.reason };
+            const result = await prepared.read(transaction, scope);
+            if (result.outcome !== "completed")
+              return { kind: "denied" as const, reason: `read_refused_${result.reasonCode}` };
+            rows.push(...result.rows);
+            next = result.nextContinuationToken;
+            scanLimited = result.scanLimited;
+            if (next === undefined || scanLimited) break;
+          }
+          return { kind: "read" as const, rows, next, scanLimited };
         });
         if (page.kind !== "available") throw exportFailure(`access_${page.kind}`);
         if (page.value.kind === "denied") throw exportFailure(page.value.reason);
-        const { result } = page.value;
-        if (result.outcome !== "completed")
-          throw exportFailure(`read_refused_${result.reasonCode}`);
-        return {
-          rows: result.rows,
-          next: result.nextContinuationToken,
-          scanLimited: result.scanLimited,
-        };
+        return page.value;
       };
 
       // Shown rows that changed since the person ticked them: exported as they are now, and
