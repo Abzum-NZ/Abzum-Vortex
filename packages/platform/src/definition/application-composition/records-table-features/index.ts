@@ -4,6 +4,7 @@ import {
 } from "./spreadsheet";
 import type { ComponentSettingValue } from "../block-property-schema";
 import {
+  boardFilterProblem,
   recordsTableBoardFeature,
   type RecordsTableBoardMode,
   type RecordsTableBoardSettings,
@@ -91,7 +92,12 @@ export {
   RECORDS_TABLE_GROUPING_MAXIMUM_CHOICES,
   RECORDS_TABLE_GROUPING_MAXIMUM_LABEL_LENGTH,
 } from "./grouping";
-export { boardAggregateLabel, boardProblem, recordsTableBoardFactsOf } from "./board";
+export {
+  boardAggregateLabel,
+  boardFilterProblem,
+  boardProblem,
+  recordsTableBoardFactsOf,
+} from "./board";
 export {
   RECORDS_TABLE_PIVOT_MAXIMUM_COLUMNS,
   RECORDS_TABLE_PIVOT_MAXIMUM_ROW_PAGE_SIZE,
@@ -305,9 +311,13 @@ export const readRecordsTableFeatures = (
 /**
  * The features a board view implements beside Board itself. A feature not listed is refused when
  * it is on together with Board: the board draws cards, not table rows, and never ignores a feature.
- * A card opens through Row actions, so that feature is the one supported beside Board.
+ * A card opens through Row actions and the cards narrow through Column filters, which a board
+ * reads over every field of its record type.
  */
-const recordsTableBoardSupportedFeatures: readonly RecordsTableFeatureKey[] = ["row_actions"];
+const recordsTableBoardSupportedFeatures: readonly RecordsTableFeatureKey[] = [
+  "row_actions",
+  "column_filters",
+];
 
 /**
  * The one capability check of one feature against the bound query's facts. Publication runs it on
@@ -392,8 +402,20 @@ export const checkRecordsTableFeature = (
     );
   // The board reads its own grouped query, which the board check judges; a table-row check of a
   // feature the board borrows would refuse that query.
-  if (features.board.enabled && key !== "board" && recordsTableBoardSupportedFeatures.includes(key))
+  if (
+    features.board.enabled &&
+    key !== "board" &&
+    recordsTableBoardSupportedFeatures.includes(key)
+  ) {
+    if (key === "column_filters" && state.enabled && facts.board !== undefined)
+      return (
+        boardFilterProblem(
+          (state as Extract<RecordsTableFeatures["columnFilters"], { enabled: true }>).fields,
+          facts.board,
+        ) ?? featureAvailable
+      );
     return featureAvailable;
+  }
   const check = (registry[key].definition as RecordsTableFeatureDefinition<object>).check(
     state,
     facts,

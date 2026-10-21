@@ -6,6 +6,7 @@ import {
   plainSourceSettingValue,
   readRecordsTableFeatures,
   recordsTableFeatureDescription,
+  recordsTableFilterKindOf,
   recordsTableFeatureKeys,
   recordsTableFeatureState,
   typedSourceSettingValue,
@@ -374,7 +375,19 @@ export function StudioGridFeatures({
                               ...choices,
                               ...(editor.offers === undefined
                                 ? {}
-                                : { fields: choices.fields.filter(editor.offers) }),
+                                : {
+                                    // A board filters over every field of its record type, not only
+                                    // the few its grouped query selects; linked records need a
+                                    // record picker a board does not draw.
+                                    fields: (features?.board.enabled === true &&
+                                    key === "column_filters"
+                                      ? boardChoices.fields.filter(
+                                          (field) =>
+                                            recordsTableFilterKindOf(field.type) !== "link",
+                                        )
+                                      : choices.fields
+                                    ).filter(editor.offers),
+                                  }),
                               ...(editor.boundRecordTypeActions === undefined
                                 ? {}
                                 : {
