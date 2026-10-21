@@ -460,7 +460,7 @@ const parseInlineEditFields = (
 };
 
 /** One projected filterable field: its identity, label, canonical type, filter kind and control facts. */
-const parseFilterField = (
+export const parseFilterField = (
   value: unknown,
   location: DefinitionRenderErrorLocation,
 ): RecordsTableFilterField => {
@@ -725,13 +725,25 @@ export const parseTableFeatures = (
       "Projected spreadsheet controls are invalid",
       location,
     );
-    requireExactKeys(controls, ["rangeSelect", "find", "statusBar"], location);
+    requireExactKeys(
+      controls,
+      ["rangeSelect", "find", "paste", "fill", "undo", "statusBar"],
+      location,
+    );
     if (
       typeof controls.rangeSelect !== "boolean" ||
       typeof controls.find !== "boolean" ||
       (!controls.rangeSelect && !controls.find)
     )
       fail("Projected spreadsheet controls need an enabled control", location);
+    for (const key of ["paste", "fill", "undo"] as const)
+      if (controls[key] !== undefined && controls[key] !== true)
+        fail(`The projected spreadsheet ${key} control is invalid`, location);
+    if (
+      (controls.undo === true && controls.paste !== true && controls.fill !== true) ||
+      ((controls.paste === true || controls.fill === true) && controls.rangeSelect !== true)
+    )
+      fail("Projected paste, fill and undo need a range and an edit", location);
     let statusBar: NonNullable<RecordsTableFeatureProjection["spreadsheet"]>["statusBar"];
     if (controls.statusBar !== undefined) {
       const bar = requireRecord(
@@ -769,6 +781,9 @@ export const parseTableFeatures = (
     spreadsheet = Object.freeze({
       rangeSelect: controls.rangeSelect as boolean,
       find: controls.find as boolean,
+      ...(controls.paste === true ? { paste: true as const } : {}),
+      ...(controls.fill === true ? { fill: true as const } : {}),
+      ...(controls.undo === true ? { undo: true as const } : {}),
       ...(statusBar === undefined ? {} : { statusBar }),
     });
   }

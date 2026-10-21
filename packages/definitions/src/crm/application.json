@@ -1230,8 +1230,20 @@
                         "enabled": true,
                         "range_select": true,
                         "find": true,
+                        "paste": true,
+                        "fill": true,
+                        "undo": true,
                         "status_bar_fields": ["vortex.crm.opportunities:opportunity.value"],
                         "status_bar_operations": ["count", "sum", "average"]
+                      },
+                      "inline_edit": {
+                        "enabled": true,
+                        "event_id": "event_edit_opportunity_cell",
+                        "fields": [
+                          "vortex.crm.opportunities:opportunity.name",
+                          "vortex.crm.opportunities:opportunity.expected_close_date",
+                          "vortex.crm.opportunities:opportunity.probability"
+                        ]
                       },
                       "row_edit": {
                         "enabled": true,
@@ -4464,6 +4476,14 @@
                         ],
                         "quick_add": true
                       },
+                      "column_filters": {
+                        "enabled": true,
+                        "fields": [
+                          "vortex.crm.opportunities:opportunity.name",
+                          "vortex.crm.opportunities:opportunity.value",
+                          "vortex.crm.opportunities:opportunity.expected_close_date"
+                        ]
+                      },
                       "pivot": {
                         "enabled": false
                       },
@@ -4811,6 +4831,14 @@
         "key": "vortex.app.events.save_company_row",
         "label": "Save company row",
         "record_type": "vortex.crm.organisations:company",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "event_edit_opportunity_cell",
+        "key": "vortex.app.events.edit_opportunity_cell",
+        "label": "Edit opportunity cell",
+        "record_type": "vortex.crm.opportunities:opportunity",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
       }
@@ -7167,6 +7195,23 @@
         "event_id": "event_save_company_row",
         "event": "row_edit",
         "flow": "save_company_row",
+        "inputs": {
+          "record": {
+            "kind": "caller",
+            "name": "record_id"
+          },
+          "values": {
+            "kind": "caller",
+            "name": "values"
+          }
+        }
+      },
+      {
+        "id": "binding_edit_opportunity_cell",
+        "control": "content_4",
+        "event_id": "event_edit_opportunity_cell",
+        "event": "inline_edit",
+        "flow": "save_opportunity_row",
         "inputs": {
           "record": {
             "kind": "caller",

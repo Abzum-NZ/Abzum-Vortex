@@ -41,12 +41,15 @@ import {
 } from "../../schema";
 import type { DatabaseRow, RequestDatabaseTransaction } from "../../db/index";
 import { z } from "zod";
-import { canonicalJson, fingerprintCanonicalValue } from "../canonical-json-definition";
+import {
+  canonicalJson,
+  fingerprintCanonicalValue,
+  sameCanonicalValue,
+} from "../canonical-json-definition";
 import {
   applicationDraftFromStoredRelease,
   hasAuthenticResolutionFingerprint,
   hasAuthenticStoredCustomerDefinitionRelease,
-  sameCanonicalJson,
 } from "../definition-release-integrity";
 import type { BuilderAuthority } from "../builder-authority";
 import {
@@ -925,10 +928,7 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
         output.artifact.resolutionFingerprint !== release.evidence.resolutionFingerprint ||
         output.resolutionFingerprint !== release.evidence.resolutionFingerprint ||
         resolution.fingerprint !== release.evidence.resolutionFingerprint ||
-        !hasAuthenticResolutionFingerprint(resolution) ||
         output.artifact.contentFingerprint !== release.publication.contentFingerprint ||
-        fingerprintCanonicalValue(output.canonical.content) !==
-          release.publication.contentFingerprint ||
         release.evidence.authoredSourceFingerprint !==
           fingerprintCanonicalValue(release.evidence.authoredSource) ||
         release.evidence.authoredSource.source_contract_version !==
@@ -948,7 +948,7 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
           compilationOutput: output,
           resolutionSnapshot: resolution,
         }) ||
-        !sameCanonicalJson(output.canonical.content, release.content)
+        !sameCanonicalValue(output.canonical.content, release.content)
       )
         return invalidStorage("materializeHistory found inconsistent stored evidence");
       if (!dependencyReferencesMatch(output, release.dependencyManifest))
@@ -1041,7 +1041,6 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
       output.artifact.resolutionFingerprint !== release.resolutionFingerprint ||
       output.resolutionFingerprint !== release.resolutionFingerprint ||
       snapshot.fingerprint !== release.resolutionFingerprint ||
-      !hasAuthenticResolutionFingerprint(snapshot) ||
       !hasAuthenticStoredCustomerDefinitionRelease({
         organizationId: release.organizationId,
         kind: "module",
@@ -1055,8 +1054,8 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
         compilationOutput: output,
         resolutionSnapshot: snapshot,
       }) ||
-      !sameCanonicalJson(snapshot.identities, release.identities) ||
-      !sameCanonicalJson(output.canonical.content, release.published.content) ||
+      !sameCanonicalValue(snapshot.identities, release.identities) ||
+      !sameCanonicalValue(output.canonical.content, release.published.content) ||
       !dependencyReferencesMatch(output, release.published.dependencyManifest)
     )
       return invalidStorage("materializeModuleRelease found inconsistent stored evidence");

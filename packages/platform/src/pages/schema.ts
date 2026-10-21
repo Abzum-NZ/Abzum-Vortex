@@ -13,6 +13,7 @@ export * from "./grid-view-state";
 export * from "./records-selection";
 export * from "./records-range-summary";
 export * from "./records-table-export-request";
+export * from "./records-table-batch-edit-request";
 export * from "./named-action-availability-schema";
 export type {
   ConditionalColumnFormatProjection,

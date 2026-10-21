@@ -25,7 +25,12 @@ import { Icon } from "../../icons/icon";
 import { FormattedDate } from "../date-format-context";
 import type { DisplayEventHandlers, TableNarrowing } from "../projected-data";
 import { RecordChoicePicker } from "./record-choice-picker";
-import type { GridFeatureColumnProps, GridFeatureModule, GridFeaturePointProps } from "./registry";
+import type {
+  GridFeatureColumnProps,
+  GridFeatureContext,
+  GridFeatureModule,
+  GridFeaturePointProps,
+} from "./registry";
 
 /** A text filter commits once typing pauses this long, so a typed word is one read, not one per key. */
 const TEXT_COMMIT_DELAY_MS = 300;
@@ -636,12 +641,21 @@ function ColumnFilterButton({ context, column }: GridFeatureColumnProps): ReactE
   );
 }
 
+/** What the filters toolbar reads: a board holds no rows, so it supplies only these. */
+export type FiltersToolbarContext = Pick<
+  GridFeatureContext,
+  "accessibleName" | "features" | "narrowing" | "events"
+>;
+
 /**
  * The toolbar part of Column filters: one chip per committed filter with its remove button, a
  * "Filter" popover that reaches every filterable field (also those not shown as columns, and on
- * narrow screens where the grid shows cards), and "Clear filters".
+ * narrow screens where the grid shows cards), and "Clear filters". The Board mode of the grid
+ * draws the same toolbar.
  */
-function FiltersToolbar({ context }: GridFeaturePointProps): ReactElement | null {
+export function FiltersToolbar({
+  context,
+}: Readonly<{ context: FiltersToolbarContext }>): ReactElement | null {
   const fields = context.features.columnFilters ?? [];
   const [chosenField, setChosenField] = useState<string | undefined>(undefined);
   const selectId = useId();

@@ -24,6 +24,7 @@ import {
   type BoardPayload,
   type DisplaySummaryMetric,
 } from "./projected-data";
+import { parseFilterField, parseTableNarrowing } from "./projected-grid-features";
 
 /**
  * The strict bounded payload a query-bound board renders: its protected columns in pipeline stage
@@ -192,6 +193,7 @@ export const parseBoardPayload = (
       "choiceFieldRequired",
       "wipLimit",
       "quickAdd",
+      "filters",
       "cardTitleFieldId",
       "cardFieldIds",
       "columns",
@@ -215,6 +217,30 @@ export const parseBoardPayload = (
   const choiceFieldKey = builderKeySchema.safeParse(record.choiceFieldKey);
   if (!choiceFieldKey.success) fail("A board requires the key of its choice field", location);
   if (typeof record.quickAdd !== "boolean") fail("A board's quick add is not a boolean", location);
+  let filters: BoardPayload["filters"];
+  if (record.filters !== undefined) {
+    const held = requireRecord(record.filters, "A board's filters must be an object", location);
+    requireExactKeys(held, ["fields", "applied"], location);
+    const fields = requireArray(
+      held.fields,
+      "A board's filter fields must be an array",
+      location,
+    ).map((field) => parseFilterField(field, location));
+    if (
+      fields.length === 0 ||
+      new Set(fields.map((field) => field.fieldId.toLowerCase())).size !== fields.length
+    )
+      fail("A board offers each filter field once", location);
+    const applied = parseTableNarrowing({ search: null, filters: held.applied }, location).filters;
+    if (
+      applied.some(
+        (filter) =>
+          !fields.some((field) => field.fieldId.toLowerCase() === filter.fieldId.toLowerCase()),
+      )
+    )
+      fail("A board applies only filters it offers", location);
+    filters = Object.freeze({ fields: Object.freeze(fields), applied });
+  }
   if (typeof record.choiceFieldRequired !== "boolean")
     fail("A board requires its stage field's required setting", location);
   let wipLimit: number | undefined;
@@ -391,6 +417,7 @@ export const parseBoardPayload = (
     choiceFieldRequired: record.choiceFieldRequired as boolean,
     ...(wipLimit === undefined ? {} : { wipLimit }),
     quickAdd: record.quickAdd as boolean,
+    ...(filters === undefined ? {} : { filters }),
     cardTitleFieldId: cardTitleFieldId.data,
     cardFieldIds: Object.freeze(cardFieldIds),
     columns: Object.freeze(columns),
