@@ -462,10 +462,43 @@ export const loadStudioApplicationDraft = async (
             return { kind: "refused", reason: "draft_missing" };
           throw error;
         }
-        const draft = await readApplicationDefinitionDraft(transaction, scope, {
-          rootId: root.data,
-          ...(expectedDraftRevision === undefined ? {} : { expectedDraftRevision }),
-        });
+        const compiles = !requests.every(
+          (request) => request.kind === "source" && request.creation !== "record_page",
+        );
+        const publishedOf = (request: StudioViewRequest) =>
+          request.kind === "data" || request.creation === "record_page";
+        // A compile request reads the saved draft once, through the platform's own snapshot, which
+        // returns it beside the compile; a source-only request reads the draft alone.
+        const context = compiles
+          ? await readLiveHumanContext(transaction, {
+              scope,
+              session: resolved.session,
+              issuedAt,
+            })
+          : null;
+        const snapshot =
+          context === null
+            ? null
+            : await createDatabaseDefinitionPublicationService(
+                installedReleaseCatalogue,
+                transaction,
+                authority,
+              ).readApplicationDraftSnapshot(
+                context,
+                {
+                  rootId: root.data,
+                  ...(expectedDraftRevision === undefined ? {} : { expectedDraftRevision }),
+                },
+                { publication: requests.some(publishedOf) },
+              );
+        const draft =
+          snapshot === null
+            ? await readApplicationDefinitionDraft(transaction, scope, {
+                rootId: root.data,
+                ...(expectedDraftRevision === undefined ? {} : { expectedDraftRevision }),
+              })
+            : snapshot.draft;
+        if (draft.kind !== "application") throw new Error("STUDIO_DRAFT_UNAVAILABLE");
         const identityReservations = requests.some((request) => request.kind === "access")
           ? await readSourceIdentityReservations(transaction, draft.rootId)
           : null;
@@ -485,8 +518,6 @@ export const loadStudioApplicationDraft = async (
           request.kind === "flows" ||
           request.kind === "authoring" ||
           canvasOf(request);
-        const publishedOf = (request: StudioViewRequest) =>
-          dataOf(request) || request.creation === "record_page";
         // The compile is read once for the union of the requested views; each view gets its own part.
         const canvas = requests.some(canvasOf);
         const data = requests.some(dataOf);
@@ -519,31 +550,6 @@ export const loadStudioApplicationDraft = async (
         let usedModules: StudioDataModule[] | null = null;
         let published: StudioPublishedData | null = null;
         let peopleDirectory: PeopleDirectoryOwner | null = null;
-        const context = requests.every(
-          (request) => request.kind === "source" && request.creation !== "record_page",
-        )
-          ? null
-          : await readLiveHumanContext(transaction, {
-              scope,
-              session: resolved.session,
-              issuedAt,
-            });
-        const service = createDatabaseDefinitionPublicationService(
-          installedReleaseCatalogue,
-          transaction,
-          authority,
-        );
-        const snapshot =
-          context === null
-            ? null
-            : await service.readApplicationDraftSnapshot(
-                context,
-                {
-                  rootId: draft.rootId,
-                  expectedDraftRevision: draft.draftRevision,
-                },
-                { publication: requests.some(publishedOf) },
-              );
         if (snapshot !== null && requests.some(publishedOf)) published = snapshot.publication;
         if (context !== null && snapshot !== null)
           try {
