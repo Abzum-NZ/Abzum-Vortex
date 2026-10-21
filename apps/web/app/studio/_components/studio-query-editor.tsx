@@ -41,6 +41,7 @@ import { Label } from "@vortex/ui/components/label";
 import { Textarea } from "@vortex/ui/components/textarea";
 import { Icon } from "@vortex/ui";
 import { StudioField } from "./studio-field";
+import { StudioInputType } from "./studio-input-type";
 import { StudioQueryInputChoices } from "./studio-query-input-choices";
 import { StudioReferencesAlert } from "./studio-used-in";
 import { useStudioDraftText } from "./use-studio-draft-text";
@@ -247,9 +248,12 @@ export function StudioQueryEditor({
   const query = module?.queries.find((item) => item.key === queryKey);
   const record =
     module === undefined || query === undefined ? undefined : inlineQueryRecordType(module, query);
-  const [newInput, setNewInput] = useState<Readonly<{ label: string; type: InputType }>>({
+  const [newInput, setNewInput] = useState<
+    Readonly<{ label: string; type: InputType; recordType: string }>
+  >({
     label: "",
     type: "text",
+    recordType: "",
   });
   const [issues, setIssues] = useState<readonly string[]>([]);
   const [references, setReferences] = useState<readonly ApplicationUsePlace[]>([]);
@@ -465,9 +469,9 @@ export function StudioQueryEditor({
       setIssues(["Inputs: enter the input's name, for example Company."]);
       return;
     }
-    const recordType = recordTypes[0]?.key;
-    if (newInput.type === "record_reference" && recordType === undefined) {
-      setIssues(["Inputs: this application has no record type to choose."]);
+    const recordType = newInput.recordType;
+    if (newInput.type === "record_reference" && recordType === "") {
+      setIssues(["Inputs: choose the record type."]);
       return;
     }
     const input = {
@@ -479,7 +483,7 @@ export function StudioQueryEditor({
     } as InlineQueryInput;
     const problem = commit({ inputs: [...query.inputs, input] });
     setIssues(problem === undefined ? [] : [problem]);
-    if (problem === undefined) setNewInput({ label: "", type: "text" });
+    if (problem === undefined) setNewInput({ label: "", type: "text", recordType: "" });
   };
   const setInput = (index: number, next: Partial<Record<string, unknown>>) =>
     query.inputs.map((input, at) =>
@@ -881,13 +885,13 @@ export function StudioQueryEditor({
               <ScreenReaderLabel
                 id={`query-${queryKey}-input-${index}-type`}
               >{`Type of input ${input.label}`}</ScreenReaderLabel>
-              <StudioOptionControl
+              <StudioInputType
                 id={`query-${queryKey}-input-${index}-type`}
-                value={input.type}
+                type={input.type}
+                recordTypes={input.type === "record_reference" ? input.record_types : []}
                 disabled={disabled}
                 options={inputTypes}
-                onChange={(type) => {
-                  // A new type starts without the old type's record types and validation.
+                onChange={(type, recordTypes) => {
                   const base = Object.fromEntries(
                     Object.entries(input).filter(
                       ([key]) => key !== "record_types" && key !== "validation",
@@ -900,34 +904,37 @@ export function StudioQueryEditor({
                           ...base,
                           type,
                           ...(type === "record_reference"
-                            ? { record_types: [recordTypes[0]?.key ?? ""] }
+                            ? { record_types: [...recordTypes] }
                             : {}),
                         } as InlineQueryInput),
                   );
                   const retained = retainedFilterProblems(inputs);
-                  if (retained.length > 0) {
-                    setIssues(retained);
-                    return;
-                  }
-                  change({ inputs });
+                  if (retained.length > 0) return retained.join(" ");
+                  const problem = commit({ inputs });
+                  if (problem === undefined) setIssues([]);
+                  return problem;
                 }}
-              />
-              {input.type === "record_reference" && (
-                <>
-                  <ScreenReaderLabel
-                    id={`query-${queryKey}-input-${index}-record`}
-                  >{`Record type of input ${input.label}`}</ScreenReaderLabel>
-                  <StudioOptionControl
-                    id={`query-${queryKey}-input-${index}-record`}
-                    value={(input as { record_types: string[] }).record_types[0] ?? ""}
-                    disabled={disabled}
-                    options={recordTypes.map((item) => ({ value: item.key, label: item.label }))}
-                    onChange={(recordType) =>
-                      change({ inputs: setInput(index, { record_types: [recordType] }) })
-                    }
-                  />
-                </>
-              )}
+              >
+                {(records, changeRecords) => (
+                  <>
+                    <ScreenReaderLabel id={`query-${queryKey}-input-${index}-record`}>
+                      {`Record type of input ${input.label}`}
+                    </ScreenReaderLabel>
+                    <StudioOptionControl
+                      id={`query-${queryKey}-input-${index}-record`}
+                      value={records[0] ?? ""}
+                      disabled={disabled}
+                      options={[
+                        { value: "", label: "Choose a record type…" },
+                        ...recordTypes.map((item) => ({ value: item.key, label: item.label })),
+                      ]}
+                      onChange={(recordType) =>
+                        changeRecords(recordType === "" ? [] : [recordType])
+                      }
+                    />
+                  </>
+                )}
+              </StudioInputType>
               {input.type === "text" && (
                 <StudioQueryInputChoices
                   id={`query-${queryKey}-input-${index}`}
@@ -989,13 +996,39 @@ export function StudioQueryEditor({
             value={newInput.type}
             disabled={disabled}
             options={inputTypes}
-            onChange={(type) => setNewInput({ ...newInput, type: type as InputType })}
+            onChange={(type) =>
+              setNewInput({ ...newInput, type: type as InputType, recordType: "" })
+            }
           />
+          {newInput.type === "record_reference" && (
+            <div className="space-y-1">
+              <Label htmlFor={`query-${queryKey}-new-input-record`}>Record type</Label>
+              <StudioOptionControl
+                id={`query-${queryKey}-new-input-record`}
+                value={newInput.recordType}
+                disabled={disabled}
+                options={[
+                  { value: "", label: "Choose a record type…" },
+                  ...recordTypes.map((item) => ({ value: item.key, label: item.label })),
+                ]}
+                onChange={(recordType) => setNewInput({ ...newInput, recordType })}
+              />
+              {newInput.recordType === "" && (
+                <p role="status" className="text-sm text-destructive">
+                  Choose the record type.
+                </p>
+              )}
+            </div>
+          )}
           <Button
             type="submit"
             size="sm"
             variant="outline"
-            disabled={disabled || newInput.label.trim() === ""}
+            disabled={
+              disabled ||
+              newInput.label.trim() === "" ||
+              (newInput.type === "record_reference" && newInput.recordType === "")
+            }
           >
             Add input
           </Button>
