@@ -167,8 +167,8 @@ begin
         order by item.ordinality
       loop
         -- An action's context depends only on the action and the record type, not on the
-        -- record: it is resolved once per page. A resolution the single preview would turn into
-        -- a refusal is a refusal of every record's preview of that action.
+        -- record: it is resolved once per page. A resolution that fails is not cached as a
+        -- context: each record's preview then decides it (and its replay) itself.
         context_key := pg_catalog.lower(action_item ->> 'ownerKind') || ':'
           || pg_catalog.lower(action_item ->> 'ownerId') || ':'
           || ((action_item ->> 'releaseRevision')::bigint)::text || ':'
@@ -188,15 +188,16 @@ begin
         end if;
         previews := pg_catalog.array_append(previews, pg_catalog.jsonb_build_object(
           'actionId', action_item -> 'actionId',
-          'preview', case when action_contexts -> context_key = 'false'::jsonb
-            then pg_catalog.jsonb_build_object('outcome', 'refused')
-            else vortex_record.prepare_named_action_set_announce_internal(
+          -- An unresolvable context passes null, so the preview resolves it itself after its
+          -- command-receipt replay check and refuses exactly as the single preview does.
+          'preview', vortex_record.prepare_named_action_set_announce_internal(
             true, (action_item ->> 'commandId')::uuid, action_item ->> 'ownerKind',
             (action_item ->> 'ownerId')::uuid, (action_item ->> 'releaseRevision')::bigint,
             (action_item ->> 'actionId')::uuid, p_record_type_id, requested_id,
             (projection ->> 'concurrencyNumber')::bigint, '{}'::jsonb,
-            (action_item ->> 'activityId')::uuid, read_facts, action_contexts -> context_key
-          ) end
+            (action_item ->> 'activityId')::uuid, read_facts,
+            nullif(action_contexts -> context_key, 'false'::jsonb)
+          )
         ));
       end loop;
     end if;
