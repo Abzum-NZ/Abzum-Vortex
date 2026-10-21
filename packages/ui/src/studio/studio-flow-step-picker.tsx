@@ -12,7 +12,6 @@ import {
   ComboboxTrigger,
 } from "../components/combobox";
 import { InputGroup } from "../components/input-group";
-import type { StudioFlowDraftChoices } from "./application-flow-step-form";
 import { StudioReferencePicker } from "./studio-reference-picker";
 import { Plus } from "lucide-react";
 import { Label } from "../components/label";
@@ -23,9 +22,9 @@ import {
   studioFlowConditionFormula,
   type StudioFlowConditionContext,
 } from "./application-flow-condition";
-import type { StudioFlowNewStepSettings } from "./application-flow-commands";
+import type { StudioFlowNewStepSettings, StudioFlowStepType } from "./application-flow-commands";
 
-export type StudioFlowStepChoice = Readonly<{ type: string; title: string; summary: string }>;
+export type StudioFlowStepChoice = StudioFlowStepType;
 export type StudioFlowStepPickerContext = Readonly<{
   condition: StudioFlowConditionContext;
   fields: readonly Readonly<{ value: string; label: string }>[];
@@ -36,7 +35,6 @@ export function StudioFlowStepPicker({
   id,
   label,
   types,
-  forms,
   disabled,
   onAdd,
   action,
@@ -45,20 +43,19 @@ export function StudioFlowStepPicker({
   id: string;
   label: string;
   types: readonly StudioFlowStepChoice[];
-  forms: StudioFlowDraftChoices["forms"];
   disabled: boolean;
   onAdd: (type: string, settings: StudioFlowNewStepSettings) => boolean;
   action: string;
   context: StudioFlowStepPickerContext;
 }>) {
   const [chosen, setChosen] = useState<StudioFlowStepChoice | null>(null);
-  const [formAlias, setFormAlias] = useState("");
+  const [picks, setPicks] = useState<Readonly<Record<string, string>>>({});
   const [message, setMessage] = useState("");
   const [field, setField] = useState("");
   const [condition, setCondition] = useState<ConditionNode | undefined>(undefined);
   const [formula, setFormula] = useState<FlowFormula | undefined>(undefined);
   const [thenTaskType, setThenTaskType] = useState("");
-  const needsForm = chosen?.type === "interface.show_form";
+  const choices = chosen?.choices ?? [];
   const needsCondition = chosen?.type === "if";
   const needsField = chosen?.type === "rule.require";
   const definition =
@@ -83,6 +80,7 @@ export function StudioFlowStepPicker({
         value={chosen}
         onValueChange={(next) => {
           setChosen(next);
+          setPicks({});
           setMessage("");
           setField("");
           setCondition(undefined);
@@ -117,19 +115,19 @@ export function StudioFlowStepPicker({
           {chosen.summary}
         </p>
       )}
-      {needsForm && (
-        <div className="space-y-1">
-          <Label htmlFor={`${id}-form`}>Form to show</Label>
+      {choices.map((choice) => (
+        <div key={choice.property} className="space-y-1">
+          <Label htmlFor={`${id}-${choice.property}`}>{choice.label}</Label>
           <StudioReferencePicker
-            id={`${id}-form`}
+            id={`${id}-${choice.property}`}
             disabled={disabled}
-            value={formAlias}
-            unset="Choose a form before adding the step"
-            options={forms.map((form) => ({ value: form.alias, label: form.label }))}
-            onChange={setFormAlias}
+            value={picks[choice.property] ?? ""}
+            unset={choice.unset}
+            options={choice.options}
+            onChange={(next) => setPicks({ ...picks, [choice.property]: next })}
           />
         </div>
-      )}
+      ))}
       {needsCondition && (
         <StudioConditionControls
           {...(condition === undefined ? {} : { value: condition })}
@@ -196,7 +194,9 @@ export function StudioFlowStepPicker({
         disabled={
           disabled ||
           chosen === null ||
-          (needsForm && !forms.some((form) => form.alias === formAlias)) ||
+          choices.some(
+            (choice) => !choice.options.some((option) => option.value === picks[choice.property]),
+          ) ||
           (needsMessage && message.trim() === "") ||
           (needsField && !context.fields.some((entry) => entry.value === field)) ||
           (needsCondition &&
@@ -205,7 +205,7 @@ export function StudioFlowStepPicker({
         onClick={() => {
           if (chosen !== null) {
             const added = onAdd(chosen.type, {
-              ...(needsForm ? { formAlias } : {}),
+              ...(choices.length > 0 ? { choices: picks } : {}),
               ...(needsMessage ? { message: message.trim() } : {}),
               ...(needsField ? { field } : {}),
               ...(needsCondition && formula !== undefined
@@ -213,7 +213,7 @@ export function StudioFlowStepPicker({
                 : {}),
             });
             if (!added) return;
-            setFormAlias("");
+            setPicks({});
             setMessage("");
             setField("");
             setCondition(undefined);

@@ -9,6 +9,7 @@ import {
   plainSourceSettingValue,
   typedSourceSettingValue,
   validateComponentSettings,
+  queryTotalReferenceProblem,
   type ApplicationSourceDocument,
   type BlockPropertySchemaContract,
   type ComponentSettingFailure,
@@ -81,6 +82,7 @@ export type StudioSettingValues = Readonly<Record<string, SourceBlockPropertyVal
 export type StudioSettingChoices = Readonly<{
   fields: readonly StudioQueryField[];
   queries: readonly StudioQueryChoice[];
+  totals: StudioQueryChoice["totals"];
   pages: readonly Readonly<{ key: string; label: string }>[];
   recordTypes: readonly Readonly<{ key: string; label: string }>[];
   actions: readonly StudioActionChoice[];
@@ -107,6 +109,7 @@ export const studioDraftChoices = (
       : { ...choice, borrowedFrom: applicationName(choice.borrowedFrom) };
   return {
     queries: studioQueryChoices(source, borrowed).map(named),
+    totals: [],
     fields: studioSourceFields(source),
     pages: source.body.pages.map((page) => ({ key: page.key, label: page.name })),
     recordTypes: studioSourceRecordTypes(source),
@@ -132,6 +135,7 @@ export const studioBlockChoices = (
     : {
         ...draft,
         fields: chosen?.fields ?? [],
+        totals: chosen?.totals ?? [],
         relationships: draft.relationships.filter(
           (relationship) => relationship.recordType === chosen?.recordType,
         ),
@@ -198,7 +202,7 @@ export const studioFittingFields = (
 export const studioSettingProblems = (
   values: StudioSettingValues,
   properties: readonly BlockPropertySchemaContract[],
-  choices?: Pick<StudioSettingChoices, "fields">,
+  choices?: Pick<StudioSettingChoices, "fields" | "totals">,
 ): readonly string[] => {
   const problems = validateComponentSettings(values, properties).map((failure) =>
     failurePlace(properties, failure.path, failure.family),
@@ -212,6 +216,10 @@ export const studioSettingProblems = (
       // Binding fields belong to the page subject or parent row, and a row's related columns to
       // the related records query; their own checks judge them, not the block's data.
       if (property.key === "query_parameters" || property.key === "child_columns") return;
+      if (property.kind === "total_reference" && value?.kind === "total_reference") {
+        const problem = queryTotalReferenceProblem(property.label, value.value, choices.totals);
+        if (problem !== undefined) problems.push(problem);
+      }
       if (
         property.kind === "field_reference" &&
         value?.kind === "field_reference" &&
@@ -241,6 +249,10 @@ const initialValue = (
   choices: StudioSettingChoices,
 ): SettingValue => {
   switch (property.kind) {
+    case "total_reference":
+      return choices.totals[0] === undefined
+        ? undefined
+        : { kind: "total_reference", value: choices.totals[0].alias };
     case "group":
       return { kind: "group", properties: {} };
     case "list":
@@ -552,6 +564,28 @@ function SettingControl(props: ControlProps): ReactElement {
           }))}
           onChange={(next) =>
             onChange(next === "" ? undefined : { kind: "field_reference", field: next })
+          }
+        />
+      );
+    case "total_reference":
+      return (
+        <StudioReferencePicker
+          id={id}
+          aria-describedby={descriptionId}
+          disabled={disabled}
+          value={value?.kind === "total_reference" ? value.value : ""}
+          unset={
+            choices.totals.length === 0
+              ? "Add a total to the query first"
+              : unsetLabel(property, undefined)
+          }
+          options={choices.totals.map((total) => ({
+            value: total.alias,
+            label: total.label,
+            group: "Totals of the query",
+          }))}
+          onChange={(next) =>
+            onChange(next === "" ? undefined : { kind: "total_reference", value: next })
           }
         />
       );

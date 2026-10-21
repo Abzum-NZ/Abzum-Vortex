@@ -18,6 +18,7 @@ import type {
 
 /** Property kinds whose value names an application-scoped or stored target. */
 export const blockReferencePropertyKinds = [
+  "total_reference",
   "field_reference",
   "relationship_reference",
   "action_reference",

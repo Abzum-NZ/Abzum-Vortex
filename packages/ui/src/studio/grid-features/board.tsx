@@ -63,22 +63,31 @@ function StudioBoardTotals({
   idPrefix,
   rows,
   facts,
+  totals,
   disabled,
   onChange,
 }: Readonly<{
   idPrefix: string;
   rows: readonly TotalRow[];
   facts: RecordsTableBoardFacts | undefined;
+  totals: StudioSettingChoices["totals"];
   disabled: boolean;
   onChange: (rows: readonly TotalRow[]) => void;
 }>): ReactElement {
-  const options: StudioReferencePickerOption[] = (
-    facts === undefined ? [] : studioBoardTotalChoices(facts)
-  ).map((choice) => ({
-    value: choice.alias,
-    label: choice.label,
-    group: choice.sumOf === undefined ? "Totals of the query" : "Number fields",
-  }));
+  const options: StudioReferencePickerOption[] = [
+    ...totals.map((total) => ({
+      value: total.alias,
+      label: total.label,
+      group: "Totals of the query",
+    })),
+    ...(facts === undefined ? [] : studioBoardTotalChoices(facts))
+      .filter((choice) => choice.sumOf !== undefined)
+      .map((choice) => ({
+        value: choice.alias,
+        label: choice.label,
+        group: "Number fields",
+      })),
+  ];
   const labelOf = (alias: string): string =>
     (options.find((option) => option.value === alias)?.label ?? "A removed item").slice(0, 60);
   const unchosen = options.filter((option) => !rows.some((row) => row.alias === option.value));
@@ -236,6 +245,7 @@ export function StudioBoardEditor({
           idPrefix={`${idPrefix}-${ownId}-totals`}
           rows={totalRows(value)}
           facts={boardFacts}
+          totals={choices.totals}
           disabled={disabled}
           onChange={(rows) => commit({ ...value.properties, totals: totalsValue(rows) })}
         />
