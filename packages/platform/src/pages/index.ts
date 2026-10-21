@@ -1,6 +1,7 @@
 import "server-only";
 export {
   projectRowActionAvailability,
+  rowActionInstallationOf,
   type RowActionInstallation,
 } from "./records-table-features/row-actions";
 

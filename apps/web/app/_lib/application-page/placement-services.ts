@@ -7,7 +7,7 @@ import {
   createRecordsSelectionSealer,
   createRecordsTableQueryResolver,
   projectRowActionAvailability,
-  installedNamedActions,
+  rowActionInstallationOf,
   createReferenceChoiceService,
   createViewerSafeRecordLinkService,
   decideRecordTypeExport,
@@ -59,24 +59,13 @@ export const createPlacementReadServices = (
       ...args: Parameters<PlacementReadInput["services"]["tables"]["projectRowActions"]>
     ) => {
       const [context, placementId, recordTypeId, projection] = args;
-      const application = context.releaseSet.application;
-      const modules = context.releaseSet.modules;
       const result = await humanOrganizationRequests(dependencies.identityAuthorityId).run(
         session,
         selection,
         async (transaction, _scope, issuedAt) =>
           projectRowActionAvailability(
             transaction,
-            {
-              bindings: application.content.flowBindings,
-              flows: new Map(
-                [
-                  ...application.content.flows,
-                  ...modules.flatMap((module) => module.content.flows),
-                ].map((flow) => [String(flow.id), flow]),
-              ),
-              namedActions: installedNamedActions(application, modules),
-            },
+            rowActionInstallationOf(context),
             placementId,
             recordTypeId,
             projection,

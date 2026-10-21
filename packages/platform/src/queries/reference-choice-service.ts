@@ -1,7 +1,8 @@
 import "server-only";
 
-import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
+import { createHash } from "node:crypto";
 import { z } from "zod";
+import { openToken, sealToken } from "./sealed-token";
 import {
   createHumanOrganizationRequestService,
   type HumanOrganizationRequestResult,
@@ -279,16 +280,7 @@ class AccountContinuationError extends Error {
   }
 }
 
-const nonceLength = 12;
-const tagLength = 16;
-const accountTokenVersion = 1;
-const accountAssociatedData = Buffer.from("vortex.query.account-choice.continuation.v1", "utf8");
-
-const cipherKey = (key: QueryContinuationKey): Buffer => {
-  if (!(key.key instanceof Uint8Array) || key.key.byteLength !== 32)
-    throw new Error("QUERY_CONTINUATION_KEY_INVALID");
-  return Buffer.from(key.key);
-};
+const accountPurpose = "vortex.query.account-choice.continuation.v1";
 
 const searchFingerprint = (search: string | undefined): string =>
   createHash("sha256")
@@ -300,48 +292,17 @@ const searchFingerprint = (search: string | undefined): string =>
 const encodeAccountContinuation = (
   continuation: AccountContinuation,
   key: QueryContinuationKey,
-): string => {
-  const payload = Buffer.from(
-    JSON.stringify(accountContinuationSchema.parse(continuation)),
-    "utf8",
-  );
-  const nonce = randomBytes(nonceLength);
-  const cipher = createCipheriv("aes-256-gcm", cipherKey(key), nonce, { authTagLength: tagLength });
-  cipher.setAAD(accountAssociatedData);
-  const encrypted = Buffer.concat([cipher.update(payload), cipher.final()]);
-  return Buffer.concat([
-    Buffer.from([accountTokenVersion]),
-    nonce,
-    cipher.getAuthTag(),
-    encrypted,
-  ]).toString("base64url");
-};
+): string => sealToken(key, accountPurpose, accountContinuationSchema.parse(continuation));
 
 const decodeAccountContinuation = (
   token: string,
   key: QueryContinuationKey,
 ): AccountContinuation => {
-  const secret = cipherKey(key);
-  try {
-    if (!/^[A-Za-z0-9_-]+$/.test(token)) throw new AccountContinuationError();
-    const bytes = Buffer.from(token, "base64url");
-    if (bytes.length <= 1 + nonceLength + tagLength || bytes[0] !== accountTokenVersion)
-      throw new AccountContinuationError();
-    const decipher = createDecipheriv("aes-256-gcm", secret, bytes.subarray(1, 1 + nonceLength), {
-      authTagLength: tagLength,
-    });
-    decipher.setAAD(accountAssociatedData);
-    decipher.setAuthTag(bytes.subarray(1 + nonceLength, 1 + nonceLength + tagLength));
-    const payload = Buffer.concat([
-      decipher.update(bytes.subarray(1 + nonceLength + tagLength)),
-      decipher.final(),
-    ]).toString("utf8");
-    const parsed = accountContinuationSchema.safeParse(JSON.parse(payload));
-    if (!parsed.success) throw new AccountContinuationError();
-    return parsed.data;
-  } catch {
-    throw new AccountContinuationError();
-  }
+  const opening = openToken(key, accountPurpose, token);
+  if (opening.kind === "refused") throw new AccountContinuationError();
+  const parsed = accountContinuationSchema.safeParse(opening.payload);
+  if (!parsed.success) throw new AccountContinuationError();
+  return parsed.data;
 };
 
 type ResultRow = DatabaseRow & { readonly result: unknown };
