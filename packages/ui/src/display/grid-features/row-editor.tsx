@@ -272,11 +272,25 @@ function RowEditScope({ context, children, retainRow }: GridFeatureScopeProps): 
           ]),
         );
         const count = Object.keys(fieldErrors).length;
+        // Located corrections show at their field; the save controls name how many need fixing and
+        // keep any correction for a field this row did not submit.
+        const unlocated = [
+          ...new Set(
+            corrections.flatMap((correction) =>
+              located.includes(correction) || correction.message === undefined
+                ? []
+                : [correction.message],
+            ),
+          ),
+        ];
         setErrors(fieldErrors);
         setMessage(
           count === 0
             ? answer.message
-            : `Correct ${count} ${count === 1 ? "field" : "fields"} before saving.`,
+            : [
+                `Correct ${count} ${count === 1 ? "field" : "fields"} before saving.`,
+                ...unlocated,
+              ].join(" "),
         );
       } else fail("A row save returned an invalid outcome", { propertyPath: ["row_edit"] });
     } catch (error) {
@@ -332,9 +346,11 @@ function RowEditScope({ context, children, retainRow }: GridFeatureScopeProps): 
   return (
     <RowEditingContext.Provider value={editing}>
       {children}
-      {context.presentation === "cards" && draft === undefined ? (
+      {/* Cards unmount their save controls with the draft; this region stays mounted so the
+          outcome is announced, and stays empty while the card's own controls show it. */}
+      {context.presentation === "cards" ? (
         <span role="status" aria-live="polite" className="sr-only">
-          {message}
+          {draft === undefined ? message : undefined}
         </span>
       ) : null}
     </RowEditingContext.Provider>
