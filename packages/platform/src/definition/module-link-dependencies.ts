@@ -32,6 +32,82 @@ export type LinkDependencyProblem = Readonly<{
   message: string;
 }>;
 
+export type LinkDependencyCandidates =
+  | Readonly<{
+      kind: "available";
+      parents: readonly LinkDependencyField[];
+      filtersByParent: Readonly<Record<string, readonly LinkDependencyField[]>>;
+    }>
+  | Readonly<{
+      kind: "unavailable";
+      reason: "no_parent_link" | "no_matching_link" | "not_filterable";
+      message: string;
+      /** The target field to open when filtering needs enabling. Otherwise open its record type. */
+      fieldId?: string;
+    }>;
+
+const matchingLink = (parent: LinkDependencyField, filter: LinkDependencyField): boolean =>
+  parent.type === "link" &&
+  parent.target !== undefined &&
+  filter.type === "link" &&
+  filter.target === parent.target;
+
+/** Offer only pairs accepted by the dependency judgement, with an actionable reason otherwise. */
+export const linkDependencyCandidates = (
+  fields: readonly LinkDependencyField[],
+  field: LinkDependencyField & Readonly<{ recordLabel: string; targetLabel: string }>,
+  targetFields: readonly LinkDependencyField[],
+): LinkDependencyCandidates => {
+  const position = fields.findIndex((item) => item.id === field.id);
+  const ordered =
+    position < 0 ? [...fields, field] : fields.map((item) => (item.id === field.id ? field : item));
+  const parents = ordered
+    .slice(0, ordered.indexOf(field))
+    .filter((item) => item.type === "link" && item.target !== undefined);
+  if (parents.length === 0)
+    return {
+      kind: "unavailable",
+      reason: "no_parent_link",
+      message: `Add another link to ${field.recordLabel} before this one; its choice can then narrow ${field.label}'s choices.`,
+    };
+  const filtersByParent: Record<string, readonly LinkDependencyField[]> = Object.create(null);
+  for (const parent of parents) {
+    const filters = targetFields.filter(
+      (filter) =>
+        matchingLink(parent, filter) &&
+        filter.filterable &&
+        linkDependencyProblem(
+          ordered.map((item) =>
+            item.id === field.id
+              ? { ...field, dependsOn: { parent: parent.id, filter: filter.id } }
+              : item,
+          ),
+          field.id,
+          targetFields,
+        ) === undefined,
+    );
+    if (filters.length > 0) filtersByParent[parent.id] = filters;
+  }
+  const availableParents = parents.filter((parent) => filtersByParent[parent.id] !== undefined);
+  if (availableParents.length > 0)
+    return { kind: "available", parents: availableParents, filtersByParent };
+  for (const parent of parents) {
+    const filter = targetFields.find((item) => matchingLink(parent, item) && !item.filterable);
+    if (filter !== undefined)
+      return {
+        kind: "unavailable",
+        reason: "not_filterable",
+        fieldId: filter.id,
+        message: `${field.targetLabel}'s ${filter.label} link does not allow filtering. Turn on Allow filtering for ${filter.label} on ${field.targetLabel} to use it here.`,
+      };
+  }
+  return {
+    kind: "unavailable",
+    reason: "no_matching_link",
+    message: `${field.targetLabel} has no link to ${parents[0]!.label} to narrow by. Add one to ${field.targetLabel} first.`,
+  };
+};
+
 /**
  * Why `fieldId`'s declared dependency cannot hold, or undefined when it can. `fields` are the
  * record type's fields in their draft order; `targetFields` are the fields of the record type the
@@ -91,14 +167,7 @@ export const linkDependencyProblem = (
     return undefined;
   }
   const filter = targetFields?.find((field) => field.id === dependsOn.filter);
-  if (
-    parent.type !== "link" ||
-    parent.target === undefined ||
-    filter === undefined ||
-    filter.type !== "link" ||
-    !filter.filterable ||
-    filter.target !== parent.target
-  )
+  if (filter === undefined || !filter.filterable || !matchingLink(parent, filter))
     return {
       reason: "filter_unavailable",
       message: `${child.label} cannot be filtered by ${parent.label}: choose a field the list can filter by.`,

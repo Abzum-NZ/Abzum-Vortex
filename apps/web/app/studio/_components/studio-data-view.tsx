@@ -767,6 +767,7 @@ export function StudioDataInspectorView({ model }: Readonly<{ model: StudioDataM
             disabled={disabled}
             context={fieldContext}
             edit={edit}
+            onSelect={select}
             onAdded={(fieldKey) =>
               select({
                 kind: "field",
@@ -801,6 +802,7 @@ export function StudioDataInspectorView({ model }: Readonly<{ model: StudioDataM
         disabled={disabled}
         context={fieldContext}
         edit={edit}
+        onSelect={select}
         onRemoved={() =>
           select({
             kind: "record_type",
