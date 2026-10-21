@@ -99,7 +99,7 @@ export const queryBindingTypeName = (
       : type.recordTypes.map(recordTypeLabel).join(" or ")
     : typeNames[type.kind];
 
-/** "a date", "an Opportunity": the article business sentences put before a type name. */
+/** "a date", "an order": the article business sentences put before a type name. */
 export const withArticle = (name: string): string =>
   `${/^[aeiou]/i.test(name) ? "an" : "a"} ${name}`;
 

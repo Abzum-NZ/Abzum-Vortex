@@ -75,6 +75,10 @@ const isPhone = (): boolean => window.matchMedia(PHONE_QUERY).matches;
 const never = (): boolean => false;
 const unknownOnServer = (): undefined => undefined;
 
+/** Whether the viewport is a phone's now; false while the server renders. */
+export const usePhoneViewport = (): boolean =>
+  useSyncExternalStore(subscribeToPhone, isPhone, never);
+
 /**
  * The presentation the table shows now: the grid, or the phone cards when the definition asks for
  * cards and the viewport is a phone's. While the server renders and the page hydrates the

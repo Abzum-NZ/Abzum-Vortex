@@ -338,6 +338,7 @@ export function StudioConditionalFormattingEditor({
           key={selectedRule.id}
           idPrefix={`${idPrefix}-${ownId}-editor`}
           rule={selectedRule}
+          position={rules.indexOf(selectedRule) + 1}
           context={context}
           fieldIdOf={fieldIdOf}
           referenceOf={referenceOf}
@@ -426,6 +427,7 @@ export function StudioConditionalFormattingEditor({
 function RuleEditor({
   idPrefix,
   rule,
+  position,
   context,
   fieldIdOf,
   referenceOf,
@@ -436,6 +438,8 @@ function RuleEditor({
 }: Readonly<{
   idPrefix: string;
   rule: ConditionalFormatRule;
+  /** The rule's place in the list, as the builder sees it. */
+  position: number;
   context: StudioConditionControlsContext;
   fieldIdOf: (reference: string) => string | undefined;
   referenceOf: (fieldId: string) => string | undefined;
@@ -488,7 +492,7 @@ function RuleEditor({
   };
   return (
     <section
-      aria-label={`Rule ${rule.id}`}
+      aria-label={`Rule ${position}`}
       className="space-y-3"
       data-vortex-formatting-rule-editor={rule.id}
     >

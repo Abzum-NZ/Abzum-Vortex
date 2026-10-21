@@ -1206,8 +1206,11 @@ export function RecordsGrid({
         />
         {!expanded || panelId === undefined || expansion === undefined ? null : (
           <GridSpanRow
-            rowAttributes={{ "data-vortex-related-of": row.recordId }}
+            // The panel is not a row of the grid: it is left out of the row count and indexes,
+            // and is announced as the named region the row's toggle controls.
+            rowAttributes={{ role: "none", "data-vortex-related-of": row.recordId }}
             cellAttributes={{
+              role: "region",
               id: panelId,
               "aria-label": `${expansion.noun.charAt(0).toUpperCase()}${expansion.noun.slice(1)} of ${name}`,
               "data-grid-panel": "",

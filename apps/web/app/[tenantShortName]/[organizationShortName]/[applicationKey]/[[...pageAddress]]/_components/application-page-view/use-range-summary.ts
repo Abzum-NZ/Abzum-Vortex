@@ -1,18 +1,15 @@
 import { useCallback, useMemo } from "react";
 import {
-  parseRecordsTablePagePosition,
+  readRecordsTablePagePosition,
+  recordsRangeSummaryResultSchema,
   type RecordsRangeSummaryResult,
 } from "@vortex/platform/schema";
 import type { DisplaySemanticEvent, TablePayload } from "@vortex/ui";
 import type { ApplicationPageModel } from "../../../../../../_lib/application-page";
 
 /** The page position of a table's placement in the address: where the shown page was read from. */
-const pagePositionOf = (placementId: string) => {
-  for (const [name, value] of new URLSearchParams(window.location.search))
-    if (name.toLowerCase() === `page.${placementId.toLowerCase()}`)
-      return parseRecordsTablePagePosition(value);
-  return undefined;
-};
+const pagePositionOf = (placementId: string) =>
+  readRecordsTablePagePosition(placementId, new URLSearchParams(window.location.search));
 
 /**
  * The totals behind a Records table's spreadsheet status bar: one request per settled range. The
@@ -56,7 +53,14 @@ export function useRangeSummary({ model }: Readonly<{ model: ApplicationPageMode
             fieldIds: event.fieldIds,
           }),
         });
-        return (await response.json()) as RecordsRangeSummaryResult;
+        // The answer is parsed, never trusted: an unreadable one is logged and shown as refused.
+        const answer = recordsRangeSummaryResultSchema.safeParse(await response.json());
+        if (answer.success) return answer.data;
+        console.error(
+          `[page] range summary answer unreadable: status=${response.status}`,
+          answer.error,
+        );
+        return { kind: "refused", reason: "not_available" };
       },
     }),
     [model],

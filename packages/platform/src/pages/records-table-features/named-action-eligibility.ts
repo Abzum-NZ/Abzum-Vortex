@@ -58,7 +58,6 @@ export const readNamedActionEligibility = async (
       actionId: action.actionId,
     })),
   }));
-  let rows: readonly EligibilityRow[];
   await transaction.query`set local role vortex_runtime`;
   // A failed read aborts the transaction, so the role reset would fail too and replace the real
   // cause; it runs only after a read that succeeded (the aborted transaction is rolled back).
@@ -69,7 +68,7 @@ export const readNamedActionEligibility = async (
   `;
   await transaction.query`set local role vortex_request`;
   if (!Array.isArray(result?.value)) throw new Error("NAMED_ACTION_ELIGIBILITY_RESULT_INVALID");
-  rows = result.value as readonly EligibilityRow[];
+  const rows = result.value as readonly EligibilityRow[];
   if (rows.length !== targets.length) throw new Error("NAMED_ACTION_ELIGIBILITY_ROWS_MISSING");
   const byId = new Map(rows.map((row) => [row.recordId.toLowerCase(), row]));
   if (byId.size !== targets.length) throw new Error("NAMED_ACTION_ELIGIBILITY_ROWS_DUPLICATED");

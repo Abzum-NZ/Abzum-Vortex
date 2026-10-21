@@ -112,7 +112,8 @@ export function usePlacementRefresh({
             undefined,
             true,
           );
-        } catch {
+        } catch (error) {
+          console.error("[page] placement content refresh failed", error);
           return;
         }
         if (placementRequestsRef.current.key !== requestScope.key) return;
@@ -185,7 +186,8 @@ export function usePlacementRefresh({
             tableContinuation,
             options?.content,
           );
-        } catch {
+        } catch (error) {
+          console.error("[page] placement refresh failed", error);
           result = { kind: "temporarily_unavailable" };
         }
         if (placementRequestsRef.current.key !== requestScope.key) return;

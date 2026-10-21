@@ -76,7 +76,9 @@ export const applyStudioRowActionChange = (
       kind: "refused",
       reason: "The row actions changed. Reload the inspector and try again.",
     };
-  if (next.length > 20 || next.filter((action) => action.placement === "inline").length > 3)
+  if (next.length > 20)
+    return { kind: "refused", reason: "A table can have at most 20 row actions" };
+  if (next.filter((action) => action.placement === "inline").length > 3)
     return {
       kind: "refused",
       reason: "At most three actions can sit beside the row; move the rest to the menu",

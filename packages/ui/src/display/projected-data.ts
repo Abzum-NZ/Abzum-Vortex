@@ -17,17 +17,14 @@ import {
 import {
   jsonValueSchema,
   type JsonValue,
-  type FlowFieldCorrection,
   builderKeySchema,
   moduleFieldValueSchemas,
   fieldIdSchema,
   richTextDocumentSchema,
   timestampSchema,
   isSafeLinkAddress,
-  type BoardColumnSelector,
   type BlockPropertyValueContract,
   type ConditionalFormatStyle,
-  type ComponentSemanticEventKind,
   type PipelineStageTone,
   type RecordsTableFeatureProjection,
   type RecordsTableRowFormat,
@@ -35,13 +32,9 @@ import {
   type RecordsTableFilterValue,
   type RecordsTableSortKey,
   type RecordsTableSortState,
-  type RecordsTableBatchEditRequest,
-  type RecordsTableBatchEditResult,
   RECORDS_TABLE_MAXIMUM_SORT_KEYS,
   gridLayoutStateSchema,
-  type GridLayout,
   type GridLayoutState,
-  type GridViewCommand,
   isRecord,
 } from "@vortex/platform/schema";
 import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "../definition-error";
@@ -54,7 +47,6 @@ import {
   parseSelectedRecordIds,
   type TableGroups,
   type TableSelectionParts,
-  type TableSelectionEvent,
 } from "./projected-grid-features";
 
 /**

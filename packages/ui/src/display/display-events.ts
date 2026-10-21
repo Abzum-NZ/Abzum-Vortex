@@ -1,15 +1,15 @@
-import {
-  type FlowFieldCorrection,
-  type JsonValue,
-  type BoardColumnSelector,
-  type ComponentSemanticEventKind,
-  type RecordsTableSortKey,
-  type RecordsTableBatchEditRequest,
-  type RecordsTableBatchEditResult,
-  type GridLayout,
-  type GridViewCommand,
+import type {
+  FlowFieldCorrection,
+  JsonValue,
+  BoardColumnSelector,
+  ComponentSemanticEventKind,
+  RecordsTableSortKey,
+  RecordsTableBatchEditRequest,
+  RecordsTableBatchEditResult,
+  GridLayout,
+  GridViewCommand,
 } from "@vortex/platform/schema";
-import { type TableSelectionEvent } from "./projected-grid-features";
+import type { TableSelectionEvent } from "./projected-grid-features";
 
 /** Declared semantic event names this display family can emit. */
 export type DisplaySemanticEventName =
