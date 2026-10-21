@@ -22,6 +22,8 @@ export type FlowApplicationAddress = Readonly<{
   organizationShortName: string;
   applicationKey: string;
   pageKey: string;
+  /** The record the page was opened for, when it has one: part of the page's address. */
+  pageRecordId?: string;
 }>;
 
 /** What the surface was rendered from, so the server can refuse a stale or foreign request. */
@@ -248,6 +250,9 @@ export function createFlowInvokeClient(options: FlowInvokeClientOptions): FlowIn
           organizationShortName: options.address.organizationShortName,
           applicationKey: options.address.applicationKey,
           pageKey: options.address.pageKey,
+          ...(options.address.pageRecordId === undefined
+            ? {}
+            : { pageRecordId: options.address.pageRecordId }),
           invocation: parsedInvocation.data,
         }),
       });

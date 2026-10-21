@@ -173,6 +173,8 @@ export type FlowInvocationRequest = Readonly<{
   organizationShortName: string;
   applicationKey: string;
   pageKey: string;
+  /** The record the addressed page was opened for (an address candidate, never authority). */
+  pageRecordId?: string;
   invocation: FlowBindingInvocation;
 }>;
 
@@ -1185,7 +1187,12 @@ export async function invokeInstalledFlow(
       ...requestDependencies,
       context,
       permissions: dependencies.releaseCatalogue.permissions,
-      selection: { pageId: String(page.pageId) },
+      // The page's own record decides its record-based visibility conditions and action
+      // availability; a gesture's subject (a row of a table on the page) never stands in for it.
+      selection: {
+        pageId: String(page.pageId),
+        ...(body.pageRecordId === undefined ? {} : { subjectRecordId: body.pageRecordId }),
+      },
     }).project(identity.session, runtimeContextSelection(context));
     if (projected.kind !== "available" || projected.value === undefined) {
       logFlowRefusal(`BINDING_CONTROL_NOT_ON_PAGE page_projection_${projected.kind}`);
