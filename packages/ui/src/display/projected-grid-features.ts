@@ -438,7 +438,7 @@ const parseInlineEditFields = (
 };
 
 /** One projected filterable field: its identity, label, canonical type, filter kind and control facts. */
-const parseFilterField = (
+export const parseFilterField = (
   value: unknown,
   location: DefinitionRenderErrorLocation,
 ): RecordsTableFilterField => {
