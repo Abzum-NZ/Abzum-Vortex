@@ -21,7 +21,12 @@ import {
   type OrganizationSelectionCandidate,
   type SaveRecordCommand,
 } from "../schema";
-import type { FlowProtectedTaskCall, FlowRunState, FlowTaskOutcome } from "../rules/index";
+import type {
+  BeforeSaveRuleWarning,
+  FlowProtectedTaskCall,
+  FlowRunState,
+  FlowTaskOutcome,
+} from "../rules/index";
 import type { FlowEffectLedger, FlowEffectPrincipal } from "./flow-continuation-store";
 import { reportUnexpectedFailure } from "./definition-error";
 import {
@@ -126,6 +131,20 @@ export const createFlowTaskRunner = (
     if (diagnostic.success) return { diagnostic: diagnostic.data };
     console.error(`[flows] rule refusal not carried: ${describeFailure(diagnostic.error)}`);
     return {};
+  };
+
+  /** Carries only committed saves' authored messages; logs locate the rule without record values. */
+  const appendWarnings = (
+    run: Run,
+    call: FlowProtectedTaskCall,
+    warnings: readonly BeforeSaveRuleWarning[] | undefined,
+  ): void => {
+    for (const warning of warnings ?? []) {
+      run.warnings.push({ taskId: call.taskId, message: warning.message });
+      console.warn(
+        `[flows] flow ${run.flowId} task ${call.taskId} committed with warning ${warning.code}`,
+      );
+    }
   };
 
   /** Records a task the platform cannot run here: it fails as not available, never as refused. */
@@ -429,6 +448,7 @@ export const createFlowTaskRunner = (
       if (value.outcome === "saved") {
         const recordId = recordIdSchema.safeParse(value.recordId);
         if (!recordId.success) return { result: { outcome: "refused" }, stored: {} };
+        appendWarnings(run, call, saved.warnings);
         const outputs = { record: recordId.data };
         return { result: { outcome: "committed", outputs }, stored: outputs };
       }
@@ -495,6 +515,7 @@ export const createFlowTaskRunner = (
         return { result: { outcome: requestOutcome(executed.kind) }, stored: {} };
       const value = executed.value;
       if (value.outcome === "completed") {
+        appendWarnings(run, call, executed.warnings);
         // Only the record's identity and revision are kept: its readable values stay with the port.
         const outputs = plan.asSave
           ? { record: value.recordId }

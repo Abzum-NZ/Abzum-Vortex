@@ -1,3 +1,4 @@
+import type { FlowWarningNotice } from "@vortex/platform/schema";
 import type { FormFlowFeedback } from "@vortex/ui";
 import type { Notice } from "./types";
 
@@ -48,6 +49,12 @@ export const finishedNotice = (outcome: string | undefined, failureCode: unknown
   failureCode === "task_not_available"
     ? notAvailableNotice
     : (outcomeNotices[outcome ?? "failed"] ?? unavailableNotice);
+
+/** Keep the save outcome first, followed by every authored warning in the same notice surface. */
+export const withSaveWarnings = (notice: Notice, warnings: readonly FlowWarningNotice[]): Notice =>
+  warnings.length === 0
+    ? notice
+    : { ...notice, text: [notice.text, ...warnings.map((warning) => warning.message)].join(" ") };
 
 export const refusalNotices: Readonly<
   Record<Extract<FormFlowFeedback, { kind: "refusal" }>["code"], Notice>
