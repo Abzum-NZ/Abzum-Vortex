@@ -27,8 +27,21 @@ export const FLOW_INTENT_KINDS: readonly FlowIntentKind[] = Object.freeze([
   "set_filter",
 ]);
 
-/** The person's answer to a form intent, using the same shape sent to the server. */
-export type FlowFormAnswer = Extract<FormContinuationAnswer, { kind: "submit" | "cancel" }>;
+/**
+ * The person's answer to a form intent, using the same shape sent to the server. A form that is
+ * cancelled has no answer: the surface rejects with the surface-cancellation error instead.
+ */
+export type FlowFormAnswer = Extract<FormContinuationAnswer, { kind: "submit" }>;
+
+/** The one rejection of an interactive surface the person cancelled or that went away unanswered. */
+export const surfaceCancellationError = (): Error => {
+  const error = new Error("Flow surface cancelled");
+  error.name = "AbortError";
+  return error;
+};
+
+export const isSurfaceCancellation = (error: unknown): boolean =>
+  error instanceof Error && error.name === "AbortError";
 
 export type FlowMessageIntent = Readonly<{ text: string; tone: string | undefined }>;
 /**
@@ -137,7 +150,7 @@ export const readFormIntent = (intent: FlowIntent): FlowFormIntent | undefined =
  */
 export type FlowIntentHost = Readonly<{
   showMessage: (message: FlowMessageIntent, signal?: AbortSignal) => void | Promise<void>;
-  /** Resolves with the person's answer; a rejection abandons the run without answering. */
+  /** Resolves with the person's answer; a cancellation (`isSurfaceCancellation`) abandons the run without answering. */
   showForm: (form: FlowFormIntent, signal?: AbortSignal) => Promise<FlowFormAnswer>;
   confirm: (confirmation: FlowConfirmIntent, signal?: AbortSignal) => Promise<FlowConfirmAnswer>;
   navigate: (intent: FlowIntent) => boolean | Promise<boolean>;

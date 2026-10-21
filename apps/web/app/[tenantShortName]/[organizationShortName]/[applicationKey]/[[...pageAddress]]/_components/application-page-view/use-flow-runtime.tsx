@@ -74,7 +74,6 @@ export function useFlowRuntime({
   application,
   subject,
   continuingFormsRef,
-  formCancelledRef,
   unsavedWorkRegistry,
   submittedFormsRef,
   router,
@@ -102,7 +101,6 @@ export function useFlowRuntime({
   application: ApplicationPageModel["invocation"];
   subject: ApplicationPageModel["subject"];
   continuingFormsRef: RefObject<Map<string, SubmittedForm>>;
-  formCancelledRef: RefObject<boolean>;
   unsavedWorkRegistry: ReturnType<typeof useUnsavedWorkRegistry>;
   submittedFormsRef: RefObject<Map<string, SubmittedForm>>;
   router: ReturnType<typeof useRouter>;
@@ -202,7 +200,6 @@ export function useFlowRuntime({
         return response;
       },
       resume: async (flowId, continuation, answer, evidence, signal) => {
-        if (answer.kind === "cancel") formCancelledRef.current = true;
         const submission = continuingFormsRef.current.get(continuation);
         continuingFormsRef.current.delete(continuation);
         const response = await client.resume(flowId, continuation, answer, evidence, signal);
@@ -210,7 +207,7 @@ export function useFlowRuntime({
         return response;
       },
     };
-  }, [application, formCancelledRef, subject, unsavedWorkRegistry]);
+  }, [application, subject, unsavedWorkRegistry]);
   const webMcpClient = useMemo(
     () =>
       createFlowInvokeClient({

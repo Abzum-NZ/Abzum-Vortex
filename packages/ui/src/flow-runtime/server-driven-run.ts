@@ -2,6 +2,7 @@ import { describeFailure, type JsonValue } from "@vortex/platform/schema";
 import {
   performPresentationIntent,
   confirmAnswer,
+  isSurfaceCancellation,
   readConfirmIntent,
   readFormIntent,
   type FlowIntent,
@@ -35,8 +36,6 @@ const maximumContinuationLength = 128;
 const maximumRounds = 25;
 
 const expectedIntentKind = { form: "show_form", confirm: "confirm" } as const;
-const isSurfaceCancellation = (error: unknown): boolean =>
-  error instanceof Error && error.name === "AbortError";
 const refuseInvalidServerFlowState = (stage: string): Readonly<{ kind: "refused" }> => {
   console.error(`[flow] server response invalid: stage=${stage}`);
   return { kind: "refused" };

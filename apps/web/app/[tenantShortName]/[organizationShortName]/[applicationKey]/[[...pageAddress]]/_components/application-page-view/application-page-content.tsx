@@ -177,8 +177,6 @@ export function ApplicationPageViewContent({
   const choiceDefaultContextsRef = useRef<Record<string, boolean>>({});
   const submittedFormsRef = useRef(new Map<string, SubmittedForm>());
   const continuingFormsRef = useRef(new Map<string, SubmittedForm>());
-  /** Set when the person cancels a form a running flow paused at; a board move clears it when it starts. */
-  const formCancelledRef = useRef(false);
   const { unsavedWorkRegistry, unsavedWork, confirmDialog } = useUnsavedWorkPrompt({ router });
 
   const application = model.invocation;
@@ -292,7 +290,6 @@ export function ApplicationPageViewContent({
     application,
     subject,
     continuingFormsRef,
-    formCancelledRef,
     unsavedWorkRegistry,
     submittedFormsRef,
     router,
@@ -524,7 +521,6 @@ export function ApplicationPageViewContent({
     setFormFeedback,
     choiceEvidenceFor,
     submittedFormsRef,
-    formCancelledRef,
     applyDispatch,
     formBlock,
     initializeChoiceForm,
