@@ -76,7 +76,7 @@ begin
         pg_catalog.jsonb_build_object(
           'moduleRootId', p_action_owner_id,
           'applicationRootIds', contribution -> 'contributorApplicationRootIds',
-          'recordTypeId', action_content ->> 'subjectRecordTypeId',
+          'recordTypeId', contribution #>> '{action,subjectRecordTypeId}',
           'permissionKeys', permission_keys,
           'changeableFieldIds', set_field_ids
         )

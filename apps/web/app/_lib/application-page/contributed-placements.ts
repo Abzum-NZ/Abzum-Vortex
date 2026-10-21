@@ -378,6 +378,11 @@ export const readContributedActionAvailability = async (
     ),
   );
   if (result.kind !== "available") throw new Error(`CONTRIBUTED_ACTION_AVAILABILITY_${result.kind}`);
+  for (const [actionId, availability] of result.value.availability)
+    if (availability.kind !== "available")
+      console.info(
+        `[page] contributed action ${actionId} is not offered: ${availability.kind === "undecided" ? availability.reason : `${availability.kind} (${availability.cause})`}`,
+      );
   return new Set(
     [...result.value.availability]
       .filter(([, availability]) => availability.kind === "available")

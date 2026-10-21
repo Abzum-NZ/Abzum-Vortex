@@ -186,6 +186,11 @@ begin
     raise exception using errcode = '55000', message = 'Installed Event storage is unavailable';
   end if;
   module_content := module_release.compilation_output #> '{canonical,content}';
+  -- An Event about a record names the fields of its record type, which include the fields other
+  -- installed Modules contributed to it.
+  module_content := vortex_record.with_installed_record_contributions_internal(
+    module_content, context_organization_id, binding_module_root_id
+  );
 
   select pg_catalog.count(*), pg_catalog.jsonb_agg(item.value) -> 0
   into record_type_count, record_type

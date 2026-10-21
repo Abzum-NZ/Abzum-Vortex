@@ -65,7 +65,7 @@ alter function vortex_record.installed_record_type_contributions_internal(uuid,u
 revoke all on function vortex_record.installed_record_type_contributions_internal(uuid, uuid, uuid)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_record.installed_record_type_contributions_internal(uuid, uuid, uuid)
-  to vortex_record_adapter, vortex_owner;
+  to vortex_record_adapter, vortex_owner, postgres;
 
 comment on function vortex_record.installed_record_type_contributions_internal(uuid, uuid, uuid) is
   'Private exact installed field contributions of one owner record type in one organisation: the active contributor field mappings on the owner''s storage whose contributor Module is bound by an active installation of that organisation, with the contributor''s exact field definition. Owner-only except for the fixed record adapter; it decides no access.';
