@@ -1187,7 +1187,11 @@
                         "enabled": false
                       },
                       "spreadsheet": {
-                        "enabled": false
+                        "enabled": true,
+                        "range_select": true,
+                        "find": true,
+                        "status_bar_fields": ["vortex.crm.opportunities:opportunity.value"],
+                        "status_bar_operations": ["count", "sum", "average"]
                       },
                       "row_edit": {
                         "enabled": true,

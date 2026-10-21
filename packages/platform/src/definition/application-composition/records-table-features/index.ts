@@ -2,6 +2,13 @@ import {
   recordsTableSpreadsheetFeature,
   type RecordsTableSpreadsheetSettings,
 } from "./spreadsheet";
+
+export {
+  RECORDS_TABLE_STATUS_BAR_MAXIMUM_FIELDS,
+  recordsTableStatusBarFieldTypes,
+  recordsTableStatusBarOperations,
+  type RecordsTableStatusBarOperation,
+} from "./spreadsheet";
 import type { ComponentSettingValue } from "../block-property-schema";
 import {
   recordsTableBoardFeature,

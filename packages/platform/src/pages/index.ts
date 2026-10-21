@@ -108,6 +108,10 @@ export {
   type RecordsTableBulkDependencies,
 } from "./records-table-features/bulk-run";
 export {
+  createRecordsRangeSummaryService,
+  type RecordsRangeSummaryDependencies,
+} from "./records-table-features/range-summary";
+export {
   createRecordsTableExportService,
   type RecordsTableExportDependencies,
 } from "./records-table-features/export";
