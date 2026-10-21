@@ -82,9 +82,10 @@ const readableSubjectSchema = z
     outcome: z.literal("allowed"),
     recordId: recordIdSchema,
     concurrencyNumber: revisionSchema,
-    values: z.record(z.string(), jsonValueSchema),
   })
   .passthrough();
+
+const readableSubjectValuesSchema = z.object({ values: z.record(z.string(), jsonValueSchema) });
 
 /**
  * The readable projection of one fixed read, or the neutral refusal: the one parser every page
@@ -121,7 +122,7 @@ export const pageSubjectFromRead = (
   const readable = projection.subject;
   const row = protectedQueryRowSchema.parse({
     recordId: readable.recordId,
-    values: readable.values,
+    values: readableSubjectValuesSchema.parse(readable).values,
     revision: readable.concurrencyNumber,
     capabilities,
   });
