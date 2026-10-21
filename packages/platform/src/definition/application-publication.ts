@@ -10,6 +10,7 @@ import {
   type VersionImpactReason,
 } from "../schema";
 import { applicationValidationContractVersion } from "./application-contract-versions";
+import type { ModuleSourceDocument } from "./module-source-contracts";
 import { applicationModuleSources } from "./application-module-lowering";
 import { readRetainedApplicationModule } from "./application-draft-compilation-cache";
 import { canonicalJson, fingerprintCanonicalValue } from "./canonical-json-definition";
@@ -80,10 +81,37 @@ export const applicationCandidate = (
   return checked;
 };
 
-const inlineModuleSources = (candidate: DefinitionCandidateDraft) =>
-  candidate.draft.source.kind === "application"
-    ? applicationModuleSources(candidate.draft.source)
-    : refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
+// One compile asks for the inline Module sources of the same draft source from several steps
+// (retention key, unchanged check, staging, release). Lowering parses every one against its
+// contract and is a pure function of the source object, so each source object is lowered once and
+// each lowered source is fingerprinted once; nothing outlives the objects it is keyed by.
+const loweredModuleSources = new WeakMap<object, readonly ModuleSourceDocument[]>();
+const moduleSourceFingerprints = new WeakMap<
+  ModuleSourceDocument,
+  ReturnType<typeof fingerprintCanonicalValue>
+>();
+
+const inlineModuleSources = (candidate: DefinitionCandidateDraft) => {
+  const source = candidate.draft.source;
+  if (source.kind !== "application") return refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
+  let lowered = loweredModuleSources.get(source);
+  if (lowered === undefined) {
+    lowered = applicationModuleSources(source);
+    loweredModuleSources.set(source, lowered);
+  }
+  return lowered;
+};
+
+const moduleSourceFingerprint = (
+  source: ModuleSourceDocument,
+): ReturnType<typeof fingerprintCanonicalValue> => {
+  let fingerprint = moduleSourceFingerprints.get(source);
+  if (fingerprint === undefined) {
+    fingerprint = fingerprintCanonicalValue(source);
+    moduleSourceFingerprints.set(source, fingerprint);
+  }
+  return fingerprint;
+};
 
 /** The release version a draft or publication candidate was last released at, if any. */
 export const latestReleaseVersion = (
@@ -122,7 +150,7 @@ export const materializeInlineModules = async (
     const root =
       existing === undefined
         ? await transaction.createOwnedModuleRoot(String(candidate.draft.rootId), source)
-        : stagesOwnedModule(existing, fingerprintCanonicalValue(source))
+        : stagesOwnedModule(existing, moduleSourceFingerprint(source))
           ? await transaction.stageOwnedModuleSource(existing, source)
           : existing;
     roots.set(source.key, root);
@@ -146,7 +174,7 @@ export const stagedOwnedModuleRoots = (
   const inlineKeys = new Set(sources.map((source) => source.key));
   return [
     ...sources.map((source) => {
-      const sourceFingerprint = fingerprintCanonicalValue(source);
+      const sourceFingerprint = moduleSourceFingerprint(source);
       const existing = owned.get(source.key);
       if (existing === undefined)
         return [
@@ -207,7 +235,7 @@ const releaseInlineModules = async (
     if (unchanged.has(source.key)) continue;
     const root = roots.get(source.key);
     if (root === undefined) return refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
-    const sourceFingerprint = fingerprintCanonicalValue(source);
+    const sourceFingerprint = moduleSourceFingerprint(source);
     const module = validateCandidate(
       context,
       await transaction.readCandidate(root.rootId),
@@ -464,7 +492,7 @@ export const releasedUnchangedModules = async (
             root !== undefined &&
             root.currentReleaseRevision !== null &&
             currentReleases.get(source.key)?.sourceFingerprint === root.sourceFingerprint &&
-            root.sourceFingerprint === fingerprintCanonicalValue(source)
+            root.sourceFingerprint === moduleSourceFingerprint(source)
           );
         })
         .flatMap((source) =>
@@ -487,7 +515,7 @@ export const releasedUnchangedModules = async (
       root === undefined ||
       root.currentReleaseRevision === null ||
       currentReleases.get(source.key)?.sourceFingerprint !== root.sourceFingerprint ||
-      root.sourceFingerprint !== fingerprintCanonicalValue(source)
+      root.sourceFingerprint !== moduleSourceFingerprint(source)
     )
       continue;
     const dependencies = dependenciesByKey.get(source.key)!;
