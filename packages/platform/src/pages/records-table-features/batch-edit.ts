@@ -266,6 +266,13 @@ export const createRecordsTableBatchEditService = (
       for (const refused of resolved.problems)
         problems.push(problem(refused.recordId, "invalid", refused.field, refused.message));
       if (problems.length > 0) return { kind: "refused", problems };
+      // Every pasted title is now a reference; a title left unresolved never reaches the save.
+      if (
+        pasted.some((cell) => !resolved.references.has(linkTitleCellKey(cell.recordId, cell.field)))
+      ) {
+        log("link_title_unresolved");
+        return { kind: "unavailable" };
+      }
       const valuesOf = (row: RecordsTableBatchEditRequest["rows"][number]) =>
         Object.fromEntries(
           Object.entries(row.values).map(([field, value]) => [

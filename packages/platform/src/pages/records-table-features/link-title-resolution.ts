@@ -42,7 +42,12 @@ export type LinkTitleProblem = Readonly<{
   recordId: string;
   field: string;
   /** For the server log; never carries a title or an id. */
-  cause: "link_title_none" | "link_title_several" | "link_title_too_many" | "link_title_parent";
+  cause:
+    | "link_title_none"
+    | "link_title_several"
+    | "link_title_too_many"
+    | "link_title_parent"
+    | "link_title_not_filterable";
   message: string;
 }>;
 
@@ -150,13 +155,15 @@ export const resolveLinkTitles = async (
       ? []
       : [{ field, definition, targetModule, targetType }];
   });
-  const prepared = await dependencies.prepareTargets(
-    session,
-    installed,
-    targets.map(({ targetType }) => String(targetType.recordTypeId)),
-  );
-  if (prepared === "temporarily_unavailable" || prepared === "refused")
-    return { references, problems, unavailable: true };
+  const prepared =
+    targets.length === 0
+      ? "ready"
+      : await dependencies.prepareTargets(
+          session,
+          installed,
+          targets.map(({ targetType }) => String(targetType.recordTypeId)),
+        );
+  if (prepared !== "ready") return { references, problems, unavailable: true };
 
   for (const field of fields) {
     const target = targets.find((candidate) => candidate.field === field);
@@ -171,16 +178,33 @@ export const resolveLinkTitles = async (
     const dependency = definition.settings.dependsOn;
     const filterFieldId = dependency === undefined ? undefined : String(dependency.filterFieldId);
     const targetLabel = targetType.singularLabel;
+    const titleField = targetType.fields.find((candidate) =>
+      sameId(String(candidate.fieldId), titleFieldId),
+    );
+    // The Query engine matches only a filterable field; a title it cannot filter is named per cell.
+    if (titleField?.filterable !== true) {
+      for (const cell of fieldCells)
+        problemOf(
+          cell,
+          "link_title_not_filterable",
+          `${targetType.pluralLabel} can't be found by title here. Pick the ${labelOf(field)} in the cell.`,
+        );
+      continue;
+    }
 
-    // One set-based read: every distinct title of the batch for this field.
-    const titles = [...new Set(fieldCells.map((cell) => cell.title))];
+    // One set-based read: every distinct title of the batch for this field. A number title only
+    // ever equals a number, so other text is left out of the read and matches nothing.
+    const numeric = titleField.type === "whole_number" || titleField.type === "decimal_number";
+    const titles = [...new Set(fieldCells.map((cell) => cell.title))].filter(
+      (title) => !numeric || Number.isFinite(Number(title)),
+    );
     const byTitle = new Map<
       string,
       Array<Readonly<{ recordId: string; parentRecordId: string | undefined }>>
     >();
     let tooMany = false;
     let token: string | undefined;
-    for (let page = 0; page < pagesPerField; page += 1) {
+    for (let page = 0; titles.length > 0 && page < pagesPerField; page += 1) {
       const command: ProtectedQueryCommand = {
         moduleRootId: moduleRootIdSchema.parse(String(targetModule.rootId)),
         queryId: queryIdSchema.parse(String(targetType.recordTypeId)),
@@ -231,7 +255,7 @@ export const resolveLinkTitles = async (
         problemOf(
           cell,
           "link_title_too_many",
-          `Too many ${targetType.pluralLabel} share these titles to match them here. Pick the ${labelOf(field)} in the cells instead.`,
+          `There are too many ${targetType.pluralLabel} to match these titles here. Pick the ${labelOf(field)} in the cells instead.`,
         );
       continue;
     }
