@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   sourceItemChildSlots,
   sourcePageSlotAddresses,
+  sourcePageShell,
   sourcePageSlotAt,
   type SourceItem,
   type ApplicationSourceDocument,
@@ -17,6 +18,15 @@ export const studioViewRequestSchema = z
   })
   .strict();
 export type StudioViewRequest = z.infer<typeof studioViewRequestSchema>;
+
+/** The page a layout is previewed on: the first page that uses it, one rule for the view and the canvas. */
+export const pageUsingLayout = (
+  source: ApplicationSourceDocument,
+  shellAlias: string | undefined,
+): string | undefined =>
+  shellAlias === undefined
+    ? undefined
+    : source.body.pages.find((page) => sourcePageShell(page.composition) === shellAlias)?.id;
 
 export const studioViewRequest = (
   tab: string,
@@ -39,7 +49,13 @@ export const studioViewRequest = (
         return slot !== undefined && contains(slot.items);
       }),
     )?.id;
+    // A block of a layout is drawn on a page that uses that layout.
+    if (pageAlias === undefined) {
+      const layout = source.body.shells.find((shell) => contains(shell.layout.content));
+      pageAlias = pageUsingLayout(source, layout?.id);
+    }
   }
+  if (selected?.kind === "shell") pageAlias = pageUsingLayout(source, selected.shellAlias);
   if (pageAlias === undefined) {
     const findEntry = (
       items: ApplicationSourceDocument["body"]["navigation"],

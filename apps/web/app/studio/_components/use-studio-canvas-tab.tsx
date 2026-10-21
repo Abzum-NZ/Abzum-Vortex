@@ -6,7 +6,6 @@ import {
   applicationSourceDocumentSchema,
   describeFailure,
   holdsPermission,
-  sourcePageShell,
   type ApplicationSourceDocument,
   type ImmutablePlatformBlockCatalogue,
   type NavigationPermissionDecisions,
@@ -56,6 +55,7 @@ import { readWhenPreviewReady } from "../_lib/studio-preview-gate";
 import { applyStudioItemLabels, type StudioPlacementDescriber } from "@vortex/ui/studio";
 import { studioDraftNavigation } from "../_lib/studio-draft-navigation";
 import { studioUseTargetOf } from "../_lib/studio-places";
+import { pageUsingLayout } from "../_lib/studio-view-request";
 import type { StudioApplicationCanvasFrames } from "../../_lib/studio-application-draft";
 import { studioMenuPosition } from "@vortex/ui/studio";
 import { ApplicationCompositionEditor } from "./application-composition-editor";
@@ -241,29 +241,21 @@ export function useStudioCanvasTab({
       : undefined;
   const pageAliasOfKey = (pageKey: string | undefined) =>
     source.body.pages.find((page) => page.key === pageKey)?.id;
-  // A selected layout, or a block of one, is drawn on a page that uses it: the page last open, or the first.
+  // A selected layout, or a block of one, is drawn on the page the view reads for it.
   const layoutAlias =
     selected?.kind === "shell"
       ? selected.shellAlias
       : selectedOwner?.kind === "shell"
         ? selectedOwner.shellAlias
         : undefined;
-  const lastCanvasPageRef = useRef<string | undefined>(undefined);
-  const previewPage =
-    layoutAlias === undefined
-      ? undefined
-      : (source.body.pages.find(
-          (page) =>
-            page.id === lastCanvasPageRef.current &&
-            sourcePageShell(page.composition) === layoutAlias,
-        ) ?? source.body.pages.find((page) => sourcePageShell(page.composition) === layoutAlias));
+  const previewPageAlias = pageUsingLayout(source, layoutAlias);
   const canvasPageAlias =
     selected?.kind === "page"
       ? selected.pageAlias
       : selectedOwner?.kind === "page"
         ? selectedOwner.pageAlias
         : layoutAlias !== undefined
-          ? previewPage?.id
+          ? previewPageAlias
           : selectedEntry?.type === "page"
             ? (pageAliasOfKey(selectedEntry.page) ?? pageAliasOfKey(source.body.home_page))
             : tab === "menu" || tab === "theme"
@@ -275,7 +267,6 @@ export function useStudioCanvasTab({
       : source.body.pages.find((page) => page.id === canvasPageAlias);
   const canvasPageRef = useRef(canvasPage?.id);
   canvasPageRef.current = canvasPage?.id;
-  lastCanvasPageRef.current = canvasPage?.id ?? lastCanvasPageRef.current;
   // New blocks go to the selected layout, otherwise to the page on the canvas.
   const addOwner: StudioCompositionOwner | undefined =
     layoutAlias !== undefined
