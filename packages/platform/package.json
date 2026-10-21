@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@js-temporal/polyfill": "catalog:",
+    "@noble/hashes": "catalog:",
     "@supabase/supabase-js": "catalog:",
     "exceljs": "catalog:",
     "file-type": "catalog:",
