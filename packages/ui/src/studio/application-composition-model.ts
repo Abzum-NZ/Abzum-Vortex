@@ -47,7 +47,13 @@ export type StudioCompositionCommand =
    * place. The block keeps its name, settings and orders; the container's first fixed slot that
    * admits the block holds it.
    */
-  | Readonly<{ kind: "wrap"; blockId: string; releaseVersion: string }>
+  | Readonly<{
+      kind: "wrap";
+      blockId: string;
+      releaseVersion: string;
+      /** The container's own required settings, which the wrap asks for (a dialog's title). */
+      settings: StudioCompositionSettings;
+    }>
   /**
    * The one settings edit: the block's complete set settings (a declared setting left out takes
    * its default) and, for a block that reads records, the query it reads.
@@ -93,6 +99,8 @@ export type StudioCompositionWrapModel =
         slotLabel: string;
         /** Why this container cannot hold the block; absent when it can. */
         unavailable?: string;
+        /** The container as the palette knows it: its required settings are asked before wrapping. */
+        choice: StudioPaletteChoice;
       }>[];
     }>
   | Readonly<{ kind: "invalid" | "unsupported" }>;
@@ -143,7 +151,13 @@ export type StudioCompositionOutcome = Readonly<{
 
 export type StudioCompositionRemovalModel =
   | Readonly<{ kind: "available"; placementAlias: string; willRemoveUnusedRelease: boolean }>
-  | Readonly<{ kind: "blocked"; reason: StudioCompositionRemovalReason }>
+  | Readonly<{
+      kind: "blocked";
+      reason: StudioCompositionRemovalReason;
+      /** The flow, and its step, that still names this item. */
+      flow?: string;
+      step?: string;
+    }>
   | Readonly<{ kind: "unsupported"; reason: StudioCompositionRemovalUnsupportedReason }>
   | Readonly<{ kind: "invalid" }>;
 

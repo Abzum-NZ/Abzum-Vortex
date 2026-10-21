@@ -23,6 +23,7 @@ import {
   describeStudioCompositionRemoval,
   describeStudioCompositionSettings,
   describeStudioCompositionWrap,
+  studioPlacementReferenceSentence,
   studioSemanticSelectionKey,
   studioBlockChoices,
   studioSettingProblems,
@@ -50,6 +51,7 @@ import {
   type StudioSettingChoices,
 } from "@vortex/ui/studio";
 import { useStudioDraftHeld } from "./use-studio-draft-held";
+import { StudioBlockSetupDialog, type StudioBlockSetupRequest } from "./studio-block-setup-dialog";
 
 type Props = Readonly<{
   context: StudioCompositionContext;
@@ -325,6 +327,7 @@ export function ApplicationCompositionEditor(props: Props) {
     }
     command({ kind: "move", destination: chosen.destination }, undefined, "Item moved.");
   };
+  const [wrapSetup, setWrapSetup] = useState<StudioBlockSetupRequest | null>(null);
   const wrapIn = (key: string) => {
     const chosen =
       wrapModel.kind === "available"
@@ -334,11 +337,30 @@ export function ApplicationCompositionEditor(props: Props) {
       setMessage("This container is no longer available.");
       return;
     }
-    command(
-      { kind: "wrap", blockId: chosen.blockId, releaseVersion: chosen.releaseVersion },
-      undefined,
-      `Item placed in a new ${chosen.name.toLowerCase()}.`,
-    );
+    const place = (settings: StudioCompositionSettings): string | true => {
+      if (props.disabled) return "Studio is read-only right now.";
+      const result = props.onCommand(props.context, props.selection, {
+        kind: "wrap",
+        blockId: chosen.blockId,
+        releaseVersion: chosen.releaseVersion,
+        settings,
+      });
+      if (result.kind !== "applied") return outcomeText(result, "Nothing changed.");
+      setMessage(`Item placed in a new ${chosen.name.toLowerCase()}.`);
+      return true;
+    };
+    // A container with required settings (a dialog's title) asks for them before it wraps.
+    if (chosen.choice.setup.length === 0) {
+      place({});
+      return;
+    }
+    setWrapSetup({
+      choice: chosen.choice,
+      description: `Place this item in a new ${chosen.name.toLowerCase()}.`,
+      action: `Place in ${chosen.name.toLowerCase()}`,
+      pageQuery: undefined,
+      add: place,
+    });
   };
   const remove = async () => {
     if (
@@ -794,7 +816,7 @@ export function ApplicationCompositionEditor(props: Props) {
                   ? "This item holds a content outlet of its layout. Retarget the outlet in the Layout inspector first."
                   : removalModel.reason === "unresolved_target"
                     ? "Something this item points to cannot be found. It cannot be removed."
-                    : "A flow still uses this item. It cannot be removed."
+                    : `${studioPlacementReferenceSentence(removalModel)} It cannot be removed.`
               : removalModel.kind === "invalid"
                 ? "This item could not be read. Reload Studio."
                 : removalModel.reason === "page_kind"
@@ -813,6 +835,11 @@ export function ApplicationCompositionEditor(props: Props) {
         {message}
       </p>
       {confirmDialog}
+      <StudioBlockSetupDialog
+        request={wrapSetup}
+        choices={props.choices}
+        onClose={() => setWrapSetup(null)}
+      />
     </section>
   );
 }

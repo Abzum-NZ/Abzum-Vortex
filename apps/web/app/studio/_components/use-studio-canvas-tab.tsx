@@ -459,7 +459,8 @@ export function useStudioCanvasTab({
       setPaletteMessage("");
       setBlockSetup({
         choice,
-        target,
+        description: `Add to ${target.label}.`,
+        action: `Add ${choice.name}`,
         pageQuery: page !== undefined && "query" in page ? page.query : undefined,
         add: (settings, query) => {
           const outcome = runAdd({ ...command, settings, query });

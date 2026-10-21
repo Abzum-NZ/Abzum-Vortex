@@ -22,6 +22,7 @@ import {
   type StudioCompositionDestination,
   type StudioSemanticOutlineNode,
   type StudioSemanticSelection,
+  studioPlacementReferenceSentence,
 } from "@vortex/ui/studio";
 import { z } from "zod";
 import { WebMcpAdapter, type WebMcpToolDescriptor } from "../../_components/webmcp-adapter";
@@ -778,7 +779,7 @@ export function ApplicationDraftAgentTools({
                     ? "This placement holds a content outlet of its layout. Retarget the outlet first."
                     : removal.reason === "unresolved_target"
                       ? "A declared placement target cannot be resolved safely. Removal is unavailable."
-                      : "A Flow still refers to this placement. Removal is unavailable.",
+                      : `${studioPlacementReferenceSentence(removal)} Removal is unavailable.`,
             };
           return commandOutcome(
             applyCommand(placement, { kind: "remove" }),

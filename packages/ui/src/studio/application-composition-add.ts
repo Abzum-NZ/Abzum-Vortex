@@ -246,6 +246,38 @@ export const groupsTaken = (target: StudioCompositionAddTarget): string => {
 };
 
 /**
+ * Puts one new block into a place of the source at an index: a fixed slot the stored block leaves
+ * out starts as an empty list, and each declared tablet and phone order takes the block at its
+ * desktop position. The source is edited in place; a stored-composition refusal is thrown.
+ */
+export const placeItem = (
+  catalogue: ImmutablePlatformBlockCatalogue,
+  source: ApplicationSourceDocument,
+  place: AddPlace,
+  index: number,
+  item: SourceItem,
+): void => {
+  const working = workingCopy(place.region);
+  const last = place.steps.at(-1);
+  if (last !== undefined) {
+    const parent = workingItem(working, place.steps.slice(0, -1), last.parentAlias);
+    if (!Array.isArray(parent.props[last.slotKey])) parent.props[last.slotKey] = [];
+  }
+  const zone = zoneHandle(working, place.steps);
+  const items = [...zone.items];
+  items.splice(Math.min(index, items.length), 0, item);
+  zone.set(
+    items,
+    adjustedSlotOrder(
+      zone.order,
+      items.map((entry) => entry.props.id),
+    ),
+  );
+  commitWorking(catalogue, place.region, working);
+  validateStoredApplicationOutlets(catalogue, source);
+};
+
+/**
  * A new block of one release: a fresh block name, the catalogue's defaults for every setting not
  * given, an empty list for every fixed slot and the default layout.
  */
@@ -255,6 +287,7 @@ export const newBlockItem = (
   release: PlatformBlockRelease,
   settings: Readonly<Record<string, SourceBlockPropertyValueContract>>,
   query: string | null,
+  shownByFlow = false,
 ): { alias: string; item: SourceItem } => {
   const taken = sourceNames(source);
   const alias = freshBlockName(release.key.split(".").at(-1) ?? "block", taken);
@@ -278,7 +311,7 @@ export const newBlockItem = (
             .map((identity) => [repeatableSlotKey(slot.key, identity), []]),
         ),
       ),
-      ...studioStarterSlots(catalogue, release, taken),
+      ...studioStarterSlots(catalogue, release, taken, shownByFlow),
       vortex: {
         block: { block_id: release.blockId, release_version: release.releaseVersion },
         ...(query === null ? {} : { query }),
@@ -370,26 +403,7 @@ export const applyAdd = (
 
   const { alias, item } = newBlockItem(catalogue, source, release, settings, query);
   try {
-    const working = workingCopy(place.region);
-    const last = place.steps.at(-1);
-    if (last !== undefined) {
-      // A fixed slot the stored block leaves out starts as an empty list.
-      const parent = workingItem(working, place.steps.slice(0, -1), last.parentAlias);
-      if (!Array.isArray(parent.props[last.slotKey])) parent.props[last.slotKey] = [];
-    }
-    const zone = zoneHandle(working, place.steps);
-    const items = [...zone.items];
-    items.splice(Math.min(input.index, items.length), 0, item);
-    // Each declared tablet and phone order takes the new block at its desktop position.
-    zone.set(
-      items,
-      adjustedSlotOrder(
-        zone.order,
-        items.map((entry) => entry.props.id),
-      ),
-    );
-    commitWorking(catalogue, place.region, working);
-    validateStoredApplicationOutlets(catalogue, source);
+    placeItem(catalogue, source, place, input.index, item);
   } catch (error) {
     if (error instanceof StoredCompositionRefusal) {
       console.error("[studio] composition add refused", {
