@@ -16,7 +16,7 @@
         "protected_view": "tenants",
         "organization_field": "organization_id",
         "revision_field": "revision",
-        "filterable_fields": ["state"],
+        "filterable_fields": ["state", "display_name"],
         "sortable_fields": ["short_name", "display_name", "state", "state_changed_at", "created_at"]
       },
       "ownership_mode": "none",
@@ -73,7 +73,7 @@
           "label": "Display name",
           "required": false,
           "unique": false,
-          "filterable": false,
+          "filterable": true,
           "sortable": true,
           "search_priority": "normal",
           "personal_data": "none",

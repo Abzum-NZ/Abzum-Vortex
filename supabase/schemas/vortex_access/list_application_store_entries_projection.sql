@@ -53,7 +53,7 @@ begin
     p_predicate,
     $declared${
       "key": {"sql": "root.key", "database": "text", "search": true},
-      "name": {"sql": "(latest.application_address ->> 'name')", "database": "text", "search": true}
+      "name": {"sql": "(latest.application_address ->> 'name')", "database": "text", "filter": true, "search": true}
     }$declared$::jsonb,
     6
   );

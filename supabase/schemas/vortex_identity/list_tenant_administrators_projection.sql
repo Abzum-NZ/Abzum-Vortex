@@ -125,7 +125,7 @@ begin
     p_predicate,
     $declared${
       "state": {"sql": "(case when assignment.revoked_at is not null and assignment.revoked_at <= $8 then 'revoked' when assignment.starts_at > $8 then 'scheduled' when assignment.expires_at is not null and assignment.expires_at <= $8 then 'expired' else 'active' end)", "database": "text", "filter": true},
-      "identity_id": {"sql": "assignment.identity_id::text", "database": "text", "search": true}
+      "identity_id": {"sql": "assignment.identity_id::text", "database": "text", "filter": true, "search": true}
     }$declared$::jsonb,
     9
   );
