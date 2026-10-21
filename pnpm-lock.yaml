@@ -167,6 +167,9 @@ catalogs:
     '@js-temporal/polyfill':
       specifier: 0.5.1
       version: 0.5.1
+    '@noble/hashes':
+      specifier: 1.8.0
+      version: 1.8.0
     '@puckeditor/core':
       specifier: 0.23.0
       version: 0.23.0
@@ -349,6 +352,9 @@ importers:
       '@js-temporal/polyfill':
         specifier: 'catalog:'
         version: 0.5.1
+      '@noble/hashes':
+        specifier: 'catalog:'
+        version: 1.8.0
       '@supabase/supabase-js':
         specifier: 'catalog:'
         version: 2.116.0
