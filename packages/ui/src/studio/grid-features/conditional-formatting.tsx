@@ -6,6 +6,7 @@ import {
   conditionalColumnFormatFieldTypes,
   conditionalColumnFormatIssue,
   conditionalFormatRuleIssue,
+  conditionalFormatRuleFields,
   type ConditionNode,
   type ConditionalColumnFormat,
   type ConditionalFormatRule,
@@ -211,7 +212,8 @@ export function StudioConditionalFormattingEditor({
       <section aria-labelledby={`${ownId}-rules`} className="space-y-2">
         <div className="flex items-center justify-between gap-2">
           <h4 id={`${ownId}-rules`} className="text-sm font-medium">
-            Rules
+            Rules (up to{" "}
+            {recordsTableSettingMaximumItems("features", "conditional_formatting", "rules")})
           </h4>
           <Button
             type="button"
@@ -247,7 +249,11 @@ export function StudioConditionalFormattingEditor({
               const summary =
                 reading.kind === "read" && reading.condition !== undefined
                   ? describeCondition(reading.condition, context)
-                  : "A removed item";
+                  : conditionalFormatRuleFields(rule).some(
+                        (reference) => !queryFields.some((field) => field.reference === reference),
+                      )
+                    ? "A removed item"
+                    : "Condition";
               const target =
                 rule.target.kind === "row"
                   ? "Whole row"
@@ -513,7 +519,11 @@ function RuleEditor({
     >
       {reading.kind === "unreadable" ? (
         <p role="note" className="text-sm">
-          A removed item is used by this condition. Choose another field or remove the rule.
+          {conditionalFormatRuleFields(rule).some(
+            (reference) => !queryFields.some((field) => field.reference === reference),
+          )
+            ? "A removed item is used by this condition. Choose another field or remove the rule."
+            : "Save the draft to edit this condition using its saved fields."}
         </p>
       ) : (
         <fieldset disabled={disabled} className="min-w-0">

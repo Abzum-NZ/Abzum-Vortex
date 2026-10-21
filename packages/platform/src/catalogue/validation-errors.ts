@@ -548,12 +548,13 @@ function makePublicError(
   code: DefinitionValidationErrorCode,
   correlationId: z.infer<typeof correlationIdSchema>,
   location?: DefinitionValidationLocation,
+  sentence?: string,
 ): PublicDefinitionValidationError {
   const entry = definitionValidationErrorCatalogue[code];
   return {
     catalogueVersion: definitionValidationCatalogueVersion,
     code,
-    message: entry.message,
+    message: sentence ?? entry.message,
     guidance: entry.guidance,
     correlationId,
     ...(location ? { location } : {}),
@@ -717,6 +718,7 @@ export function translateDefinitionRuleFailures(
         failure.code ?? failureCodeByFamily[failure.family],
         context.correlationId,
         failure.location ?? context.rootLocation,
+        failure.sentence,
       ),
     ),
     context.correlationId,
