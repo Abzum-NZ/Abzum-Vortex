@@ -208,14 +208,6 @@ const withSettings = (
   } as SourceItem["props"];
 };
 
-const eligibleAddRelease = (release: PlatformBlockRelease): boolean =>
-  release.paletteGroup === "content" &&
-  release.slots.length === 0 &&
-  release.properties.every((property) => property.kind === "text" && !property.required) &&
-  release.capabilities.accessibleName === "optional" &&
-  release.supportedStateOperations.length === 0 &&
-  release.supportedEvents.every((event) => event === "refresh");
-
 /**
  * A block's repeatable slots follow its settings: an entry the settings add gets an empty slot,
  * and an entry they remove takes its slot away, which must be empty by then.
@@ -453,19 +445,25 @@ const resolveRemoval = (
   // Any of a layout's own blocks leaves with everything inside it, as any of them can be added.
   // A page removes one display item, and only from an ordinary main area.
   const layout = target.region.shell !== undefined;
-  const removablePage =
-    page !== undefined &&
-    (page.type === "list" || page.type === "detail" || page.type === "dashboard") &&
-    !source.body.public_addresses.some((address) => address.page === page.id) &&
-    !source.body.experiences?.some((experience) => experience.page === page.key);
-  if (!removablePage && !layout) return { kind: "unsupported" };
-  const release = releaseFor(catalogue, target.item);
+  if (!layout) {
+    if (
+      page === undefined ||
+      (page.type !== "list" && page.type !== "detail" && page.type !== "dashboard")
+    )
+      return { kind: "unsupported", reason: "page_kind" };
+    if (
+      source.body.public_addresses.some((address) => address.page === page.id) ||
+      source.body.experiences?.some((experience) => experience.page === page.key)
+    )
+      return { kind: "unsupported", reason: "public_page" };
+  }
   if (
-    release === undefined ||
-    !manifestMatches(catalogue, source, target.region.zone.items) ||
-    (!layout && (!eligibleAddRelease(release) || itemSlots(catalogue, target.item).size !== 0))
+    releaseFor(catalogue, target.item) === undefined ||
+    !manifestMatches(catalogue, source, target.region.zone.items)
   )
-    return { kind: "unsupported" };
+    return { kind: "unsupported", reason: "manifest_mismatch" };
+  if (!layout && itemSlots(catalogue, target.item).size !== 0)
+    return { kind: "unsupported", reason: "has_children" };
   validateRegion(catalogue, target.region);
   if (studioLayoutOutletPlacementUses(source, alias).length > 0)
     return { kind: "blocked", reason: "content_outlet" };
@@ -478,7 +476,7 @@ const resolveRemoval = (
         : releaseFor(catalogue, parent)?.slots.find((item) => item.key === step.slotKey);
     const child = parent === undefined ? undefined : itemSlots(catalogue, parent).get(step.slotKey);
     if (declaration === undefined || declaration.repeats !== undefined || child === undefined)
-      return { kind: "unsupported" };
+      return { kind: "unsupported", reason: "repeating_slot" };
     if (child.items === target.zone.items && declaration.required && child.items.length === 1)
       return { kind: "blocked", reason: "required_slot" };
     zone = child;
@@ -524,7 +522,8 @@ export const describeStudioCompositionRemoval = (
           willRemoveUnusedRelease: resolved.removal.unusedReleases.length > 0,
         }
       : resolved;
-  } catch {
+  } catch (error) {
+    console.error("[studio] removal model failed", error);
     return { kind: "invalid" };
   }
 };
