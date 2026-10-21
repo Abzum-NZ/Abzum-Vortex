@@ -8,6 +8,7 @@ import {
   LINK_TILES_BLOCK_RELEASE,
   QUERY_NOTICE_BLOCK_RELEASE,
   SUMMARY_VALUES_BLOCK_RELEASE,
+  TABLE_BLOCK_RELEASE,
 } from "../../definition/index";
 import { readCalendarPlacementContract } from "../calendar-query";
 import { resolvePlacementInputs } from "./bindings";
@@ -45,7 +46,7 @@ export const isStreamableQueryPlacement = (placement: PlacementReadEntry): boole
     return false;
   const settings = placementSettingsOf(placement);
   return (
-    readRecordsTableContract(settings) !== undefined ||
+    placementBlockIs(placement, TABLE_BLOCK_RELEASE) ||
     readRecordDetailContract(settings) !== undefined ||
     placementBlockIs(placement, QUERY_NOTICE_BLOCK_RELEASE) ||
     placementBlockIs(placement, LINK_TILES_BLOCK_RELEASE) ||
@@ -79,9 +80,15 @@ export const readQueryPlacement = async (
     read.data[placementId] = { status: "refused", reason: "not_permitted" };
     return;
   }
-  const tableContract = readRecordsTableContract(settings);
-  const detailContract =
-    tableContract === undefined ? readRecordDetailContract(settings) : undefined;
+  // A Data grid is known by its block; settings it cannot read fail loudly, never as no data.
+  const isTable = placementBlockIs(placement, TABLE_BLOCK_RELEASE);
+  const tableContract = isTable ? readRecordsTableContract(settings) : undefined;
+  if (isTable && tableContract === undefined) {
+    logPlacementFailure(read.address, placementId, "records_table_settings_invalid");
+    read.data[placementId] = { status: "refused", reason: "not_permitted" };
+    return;
+  }
+  const detailContract = isTable ? undefined : readRecordDetailContract(settings);
   const queryId =
     typeof placement.vortex.queryId === "string" ? placement.vortex.queryId : undefined;
   const isNotice = placementBlockIs(placement, QUERY_NOTICE_BLOCK_RELEASE);

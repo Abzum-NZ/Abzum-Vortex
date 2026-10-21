@@ -72,7 +72,8 @@ export function useReferenceChoices({
       if (!isRecord(data) || data.status !== "ready") return undefined;
       try {
         return parseChoicePage(placementId, data.values);
-      } catch {
+      } catch (error) {
+        console.error("[page] reference choices unreadable", error);
         return undefined;
       }
     },
@@ -188,7 +189,8 @@ export function useReferenceChoices({
             }),
           };
         });
-      } catch {
+      } catch (error) {
+        console.error("[page] reference choices read failed", error);
         if (choiceRequestIdsRef.current[stateKey] === requestId) setNotice(unavailableNotice);
       }
     },

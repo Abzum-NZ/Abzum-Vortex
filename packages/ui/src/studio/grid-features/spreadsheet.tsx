@@ -83,9 +83,9 @@ export function StudioSpreadsheetEditor({
           ["undo", "Undo"],
         ] as const
       ).map(([key, label]) => {
+        // An absent switch reads as off, exactly as the platform reader reads it.
         const setting = value.properties[key];
-        if (setting?.kind !== "boolean")
-          throw new Error(`Spreadsheet setting ${key} is incomplete`);
+        const on = setting?.kind === "boolean" && setting.value;
         return (
           <Item key={key} size="sm" className="px-0">
             <ItemContent>
@@ -96,7 +96,7 @@ export function StudioSpreadsheetEditor({
             <ItemActions>
               <Switch
                 id={`${id}-${key}`}
-                checked={setting.value}
+                checked={on}
                 disabled={disabled}
                 onCheckedChange={(checked) => write({ [key]: { kind: "boolean", value: checked } })}
               />

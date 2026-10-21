@@ -131,7 +131,7 @@ export type GridFeatureCellProps = Readonly<{
  * The closed decoration tokens a feature may give a cell; each maps to semantic theme-token
  * classes, so every app theme preset colours them and no feature names a colour of its own.
  */
-export const gridCellDecorationClasses = {
+const gridCellDecorationClasses = {
   text_success: "text-success",
   text_warning: "text-warning",
   text_info: "text-info",
@@ -234,7 +234,7 @@ const projectionKeys: Readonly<Record<keyof RecordsTableFeatureProjection, GridE
 };
 
 /** The features a projection turns on, in the registry's order. */
-export const projectedGridFeatures = (
+const projectedGridFeatures = (
   features: RecordsTableFeatureProjection | undefined,
 ): readonly GridExtensionKey[] =>
   features === undefined
@@ -272,7 +272,19 @@ const featurePoint = <Props,>(
   const held = pointComponents.get(id);
   const component =
     held ??
-    lazy(async () => ({ default: pointComponentOf((await loaders[key]()).gridFeature, point) }));
+    lazy(async () => {
+      try {
+        return { default: pointComponentOf((await loaders[key]()).gridFeature, point) };
+      } catch (error) {
+        // A feature whose code cannot be downloaded leaves the grid usable without it; the next
+        // render tries again.
+        console.error(`[display] grid feature ${key} could not be loaded`, error);
+        pointComponents.delete(id);
+        const fallback =
+          point === "CellEditor" || point === "CellAdornment" ? PassThrough : Nothing;
+        return { default: fallback as unknown as ComponentType<object> };
+      }
+    });
   if (held === undefined) pointComponents.set(id, component);
   return component as unknown as ComponentType<Props>;
 };

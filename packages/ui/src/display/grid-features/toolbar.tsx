@@ -5,7 +5,6 @@ import {
   useEffect,
   useRef,
   useState,
-  useSyncExternalStore,
   type ReactElement,
   type ReactNode,
   type RefObject,
@@ -31,7 +30,7 @@ import { Kbd } from "../../components/kbd";
 import { ToggleGroup, ToggleGroupItem } from "../../components/toggle-group";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../../components/tooltip";
 import { Icon } from "../../icons/icon";
-import { LAYOUT_BREAKPOINT_MEDIA } from "../../layout-styles";
+import { usePhoneViewport } from "../table-geometry";
 import type { GridLayoutControls } from "../table-layout";
 
 const DENSITY_LABELS: Readonly<Record<RecordsTableDensity, string>> = Object.freeze({
@@ -167,19 +166,6 @@ export function useGridFullScreen(
   return { active, toggle, buttonRef };
 }
 
-const PHONE_QUERY = LAYOUT_BREAKPOINT_MEDIA.phone;
-const subscribeToPhone = (notify: () => void): (() => void) => {
-  const media = window.matchMedia(PHONE_QUERY);
-  media.addEventListener("change", notify);
-  return () => media.removeEventListener("change", notify);
-};
-const usePhone = (): boolean =>
-  useSyncExternalStore(
-    subscribeToPhone,
-    () => window.matchMedia(PHONE_QUERY).matches,
-    () => false,
-  );
-
 type ColumnChoicesProps = Readonly<{
   layout: GridLayoutControls;
   /** The columns the shown page carries values for, lower-cased. */
@@ -270,7 +256,7 @@ export function GridToolbar({
   layoutControls,
   fullScreen,
 }: GridToolbarProps): ReactElement {
-  const phone = usePhone();
+  const phone = usePhoneViewport();
   const fullScreenLabel = fullScreen?.active === true ? "Exit full screen" : "Full screen";
   const own = ((): ReactNode => {
     if (layoutControls === undefined && fullScreen === undefined) return null;

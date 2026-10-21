@@ -81,18 +81,15 @@ export {
   recordsTableFieldNotEditableReason,
   type RecordsTableBoardFacts,
   type RecordsTableFeatureCheck,
-  type RecordsTableFeatureRefusalCode,
   type RecordsTableFeatureState,
   type RecordsTableFieldFacts,
   type RecordsTablePivotDateUnit,
   type RecordsTableQueryFacts,
-  type RecordsTableRelatedQueryFacts,
   type RecordsTableRelatedRecordsFacts,
 } from "./shared";
 export {
   recordsTableActionCapabilities,
   recordsTableRowActionIcons,
-  type RecordsTableActionCapability,
   type RecordsTableActionContract,
 } from "./row-actions";
 export {
@@ -102,12 +99,8 @@ export {
   spreadsheetText,
   type RecordsTableExportFormat,
 } from "./export";
-export { RECORDS_TABLE_RELATED_RECORDS_MAXIMUM_PAGE_SIZE } from "./master-detail";
 export { RECORDS_TABLE_TREE_MAXIMUM_PAGE_SIZE } from "./tree";
 export {
-  RECORDS_TABLE_GROUPING_MAXIMUM_CHOICES,
-  RECORDS_TABLE_GROUPING_MAXIMUM_LABEL_LENGTH,
-  RECORDS_TABLE_GROUPING_MAXIMUM_PAGE_SIZE,
   checkRecordsTableGrouping,
   groupingDefaultsFromQuery,
   recordsTableGroupingFieldTypes,
@@ -117,21 +110,12 @@ export {
 export {
   boardAggregateLabel,
   boardFilterProblem,
-  boardFormattingProblem,
   boardProblem,
   recordsTableBoardFactsOf,
 } from "./board";
 export {
-  RECORDS_TABLE_PIVOT_MAXIMUM_COLUMNS,
-  RECORDS_TABLE_PIVOT_MAXIMUM_ROW_PAGE_SIZE,
-  recordsTablePivotMeasureFieldTypes,
-  recordsTablePivotMeasureFunctions,
-  type RecordsTablePivotMeasureFunction,
-} from "./pivot";
-export {
   conditionalColumnFormatFieldTypes,
   conditionalColumnFormatIssue,
-  conditionalFormatComparisons,
   conditionalFormatFactsOf,
   conditionalFormatIcons,
   conditionalFormatRuleFields,
@@ -139,11 +123,7 @@ export {
   conditionalFormatTokens,
   conditionalFormattingDateParameters,
   type ConditionalColumnFormat,
-  type ConditionalFormatComparison,
-  type ConditionalFormatCondition,
-  type ConditionalFormatFacts,
   type ConditionalFormatIcon,
-  type ConditionalFormatOperand,
   type ConditionalFormatRule,
   type ConditionalFormatStyle,
   type ConditionalFormatToken,

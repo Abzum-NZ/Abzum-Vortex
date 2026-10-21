@@ -663,6 +663,9 @@ export function BoardView(props: DisplayRenderProps<BoardPayload>): ReactElement
 
   // The viewport clips the horizontal scroller and hidden phone columns. Batch newly visible
   // placeholders into one bounded read; loaded columns keep their independent pages and cursors.
+  // One observer per payload: it reads the current columns through a ref, not once per render.
+  const unreadRef = useRef({ buckets, failedKeys, readBuckets });
+  unreadRef.current = { buckets, failedKeys, readBuckets };
   useEffect(() => {
     const section = cardsRef.current;
     if (section === null || pageChanged === undefined) return;
@@ -681,6 +684,7 @@ export function BoardView(props: DisplayRenderProps<BoardPayload>): ReactElement
       }
       if (frame !== undefined) cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
+        const { buckets, failedKeys, readBuckets } = unreadRef.current;
         const unread = buckets.filter(
           (bucket) =>
             visible.has(bucket.key) &&
@@ -695,7 +699,7 @@ export function BoardView(props: DisplayRenderProps<BoardPayload>): ReactElement
       observer.disconnect();
       if (frame !== undefined) cancelAnimationFrame(frame);
     };
-  });
+  }, [values, pageChanged]);
 
   const addCard = (bucket: BoardBucket): void => {
     if (

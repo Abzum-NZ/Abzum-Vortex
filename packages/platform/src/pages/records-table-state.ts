@@ -442,37 +442,14 @@ export const readRecordsTableViewId = (
   entries: Iterable<readonly [string, string]>,
 ): string | undefined => readRecordsTableView(placementId, entries)?.viewId;
 
-/**
- * The sort, filters and search a placement's address holds, with each filter in its address
- * spelling, so a saved view stores exactly what the address names. Undefined when the address
- * names a malformed part, which the server refuses to read.
- */
-export const readRecordsTableAddressedQuery = (
+/** The page position a placement's address holds; undefined on the first page. */
+export const readRecordsTablePagePosition = (
   placementId: string,
   entries: Iterable<readonly [string, string]>,
-):
-  | Readonly<{
-      sort: readonly RecordsTableSortKey[];
-      filters: readonly Readonly<{ fieldId: string; filter: string }>[];
-      search: string | null;
-    }>
-  | undefined => {
-  const addressed = [...entries];
-  const read = readRecordsTableQueryState(placementId, addressed);
-  if (read.kind !== "valid") return undefined;
-  const owned = placementEntries(placementId, addressed);
-  const prefix = filterPrefix(placementId);
-  return {
-    sort: read.state.sort,
-    filters: read.state.filters.flatMap(({ fieldId }) => {
-      const spelled = [...owned].find(
-        ([name]) => name.startsWith(prefix) && sameId(name.slice(prefix.length), fieldId),
-      );
-      return spelled === undefined ? [] : [{ fieldId, filter: spelled[1] }];
-    }),
-    search: read.state.search,
-  };
-};
+): ReturnType<typeof parseRecordsTablePagePosition> =>
+  parseRecordsTablePagePosition(
+    placementEntries(placementId, entries).get(pageParameter(placementId)),
+  );
 
 /** One change a person makes to a table's query state from its controls. */
 export type RecordsTableQueryChange =
