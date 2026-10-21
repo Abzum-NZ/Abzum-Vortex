@@ -384,6 +384,8 @@ const studioCompileFailure = (error: unknown): StudioCompileFailure => {
         recordTypeKey: keyOf("record_type"),
         fieldKey: keyOf("field"),
         queryKey: keyOf("query"),
+        flowKey: keyOf("flow"),
+        taskId: keyOf("flow_node"),
       };
       return {
         reasonCode: current.ruleCode,

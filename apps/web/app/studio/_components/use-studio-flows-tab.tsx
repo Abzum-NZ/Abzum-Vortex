@@ -360,7 +360,6 @@ export function useStudioFlowsTab({
           onSelect={selectStep}
           appearance={appearance}
           types={stepTypes}
-          forms={flowChoices.forms}
           disabled={disabled}
           title={labels.get(selectionKey) ?? "Flow"}
           choicesAt={(insertion) => ({

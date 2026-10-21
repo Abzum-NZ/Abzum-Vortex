@@ -52,6 +52,10 @@ type Failure = Readonly<{
   reason?: string;
   /** For a compilation refusal, the name of the block it is about, when it is about one. */
   blockAlias?: string;
+  /** For a compilation refusal inside a flow, the flow, the step in it and the rule's family. */
+  flowKey?: string;
+  taskId?: string;
+  family?: string;
   /** For a compilation refusal with its own business sentence, that sentence. */
   sentence?: string;
 }>;
@@ -184,10 +188,19 @@ const classifyFailure = (error: unknown): Failure => {
   const compilation = compilationRefusal(error);
   if (compilation !== undefined) {
     const block = compilation.location?.segments.find((segment) => segment.kind === "block");
+    const flow = compilation.location?.segments.find((segment) => segment.kind === "flow");
+    const task = compilation.location?.segments.find((segment) => segment.kind === "flow_node");
     return {
       kind: "refused",
       reason: `compilation_${compilation.ruleCode.toLowerCase()}`,
       ...(block === undefined ? {} : { blockAlias: block.key }),
+      ...(flow === undefined
+        ? {}
+        : {
+            flowKey: flow.key,
+            family: compilation.family,
+            ...(task === undefined ? {} : { taskId: task.key }),
+          }),
       ...(compilation.sentence !== undefined
         ? { sentence: compilation.sentence }
         : compilation.code === undefined
