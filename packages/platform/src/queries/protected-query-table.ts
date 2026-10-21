@@ -113,8 +113,16 @@ export const runCommand = async (
 ): Promise<ProtectedQueryResult> => {
   const applicationRootId = scope.applicationRootId;
   if (applicationRootId === undefined) return refusal("request_invalid");
-  if (command.exactRecordIds !== undefined && command.continuationToken !== undefined)
+  if (
+    command.exactRecordIds !== undefined &&
+    (command.continuationToken !== undefined || command.exactRecordIds.length !== command.pageSize)
+  ) {
+    console.error("[protected-query] request refused", {
+      part: "exact_ids",
+      reason: command.continuationToken !== undefined ? "exact_ids_cursor" : "exact_ids_page_size",
+    });
     return refusal("request_invalid");
+  }
 
   // A user sort or filter outside the component-declared sets is refused before any read.
   const userRefusal = userInputRefusal(command);

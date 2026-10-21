@@ -209,22 +209,35 @@ begin
   if p_direction not in ('forward', 'backward') or p_direction is null then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
   end if;
+  -- An exact read names 1..200 distinct, non-nil record ids and asks for exactly that many rows.
+  if p_exact_record_ids is not null then
+    if pg_catalog.cardinality(p_exact_record_ids) > 200 then
+      raise log '%', '{"part":"exact_ids","reason":"exact_ids_too_many"}';
+      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
+    end if;
+    -- Check dimensions before array_position: PostgreSQL only accepts a one-dimensional array.
+    if pg_catalog.array_ndims(p_exact_record_ids) is distinct from 1
+      or pg_catalog.cardinality(p_exact_record_ids) = 0 then
+      raise log '%', '{"part":"exact_ids","reason":"exact_ids_invalid"}';
+      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
+    end if;
+    if pg_catalog.array_position(p_exact_record_ids, null) is not null
+      or '00000000-0000-0000-0000-000000000000'::uuid = any (p_exact_record_ids)
+      or (select pg_catalog.count(distinct exact_id.id) from pg_catalog.unnest(p_exact_record_ids) as exact_id(id))
+        <> pg_catalog.cardinality(p_exact_record_ids) then
+      raise log '%', '{"part":"exact_ids","reason":"exact_ids_invalid"}';
+      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
+    end if;
+    if p_page_size is distinct from pg_catalog.cardinality(p_exact_record_ids)
+      or (p_after is not null and p_after <> 'null'::jsonb) then
+      raise log '%', '{"part":"exact_ids","reason":"exact_ids_page_invalid"}';
+      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
+    end if;
+  end if;
   if p_requested_field_ids is null
     or pg_catalog.jsonb_typeof(p_requested_field_ids) <> 'array'
     or pg_catalog.jsonb_array_length(p_requested_field_ids) not between 1 and 200
     or p_page_size is null or p_page_size not between 1 and 200 then
-    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
-  end if;
-  -- An exact read names 1..200 distinct, non-nil record ids and asks for exactly that many rows.
-  if p_exact_record_ids is not null and (
-    pg_catalog.array_ndims(p_exact_record_ids) <> 1
-    or pg_catalog.cardinality(p_exact_record_ids) not between 1 and 200
-    or pg_catalog.cardinality(p_exact_record_ids) <> p_page_size
-    or pg_catalog.array_position(p_exact_record_ids, null) is not null
-    or '00000000-0000-0000-0000-000000000000'::uuid = any (p_exact_record_ids)
-    or (select pg_catalog.count(distinct exact_id.id) from pg_catalog.unnest(p_exact_record_ids) as exact_id(id))
-      <> pg_catalog.cardinality(p_exact_record_ids)
-  ) then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
   end if;
   for field_item in select item.value from pg_catalog.jsonb_array_elements(p_requested_field_ids) as item(value) loop
