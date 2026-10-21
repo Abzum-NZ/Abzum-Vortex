@@ -29,6 +29,7 @@ export function OrganizationLauncherPage({
   organizationName,
   account,
   openApplication,
+  openEventId,
   studio,
   launcherHref,
   platformBlockReleases,
@@ -42,6 +43,7 @@ export function OrganizationLauncherPage({
   organizationName: string;
   account: ApplicationAccount;
   openApplication: (event: DisplaySemanticEvent) => Promise<void>;
+  openEventId: string;
   studio?: Readonly<{ href: string; tileId: string }>;
   launcherHref: string;
   platformBlockReleases: readonly PlatformBlockRelease[];
@@ -85,9 +87,12 @@ export function OrganizationLauncherPage({
             data: { status: "ready", values },
             events: {
               row_action: (event: DisplaySemanticEvent) => {
+                if (event.event !== "row_action" || event.eventId !== openEventId) {
+                  console.error("[launcher] open refused: ROW_ACTION_EVENT_UNKNOWN");
+                  return;
+                }
                 if (
                   studio !== undefined &&
-                  event.event === "row_action" &&
                   event.recordId === studio.tileId
                 ) {
                   router.push(studio.href);

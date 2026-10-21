@@ -303,7 +303,11 @@ export function useRuntimeInputs({
       // Runtime data alone does not identify a display: forms can have projected owner-group data.
       // Give each placement only the display callbacks its own registered release declares.
       if (data !== undefined && model.guidedForm === undefined) {
-        if (launcherPlacements.has(placementId) && supportsEvent("row_action"))
+        if (
+          launcherPlacements.has(placementId) &&
+          supportsEvent("row_action") &&
+          !bindings.some((binding) => binding.event === "row_action")
+        )
           events.row_action = async (event: DisplaySemanticEvent) => {
             if (event.event !== "row_action" || busy) return;
             if (unsavedWork.hasUnsavedWork() && !(await unsavedWork.confirmDiscardUnsavedWork()))
@@ -313,7 +317,6 @@ export function useRuntimeInputs({
         for (const kind of ["row_clicked", "row_action"] as const)
           if (
             supportsEvent(kind) &&
-            (kind !== "row_action" || !launcherPlacements.has(placementId)) &&
             bindings.some((binding) => binding.event === kind)
           )
             events[kind] = (event: DisplaySemanticEvent) => {

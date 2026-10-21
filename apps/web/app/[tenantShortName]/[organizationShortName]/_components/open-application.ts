@@ -2,7 +2,11 @@ import "server-only";
 
 import { redirect } from "next/navigation";
 import type { DisplaySemanticEvent } from "@vortex/ui";
-import { applicationLauncherOpenEventId } from "@vortex/platform/server";
+import {
+  isRecord,
+  PLATFORM_BLOCK_RELEASE_IDENTITIES,
+  walkPageComposition,
+} from "@vortex/platform/schema";
 import { continueSessionOrEnd } from "../../../auth/_lib/session-redirect";
 import { resolveIdentitySession } from "../../../auth/_lib/session-server";
 import { resolveApplicationAddress } from "../../../_lib/application-address";
@@ -10,6 +14,24 @@ import {
   applicationPageAddressPath as addressPath,
   organizationAddressPath as launcherPath,
 } from "../../../_lib/address-paths";
+
+/** Read the event identities authored on the launcher placements of this compiled page. */
+export const applicationLauncherEventIds = (composition: unknown): readonly string[] => {
+  const eventIds: string[] = [];
+  walkPageComposition(composition, ({ props, vortex }) => {
+    if (
+      isRecord(vortex.block) &&
+      vortex.block.blockId ===
+        PLATFORM_BLOCK_RELEASE_IDENTITIES.APPLICATION_LAUNCHER_BLOCK_RELEASE.blockId
+    ) {
+      if (typeof props.row_action_event_id !== "string" || props.row_action_event_id.length === 0)
+        throw new Error("APPLICATION_LAUNCHER_EVENT_ID_MISSING");
+      eventIds.push(props.row_action_event_id);
+    }
+    return undefined;
+  });
+  return eventIds;
+};
 
 /**
  * Tile activation is the launcher block's declared `row_action` event. It opens only when the event
@@ -23,12 +45,11 @@ export const openPermittedApplication = async (
   tenantShortName: string,
   organizationShortName: string,
   event: DisplaySemanticEvent,
+  declaredEventIds: readonly string[],
 ): Promise<void> => {
   if (event?.event !== "row_action" || typeof event.recordId !== "string") return;
-  if (event.eventId !== applicationLauncherOpenEventId) {
-    console.error(
-      `[launcher] open refused: ROW_ACTION_EVENT_UNKNOWN eventId=${String(event.eventId)}`,
-    );
+  if (!declaredEventIds.includes(event.eventId)) {
+    console.error("[launcher] open refused: ROW_ACTION_EVENT_UNKNOWN");
     return;
   }
   const chooser = launcherPath(tenantShortName, organizationShortName);
