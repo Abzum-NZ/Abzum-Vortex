@@ -8,7 +8,12 @@ import {
   type RecordsTableContract,
 } from "../../schema";
 import { buildRecordsTableNarrowing } from "../records-table-query";
-import { logRecordsTableRequestRefusal } from "../records-table-features";
+import {
+  conditionalFormattingRelativeDates,
+  conditionalFormattingUsesRelativeDates,
+  logRecordsTableRequestRefusal,
+  type ConditionalFormattingContext,
+} from "../records-table-features";
 import { readRecordsTableQueryState, readRecordsTableView } from "../records-table-state";
 import { projectBoardPlacement } from "../board-query";
 import { filterTimeZone } from "./records-table";
@@ -124,6 +129,27 @@ export const readBoard = async (
     return;
   }
 
+  // Formatting rules are evaluated with the bound record type's declared fields and, when a rule
+  // compares with a relative date, the dates counted in the organisation's time zone.
+  let formatting: Parameters<typeof projectBoardPlacement>[0]["formatting"];
+  if (contract.features.conditionalFormatting.enabled) {
+    const recordType = bound.query.recordType;
+    const recordTypeId =
+      recordType.state === "resolved" ? String(recordType.recordTypeId).toLowerCase() : undefined;
+    const recordFields =
+      bound.module.content.recordTypes.find(
+        (candidate) => String(candidate.recordTypeId).toLowerCase() === recordTypeId,
+      )?.fields ?? [];
+    let relativeDates: ConditionalFormattingContext["relativeDates"];
+    if (conditionalFormattingUsesRelativeDates(contract, [])) {
+      const timeZone = await read.bindings.timeZone();
+      if (timeZone === undefined)
+        logPlacementFailure(read.address, placementId, "table_formatting_time_zone_unavailable");
+      else relativeDates = conditionalFormattingRelativeDates(read.bindings.now, timeZone);
+    }
+    formatting = { contract, context: { recordFields, relativeDates } };
+  }
+
   const projection = await projectBoardPlacement({
     context: read.context,
     session: read.session,
@@ -135,6 +161,7 @@ export const readBoard = async (
     queries: read.services.queries,
     board,
     ...(filters === undefined ? {} : { filters }),
+    ...(formatting === undefined ? {} : { formatting }),
     ...(columnRead === undefined ? {} : { read: columnRead }),
   });
   if (projection.outcome === "ready") {

@@ -63,6 +63,7 @@ export function StudioConditionalFormattingEditor({
   query,
   facts,
   compiledFields,
+  board,
   disabled,
   onChange,
 }: Readonly<{
@@ -75,6 +76,8 @@ export function StudioConditionalFormattingEditor({
   facts: RecordsTableQueryFacts;
   /** The saved draft's compiled fields of the record type the query reads; undefined before a save. */
   compiledFields: readonly ModuleField[] | undefined;
+  /** The table is in Board mode: rules colour whole cards and there are no number columns. */
+  board: boolean;
   disabled: boolean;
   onChange: (next: GroupValue) => void;
 }>): ReactElement {
@@ -87,6 +90,8 @@ export function StudioConditionalFormattingEditor({
   const rules = state.enabled ? state.rules : [];
   const columnFormats = state.enabled ? state.columnFormats : [];
 
+  // A board's rules read every field of its record type, so they are judged against those.
+  const ruleFacts = board && facts.board !== undefined ? { fields: facts.board.fields } : facts;
   const recordType = query?.recordType;
   const queryFields = useMemo(() => query?.fields ?? [], [query]);
   // The condition controls work on the compiled fields; the settings name them by qualified field.
@@ -218,7 +223,7 @@ export function StudioConditionalFormattingEditor({
         ) : (
           <ol aria-label="Formatting rules" className="space-y-1">
             {rules.map((rule, index) => {
-              const issue = conditionalFormatRuleIssue(rule, facts);
+              const issue = conditionalFormatRuleIssue(rule, ruleFacts);
               const switchId = `${idPrefix}-${ownId}-rule-${index}`;
               const reading = readStudioQueryFilter(rule.condition as InlineQueryFilter, fieldIdOf);
               const summary =
@@ -325,70 +330,76 @@ export function StudioConditionalFormattingEditor({
           fieldIdOf={fieldIdOf}
           referenceOf={referenceOf}
           queryFields={queryFields}
+          board={board}
           disabled={disabled}
           onChange={(changes, remove) => writeRule(selectedRule.id, changes, remove)}
         />
       )}
 
-      <section aria-labelledby={`${ownId}-columns`} className="space-y-2">
-        <div className="flex items-center justify-between gap-2">
-          <h4 id={`${ownId}-columns`} className="text-sm font-medium">
-            Number columns
-          </h4>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={disabled || availableNumberFields.length === 0 || formatItems.length >= 10}
-            onClick={() =>
-              write({
-                formats: [
-                  ...formatItems,
-                  {
-                    kind: "group",
-                    properties: {
-                      field: {
-                        kind: "field_reference",
-                        field: availableNumberFields[0]!.reference as never,
+      {/* A board has no number columns: the section shows there only to remove formats it holds. */}
+      {board && columnFormats.length === 0 ? null : (
+        <section aria-labelledby={`${ownId}-columns`} className="space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <h4 id={`${ownId}-columns`} className="text-sm font-medium">
+              Number columns
+            </h4>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={
+                disabled || board || availableNumberFields.length === 0 || formatItems.length >= 10
+              }
+              onClick={() =>
+                write({
+                  formats: [
+                    ...formatItems,
+                    {
+                      kind: "group",
+                      properties: {
+                        field: {
+                          kind: "field_reference",
+                          field: availableNumberFields[0]!.reference as never,
+                        },
+                        kind: choice("data_bar"),
+                        token: choice("info"),
                       },
-                      kind: choice("data_bar"),
-                      token: choice("info"),
                     },
-                  },
-                ],
-              })
-            }
-          >
-            <Icon name="plus" />
-            Add
-          </Button>
-        </div>
-        <p className="text-sm text-muted-foreground">
-          Data bars and colour scales measure the rows on the page.
-        </p>
-        {columnFormats.map((format, index) => (
-          <ColumnFormatEditor
-            key={`${format.field}-${index}`}
-            idPrefix={`${idPrefix}-${ownId}-column-${index}`}
-            format={format}
-            numberFields={numberFields.filter(
-              (field) =>
-                field.reference === format.field ||
-                !columnFormats.some((held) => held.field === field.reference),
-            )}
-            issue={conditionalColumnFormatIssue(format, facts)}
-            disabled={disabled}
-            onChange={(next) =>
-              write({
-                formats: formatItems.map((item, position) => (position === index ? next : item)),
-              })
-            }
-            onRemove={() =>
-              write({ formats: formatItems.filter((_, position) => position !== index) })
-            }
-          />
-        ))}
-      </section>
+                  ],
+                })
+              }
+            >
+              <Icon name="plus" />
+              Add
+            </Button>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Data bars and colour scales measure the rows on the page.
+          </p>
+          {columnFormats.map((format, index) => (
+            <ColumnFormatEditor
+              key={`${format.field}-${index}`}
+              idPrefix={`${idPrefix}-${ownId}-column-${index}`}
+              format={format}
+              numberFields={numberFields.filter(
+                (field) =>
+                  field.reference === format.field ||
+                  !columnFormats.some((held) => held.field === field.reference),
+              )}
+              issue={conditionalColumnFormatIssue(format, facts)}
+              disabled={disabled}
+              onChange={(next) =>
+                write({
+                  formats: formatItems.map((item, position) => (position === index ? next : item)),
+                })
+              }
+              onRemove={() =>
+                write({ formats: formatItems.filter((_, position) => position !== index) })
+              }
+            />
+          ))}
+        </section>
+      )}
     </div>
   );
 }
@@ -401,6 +412,7 @@ function RuleEditor({
   fieldIdOf,
   referenceOf,
   queryFields,
+  board,
   disabled,
   onChange,
 }: Readonly<{
@@ -410,6 +422,7 @@ function RuleEditor({
   fieldIdOf: (reference: string) => string | undefined;
   referenceOf: (fieldId: string) => string | undefined;
   queryFields: StudioQueryChoice["fields"];
+  board: boolean;
   disabled: boolean;
   onChange: (changes: Properties, remove?: readonly string[]) => void;
 }>): ReactElement {
@@ -488,6 +501,7 @@ function RuleEditor({
         style={rule.style}
         stopIfTrue={rule.stopIfTrue}
         cellOptions={queryFields.map((field) => ({ value: field.reference, label: field.label }))}
+        wholeRowOnly={board}
         disabled={disabled}
         onChange={writeChange}
       />

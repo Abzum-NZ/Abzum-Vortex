@@ -438,14 +438,13 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
         <SelectAllControl
           allSelected={allSelected}
           someSelected={someSelected}
-          recordIds={pageRecordIds}
+          rows={rows}
           accessibleName={accessibleName}
           events={events}
         />
       ),
     }),
-    // The page's record identities are part of `allSelected` and the rows' own identity.
-    [renderers, allSelected, someSelected, pageRecordIds.join("\u0000"), accessibleName, events],
+    [renderers, allSelected, someSelected, rows, accessibleName, events],
   );
 
   // Announcements: a new order or page of rows, and the selection count.
