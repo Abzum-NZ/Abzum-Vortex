@@ -1,6 +1,6 @@
 -- #3263: an exact read names up to 200 record ids and returns them in one protected page.
 
-set local role vortex_owner;
+set local role vortex_record_adapter;
 
 drop function vortex_record.run_module_query(uuid,uuid,bigint,jsonb,jsonb,integer,jsonb,jsonb,jsonb,text,uuid);
 drop function vortex_record.query_search_plan_internal(jsonb,jsonb,text[],uuid);
