@@ -168,9 +168,11 @@ const failurePlace = (
     declarations = current?.kind === "group" ? current.properties : undefined;
   }
   if (family === undefined) return parts.join(", ");
-  return family === "required_value" && current?.showWhen !== undefined
-    ? conditionalRequiredMessage(current)
-    : `${parts.join(", ")} ${familyText[family]}.`;
+  if (family !== "required_value" || current?.showWhen === undefined)
+    return `${parts.join(", ")} ${familyText[family]}.`;
+  // A nested entry keeps its place, so the pre-check names which column needs the value.
+  const owner = parts.slice(0, -1).join(", ");
+  return owner === "" ? conditionalRequiredMessage(current) : `${owner}: ${conditionalRequiredMessage(current)}`;
 };
 
 /** A setting required by a selected choice asks for its value beside the control. */
