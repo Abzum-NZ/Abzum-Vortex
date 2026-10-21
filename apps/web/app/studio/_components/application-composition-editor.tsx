@@ -778,10 +778,12 @@ export function ApplicationCompositionEditor(props: Props) {
             {removalModel.kind === "blocked"
               ? removalModel.reason === "required_slot"
                 ? "This area needs at least this item."
-                : removalModel.reason === "unresolved_target"
-                  ? "Something this item points to cannot be found. It cannot be removed."
-                  : "A flow still uses this item. It cannot be removed."
-              : "Only display items in the main area of a list, detail or dashboard page can be removed."}
+                : removalModel.reason === "content_outlet"
+                  ? "This item holds a content outlet of its layout. Retarget the outlet in the Layout inspector first."
+                  : removalModel.reason === "unresolved_target"
+                    ? "Something this item points to cannot be found. It cannot be removed."
+                    : "A flow still uses this item. It cannot be removed."
+              : "Only display items in a layout or in the main area of a list, detail or dashboard page can be removed."}
           </p>
         )}
       </StudioInspectorGroup>
