@@ -442,6 +442,18 @@ export const choiceOptionsFor = (
   return options.map(({ value, label }) => ({ value, label }));
 };
 
+/** Choice comparisons use option controls regardless of the stored literal's shape. */
+export const usesChoiceOptionControl = (
+  operator: ConditionOperator,
+  other: ConditionOperand | undefined,
+  context: StudioConditionControlsContext,
+): boolean =>
+  (operator === "equals" ||
+    operator === "not_equals" ||
+    operator === "in" ||
+    operator === "not_in") &&
+  (choiceOptionsFor(other, context)?.length ?? 0) > 0;
+
 /** Field types whose stored value contract is the same in the authored and the compiled form. */
 const plainValueFieldTypes = new Set([
   "text",
@@ -480,6 +492,7 @@ const literalProblem = (
   const label = permission?.label ?? "the field";
   const options = choiceOptionsFor(other, context);
   if (options !== undefined && options.length > 0) {
+    if (values.length === 0) return "Choose at least one option";
     if (values.some((entry) => entry === "")) return `Choose one of the options of ${label}`;
     return values.every(
       (entry) => typeof entry === "string" && options.some((option) => option.value === entry),
@@ -861,6 +874,7 @@ const describeOperand = (
         : undefined;
     const word = (value: JsonValue): string =>
       options?.find((option) => option.value === value)?.label ??
+      ((options?.length ?? 0) > 0 ? "Unknown option (removed)" : undefined) ??
       (typeof value === "string" ? value : (JSON.stringify(value) ?? "empty"));
     // A list (in, not in) reads as its values, by their option labels where there are some.
     return Array.isArray(operand.value)
