@@ -208,7 +208,9 @@ export type ConditionalFormatRuleChange = Readonly<{
 /**
  * A rule's target (the whole row or chosen cells), its colour, tint, text, weight, strike, icon,
  * label and stop switch. `cellOptions` are the cells a rule may target, spelled however the caller
- * identifies a field (a qualified reference in Studio, a field identity in a running grid).
+ * identifies a field (a qualified reference in Studio, a field identity in a running grid). A
+ * `wholeRowOnly` caller (a board, whose cards have no cells) is offered the target choice only while
+ * a rule still targets cells, so it can be switched back to the whole row.
  */
 export function ConditionalFormatStyleControls({
   idPrefix,
@@ -216,6 +218,7 @@ export function ConditionalFormatStyleControls({
   style,
   stopIfTrue,
   cellOptions,
+  wholeRowOnly = false,
   disabled,
   onChange,
 }: Readonly<{
@@ -224,6 +227,7 @@ export function ConditionalFormatStyleControls({
   style: ConditionalFormatStyle;
   stopIfTrue: boolean;
   cellOptions: readonly Readonly<{ value: string; label: string }>[];
+  wholeRowOnly?: boolean;
   disabled: boolean;
   onChange: (change: ConditionalFormatRuleChange) => void;
 }>): ReactElement {
@@ -235,28 +239,30 @@ export function ConditionalFormatStyleControls({
     onChange({ style: { ...style, ...changes } });
   return (
     <>
-      <div className="space-y-1">
-        <Label className="text-sm">Formats</Label>
-        <ToggleGroup
-          aria-label="Formats"
-          variant="outline"
-          size="sm"
-          className="w-full"
-          value={[target.kind]}
-          disabled={disabled}
-          onValueChange={(next) => {
-            if (next[0] === "row") onChange({ target: { kind: "row" } });
-            else if (next[0] === "cells") onChange({ target: { kind: "cells", fields: [] } });
-          }}
-        >
-          <ToggleGroupItem value="row" className="flex-1">
-            Whole row
-          </ToggleGroupItem>
-          <ToggleGroupItem value="cells" className="flex-1">
-            Chosen cells
-          </ToggleGroupItem>
-        </ToggleGroup>
-      </div>
+      {wholeRowOnly && target.kind === "row" ? null : (
+        <div className="space-y-1">
+          <Label className="text-sm">Formats</Label>
+          <ToggleGroup
+            aria-label="Formats"
+            variant="outline"
+            size="sm"
+            className="w-full"
+            value={[target.kind]}
+            disabled={disabled}
+            onValueChange={(next) => {
+              if (next[0] === "row") onChange({ target: { kind: "row" } });
+              else if (next[0] === "cells") onChange({ target: { kind: "cells", fields: [] } });
+            }}
+          >
+            <ToggleGroupItem value="row" className="flex-1">
+              Whole row
+            </ToggleGroupItem>
+            <ToggleGroupItem value="cells" className="flex-1">
+              Chosen cells
+            </ToggleGroupItem>
+          </ToggleGroup>
+        </div>
+      )}
       {target.kind === "cells" ? (
         <div className="space-y-1">
           <div className="flex flex-wrap gap-1">

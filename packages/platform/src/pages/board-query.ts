@@ -16,6 +16,11 @@ import {
   type ProtectedQuerySummaryAggregateResult,
 } from "../queries/index";
 import {
+  conditionalFormattingFieldIds,
+  evaluateConditionalFormatting,
+  type ConditionalFormattingContext,
+} from "./records-table-features";
+import {
   boardColumnReadRequestSchema,
   boardFilterProblem,
   boardProblem,
@@ -27,7 +32,9 @@ import {
   richTextDocumentSchema,
   sameId,
   type ProjectedItem,
+  type ConditionalFormatStyle,
   type RecordsTableBoardMode,
+  type RecordsTableContract,
   type RecordsTableFilterField,
   type RecordsTableFilterValue,
   type IdentitySession,
@@ -131,6 +138,7 @@ const projectBoardRow = (
   row: ProtectedQueryPageRow,
   requestedFieldIds: readonly string[],
   fieldsById: ReadonlyMap<string, ModuleField>,
+  format: string | undefined,
 ): BoardCardRow => {
   const declared = requestedFieldIds.map((fieldId) => ({ fieldId }));
   const valuesById = new Map(
@@ -149,22 +157,58 @@ const projectBoardRow = (
     revision: row.revision,
     capabilities: row.capabilities,
     fields: displayFields,
+    ...(format === undefined ? {} : { format: { row: format } }),
   };
 };
 
+/** What a board's card formatting is evaluated with; supplied only when Formatting is on. */
+type BoardFormatting = Readonly<{
+  contract: RecordsTableContract;
+  context: ConditionalFormattingContext;
+}>;
+
+/**
+ * The styles of every enabled rule of the board's Formatting. They travel on every read, so the
+ * columns of one read and the pages of another always find the style a card names; a style carries
+ * no condition and no value.
+ */
+const boardFormattingStyles = (
+  contract: RecordsTableContract,
+): Readonly<Record<string, ConditionalFormatStyle>> =>
+  contract.features.conditionalFormatting.enabled
+    ? Object.fromEntries(
+        contract.features.conditionalFormatting.rules
+          .filter((rule) => rule.enabled)
+          .map((rule) => [rule.id, rule.style]),
+      )
+    : {};
+
+/**
+ * One page of cards with only the card's own fields. The rules of the board's formatting are
+ * evaluated here, on the rows the engine returned under the viewer's field policy; a value read
+ * only for a rule never leaves, and a card that withholds a field a rule reads is not styled by it.
+ */
 const projectPage = (
   page: ProtectedBoardArrangementPage | null,
-  requestedFieldIds: readonly string[],
+  cardFieldIds: readonly string[],
   fieldsById: ReadonlyMap<string, ModuleField>,
-): BoardPagePayload | null =>
-  page === null
-    ? null
-    : {
-        rows: page.rows.map((row) => projectBoardRow(row, requestedFieldIds, fieldsById)),
-        ...(page.nextContinuationToken === undefined
-          ? {}
-          : { nextContinuationToken: page.nextContinuationToken }),
-      };
+  formatting: BoardFormatting | undefined,
+): BoardPagePayload | null => {
+  if (page === null) return null;
+  const formats =
+    formatting === undefined
+      ? undefined
+      : evaluateConditionalFormatting(formatting.contract, [], page.rows, formatting.context, [])
+          ?.rows;
+  return {
+    rows: page.rows.map((row) =>
+      projectBoardRow(row, cardFieldIds, fieldsById, formats?.get(row.recordId)?.row),
+    ),
+    ...(page.nextContinuationToken === undefined
+      ? {}
+      : { nextContinuationToken: page.nextContinuationToken }),
+  };
+};
 
 const metricValue = (
   aggregate: ModuleQuery["aggregates"][number],
@@ -269,6 +313,8 @@ type BoardCardRow = Readonly<{
   revision: ProtectedQueryPageRow["revision"];
   capabilities: ProtectedQueryPageRow["capabilities"];
   fields: readonly Readonly<{ key: string; label: string; value: BoardCellValue }>[];
+  /** The rule that formats the whole card, when one matched. */
+  format?: Readonly<{ row: string }>;
 }>;
 type BoardPagePayload = Readonly<{
   rows: readonly BoardCardRow[];
@@ -307,6 +353,8 @@ export type BoardPlacementValues = Readonly<{
     fields: readonly RecordsTableFilterField[];
     applied: readonly RecordsTableFilterValue[];
   }>;
+  /** The styles cards name through `format`; absent when the board has no Formatting. */
+  formatting?: Readonly<{ styles: Readonly<Record<string, ConditionalFormatStyle>> }>;
   cardTitleFieldId: string;
   cardFieldIds: readonly string[];
   columns: readonly (BoardBucketValues & BoardStageValues)[];
@@ -358,6 +406,8 @@ export const projectBoardPlacement = async (
     queries: BoardQueries;
     /** The placement's Board feature, as the one Records table reader read it. */
     board: RecordsTableBoardMode;
+    /** The board's Formatting with what its rules are evaluated with; supplied only when it is on. */
+    formatting?: BoardFormatting;
     /**
      * The placement's Column filters as the viewer's address narrowed them: the declared fields,
      * the condition every column read and total applies and what the filter controls show.
@@ -431,7 +481,17 @@ export const projectBoardPlacement = async (
     )!;
 
     const fieldsById = installedFieldMap(fields);
-    const requestedFieldIds = [board.cardTitleField, ...board.cardFields];
+    const cardFieldIds = [board.cardTitleField, ...board.cardFields];
+    // Fields only the formatting rules read are an optional projection: the engine returns each
+    // under the viewer's field policy (absent where withheld) and they are stripped from the cards.
+    const requestedFieldIds = [
+      ...cardFieldIds,
+      ...(input.formatting === undefined
+        ? []
+        : conditionalFormattingFieldIds(input.formatting.contract, []).filter(
+            (fieldId) => !cardFieldIds.some((cardFieldId) => sameId(cardFieldId, fieldId)),
+          )),
+    ];
     const inputValues = input.inputValues;
 
     let pageRequest: ProtectedBoardArrangementCommand["pageRequest"];
@@ -525,7 +585,7 @@ export const projectBoardPlacement = async (
             state: column.rowCount === null ? ("unread" as const) : ("read" as const),
             rowCount: column.rowCount,
             aggregates: bucketAggregates,
-            page: projectPage(column.page, requestedFieldIds, fieldsById),
+            page: projectPage(column.page, cardFieldIds, fieldsById, input.formatting),
           },
         ];
       });
@@ -558,8 +618,11 @@ export const projectBoardPlacement = async (
         ...(input.filters === undefined || input.filters.fields.length === 0
           ? {}
           : { filters: { fields: input.filters.fields, applied: input.filters.applied } }),
+        ...(input.formatting === undefined
+          ? {}
+          : { formatting: { styles: boardFormattingStyles(input.formatting.contract) } }),
         cardTitleFieldId: board.cardTitleField,
-        cardFieldIds: requestedFieldIds,
+        cardFieldIds,
         columns,
         unassigned: {
           moves: starts.filter((target) =>
@@ -568,7 +631,7 @@ export const projectBoardPlacement = async (
           state: arranged.unassigned.rowCount === null ? "unread" : "read",
           rowCount: arranged.unassigned.rowCount,
           aggregates: unassignedAggregates,
-          page: projectPage(arranged.unassigned.page, requestedFieldIds, fieldsById),
+          page: projectPage(arranged.unassigned.page, cardFieldIds, fieldsById, input.formatting),
         },
       },
     };

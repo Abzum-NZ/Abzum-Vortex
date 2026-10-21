@@ -43,6 +43,11 @@ const BoardFilters = lazy(async () => ({
   default: (await import("./grid-features/column-filters")).FiltersToolbar,
 }));
 
+/** Draws a card's matched Formatting rule, a chunk that loads only for a board that has Formatting. */
+const BoardCardFormat = lazy(async () => ({
+  default: (await import("./grid-features/conditional-format")).BoardCardFormat,
+}));
+
 type BoardBucket = Readonly<{
   key: string;
   label: string;
@@ -129,6 +134,7 @@ function BoardColumn({
   wipLimit,
   active,
   cardFieldIds,
+  formatting,
   emptyMessage,
   events,
   rowActions,
@@ -147,6 +153,8 @@ function BoardColumn({
   /** On a phone only the active column shows; a wider screen shows them all. */
   active: boolean;
   cardFieldIds: readonly string[];
+  /** The styles cards name through their format; absent when the board has no Formatting. */
+  formatting: BoardPayload["formatting"];
   emptyMessage: string;
   events: DisplayRenderProps<BoardPayload>["events"];
   /** The grid's declared row actions; a card offers each one, by its own event identity. */
@@ -283,70 +291,81 @@ function BoardColumn({
                   (changeable) => changeable.toLowerCase() === choiceFieldId.toLowerCase(),
                 );
               const idle = movable && mover.movingRecordId === undefined;
+              const cardStyle =
+                row.format === undefined ? undefined : formatting?.styles[row.format.row];
+              const cardElement = (
+                <Card
+                  size="sm"
+                  className={moving ? "opacity-60" : undefined}
+                  aria-busy={moving}
+                  data-vortex-board-card-moving={moving ? "true" : undefined}
+                  {...(idle
+                    ? {
+                        draggable: true,
+                        onDragStart: (event: DragEvent) => {
+                          mover.dragged.current = card;
+                          mover.setDraggingFrom(bucket);
+                          event.dataTransfer.effectAllowed = "move";
+                          event.dataTransfer.setData("text/plain", accessibleTitle);
+                        },
+                        onDragEnd: () => {
+                          mover.dragged.current = undefined;
+                          mover.setDraggingFrom(undefined);
+                        },
+                      }
+                    : {})}
+                >
+                  <CardHeader>
+                    <CardTitle className="min-w-0 break-words">
+                      {titleField === undefined || title.length === 0 ? (
+                        "Untitled item"
+                      ) : (
+                        <DisplayCellView value={titleField.value} />
+                      )}
+                    </CardTitle>
+                    {(events?.row_action === undefined || rowActions.length === 0) &&
+                    !movable ? null : (
+                      <CardAction>
+                        <CardActionsMenu
+                          card={card}
+                          from={bucket}
+                          name={accessibleTitle}
+                          events={events}
+                          rowActions={rowActions}
+                          mover={movable ? mover : undefined}
+                          disabled={mover?.movingRecordId !== undefined}
+                        />
+                      </CardAction>
+                    )}
+                  </CardHeader>
+                  {moving || details.length > 0 ? (
+                    <CardContent className="flex flex-col">
+                      {moving ? (
+                        <p role="status" className="m-0 text-muted-foreground">
+                          Moving…
+                        </p>
+                      ) : null}
+                      {details.map((field) => (
+                        <p key={field.key} className="m-0 flex min-w-0 justify-between gap-2">
+                          <span className="min-w-0 text-muted-foreground">{field.label}</span>
+                          <span className="shrink-0 whitespace-nowrap text-right">
+                            <DisplayCellView value={field.value} />
+                          </span>
+                        </p>
+                      ))}
+                    </CardContent>
+                  ) : null}
+                </Card>
+              );
               return (
                 <li key={row.recordId} data-vortex-board-card="">
-                  <Card
-                    size="sm"
-                    className={moving ? "opacity-60" : undefined}
-                    aria-busy={moving}
-                    data-vortex-board-card-moving={moving ? "true" : undefined}
-                    {...(idle
-                      ? {
-                          draggable: true,
-                          onDragStart: (event: DragEvent) => {
-                            mover.dragged.current = card;
-                            mover.setDraggingFrom(bucket);
-                            event.dataTransfer.effectAllowed = "move";
-                            event.dataTransfer.setData("text/plain", accessibleTitle);
-                          },
-                          onDragEnd: () => {
-                            mover.dragged.current = undefined;
-                            mover.setDraggingFrom(undefined);
-                          },
-                        }
-                      : {})}
-                  >
-                    <CardHeader>
-                      <CardTitle className="min-w-0 break-words">
-                        {titleField === undefined || title.length === 0 ? (
-                          "Untitled item"
-                        ) : (
-                          <DisplayCellView value={titleField.value} />
-                        )}
-                      </CardTitle>
-                      {(events?.row_action === undefined || rowActions.length === 0) &&
-                      !movable ? null : (
-                        <CardAction>
-                          <CardActionsMenu
-                            card={card}
-                            from={bucket}
-                            name={accessibleTitle}
-                            events={events}
-                            rowActions={rowActions}
-                            mover={movable ? mover : undefined}
-                            disabled={mover?.movingRecordId !== undefined}
-                          />
-                        </CardAction>
-                      )}
-                    </CardHeader>
-                    {moving || details.length > 0 ? (
-                      <CardContent className="flex flex-col">
-                        {moving ? (
-                          <p role="status" className="m-0 text-muted-foreground">
-                            Moving…
-                          </p>
-                        ) : null}
-                        {details.map((field) => (
-                          <p key={field.key} className="m-0 flex min-w-0 justify-between gap-2">
-                            <span className="min-w-0 text-muted-foreground">{field.label}</span>
-                            <span className="shrink-0 whitespace-nowrap text-right">
-                              <DisplayCellView value={field.value} />
-                            </span>
-                          </p>
-                        ))}
-                      </CardContent>
-                    ) : null}
-                  </Card>
+                  {cardStyle === undefined ? (
+                    cardElement
+                  ) : (
+                    <Suspense fallback={cardElement}>
+                      <BoardCardFormat style={cardStyle}>{cardElement}</BoardCardFormat>
+                    </Suspense>
+                  )}
                 </li>
               );
             })}
@@ -763,6 +782,7 @@ export function BoardView(props: DisplayRenderProps<BoardPayload>): ReactElement
                   wipLimit={values.wipLimit}
                   active={bucket.key === activeKey}
                   cardFieldIds={values.cardFieldIds}
+                  formatting={values.formatting}
                   emptyMessage={emptyMessage}
                   events={events}
                   rowActions={rowActions}
