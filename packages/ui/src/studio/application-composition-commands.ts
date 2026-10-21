@@ -441,9 +441,13 @@ const resolveRemoval = (
   const resolved = resolve(context, selection);
   if (resolved === undefined) return { kind: "invalid" };
   const { source, target, alias } = resolved;
-  const page = target.region.ordinaryMain === true ? target.region.page : undefined;
+  // A page's content is its main area, or the layout content slot its layout opens for it.
+  const page =
+    target.region.ordinaryMain === true || target.region.parent !== undefined
+      ? target.region.page
+      : undefined;
   // Any of a layout's own blocks leaves with everything inside it, as any of them can be added.
-  // A page removes one display item, and only from an ordinary main area.
+  // A page removes one display item, and only from its content.
   const layout = target.region.shell !== undefined;
   if (!layout) {
     if (
@@ -459,7 +463,8 @@ const resolveRemoval = (
   }
   if (
     releaseFor(catalogue, target.item) === undefined ||
-    !manifestMatches(catalogue, source, target.region.zone.items)
+    !manifestMatches(catalogue, source, target.region.zone.items) ||
+    (target.region.parent !== undefined && !pinnedRelease(catalogue, source, target.region.parent))
   )
     return { kind: "unsupported", reason: "manifest_mismatch" };
   if (
