@@ -167,16 +167,15 @@ export function StudioActionInputs({
                             </ComboboxList>
                           </ComboboxContent>
                         </Combobox>
-                        <p className="text-sm text-muted-foreground" aria-live="polite">
-                          {selectedRecords.length === 0
-                            ? "Choose at least one record type."
-                            : selectedRecords
-                                .map(
-                                  (key) =>
-                                    records.find((record) => record.key === key)?.label ?? key,
-                                )
-                                .join(", ")}
-                        </p>
+                        {selectedRecords.length > 0 && (
+                          <p className="text-sm text-muted-foreground" aria-live="polite">
+                            {selectedRecords
+                              .map(
+                                (key) => records.find((record) => record.key === key)?.label ?? key,
+                              )
+                              .join(", ")}
+                          </p>
+                        )}
                       </div>
                     )}
                   </StudioInputType>

@@ -1010,7 +1010,7 @@ export function StudioQueryEditor({
               />
               {newInput.recordType === "" && (
                 <p role="status" className="text-sm text-destructive">
-                  Choose the record type
+                  Choose the record type.
                 </p>
               )}
             </div>

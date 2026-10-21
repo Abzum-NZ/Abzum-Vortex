@@ -25,7 +25,7 @@ export function StudioInputType<Type extends string>({
   const change = (nextType: Type, records: readonly string[]) => {
     const next = { type: nextType, recordTypes: records };
     if (nextType === "record_reference" && records.length === 0) {
-      control.hold(next, "Choose the record type");
+      control.hold(next, "Choose the record type.");
       return;
     }
     const problem = onChange(nextType, records);
