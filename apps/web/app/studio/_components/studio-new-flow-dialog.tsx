@@ -113,11 +113,11 @@ export function StudioNewFlowDialog({ open, onOpenChange, choices, source, onCre
           <legend className="text-sm font-medium">What should it do?</legend>
           <RadioGroup value={what} onValueChange={(value) => setWhat(value as "operation" | "message")}>
             <div className="flex items-start gap-2">
-              <RadioGroupItem id="new-flow-what-operation" value="operation" />
+              <RadioGroupItem id="new-flow-what-operation" value="operation" className="size-4 rounded-full border border-input" />
               <Label htmlFor="new-flow-what-operation" className="font-normal">Run an operation</Label>
             </div>
             <div className="flex items-start gap-2">
-              <RadioGroupItem id="new-flow-what-message" value="message" />
+              <RadioGroupItem id="new-flow-what-message" value="message" className="size-4 rounded-full border border-input" />
               <Label htmlFor="new-flow-what-message" className="font-normal">Show a message</Label>
             </div>
           </RadioGroup>
