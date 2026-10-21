@@ -626,7 +626,7 @@ export function ModuleFieldsEditor({
     <div className="flex items-center gap-2">
       <Switch
         id={`module-field-${key}`}
-        checked={form[key] || (key === "filterable" && isTitleField)}
+        checked={form[key]}
         disabled={disabled || shapeLocked || extraDisabled}
         onCheckedChange={(checked) => change({ [key]: checked })}
       />
