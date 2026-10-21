@@ -104,9 +104,14 @@ export const compiledPageBindingFacts = <Entry extends Placement>(
   const directoryPersonTypeId = [...recordById.values()].find(
     (record) => object(record.systemProjection).protectedView === "organization_accounts",
   )?.recordTypeId;
+  const directoryGroupTypeId = [...recordById.values()].find(
+    (record) => object(record.systemProjection).protectedView === "groups",
+  )?.recordTypeId;
   return pageBindingFacts({
     currentPersonRecordType:
       typeof directoryPersonTypeId === "string" ? directoryPersonTypeId : undefined,
+    currentTeamRecordType:
+      typeof directoryGroupTypeId === "string" ? directoryGroupTypeId : undefined,
     subject:
       subjectTypeId === undefined
         ? undefined

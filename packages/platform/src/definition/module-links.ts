@@ -13,6 +13,7 @@ type Relationship = RecordType["relationships"][number];
 export const peopleDirectory = Object.freeze({
   module: "vortex.system_directory",
   recordType: "vortex.system_directory:person",
+  groupRecordType: "vortex.system_directory:group",
   readPermission: "vortex.system_directory.person.reference_read",
 });
 

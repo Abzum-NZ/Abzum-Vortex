@@ -2,11 +2,13 @@
 import { useId } from "react";
 import {
   checkQueryBindings,
+  currentPersonParts,
   queryInputValueType,
   queryBindingTypeName,
   queryBindingTypesFit,
   readQueryBindings,
   relativeDateAnchors,
+  type CurrentPersonPart,
   type QueryBindingSourceKind,
   type RelativeDateAnchor,
   type SourceBlockPropertyValueContract,
@@ -28,10 +30,10 @@ import type { StudioQueryChoice } from "./contextual-palette";
 
 type Value = SourceBlockPropertyValueContract;
 const text = (value: string): Value => ({ kind: "text", value });
-const personParts = ["person", "organisation"] as const;
-const partLabels: Record<(typeof personParts)[number], string> = {
+const partLabels: Record<CurrentPersonPart, string> = {
   person: "Person",
   organisation: "Organisation",
+  team: "Team",
 };
 /**
  * A date and time is written in UTC, as `2026-10-20T09:30`, and kept as an exact instant. An instant
@@ -133,17 +135,24 @@ export function StudioQueryBindings({
         const rowFields = (facts.rowFields ?? []).filter(
           (field) => field.type !== undefined && fit(field.type),
         );
-        // The person's directory record fills a record input; their organisation fills a text one.
+        // The person's directory record fills a record input; their organisation fills a text one;
+        // their team fills a record input of the group directory.
         const personFits =
           facts.currentPersonRecordType !== undefined &&
           fit({ kind: "record", recordTypes: [facts.currentPersonRecordType] });
         const organisationFits = fit({ kind: "text" });
+        const teamFits =
+          facts.currentTeamRecordType !== undefined &&
+          fit({ kind: "record", recordTypes: [facts.currentTeamRecordType] });
+        const partsFitting = currentPersonParts.filter((part) =>
+          part === "person" ? personFits : part === "organisation" ? organisationFits : teamFits,
+        );
         const sources: QueryBindingSourceKind[] = [
           "fixed",
           ...(parameters.length ? ["page_parameter" as const] : []),
           ...(fields.length ? ["record_field" as const] : []),
           ...(controls.length ? ["control" as const] : []),
-          ...(personFits || organisationFits ? ["current_person" as const] : []),
+          ...(partsFitting.length > 0 ? ["current_person" as const] : []),
           ...(input.type?.kind === "date" || input.type?.kind === "date_time"
             ? ["relative_date" as const]
             : []),
@@ -189,7 +198,7 @@ export function StudioQueryBindings({
                   : kind === "control"
                     ? { control_placement: text(controls[0]!.placement) }
                     : kind === "current_person"
-                      ? { part: choice(personFits ? "person" : "organisation") }
+                      ? { part: choice(partsFitting[0]!) }
                       : kind === "this_row"
                         ? rowItself
                           ? {}
@@ -283,23 +292,25 @@ export function StudioQueryBindings({
                 }
               />
             )}
-            {source === "current_person" && personFits && organisationFits && (
+            {source === "current_person" && partsFitting.length > 1 && (
               <Select
                 disabled={disabled}
-                value={props.part?.kind === "choice" ? props.part.value : "person"}
-                onValueChange={(value) => change({ ...props, part: choice(value ?? "person") })}
+                value={props.part?.kind === "choice" ? props.part.value : partsFitting[0]!}
+                onValueChange={(value) =>
+                  change({ ...props, part: choice(value ?? partsFitting[0]!) })
+                }
               >
                 <SelectTrigger aria-label={`${input.label} part`}>
                   <SelectValue>
                     {partLabels[
                       (props.part?.kind === "choice"
                         ? props.part.value
-                        : "person") as (typeof personParts)[number]
-                    ] ?? partLabels.person}
+                        : partsFitting[0]!) as CurrentPersonPart
+                    ] ?? partLabels[partsFitting[0]!]}
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  {personParts.map((part) => (
+                  {partsFitting.map((part) => (
                     <SelectItem key={part} value={part}>
                       {partLabels[part]}
                     </SelectItem>

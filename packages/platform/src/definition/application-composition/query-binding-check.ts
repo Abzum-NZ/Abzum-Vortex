@@ -57,6 +57,8 @@ export type QueryBindingPageFacts = Readonly<{
   blockLabel: string;
   /** The directory person type in the caller's identity space; absent without the directory. */
   currentPersonRecordType: string | undefined;
+  /** The group directory type in the caller's identity space; absent without the directory. */
+  currentTeamRecordType: string | undefined;
   parameters: readonly QueryBindingPageParameter[];
   controls: readonly QueryBindingControl[];
   /** The fields of the page's subject record; undefined when the page is not a record page. */
@@ -126,6 +128,14 @@ const sourceFacts = (source: QueryBindingSource, facts: QueryBindingPageFacts): 
     case "current_person":
       if (source.part === "organisation")
         return { kind: "typed", type: { kind: "text" }, description: "the current organisation" };
+      if (source.part === "team")
+        return facts.currentTeamRecordType === undefined
+          ? { kind: "problem", sentence: "Current team needs the group directory." }
+          : {
+              kind: "typed",
+              type: { kind: "record", recordTypes: [facts.currentTeamRecordType] },
+              description: "the current team",
+            };
       return facts.currentPersonRecordType === undefined
         ? { kind: "problem", sentence: "Current person needs the people directory." }
         : {
@@ -286,6 +296,7 @@ export const pageBindingFacts = (
     /** The record type a record page is about, with its name; undefined on any other page. */
     subject: Readonly<{ recordType: string; label: string }> | undefined;
     currentPersonRecordType: string | undefined;
+    currentTeamRecordType: string | undefined;
     placements: readonly QueryBindingPlacement[];
     recordFields: readonly QueryBindingField[] | undefined;
     recordTypeLabel: (recordType: string) => string;
@@ -335,6 +346,7 @@ export const pageBindingFacts = (
   }
   return {
     currentPersonRecordType: input.currentPersonRecordType,
+    currentTeamRecordType: input.currentTeamRecordType,
     parameters,
     controls,
     recordFields: input.recordFields,
