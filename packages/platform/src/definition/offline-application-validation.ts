@@ -301,7 +301,17 @@ export const validateApplicationsOffline = async (
     try {
       return applicationModuleSources(application);
     } catch (error) {
-      failures.push(unexpected(application.key, "source_schema", error));
+      failures.push(
+        error instanceof DefinitionCompilationError
+          ? {
+              definitionKey: application.key,
+              stage: "compile",
+              code: error.ruleCode,
+              location: renderLocation(error.location),
+              detail: error.family,
+            }
+          : unexpected(application.key, "source_schema", error),
+      );
       return [];
     }
   });
