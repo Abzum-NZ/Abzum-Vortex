@@ -233,7 +233,8 @@ begin
         live_table_token
       ) using (
         select pg_catalog.array_agg(member.record_id)
-        from pg_catalog.unnest(readable_ids, readable_columns_by_record) as member(record_id, columns)
+        from rows from (pg_catalog.unnest(readable_ids), pg_catalog.unnest(readable_columns_by_record))
+          as member(record_id, columns)
         where member.columns = copied_columns
       );
     end loop;
