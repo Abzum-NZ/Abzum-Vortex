@@ -12,6 +12,7 @@ import {
   createFlowInvokeClient,
   createFlowRuntime,
   createFormBlockRuntime,
+  getAccessibleName,
   type FieldInputControlReleaseMap,
   type createPlatformComponentRegistryForReleases,
   PagePuckRenderer,
@@ -219,16 +220,32 @@ export function useFlowRuntime({
         platformComponentRegistry,
       );
       if (surface === undefined)
-        return (
-          <div className="flex flex-col gap-4">
-            <p role="alert">Form unavailable.</p>
+        return {
+          title: "Form unavailable",
+          body: (
             <DialogFooter>
               <Button type="button" variant="secondary" onClick={controls.cancel}>
                 Cancel
               </Button>
             </DialogFooter>
-          </div>
-        );
+          ),
+        };
+      const placementId = surface.placementIds.find((id) => sameId(id, form.formId));
+      const placement = placementId === undefined ? undefined : surface.placements[placementId];
+      const block = placement?.vortex.block;
+      const release =
+        isRecord(block) &&
+        typeof block.blockId === "string" &&
+        typeof block.releaseVersion === "string"
+          ? platformComponentRegistry.get(block.blockId, block.releaseVersion)?.metadata
+          : undefined;
+      if (placement === undefined || release === undefined)
+        throw new Error(`Show form '${form.formId}' has no registered form placement`);
+      const title = getAccessibleName(
+        placement.settings as Parameters<typeof getAccessibleName>[0],
+        release,
+      );
+      if (title === undefined) throw new Error(`Show form '${form.formId}' has no title`);
       const scopedInputs: Record<string, unknown> = {};
       for (const placementId of surface.placementIds) {
         const current = runtimeInputsRef.current[placementId];
@@ -294,37 +311,40 @@ export function useFlowRuntime({
         if (Object.keys(events).length > 0) modalInput.events = events;
         if (Object.keys(modalInput).length > 0) scopedInputs[placementId] = modalInput;
       }
-      return (
-        <div key={form.taskId}>
-          <div ref={dialogFormRef} className="flex flex-col gap-4">
-            <UnsavedWorkProvider>
-              <PagePuckRenderer
-                composition={surface.composition}
-                registry={platformComponentRegistry}
-                fieldInputControlReleases={fieldInputControlReleases}
-                platformThemeTokens={platformThemeTokens}
-                pageId={model.pageId}
-                theme={model.theme}
-                projectedNavigation={model.navigation}
-                resolvePageHref={resolvePageHref}
-                currentPageId={model.pageId}
-                runtimeInputs={scopedInputs}
-              />
-            </UnsavedWorkProvider>
-            <DialogFooter>
-              <Button type="button" variant="secondary" onClick={controls.cancel}>
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                onClick={() => dialogFormRef.current?.querySelector("form")?.requestSubmit()}
-              >
-                Continue
-              </Button>
-            </DialogFooter>
+      return {
+        title,
+        body: (
+          <div key={form.taskId}>
+            <div ref={dialogFormRef} className="flex flex-col gap-4">
+              <UnsavedWorkProvider>
+                <PagePuckRenderer
+                  composition={surface.composition}
+                  registry={platformComponentRegistry}
+                  fieldInputControlReleases={fieldInputControlReleases}
+                  platformThemeTokens={platformThemeTokens}
+                  pageId={model.pageId}
+                  theme={model.theme}
+                  projectedNavigation={model.navigation}
+                  resolvePageHref={resolvePageHref}
+                  currentPageId={model.pageId}
+                  runtimeInputs={scopedInputs}
+                />
+              </UnsavedWorkProvider>
+              <DialogFooter>
+                <Button type="button" variant="secondary" onClick={controls.cancel}>
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => dialogFormRef.current?.querySelector("form")?.requestSubmit()}
+                >
+                  Continue
+                </Button>
+              </DialogFooter>
+            </div>
           </div>
-        </div>
-      );
+        ),
+      };
     },
     [choiceEvidenceFor, choicePayloadFor, currentData, model, resolvePageHref, router],
   );
