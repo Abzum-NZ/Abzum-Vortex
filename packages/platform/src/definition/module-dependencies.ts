@@ -33,6 +33,18 @@ const referencedModule = (value: string): string | undefined => {
  * labels and descriptions never create a dependency.
  */
 export const moduleReferencePaths = (document: object): ReadonlyMap<string, readonly Path[]> => {
+  let references = referencePathsBySource.get(document);
+  if (references === undefined) {
+    references = collectModuleReferencePaths(document);
+    referencePathsBySource.set(document, references);
+  }
+  return references;
+};
+
+// A pure function of the source object, asked for by every step of one compile; computed once.
+const referencePathsBySource = new WeakMap<object, ReadonlyMap<string, readonly Path[]>>();
+
+const collectModuleReferencePaths = (document: object): ReadonlyMap<string, readonly Path[]> => {
   const source = document as JsonObject;
   const own = String(source.key);
   const references = new Map<string, Path[]>();
