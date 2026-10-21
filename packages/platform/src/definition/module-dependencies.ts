@@ -28,6 +28,9 @@ const referencedModule = (value: string): string | undefined => {
   return namespacedKeySchema.safeParse(key).success ? key : undefined;
 };
 
+// A pure function of the source object, asked for by every step of one compile; computed once.
+const referencePathsBySource = new WeakMap<object, ReadonlyMap<string, readonly Path[]>>();
+
 /**
  * The source leaves of a Module that reference another Module, by that Module's key. Only the
  * positions the source contract declares as compiled into a canonical identity are read, so names,
@@ -41,9 +44,6 @@ export const moduleReferencePaths = (document: object): ReadonlyMap<string, read
   }
   return references;
 };
-
-// A pure function of the source object, asked for by every step of one compile; computed once.
-const referencePathsBySource = new WeakMap<object, ReadonlyMap<string, readonly Path[]>>();
 
 const collectModuleReferencePaths = (document: object): ReadonlyMap<string, readonly Path[]> => {
   const source = document as JsonObject;
