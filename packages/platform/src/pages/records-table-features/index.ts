@@ -181,6 +181,7 @@ export type RecordsTableRequestPart =
   | "filter"
   | "search"
   | "command"
+  | "cursor"
   | "bulk_action"
   | "inline_edit"
   | "row_edit"

@@ -11,6 +11,7 @@ import {
   type OrganizationSelectionCandidate,
 } from "../../schema";
 import type { HumanOrganizationRequestResult } from "../../access/index";
+import type { QueryContinuationKey } from "../../queries/index";
 import type { InstalledRuntimeContext } from "../../definition/installed-runtime-context";
 import {
   protectedQuerySummaryCommandSchema,
@@ -35,6 +36,7 @@ import { resolveQueryBindings, type QueryBindingContext } from "../query-binding
 import { buildRecordsTableNarrowing } from "../records-table-query";
 import { encodeRecordsTableFieldFilter, readRecordsTableQueryState } from "../records-table-state";
 import { formatDecimal, formatMoney } from "../value-format";
+import { openPivotCursor, sealPivotCursor, type PivotCursorBinding } from "./pivot-cursor";
 import { bucketFirstDay, bucketLabel, bucketLastDay } from "./dimension-values";
 import { logRecordsTableRequestRefusal, recordsTableRequestRefusal } from "./index";
 
@@ -110,8 +112,12 @@ export type PivotRequest = Readonly<{
   placement: PlacementReadEntry;
   /** The page address, from which the table's own search and filters are read. */
   addressEntries: readonly (readonly [string, string])[];
-  /** Opaque position of the first row of the page; absent reads the first rows. */
+  /** The sealed position of the first row of the page; absent reads the first rows. */
   cursor?: string;
+  /** The page the table is on; a cursor is bound to it. */
+  pageId: string;
+  /** Seals and opens the pivot's row positions. */
+  continuationKey: QueryContinuationKey;
   /** The page's binding context, from which the table query's inputs resolve. */
   bindings: QueryBindingContext;
   queries: RecordsTablePivotQueryRunner;
@@ -131,13 +137,6 @@ const refuse = (reason: string): PivotResult => {
 const fail = (cause: string): PivotResult => {
   console.error(`[records-table] pivot unavailable where=pivot cause=${cause}`);
   return failed;
-};
-
-const encodeCursor = (key: string): string => Buffer.from(key, "utf8").toString("base64url");
-const decodeCursor = (cursor: string): string | undefined => {
-  if (!/^[A-Za-z0-9_-]{1,6000}$/.test(cursor)) return undefined;
-  const text = Buffer.from(cursor, "base64url").toString("utf8");
-  return text.length >= 1 && text.length <= 4096 ? text : undefined;
 };
 
 type Dimension = Readonly<{
@@ -324,9 +323,7 @@ export const readRecordsTablePivot = async (request: PivotRequest): Promise<Pivo
       : { unit, timeZone: timeZone ?? "UTC" };
   const rowBucket = bucket(row, feature.rowDateUnit);
   const columnBucket = bucket(column, feature.columnDateUnit);
-  const after = request.cursor === undefined ? undefined : decodeCursor(request.cursor);
-  if (request.cursor !== undefined && after === undefined) return refuse("cursor_malformed");
-  const command = protectedQuerySummaryCommandSchema.safeParse({
+  const query = {
     moduleRootId: bound.module.rootId,
     queryId: bound.query.queryId,
     inputValues: resolution.inputValues,
@@ -341,11 +338,34 @@ export const readRecordsTablePivot = async (request: PivotRequest): Promise<Pivo
           : { operation: measureFunction, fieldId: String(measure!.fieldId).toLowerCase() },
       rowLimit: rowPageSize,
     },
-    ...(after === undefined ? {} : { groupAfter: after }),
     ...(narrowing.search === undefined ? {} : { search: narrowing.search }),
     searchableFieldIds: [],
     ...(narrowing.filter === undefined ? {} : { filter: narrowing.filter }),
     filterableFieldIds: narrowing.filterableFieldIds,
+  };
+  const binding: PivotCursorBinding = {
+    session: request.session,
+    selection: request.selection,
+    installationRevision: context.applicationReleaseRevision,
+    pageId: request.pageId,
+    placementId: placement.placementId,
+    query,
+  };
+  // A cursor that is not exactly for this read (other filters, person, release, a tampered token)
+  // is stale: the cause is logged and the pivot starts again at its first page.
+  let after: string | undefined;
+  if (request.cursor !== undefined) {
+    const opening = openPivotCursor(request.cursor, request.continuationKey, binding);
+    if (opening.kind === "stale")
+      logRecordsTableRequestRefusal(
+        recordsTableRequestRefusal("cursor", `cursor_stale ${opening.cause}`),
+        "pivot",
+      );
+    else after = opening.groupKey;
+  }
+  const command = protectedQuerySummaryCommandSchema.safeParse({
+    ...query,
+    ...(after === undefined ? {} : { groupAfter: after }),
   });
   if (!command.success) return refuse("command_invalid");
 
@@ -460,6 +480,8 @@ export const readRecordsTablePivot = async (request: PivotRequest): Promise<Pivo
       : {}),
     totalRecords: summary.totalRowCount,
     rowGroupCount: pivot.rowGroupCount,
-    ...(next === null || next === undefined ? {} : { nextCursor: encodeCursor(next) }),
+    ...(next === null || next === undefined
+      ? {}
+      : { nextCursor: sealPivotCursor(request.continuationKey, binding, next) }),
   };
 };

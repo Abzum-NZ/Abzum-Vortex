@@ -111,6 +111,8 @@ export const loadApplicationPivot = async (
         ]),
       ),
       ...(request.cursor === undefined ? {} : { cursor: request.cursor }),
+      pageId: String(pageDefinition.pageId),
+      continuationKey: getQueryContinuationKey(),
       bindings,
       queries: services.queries,
       readTimeZone: services.readTimeZone,

@@ -124,8 +124,9 @@ export function usePlacementActions({
   );
 
   const readBoardColumns = useCallback(
-    async (placementId: string, event: DisplaySemanticEvent): Promise<boolean> => {
-      if (busy || event.event !== "page_changed" || !("columns" in event)) return false;
+    async (placementId: string, event: DisplaySemanticEvent): Promise<boolean | "deferred"> => {
+      if (event.event !== "page_changed" || !("columns" in event)) return false;
+      if (busy) return "deferred";
       const board = await import("./board-column-read");
       return board.readBoardColumns(
         {

@@ -48,6 +48,12 @@ const BoardCardFormat = lazy(async () => ({
   default: (await import("./grid-features/conditional-format")).BoardCardFormat,
 }));
 
+/**
+ * What a column read answers: accepted, refused (a real failure), or deferred (put off because the
+ * page was busy; the board reads the column again once it is idle).
+ */
+type BoardColumnReadOutcome = void | boolean | "deferred";
+
 type BoardBucket = Readonly<{
   key: string;
   label: string;
@@ -503,9 +509,14 @@ export function BoardView(props: DisplayRenderProps<BoardPayload>): ReactElement
     : [];
   const [pendingKeys, setPendingKeys] = useState<ReadonlySet<string>>(new Set());
   const [failedKeys, setFailedKeys] = useState<ReadonlySet<string>>(new Set());
+  // Columns whose read was put off because the page was busy or another read of this board was in
+  // flight: not a failure, they are read again as soon as the board is idle.
+  const [deferredKeys, setDeferredKeys] = useState<ReadonlySet<string>>(new Set());
+  const visibleKeysRef = useRef<Set<string>>(new Set());
   const pendingKeyRef = useRef<string | undefined>(undefined);
   const pageChanged = events?.page_changed as
-    ((event: DisplaySemanticEvent) => void | boolean | Promise<void | boolean>) | undefined;
+    | ((event: DisplaySemanticEvent) => BoardColumnReadOutcome | Promise<BoardColumnReadOutcome>)
+    | undefined;
   const cardMoved = events?.card_moved as
     ((event: DisplaySemanticEvent) => void | boolean | Promise<void | boolean>) | undefined;
   const cardAdded = events?.card_added as
@@ -649,7 +660,13 @@ export function BoardView(props: DisplayRenderProps<BoardPayload>): ReactElement
             ...(continuationToken === undefined ? {} : { continuationToken }),
           }),
         );
-        if (accepted === false) setFailedKeys((current) => new Set([...current, ...keys]));
+        if (accepted === "deferred") setDeferredKeys((current) => new Set([...current, ...keys]));
+        else {
+          setDeferredKeys(
+            (current) => new Set([...current].filter((candidate) => !keys.has(candidate))),
+          );
+          if (accepted === false) setFailedKeys((current) => new Set([...current, ...keys]));
+        }
       } catch (error) {
         console.error("[board] column read failed", error);
         setFailedKeys((current) => new Set([...current, ...keys]));
@@ -669,7 +686,8 @@ export function BoardView(props: DisplayRenderProps<BoardPayload>): ReactElement
   useEffect(() => {
     const section = cardsRef.current;
     if (section === null || pageChanged === undefined) return;
-    const visible = new Set<string>();
+    const visible = visibleKeysRef.current;
+    visible.clear();
     let frame: number | undefined;
     const observer = new IntersectionObserver((entries) => {
       for (const entry of entries) {
@@ -700,6 +718,23 @@ export function BoardView(props: DisplayRenderProps<BoardPayload>): ReactElement
       if (frame !== undefined) cancelAnimationFrame(frame);
     };
   }, [values, pageChanged]);
+
+  // A deferred column is read again once the board is idle and the column is still on screen.
+  useEffect(() => {
+    if (deferredKeys.size === 0 || pendingKeys.size > 0) return;
+    const timer = setTimeout(() => {
+      const { buckets, readBuckets } = unreadRef.current;
+      const again = buckets.filter(
+        (bucket) =>
+          deferredKeys.has(bucket.key) &&
+          visibleKeysRef.current.has(bucket.key) &&
+          bucket.values.state === "unread",
+      );
+      if (again.length === 0) setDeferredKeys(new Set());
+      else void readBuckets(again);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [deferredKeys, pendingKeys]);
 
   const addCard = (bucket: BoardBucket): void => {
     if (

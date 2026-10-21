@@ -24,12 +24,16 @@ type BoardReadInput = Pick<
   | "router"
 >;
 
-/** The Board-only browser request path is loaded on the first visible-column read. */
+/**
+ * The Board-only browser request path is loaded on the first visible-column read. It answers
+ * "deferred" when the read cannot run yet (the page is busy or another read of this board is in
+ * flight): the board keeps the column and reads it again when idle. `false` is a real failure.
+ */
 export async function readBoardColumns(
   input: BoardReadInput,
   placementId: string,
   event: DisplaySemanticEvent,
-): Promise<boolean> {
+): Promise<boolean | "deferred"> {
   const {
     busy,
     placementRequestsRef,
@@ -43,7 +47,8 @@ export async function readBoardColumns(
     currentSearch,
     router,
   } = input;
-  if (busy || event.event !== "page_changed" || !("columns" in event)) return false;
+  if (event.event !== "page_changed" || !("columns" in event)) return false;
+  if (busy) return "deferred";
   const parsedId = containedComponentIdSchema.safeParse(placementId);
   const columnRead = boardColumnReadRequestSchema.safeParse({
     columns: event.columns,
@@ -68,7 +73,7 @@ export async function readBoardColumns(
   if (currentBoard === undefined) return false;
 
   const serialKey = `${requestScope.key}\u0000${parsedId.data.toLowerCase()}`;
-  if (boardContinuationInFlightRef.current.has(serialKey)) return false;
+  if (boardContinuationInFlightRef.current.has(serialKey)) return "deferred";
   boardContinuationInFlightRef.current.add(serialKey);
   const request = nextComponentRequestGeneration(
     requestScope.generations.get(parsedId.data.toLowerCase()),
@@ -77,7 +82,8 @@ export async function readBoardColumns(
   );
   requestScope.generations.set(parsedId.data.toLowerCase(), request);
 
-  const clearAndReload = (): false => {
+  const clearAndReload = (cause: string): false => {
+    console.error(`[page] board column read failed cause=${cause}`);
     if (
       placementRequestsRef.current.key === requestScope.key &&
       isCurrentComponentRequestGeneration(
@@ -132,7 +138,7 @@ export async function readBoardColumns(
       router.refresh();
       return false;
     }
-    if (result.kind !== "available") return clearAndReload();
+    if (result.kind !== "available") return clearAndReload(`read_${result.kind}`);
 
     const returnedData = Object.entries(result.data).find(
       ([candidate]) => candidate.toLowerCase() === parsedId.data.toLowerCase(),
@@ -142,7 +148,7 @@ export async function readBoardColumns(
       freshBoard === undefined
         ? undefined
         : mergeBoardColumnRead(currentBoard, freshBoard, columnRead.data);
-    if (mergedBoard === undefined) return clearAndReload();
+    if (mergedBoard === undefined) return clearAndReload("payload_not_mergeable");
 
     setRefreshedPlacementData((current) => {
       const liveScope = placementRequestsRef.current;
