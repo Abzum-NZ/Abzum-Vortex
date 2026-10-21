@@ -127,6 +127,26 @@ export const describeStudioCompileFailure = (
     };
   }
   const modules = source.body.modules;
+  if (
+    failure.moduleKeys !== undefined &&
+    failure.moduleKeys.length > 0 &&
+    (failure.reasonCode === "vortex.definition.module_dependency_acyclic" ||
+      failure.reasonCode === "vortex.definition.module_dependency_resolved")
+  ) {
+    const names = failure.moduleKeys.map(
+      (key) =>
+        modules.find((module) => module.key === key)?.name ??
+        key.split(".").at(-1)!.replaceAll("_", " "),
+    );
+    const list = new Intl.ListFormat("en", { style: "long", type: "conjunction" });
+    return {
+      message:
+        failure.reasonCode === "vortex.definition.module_dependency_acyclic"
+          ? `${list.format(names)} use each other's records in a loop. Change a record type used by an input or a link in one of these modules, or remove the reference.`
+          : `${names[0]} uses records from ${list.format(names.slice(1))}, which this application neither owns nor uses. Add the module to the application, or change or remove the reference.`,
+      selection: null,
+    };
+  }
   if (failure.queryKey !== undefined) {
     const module =
       modules.find(

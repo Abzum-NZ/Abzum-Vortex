@@ -8,6 +8,8 @@ export type StudioCompileFailure = Readonly<{
   tokenKey?: string;
   /** The module, record type, field or query the refusal is about. */
   moduleKey?: string;
+  /** The dependency path when several modules take part in a refusal. */
+  moduleKeys?: readonly string[];
   recordTypeKey?: string;
   fieldKey?: string;
   queryKey?: string;

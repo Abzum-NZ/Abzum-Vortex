@@ -12,15 +12,8 @@ import type {
   TablePayload,
 } from "@vortex/ui";
 import type { ApplicationPageModel } from "../../../../../../_lib/application-page";
+import { recordsTableAddress } from "./records-table-address";
 import type { SelectedRecords } from "./types";
-
-/** The application page an export request addresses; the server resolves it again. */
-const addressOf = (model: ApplicationPageModel) => ({
-  tenantShortName: model.invocation.tenantShortName,
-  organizationShortName: model.invocation.organizationShortName,
-  applicationKey: model.invocation.applicationKey,
-  pageKey: model.invocation.pageKey,
-});
 
 const numberFormat = new Intl.NumberFormat();
 
@@ -133,7 +126,7 @@ export function useRecordsExport({
           cache: "no-store",
           signal: controller.signal,
           body: JSON.stringify({
-            ...addressOf(model),
+            ...recordsTableAddress(model),
             placementId,
             format,
             selection,
