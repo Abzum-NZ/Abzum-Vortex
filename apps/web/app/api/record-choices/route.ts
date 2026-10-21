@@ -46,9 +46,13 @@ const requestSchema = z
   .refine((body) => (body.fieldId === undefined) === (body.purpose === undefined), {
     message: "A table link picker names its field and its purpose together",
   })
-  .refine((body) => body.parentRecordId === undefined || body.purpose === "edit", {
-    message: "Only an edited cell's picker names a parent record",
-  });
+  .refine(
+    (body) =>
+      body.parentRecordId === undefined || body.fieldId === undefined || body.purpose === "edit",
+    {
+      message: "Only an edited cell's picker names a parent record",
+    },
+  );
 
 const refusedResponse = (code: string, cause?: unknown): NextResponse => {
   logRefusal("record-choices", "record choice page", code, cause);

@@ -187,19 +187,27 @@ export function FormContainer(props: FormContainerProps): ReactElement {
   // as already edited past before the person has seen them.
   const flowFeedbackRef = useRef(props.flowFeedback);
   flowFeedbackRef.current = props.flowFeedback;
-  const reportFieldChanged = useCallback(() => {
-    const settled = flowFeedbackRef.current;
-    if (settled?.kind === "refusal" && settled.corrections !== undefined)
-      setEditedPastCorrections(JSON.stringify(settled.corrections));
-    if (supplied) setFeedbackTick((current) => current + 1);
-    if (validationAttemptedRef.current) setValidationErrors(registry.validationErrors());
-    const baseline = baselineRef.current;
-    if (baseline !== undefined)
-      unsavedWorkRegistry?.setDirty(
-        formId,
-        !equalFormValue(registry.values(), baseline) || ownerGroupChoice !== undefined,
-      );
-  }, [formId, ownerGroupChoice, registry, supplied, unsavedWorkRegistry]);
+  const reportFieldChanged = useCallback(
+    (fieldKey?: string) => {
+      if (fieldKey !== undefined) registry.notify(fieldKey, "changed");
+      const settled = flowFeedbackRef.current;
+      if (settled?.kind === "refusal" && settled.corrections !== undefined)
+        setEditedPastCorrections(JSON.stringify(settled.corrections));
+      if (supplied) setFeedbackTick((current) => current + 1);
+      if (validationAttemptedRef.current) setValidationErrors(registry.validationErrors());
+      const baseline = baselineRef.current;
+      if (baseline !== undefined)
+        unsavedWorkRegistry?.setDirty(
+          formId,
+          !equalFormValue(registry.values(), baseline) || ownerGroupChoice !== undefined,
+        );
+    },
+    [formId, ownerGroupChoice, registry, supplied, unsavedWorkRegistry],
+  );
+  const reportFieldEdited = useCallback(
+    (fieldKey: string) => registry.notify(fieldKey, "edited"),
+    [registry],
+  );
 
   // Applicability is decided once per render from the fields' current typed
   // values, and the scope changes with it, so every field clears or restores
@@ -242,8 +250,19 @@ export function FormContainer(props: FormContainerProps): ReactElement {
       fieldErrorFor,
       draftFeedbackFor,
       reportFieldChanged,
+      reportFieldEdited,
+      watch: registry.watch,
+      read: registry.read,
     }),
-    [pending, context.inactive, registry, fieldErrorFor, draftFeedbackFor, reportFieldChanged],
+    [
+      pending,
+      context.inactive,
+      registry,
+      fieldErrorFor,
+      draftFeedbackFor,
+      reportFieldChanged,
+      reportFieldEdited,
+    ],
   );
 
   const events = context.events;

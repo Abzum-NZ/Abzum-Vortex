@@ -1195,6 +1195,7 @@
                         "trigger": "button",
                         "fields": [
                           "vortex.crm.opportunities:opportunity.name",
+                          "vortex.crm.opportunities:opportunity.account_group",
                           "vortex.crm.opportunities:opportunity.company",
                           "vortex.crm.opportunities:opportunity.primary_contact",
                           "vortex.crm.opportunities:opportunity.expected_close_date",
@@ -1216,6 +1217,12 @@
                       {
                         "field": "vortex.crm.opportunities:opportunity.name",
                         "label": "Opportunity name",
+                        "visible": true,
+                        "pin": "unpinned"
+                      },
+                      {
+                        "field": "vortex.crm.opportunities:opportunity.account_group",
+                        "label": "Group",
                         "visible": true,
                         "pin": "unpinned"
                       },
@@ -3406,6 +3413,10 @@
                         "label": "Opportunity name"
                       },
                       {
+                        "field": "vortex.crm.opportunities:opportunity.account_group",
+                        "label": "Group"
+                      },
+                      {
                         "field": "vortex.crm.opportunities:opportunity.company",
                         "label": "Company"
                       },
@@ -3710,6 +3721,30 @@
                             {
                               "type": "platform.renderer.field_input",
                               "props": {
+                                "id": "input_crm_opportunity_edit_account_group",
+                                "field": "vortex.crm.opportunities:opportunity.account_group",
+                                "vortex": {
+                                  "block": {
+                                    "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                                    "release_version": "1.0.0"
+                                  },
+                                  "responsive": {
+                                    "desktop": {
+                                      "visible": true,
+                                      "width": {
+                                        "kind": "fill"
+                                      },
+                                      "height": {
+                                        "kind": "content"
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            {
+                              "type": "platform.renderer.field_input",
+                              "props": {
                                 "id": "input_crm_opportunity_edit_company",
                                 "field": "vortex.crm.opportunities:opportunity.company",
                                 "vortex": {
@@ -3957,6 +3992,30 @@
                               "props": {
                                 "id": "input_crm_opportunity_create_name",
                                 "field": "vortex.crm.opportunities:opportunity.name",
+                                "vortex": {
+                                  "block": {
+                                    "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                                    "release_version": "1.0.0"
+                                  },
+                                  "responsive": {
+                                    "desktop": {
+                                      "visible": true,
+                                      "width": {
+                                        "kind": "fill"
+                                      },
+                                      "height": {
+                                        "kind": "content"
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            {
+                              "type": "platform.renderer.field_input",
+                              "props": {
+                                "id": "input_crm_opportunity_create_account_group",
+                                "field": "vortex.crm.opportunities:opportunity.account_group",
                                 "vortex": {
                                   "block": {
                                     "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",

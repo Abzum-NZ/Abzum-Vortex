@@ -68,6 +68,8 @@ export type FieldInputSourceField = Readonly<{
     moduleRootId: string;
     recordTypeId: string;
   }>[];
+  /** A link field's declared dependency: the link field of the same record type it takes its choices from. */
+  dependsOnField?: Readonly<{ key: string; label: string }> | undefined;
 }>;
 
 /** Publication can select only existing indexable fields, including safe derived inputs. */

@@ -50,6 +50,25 @@
           }
         },
         {
+          "id": "fld_opp_account_group",
+          "key": "account_group",
+          "label": "Group",
+          "required": true,
+          "unique": false,
+          "filterable": true,
+          "sortable": false,
+          "search_priority": "normal",
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "link",
+          "settings": {
+            "target": "vortex.crm.organisations:company",
+            "reverse_key": "group_opportunities",
+            "reverse_name": "Group opportunities",
+            "on_parent_delete": "refuse"
+          }
+        },
+        {
           "id": "fld_opp_company",
           "key": "company",
           "label": "Company",
@@ -65,7 +84,11 @@
             "target": "vortex.crm.organisations:company",
             "reverse_key": "opportunities",
             "reverse_name": "Opportunities",
-            "on_parent_delete": "refuse"
+            "on_parent_delete": "refuse",
+            "depends_on": {
+              "parent_field": "account_group",
+              "filter_field": "parent_company"
+            }
           }
         },
         {
@@ -410,6 +433,14 @@
       ],
       "relationships": [
         {
+          "id": "fld_opp_account_group_relationship",
+          "key": "account_group",
+          "from_field": "account_group",
+          "to_record_type": "vortex.crm.organisations:company",
+          "cardinality": "many_to_one",
+          "on_parent_delete": "refuse"
+        },
+        {
           "id": "fld_opp_company_relationship",
           "key": "company",
           "from_field": "company",
@@ -552,6 +583,7 @@
         "readable_fields": [
           "opportunity_number",
           "name",
+          "account_group",
           "company",
           "primary_contact",
           "value",
@@ -566,6 +598,7 @@
         ],
         "changeable_fields": [
           "name",
+          "account_group",
           "company",
           "primary_contact",
           "value",
@@ -597,6 +630,7 @@
         "readable_fields": [
           "opportunity_number",
           "name",
+          "account_group",
           "company",
           "primary_contact",
           "value",
@@ -631,6 +665,7 @@
         "readable_fields": [
           "opportunity_number",
           "name",
+          "account_group",
           "company",
           "primary_contact",
           "value",
@@ -645,6 +680,7 @@
         ],
         "changeable_fields": [
           "name",
+          "account_group",
           "company",
           "primary_contact",
           "value",
@@ -716,6 +752,7 @@
         "readable_fields": [
           "opportunity_number",
           "name",
+          "account_group",
           "company",
           "primary_contact",
           "value",
@@ -1221,6 +1258,7 @@
       "select": [
         "opportunity_number",
         "name",
+        "account_group",
         "company",
         "primary_contact",
         "value",

@@ -28,6 +28,7 @@ import {
 } from "../runtime-preview-demand";
 import {
   collectPlacements,
+  fieldForPlacement,
   first,
   isLinkInputPlacement,
   linkInputTargets,
@@ -183,38 +184,69 @@ const tableLinkFieldTarget = (
       for (const field of recordType.fields)
         if (sameId(String(field.fieldId), fieldId)) {
           if (field.type !== "link" || field.settings.target.state !== "resolved") return undefined;
-          const declared = field.settings.dependsOn;
-          const parent =
-            declared === undefined
-              ? undefined
-              : recordType.fields.find((candidate) =>
-                  sameId(String(candidate.fieldId), String(declared.parentFieldId)),
-                );
-          const parentTarget =
-            parent?.type === "link" && parent.settings.target.state === "resolved"
-              ? parent.settings.target
-              : undefined;
+          const dependency = declaredLinkDependency(recordType, field);
           return {
             sourceRecordTypeId: String(recordType.recordTypeId),
             moduleRootId: String(field.settings.target.moduleRootId),
             recordTypeId: String(field.settings.target.recordTypeId),
-            ...(declared === undefined
-              ? {}
-              : {
-                  dependency: {
-                    parentFieldId: String(declared.parentFieldId),
-                    filterFieldId: String(declared.filterFieldId),
-                    parentTarget:
-                      parentTarget === undefined
-                        ? undefined
-                        : {
-                            moduleRootId: String(parentTarget.moduleRootId),
-                            recordTypeId: String(parentTarget.recordTypeId),
-                          },
-                  },
-                }),
+            ...(dependency === undefined ? {} : { dependency }),
           };
         }
+  return undefined;
+};
+
+/**
+ * A link field's declared dependency on another link field of its record type, with the parent's
+ * target resolved: the one reading both the table link pickers and the form link inputs narrow by.
+ */
+const declaredLinkDependency = (
+  recordType: InstalledRuntimeContext["releaseSet"]["modules"][number]["content"]["recordTypes"][number],
+  field: (typeof recordType.fields)[number],
+): LinkDependency | undefined => {
+  if (field.type !== "link" || field.settings.dependsOn === undefined) return undefined;
+  const declared = field.settings.dependsOn;
+  const parent = recordType.fields.find((candidate) =>
+    sameId(String(candidate.fieldId), String(declared.parentFieldId)),
+  );
+  const parentTarget =
+    parent?.type === "link" && parent.settings.target.state === "resolved"
+      ? parent.settings.target
+      : undefined;
+  return {
+    parentFieldId: String(declared.parentFieldId),
+    filterFieldId: String(declared.filterFieldId),
+    parentTarget:
+      parentTarget === undefined
+        ? undefined
+        : {
+            moduleRootId: String(parentTarget.moduleRootId),
+            recordTypeId: String(parentTarget.recordTypeId),
+          },
+  };
+};
+
+/**
+ * The declared dependency of the field a form's automatic link input is bound to, with the record
+ * type that holds both. Undefined when the input is bound to no installed field.
+ */
+const boundLinkFieldDependency = (
+  context: InstalledRuntimeContext,
+  placement: Parameters<typeof fieldForPlacement>[0],
+):
+  | Readonly<{ sourceRecordTypeId: string; fieldId: string; dependency?: LinkDependency }>
+  | undefined => {
+  const bound = fieldForPlacement(placement, context.releaseSet.modules);
+  if (bound === undefined) return undefined;
+  for (const recordType of bound.module.content.recordTypes)
+    for (const field of recordType.fields) {
+      if (field !== bound.field) continue;
+      const dependency = declaredLinkDependency(recordType, field);
+      return {
+        sourceRecordTypeId: String(recordType.recordTypeId),
+        fieldId: String(field.fieldId),
+        ...(dependency === undefined ? {} : { dependency }),
+      };
+    }
   return undefined;
 };
 
@@ -224,6 +256,25 @@ type LinkDependency = Readonly<{
   filterFieldId: string;
   parentTarget: Readonly<{ moduleRootId: string; recordTypeId: string }> | undefined;
 }>;
+
+/**
+ * Why a dependent picker may not read, or undefined when it may: the parent record the person
+ * chose is named, the declared parent is a link, and the viewer may read the parent field. The
+ * parent record itself is read again under the viewer's access before any choice is offered.
+ */
+const dependencyRefusal = (
+  link: LinkDependency,
+  childFieldId: string,
+  parentRecordId: string | undefined,
+  readableFieldIds: ReadonlySet<string>,
+): string | undefined => {
+  const detail = `child=${childFieldId} parent=${link.parentFieldId}`;
+  if (parentRecordId === undefined) return `dependency_parent_missing ${detail}`;
+  if (link.parentTarget === undefined) return `dependency_parent_not_a_link ${detail}`;
+  if (!readableFieldIds.has(link.parentFieldId.toLowerCase()))
+    return `dependency_parent_withheld ${detail}`;
+  return undefined;
+};
 
 export type RecordChoicePageResult =
   | Readonly<{
@@ -298,15 +349,14 @@ export const loadRecordChoicePage = async (
     if (request.purpose === "edit" && filtered.dependency !== undefined) {
       // The parent is the editor's draft, never authority: it must be a parent link the viewer may
       // read, and the record itself is read again below under the viewer's access.
-      const link = filtered.dependency;
-      const detail = `child=${request.fieldId} parent=${link.parentFieldId}`;
-      if (request.parentRecordId === undefined)
-        return { kind: "refused", cause: `dependency_parent_missing ${detail}` };
-      if (link.parentTarget === undefined)
-        return { kind: "refused", cause: `dependency_parent_not_a_link ${detail}` };
-      if (!readable.value.has(link.parentFieldId.toLowerCase()))
-        return { kind: "refused", cause: `dependency_parent_withheld ${detail}` };
-      dependency = { link, parentRecordId: request.parentRecordId };
+      const refusal = dependencyRefusal(
+        filtered.dependency,
+        request.fieldId,
+        request.parentRecordId,
+        readable.value,
+      );
+      if (refusal !== undefined) return { kind: "refused", cause: refusal };
+      dependency = { link: filtered.dependency, parentRecordId: request.parentRecordId! };
     }
     declaredTargets = [filtered];
   } else {
@@ -322,6 +372,30 @@ export const loadRecordChoicePage = async (
     )
       return { kind: "refused", cause: "placement_unavailable" };
     declaredTargets = linkInputTargets(placement.settings);
+    // An automatic input bound to a field that declares a dependency offers only the records the
+    // parent the person chose in the form's draft narrows it to: the table pickers' rule, read
+    // from the same declaration.
+    const bound = boundLinkFieldDependency(context, placement);
+    if (bound?.dependency !== undefined) {
+      const readable = await createHumanOrganizationRequestService(dependencies).run(
+        session,
+        selection,
+        (transaction, scope) =>
+          decideRecordTypeFieldIds(transaction, scope, context, bound.sourceRecordTypeId, "read"),
+      );
+      if (readable.kind === "temporarily_unavailable") return readable;
+      if (readable.kind !== "available") return { kind: "refused", cause: "link_field_withheld" };
+      const refusal = dependencyRefusal(
+        bound.dependency,
+        bound.fieldId,
+        request.parentRecordId,
+        readable.value,
+      );
+      if (refusal !== undefined) return { kind: "refused", cause: refusal };
+      dependency = { link: bound.dependency, parentRecordId: request.parentRecordId! };
+    } else if (request.parentRecordId !== undefined) {
+      return { kind: "refused", cause: "dependency_not_declared" };
+    }
   }
 
   const targets: RecordChoiceCommand["targets"][number][] = [];

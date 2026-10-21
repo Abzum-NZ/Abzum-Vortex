@@ -479,6 +479,12 @@ const deriveFieldInputContract = (field: FieldInputSourceField): DerivedFieldInp
               recordType,
             })),
           },
+          ...(field.dependsOnField === undefined
+            ? {}
+            : {
+                parent_field: { kind: "text", value: field.dependsOnField.key },
+                parent_field_label: { kind: "text", value: field.dependsOnField.label },
+              }),
         },
       };
     default:

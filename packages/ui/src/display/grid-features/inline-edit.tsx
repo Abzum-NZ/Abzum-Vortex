@@ -34,12 +34,8 @@ import {
   type EditDraft,
 } from "./edit-values";
 import { LinkDraftPicker, linkedRecordTitle } from "./record-choice-picker";
-import {
-  dependentFieldsOf,
-  parentFieldOf,
-  storedRecordId,
-  waitingForParent,
-} from "./link-dependency";
+import { waitingForParent } from "../../controls/link-dependency-text";
+import { dependentFieldsOf, parentFieldOf, storedRecordId } from "./link-dependency";
 import type { GridFeatureCellProps, GridFeatureModule } from "./registry";
 
 type Phase = "idle" | "editing" | "saving";

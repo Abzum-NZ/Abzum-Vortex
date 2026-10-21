@@ -28,7 +28,8 @@ import {
   useFieldIds,
   useSeededState,
 } from "./field-parts";
-import { useRequiredFormField } from "./form-context";
+import { waitingForParent } from "./link-dependency-text";
+import { useFormScope, useRequiredFormField, useWatchedFormField } from "./form-context";
 import {
   parseRecordChoicePage,
   type LinkInputPayload,
@@ -58,6 +59,11 @@ const seededPick = (values: LinkInputPayload | undefined): Picked | null =>
  * continuation, nothing else) and shows each by its title; the server reads them under the
  * person's own access. It emits `field_changed` with the picked record's typed reference and
  * publishes it to its enclosing form. Without a page to ask, it offers no records.
+ *
+ * A link that depends on another link of its form (Company on Group) is derived with that link's
+ * name: it offers nothing until the person has chosen there, sends that chosen record with its
+ * request so the server narrows the choices, and clears its own choice when the person changes the
+ * link it depends on.
  */
 export function LinkInput(props: LinkInputProps): ReactElement {
   const context = resolveControlContext<LinkInputPayload>(props, [
@@ -73,8 +79,26 @@ export function LinkInput(props: LinkInputProps): ReactElement {
   const required = settings.boolean("required");
   const readOnly = settings.boolean("read_only");
   const draftFeedback = useFieldFeedback(fieldKey);
+  const formScope = useFormScope();
+  const parentKey = settings.text("parent_field");
+  const parentLabel = settings.text("parent_field_label") ?? parentKey;
+  const clearForParent = useRef<() => void>(() => undefined);
+  const parentValue = useWatchedFormField(parentKey, () => clearForParent.current());
+  const parentRecordId =
+    typeof parentValue === "object" &&
+    parentValue !== null &&
+    "recordId" in parentValue &&
+    typeof parentValue.recordId === "string"
+      ? parentValue.recordId
+      : undefined;
+  const parentMissing = parentKey !== undefined && parentRecordId === undefined;
+  const parentRecord = useRef(parentRecordId);
+  parentRecord.current = parentRecordId;
   const disabled =
-    context.inactive || settings.boolean("disabled") || draftFeedback?.disabled === true;
+    context.inactive ||
+    settings.boolean("disabled") ||
+    draftFeedback?.disabled === true ||
+    parentMissing;
   const allowedRecordTypeIds = settings.recordTypeIds("record_types").map((id) => id.toLowerCase());
   const severalTypes = allowedRecordTypeIds.length > 1;
   const projectedError = context.values?.error;
@@ -123,6 +147,7 @@ export function LinkInput(props: LinkInputProps): ReactElement {
     void Promise.resolve(
       handler({
         event: "records_requested",
+        ...(parentRecord.current === undefined ? {} : { parentRecordId: parentRecord.current }),
         ...(bounded === "" ? {} : { search: bounded }),
         ...(continuationToken === undefined ? {} : { continuationToken }),
       }),
@@ -172,8 +197,7 @@ export function LinkInput(props: LinkInputProps): ReactElement {
       ? choices
       : [pickedOption, ...choices];
 
-  const change = (item: RecordChoiceOption | null): void => {
-    if (disabled || readOnly) return;
+  const apply = (item: RecordChoiceOption | null): void => {
     const reference =
       item === null || !allowedRecordTypeIds.includes(item.recordTypeId.toLowerCase())
         ? null
@@ -184,6 +208,16 @@ export function LinkInput(props: LinkInputProps): ReactElement {
         : { reference, title: item.title, typeLabel: item.typeLabel },
     );
     context.events?.field_changed?.({ event: "field_changed", fieldKey, value: reference });
+    formScope?.reportFieldEdited(fieldKey);
+  };
+  const change = (item: RecordChoiceOption | null): void => {
+    if (disabled || readOnly) return;
+    apply(item);
+  };
+  // The link this one depends on was edited: a choice made under the old one is not kept.
+  clearForParent.current = () => {
+    if (readOnly || picked === null) return;
+    apply(null);
   };
 
   const described = describedBy(ids, help, error, note, draftFeedback);
@@ -228,7 +262,7 @@ export function LinkInput(props: LinkInputProps): ReactElement {
         <InputGroup>
           <ComboboxInput
             id={ids.control}
-            placeholder={placeholder}
+            placeholder={parentMissing ? waitingForParent(parentLabel ?? "") : placeholder}
             disabled={inactive}
             readOnly={readOnly}
             aria-labelledby={ids.label}

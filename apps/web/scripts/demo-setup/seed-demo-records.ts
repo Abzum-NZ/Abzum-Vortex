@@ -108,6 +108,15 @@ type CompanySeed = Readonly<{
   phone: string;
 }>;
 
+const groups = [
+  { name: "Pacific Holdings", industry: "technology", website: "https://pacificholdings.example" },
+  {
+    name: "Southern Holdings",
+    industry: "technology",
+    website: "https://southernholdings.example",
+  },
+] as const;
+
 const companies: readonly CompanySeed[] = [
   {
     name: "Kauri Cloud Systems",
@@ -508,6 +517,25 @@ export const seedDemoRecords = async (facts: DemoSeedFacts): Promise<void> => {
 
   const companyIds: string[] = [];
   const contactIds: string[] = [];
+  // Two holding companies are the groups of the Group -> Company -> Primary contact cascade of an
+  // opportunity: each holds four of the companies, every one with its own contact.
+  const groupIds: string[] = [];
+  for (const [index, group] of groups.entries()) {
+    groupIds.push(
+      await save(
+        crmRootId,
+        companyType,
+        `company-group/${index + 1}`,
+        {
+          name: group.name,
+          company_kind: ["partner"],
+          industry: group.industry,
+          website: group.website,
+        },
+        crmOwnerGroupId,
+      ),
+    );
+  }
   for (const [index, company] of companies.entries()) {
     const companyId = await save(
       crmRootId,
@@ -535,6 +563,10 @@ export const seedDemoRecords = async (facts: DemoSeedFacts): Promise<void> => {
           ],
         },
         customer_since: company.customerSince,
+        parent_company: {
+          recordTypeId: companyType.recordTypeId,
+          recordId: groupIds[index < 4 ? 0 : 1]!,
+        },
       },
       crmOwnerGroupId,
     );
@@ -577,6 +609,10 @@ export const seedDemoRecords = async (facts: DemoSeedFacts): Promise<void> => {
       `opportunity/${index + 1}`,
       {
         name: opportunity.name,
+        account_group: {
+          recordTypeId: companyType.recordTypeId,
+          recordId: groupIds[index < 4 ? 0 : 1]!,
+        },
         company: { recordTypeId: companyType.recordTypeId, recordId: companyIds[index]! },
         primary_contact: { recordTypeId: contactType.recordTypeId, recordId: contactIds[index]! },
         value: { amount: opportunity.value, currency: "NZD" },

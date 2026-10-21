@@ -96,6 +96,8 @@ export type ControlSemanticEvent =
       event: "records_requested";
       search?: string;
       continuationToken?: string;
+      /** For a link input that depends on another: the record chosen in that input, in the draft. */
+      parentRecordId?: string;
     }>
   | Readonly<{ event: "form_ready" }>
   | Readonly<{ event: "form_reset" }>

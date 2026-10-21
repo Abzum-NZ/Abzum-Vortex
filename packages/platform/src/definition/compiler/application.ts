@@ -640,11 +640,28 @@ const applicationCompositionResolution = (
           : type === "link_to_one_of_several" && Array.isArray(settings.targets)
             ? (settings.targets as unknown[]).map(resolvedRecordType)
             : [];
+      const dependsOn =
+        type === "link" && settings.dependsOn !== undefined
+          ? asObject(settings.dependsOn)
+          : undefined;
+      const dependsOnField =
+        dependsOn === undefined ? undefined : valueIndex.fieldById(String(dependsOn.parentFieldId));
+      // A declared dependency names a field of an exactly bound module release, or is refused.
+      if (dependsOn !== undefined && dependsOnField === undefined)
+        fail("vortex.definition.module_field_references", "broken_reference");
       return {
         key: String(field.key),
         label: String(field.label),
         required: field.required === true,
         type,
+        ...(dependsOnField === undefined
+          ? {}
+          : {
+              dependsOnField: {
+                key: String(dependsOnField.field.key),
+                label: String(dependsOnField.field.label),
+              },
+            }),
         ...(type === "date_time" &&
         (settings.displayTimeZone === "person" ||
           settings.displayTimeZone === "organization" ||

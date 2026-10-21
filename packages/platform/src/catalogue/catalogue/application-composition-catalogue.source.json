@@ -1724,6 +1724,24 @@
       },
       {
         "kind": "text",
+        "key": "parent_field",
+        "label": "Link it depends on",
+        "help": "The name of the form field whose chosen record narrows this link's choices; derived from the module field's declared dependency",
+        "required": false,
+        "minLength": 1,
+        "maxLength": 40
+      },
+      {
+        "kind": "text",
+        "key": "parent_field_label",
+        "label": "Label of the link it depends on",
+        "help": "The label of that field, which the input names while it waits for a choice",
+        "required": false,
+        "minLength": 1,
+        "maxLength": 120
+      },
+      {
+        "kind": "text",
         "key": "publishes_parameter",
         "label": "Page parameter",
         "help": "Page parameter this control reads and writes: the chosen record's identity",
@@ -2099,6 +2117,24 @@
           "label": "Record type",
           "required": true
         }
+      },
+      {
+        "kind": "text",
+        "key": "parent_field",
+        "label": "Link it depends on",
+        "help": "The name of the form field whose chosen record narrows this link's choices; derived from the module field's declared dependency",
+        "required": false,
+        "minLength": 1,
+        "maxLength": 40
+      },
+      {
+        "kind": "text",
+        "key": "parent_field_label",
+        "label": "Label of the link it depends on",
+        "help": "The label of that field, which the input names while it waits for a choice",
+        "required": false,
+        "minLength": 1,
+        "maxLength": 120
       },
       {
         "kind": "number",
