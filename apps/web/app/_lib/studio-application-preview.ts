@@ -12,8 +12,10 @@ import {
   readApplicationDefinitionDraft,
   readLiveHumanContext,
   requireBuilderAuthority,
+  type BuilderAuthority,
   type BuilderTargetFactsReader,
   type DatabaseRow,
+  type RequestDatabaseTransaction,
   type StoredApplicationDefinitionDraft,
 } from "@vortex/platform/server";
 import {
@@ -29,6 +31,7 @@ import {
   type OrganizationId,
   type PreviewInstallation,
   type PreviewDemand,
+  type SelectedOrganizationScope,
 } from "@vortex/platform/schema";
 import { z } from "zod";
 import { installedReleaseCatalogue } from "./definition-catalogue";
@@ -213,24 +216,6 @@ const readPreviewStateIn = (
       targetFacts: studioDraftTargetFacts,
       permissions: platformPermissionSource,
     });
-    try {
-      await requireBuilderAuthority(authority, { kind: "draft_change", rootId });
-    } catch (error) {
-      if (error instanceof BuilderAuthorityError)
-        return { kind: "refused", reason: "permission_refused" } as const;
-      throw error;
-    }
-    let draft: StoredApplicationDefinitionDraft;
-    try {
-      draft = await readApplicationDefinitionDraft(transaction, scope, {
-        rootId,
-        expectedDraftRevision: draftRevision,
-      });
-    } catch (error) {
-      if (error instanceof DefinitionError && error.code === "DEFINITION_DRAFT_STALE_OR_MISSING")
-        return { kind: "conflict" } as const;
-      throw error;
-    }
     const preview =
       await createPreviewInstallationRepository(transaction).readBuilderPreview(rootId);
     if (
@@ -239,18 +224,36 @@ const readPreviewStateIn = (
         !sameId(preview.organizationId, organizationId))
     )
       throw new Error("STUDIO_PREVIEW_LOOKUP_MISMATCH");
-    // A ready canvas needs the current compile as well as the saved source. Keep both in this
-    // protected request rather than opening another organisation request and checking the same
-    // builder permission twice there. The platform compiler still checks current authority,
-    // the saved revision and dependency revisions before consulting its compilation retention.
-    if (readCompilation && studioPreviewRunsDraft(draft, preview) === "ready") {
+    // A ready canvas needs the current compile as well as the saved source. When the preview can
+    // run this revision, the platform compiler's own snapshot is the one read: it checks the
+    // builder's current authority, the saved revision and the dependency revisions, and returns
+    // the exact-revision draft it compiled, so neither is read a second time in this request.
+    if (readCompilation && previewCanRunRevision(preview, draftRevision)) {
       const context = await readLiveHumanContext(transaction, { scope, session, issuedAt });
       try {
-        const compiled = await createDatabaseDefinitionPublicationService(
+        const snapshot = await createDatabaseDefinitionPublicationService(
           installedReleaseCatalogue,
           transaction,
           authority,
-        ).compileApplicationDraft(context, { rootId, expectedDraftRevision: draftRevision });
+        ).readApplicationDraftSnapshot(
+          context,
+          { rootId, expectedDraftRevision: draftRevision },
+          { publication: false },
+        );
+        const compiled = snapshot.compilation;
+        // The snapshot authorised the builder before it read anything; a compile that failed
+        // still leaves the saved draft to read, and only a ready canvas needs its compile.
+        const draft =
+          compiled?.candidate.draft ??
+          (await readApplicationDefinitionDraft(transaction, scope, {
+            rootId,
+            expectedDraftRevision: draftRevision,
+          }));
+        if (draft.kind !== "application")
+          throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING");
+        if (studioPreviewRunsDraft(draft, preview) !== "ready")
+          return { kind: "read", draft, preview } as const;
+        if (compiled === null) throw snapshot.failure;
         return {
           kind: "read",
           draft,
@@ -267,8 +270,37 @@ const readPreviewStateIn = (
         throw error;
       }
     }
-    return { kind: "read", draft, preview } as const;
+    return readDraftOnly(transaction, scope, authority, rootId, draftRevision, preview);
   });
+
+/** The saved draft at exactly the requested revision, read under the builder's draft authority. */
+const readDraftOnly = async (
+  transaction: RequestDatabaseTransaction,
+  scope: SelectedOrganizationScope,
+  authority: BuilderAuthority,
+  rootId: ApplicationRootId,
+  draftRevision: number,
+  preview: BuilderPreviewInstallation | undefined,
+) => {
+  try {
+    await requireBuilderAuthority(authority, { kind: "draft_change", rootId });
+  } catch (error) {
+    if (error instanceof BuilderAuthorityError)
+      return { kind: "refused", reason: "permission_refused" } as const;
+    throw error;
+  }
+  try {
+    const draft = await readApplicationDefinitionDraft(transaction, scope, {
+      rootId,
+      expectedDraftRevision: draftRevision,
+    });
+    return { kind: "read", draft, preview } as const;
+  } catch (error) {
+    if (error instanceof DefinitionError && error.code === "DEFINITION_DRAFT_STALE_OR_MISSING")
+      return { kind: "conflict" } as const;
+    throw error;
+  }
+};
 
 /** A preview reused for a new read keeps at least this long, so it does not expire while Studio reads it. */
 const reuseMarginMs = 60 * 60 * 1000;
@@ -488,6 +520,13 @@ const targetOf = (
 
 const lasting = (preview: BuilderPreviewInstallation): boolean =>
   Date.parse(preview.expiresAt) - Date.now() > reuseMarginMs;
+
+/** A preview that is not newer than the revision and does not expire soon may run it. */
+const previewCanRunRevision = (
+  preview: BuilderPreviewInstallation | undefined,
+  draftRevision: number,
+): preview is BuilderPreviewInstallation =>
+  preview !== undefined && preview.draftRevision <= draftRevision && lasting(preview);
 
 /**
  * Whether the builder's preview already runs this saved revision's data shape, so its records are
