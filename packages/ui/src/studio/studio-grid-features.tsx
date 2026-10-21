@@ -317,9 +317,16 @@ export function StudioGridFeatures({
                     idPrefix={`${switchId}-editor`}
                     value={current}
                     state={features.conditionalFormatting}
-                    query={query}
+                    // A board's rules read any field of its record type, not only the few its
+                    // grouped query selects.
+                    query={
+                      features.board.enabled && query !== undefined
+                        ? { ...query, fields: boardChoices.fields }
+                        : query
+                    }
                     facts={facts}
                     compiledFields={compiledFields}
+                    board={features.board.enabled}
                     disabled={disabled}
                     onChange={(next) => write(key, next)}
                   />

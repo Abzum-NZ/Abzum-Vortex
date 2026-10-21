@@ -22,6 +22,7 @@ import type {
 } from "@vortex/ui";
 import type { ApplicationPageModel } from "../../../../../../_lib/application-page";
 import { tablePayloadFor } from "./placement-helpers";
+import type { PageSelection, SelectedRecords } from "./types";
 
 /**
  * "Every matching record" of one table: the read's sealed descriptor it was chosen on, its count
@@ -55,8 +56,8 @@ const addressOf = (model: ApplicationPageModel) => ({
 });
 
 /**
- * The selection of a Records table beyond its shown page, and its bulk runs. The page's rows stay
- * the only records the browser holds: selecting every matching record keeps the read's sealed
+ * The selection of a Records table's drawn rows, and its bulk runs. Explicit selections hold the
+ * revision seen when ticked; selecting every matching record keeps the read's sealed
  * descriptor, reads one capped count on the server when the person asks for it, and records the
  * rows the person unticks. A bulk run is one request to the server, which streams its progress
  * and summary; the table is read again once when the run ends. Any new read of the table (another
@@ -74,8 +75,8 @@ export function useBulkSelection({
   model: ApplicationPageModel;
   navigationKey: string;
   currentData: ApplicationPageModel["data"];
-  selection: Readonly<Record<string, readonly string[]>>;
-  setSelection: Dispatch<SetStateAction<Readonly<Record<string, readonly string[]>>>>;
+  selection: PageSelection;
+  setSelection: Dispatch<SetStateAction<PageSelection>>;
   refreshPlacements: (placementIds: readonly string[]) => Promise<void>;
 }>) {
   const [scopes, setScopes] = useState<Readonly<Record<string, HeldScope>>>({});
@@ -86,7 +87,7 @@ export function useBulkSelection({
         string,
         Readonly<{
           data: unknown;
-          selected: readonly string[];
+          selected: SelectedRecords;
           records: NamedActionAvailability | "unavailable";
         }>
       >
@@ -120,24 +121,11 @@ export function useBulkSelection({
         )
           continue;
         const table = tablePayloadFor(currentData[placementId]);
-        if (table?.features?.bulkActions === undefined || table.rows.length === 0) continue;
-        const visible = table.rows.filter((row) => selected.includes(row.recordId));
-        const targets = visible.flatMap((row) =>
-          row.revision === undefined ? [] : [{ recordId: row.recordId, revision: row.revision }],
-        );
-        if (targets.length === 0 || targets.length !== visible.length) {
-          if (targets.length !== visible.length)
-            console.error("[page] action availability needs every selected row's revision");
-          setAvailability((current) => ({
-            ...current,
-            [placementId]: { data: currentData[placementId], selected, records: "unavailable" },
-          }));
-          continue;
-        }
+        if (table?.features?.bulkActions === undefined) continue;
         void import("./read-action-availability")
           .then(({ readActionAvailability }) =>
             readActionAvailability(
-              { ...addressOf(model), placementId, targets },
+              { ...addressOf(model), placementId, targets: selected },
               controller.signal,
             ),
           )
@@ -224,7 +212,7 @@ export function useBulkSelection({
     async (
       placementId: string,
       table: TablePayload,
-      held: readonly string[] | undefined,
+      held: SelectedRecords | undefined,
       actionKey: string,
     ): Promise<void> => {
       const action = table.features?.bulkActions?.find(
@@ -243,11 +231,7 @@ export function useBulkSelection({
         selection = { kind: "matching", token: matching.token, excluded: [...matching.excluded] };
         selected = Math.max(0, matching.scope.count - matching.excluded.length);
       } else {
-        // The rows the person selected on the shown page, each at the revision they saw.
-        const items = (held ?? []).flatMap((recordId) => {
-          const row = table.rows.find((candidate) => candidate.recordId === recordId);
-          return row?.revision === undefined ? [] : [{ recordId, revision: row.revision }];
-        });
+        const items = [...(held ?? [])];
         if (items.length === 0) return;
         selection = { kind: "ids", items };
         selected = items.length;
@@ -338,7 +322,7 @@ export function useBulkSelection({
 
   /** The Bulk actions events of one table's placement. */
   const eventsFor = useCallback(
-    (placementId: string, table: TablePayload, held: readonly string[] | undefined) => ({
+    (placementId: string, table: TablePayload, held: SelectedRecords | undefined) => ({
       selection_scope_changed: (event: DisplaySemanticEvent) => {
         if (event.event !== "selection_scope_changed") return;
         if (event.scope === "cleared") return clear(placementId);
@@ -363,6 +347,20 @@ export function useBulkSelection({
       if (matching === undefined && scopes[placementId] !== undefined)
         setScopes((current) => without(current, placementId));
       if (matching?.scope.kind !== "matching") return false;
+      if (!table.rows.some((row) => row.recordId === recordId)) {
+        // Matching means query roots only. Selecting a child returns to the explicitly checked
+        // page roots, then lets the ordinary selection handler add that one drawn child.
+        setScopes((current) => without(current, placementId));
+        setSelection((current) => ({
+          ...current,
+          [placementId]: table.rows.flatMap((row) =>
+            matching.excluded.includes(row.recordId) || row.revision === undefined
+              ? []
+              : [{ recordId: row.recordId, revision: row.revision }],
+          ),
+        }));
+        return false;
+      }
       setScopes((current) => {
         const scope = current[placementId];
         if (scope === undefined) return current;
@@ -374,7 +372,7 @@ export function useBulkSelection({
       });
       return true;
     },
-    [scopeOf, scopes],
+    [scopeOf, scopes, setSelection],
   );
 
   /** The table values the page shows: its selection scope and bulk run, beside the read's rows. */

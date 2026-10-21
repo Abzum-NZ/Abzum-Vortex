@@ -2,6 +2,7 @@ import type { ControlSemanticEvent, FormBlockRuntime } from "@vortex/ui";
 import type {
   FlowFieldCorrection,
   ReferenceChoiceSelectionEvidenceMap,
+  RecordsSelectionInput,
 } from "@vortex/platform/schema";
 import type { ApplicationPageModel, PageDataState } from "../../../../../../_lib/application-page";
 import type {
@@ -13,6 +14,13 @@ import type {
 } from "@vortex/platform/server";
 
 export type EditFormBaseline = ApplicationPageModel["editFormBaselines"][string];
+
+/** Explicitly selected drawn records, held at the revision of the selection gesture. */
+export type SelectedRecords = readonly Extract<
+  RecordsSelectionInput,
+  { kind: "ids" }
+>["items"][number][];
+export type PageSelection = Readonly<Record<string, SelectedRecords>>;
 
 export type TableContinuationTarget = Readonly<{
   placementId: string;

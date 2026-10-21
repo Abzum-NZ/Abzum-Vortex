@@ -697,6 +697,8 @@ export function compileFlowSources(input: FlowCompilationInput): CompiledFlowSet
         invalid.ruleCode,
         invalid.family,
         flowIssueLocation(location, invalid),
+        undefined,
+        invalid.message,
       );
 
     // The flow's readable key must name the same permanent flow as its owner alias.
@@ -773,6 +775,8 @@ export function compileFlowSources(input: FlowCompilationInput): CompiledFlowSet
         invalid.ruleCode,
         invalid.family,
         flowIssueLocation(resolver.locate?.(input.flows[entry.sourceIndex]!.key), invalid),
+        undefined,
+        invalid.message,
       );
   }
   // Calls between the flows: no cycle, a bounded depth, and transaction flows calling only their own kind.

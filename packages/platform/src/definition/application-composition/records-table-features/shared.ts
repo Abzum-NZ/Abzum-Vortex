@@ -159,6 +159,10 @@ export type RecordsTableBoardFacts = Readonly<{
     filterable: boolean;
     /** For a choice field, how many options it declares. */
     choiceCount?: number;
+    /** The stored option values, used to check fixed values in a card's formatting conditions. */
+    choiceValues?: readonly string[];
+    /** For a calculation or total, the type of the value it produces. */
+    resultType?: string;
   }>[];
   selected: readonly string[];
   groupBy: readonly string[];

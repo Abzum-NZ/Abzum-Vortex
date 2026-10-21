@@ -18,11 +18,27 @@ import type {
   StudioAccessResult,
   StudioSemanticSelection,
 } from "@vortex/ui/studio";
-import { StudioAccessPageGates, StudioAccessPermissionList } from "./studio-access-gates";
-import { StudioAccessRoleEditor } from "./studio-access-role";
+import { useIntentPreload } from "../_lib/use-intent-preload";
+import { deferredStudioPart } from "./studio-deferred-part";
 import { StudioField } from "./studio-field";
 import { StudioPanelShell, StudioSection } from "./studio-frame";
 import { StudioReferencesAlert } from "./studio-used-in";
+
+// The three editors of the centre load when the Access tab is first opened.
+const StudioAccessRoleEditor = deferredStudioPart(
+  () => import("./studio-access-role").then((module) => module.StudioAccessRoleEditor),
+  "role editor",
+);
+const StudioAccessPageGates = deferredStudioPart(
+  () => import("./studio-access-gates").then((module) => module.StudioAccessPageGates),
+  "page access editor",
+);
+const StudioAccessPermissionList = deferredStudioPart(
+  () => import("./studio-access-gates").then((module) => module.StudioAccessPermissionList),
+  "permission list",
+);
+const preloadAccessEditors = () =>
+  Promise.all([import("./studio-access-role"), import("./studio-access-gates")]);
 
 /** What the centre edits: the selected role, or one of the two application-wide views. */
 type View = "role" | "pages" | "permissions";
@@ -91,6 +107,7 @@ export function useStudioAccessTab({
   showPages: () => void;
   showRole: () => void;
 }> {
+  useIntentPreload(preloadAccessEditors, "#studio-rail-access");
   const roles = source.body.roles;
   const [view, setView] = useState<View>("role");
   const [feedback, setFeedback] = useState<Feedback | null>(null);

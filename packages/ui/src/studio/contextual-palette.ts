@@ -385,6 +385,12 @@ export const studioBoardFacts = (
       ...(studioFieldFacts(field).choiceCount === undefined
         ? {}
         : { choiceCount: studioFieldFacts(field).choiceCount! }),
+      ...(studioFieldFacts(field).choiceValues === undefined
+        ? {}
+        : { choiceValues: studioFieldFacts(field).choiceValues! }),
+      ...(studioFieldFacts(field).resultType === undefined
+        ? {}
+        : { resultType: studioFieldFacts(field).resultType! }),
     })),
     selected: (query.select.length === 0
       ? record.fields.map((field) => field.key)

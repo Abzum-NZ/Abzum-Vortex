@@ -12,6 +12,7 @@ export {
 import type { ComponentSettingValue } from "../block-property-schema";
 import {
   boardFilterProblem,
+  boardFormattingProblem,
   recordsTableBoardFeature,
   type RecordsTableBoardMode,
   type RecordsTableBoardSettings,
@@ -116,6 +117,7 @@ export {
 export {
   boardAggregateLabel,
   boardFilterProblem,
+  boardFormattingProblem,
   boardProblem,
   recordsTableBoardFactsOf,
 } from "./board";
@@ -330,12 +332,13 @@ export const readRecordsTableFeatures = (
 /**
  * The features a board view implements beside Board itself. A feature not listed is refused when
  * it is on together with Board: the board draws cards, not table rows, and never ignores a feature.
- * A card opens through Row actions and the cards narrow through Column filters, which a board
- * reads over every field of its record type.
+ * A card opens through Row actions, the cards narrow through Column filters, which a board
+ * reads over every field of its record type, and Formatting colours whole cards.
  */
 const recordsTableBoardSupportedFeatures: readonly RecordsTableFeatureKey[] = [
   "row_actions",
   "column_filters",
+  "conditional_formatting",
 ];
 
 /**
@@ -454,6 +457,13 @@ export const checkRecordsTableFeature = (
       return (
         boardFilterProblem(
           (state as Extract<RecordsTableFeatures["columnFilters"], { enabled: true }>).fields,
+          facts.board,
+        ) ?? featureAvailable
+      );
+    if (key === "conditional_formatting" && state.enabled && facts.board !== undefined)
+      return (
+        boardFormattingProblem(
+          state as Extract<RecordsTableFeatures["conditionalFormatting"], { enabled: true }>,
           facts.board,
         ) ?? featureAvailable
       );

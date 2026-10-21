@@ -42,7 +42,7 @@ const refusalWords: Readonly<Record<RecordsTableBulkRefusalReason, string>> = {
   refused: "their change was refused",
 };
 
-/** The number of records the selection holds now: the page's rows, or every matching record. */
+/** The number of records held explicitly, or every matching record. */
 const selectedCount = (context: GridFeatureContext): number => {
   const scope = context.selection.selectionScope;
   return scope?.kind === "matching"
@@ -65,15 +65,9 @@ const availabilityFor = (
   let eligible = 0;
   const reasons = new Set<RecordsTableBulkRefusalReason>();
   for (const recordId of context.selectedRecordIds) {
-    const row = context.rows.find((candidate) => candidate.recordId === recordId);
-    if (row === undefined) {
-      reasons.add("removed");
-      continue;
-    }
-    const record = availability.find(
-      (candidate) => candidate.recordId === recordId && candidate.revision === row.revision,
-    );
-    // No decision for the displayed revision: never guess; the person selects again.
+    // The host binds this response to the exact held ids and revisions. A selected row may now
+    // be beneath a closed branch, so the current page rows cannot resolve its revision.
+    const record = availability.find((candidate) => candidate.recordId === recordId);
     const decision = record?.actions.find((candidate) => candidate.action === action);
     if (decision === undefined) return unchecked;
     if (decision.eligible) eligible += 1;
@@ -276,6 +270,8 @@ function SelectionBand({
   const { selectionScope: scope, selectionToken, bulkRun: run } = context.selection;
   const pageCount = context.rows.length;
   const selected = context.selectedRecordIds.length;
+  const allOnPage =
+    pageCount > 0 && context.rows.every((row) => context.selectedRecordIds.includes(row.recordId));
   const clear =
     onScope === undefined ? null : (
       <Button
@@ -321,10 +317,11 @@ function SelectionBand({
       </span>
     );
   else if (scope !== undefined) body = <span>{scopeMessage(scope)}</span>;
-  else if (selected > 0 && selected === pageCount && context.paged && selectionToken !== undefined)
+  else if (allOnPage && context.paged && selectionToken !== undefined)
     body = (
       <span>
-        All {numberFormat.format(pageCount)} on this page are selected.{" "}
+        {records(selected)} selected. All {numberFormat.format(pageCount)} on this page are
+        selected.{" "}
         {onScope === undefined ? null : (
           <Button
             variant="link"
