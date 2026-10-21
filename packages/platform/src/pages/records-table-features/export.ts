@@ -82,8 +82,8 @@ import type { InstalledRuntimeContext } from "../../definition/index";
 export type RecordsTableExportDependencies = HumanOrganizationRequestDependencies &
   Readonly<{ continuationKey: QueryContinuationKey }>;
 
-/** The most rows a read of a selection of shown rows yields at once, so the first bytes come soon. */
-const selectedRowsPageSize = 25;
+/** The most record ids one exact read names; the protected query refuses more. */
+const exactRecordIdsPerRead = 200;
 
 /** A failure the transport reports as the export's reason; the person only sees a neutral message. */
 const exportFailure = (reason: string, cause?: unknown): Error =>
@@ -619,29 +619,21 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
         }
         // Only unticked records the read still matches lower the count: one gone or changed since
         // would otherwise understate it, and near the row limit end the stream short of it.
-        let stillExcluded = excluded.size;
-        if (excluded.size > 0 && descriptor.search !== null) {
-          // A single record's read does not apply the search, so its exclusions cannot be
-          // confirmed; near the limit the selection is judged by what the read matches.
-          if (counted.count > maxRows && counted.count - excluded.size <= maxRows) {
-            refuse("selection_over_row_limit", "exclusions_unconfirmed");
-            await audit(session, address, recordTypeId, columnIds, "refused");
-            return { kind: "refused", reason: "too_many", limit: maxRows, count: counted.count };
+        let stillExcluded = 0;
+        // Each 200 exclusions are confirmed in one protected read that applies the search and filters.
+        const excludedIds = [...excluded];
+        for (let start = 0; start < excludedIds.length; start += exactRecordIdsPerRead) {
+          const batch = excludedIds.slice(start, start + exactRecordIdsPerRead);
+          const read = await queries.run(session, address.selection, {
+            ...command,
+            pageSize: batch.length,
+            exactRecordIds: batch,
+          });
+          if (read.kind !== "available" || read.value.outcome !== "completed") {
+            refuse("exclusion_unreadable");
+            return unavailable;
           }
-        } else if (excluded.size > 0) {
-          stillExcluded = 0;
-          for (const recordId of excluded) {
-            const read = await queries.run(session, address.selection, {
-              ...command,
-              pageSize: 1,
-              exactRecordId: recordId,
-            });
-            if (read.kind !== "available" || read.value.outcome !== "completed") {
-              refuse("exclusion_unreadable");
-              return unavailable;
-            }
-            if (read.value.rows.length > 0) stillExcluded += 1;
-          }
+          stillExcluded += read.value.rows.length;
         }
         expected = Math.max(0, counted.count - stillExcluded);
       }
@@ -709,7 +701,7 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
       };
 
       const readPage = async (
-        extra: Readonly<{ exactRecordId?: string; continuationToken?: string }>,
+        extra: Readonly<{ exactRecordIds?: readonly string[]; continuationToken?: string }>,
       ): Promise<
         Readonly<{
           rows: readonly ProtectedQueryRow[];
@@ -719,8 +711,10 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
       > => {
         const result = await queries.run(session, address.selection, {
           ...command,
-          pageSize: extra.exactRecordId === undefined ? pageSize : 1,
-          ...(extra.exactRecordId === undefined ? {} : { exactRecordId: extra.exactRecordId }),
+          pageSize: extra.exactRecordIds === undefined ? pageSize : extra.exactRecordIds.length,
+          ...(extra.exactRecordIds === undefined
+            ? {}
+            : { exactRecordIds: [...extra.exactRecordIds] }),
           ...(extra.continuationToken === undefined
             ? {}
             : { pageDirection: "forward" as const, continuationToken: extra.continuationToken }),
@@ -742,19 +736,30 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
 
       async function* pages(pageSignal: AbortSignal): AsyncGenerator<RecordsExportPage> {
         if (request.selection.kind === "ids") {
-          // The rows the person ticked, each read under their current access in the order they
-          // were shown; a row that is gone or no longer readable is left out, never guessed.
-          for (let start = 0; start < selectedIds.length; start += selectedRowsPageSize) {
-            const rows: ProtectedQueryRow[] = [];
-            for (const recordId of selectedIds.slice(start, start + selectedRowsPageSize)) {
-              pageSignal.throwIfAborted();
-              if (rows.length === 0) await recheck();
-              const read = (await readPage({ exactRecordId: recordId })).rows;
-              for (const row of read)
-                if (row.revision !== undefined && row.revision !== selectedRevisions.get(recordId))
-                  changed += 1;
-              rows.push(...read);
-            }
+          // The rows the person ticked, each 200 read in one protected read under their current
+          // access and listed in the order they were shown; a row that is gone or no longer
+          // readable is left out, never guessed.
+          const shownAt = new Map(selectedIds.map((recordId, index) => [recordId, index]));
+          for (let start = 0; start < selectedIds.length; start += exactRecordIdsPerRead) {
+            pageSignal.throwIfAborted();
+            await recheck();
+            const rows = [
+              ...(
+                await readPage({
+                  exactRecordIds: selectedIds.slice(start, start + exactRecordIdsPerRead),
+                })
+              ).rows,
+            ].sort(
+              (left, right) =>
+                shownAt.get(String(left.recordId).toLowerCase())! -
+                shownAt.get(String(right.recordId).toLowerCase())!,
+            );
+            for (const row of rows)
+              if (
+                row.revision !== undefined &&
+                row.revision !== selectedRevisions.get(String(row.recordId).toLowerCase())
+              )
+                changed += 1;
             if (rows.length > 0) yield await toPage(rows);
           }
           return;
