@@ -44,8 +44,8 @@ export const argumentValue = (name: string): string | undefined => {
 export const openLane = (): LaneFacts => {
   loadLocalWebEnvironment();
   const lane = Number(argumentValue("lane"));
-  if (![2, 3, 4, 5].includes(lane))
-    throw new Error("Pass --lane 2, 3, 4 or 5. The main stack is never used.");
+  if (![2, 3, 4, 5, 7, 8, 9].includes(lane))
+    throw new Error("Pass --lane 2, 3, 4, 5, 7, 8 or 9. The main stack is never used.");
   const databasePort = 54322 + 1000 * (lane - 1);
   const runtimePort = new URL(process.env.VORTEX_RUNTIME_DATABASE_URL ?? "").port;
   if (Number(runtimePort) !== databasePort)

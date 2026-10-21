@@ -4870,6 +4870,27 @@
                 "required": false
               },
               {
+                "kind": "boolean",
+                "key": "paste",
+                "label": "Paste",
+                "help": "Paste copied cells into a selected range; every cell is checked on the server and all change or none",
+                "required": false
+              },
+              {
+                "kind": "boolean",
+                "key": "fill",
+                "label": "Fill down",
+                "help": "Ctrl+D copies the top cell of a selected range down the range",
+                "required": false
+              },
+              {
+                "kind": "boolean",
+                "key": "undo",
+                "label": "Undo",
+                "help": "Ctrl+Z and Ctrl+Y undo and redo the batches committed in this session",
+                "required": false
+              },
+              {
                 "kind": "list",
                 "key": "status_bar_fields",
                 "label": "Status bar fields",

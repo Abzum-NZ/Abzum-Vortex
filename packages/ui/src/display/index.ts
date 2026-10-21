@@ -23,6 +23,7 @@ export {
   type DisplayRichTextDocument,
   type DisplayRichTextInline,
   type DisplayRow,
+  type DisplayBatchEditAnswer,
   type DisplaySemanticEvent,
   type DisplaySemanticEventName,
   type BoardBucketPayload,

@@ -96,6 +96,9 @@ export const studioGridFeatureStartSettings: Readonly<
   spreadsheet: {
     range_select: { kind: "boolean", value: true },
     find: { kind: "boolean", value: true },
+    paste: { kind: "boolean", value: false },
+    fill: { kind: "boolean", value: false },
+    undo: { kind: "boolean", value: false },
     status_bar_fields: { kind: "list", items: [] },
     status_bar_operations: { kind: "list", items: [] },
   },
