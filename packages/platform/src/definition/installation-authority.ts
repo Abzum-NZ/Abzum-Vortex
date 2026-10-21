@@ -25,15 +25,15 @@ import {
   type OrganizationAccessDeclaration,
   type SelectedOrganizationScope,
 } from "../schema";
-import { builderRecentAuthentication, deriveBuilderRequirements } from "./builder-authority";
+import {
+  builderPermissionKeys,
+  builderRecentAuthentication,
+  deriveBuilderRequirements,
+} from "./builder-authority";
 import type { prepareApplicationRoleTemplatesForHumanRequest } from "../access/application-role-template-adapter";
 
 type InstallationProblemKind =
-  | "conflict"
-  | "refused"
-  | "authentication_required"
-  | "temporarily_unavailable"
-  | "failed";
+  "conflict" | "refused" | "authentication_required" | "temporarily_unavailable" | "failed";
 
 export type InstallationUnavailableReason =
   | "not_installed"
@@ -158,7 +158,8 @@ export const installationTargetFacts = async (
   _scope: SelectedOrganizationScope,
   rootId: string | undefined,
 ) => {
-  if (rootId === undefined) installationProblem("application_root_missing", "refused", "unsupported_root");
+  if (rootId === undefined)
+    installationProblem("application_root_missing", "refused", "unsupported_root");
   return readInstallationOrdinaryRoot(transaction, rootId);
 };
 
@@ -186,10 +187,7 @@ export const installationPermissionDeclaration = (
   });
 };
 
-const eligibleUntil = (
-  decisionValue: unknown,
-  context: InstallationHumanContext,
-): string => {
+const eligibleUntil = (decisionValue: unknown, context: InstallationHumanContext): string => {
   const parsed = organizationPermissionEligibilitySchema.safeParse({
     ...(decisionValue as object),
     outcome: "eligible",
@@ -248,7 +246,8 @@ export const requireInstallationAuthority = async (
     if (
       error instanceof Error &&
       "code" in error &&
-      String((error as { readonly code?: unknown }).code) === "BUILDER_RECENT_AUTHENTICATION_REQUIRED"
+      String((error as { readonly code?: unknown }).code) ===
+        "BUILDER_RECENT_AUTHENTICATION_REQUIRED"
     )
       installationProblem("recent_authentication_required", "authentication_required", undefined, {
         cause: error,
@@ -257,10 +256,7 @@ export const requireInstallationAuthority = async (
   });
 };
 
-export const installationOperation = (
-  rootId: string,
-  containsCustomComponents: boolean,
-) =>
+export const installationOperation = (rootId: string, containsCustomComponents: boolean) =>
   ({
     kind: "installation" as const,
     applicationRootId: rootId,
@@ -268,6 +264,15 @@ export const installationOperation = (
     containsCustomComponents,
     acceptedPermissions: [],
   }) satisfies BuilderOperation;
+
+/** A refusal of the installation permissions, named so the person is told what is missing. */
+export const refuseInstallationAuthority = (cause: unknown): never => {
+  throw new InstallationProblem(
+    { kind: "refused", memberRoleRefusal: "installation_authority" },
+    "installation_authority_refused",
+    { cause },
+  );
+};
 
 const readRequirementDeadlines = async (
   transaction: RequestDatabaseTransaction,
@@ -278,15 +283,23 @@ const readRequirementDeadlines = async (
 ): Promise<string[]> => {
   const deadlines: string[] = [];
   for (const [index, key] of requirements.permissionKeys.entries()) {
+    const deadline = readInstallationPermissionDeadline(
+      transaction,
+      scope,
+      context,
+      permissions,
+      key,
+      requirements.recentAuthentication && index === 0,
+    );
+    // Only a refused Manage applications is named; another requirement (custom code) stays untyped.
     deadlines.push(
-      await readInstallationPermissionDeadline(
-        transaction,
-        scope,
-        context,
-        permissions,
-        key,
-        requirements.recentAuthentication && index === 0,
-      ),
+      await (key === builderPermissionKeys.applicationsManage
+        ? deadline.catch((error: unknown) => {
+            if (error instanceof InstallationProblem && error.problem.kind === "refused")
+              return refuseInstallationAuthority(error);
+            throw error;
+          })
+        : deadline),
     );
   }
   return deadlines;
