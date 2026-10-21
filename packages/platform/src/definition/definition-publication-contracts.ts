@@ -137,7 +137,11 @@ export interface DefinitionPublicationReader {
       extensionPointUses: readonly ModuleExtensionPointUse[];
     }>
   >;
-  /** The draft, its identities and its current release version, without the release itself. */
+  /**
+   * The draft, its identities and its current release version, without the release itself. The
+   * draft is already parsed with the stored-draft schema (or staged by the platform itself), so
+   * `validateDraftCandidate` checks it without parsing it again.
+   */
   readDraftCandidate(rootId: string): Promise<DefinitionDraftCandidate | undefined>;
   /** Rechecks a retained Application draft's revision, source and publication anchor only. */
   isApplicationDraftCurrent(candidate: DefinitionDraftCandidate): Promise<boolean>;
