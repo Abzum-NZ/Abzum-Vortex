@@ -1377,7 +1377,12 @@ const deleteRefusal = (
 
 /** What one run of a named action over several records ended with. */
 export type NamedActionBatchResult =
-  | Readonly<{ kind: "completed"; results: readonly ExecuteNamedActionResult[] }>
+  | Readonly<{
+      kind: "completed";
+      results: readonly ExecuteNamedActionResult[];
+      /** Server-only subject identity lets the bulk summary count records, not repeated tasks. */
+      warnings: readonly (BeforeSaveRuleWarning & Readonly<{ recordId: string }>)[];
+    }>
   /** One record refused, so the whole batch rolled back; `index` names it in the given order. */
   | Readonly<{ kind: "refused"; index: number; result: ExecuteNamedActionResult | undefined }>
   | Readonly<{ kind: "unavailable" | "temporarily_unavailable" }>;
@@ -1538,7 +1543,18 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
         return { kind: "refused", index: settled, result: deleteRefusal(settlement) };
       if (refused !== undefined) return { kind: "refused", ...refused };
       if (result.kind !== "available") return result;
-      return { kind: "completed", results: result.value };
+      return {
+        kind: "completed",
+        results: result.value,
+        warnings: states.flatMap((state) =>
+          state.attempted.executions.flatMap((execution) =>
+            execution.warnings.map((warning) => ({
+              ...warning,
+              recordId: state.command.recordId,
+            })),
+          ),
+        ),
+      };
     },
   });
 };

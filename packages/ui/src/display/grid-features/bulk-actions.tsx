@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type ReactElement } from "react";
+import { TriangleAlertIcon } from "lucide-react";
 import type {
   RecordsTableBulkActionContract,
   RecordsTableBulkRefusalReason,
@@ -219,8 +220,9 @@ function RunSummary({ run }: Readonly<{ run: Extract<TableBulkRun, { status: "fi
   const refused = summary.refused.reduce((sum, item) => sum + item.count, 0);
   const drift = summary.total - run.selected;
   return (
-    <span className="min-w-0">
-      {run.label}: {records(summary.done)} of {numberFormat.format(summary.total)} changed.
+    <span className="min-w-0 break-words">
+      {run.label}: {numberFormat.format(summary.done)} of {numberFormat.format(summary.total)}{" "}
+      changed.
       {!summary.limited && drift !== 0 && run.selected > 0
         ? ` ${numberFormat.format(Math.abs(drift))} ${drift > 0 ? "more matched" : "fewer matched"} than when you selected them.`
         : ""}
@@ -235,6 +237,14 @@ function RunSummary({ run }: Readonly<{ run: Extract<TableBulkRun, { status: "fi
         ? ` ${records(summary.notProcessed)} not reached${refused > 0 && summary.done === 0 ? ", so nothing was changed" : ""}.`
         : ""}
       {summary.limited ? " More records matched than the action's limit." : ""}
+      {summary.warnings.map(({ message, count }) => (
+        <span key={message} className="mt-1 flex items-start gap-1.5 text-muted-foreground">
+          <TriangleAlertIcon className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+          <span className="min-w-0 break-words">
+            Warning on {records(count)}: {message}
+          </span>
+        </span>
+      ))}
     </span>
   );
 }
