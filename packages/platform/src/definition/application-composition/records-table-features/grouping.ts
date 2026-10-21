@@ -52,14 +52,14 @@ const groupable = (field: RecordsTableFieldFacts): boolean =>
 
 /**
  * A table that reads a grouped query has no flat rows to show: it is a Grouped table, so Group by
- * must be on. Publication and Studio refuse the table until it is.
+ * and Open grouped must be on. Publication and Studio refuse the table until they are.
  */
 export const recordsTableGroupedQueryRefusal = (
   facts: Pick<RecordsTableQueryFacts, "queryLabel">,
 ): RecordsTableFeatureCheck =>
   featureNotPossible(
     code,
-    `A table that reads ${facts.queryLabel || "this query"} shows its records in groups: switch on Group by`,
+    `A table that reads ${facts.queryLabel || "this query"} shows its records in groups: switch on Group by and Open grouped.`,
   );
 
 /**
