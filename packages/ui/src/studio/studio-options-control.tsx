@@ -26,10 +26,11 @@ export function StudioOptionsControl({
   "aria-invalid"?: boolean;
 }>) {
   const [search, setSearch] = useState("");
+  const searchable = options.length > 12;
   const selected = options.filter((option) => value.includes(option.value));
   const unknown = value.filter((entry) => !options.some((option) => option.value === entry));
   const visible = options.filter((option) =>
-    option.label.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()),
+    !searchable || option.label.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()),
   );
   const commit = (keys: readonly string[], removedIndex?: number) =>
     onChange([
@@ -80,7 +81,7 @@ export function StudioOptionsControl({
           ))}
         </div>
       )}
-      {options.length > 12 && (
+      {searchable && (
         <Input
           aria-label="Search options"
           placeholder="Search options…"
