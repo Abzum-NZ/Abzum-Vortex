@@ -18,6 +18,8 @@ export const requestRecordChoices = async (
     /** For a Records table's link picker: the field whose target records are offered, and why. */
     fieldId?: string;
     purpose?: "filter" | "edit";
+    /** For a dependent link field: the record chosen in the field it depends on. */
+    parentRecordId?: string;
   },
   reload: () => void,
 ): Promise<RecordChoicePage> => {
@@ -35,6 +37,7 @@ export const requestRecordChoices = async (
       placementId,
       ...(event.fieldId === undefined ? {} : { fieldId: event.fieldId }),
       ...(event.purpose === undefined ? {} : { purpose: event.purpose }),
+      ...(event.parentRecordId === undefined ? {} : { parentRecordId: event.parentRecordId }),
       installationRevision: application.installationRevision,
       releaseKey: application.releaseKey,
       ...(model.subject === undefined ? {} : { subjectRecordId: model.subject.recordId }),

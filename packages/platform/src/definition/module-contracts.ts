@@ -264,6 +264,11 @@ const linkSettingsSchema = z
     reverseName: labelSchema,
     onParentDelete: z.enum(["refuse", "empty_optional", "soft_delete_dependent"]),
     applicationRootIdRequired: z.boolean().optional(),
+    /** The link field of this record type whose chosen record narrows this field's choices. */
+    dependsOn: z
+      .object({ parentFieldId: fieldIdSchema, filterFieldId: fieldIdSchema })
+      .strict()
+      .optional(),
   })
   .strict();
 const multiLinkSettingsSchema = z

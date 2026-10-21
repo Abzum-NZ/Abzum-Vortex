@@ -265,6 +265,17 @@ const sourceTableSettingsSchema = z
         message: "Table column keys must be unique",
       });
   });
+/**
+ * The declared dependency of a link field on another link field of the same record type: this
+ * field's choices are the target records whose `filter_field` link points at the parent's chosen
+ * record (Country -> Region -> City). Both are field keys.
+ */
+const sourceLinkDependencySchema = z
+  .object({
+    parent_field: sourceProvenanceUnchanged(builderKeySchema),
+    filter_field: sourceProvenanceUnchanged(builderKeySchema),
+  })
+  .strict();
 const sourceLinkSettingsSchema = z
   .object({
     target: sourceProvenanceTarget(sourceQualifiedRecordTypeSchema, ["target/**"]),
@@ -276,6 +287,7 @@ const sourceLinkSettingsSchema = z
     application_root_required: sourceProvenanceTarget(z.boolean().optional(), [
       "applicationRootIdRequired",
     ]),
+    depends_on: sourceProvenanceTarget(sourceLinkDependencySchema.optional(), ["dependsOn/**"], true),
   })
   .strict();
 const sourceMultiLinkSettingsSchema = z

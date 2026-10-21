@@ -21,6 +21,7 @@ import { Icon } from "../../icons/icon";
 import { parseRecordChoicePage, type RecordChoiceOption } from "../../controls/projected-data";
 import type { DisplayEventHandlers, DisplayRow } from "../projected-data";
 import type { LinkDraft } from "./edit-values";
+import { waitingForParent } from "./link-dependency";
 
 /** A search reads once typing pauses this long, so a typed word is one read, not one per key. */
 const SEARCH_DELAY_MS = 300;
@@ -48,6 +49,7 @@ export function RecordChoicePicker({
   invalid,
   describedBy,
   maxed,
+  parentRecordId,
 }: Readonly<{
   fieldId: string;
   purpose: "filter" | "edit";
@@ -66,6 +68,8 @@ export function RecordChoicePicker({
   describedBy?: string;
   /** No further record may be chosen; the input is disabled. */
   maxed?: boolean;
+  /** For a dependent link field: the record chosen in the field it depends on, in the draft. */
+  parentRecordId?: string;
 }>): ReactElement {
   const [open, setOpen] = useState(autoOpen === true);
   const [search, setSearch] = useState("");
@@ -91,6 +95,7 @@ export function RecordChoicePicker({
         event: "table_records_requested",
         field: fieldId,
         purpose,
+        ...(parentRecordId === undefined ? {} : { parentRecordId }),
         ...(bounded === "" ? {} : { search: bounded }),
         ...(continuationToken === undefined ? {} : { continuationToken }),
       }),
@@ -123,7 +128,7 @@ export function RecordChoicePicker({
       clearTimeout(timeout);
       generation.current += 1;
     };
-  }, [open, search, fieldId, purpose]);
+  }, [open, search, fieldId, purpose, parentRecordId]);
 
   return (
     <Combobox
@@ -225,6 +230,7 @@ export function LinkDraftPicker({
   onOpenChange,
   invalid,
   describedBy,
+  dependency,
 }: Readonly<{
   fieldId: string;
   label: string;
@@ -243,7 +249,13 @@ export function LinkDraftPicker({
   onOpenChange?: (open: boolean) => void;
   invalid?: boolean;
   describedBy?: string;
+  /**
+   * Set for a field that depends on another link field: the record chosen there (undefined while
+   * none is, or while the viewer cannot read it), which the picker offers records for.
+   */
+  dependency?: Readonly<{ parentRecordId: string | undefined; parentLabel: string }>;
 }>): ReactElement {
+  const waiting = dependency !== undefined && dependency.parentRecordId === undefined;
   const chosen = draft === null ? "None" : (draft.title ?? current ?? "Chosen record");
   const clear =
     draft === null || required ? null : (
@@ -267,8 +279,17 @@ export function LinkDraftPicker({
       purpose="edit"
       label={label}
       events={events}
-      placeholder={inline === true ? chosen : `Find ${label}`}
-      {...(disabled === undefined ? {} : { disabled })}
+      placeholder={
+        waiting
+          ? waitingForParent(dependency.parentLabel)
+          : inline === true
+            ? chosen
+            : `Find ${label}`
+      }
+      {...(waiting || disabled === true ? { disabled: true } : {})}
+      {...(dependency?.parentRecordId === undefined
+        ? {}
+        : { parentRecordId: dependency.parentRecordId })}
       {...(autoOpen === undefined ? {} : { autoOpen })}
       {...(inputRef === undefined ? {} : { inputRef })}
       {...(onKeyDown === undefined ? {} : { onKeyDown })}

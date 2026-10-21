@@ -142,6 +142,9 @@ export function applicationPageRules(scope: ApplicationScope): void {
               recordsTableEditableFieldTypes.includes(String(field.type)) &&
               (field.type !== "link" ||
                 object(object(field.settings ?? {}).target).state === "resolved"),
+            ...(field.type === "link" && object(field.settings ?? {}).dependsOn !== undefined
+              ? { dependsOn: String(object(object(field.settings).dependsOn).parentFieldId) }
+              : {}),
             // A one-record link from the record type to itself names each record's parent.
             parentLink:
               field.type === "link" &&
