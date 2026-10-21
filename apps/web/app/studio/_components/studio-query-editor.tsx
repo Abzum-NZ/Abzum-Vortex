@@ -470,7 +470,7 @@ export function StudioQueryEditor({
     }
     const recordType = newInput.recordType;
     if (newInput.type === "record_reference" && recordType === "") {
-      setIssues(["Choose the record type"]);
+      setIssues(["Inputs: choose the record type."]);
       return;
     }
     const input = {
@@ -905,7 +905,9 @@ export function StudioQueryEditor({
                   );
                   const retained = retainedFilterProblems(inputs);
                   if (retained.length > 0) return retained.join(" ");
-                  return commit({ inputs });
+                  const problem = commit({ inputs });
+                  if (problem === undefined) setIssues([]);
+                  return problem;
                 }}
               >
                 {(records, changeRecords) => (
