@@ -167,11 +167,11 @@ export const resolveBulkRequest = async <Body extends { pageKey: string; placeme
   // The table must be on this page as projected for the person now, once, and usable by them.
   const gate = requireProjectedPlacement(projected.value, body.data.placementId);
   if (gate.kind === "refused")
-    return refused(gate.reason, "not_available", 403, {
-      pageKey: address.pageKey,
-      placementId: body.data.placementId,
-      pageRecordGiven: addressPart.data.pageRecordId !== undefined,
-    });
+    return refused(
+      `${gate.reason} page=${address.pageKey} placement=${JSON.stringify(body.data.placementId)} page_record=${addressPart.data.pageRecordId === undefined ? "none" : "given"}`,
+      "not_available",
+      403,
+    );
   if (!isTablePlacement(gate.placement))
     return refused("placement_not_a_table", "not_available", 403);
   return {
