@@ -452,7 +452,7 @@ export const loadRecordChoicePage = async (
       filterableFieldIds: [],
       searchableFieldIds: [],
       pageSize: 1,
-      exactRecordId: dependency.parentRecordId,
+      exactRecordIds: [dependency.parentRecordId],
     });
     if (parentRead.kind === "temporarily_unavailable") return { kind: "temporarily_unavailable" };
     if (
