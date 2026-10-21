@@ -452,6 +452,8 @@ const resolveRemoval = (
   )
     return { kind: "unsupported" };
   validateRegion(catalogue, target.region);
+  if (studioLayoutOutletPlacementUses(source, alias).length > 0)
+    return { kind: "blocked", reason: "content_outlet" };
   let zone = target.region.zone;
   for (const step of target.steps) {
     const parent = zone.items.find((item) => item.props.id === step.parentAlias);

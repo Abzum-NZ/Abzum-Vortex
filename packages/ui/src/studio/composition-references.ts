@@ -21,6 +21,7 @@ export type StudioCompositionRemovalReason =
   | "flow_component"
   | "flow_panel"
   | "required_slot"
+  | "content_outlet"
   | "unresolved_target";
 
 /** Every `id` in the source: a new block's name is unique among them all. */
