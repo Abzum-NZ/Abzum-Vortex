@@ -336,7 +336,8 @@ export function StudioConditionalFormattingEditor({
         />
       )}
 
-      {board ? null : (
+      {/* A board has no number columns: the section shows there only to remove formats it holds. */}
+      {board && columnFormats.length === 0 ? null : (
         <section aria-labelledby={`${ownId}-columns`} className="space-y-2">
           <div className="flex items-center justify-between gap-2">
             <h4 id={`${ownId}-columns`} className="text-sm font-medium">
@@ -346,7 +347,9 @@ export function StudioConditionalFormattingEditor({
               type="button"
               variant="outline"
               size="sm"
-              disabled={disabled || availableNumberFields.length === 0 || formatItems.length >= 10}
+              disabled={
+                disabled || board || availableNumberFields.length === 0 || formatItems.length >= 10
+              }
               onClick={() =>
                 write({
                   formats: [

@@ -209,7 +209,8 @@ export type ConditionalFormatRuleChange = Readonly<{
  * A rule's target (the whole row or chosen cells), its colour, tint, text, weight, strike, icon,
  * label and stop switch. `cellOptions` are the cells a rule may target, spelled however the caller
  * identifies a field (a qualified reference in Studio, a field identity in a running grid). A
- * `wholeRowOnly` caller (a board, whose cards have no cells) is not offered the cell target.
+ * `wholeRowOnly` caller (a board, whose cards have no cells) is offered the target choice only while
+ * a rule still targets cells, so it can be switched back to the whole row.
  */
 export function ConditionalFormatStyleControls({
   idPrefix,
@@ -238,7 +239,7 @@ export function ConditionalFormatStyleControls({
     onChange({ style: { ...style, ...changes } });
   return (
     <>
-      {wholeRowOnly ? null : (
+      {wholeRowOnly && target.kind === "row" ? null : (
         <div className="space-y-1">
           <Label className="text-sm">Formats</Label>
           <ToggleGroup
