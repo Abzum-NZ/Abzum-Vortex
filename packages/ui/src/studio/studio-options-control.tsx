@@ -46,7 +46,7 @@ export function StudioOptionsControl({
       aria-label={label}
       aria-describedby={describedBy}
       aria-invalid={invalid}
-      className="min-w-0 space-y-3"
+      className="min-w-0 space-y-3 text-foreground"
     >
       {(selected.length > 0 || unknown.length > 0) && (
         <div className="flex min-w-0 flex-wrap gap-2" aria-label="Selected options">
@@ -99,7 +99,6 @@ export function StudioOptionsControl({
             <Checkbox
               checked={value.includes(option.value)}
               aria-describedby={describedBy}
-              aria-invalid={invalid}
               onCheckedChange={(checked) =>
                 commit(
                   checked
