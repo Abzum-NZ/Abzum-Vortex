@@ -75,6 +75,7 @@ export const definitionValidationErrorCodes = [
   "definition_records_table_export",
   "definition_query_binding",
   "definition_query_binding_choice",
+  "definition_form_field_dependency",
   "definition_unknown_property",
   "definition_too_few_items",
   "definition_too_many_items",
@@ -257,6 +258,12 @@ const definitionValidationErrorCatalogueSource = {
     order: 39,
     message: "A fixed value is not one of the choices of its query input.",
     guidance: "Open the block's Query inputs and pick one of the choices the input now offers.",
+  },
+  // The sentence names the dependent field and the field it depends on.
+  definition_form_field_dependency: {
+    order: 39,
+    message: "A form shows a field without the field its choices depend on.",
+    guidance: "Add the field it depends on to the same form, or remove the dependent field.",
   },
   definition_unknown_property: {
     order: 40,

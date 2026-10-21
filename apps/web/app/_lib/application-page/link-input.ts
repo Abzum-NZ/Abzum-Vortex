@@ -429,7 +429,7 @@ export const loadRecordChoicePage = async (
     )
       return {
         kind: "refused",
-        cause: `dependency_parent_unreadable child=${request.fieldId} parent=${dependency.link.parentFieldId}`,
+        cause: `dependency_parent_unreadable child=${request.fieldId ?? placement.placementId} parent=${dependency.link.parentFieldId}`,
       };
     narrowedBy = {
       fieldId: dependency.link.filterFieldId,
