@@ -94,6 +94,8 @@ export type RecordsTableFeatureProjection = Readonly<{
     fieldId: string;
     label: string;
     unassignedLabel: string;
+    /** The authored opening state: the address overrides it (grouped or flat) for this viewer. */
+    opensGrouped: boolean;
     /** The table reads a grouped query, so it is always grouped and offers no way to ungroup. */
     required?: true;
   }>;
@@ -334,11 +336,13 @@ export const projectRecordsTableFeatures = (
     groupingSettings.enabled &&
     groupingSettings.field !== undefined &&
     groupingSettings.unassignedLabel !== undefined &&
+    groupingSettings.opensGrouped !== undefined &&
     readable(groupingSettings.field)
       ? {
           fieldId: groupingSettings.field.toLowerCase(),
           label: fieldLabels?.[groupingSettings.field.toLowerCase()] ?? "",
           unassignedLabel: groupingSettings.unassignedLabel,
+          opensGrouped: groupingSettings.opensGrouped,
         }
       : undefined;
   const exportSettings = features.export;

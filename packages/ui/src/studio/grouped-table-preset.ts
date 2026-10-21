@@ -91,6 +91,8 @@ export const studioGroupedTableSettings = (
           ...grouping.properties,
           ...studioGridFeatureStartSettings.grouping,
           ...chosen,
+          // A Grouped table opens grouped; the viewer may ungroup it.
+          opens_grouped: { kind: "boolean", value: true },
           enabled: { kind: "boolean", value: true },
         },
       },
