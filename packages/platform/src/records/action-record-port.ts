@@ -136,6 +136,36 @@ const preparationReason = (reasonCode: string | undefined): RuleReason | undefin
   return { code: reasonCode, message };
 };
 
+/**
+ * The sentence a refused precondition shows, in the record type's own words: what the action needs
+ * ("Mark opportunity won needs Stage to be Negotiation."), or that it does not fit the record now.
+ */
+const preconditionReason = (prepared: PreparedNamedAction): RuleReason => {
+  const condition = prepared.action.precondition;
+  const fieldId =
+    condition?.kind === "comparison" && condition.left.source === "field"
+      ? condition.left.fieldId
+      : undefined;
+  const value =
+    condition?.kind === "comparison" &&
+    condition.operator === "equals" &&
+    condition.right?.source === "value"
+      ? condition.right.value
+      : undefined;
+  const field = prepared.recordType.fields.find((candidate) => candidate.fieldId === fieldId);
+  const settings = (field as { settings?: { options?: unknown } } | undefined)?.settings;
+  const option = (
+    Array.isArray(settings?.options)
+      ? (settings.options as readonly Readonly<{ value: string; label: string }>[])
+      : []
+  ).find((candidate) => candidate.value === value);
+  const message =
+    field === undefined || option === undefined
+      ? `${prepared.action.label} can't be used on this record as it is now.`
+      : `${prepared.action.label} needs ${field.label} to be ${option.label}.`;
+  return { code: "action_precondition", message: message.slice(0, 300) };
+};
+
 const completedResult = (candidate: Record<string, unknown>) => {
   const parsedRevision = revision(candidate.concurrencyNumber);
   if (parsedRevision === undefined) return undefined;
@@ -739,6 +769,8 @@ type NamedActionAttemptState = {
   deleteOccurrenceId?: string;
   /** A failed subject delete discards the whole command, receipt included. */
   deleteSettlement?: Settled<unknown> | undefined;
+  /** The database recorded a precondition refusal: the person reads why from this. */
+  preconditionRefusal?: Readonly<{ correlationId: string; reason: RuleReason }> | undefined;
   attempted: { rules?: BeforeSaveRuleExecution; executions: BeforeSaveRuleExecution[] };
 };
 
@@ -863,13 +895,16 @@ const planNamedAction = async (
   if (preparedRun.kind !== previewRun.kind) return restart;
   if (preparedRun.kind === "refused") {
     const refusal = await refusePrecondition(transaction, state.command, state.activityId);
-    return refusal.outcome === "refused_recorded"
-      ? recordedRefusal
-      : safeRefusal(
-          prepared.correlationId,
-          "operation_refused",
-          "the action's precondition refused the subject record",
-        );
+    const reason = preconditionReason(prepared);
+    if (refusal.outcome !== "refused_recorded")
+      return safeRefusal(
+        prepared.correlationId,
+        "operation_refused",
+        "the action's precondition refused the subject record",
+        reason,
+      );
+    state.preconditionRefusal = { correlationId: prepared.correlationId, reason };
+    return recordedRefusal;
   }
   const composition = preparedRun.composition;
   const previewComposition = (previewRun as Extract<FlowComposition, { kind: "composed" }>)
@@ -1437,6 +1472,7 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
       const state = attemptStateOf(command, activityId);
       for (let attempt = 0; attempt < 3; attempt += 1) {
         state.deleteSettlement = undefined;
+        state.preconditionRefusal = undefined;
         state.attempted = { executions: [] };
         const result = await requests.runChange(
           session,
@@ -1454,6 +1490,18 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
         if (result.kind !== "available") return result;
         if (result.value === restart) continue;
         if (result.value === recordedRefusal) {
+          const refused =
+            state.preconditionRefusal as NamedActionAttemptState["preconditionRefusal"];
+          if (refused !== undefined)
+            return {
+              kind: "available",
+              value: safeRefusal(
+                refused.correlationId,
+                "operation_refused",
+                "the action's precondition refused the subject record (refusal recorded)",
+                refused.reason,
+              ),
+            };
           console.error("[named-action] refused NAMED_ACTION_REFUSAL_RECORDED");
           return { kind: "unavailable" };
         }

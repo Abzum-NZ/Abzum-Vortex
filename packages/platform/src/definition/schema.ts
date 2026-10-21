@@ -23,6 +23,7 @@ export * from "./application-flow-bindings";
 // The one flow validator is pure, so Studio judges a flow edit with it before the draft takes it.
 export {
   validateFlow,
+  operationInputAccepts,
   type FlowValidationIssue,
   type FlowValidationOptions,
 } from "./flow-validation";

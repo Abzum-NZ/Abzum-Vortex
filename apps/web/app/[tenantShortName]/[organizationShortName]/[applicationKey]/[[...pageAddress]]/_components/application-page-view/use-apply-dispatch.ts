@@ -142,12 +142,13 @@ export function useApplyDispatch({
           const correctionMessages = (diagnostic?.corrections ?? []).flatMap((correction) =>
             correction.message === undefined ? [] : [correction.message],
           );
-          const ruleMessages =
-            diagnostic?.ruleRefusal !== undefined
-              ? [diagnostic.ruleRefusal.message]
-              : correctionMessages.length > 0
-                ? [...new Set(correctionMessages)]
-                : undefined;
+          const authoredMessages = [
+            ...new Set([
+              ...(diagnostic?.ruleRefusal === undefined ? [] : [diagnostic.ruleRefusal.message]),
+              ...correctionMessages,
+            ]),
+          ];
+          const ruleMessages = authoredMessages.length > 0 ? authoredMessages : undefined;
           const refusalFeedback: Extract<FormFlowFeedback, { kind: "refusal" }> | undefined =
             diagnostic === undefined
               ? undefined
