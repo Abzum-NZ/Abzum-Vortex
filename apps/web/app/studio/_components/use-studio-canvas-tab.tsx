@@ -183,22 +183,31 @@ export function useStudioCanvasTab({
   const [gridStates, setGridStates] = useState<ReadonlyMap<string, StudioCanvasGridState>>(
     new Map(),
   );
+  const gridStatesRef = useRef(gridStates);
   const onGridChange = useCallback((change: StudioCanvasGridChange) => {
-    setGridStates((held) => {
-      try {
-        const next = reduceStudioCanvasGrid(held.get(change.placementAlias), change);
-        if (next === held.get(change.placementAlias)) return held;
-        const states = new Map(held);
-        if (next === undefined) states.delete(change.placementAlias);
-        else states.set(change.placementAlias, next);
-        return states;
-      } catch (error) {
-        console.error(
-          `[studio] a canvas grid change was not applied: STUDIO_CANVAS_GRID_CHANGE_REFUSED cause=${describeFailure(error)}`,
-        );
-        return held;
+    const held = gridStatesRef.current;
+    try {
+      const next = reduceStudioCanvasGrid(held.get(change.placementAlias), change);
+      if (next !== undefined && "kind" in next) {
+        console.error("[studio] a canvas grid change was refused", {
+          code: next.code,
+          cause: next.cause,
+        });
+        setNotice(next.reason);
+        return;
       }
-    });
+      if (next === held.get(change.placementAlias)) return;
+      const states = new Map(held);
+      if (next === undefined) states.delete(change.placementAlias);
+      else states.set(change.placementAlias, next);
+      gridStatesRef.current = states;
+      setGridStates(states);
+    } catch (error) {
+      console.error(
+        `[studio] a canvas grid change was not applied: STUDIO_CANVAS_GRID_CHANGE_REFUSED cause=${describeFailure(error)}`,
+      );
+      setNotice("This grid change could not be applied. Reload the canvas and try again.");
+    }
   }, []);
   // The preview reads a grid again only for a query change or a newly shown column; the text
   // makes the object stable across the layout gestures that read nothing.

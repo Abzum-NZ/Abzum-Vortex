@@ -182,6 +182,7 @@ export function ApplicationCompositionEditor(props: Props) {
   // screen size) drops it. The workspace keys this editor by the selected item.
   const settings = useStudioDraftHeld(settingsInputsFor(settingsModel));
   const layout = useStudioDraftHeld(model.kind === "available" ? inputsFor(model.layout) : null);
+  const [problemArea, setProblemArea] = useState<"settings" | "features">("settings");
   const [message, setMessage] = useState("");
   const titleId = useId();
   const hintId = useId();
@@ -256,7 +257,8 @@ export function ApplicationCompositionEditor(props: Props) {
       layout.applied(next);
     else layout.hold(next, "");
   };
-  const changeSettings = (next: SettingsInputs) => {
+  const changeSettings = (next: SettingsInputs, area: "settings" | "features" = "settings") => {
+    setProblemArea(area);
     if (settingsModel.kind !== "available") return;
     const board = boardModeOf(next.settings);
     const featureGroup = next.settings.features;
@@ -449,7 +451,7 @@ export function ApplicationCompositionEditor(props: Props) {
             />
           </fieldset>
           <StudioHelp hint="A setting you leave unset uses its default." />
-          {settings.problem !== "" && (
+          {settings.problem !== "" && problemArea === "settings" && (
             <p role="alert" className="text-sm text-destructive">
               {settings.problem}
             </p>
@@ -466,6 +468,7 @@ export function ApplicationCompositionEditor(props: Props) {
         <StudioGridFeatures
           idPrefix={`${settingsId}-features`}
           property={featuresProperty}
+          problem={problemArea === "features" ? settings.problem : ""}
           tableSettings={settingsInputs.settings}
           canvasArrangement={canvasMatches ? props.canvasArrangement?.state : undefined}
           canvasStale={props.canvasArrangement !== undefined && !canvasMatches}
@@ -505,7 +508,7 @@ export function ApplicationCompositionEditor(props: Props) {
             relationships: props.choices.relationships,
             recordTypeLabel: (recordType) =>
               props.choices.recordTypes.find((candidate) => candidate.key === recordType)?.label ??
-              recordType.slice(recordType.indexOf(":") + 1).replaceAll("_", " "),
+              "A removed item",
             page:
               settingsModel.kind === "available"
                 ? studioQueryBindingFacts(
@@ -522,10 +525,13 @@ export function ApplicationCompositionEditor(props: Props) {
           }}
           disabled={props.disabled}
           onChange={(features) =>
-            changeSettings({
-              ...settingsInputs,
-              settings: { ...settingsInputs.settings, [featuresProperty.key]: features },
-            })
+            changeSettings(
+              {
+                ...settingsInputs,
+                settings: { ...settingsInputs.settings, [featuresProperty.key]: features },
+              },
+              "features",
+            )
           }
         />
       )}

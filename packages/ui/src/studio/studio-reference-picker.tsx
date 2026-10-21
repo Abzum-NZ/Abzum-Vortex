@@ -53,7 +53,7 @@ export function StudioReferencePicker({
   const known = value === "" || options.some((option) => option.value === value);
   const entries: StudioReferencePickerOption[] = [
     ...(unset === undefined ? [] : [{ value: "", label: unset }]),
-    ...(!known ? [{ value, label: value + " (not offered here)", disabled: true }] : []),
+    ...(!known ? [{ value, label: "A removed item", disabled: true }] : []),
     ...options,
   ];
   const selected = entries.find((entry) => entry.value === value) ?? null;

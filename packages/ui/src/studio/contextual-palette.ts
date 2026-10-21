@@ -227,6 +227,7 @@ export type StudioQueryField = Readonly<{
   sortable: boolean;
   filterable: boolean;
   searchable: boolean;
+  linkTargetResolved?: boolean;
   choiceCount?: number;
   choiceValues?: readonly string[];
   /** For a calculation or total, the type of the value it produces. */
@@ -295,6 +296,8 @@ export type StudioQueryChoice = Readonly<{
   label: string;
   /** The record type the query reads, as `<module>:<record>`. */
   recordType: string;
+  recordTypeLabel: string;
+  allFields: readonly StudioQueryField[];
   fields: readonly StudioQueryField[];
   /** The query groups or totals its rows, so its rows are not records a person can act on. */
   grouped: boolean;
@@ -347,6 +350,7 @@ export type StudioRelationshipChoice = Readonly<{
  */
 export type StudioBorrowedChoices = Readonly<{
   usesSignature: string;
+  recordTypes: readonly string[];
   queries: readonly StudioQueryChoice[];
   actions: readonly StudioActionChoice[];
   relationships: readonly StudioRelationshipChoice[];
@@ -443,7 +447,10 @@ const isParentLink = (
         : `${moduleKey}:${relationship.to_record_type}`) === recordType,
   );
 
-const ownQueries = (source: ApplicationSourceDocument): StudioQueryChoice[] =>
+const ownQueries = (
+  source: ApplicationSourceDocument,
+  borrowed: StudioBorrowedChoices | null,
+): StudioQueryChoice[] =>
   (source.body.modules ?? []).flatMap((module) =>
     module.queries.map((query) => {
       const recordType = query.record_type.includes(":")
@@ -455,29 +462,34 @@ const ownQueries = (source: ApplicationSourceDocument): StudioQueryChoice[] =>
         ?.record_types.find((candidate) => candidate.key === recordKey);
       const selected =
         query.select.length === 0 ? (record?.fields ?? []).map((field) => field.key) : query.select;
-      const fields = selected.flatMap((key) => {
-        const field = record?.fields.find((candidate) => candidate.key === key);
-        return field === undefined
-          ? []
-          : [
-              Object.freeze({
-                reference: `${recordType}.${field.key}`,
-                label: field.label,
-                type: field.type,
-                ...studioFieldFacts(field),
-                ...(isParentLink(module.key, recordType, record, field)
-                  ? { parentLink: true }
-                  : {}),
-                ...((field.type === "link" || field.type === "choice") &&
-                (field.settings as { depends_on?: { parent_field: string } }).depends_on !==
-                  undefined
-                  ? {
-                      dependsOn: `${recordType}.${(field.settings as { depends_on: { parent_field: string } }).depends_on.parent_field}`,
-                    }
-                  : {}),
-              }),
-            ];
-      });
+      const allFields = (record?.fields ?? []).map((field) =>
+        Object.freeze({
+          reference: `${recordType}.${field.key}`,
+          label: field.label,
+          type: field.type,
+          ...studioFieldFacts(field),
+          linkTargetResolved:
+            field.type !== "link" ||
+            (() => {
+              const target = (field.settings as { target: string }).target;
+              const qualified = target.includes(":") ? target : `${moduleKey}:${target}`;
+              return (
+                source.body.modules.some((owner) =>
+                  owner.record_types.some(
+                    (targetRecord) => `${owner.key}:${targetRecord.key}` === qualified,
+                  ),
+                ) || borrowed?.recordTypes.includes(qualified) === true
+              );
+            })(),
+          ...(isParentLink(module.key, recordType, record, field) ? { parentLink: true } : {}),
+          ...((field.type === "link" || field.type === "choice") &&
+          (field.settings as { depends_on?: { parent_field: string } }).depends_on !== undefined
+            ? {
+                dependsOn: `${recordType}.${(field.settings as { depends_on: { parent_field: string } }).depends_on.parent_field}`,
+              }
+            : {}),
+        }),
+      );
       const inputs = query.inputs.map((input) =>
         Object.freeze({
           key: input.key,
@@ -502,7 +514,13 @@ const ownQueries = (source: ApplicationSourceDocument): StudioQueryChoice[] =>
         reference: `${module.key}:${query.key}`,
         label: query.label ?? query.key,
         recordType,
-        fields: Object.freeze(fields),
+        recordTypeLabel: record?.name ?? "",
+        allFields: Object.freeze(allFields),
+        fields: Object.freeze(
+          selected.flatMap((key) =>
+            allFields.filter((field) => field.reference === `${recordType}.${key}`),
+          ),
+        ),
         grouped: query.group_by.length > 0 || query.aggregates.length > 0,
         groupBy: Object.freeze(query.group_by.map((key) => `${recordType}.${key}`)),
         inputs: Object.freeze(inputs),
@@ -554,7 +572,10 @@ export function studioQueryChoices(
   source: ApplicationSourceDocument,
   borrowed: StudioBorrowedChoices | null,
 ): readonly StudioQueryChoice[] {
-  return Object.freeze([...ownQueries(source), ...(borrowedFor(source, borrowed)?.queries ?? [])]);
+  return Object.freeze([
+    ...ownQueries(source, borrowedFor(source, borrowed)),
+    ...(borrowedFor(source, borrowed)?.queries ?? []),
+  ]);
 }
 
 /**

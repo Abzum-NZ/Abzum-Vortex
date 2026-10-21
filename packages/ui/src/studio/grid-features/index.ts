@@ -3,7 +3,7 @@ import {
   queryInputValueType,
   recordsTableFeatureOfEvent,
   type BlockPropertySchemaContract,
-  recordsTableEditableFieldTypes,
+  recordsTableQueryFacts,
   recordsTableFieldFilterable,
   recordsTableGroupingFieldTypes,
   type QueryBindingField,
@@ -171,38 +171,23 @@ export type StudioRelatedRecordsChoices = Readonly<{
   rowFields: readonly QueryBindingField[];
 }>;
 
-/**
- * The fields of the bound query as the feature checks judge them. A grouped query reads only the
- * fields it groups by, as publication judges it.
- */
-const studioFieldFacts = (query: StudioQueryChoice | undefined): RecordsTableQueryFacts["fields"] =>
-  (query?.fields ?? [])
-    .filter((field) => query?.grouped !== true || query.groupBy.includes(field.reference))
-    .map((field) => ({
-      field: field.reference,
-      label: field.label,
-      type: field.type,
-      sortable: field.sortable,
-      filterable: field.filterable,
-      searchable: field.searchable,
-      editable: query?.grouped !== true && recordsTableEditableFieldTypes.includes(field.type),
-      parentLink: field.parentLink === true,
-      ...(field.dependsOn === undefined ? {} : { dependsOn: field.dependsOn }),
-      ...(field.choiceCount === undefined ? {} : { choiceCount: field.choiceCount }),
-      ...(field.choiceValues === undefined ? {} : { choiceValues: field.choiceValues }),
-      ...(field.resultType === undefined ? {} : { resultType: field.resultType }),
-    }));
-
-/** What Group by and the Grouped table preset read of the bound query. */
+/** What Group by and the Grouped table preset read of the shared query facts. */
 export const studioGroupingFacts = (
   query: StudioQueryChoice | undefined,
-): RecordsTableGroupingFacts & Pick<RecordsTableQueryFacts, "groupBy"> => ({
-  recordTypeLabel: query?.label ?? "",
-  fields: studioFieldFacts(query),
-  grouped: query?.grouped === true,
-  queryLabel: query?.label ?? "",
-  groupBy: query?.groupBy ?? [],
-});
+): RecordsTableGroupingFacts & Pick<RecordsTableQueryFacts, "groupBy"> =>
+  recordsTableQueryFacts({
+    recordTypeLabel: query?.recordTypeLabel ?? "",
+    fields: (query?.allFields ?? []).map((field) => ({
+      ...field,
+      field: field.reference,
+      parentLink: field.parentLink === true,
+      linkTargetResolved: field.linkTargetResolved === true,
+    })),
+    selectedFields: (query?.fields ?? []).map((field) => field.reference),
+    grouped: query?.grouped === true,
+    queryLabel: query?.label ?? "",
+    groupBy: query?.groupBy ?? [],
+  });
 
 /**
  * The bound query's facts as the draft holds them, in the spelling the table's settings use
@@ -216,57 +201,66 @@ export const studioRecordsTableQueryFacts = (
   relationships: readonly StudioRelationshipChoice[],
   related: StudioRelatedRecordsChoices,
   columnFieldIds: readonly string[],
-): RecordsTableQueryFacts => ({
-  signedIn,
-  recordTypeLabel: query?.label ?? "",
-  maximumPageSize: query?.pageSize,
-  columnFieldIds,
-  fields: studioFieldFacts(query),
-  relationships: relationships
-    .filter((relationship) => relationship.recordType === query?.recordType)
-    .map((relationship) => ({ key: relationship.reference, label: relationship.label })),
-  actions: actions
-    .filter((action) => action.recordType === query?.recordType)
-    .map((action) => ({
-      key: action.reference,
-      label: action.label,
-      acceptsSelection: action.acceptsSelection,
+  table: RecordsTableQueryFacts["table"],
+): RecordsTableQueryFacts =>
+  recordsTableQueryFacts({
+    signedIn,
+    recordTypeLabel: query?.recordTypeLabel ?? "",
+    maximumPageSize: query?.pageSize,
+    columnFieldIds,
+    table,
+    selectedFields: (query?.fields ?? []).map((field) => field.reference),
+    fields: (query?.allFields ?? []).map((field) => ({
+      ...field,
+      field: field.reference,
+      parentLink: field.parentLink === true,
+      linkTargetResolved: field.linkTargetResolved === true,
     })),
-  grouped: query?.grouped === true,
-  queryLabel: query?.label ?? "",
-  groupBy: query?.groupBy ?? [],
-  exportable: query?.exportable === true,
-  board: query?.board,
-  relatedRecords: {
-    recordType: query?.recordType ?? "",
-    links:
-      query === undefined
-        ? []
-        : related.relationships
-            .filter((relationship) => relationship.targets.includes(query.recordType))
-            .map((relationship) => ({
-              relationship: relationship.reference,
-              label: relationship.label,
-              childRecordType: relationship.recordType,
-              childRecordTypeLabel: related.recordTypeLabel(relationship.recordType),
-            })),
-    queries: related.queries.map((candidate) => ({
-      query: candidate.reference,
-      label: candidate.label,
-      recordType: candidate.recordType,
-      fields: candidate.fields.map((field) => ({ field: field.reference, label: field.label })),
-      inputs: candidate.inputs.map((input) => ({
-        key: input.key,
-        label: input.label,
-        required: input.required,
-        type: queryInputValueType(input),
+    relationships: relationships
+      .filter((relationship) => relationship.recordType === query?.recordType)
+      .map((relationship) => ({ key: relationship.reference, label: relationship.label })),
+    actions: actions
+      .filter((action) => action.recordType === query?.recordType)
+      .map((action) => ({
+        key: action.reference,
+        label: action.label,
+        acceptsSelection: action.acceptsSelection,
       })),
-      grouped: candidate.grouped,
-    })),
-    rowFields: related.rowFields,
-    page: related.page,
-  },
-});
+    grouped: query?.grouped === true,
+    queryLabel: query?.label ?? "",
+    groupBy: query?.groupBy ?? [],
+    exportable: query?.exportable === true,
+    board: query?.board,
+    relatedRecords: {
+      recordType: query?.recordType ?? "",
+      links:
+        query === undefined
+          ? []
+          : related.relationships
+              .filter((relationship) => relationship.targets.includes(query.recordType))
+              .map((relationship) => ({
+                relationship: relationship.reference,
+                label: relationship.label,
+                childRecordType: relationship.recordType,
+                childRecordTypeLabel: related.recordTypeLabel(relationship.recordType),
+              })),
+      queries: related.queries.map((candidate) => ({
+        query: candidate.reference,
+        label: candidate.label,
+        recordType: candidate.recordType,
+        fields: candidate.fields.map((field) => ({ field: field.reference, label: field.label })),
+        inputs: candidate.inputs.map((input) => ({
+          key: input.key,
+          label: input.label,
+          required: input.required,
+          type: queryInputValueType(input),
+        })),
+        grouped: candidate.grouped,
+      })),
+      rowFields: related.rowFields,
+      page: related.page,
+    },
+  });
 
 /** Restore enabled grid features from their one authored workflow binding. */
 export const restoreStudioGridFeatureBindings = (

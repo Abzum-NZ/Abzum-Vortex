@@ -1,6 +1,9 @@
 "use client";
 import { useState, type ReactElement } from "react";
-import type { SourceBlockPropertyValueContract } from "@vortex/platform/schema";
+import {
+  recordsTableSettingMaximumItems,
+  type SourceBlockPropertyValueContract,
+} from "@vortex/platform/schema";
 import { Button } from "../../components/button";
 import { RotateCcw, Trash2 } from "lucide-react";
 import { Input } from "../../components/input";
@@ -242,7 +245,12 @@ export function StudioSavedViewsEditor({
         variant="outline"
         size="sm"
         disabled={
-          disabled || !name.trim() || !role || capture() === undefined || views.length >= 20
+          disabled ||
+          !name.trim() ||
+          !role ||
+          capture() === undefined ||
+          views.length >=
+            recordsTableSettingMaximumItems("features", "saved_views", "default_views")
         }
         onClick={() => {
           const state = capture();

@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, type ReactElement } from "react";
+import { useId, useState, type ReactElement } from "react";
 import {
   checkRecordsTableFeature,
   plainSourceSettingValue,
@@ -47,6 +47,7 @@ import {
   StudioSettingFields,
   type StudioSettingChoices,
   type StudioSettingValues,
+  studioSettingProblems,
 } from "./studio-setting-controls";
 
 type GroupValue = Extract<SourceBlockPropertyValueContract, { kind: "group" }>;
@@ -88,6 +89,7 @@ export const studioGridFeaturesProperty = (
 export function StudioGridFeatures({
   idPrefix,
   property,
+  problem,
   value,
   presentation,
   query,
@@ -104,6 +106,7 @@ export function StudioGridFeatures({
   onChange,
 }: Readonly<{
   idPrefix: string;
+  problem: string;
   /** The table release's `features` group declaration. */
   property: Extract<BlockPropertySchemaContract, { kind: "group" }>;
   /** The authored features group; unset uses the catalogue default (every feature off). */
@@ -129,6 +132,7 @@ export function StudioGridFeatures({
   onChange: (next: SourceBlockPropertyValueContract) => void;
 }>): ReactElement {
   const ownId = useId();
+  const [changedFeature, setChangedFeature] = useState<RecordsTableFeatureKey | undefined>();
   const authored = value?.kind === "group" ? value.properties : {};
   const featureValue = (key: RecordsTableFeatureKey): GroupValue => {
     const held = authored[key];
@@ -151,6 +155,19 @@ export function StudioGridFeatures({
     choices.relationships,
     related,
     tableColumnFields(tableSettings),
+    {
+      rowActions:
+        tableSettings["row_actions"]?.kind === "list"
+          ? tableSettings["row_actions"].items.flatMap((item) => {
+              const placement = item.kind === "group" ? item.properties["placement"] : undefined;
+              return placement?.kind === "choice" ? [{ placement: placement.value }] : [];
+            })
+          : [],
+      viewport:
+        tableSettings["viewport"]?.kind === "choice" && tableSettings["viewport"].value === "page"
+          ? "page"
+          : "bounded",
+    },
   );
   // Related records pick a link to this table's record type, a query of the linked record type and
   // that query's fields, never the table's own fields; This row binds the query's input.
@@ -189,6 +206,7 @@ export function StudioGridFeatures({
     };
   };
   const write = (key: RecordsTableFeatureKey, next: GroupValue): void => {
+    setChangedFeature(key);
     const candidate = { ...whole, properties: { ...whole.properties, [key]: next } };
     // New list entries need their catalogue defaults before the composition command checks the
     // typed value's round trip. Keep invalid user input in the inspector's ordinary validation path.
@@ -201,8 +219,24 @@ export function StudioGridFeatures({
     onChange(normalized ?? candidate);
   };
 
+  const viewportCheck =
+    features === undefined
+      ? undefined
+      : checkRecordsTableFeature(
+          "viewport",
+          { enabled: true },
+          facts,
+          presentation,
+          features,
+          tablePageSize,
+        );
   return (
     <StudioInspectorGroup title="Features">
+      {viewportCheck?.kind === "not_possible" ? (
+        <p role="alert" className="text-sm text-destructive">
+          {viewportCheck.reason}
+        </p>
+      ) : null}
       <ItemGroup role="list" aria-label="Table features" className="gap-1">
         {recordsTableFeatureKeys.map((key) => {
           const declaration = property.properties.find((feature) => feature.key === key);
@@ -284,6 +318,18 @@ export function StudioGridFeatures({
                   />
                 </ItemActions>
               </Item>
+              {problem !== "" && changedFeature === key ? (
+                <p role="alert" className="text-sm text-destructive">
+                  {problem}
+                </p>
+              ) : null}
+              {enabled && declaration !== undefined
+                ? studioSettingProblems({ [key]: current }, [declaration]).map((sentence) => (
+                    <p key={sentence} role="alert" className="text-sm text-destructive">
+                      {sentence}
+                    </p>
+                  ))
+                : null}
               {enabled && key === "spreadsheet" ? (
                 <StudioSpreadsheetEditor
                   value={current}

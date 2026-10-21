@@ -826,6 +826,10 @@ const moduleSourceQueryAggregateSchema = z
   })
   .strict();
 
+/** The most totals one query holds and the most queries one Module holds. */
+export const MODULE_QUERY_MAXIMUM_TOTALS = 20;
+export const MODULE_MAXIMUM_QUERIES = 100;
+
 /**
  * One authored Module-owned query. It names a local or dependency-qualified record type,
  * typed inputs, the fields it returns, a typed filter tree, grouping, totals, a stable sort,
@@ -855,7 +859,9 @@ const moduleSourceQuerySchema = z
     group_by: sourceProvenanceUnchanged(
       z.array(sourceProvenanceTarget(builderKeySchema, ["groupByFieldIds/#"])).max(10),
     ),
-    aggregates: sourceProvenanceUnchanged(z.array(moduleSourceQueryAggregateSchema).max(20)),
+    aggregates: sourceProvenanceUnchanged(
+      z.array(moduleSourceQueryAggregateSchema).max(MODULE_QUERY_MAXIMUM_TOTALS),
+    ),
     sort: sourceProvenanceUnchanged(z.array(moduleSourceQuerySortSchema).min(1).max(20)),
     page_size: sourceProvenanceUnchanged(z.number().int().min(1).max(200)),
     relationship_hops: sourceProvenanceUnchanged(z.number().int().min(0).max(2)),
@@ -994,7 +1000,9 @@ const moduleSourceBodyFields = {
   sharing_conditions: sourceProvenanceUnchanged(
     z.array(moduleSourceSharingConditionSchema).max(100),
   ),
-  queries: sourceProvenanceUnchanged(z.array(moduleSourceQuerySchema).max(100).default([])),
+  queries: sourceProvenanceUnchanged(
+    z.array(moduleSourceQuerySchema).max(MODULE_MAXIMUM_QUERIES).default([]),
+  ),
 };
 
 type ModuleSourceBodyFields = z.infer<z.ZodObject<typeof moduleSourceBodyFields>>;

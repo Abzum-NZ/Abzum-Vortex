@@ -17,7 +17,7 @@ import {
   moduleQueryDefinitionSchema,
   checkRecordsTableFeatures,
   recordsTableGroupingRequired,
-  recordsTableEditableFieldTypes,
+  recordsTableQueryFacts,
   type BlockPropertySchemaContract,
   type RecordsTableQueryFacts,
   type RecordsTableRelatedRecordsFacts,
@@ -118,71 +118,60 @@ export function applicationPageRules(scope: ApplicationScope): void {
    * read over the selected fields) with its type and flags, the record type's relationships and
    * the named actions whose subject it is.
    */
-  const recordsTableQueryFacts = (
+  const compiledRecordsTableQueryFacts = (
     bound: JsonObject,
     page: RecordsTableRelatedRecordsFacts["page"],
     signedIn: boolean,
-    columnFieldIds: readonly string[],
+    table: NonNullable<ReturnType<typeof readRecordsTableContract>>,
   ): RecordsTableQueryFacts => {
     const recordTypeId = String(object(bound.recordType).recordTypeId);
     const record = records.get(recordTypeId);
     const grouped = array(bound.groupByFieldIds).length > 0 || array(bound.aggregates).length > 0;
-    const groupedBy = new Set(array(bound.groupByFieldIds).map((id) => String(id).toLowerCase()));
-    const offered = new Set(
-      array(bound.selectedFieldIds)
-        .map((id) => String(id).toLowerCase())
-        .filter((id) => !grouped || groupedBy.has(id)),
-    );
-    return {
+    return recordsTableQueryFacts({
       signedIn,
+      table: { rowActions: table.rowBehaviours.rowActions, viewport: table.viewport },
+      selectedFields: array(bound.selectedFieldIds).map(String),
       recordTypeLabel: String(record?.singularLabel ?? ""),
       maximumPageSize: typeof bound.pageSize === "number" ? bound.pageSize : undefined,
-      columnFieldIds,
-      fields: array(record?.fields)
-        .filter((field) => offered.has(String(field.fieldId).toLowerCase()))
-        .map((field) => {
-          const options = object(field.settings ?? {}).options;
-          return {
-            field: String(field.fieldId),
-            label: String(field.label),
-            type: String(field.type),
-            sortable: field.sortable === true,
-            filterable: field.filterable === true,
-            searchable: field.searchPriority !== undefined,
-            editable:
-              !grouped &&
-              recordsTableEditableFieldTypes.includes(String(field.type)) &&
-              (field.type !== "link" ||
-                object(object(field.settings ?? {}).target).state === "resolved"),
-            ...((field.type === "link" || field.type === "choice") &&
-            object(field.settings ?? {}).dependsOn !== undefined
-              ? { dependsOn: String(object(object(field.settings).dependsOn).parentFieldId) }
-              : {}),
-            // A one-record link from the record type to itself names each record's parent.
-            parentLink:
-              field.type === "link" &&
-              array(record?.relationships).some(
-                (relationship) =>
-                  String(relationship.fromFieldId).toLowerCase() ===
-                    String(field.fieldId).toLowerCase() &&
-                  relationship.cardinality === "many_to_one" &&
-                  String(object(relationship.toRecordType ?? {}).recordTypeId).toLowerCase() ===
-                    recordTypeId.toLowerCase(),
-              ),
-            ...(field.type === "choice" && Array.isArray(options)
-              ? {
-                  choiceCount: options.length,
-                  choiceValues: options.map((option) => String(object(option).value)),
-                }
-              : {}),
-            ...(typeof object(field.settings ?? {}).resultType === "string"
-              ? { resultType: String(object(field.settings ?? {}).resultType) }
-              : {}),
-          };
-        }),
-      unselectedFields: array(record?.fields)
-        .filter((field) => !offered.has(String(field.fieldId).toLowerCase()))
-        .map((field) => ({ field: String(field.fieldId), label: String(field.label) })),
+      columnFieldIds: table.columns.map((column) => column.field),
+      fields: array(record?.fields).map((field) => {
+        const options = object(field.settings ?? {}).options;
+        return {
+          field: String(field.fieldId),
+          label: String(field.label),
+          type: String(field.type),
+          sortable: field.sortable === true,
+          filterable: field.filterable === true,
+          searchable: field.searchPriority !== undefined,
+          linkTargetResolved:
+            field.type !== "link" ||
+            object(object(field.settings ?? {}).target).state === "resolved",
+          ...((field.type === "link" || field.type === "choice") &&
+          object(field.settings ?? {}).dependsOn !== undefined
+            ? { dependsOn: String(object(object(field.settings).dependsOn).parentFieldId) }
+            : {}),
+          // A one-record link from the record type to itself names each record's parent.
+          parentLink:
+            field.type === "link" &&
+            array(record?.relationships).some(
+              (relationship) =>
+                String(relationship.fromFieldId).toLowerCase() ===
+                  String(field.fieldId).toLowerCase() &&
+                relationship.cardinality === "many_to_one" &&
+                String(object(relationship.toRecordType ?? {}).recordTypeId).toLowerCase() ===
+                  recordTypeId.toLowerCase(),
+            ),
+          ...(field.type === "choice" && Array.isArray(options)
+            ? {
+                choiceCount: options.length,
+                choiceValues: options.map((option) => String(object(option).value)),
+              }
+            : {}),
+          ...(typeof object(field.settings ?? {}).resultType === "string"
+            ? { resultType: String(object(field.settings ?? {}).resultType) }
+            : {}),
+        };
+      }),
       relationships: array(record?.relationships).map((relationship) => ({
         key: String(relationship.key),
         label: String(relationship.key),
@@ -206,7 +195,7 @@ export function applicationPageRules(scope: ApplicationScope): void {
         record === undefined
           ? undefined
           : recordsTableBoardFactsOf(bound, array(record.fields), array(record.pipelines)),
-    };
+    });
   };
 
   /**
@@ -590,11 +579,11 @@ export function applicationPageRules(scope: ApplicationScope): void {
           );
         // Every enabled grid feature must fit the bound query; publication reports the feature's
         // own business sentence, the one Studio shows beside its switch.
-        const tableFacts = recordsTableQueryFacts(
+        const tableFacts = compiledRecordsTableQueryFacts(
           bound,
           bindingFacts,
           page.type !== "public",
-          table.columns.map((column) => column.field),
+          table,
         );
         // A table that reads a grouped query is refused while Group by is off, since the query
         // has no flat rows to show.

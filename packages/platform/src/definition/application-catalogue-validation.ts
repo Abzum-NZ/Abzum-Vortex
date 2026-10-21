@@ -3,7 +3,7 @@ import {
   readRecordDetailContract,
   readRecordsTableContract,
   readQueryBindings,
-  recordsTableContractRefusal,
+  recordsTableColumnProblems,
   readSourceItem,
   canonicalJson,
   plainSourceSettingValue,
@@ -116,12 +116,14 @@ export function validateApplicationSourceCatalogue(
     family: DefinitionRuleFailure["family"],
     segments: readonly Segment[] = [],
     code?: DefinitionValidationErrorCode,
+    sentence?: string,
   ): void => {
     const located: Segment[] = [{ kind: "application", key: source.key }, ...segments];
     failures.push({
       ruleCode,
       family,
       ...(code === undefined ? {} : { code }),
+      ...(sentence === undefined ? {} : { sentence }),
       location: {
         documentKind: "application",
         documentKey: source.key,
@@ -232,6 +234,15 @@ export function validateApplicationSourceCatalogue(
     };
     const orders = (): boolean => true;
 
+    for (const problem of recordsTableColumnProblems(settings["columns"]))
+      report(
+        "vortex.definition.application_block_settings",
+        "required_value",
+        at("columns"),
+        problem.code,
+        problem.reason,
+      );
+
     if (table !== undefined) {
       checkFields(
         "columns",
@@ -239,19 +250,6 @@ export function validateApplicationSourceCatalogue(
         () => true,
         "invalid_value",
       );
-      // A table always shows at least one column before a person chooses other columns.
-      if (!table.columns.some((column) => column.visible))
-        report("vortex.definition.application_block_settings", "required_value", at("columns"));
-      // A page that mounts only its visible window (more than 100 rows) scrolls in its own area;
-      // publication reports the refusal's own business sentence, not only the family.
-      const refusal = recordsTableContractRefusal(table);
-      if (refusal !== undefined)
-        report(
-          "vortex.definition.application_block_settings",
-          "unsupported_choice",
-          at(refusal === "definition_records_table_bounded_scrolling" ? "viewport" : "row_actions"),
-          refusal,
-        );
       // The default order is a sort a person could choose: each key is a declared sortable field.
       const sortable = new Set(table.sortableFields.map((field) => field.toLowerCase()));
       checkFields(

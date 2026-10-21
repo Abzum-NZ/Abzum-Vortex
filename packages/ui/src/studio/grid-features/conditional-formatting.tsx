@@ -2,9 +2,11 @@
 
 import { useId, useMemo, useState, type DragEvent, type ReactElement } from "react";
 import {
+  recordsTableSettingMaximumItems,
   conditionalColumnFormatFieldTypes,
   conditionalColumnFormatIssue,
   conditionalFormatRuleIssue,
+  conditionalFormatRuleFields,
   type ConditionNode,
   type ConditionalColumnFormat,
   type ConditionalFormatRule,
@@ -110,7 +112,7 @@ export function StudioConditionalFormattingEditor({
     return field === undefined ? undefined : `${recordType}.${field.key}`;
   };
   const fieldLabel = (reference: string): string =>
-    queryFields.find((field) => field.reference === reference)?.label ?? reference;
+    queryFields.find((field) => field.reference === reference)?.label ?? "A removed item";
 
   const write = (next: Readonly<{ rules?: readonly Value[]; formats?: readonly Value[] }>): void =>
     onChange({
@@ -210,13 +212,19 @@ export function StudioConditionalFormattingEditor({
       <section aria-labelledby={`${ownId}-rules`} className="space-y-2">
         <div className="flex items-center justify-between gap-2">
           <h4 id={`${ownId}-rules`} className="text-sm font-medium">
-            Rules
+            Rules (up to{" "}
+            {recordsTableSettingMaximumItems("features", "conditional_formatting", "rules")})
           </h4>
           <Button
             type="button"
             variant="outline"
             size="sm"
-            disabled={disabled || initial === undefined || ruleItems.length >= 20}
+            disabled={
+              disabled ||
+              initial === undefined ||
+              ruleItems.length >=
+                recordsTableSettingMaximumItems("features", "conditional_formatting", "rules")
+            }
             onClick={addRule}
           >
             <Icon name="plus" />
@@ -241,7 +249,11 @@ export function StudioConditionalFormattingEditor({
               const summary =
                 reading.kind === "read" && reading.condition !== undefined
                   ? describeCondition(reading.condition, context)
-                  : "Condition";
+                  : conditionalFormatRuleFields(rule).some(
+                        (reference) => !queryFields.some((field) => field.reference === reference),
+                      )
+                    ? "A removed item"
+                    : "Condition";
               const target =
                 rule.target.kind === "row"
                   ? "Whole row"
@@ -303,6 +315,7 @@ export function StudioConditionalFormattingEditor({
                   />
                   <StudioInspectorActions
                     actions={[
+                      { label: "Show me where", onSelect: () => setSelected(rule.id) },
                       {
                         label: "Move up",
                         disabled: disabled || index === 0,
@@ -361,7 +374,15 @@ export function StudioConditionalFormattingEditor({
               variant="outline"
               size="sm"
               disabled={
-                disabled || board || availableNumberFields.length === 0 || formatItems.length >= 10
+                disabled ||
+                board ||
+                availableNumberFields.length === 0 ||
+                formatItems.length >=
+                  recordsTableSettingMaximumItems(
+                    "features",
+                    "conditional_formatting",
+                    "column_formats",
+                  )
               }
               onClick={() =>
                 write({
@@ -498,7 +519,11 @@ function RuleEditor({
     >
       {reading.kind === "unreadable" ? (
         <p role="note" className="text-sm">
-          {reading.reason} The condition stays as it is.
+          {conditionalFormatRuleFields(rule).some(
+            (reference) => !queryFields.some((field) => field.reference === reference),
+          )
+            ? "A removed item is used by this condition. Choose another field or remove the rule."
+            : "Save the draft to edit this condition using its saved fields."}
         </p>
       ) : (
         <fieldset disabled={disabled} className="min-w-0">

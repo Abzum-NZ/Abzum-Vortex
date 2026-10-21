@@ -1,5 +1,6 @@
 "use client";
 
+import { recordsTableSettingMaximumItems } from "@vortex/platform/schema";
 import { useId, type ReactElement } from "react";
 import { Trash2 } from "lucide-react";
 import type {
@@ -79,7 +80,7 @@ function StudioBoardTotals({
     group: choice.sumOf === undefined ? "Totals of the query" : "Number fields",
   }));
   const labelOf = (alias: string): string =>
-    (options.find((option) => option.value === alias)?.label ?? alias).slice(0, 60);
+    (options.find((option) => option.value === alias)?.label ?? "A removed item").slice(0, 60);
   const unchosen = options.filter((option) => !rows.some((row) => row.alias === option.value));
   return (
     <div className="space-y-2" data-vortex-board-totals="">
@@ -125,7 +126,7 @@ function StudioBoardTotals({
           </Button>
         </div>
       ))}
-      {rows.length >= 6 ? null : (
+      {rows.length >= recordsTableSettingMaximumItems("features", "board", "totals") ? null : (
         <StudioReferencePicker
           id={`${idPrefix}-add`}
           value=""

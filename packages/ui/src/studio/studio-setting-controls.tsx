@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type ReactElement } from "react";
 import {
   canonicalJson,
+  recordsTableColumnProblems,
   componentSettingApplies,
   plainSettingValue,
   plainSourceSettingValue,
@@ -172,7 +173,9 @@ const failurePlace = (
     return `${parts.join(", ")} ${familyText[family]}.`;
   // A nested entry keeps its place, so the pre-check names which column needs the value.
   const owner = parts.slice(0, -1).join(", ");
-  return owner === "" ? conditionalRequiredMessage(current) : `${owner}: ${conditionalRequiredMessage(current)}`;
+  return owner === ""
+    ? conditionalRequiredMessage(current)
+    : `${owner}: ${conditionalRequiredMessage(current)}`;
 };
 
 /** A setting required by a selected choice asks for its value beside the control. */
@@ -228,35 +231,7 @@ export const studioSettingProblems = (
     // The shared binding check validates binding fields' scope and type in Studio and publication.
     for (const property of properties) visit(property, values[property.key], [property.key]);
   }
-  // A data grid shows at least one column before a person arranges it; publication refuses a
-  // grid whose columns are all hidden by default.
-  const columns = values["columns"];
-  if (
-    columns?.kind === "list" &&
-    columns.items.length > 0 &&
-    columns.items.every(
-      (item) =>
-        item.kind === "group" &&
-        item.properties["visible"]?.kind === "boolean" &&
-        !item.properties["visible"].value,
-    )
-  )
-    problems.push("Keep at least one column visible.");
-  // Auto-size measures a column's values on screen, so it needs the field the column shows.
-  if (columns?.kind === "list")
-    columns.items.forEach((item, index) => {
-      if (
-        item?.kind === "group" &&
-        item.properties["auto_size"]?.kind === "boolean" &&
-        item.properties["auto_size"].value &&
-        item.properties["field"]?.kind !== "field_reference"
-      ) {
-        const label = item.properties["label"];
-        const name =
-          label?.kind === "text" && label.value.trim() !== "" ? label.value : `Column ${index + 1}`;
-        problems.push(`Auto-size is not possible: ${name} has no field to measure.`);
-      }
-    });
+  problems.push(...recordsTableColumnProblems(values["columns"]).map((problem) => problem.reason));
   return [...new Set(problems)];
 };
 
@@ -407,7 +382,7 @@ export function StudioOptionControl({
     );
   const entries = [
     ...(unset === undefined ? [] : [{ value: "", label: unset, disabled: false }]),
-    ...(known ? [] : [{ value, label: `${value} (not offered here)`, disabled: true }]),
+    ...(known ? [] : [{ value, label: "A removed item", disabled: true }]),
     ...options,
   ];
   return (

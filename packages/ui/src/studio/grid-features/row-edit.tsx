@@ -1,14 +1,12 @@
 "use client";
 
-import { useId, type ReactElement } from "react";
+import type { ReactElement } from "react";
 import {
   recordsTableFieldNotEditableReason,
   type RecordsTableQueryFacts,
   type SourceBlockPropertyValueContract,
 } from "@vortex/platform/schema";
-import { Button } from "../../components/button";
-import { Label } from "../../components/label";
-import { StudioReferencePicker } from "../studio-reference-picker";
+import { StudioGridFieldPicker } from "./field-picker";
 
 type Group = Extract<SourceBlockPropertyValueContract, { kind: "group" }>;
 
@@ -25,7 +23,6 @@ export function StudioRowEditEditor({
   disabled: boolean;
   onChange: (next: Group) => void;
 }>): ReactElement {
-  const id = useId();
   const held = value.properties["fields"];
   const chosen =
     held?.kind === "list"
@@ -50,42 +47,13 @@ export function StudioRowEditEditor({
           ? "The workflow for a saved row saves all changed fields together."
           : "Name the action that saves the row: add “When a row is saved” under Workflow."}
       </p>
-      <Label htmlFor={id}>Editable fields</Label>
-      <StudioReferencePicker
-        id={id}
-        value=""
-        unset="Add a field"
+      <StudioGridFieldPicker
+        fields={facts.fields.filter((field) => columns.includes(field.field))}
+        chosen={chosen}
         disabled={disabled}
-        options={facts.fields
-          .filter((field) => columns.includes(field.field) && !chosen.includes(field.field))
-          .map((field) => {
-            const reason = recordsTableFieldNotEditableReason(field);
-            return {
-              value: field.field,
-              label: field.label,
-              disabled: reason !== undefined,
-              description: reason,
-            };
-          })}
-        onChange={(field) => {
-          if (field !== "") write([...chosen, field]);
-        }}
+        reason={recordsTableFieldNotEditableReason}
+        onChange={write}
       />
-      {chosen.map((field) => (
-        <div key={field} className="flex items-center justify-between gap-2 text-sm">
-          <span>{facts.fields.find((candidate) => candidate.field === field)?.label ?? field}</span>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            disabled={disabled}
-            aria-label={`Remove ${facts.fields.find((candidate) => candidate.field === field)?.label ?? field}`}
-            onClick={() => write(chosen.filter((candidate) => candidate !== field))}
-          >
-            Remove
-          </Button>
-        </div>
-      ))}
     </div>
   );
 }
