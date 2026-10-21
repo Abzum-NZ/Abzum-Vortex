@@ -114,6 +114,9 @@ begin
       raise exception using errcode = '55000',
         message = 'Installed Module definition is unavailable';
     end if;
+    release_content := vortex_record.with_installed_record_contributions_internal(
+      release_content, context_organization_id, module_root_value
+    );
 
     -- Every record type must agree with its storage: an active catalogue entry
     -- for this Module and type, provisioned by this release, with an active

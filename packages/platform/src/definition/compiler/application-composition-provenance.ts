@@ -468,7 +468,7 @@ export function applicationCompositionProvenance(
     if (setting) {
       const leafKind = kind ?? "";
       const eventReference =
-        canonicalPath.at(-1) === "event_id" &&
+        (canonicalPath.at(-1) === "event_id" || canonicalPath.at(-1) === "row_action_event_id") &&
         canonicalValue === resolution.id(source.key, "event", String(sourceValue), "content");
       const controlReference =
         canonicalPath.at(-1) === "control_placement" &&

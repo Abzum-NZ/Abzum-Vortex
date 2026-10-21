@@ -292,6 +292,15 @@
     "rendererKey": "platform.renderer.record_detail",
     "properties": [
       {
+        "kind": "text",
+        "key": "row_action_event_id",
+        "label": "Row action event identity",
+        "help": "Stable identity of the flow binding the row action runs",
+        "required": true,
+        "minLength": 1,
+        "maxLength": 60
+      },
+      {
         "kind": "choice",
         "key": "heading_source",
         "label": "Heading comes from",
@@ -2291,6 +2300,15 @@
     "properties": [
       {
         "kind": "text",
+        "key": "row_action_event_id",
+        "label": "Row action event identity",
+        "help": "Stable identity of the flow binding the row action runs",
+        "required": true,
+        "minLength": 1,
+        "maxLength": 60
+      },
+      {
+        "kind": "text",
         "key": "title",
         "presentation": true,
         "label": "Title",
@@ -2362,6 +2380,15 @@
     "paletteGroup": "content",
     "rendererKey": "platform.renderer.link_tiles",
     "properties": [
+      {
+        "kind": "text",
+        "key": "row_action_event_id",
+        "label": "Row action event identity",
+        "help": "Stable identity of the flow binding the row action runs",
+        "required": true,
+        "minLength": 1,
+        "maxLength": 60
+      },
       {
         "kind": "text",
         "key": "title",
@@ -4366,7 +4393,7 @@
             "kind": "group",
             "key": "grouping",
             "label": "Group by",
-            "help": "Group the records by a choice or stage field, counted on the server",
+            "help": "Group the records by a choice, stage, link or date field, counted on the server",
             "required": false,
             "defaultValue": {
               "kind": "group",
@@ -4393,9 +4420,9 @@
                 "kind": "field_reference",
                 "key": "field",
                 "label": "Group by",
-                "help": "A choice or stage field people can filter by, with at most 50 choices",
+                "help": "A choice, stage, link or date field people can filter by; a choice field has at most 50 choices",
                 "required": false,
-                "fieldTypes": ["choice"]
+                "fieldTypes": ["choice", "link", "date", "date_time"]
               },
               {
                 "kind": "text",
@@ -4405,6 +4432,45 @@
                 "required": false,
                 "minLength": 1,
                 "maxLength": 40
+              },
+              {
+                "kind": "choice",
+                "key": "date_unit",
+                "label": "Group dates by",
+                "help": "The calendar unit when the field is a date, counted in the organisation's time zone",
+                "required": false,
+                "options": [
+                  {
+                    "key": "day",
+                    "label": "Day"
+                  },
+                  {
+                    "key": "week",
+                    "label": "Week"
+                  },
+                  {
+                    "key": "month",
+                    "label": "Month"
+                  },
+                  {
+                    "key": "quarter",
+                    "label": "Quarter"
+                  },
+                  {
+                    "key": "year",
+                    "label": "Year"
+                  }
+                ]
+              },
+              {
+                "kind": "number",
+                "key": "group_page_size",
+                "label": "Groups at a time",
+                "help": "How many groups one page shows, at most 200; more groups continue on the next page",
+                "required": false,
+                "integer": true,
+                "minimum": 1,
+                "maximum": 200
               }
             ]
           },
@@ -4742,7 +4808,7 @@
                 "help": "The file formats people can download",
                 "required": false,
                 "minimumItems": 1,
-                "maximumItems": 1,
+                "maximumItems": 2,
                 "item": {
                   "kind": "choice",
                   "key": "format",
@@ -4752,6 +4818,10 @@
                     {
                       "key": "csv",
                       "label": "CSV"
+                    },
+                    {
+                      "key": "xlsx",
+                      "label": "Excel"
                     }
                   ]
                 }
@@ -4798,6 +4868,45 @@
                 "label": "Find on page",
                 "help": "Find values on this page; Ctrl+F opens the finder",
                 "required": false
+              },
+              {
+                "kind": "list",
+                "key": "status_bar_fields",
+                "label": "Status bar fields",
+                "help": "Number, money and date fields whose selected values the status bar totals; leave empty for no status bar",
+                "required": false,
+                "minimumItems": 0,
+                "maximumItems": 20,
+                "item": {
+                  "kind": "field_reference",
+                  "key": "field",
+                  "label": "Field",
+                  "help": "Field of the bound query the status bar totals",
+                  "required": true,
+                  "fieldTypes": ["whole_number", "decimal_number", "money", "date", "date_time"]
+                }
+              },
+              {
+                "kind": "list",
+                "key": "status_bar_operations",
+                "label": "Status bar totals",
+                "help": "The totals the status bar shows for each field",
+                "required": false,
+                "minimumItems": 0,
+                "maximumItems": 5,
+                "item": {
+                  "kind": "choice",
+                  "key": "operation",
+                  "label": "Total",
+                  "required": true,
+                  "options": [
+                    { "key": "count", "label": "Count" },
+                    { "key": "sum", "label": "Sum" },
+                    { "key": "average", "label": "Average" },
+                    { "key": "minimum", "label": "Minimum" },
+                    { "key": "maximum", "label": "Maximum" }
+                  ]
+                }
               }
             ],
             "defaultValue": {
@@ -5042,6 +5151,15 @@
     "paletteGroup": "data",
     "rendererKey": "platform.renderer.calendar",
     "properties": [
+      {
+        "kind": "text",
+        "key": "row_action_event_id",
+        "label": "Row action event identity",
+        "help": "Stable identity of the flow binding the row action runs",
+        "required": true,
+        "minLength": 1,
+        "maxLength": 60
+      },
       {
         "kind": "text",
         "key": "title",

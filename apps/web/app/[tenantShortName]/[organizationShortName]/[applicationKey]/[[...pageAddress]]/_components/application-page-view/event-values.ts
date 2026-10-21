@@ -73,8 +73,10 @@ export const choiceScopeKey = (placementId: string, formId?: string): string =>
   formId === undefined ? placementId : `${formId}\u0000${placementId}`;
 
 /**
- * Finds the binding an event identity names. A placement-level event matches only when the
- * placement declares exactly one binding of its kind, so it never guesses between several.
+ * Finds the binding an event identity names. Every event that carries an `eventId` (a row click, a
+ * row action, an inline or row edit) matches by that identity alone. Only `card_moved` and
+ * `card_added` are placement-level by contract: a board binds at most one of each, so they match
+ * the one binding of their kind and never guess between several.
  */
 export const bindingFor = (
   bindings: readonly PlacementFlowBinding[],
@@ -83,5 +85,7 @@ export const bindingFor = (
   const ofKind = bindings.filter((binding) => binding.event === event.event);
   const eventId = eventIdOf(event);
   if (eventId !== undefined) return ofKind.find((binding) => binding.eventId === eventId);
-  return ofKind.length === 1 ? ofKind[0] : undefined;
+  return (event.event === "card_moved" || event.event === "card_added") && ofKind.length === 1
+    ? ofKind[0]
+    : undefined;
 };

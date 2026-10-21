@@ -61,7 +61,7 @@ const readTreeLevelPage = async (
         tree: { fieldId: command.parentFieldId, parentRecordId: command.parentRecordId },
       })}::text::jsonb,
       ${command.pageDirection ?? "forward"}::text,
-      ${null}::uuid
+      ${null}::uuid[]
     ) as result
   `;
   return treeLevelPageReadSchema.parse(one(rows));

@@ -117,7 +117,9 @@ export const formContinuationAnswerSchema = z.discriminatedUnion("kind", [
   /** Cancel the form; the flow follows its declared not-submitted path. */
   z.object({ kind: z.literal("cancel") }).strict(),
   /** Answer a confirmation, with the person's opt-in when the confirmation offered one. */
-  z.object({ kind: z.literal("confirm"), confirmed: z.boolean(), choice: z.boolean().optional() }).strict(),
+  z
+    .object({ kind: z.literal("confirm"), confirmed: z.boolean(), choice: z.boolean().optional() })
+    .strict(),
 ]);
 
 /** Asks the server to start a flow the person may run, which may pause at a form. */
@@ -175,6 +177,12 @@ export const formContinuationUnavailableNoticeSchema = z
   })
   .strict();
 
+/** A committed save's authored warning; no record values or internal warning codes. */
+export const flowWarningNoticeSchema = z
+  .object({ taskId: builderKeySchema, message: z.string().min(1) })
+  .strict();
+export type FlowWarningNotice = z.infer<typeof flowWarningNoticeSchema>;
+
 const resultCommon = {
   runId: z.uuid(),
   receipt: formContinuationReceiptSchema,
@@ -213,6 +221,7 @@ export const formContinuationOutcomeSchema = z.discriminatedUnion("kind", [
     .object({
       kind: z.literal("finished"),
       ...resultCommon,
+      warnings: z.array(flowWarningNoticeSchema),
       result: safeFlowResultKindSchema,
       presentation: safeFlowResultDescriptorSchema,
       failure: z

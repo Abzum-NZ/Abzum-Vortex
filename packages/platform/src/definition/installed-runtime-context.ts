@@ -15,6 +15,12 @@ import {
   databaseErrorCode,
   unexpectedDefinitionFailure,
 } from "./definition-error";
+import {
+  noInstalledRecordContributions,
+  withInstalledRecordContributions,
+  type InstalledRecordContributions,
+  type InstalledRecordTypeContributions,
+} from "./installed-record-contributions";
 
 type InstalledRuntimeContextErrorCode =
   | "INSTALLED_RUNTIME_CONTEXT_REFUSED"
@@ -43,6 +49,12 @@ export type InstalledRuntimeContext = Readonly<{
   permissionRegistration: PreparedApplicationPermissionRegistration;
   /** The resolved active installation whose bindings were verified against the release set. */
   installation: ActiveApplicationInstallationEvidence;
+  /**
+   * The fields other installed Modules of the organisation contributed to the record types of
+   * `releaseSet`, whose record types already list them after their own fields. Pages and flows read
+   * the contributed identities here; the database serves the same set to every record read and write.
+   */
+  recordContributions: readonly InstalledRecordTypeContributions[];
   /**
    * The organisation account of the person a human request runs for, from the verified request
    * scope; absent for a system context. The directory projects this account as its person record.
@@ -149,6 +161,8 @@ export const assembleHumanInstalledRuntimeContext = (
       validated: SystemApplicationBoundReleaseSetResult,
     ) => PreparedApplicationPermissionRegistration,
   ) => PreparedApplicationPermissionRegistration = (validated, prepare) => prepare(validated),
+  /** The installed contributions on the release set's record types; a preview receives none. */
+  contributions: InstalledRecordContributions = noInstalledRecordContributions,
 ): InstalledRuntimeContext =>
   assembleContext(
     installation,
@@ -156,6 +170,7 @@ export const assembleHumanInstalledRuntimeContext = (
     scope.organizationId,
     undefined,
     scope.organizationAccountId,
+    contributions,
     (validated) =>
       prepareRegistration(validated, (candidate) =>
         prepareApplicationPermissionRegistrationForHumanRequest(
@@ -180,6 +195,7 @@ const assembleContext = (
   organizationId: string,
   expectedCorrelationId: string | undefined,
   viewerOrganizationAccountId: string | undefined,
+  contributions: InstalledRecordContributions,
   prepareRegistration: (
     releaseSet: SystemApplicationBoundReleaseSetResult,
   ) => PreparedApplicationPermissionRegistration,
@@ -228,9 +244,12 @@ const assembleContext = (
     applicationRootId: application.rootId,
     applicationReleaseRevision: application.releaseRevision,
     correlationId: application.correlationId,
-    releaseSet,
+    // The registration above is prepared from the exact release set; the context then serves the
+    // same release set with the contributed fields listed on their owner record types.
+    releaseSet: withInstalledRecordContributions(releaseSet, contributions),
     permissionRegistration,
     installation,
+    recordContributions: contributions.recordTypes,
     ...(viewerOrganizationAccountId === undefined ? {} : { viewerOrganizationAccountId }),
   });
   assembledContexts.add(context);
