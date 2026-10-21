@@ -189,14 +189,21 @@ export type TableBulkRun =
  * One export of a table, as the page runtime follows it. `running` is a file being received (the
  * bytes so far); `finished` is a whole file the person has; `refused` is a message instead of a
  * file; `incomplete` is a file that stopped short, which is never saved; `cancelled` is the
- * person's own stop.
+ * person's own stop. The run ID stays the same through progress and outcome, including when
+ * the page payload is parsed again.
  */
 export type TableExportRun =
-  | Readonly<{ status: "running"; scope: TableExportScope; expected?: number; bytes: number }>
-  | Readonly<{ status: "finished"; scope: TableExportScope; filename: string }>
-  | Readonly<{ status: "refused"; message: string }>
-  | Readonly<{ status: "incomplete" }>
-  | Readonly<{ status: "cancelled" }>;
+  | Readonly<{
+      runId: string;
+      status: "running";
+      scope: TableExportScope;
+      expected?: number;
+      bytes: number;
+    }>
+  | Readonly<{ runId: string; status: "finished"; scope: TableExportScope; filename: string }>
+  | Readonly<{ runId: string; status: "refused"; message: string }>
+  | Readonly<{ runId: string; status: "incomplete" }>
+  | Readonly<{ runId: string; status: "cancelled" }>;
 
 /** What an export covers: the rows ticked on the page, the current view, or every matching record. */
 export type TableExportScope = "selected" | "view" | "matching";
@@ -276,6 +283,7 @@ const parseExportRun = (
   location: DefinitionRenderErrorLocation,
 ): TableExportRun => {
   const run = requireRecord(value, "A table export is invalid", location);
+  const runId = requireNonEmptyString(run.runId, "A table export needs its run ID", location);
   const scope = (): TableExportScope => {
     if (run.scope !== "selected" && run.scope !== "view" && run.scope !== "matching")
       fail("A table export names an unknown scope", location);
@@ -285,6 +293,7 @@ const parseExportRun = (
     case "running":
       return Object.freeze({
         status: "running",
+        runId,
         scope: scope(),
         bytes: wholeCount(run.bytes, location),
         ...(run.expected === undefined ? {} : { expected: wholeCount(run.expected, location) }),
@@ -292,17 +301,19 @@ const parseExportRun = (
     case "finished":
       return Object.freeze({
         status: "finished",
+        runId,
         scope: scope(),
         filename: requireNonEmptyString(run.filename, "A finished export needs its file", location),
       });
     case "refused":
       return Object.freeze({
         status: "refused",
+        runId,
         message: requireNonEmptyString(run.message, "A refused export needs its message", location),
       });
     case "incomplete":
     case "cancelled":
-      return Object.freeze({ status: run.status });
+      return Object.freeze({ status: run.status, runId });
     default:
       return fail("A table export has an unknown status", location);
   }
