@@ -22,6 +22,7 @@ import {
   describeStudioCompositionEdit,
   describeStudioCompositionRemoval,
   describeStudioCompositionSettings,
+  describeStudioCompositionWrap,
   studioSemanticSelectionKey,
   studioBlockChoices,
   studioSettingProblems,
@@ -162,6 +163,10 @@ export function ApplicationCompositionEditor(props: Props) {
   );
   const moveModel = useMemo(
     () => describeStudioCompositionDestinations(props.context, props.selection),
+    [props.context, props.selection],
+  );
+  const wrapModel = useMemo(
+    () => describeStudioCompositionWrap(props.context, props.selection),
     [props.context, props.selection],
   );
   const removalModel = useMemo(
@@ -317,6 +322,21 @@ export function ApplicationCompositionEditor(props: Props) {
       return;
     }
     command({ kind: "move", destination: chosen.destination }, undefined, "Item moved.");
+  };
+  const wrapIn = (key: string) => {
+    const chosen =
+      wrapModel.kind === "available"
+        ? wrapModel.containers.find((item) => `${item.blockId}:${item.releaseVersion}` === key)
+        : undefined;
+    if (chosen === undefined) {
+      setMessage("This container is no longer available.");
+      return;
+    }
+    command(
+      { kind: "wrap", blockId: chosen.blockId, releaseVersion: chosen.releaseVersion },
+      undefined,
+      `Item placed in a new ${chosen.name.toLowerCase()}.`,
+    );
   };
   const remove = async () => {
     if (
@@ -696,7 +716,7 @@ export function ApplicationCompositionEditor(props: Props) {
         </fieldset>
         <StudioField
           label="Move to another area"
-          hint="Moves this item, with what is inside it, to the end of the area you choose on this page. Required content and nesting limits are checked first."
+          hint="Moves this item, with what is inside it, to the end of the area you choose in this page or layout. Required content and nesting limits are checked first."
         >
           {(control) => (
             <StudioReferencePicker
@@ -720,9 +740,34 @@ export function ApplicationCompositionEditor(props: Props) {
         {destinations.length === 0 && (
           <p role="status" className="text-sm text-muted-foreground">
             {moveModel.kind === "unsupported"
-              ? "Items can only be moved within the main area of an ordinary page."
+              ? "Items can only be moved within the main area of an ordinary page or a layout."
               : "There is no other area this item can move to."}
           </p>
+        )}
+        {wrapModel.kind === "available" && wrapModel.containers.length > 0 && (
+          <StudioField
+            label="Place in a new container"
+            hint="Puts this item into a new container that takes its place. The item keeps its name, settings and order. Containers that cannot hold it say why."
+          >
+            {(control) => (
+              <StudioReferencePicker
+                {...control}
+                value=""
+                unset="Choose a container"
+                disabled={props.disabled}
+                options={wrapModel.containers.map((item) => ({
+                  value: `${item.blockId}:${item.releaseVersion}`,
+                  label:
+                    item.unavailable === undefined
+                      ? item.name
+                      : `${item.name} (not possible: ${item.unavailable})`,
+                }))}
+                onChange={(next) => {
+                  if (next !== "") wrapIn(next);
+                }}
+              />
+            )}
+          </StudioField>
         )}
         {removalModel.kind !== "available" && (
           <p
