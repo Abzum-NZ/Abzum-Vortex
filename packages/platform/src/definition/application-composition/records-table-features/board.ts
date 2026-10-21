@@ -1,5 +1,9 @@
 import { recordsTableFilterKindOf } from "./column-filters";
 import {
+  conditionalFormatRuleIssue,
+  type RecordsTableConditionalFormattingSettings,
+} from "./conditional-formatting";
+import {
   featureAvailable,
   featureEnabled,
   featureNotPossible,
@@ -219,6 +223,38 @@ export const boardFilterProblem = (
 };
 
 /**
+ * Why the formatting a board's cards would get cannot be applied, as one business sentence, or
+ * undefined when it can. A card is one block, so a rule colours the whole card and a number format
+ * (a bar or scale over a column of cells) has nothing to draw on; a rule reads any field of the
+ * board's record type, whether or not the card shows it.
+ */
+export const boardFormattingProblem = (
+  settings: RecordsTableConditionalFormattingSettings,
+  board: RecordsTableBoardFacts,
+): Extract<RecordsTableFeatureCheck, { kind: "not_possible" }> | undefined => {
+  const refuse = (reason: string): Extract<RecordsTableFeatureCheck, { kind: "not_possible" }> =>
+    Object.freeze({
+      kind: "not_possible",
+      code: "definition_records_table_conditional_formatting",
+      reason,
+    });
+  if (settings.rules.length === 0 && settings.columnFormats.length === 0)
+    return refuse("Add a rule that colours the cards.");
+  if (settings.columnFormats.length > 0)
+    return refuse("Number formats need table columns: remove them to format the cards of a board.");
+  const ids = new Set<string>();
+  for (const rule of settings.rules) {
+    if (ids.has(rule.id)) return refuse("Each rule needs its own identity.");
+    ids.add(rule.id);
+    if (rule.target.kind !== "row")
+      return refuse("A board formats whole cards: choose the whole row for every rule.");
+    const issue = conditionalFormatRuleIssue(rule, board);
+    if (issue !== undefined) return refuse(issue.replace("the bound query", board.queryLabel));
+  }
+  return undefined;
+};
+
+/**
  * The board facts of a query, a record type's fields and its pipelines as they are stored (a
  * compiled release or the installed Module), or undefined when any of them is malformed. Field
  * identities are the canonical identities.
@@ -260,7 +296,16 @@ export const recordsTableBoardFactsOf = (
       type: String(field["type"]),
       filterable: field["filterable"] === true,
       ...(field["type"] === "choice" && Array.isArray(options)
-        ? { choiceCount: options.length }
+        ? {
+            choiceCount: options.length,
+            choiceValues: options.flatMap((option) => {
+              const value = record(option)?.["value"];
+              return typeof value === "string" ? [value] : [];
+            }),
+          }
+        : {}),
+      ...(typeof record(field["settings"])?.["resultType"] === "string"
+        ? { resultType: String(record(field["settings"])?.["resultType"]) }
         : {}),
     });
   }

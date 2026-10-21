@@ -25,6 +25,7 @@ import {
   type DisplaySummaryMetric,
 } from "./projected-data";
 import { parseFilterField, parseTableNarrowing } from "./projected-grid-features";
+import { parseFormatStyles } from "./projected-format";
 
 /**
  * The strict bounded payload a query-bound board renders: its protected columns in pipeline stage
@@ -88,7 +89,11 @@ const parseBoardPage = (
   const rows = candidates.map((candidate, index) => {
     const rowLocation = { ...location, propertyPath: [`rows[${index}]`] };
     const row = requireRecord(candidate, "A board card must be an object", rowLocation);
-    requireExactKeys(row, ["recordId", "revision", "capabilities", "fields"], rowLocation);
+    requireExactKeys(
+      row,
+      ["recordId", "revision", "capabilities", "fields", "format"],
+      rowLocation,
+    );
     const parsedRecordId = recordIdSchema.safeParse(row.recordId);
     if (!parsedRecordId.success) fail("A board card requires a valid record identity", rowLocation);
     const normalizedRecordId = parsedRecordId.data.toLowerCase();
@@ -119,11 +124,20 @@ const parseBoardPage = (
         fail("A board card text value exceeds its field contract bound", rowLocation);
       seenFields.add(key);
     }
+    let format: BoardPage["rows"][number]["format"];
+    if (row.format !== undefined) {
+      const held = requireRecord(row.format, "A board card format must be an object", rowLocation);
+      requireExactKeys(held, ["row"], rowLocation);
+      format = Object.freeze({
+        row: requireNonEmptyString(held.row, "A card style key must be text", rowLocation),
+      });
+    }
     return Object.freeze({
       recordId: parsedRecordId.data,
       revision,
       capabilities,
       fields,
+      ...(format === undefined ? {} : { format }),
     });
   });
   let nextContinuationToken: string | undefined;
@@ -194,6 +208,7 @@ export const parseBoardPayload = (
       "wipLimit",
       "quickAdd",
       "filters",
+      "formatting",
       "cardTitleFieldId",
       "cardFieldIds",
       "columns",
@@ -240,6 +255,16 @@ export const parseBoardPayload = (
     )
       fail("A board applies only filters it offers", location);
     filters = Object.freeze({ fields: Object.freeze(fields), applied });
+  }
+  let formatting: BoardPayload["formatting"];
+  if (record.formatting !== undefined) {
+    const held = requireRecord(
+      record.formatting,
+      "A board's formatting must be an object",
+      location,
+    );
+    requireExactKeys(held, ["styles"], location);
+    formatting = Object.freeze({ styles: parseFormatStyles(held.styles, location) });
   }
   if (typeof record.choiceFieldRequired !== "boolean")
     fail("A board requires its stage field's required setting", location);
@@ -401,6 +426,11 @@ export const parseBoardPayload = (
       unassignedLocation,
     ),
   });
+  // Every style a card names is one the board carries.
+  for (const bucket of [...columns, unassigned])
+    for (const row of bucket.page?.rows ?? [])
+      if (row.format !== undefined && formatting?.styles[row.format.row] === undefined)
+        fail("A board card names a style the board does not carry", location);
   const readBuckets = [...columns, unassigned].filter((bucket) => bucket.state === "read");
   for (const bucket of readBuckets.slice(1))
     requireMatchingBoardMetrics(readBuckets[0]!.aggregates, bucket.aggregates, location);
@@ -418,6 +448,7 @@ export const parseBoardPayload = (
     ...(wipLimit === undefined ? {} : { wipLimit }),
     quickAdd: record.quickAdd as boolean,
     ...(filters === undefined ? {} : { filters }),
+    ...(formatting === undefined ? {} : { formatting }),
     cardTitleFieldId: cardTitleFieldId.data,
     cardFieldIds: Object.freeze(cardFieldIds),
     columns: Object.freeze(columns),
