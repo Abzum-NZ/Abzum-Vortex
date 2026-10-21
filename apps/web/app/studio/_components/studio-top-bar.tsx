@@ -86,7 +86,7 @@ export function StudioTopBar({
   publishDisabled: boolean;
 }>) {
   return (
-    <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border bg-background px-3">
+    <header className="flex h-14 min-w-0 shrink-0 items-center gap-2 border-b border-border bg-background px-3 sm:gap-3">
       <ToolbarButton
         tip="All applications"
         variant="ghost"
@@ -97,9 +97,9 @@ export function StudioTopBar({
       >
         <Icon name="grid" />
       </ToolbarButton>
-      <Breadcrumb className="min-w-0">
+      <Breadcrumb className="min-w-0 flex-1">
         <BreadcrumbList className="flex-nowrap">
-          <BreadcrumbItem className="min-w-0">
+          <BreadcrumbItem className="hidden min-w-0 lg:inline-flex">
             <BreadcrumbLink
               className="truncate"
               render={<Link href={location.organizationHref} prefetch={false} />}
@@ -107,7 +107,7 @@ export function StudioTopBar({
               {location.organizationName}
             </BreadcrumbLink>
           </BreadcrumbItem>
-          <BreadcrumbSeparator />
+          <BreadcrumbSeparator className="hidden lg:block" />
           <BreadcrumbItem className="min-w-0">
             <DropdownMenu>
               <DropdownMenuTrigger
@@ -136,8 +136,8 @@ export function StudioTopBar({
           </BreadcrumbItem>
           {location.item !== undefined && (
             <>
-              <BreadcrumbSeparator />
-              <BreadcrumbItem className="min-w-0">
+              <BreadcrumbSeparator className="hidden sm:block" />
+              <BreadcrumbItem className="hidden min-w-0 sm:inline-flex">
                 <BreadcrumbPage className="truncate font-medium">{location.item}</BreadcrumbPage>
               </BreadcrumbItem>
             </>
@@ -146,83 +146,124 @@ export function StudioTopBar({
       </Breadcrumb>
       {saveState}
       <div className="ml-auto flex shrink-0 items-center gap-1">
-        <ToolbarButton
-          tip={
-            undoDisabled
-              ? "Resolve the blocked draft before undoing"
-              : canUndo
-                ? "Undo"
-                : "No changes to undo"
-          }
-          shortcut="Ctrl Z"
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          aria-label="Undo"
-          disabled={!canUndo || undoDisabled}
-          onClick={onUndo}
-        >
-          <Icon name="undo" />
-        </ToolbarButton>
-        <ToolbarButton
-          tip={
-            undoDisabled
-              ? "Resolve the blocked draft before redoing"
-              : canRedo
-                ? "Redo"
-                : "No changes to redo"
-          }
-          shortcut="Ctrl Shift Z"
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          aria-label="Redo"
-          disabled={!canRedo || undoDisabled}
-          onClick={onRedo}
-        >
-          <Icon name="redo" />
-        </ToolbarButton>
-        <Separator orientation="vertical" className="mx-2 h-6" />
-        {backToAppHref !== undefined && (
-          <Button
+        <div className="hidden items-center gap-1 lg:flex">
+          <ToolbarButton
+            tip={
+              undoDisabled
+                ? "Resolve the blocked draft before undoing"
+                : canUndo
+                  ? "Undo"
+                  : "No changes to undo"
+            }
+            shortcut="Ctrl Z"
+            type="button"
             variant="ghost"
-            size="sm"
-            nativeButton={false}
-            render={<Link href={backToAppHref} prefetch={false} />}
+            size="icon-sm"
+            aria-label="Undo"
+            disabled={!canUndo || undoDisabled}
+            onClick={onUndo}
           >
-            <Icon name="chevron-left" />
-            Back to app
-          </Button>
-        )}
-        <ToolbarButton
-          tip={
-            previewDisabled
-              ? "Resolve the blocked draft before previewing"
-              : "Run the saved draft in a new tab"
-          }
-          type="button"
-          variant="outline"
-          size="sm"
-          aria-busy={previewPending}
-          disabled={previewDisabled || previewPending}
-          onClick={onPreview}
-        >
-          {previewPending ? <Spinner /> : <Icon name="eye" />}
-          {previewPending ? "Starting…" : "Preview"}
-        </ToolbarButton>
-        <ToolbarButton
-          tip={
-            publishDisabled
-              ? "Resolve the blocked draft before publishing"
-              : "Publish a version of this application"
-          }
-          type="button"
-          size="sm"
-          disabled={publishDisabled}
-          onClick={onPublish}
-        >
-          Publish
-        </ToolbarButton>
+            <Icon name="undo" />
+          </ToolbarButton>
+          <ToolbarButton
+            tip={
+              undoDisabled
+                ? "Resolve the blocked draft before redoing"
+                : canRedo
+                  ? "Redo"
+                  : "No changes to redo"
+            }
+            shortcut="Ctrl Shift Z"
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Redo"
+            disabled={!canRedo || undoDisabled}
+            onClick={onRedo}
+          >
+            <Icon name="redo" />
+          </ToolbarButton>
+          <Separator orientation="vertical" className="mx-2 h-6" />
+          {backToAppHref !== undefined && (
+            <Button
+              variant="ghost"
+              size="sm"
+              nativeButton={false}
+              render={<Link href={backToAppHref} prefetch={false} />}
+            >
+              <Icon name="chevron-left" />
+              Back to app
+            </Button>
+          )}
+          <ToolbarButton
+            tip={
+              previewDisabled
+                ? "Resolve the blocked draft before previewing"
+                : "Run the saved draft in a new tab"
+            }
+            type="button"
+            variant="outline"
+            size="sm"
+            aria-busy={previewPending}
+            disabled={previewDisabled || previewPending}
+            onClick={onPreview}
+          >
+            {previewPending ? <Spinner /> : <Icon name="eye" />}
+            {previewPending ? "Starting…" : "Preview"}
+          </ToolbarButton>
+          <ToolbarButton
+            tip={
+              publishDisabled
+                ? "Resolve the blocked draft before publishing"
+                : "Publish a version of this application"
+            }
+            type="button"
+            size="sm"
+            disabled={publishDisabled}
+            onClick={onPublish}
+          >
+            Publish
+          </ToolbarButton>
+        </div>
+        <div className="lg:hidden">
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              aria-label="Draft actions"
+              render={<Button type="button" variant="ghost" size="icon-sm" />}
+            >
+              <Icon name="more-horizontal" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-48">
+              <DropdownMenuItem disabled={!canUndo || undoDisabled} onClick={onUndo}>
+                <Icon name="undo" /> Undo
+              </DropdownMenuItem>
+              <DropdownMenuItem disabled={!canRedo || undoDisabled} onClick={onRedo}>
+                <Icon name="redo" /> Redo
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              {backToAppHref !== undefined && (
+                <DropdownMenuItem render={<Link href={backToAppHref} prefetch={false} />}>
+                  <Icon name="chevron-left" /> Back to app
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuItem
+                disabled={previewDisabled || previewPending}
+                aria-busy={previewPending}
+                onClick={onPreview}
+              >
+                {previewPending ? <Spinner /> : <Icon name="eye" />}
+                {previewPending ? "Starting…" : "Preview"}
+              </DropdownMenuItem>
+              <DropdownMenuItem disabled={publishDisabled} onClick={onPublish}>
+                Publish
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem render={<Link href={location.organizationHref} prefetch={false} />}>
+                {location.organizationName}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
         <AppearanceToggle />
       </div>
     </header>

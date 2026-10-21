@@ -26,6 +26,7 @@ import {
   type FlowDefinition,
   type FlowRefusalFeedback,
   type FlowTask,
+  type FlowWarningNotice,
   type IdentitySession,
   type JsonValue,
   type OrganizationSelectionCandidate,
@@ -164,6 +165,7 @@ export type FlowBindingEndpointResult =
   /** The run ended. `descriptor` is the shared safe result; `outputs` only when it says available. */
   | Readonly<{
       kind: "result";
+      warnings: readonly FlowWarningNotice[];
       runId: string;
       descriptor: SafeFlowResultDescriptor;
       outputs: Readonly<Record<string, JsonValue>>;
@@ -584,6 +586,7 @@ const finishedResult = (
         );
   return {
     kind: "result",
+    warnings: response.warnings,
     runId: response.runId,
     descriptor,
     outputs: descriptor.outputs === "available" ? response.outputs : {},
@@ -693,6 +696,7 @@ const continuationResult = (
       );
       return {
         kind: "result",
+        warnings: outcome.warnings,
         runId: outcome.runId,
         descriptor: outcome.presentation,
         outputs: outcome.presentation.outputs === "available" ? outcome.outputs : {},

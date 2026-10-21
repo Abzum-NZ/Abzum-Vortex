@@ -187,7 +187,6 @@ export const loadApplicationRowDetail = async (
           session,
           dependencies,
           selection,
-          context,
           String(pageDefinition.pageId),
           [
             pageGridLayoutRequest(

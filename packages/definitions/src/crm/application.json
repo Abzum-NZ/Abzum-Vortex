@@ -1095,7 +1095,7 @@
                       },
                       "export": {
                         "enabled": true,
-                        "formats": ["csv"],
+                        "formats": ["csv", "xlsx"],
                         "max_rows": 10000
                       },
                       "conditional_formatting": {
@@ -1187,7 +1187,11 @@
                         "enabled": false
                       },
                       "spreadsheet": {
-                        "enabled": false
+                        "enabled": true,
+                        "range_select": true,
+                        "find": true,
+                        "status_bar_fields": ["vortex.crm.opportunities:opportunity.value"],
+                        "status_bar_operations": ["count", "sum", "average"]
                       },
                       "row_edit": {
                         "enabled": true,
@@ -2857,7 +2861,8 @@
                           }
                         }
                       }
-                    }
+                    },
+                    "row_action_event_id": "row_action_detail_crm_company"
                   }
                 },
                 {
@@ -3205,7 +3210,8 @@
                           }
                         }
                       }
-                    }
+                    },
+                    "row_action_event_id": "row_action_detail_crm_contact"
                   }
                 },
                 {
@@ -3320,7 +3326,8 @@
                           }
                         }
                       }
-                    }
+                    },
+                    "row_action_event_id": "row_action_detail_crm_lead"
                   }
                 },
                 {
@@ -3466,7 +3473,8 @@
                           }
                         }
                       }
-                    }
+                    },
+                    "row_action_event_id": "row_action_detail_crm_opportunity"
                   }
                 },
                 {
@@ -3628,7 +3636,8 @@
                           }
                         }
                       }
-                    }
+                    },
+                    "row_action_event_id": "row_action_detail_crm_activity"
                   }
                 },
                 {

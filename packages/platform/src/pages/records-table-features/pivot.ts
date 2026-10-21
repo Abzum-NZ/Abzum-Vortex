@@ -35,6 +35,7 @@ import { resolveQueryBindings, type QueryBindingContext } from "../query-binding
 import { buildRecordsTableNarrowing } from "../records-table-query";
 import { encodeRecordsTableFieldFilter, readRecordsTableQueryState } from "../records-table-state";
 import { formatDecimal, formatMoney } from "../value-format";
+import { bucketFirstDay, bucketLabel, bucketLastDay } from "./dimension-values";
 import { logRecordsTableRequestRefusal, recordsTableRequestRefusal } from "./index";
 
 /** The measure's alias in the summary; the pivot defines exactly one. */
@@ -139,63 +140,6 @@ const decodeCursor = (cursor: string): string | undefined => {
   return text.length >= 1 && text.length <= 4096 ? text : undefined;
 };
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-const dayNumber = (day: string): number => Date.parse(`${day}T00:00:00Z`) / DAY_MS;
-const dayText = (number: number): string => new Date(number * DAY_MS).toISOString().slice(0, 10);
-
-/** The calendar day an instant falls on in a named time zone. */
-const localDay = (instant: string, timeZone: string): string =>
-  new Intl.DateTimeFormat("en-CA", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date(instant));
-
-/** The last calendar day of the bucket that starts on `start`. */
-const bucketLastDay = (start: string, unit: string): string => {
-  const date = new Date(`${start}T00:00:00Z`);
-  const months = unit === "year" ? 12 : unit === "quarter" ? 3 : unit === "month" ? 1 : 0;
-  if (months > 0) {
-    date.setUTCMonth(date.getUTCMonth() + months);
-    return dayText(Math.round(date.getTime() / DAY_MS) - 1);
-  }
-  return dayText(dayNumber(start) + (unit === "week" ? 6 : 0));
-};
-
-const monthNames = [
-  "Jan",
-  "Feb",
-  "Mar",
-  "Apr",
-  "May",
-  "Jun",
-  "Jul",
-  "Aug",
-  "Sep",
-  "Oct",
-  "Nov",
-  "Dec",
-];
-
-/** The heading of a date bucket from the first calendar day it holds. */
-const bucketLabel = (start: string, unit: string): string => {
-  const [year = "", month = "01", day = "01"] = start.split("-");
-  const monthName = monthNames[Number(month) - 1] ?? month;
-  switch (unit) {
-    case "year":
-      return year;
-    case "quarter":
-      return `Q${Math.floor((Number(month) - 1) / 3) + 1} ${year}`;
-    case "month":
-      return `${monthName} ${year}`;
-    case "week":
-      return `Week of ${Number(day)} ${monthName} ${year}`;
-    default:
-      return `${Number(day)} ${monthName} ${year}`;
-  }
-};
-
 type Dimension = Readonly<{
   field: PlacementField;
   unit?: string;
@@ -260,8 +204,7 @@ const axisValue = (
     };
   }
   const unit = dimension.unit ?? "day";
-  const start =
-    dimension.field.type === "date_time" ? localDay(value, timeZone ?? "UTC") : value.slice(0, 10);
+  const start = bucketFirstDay(dimension.field.type, value, timeZone);
   return {
     key,
     label: bucketLabel(start, unit),

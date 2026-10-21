@@ -208,8 +208,9 @@ const definitionValidationErrorCatalogueSource = {
   // Grouping names its own part (the field, its choice count) in its sentence.
   definition_records_table_grouping: {
     order: 39,
-    message: "Group by needs a choice or stage field in the bound query.",
-    guidance: "Choose the choice or stage field the records are grouped by, or turn Group by off.",
+    message: "Group by needs a choice, stage, link or date field in the bound query.",
+    guidance:
+      "Choose the choice, stage, link or date field the records are grouped by, or turn Group by off.",
   },
   definition_records_table_conditional_formatting: {
     order: 39,

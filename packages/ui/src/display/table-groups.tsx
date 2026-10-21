@@ -107,6 +107,8 @@ export type GroupedTable = Readonly<{
   toggle: (key: string) => void;
   /** Reads the open group's next or previous page. */
   move: (direction: "next" | "previous") => void;
+  /** Shows another page of the groups: after the group named, or (null) from the first. */
+  movePage: ((after: string | null) => void) | undefined;
 }>;
 
 /**
@@ -181,6 +183,7 @@ export function useGroupedTable(
   }, [serverRead]);
   const requestGroup = events?.group_requested;
   const opened = events?.group_opened;
+  const pageGroups = events?.group_page_changed;
 
   const read = useCallback(
     async (key: string, page: number, token?: string, direction?: "forward" | "backward") => {
@@ -239,6 +242,17 @@ export function useGroupedTable(
     [current.expanded, opened, read],
   );
 
+  const movePage = useMemo(
+    () =>
+      pageGroups === undefined
+        ? undefined
+        : (after: string | null) => {
+            latest.current += 1;
+            void pageGroups({ event: "group_page_changed", after });
+          },
+    [pageGroups],
+  );
+
   const members = current.members;
   const move = useCallback(
     (direction: "next" | "previous") => {
@@ -267,8 +281,9 @@ export function useGroupedTable(
             memberFeatures: members?.status === "ready" ? members.page.features : undefined,
             toggle,
             move,
+            movePage,
           },
-    [groups, current.expanded, members, toggle, move],
+    [groups, current.expanded, members, toggle, move, movePage],
   );
 }
 
@@ -307,7 +322,8 @@ export function GroupedBody({
     >
       <p className="m-0 text-xs text-muted-foreground tabular-nums">
         {groups.total === 1 ? "1 record" : `${groups.total} records`} in{" "}
-        {groups.groups.length === 1 ? "1 group" : `${groups.groups.length} groups`}, counted when
+        {groups.groups.length === 1 ? "1 group" : `${groups.groups.length} groups`}
+        {groups.page.first && groups.page.next === undefined ? "" : " on this page"}, counted when
         the table was read
       </p>
       {groups.groups.length === 0 ? (
@@ -373,6 +389,36 @@ export function GroupedBody({
           )}
         </GroupSection>
       ))}
+      <GroupsPager grouped={grouped} />
+    </div>
+  );
+}
+
+/** More groups than one page shows continue on the next page; the way back is the first page. */
+function GroupsPager({ grouped }: Readonly<{ grouped: GroupedTable }>): ReactElement | null {
+  const { page } = grouped.groups;
+  if (page.first && page.next === undefined) return null;
+  const movePage = grouped.movePage;
+  return (
+    <div className="flex flex-wrap items-center justify-end gap-2">
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        disabled={page.first || movePage === undefined}
+        onClick={() => movePage?.(null)}
+      >
+        First groups
+      </Button>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        disabled={page.next === undefined || movePage === undefined}
+        onClick={() => page.next !== undefined && movePage?.(page.next)}
+      >
+        More groups
+      </Button>
     </div>
   );
 }

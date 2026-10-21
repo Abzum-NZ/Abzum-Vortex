@@ -1,6 +1,8 @@
 import {
   builderKeySchema,
   flowLiteralSchema,
+  flowReadFieldsProjectionSchema,
+  flowTaskOutputMembers,
   namespacedKeySchema,
   parseFlowReference,
   type ApplicationSourceDocument,
@@ -294,10 +296,12 @@ const outputLabel = (key: string): string =>
         ? "the answers"
         : studioWords(key).toLowerCase();
 
-/** The outputs one task gives the steps after it. */
+/** The outputs one task gives the steps after it: each output whole, and every member its contract declares. */
 const taskOutputs = (
+  source: Readonly<ApplicationSourceDocument>,
   flow: SourceFlow,
   siblings: readonly SourceFlow[],
+  moduleKey: string | null,
   task: SourceFlowTask,
   location: string,
   forms: StudioFlowDraftChoices["forms"],
@@ -332,31 +336,60 @@ const taskOutputs = (
   }
   if (!("properties" in task)) return [];
   const definition = studioFlowDefinitionOf(task.type);
+  // A projected field is written `<record type>.<field>`; its type is the one the record type gives it.
+  const draftField = (reference: string): StudioDraftField | undefined => {
+    const split = reference.lastIndexOf(".");
+    return split < 1
+      ? undefined
+      : studioDraftRecordType(source, reference.slice(0, split), moduleKey)?.record.fields.find(
+          (field) => field.key === reference.slice(split + 1),
+        );
+  };
+  const projection = (): readonly Readonly<{ alias: string; field: string }>[] => {
+    const fields = task.properties.fields;
+    const parsed =
+      fields?.kind === "literal" && fields.literal.type === "json"
+        ? flowReadFieldsProjectionSchema.safeParse(fields.literal.value)
+        : undefined;
+    return parsed?.success ? parsed.data : [];
+  };
   const outputs = (definition?.outputs ?? []).flatMap((output) => {
-    if (task.type === "interface.show_form" && output.key === "values") {
-      const form = task.properties.form;
-      const alias = form?.kind === "literal" ? form.literal.value : undefined;
-      const fields = forms.find((entry) => entry.alias === alias)?.fields ?? [];
-      const inputs = task.properties.inputs;
-      const members =
-        inputs?.kind === "map"
-          ? Object.entries(inputs.entries).map(([name, value]) => {
-              const field = fields.find((field) => field.name === name);
-              return choice(
-                "values",
-                field?.type ?? (value.kind === "literal" ? value.literal.type : undefined),
-                [name],
-                `the answer ${(field?.label ?? studioWords(name)).toLowerCase()}`,
-              );
-            })
-          : [];
-      return [choice("values", "json"), ...members];
-    }
-    return [choice(output.key, output.type)];
+    const declared = flowTaskOutputMembers(task, output.key, {
+      readFieldType: (reference) => {
+        const field = draftField(reference);
+        return field === undefined ? undefined : studioFieldValueType(field.type);
+      },
+    });
+    if (declared === undefined) return [choice(output.key, output.type)];
+    const answers = task.type === "interface.show_form" ? formFields(task, forms) : [];
+    const members = declared.members.map((member) => {
+      const answer = answers.find((field) => field.name === member.name);
+      const field =
+        task.type === "record.read_fields"
+          ? draftField(projection().find((entry) => entry.alias === member.name)?.field ?? "")
+          : undefined;
+      const label = (answer?.label ?? field?.label ?? studioWords(member.name)).toLowerCase();
+      return choice(
+        output.key,
+        answer?.type ?? member.type,
+        [member.name],
+        task.type === "interface.show_form" ? `the answer ${label}` : label,
+      );
+    });
+    return declared.whole ? [choice(output.key, output.type), ...members] : members;
   });
   if (task.allowRefusal === true)
     outputs.push(choice("outcome", "choice", undefined, "how it ended"));
   return outputs;
+};
+
+const formFields = (
+  task: Extract<SourceFlowTask, { properties: unknown }>,
+  forms: StudioFlowDraftChoices["forms"],
+) => {
+  const form = task.properties.form;
+  const alias = form?.kind === "literal" ? form.literal.value : undefined;
+  return forms.find((entry) => entry.alias === alias)?.fields ?? [];
 };
 
 /**
@@ -395,7 +428,7 @@ export const studioFlowReferenceChoices = (
   if (path !== null)
     for (const task of studioFlowTasksBefore(flow, path)) {
       const location = describeStudioFlowLocation(flow, studioFlowTaskPath(flow, task.id) ?? []);
-      choices.push(...taskOutputs(flow, siblings, task, location, forms));
+      choices.push(...taskOutputs(source, flow, siblings, moduleKey, task, location, forms));
     }
   // The record the flow runs for: the record a trigger saves or announces, or the record an
   // interactive flow's record input names. Each field offers its type and, for a choice, its options.
@@ -440,32 +473,6 @@ export const studioFlowReferenceChoices = (
   );
   if (flow.execution === "interactive" || flow.execution === "background")
     add({ source: "execution_now" }, "Now", "The run", "date_time");
-  // Offer the members the definition already reads, only when their producing step is in scope.
-  const members = (value: unknown): void => {
-    if (value === null || typeof value !== "object") return;
-    const entry = value as Record<string, unknown>;
-    if (entry.source === "task_output" && Array.isArray(entry.path)) {
-      const reference = entry as Extract<FlowReference, { source: "task_output" }>;
-      const token = studioFlowReferenceToken(reference);
-      const base = choices.find(
-        (choice) =>
-          choice.reference.source === "task_output" &&
-          choice.reference.task === reference.task &&
-          choice.reference.key === reference.key &&
-          choice.reference.path === undefined,
-      );
-      if (base !== undefined && !choices.some((choice) => choice.token === token))
-        choices.push({
-          ...base,
-          token,
-          reference,
-          type: undefined,
-          label: `${base.label}: ${reference.path!.map(studioWords).join(" / ")}`,
-        });
-    }
-    for (const child of Object.values(entry)) members(child);
-  };
-  members(flow);
   return choices;
 };
 

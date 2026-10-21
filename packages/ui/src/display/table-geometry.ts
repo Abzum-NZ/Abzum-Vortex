@@ -5,7 +5,6 @@ import {
   RECORDS_TABLE_COLUMN_MAXIMUM_WIDTH,
   RECORDS_TABLE_COLUMN_MINIMUM_WIDTH,
   RECORDS_TABLE_UNVIRTUALIZED_ROW_LIMIT,
-  type RecordsTableColumnContract,
   type RecordsTableContract,
   type RecordsTableDensity,
 } from "@vortex/platform/schema";
@@ -23,13 +22,7 @@ export const CARD_SPACING: Readonly<Record<RecordsTableDensity, string>> = Objec
   compact: "gap-1 p-2",
 });
 
-/** Starting width of a column per its declared relative width, in pixels. */
-const COLUMN_WIDTH: Readonly<Record<RecordsTableColumnContract["width"], number>> = Object.freeze({
-  auto: 180,
-  narrow: 120,
-  medium: 220,
-  wide: 320,
-});
+export { recordsTableColumnWidth as columnWidth } from "@vortex/platform/schema";
 
 /** A person resizes a column within the contract's bounds; a stored layout holds the same bounds. */
 export const GRID_COLUMN_MIN_WIDTH = RECORDS_TABLE_COLUMN_MINIMUM_WIDTH;
@@ -50,9 +43,6 @@ export const gridActionsWidth = (contract: RecordsTableContract): number =>
           1 +
           Number(contract.features.rowEdit.enabled))
     : GRID_CONTROL_COLUMN_WIDTH;
-
-export const columnWidth = (column: RecordsTableColumnContract): number =>
-  COLUMN_WIDTH[column.width];
 
 /** Whether a page of this many rows mounts only the rows in view. */
 export const virtualizesRows = (rowCount: number): boolean =>

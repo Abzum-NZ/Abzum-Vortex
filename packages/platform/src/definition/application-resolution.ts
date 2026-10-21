@@ -72,6 +72,92 @@ export type FieldInputSourceField = Readonly<{
   dependsOnField?: Readonly<{ key: string; label: string }> | undefined;
 }>;
 
+type FieldInputJson = Readonly<Record<string, unknown>>;
+
+/**
+ * The automatic field input metadata of one canonical module field, read by the compiler for a
+ * bound release and by the runtime for a contributed field. Undefined when a link field names a
+ * target that is not resolved: an automatic input never invents a record type identity.
+ */
+export const fieldInputSourceField = (
+  field: FieldInputJson,
+  /** The field of the same record type a declared dependency names; without it, a dependent link has no input. */
+  siblingField?: (fieldId: string) => FieldInputJson | undefined,
+): FieldInputSourceField | undefined => {
+  const type = String(field.type);
+  const settings: FieldInputJson =
+    typeof field.settings === "object" && field.settings !== null
+      ? (field.settings as FieldInputJson)
+      : {};
+  const resolvedRecordType = (
+    value: unknown,
+  ): FieldInputSourceField["recordTypes"][number] | undefined => {
+    const recordType = (typeof value === "object" && value !== null ? value : {}) as FieldInputJson;
+    return recordType.state === "resolved"
+      ? {
+          state: "resolved",
+          moduleRootId: String(recordType.moduleRootId),
+          recordTypeId: String(recordType.recordTypeId),
+        }
+      : undefined;
+  };
+  const choices =
+    (type === "choice" || type === "several_choices") && Array.isArray(settings.options)
+      ? (settings.options as FieldInputJson[]).map((option) => ({
+          key: String(option.value),
+          label: String(option.label),
+        }))
+      : [];
+  const targets: unknown[] =
+    type === "link" && settings.target !== undefined
+      ? [settings.target]
+      : type === "link_to_one_of_several" && Array.isArray(settings.targets)
+        ? (settings.targets as unknown[])
+        : [];
+  const recordTypes = targets.map(resolvedRecordType);
+  if (recordTypes.some((recordType) => recordType === undefined)) return undefined;
+  const dependsOn =
+    type === "link" && typeof settings.dependsOn === "object" && settings.dependsOn !== null
+      ? (settings.dependsOn as FieldInputJson)
+      : undefined;
+  const parent =
+    dependsOn === undefined ? undefined : siblingField?.(String(dependsOn.parentFieldId));
+  // A declared dependency is drawn with its parent or not at all, never silently without it.
+  if (dependsOn !== undefined && parent === undefined) return undefined;
+  return {
+    key: String(field.key),
+    label: String(field.label),
+    required: field.required === true,
+    type,
+    ...(parent === undefined
+      ? {}
+      : { dependsOnField: { key: String(parent.key), label: String(parent.label) } }),
+    ...(type === "date_time" &&
+    (settings.displayTimeZone === "person" ||
+      settings.displayTimeZone === "organization" ||
+      settings.displayTimeZone === "utc")
+      ? { displayTimeZone: settings.displayTimeZone }
+      : {}),
+    ...(type === "several_choices" && typeof settings.maximumSelections === "number"
+      ? { maximumSelections: settings.maximumSelections }
+      : {}),
+    ...(type === "attachment"
+      ? {
+          attachmentSettings: settings as unknown as NonNullable<
+            FieldInputSourceField["attachmentSettings"]
+          >,
+        }
+      : {}),
+    ...(type === "table"
+      ? {
+          tableSettings: settings as unknown as NonNullable<FieldInputSourceField["tableSettings"]>,
+        }
+      : {}),
+    choices,
+    recordTypes: recordTypes as FieldInputSourceField["recordTypes"],
+  };
+};
+
 /** Publication can select only existing indexable fields, including safe derived inputs. */
 export const applicationSearchFieldIsSelectable = (
   fields: readonly ModuleField[],

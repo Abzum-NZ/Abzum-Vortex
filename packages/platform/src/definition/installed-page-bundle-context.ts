@@ -26,6 +26,7 @@ import {
   type InstalledRuntimeContext,
 } from "./installed-runtime-context";
 import { loadHumanPreviewRuntimeContext } from "./preview-runtime-context";
+import { readInstalledRecordContributions } from "./installed-record-contributions";
 
 type InstalledPageBundleIdentityEvidence = Readonly<{
   organizationId: ActiveInstallationBundleState["identity"]["organizationId"];
@@ -264,11 +265,15 @@ export const createHumanInstalledPageBundleContextLoader = (
         bundle = cached.bundle;
         retainInstalledPageBundle(key, bundle, cached.size);
       }
+      // The installed bundle is immutable, but what other installed Modules contribute to its
+      // record types changes with their installations, so it is read with every request.
+      const contributions = await readInstalledRecordContributions(dependencies.transaction);
       const context = assembleHumanInstalledRuntimeContext(
         installation,
         withCorrelation(bundle.releaseSet, state.identity.correlationId),
         dependencies.scope,
         (validated, prepare) => preparedRegistrationFor(bundle, validated, prepare),
+        contributions,
       );
       return retainPageCompositions(context, bundle.compositions, deepFreeze({
         organizationId: state.identity.organizationId,
