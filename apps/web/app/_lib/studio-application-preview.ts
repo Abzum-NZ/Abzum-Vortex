@@ -579,11 +579,18 @@ export async function currentStudioPreview(
 
 /**
  * Saves whose preview is being moved, by builder and Application: the newest saved revision a move
- * is wanted for and the move under way. A save that arrives while a move runs only raises the
- * wanted revision, so a burst of saves costs one move to the newest. It holds only pending work,
- * never an access decision or a result.
+ * is wanted for and the move under way. A save that arrives while a move runs raises the wanted
+ * revision and cancels the move under way for the older one (its transaction rolls back at the
+ * next step), so a burst of saves costs one move to the newest. It holds only pending work, never
+ * an access decision or a result.
  */
-type ScheduledMove = { session: IdentitySession; wanted: number; idle: Promise<void> };
+type ScheduledMove = {
+  session: IdentitySession;
+  wanted: number;
+  idle: Promise<void>;
+  /** The revision being moved to and the way to cancel that move. */
+  moving?: { revision: number; controller: AbortController };
+};
 const scheduledMovesKey = Symbol.for("vortex.web.studio-preview-moves");
 const processMoves = globalThis as typeof globalThis & {
   [scheduledMovesKey]?: Map<string, ScheduledMove>;
@@ -602,8 +609,10 @@ const moveToSaved = async (
   organizationId: OrganizationId,
   rootId: ApplicationRootId,
   draftRevision: number,
+  signal: AbortSignal,
 ): Promise<void> => {
   const state = await readStudioPreviewState(session, organizationId, rootId, draftRevision);
+  signal.throwIfAborted();
   // A conflict is a newer save, whose own move follows; a refusal leaves the preview as it is.
   if (state.kind !== "read") {
     if (state.kind === "temporarily_unavailable")
@@ -621,10 +630,11 @@ const moveToSaved = async (
   const moved = await follow(
     targetOf(session, organizationId, state.draft),
     state.preview.previewInstallationId,
+    signal,
   );
   if (moved.kind !== "available" && moved.kind !== "conflict")
     console.error(
-      `[studio] preview move failed: STUDIO_PREVIEW_MOVE_FAILED kind=${moved.kind} revision=${draftRevision}`,
+      `[studio] preview move failed: STUDIO_PREVIEW_MOVE_FAILED kind=${moved.kind}${moved.kind === "refused" ? ` reason=${moved.reason}` : ""} preview=${state.preview.previewInstallationId} revision=${draftRevision}`,
     );
 };
 
@@ -644,6 +654,8 @@ export const scheduleStudioPreviewMove = (
   if (current !== undefined) {
     current.wanted = Math.max(current.wanted, draftRevision);
     current.session = session;
+    if (current.moving !== undefined && current.moving.revision < current.wanted)
+      current.moving.controller.abort();
     return current.idle;
   }
   const move: ScheduledMove = { session, wanted: draftRevision, idle: Promise.resolve() };
@@ -652,9 +664,13 @@ export const scheduleStudioPreviewMove = (
     try {
       while (move.wanted > moved) {
         moved = move.wanted;
+        const controller = new AbortController();
+        move.moving = { revision: moved, controller };
         try {
-          await moveToSaved(move.session, organizationId, rootId, moved);
+          await moveToSaved(move.session, organizationId, rootId, moved, controller.signal);
         } catch (error) {
+          // A newer save cancelled this move; the loop moves to that revision next.
+          if (controller.signal.aborted) continue;
           console.error(
             `[studio] preview move failed: STUDIO_PREVIEW_MOVE_FAILED cause=${describeFailure(error)}`,
           );

@@ -111,89 +111,124 @@ begin
       when 'organization_shared' then 'organisation_id'
       else 'organisation_id, application_root_id'
     end;
-    field_ids := array[]::uuid[];
-
+    begin
+      select coalesce(pg_catalog.array_agg((item.value ->> 'fieldId')::uuid), array[]::uuid[])
+      into field_ids
+      from pg_catalog.jsonb_array_elements(record_type -> 'fields') as item(value);
+    exception when invalid_text_representation then
+      raise exception using errcode = '42501', message = 'Record field storage identity is invalid';
+    end;
+    -- Every field of the record type is checked in one pass, then applied set-based: only what a
+    -- field actually changes costs a statement.
+    if exists (
+      select 1
+      from pg_catalog.jsonb_array_elements(record_type -> 'fields') as item(value)
+      where not vortex_platform.is_non_nil_uuid(item.value ->> 'fieldId')
+        or item.value ->> 'type' is null
+        or pg_catalog.jsonb_typeof(item.value -> 'required') <> 'boolean'
+        or pg_catalog.jsonb_typeof(item.value -> 'unique') <> 'boolean'
+        or pg_catalog.jsonb_typeof(item.value -> 'filterable') <> 'boolean'
+        or pg_catalog.jsonb_typeof(item.value -> 'sortable') <> 'boolean'
+        or pg_catalog.jsonb_typeof(item.value -> 'settings') <> 'object'
+    ) then
+      raise exception using errcode = '42501', message = 'Record field storage definition is invalid';
+    end if;
+    if exists (
+      select 1
+      from pg_catalog.jsonb_array_elements(record_type -> 'fields') as item(value)
+      where vortex_record.database_value_type(item.value) is null
+    ) then
+      raise exception using errcode = '23514', message = 'Record field storage type is unsupported';
+    end if;
+    -- Stored values keep their meaning only while the field keeps its database type.
+    if exists (
+      select 1
+      from pg_catalog.jsonb_array_elements(record_type -> 'fields') as item(value)
+      join vortex_record.field_storage_mappings as mapping
+        on mapping.storage_contract_id = binding_row.storage_contract_id
+        and mapping.field_id = (item.value ->> 'fieldId')::uuid
+      where mapping.database_value_type is distinct from vortex_record.database_value_type(item.value)
+    ) then
+      raise exception using errcode = 'V3201', message = 'Preview record storage cannot follow this change';
+    end if;
+    -- Preview storage serves exactly the one Module release the preview runs, so each mapping
+    -- is that release's.
+    update vortex_record.field_storage_mappings as mapping
+    set field_definition = item.value,
+        introduced_by_module_root_id = p_module_root_id,
+        introduced_at_release_revision = p_module_release_revision,
+        state = 'active',
+        retired_by_module_root_id = null,
+        retired_at_release_revision = null
+    from pg_catalog.jsonb_array_elements(record_type -> 'fields') as item(value)
+    where mapping.storage_contract_id = binding_row.storage_contract_id
+      and mapping.field_id = (item.value ->> 'fieldId')::uuid
+      and (mapping.field_definition is distinct from item.value
+        or mapping.introduced_by_module_root_id is distinct from p_module_root_id
+        or mapping.introduced_at_release_revision is distinct from p_module_release_revision
+        or mapping.state is distinct from 'active'
+        or mapping.retired_at_release_revision is not null);
+    -- Records already in the preview have no value for a new field, so the column takes none;
+    -- the save path enforces a required field for every record it writes.
     for field_value in
       select item.value
       from pg_catalog.jsonb_array_elements(record_type -> 'fields') as item(value)
+      where not exists (
+        select 1
+        from vortex_record.field_storage_mappings as mapping
+        where mapping.storage_contract_id = binding_row.storage_contract_id
+          and mapping.field_id = (item.value ->> 'fieldId')::uuid
+      )
       order by item.value ->> 'fieldId'
     loop
-      begin
-        field_id_value := (field_value ->> 'fieldId')::uuid;
-      exception when invalid_text_representation then
-        raise exception using errcode = '42501', message = 'Record field storage identity is invalid';
-      end;
-      if not vortex_platform.is_non_nil_uuid(field_id_value::text)
-        or field_value ->> 'type' is null
-        or pg_catalog.jsonb_typeof(field_value -> 'required') <> 'boolean'
-        or pg_catalog.jsonb_typeof(field_value -> 'unique') <> 'boolean'
-        or pg_catalog.jsonb_typeof(field_value -> 'filterable') <> 'boolean'
-        or pg_catalog.jsonb_typeof(field_value -> 'sortable') <> 'boolean'
-        or pg_catalog.jsonb_typeof(field_value -> 'settings') <> 'object' then
-        raise exception using errcode = '42501', message = 'Record field storage definition is invalid';
-      end if;
-      field_ids := field_ids || field_id_value;
+      field_id_value := (field_value ->> 'fieldId')::uuid;
       database_type := vortex_record.database_value_type(field_value);
-      if database_type is null then
-        raise exception using errcode = '23514', message = 'Record field storage type is unsupported';
-      end if;
-      select mapping.* into mapping_row
-      from vortex_record.field_storage_mappings as mapping
-      where mapping.storage_contract_id = binding_row.storage_contract_id
-        and mapping.field_id = field_id_value
-      for update;
-      if found then
-        -- Stored values keep their meaning only while the field keeps its database type.
-        if mapping_row.database_value_type is distinct from database_type then
-          raise exception using errcode = 'V3201', message = 'Preview record storage cannot follow this change';
-        end if;
-        column_token := mapping_row.physical_column_token;
-        -- Preview storage serves exactly the one Module release the preview runs, so each mapping
-        -- is that release's.
-        update vortex_record.field_storage_mappings as mapping
-        set field_definition = field_value,
-            introduced_by_module_root_id = p_module_root_id,
-            introduced_at_release_revision = p_module_release_revision,
-            state = 'active',
-            retired_by_module_root_id = null,
-            retired_at_release_revision = null
-        where mapping.storage_contract_id = binding_row.storage_contract_id
-          and mapping.field_id = field_id_value;
-      else
-        -- Records already in the preview have no value for a new field, so the column takes none;
-        -- the save path enforces a required field for every record it writes.
-        column_token := 'f_' || pg_catalog.replace(pg_catalog.lower(field_id_value::text), '-', '');
-        execute pg_catalog.format(
-          'alter table record_data.%I add column %I %s',
-          catalogue_row.physical_table_token, column_token, vortex_record.sql_value_type(database_type)
-        );
-        insert into vortex_record.field_storage_mappings (
-          storage_contract_id, field_id, physical_column_token, database_value_type,
-          field_definition, introduced_by_module_root_id, introduced_at_release_revision, state
-        ) values (
-          binding_row.storage_contract_id, field_id_value, column_token, database_type, field_value,
-          p_module_root_id, p_module_release_revision, 'active'
-        );
-      end if;
-      -- Table changes run only where the column or its index actually differs.
-      if not (field_value ->> 'required')::boolean and exists (
-        select 1
-        from pg_catalog.pg_attribute as attribute
-        where attribute.attrelid = pg_catalog.to_regclass(
-            pg_catalog.format('record_data.%I', catalogue_row.physical_table_token))
-          and attribute.attname = column_token
-          and attribute.attnotnull
-      ) then
-        execute pg_catalog.format(
-          'alter table record_data.%I alter column %I drop not null',
-          catalogue_row.physical_table_token, column_token
-        );
-      end if;
-      index_token := 'pux_' || pg_catalog.md5(
-        binding_row.storage_contract_id::text || ':' || field_id_value::text
+      column_token := 'f_' || pg_catalog.replace(pg_catalog.lower(field_id_value::text), '-', '');
+      execute pg_catalog.format(
+        'alter table record_data.%I add column %I %s',
+        catalogue_row.physical_table_token, column_token, vortex_record.sql_value_type(database_type)
       );
-      if (field_value ->> 'unique')::boolean
-        and pg_catalog.to_regclass(pg_catalog.format('record_data.%I', index_token)) is null then
+      insert into vortex_record.field_storage_mappings (
+        storage_contract_id, field_id, physical_column_token, database_value_type,
+        field_definition, introduced_by_module_root_id, introduced_at_release_revision, state
+      ) values (
+        binding_row.storage_contract_id, field_id_value, column_token, database_type, field_value,
+        p_module_root_id, p_module_release_revision, 'active'
+      );
+    end loop;
+    -- Table changes run only where the column or its index actually differs.
+    for column_token in
+      select mapping.physical_column_token
+      from pg_catalog.jsonb_array_elements(record_type -> 'fields') as item(value)
+      join vortex_record.field_storage_mappings as mapping
+        on mapping.storage_contract_id = binding_row.storage_contract_id
+        and mapping.field_id = (item.value ->> 'fieldId')::uuid
+      join pg_catalog.pg_attribute as attribute
+        on attribute.attrelid = pg_catalog.to_regclass(
+            pg_catalog.format('record_data.%I', catalogue_row.physical_table_token))
+        and attribute.attname = mapping.physical_column_token
+        and attribute.attnotnull
+      where not (item.value ->> 'required')::boolean
+      order by item.value ->> 'fieldId'
+    loop
+      execute pg_catalog.format(
+        'alter table record_data.%I alter column %I drop not null',
+        catalogue_row.physical_table_token, column_token
+      );
+    end loop;
+    for field_value, column_token, index_token in
+      select item.value, mapping.physical_column_token,
+        'pux_' || pg_catalog.md5(binding_row.storage_contract_id::text || ':' || mapping.field_id::text)
+      from pg_catalog.jsonb_array_elements(record_type -> 'fields') as item(value)
+      join vortex_record.field_storage_mappings as mapping
+        on mapping.storage_contract_id = binding_row.storage_contract_id
+        and mapping.field_id = (item.value ->> 'fieldId')::uuid
+      where (item.value ->> 'unique')::boolean
+        is distinct from (pg_catalog.to_regclass(pg_catalog.format('record_data.%I',
+          'pux_' || pg_catalog.md5(binding_row.storage_contract_id::text || ':' || mapping.field_id::text))) is not null)
+      order by item.value ->> 'fieldId'
+    loop
+      if (field_value ->> 'unique')::boolean then
         begin
           execute pg_catalog.format(
             'create unique index %I on record_data.%I (%s, %I) where lifecycle_state in (''active'', ''soft_deleted'', ''removal_pending'')',
@@ -202,8 +237,7 @@ begin
         exception when unique_violation then
           raise exception using errcode = 'V3201', message = 'Preview records repeat a value the draft makes unique';
         end;
-      elsif not (field_value ->> 'unique')::boolean
-        and pg_catalog.to_regclass(pg_catalog.format('record_data.%I', index_token)) is not null then
+      else
         execute pg_catalog.format('drop index record_data.%I', index_token);
       end if;
     end loop;
