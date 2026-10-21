@@ -109,7 +109,8 @@ export const studioGridFeatureStartSettings: Readonly<
   // A tree reads forty records of a level at a time unless the builder chooses otherwise.
   tree: { child_page_size: { kind: "number", value: 40 } },
   // Records with no value are named "Unassigned" and groups read forty at a time unless the
-  // builder chooses otherwise.
+  // builder chooses otherwise. Whether the table opens grouped starts from the bound query
+  // (`studioGroupingStart`).
   grouping: {
     unassigned_label: { kind: "text", value: "Unassigned" },
     group_page_size: { kind: "number", value: 40 },
@@ -133,12 +134,15 @@ export const studioGridFeatureStartSettings: Readonly<
  * on or a Grouped table is added), so the table reads only its own settings.
  */
 export const studioGroupingStart = (
-  facts: Pick<RecordsTableQueryFacts, "fields" | "groupBy">,
+  facts: Pick<RecordsTableQueryFacts, "fields" | "groupBy" | "grouped">,
 ): Readonly<Record<string, SourceBlockPropertyValueContract>> => {
   const defaults = groupingDefaultsFromQuery(facts);
+  // A table that reads a grouped query has no flat rows, so it can only open grouped.
+  const opensGrouped = { opens_grouped: { kind: "boolean", value: facts.grouped } } as const;
   return defaults === undefined
-    ? {}
+    ? opensGrouped
     : {
+        ...opensGrouped,
         field: { kind: "field_reference", field: defaults.field },
         ...(defaults.dateUnit === undefined
           ? {}
@@ -149,7 +153,7 @@ export const studioGroupingStart = (
 /** The settings a feature starts with for this bound query; Group by also starts as the query groups. */
 export const studioGridFeatureStart = (
   key: RecordsTableFeatureKey,
-  facts: Pick<RecordsTableQueryFacts, "fields" | "groupBy">,
+  facts: Pick<RecordsTableQueryFacts, "fields" | "groupBy" | "grouped">,
 ): Readonly<Record<string, SourceBlockPropertyValueContract>> => ({
   ...studioGridFeatureStartSettings[key],
   ...(key === "grouping" ? studioGroupingStart(facts) : {}),
@@ -195,6 +199,8 @@ export const studioGroupingFacts = (
 ): RecordsTableGroupingFacts & Pick<RecordsTableQueryFacts, "groupBy"> => ({
   recordTypeLabel: query?.label ?? "",
   fields: studioFieldFacts(query),
+  grouped: query?.grouped === true,
+  queryLabel: query?.label ?? "",
   groupBy: query?.groupBy ?? [],
 });
 

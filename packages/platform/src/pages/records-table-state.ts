@@ -248,14 +248,21 @@ export const applyRecordsTableGroupExpansion = (
 };
 
 /**
+ * The address value that opens a table flat although it is authored to open grouped. A field
+ * identity is a UUID, so it never collides with this word.
+ */
+const GROUP_FLAT_VALUE = "flat";
+
+/**
  * The grouping an address value names: `<field>` for the first page of groups, `<field>.<position>`
- * for a later page, the position being the base64url text of the last group's key. A value that is
- * not one of these is malformed.
+ * for a later page, the position being the base64url text of the last group's key, or `flat` for
+ * the ungrouped table. A value that is not one of these is malformed.
  */
 const decodeGroupParameter = (
   value: string | undefined,
-): Readonly<{ fieldId: string; after: string | null }> | undefined | "malformed" => {
+): Readonly<{ fieldId: string; after: string | null }> | undefined | "flat" | "malformed" => {
   if (value === undefined) return undefined;
+  if (value === GROUP_FLAT_VALUE) return "flat";
   const dot = value.indexOf(".");
   const fieldId = dot < 0 ? value : value.slice(0, dot);
   if (!FIELD_ID_PATTERN.test(fieldId)) return "malformed";
@@ -335,10 +342,14 @@ export const readRecordsTableQueryState = (
   placementId: string,
   entries: Iterable<readonly [string, string]>,
   /**
-   * The field a table that must be grouped (it reads a grouped query) is grouped by when the
-   * address names none: its authored grouping field, never one the address chose.
+   * The field a table authored to open grouped (`opens_grouped`; always, for a grouped query) is
+   * grouped by when the address names none: its authored grouping field, never one the address
+   * chose. The address overrides the authored opening state both ways: a field groups, `flat`
+   * ungroups.
    */
-  requiredGroupField?: string,
+  opensGroupedField?: string,
+  /** The table reads a grouped query, which has no flat read: `flat` is malformed for it. */
+  groupedQuery = false,
 ): RecordsTableQueryStateRead => {
   const addressed = [...entries];
   const filtersSeen = new Set<string>();
@@ -373,12 +384,16 @@ export const readRecordsTableQueryState = (
       return { kind: "malformed", part: "filter" };
     filters.push({ fieldId: fieldId.toLowerCase(), filter });
   }
+  const addressedGroup = decodeGroupParameter(owned.get(groupParameter(placementId)));
+  if (addressedGroup === "malformed" || (addressedGroup === "flat" && groupedQuery))
+    return { kind: "malformed", part: "group" };
   const group =
-    decodeGroupParameter(owned.get(groupParameter(placementId))) ??
-    (requiredGroupField === undefined
+    addressedGroup === "flat"
       ? undefined
-      : { fieldId: requiredGroupField.toLowerCase(), after: null });
-  if (group === "malformed") return { kind: "malformed", part: "group" };
+      : (addressedGroup ??
+        (opensGroupedField === undefined
+          ? undefined
+          : { fieldId: opensGroupedField.toLowerCase(), after: null }));
   const expanded = decodeGroupExpansion(
     addressed.find(
       ([name]) => name.toLowerCase() === expandParameter(placementId).toLowerCase(),
@@ -465,10 +480,19 @@ export type RecordsTableQueryChange =
   /** `filter` is the address spelling of the field's typed filter; empty clears the field's filter. */
   | Readonly<{ kind: "filter"; fieldId: string; filter: string }>
   | Readonly<{ kind: "search"; text: string }>
-  /** Groups the table by a field (null leaves the grouping); every group starts closed. */
-  | Readonly<{ kind: "group"; fieldId: string | null }>
+  /**
+   * Groups the table by a field (null leaves the grouping); every group starts closed.
+   * `opensGrouped` is whether the table is authored to open grouped: the address then holds only
+   * the difference from that opening state.
+   */
+  | Readonly<{ kind: "group"; fieldId: string | null; opensGrouped: boolean }>
   /** Shows another page of the groups (null `after` is the first page); every group is closed. */
-  | Readonly<{ kind: "groupPage"; fieldId: string; after: string | null }>
+  | Readonly<{
+      kind: "groupPage";
+      fieldId: string;
+      after: string | null;
+      opensGrouped: boolean;
+    }>
   /**
    * A pivot cell opens the ordinary grid on the records it counts: every filter is set at once and
    * the pivot view is closed, so the one address change reads one bounded page.
@@ -509,15 +533,15 @@ export const applyRecordsTableQueryChange = (
   else if (parseRecordsTablePivotView(pivotValue) !== undefined)
     set(pivotParameter(placementId), "on");
   const settleView = (): void => {
-    // A selected view brings its own query state only while the address names none: once the
-    // person has cleared it all, the address says so explicitly.
+    // A selected view brings its own sort, filters and search only while the address names none:
+    // once the person has cleared them all, the address says so explicitly. Grouping is not part
+    // of a view's query state, so a grouped or flat address neither keeps nor clears the view's.
     const view = readRecordsTableView(placementId, parameters);
     if (view === undefined) return;
     const queried = [...parameters.keys()].some(
       (name) =>
         recordsTableParameterPlacement(name) === placementId.toLowerCase() &&
-        !name.toLowerCase().startsWith("view.") &&
-        !name.toLowerCase().startsWith("page."),
+        ["sort.", "filter.", "search."].some((prefix) => name.toLowerCase().startsWith(prefix)),
     );
     set(viewParameter(placementId), queried ? view.viewId : `${view.viewId}${VIEW_CLEARED_SUFFIX}`);
   };
@@ -549,17 +573,27 @@ export const applyRecordsTableQueryChange = (
       set(viewParameter(placementId), change.viewId ?? undefined);
       return;
     case "group":
-      set(groupParameter(placementId), change.fieldId ?? undefined);
+      // Back in the authored opening state, the parameter goes; otherwise it names the difference.
+      set(
+        groupParameter(placementId),
+        change.opensGrouped
+          ? change.fieldId === null
+            ? GROUP_FLAT_VALUE
+            : undefined
+          : (change.fieldId ?? undefined),
+      );
       applyRecordsTableGroupExpansion(parameters, placementId, null);
-      settleView();
       return;
     case "groupPage":
       set(
         groupParameter(placementId),
-        change.after === null ? change.fieldId : `${change.fieldId}.${toBase64Url(change.after)}`,
+        change.after === null
+          ? change.opensGrouped
+            ? undefined
+            : change.fieldId
+          : `${change.fieldId}.${toBase64Url(change.after)}`,
       );
       applyRecordsTableGroupExpansion(parameters, placementId, null);
-      settleView();
       return;
   }
 };
