@@ -54,6 +54,7 @@ const readSummary = async (
         searchableFieldIds: command.searchableFieldIds,
         ...(command.grouping === undefined ? {} : { grouping: command.grouping }),
         ...(command.pivot === undefined ? {} : { pivot: command.pivot }),
+        ...(command.groupLimit === undefined ? {} : { groupLimit: command.groupLimit }),
         ...(command.groupAfter === undefined ? {} : { groupAfter: command.groupAfter }),
         filterableFieldIds: command.filterableFieldIds,
       })}::text::jsonb
@@ -119,6 +120,17 @@ export const summariseCommand = async (
       result.groupByFieldIds.length !== 1 ||
       result.groupByFieldIds[0]?.toLowerCase() !== command.grouping.fieldId.toLowerCase() ||
       (result.nextGroupKey !== null &&
+        !groupCursorEndsAt(result.nextGroupKey, result.groups.at(-1)?.groupKey)))
+  )
+    throw new Error("PROTECTED_QUERY_RESULT_INVALID");
+  // The query's own grouping is paged too: at most the requested page, or the default 40.
+  if (
+    result.outcome === "completed" &&
+    command.grouping === undefined &&
+    command.pivot === undefined &&
+    (result.groups.length > (command.groupLimit ?? 40) ||
+      (result.nextGroupKey !== null &&
+        result.nextGroupKey !== undefined &&
         !groupCursorEndsAt(result.nextGroupKey, result.groups.at(-1)?.groupKey)))
   )
     throw new Error("PROTECTED_QUERY_RESULT_INVALID");

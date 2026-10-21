@@ -147,6 +147,7 @@ const projectChart = (input: {
         categoryLabel: string;
         measureLabel: string;
         points: readonly ChartPoint[];
+        moreGroups: boolean;
       }>;
     }>
   | Readonly<{
@@ -195,7 +196,14 @@ const projectChart = (input: {
   }
   return {
     ok: true,
-    chart: { kind: "chart", categoryLabel: categoryField.label, measureLabel, points },
+    chart: {
+      kind: "chart",
+      categoryLabel: categoryField.label,
+      measureLabel,
+      points,
+      // The summary pages its groups; the chart draws the first page and says more exist.
+      moreGroups: summary.nextGroupKey !== null && summary.nextGroupKey !== undefined,
+    },
   };
 };
 

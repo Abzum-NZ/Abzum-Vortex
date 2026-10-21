@@ -42,6 +42,26 @@ const requestSchema = z
   })
   .strict();
 
+const groupPageTrailSchema = z.array(z.string().min(1).max(4096)).max(200);
+
+/** The group cursors a summary page token holds, oldest first; undefined when it is not one. */
+const groupPageTrail = (token: string): readonly string[] | undefined => {
+  if (!token.startsWith("g:")) return undefined;
+  try {
+    const trail = groupPageTrailSchema.safeParse(JSON.parse(token.slice(2)));
+    return trail.success ? trail.data : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+/** A summary page token; the oldest cursors give way when the trail outgrows a token. */
+const groupPageToken = (trail: readonly string[]): string => {
+  let kept = trail.slice(-200);
+  while (kept.length > 1 && JSON.stringify(kept).length > 65_000) kept = kept.slice(1);
+  return `g:${JSON.stringify(kept)}`;
+};
+
 /** One column of the results grid: a field the query returns, by its label. */
 export type StudioDataColumn = Readonly<{ key: string; label: string }>;
 
@@ -77,9 +97,7 @@ export type StudioDataRecordsResult =
         count: number;
         totals: readonly StudioDataTotal[];
       }>[];
-      /** How many groups the summary has in all, over every page. */
-      groupCount: number;
-      /** The groups after and before this page, by keyset: the key of the group the page ends or starts at. */
+      /** The pages after and before this one, by the summary's group keyset. */
       next?: string;
       previous?: string;
       totalRowCount: number;
@@ -235,10 +253,18 @@ export const readStudioDataRecords = async (
     const summary = query.groupByFieldIds.length > 0 || query.aggregates.length > 0;
     const label = query.label ?? sentence(query.key);
     if (summary) {
+      // Groups are paged by the summary's keyset. The token holds the cursor every page so far
+      // started after (none for the first), so the previous page is the trail without its last.
+      const trail =
+        request.continuationToken === undefined ? [] : groupPageTrail(request.continuationToken);
+      if (trail === undefined) return { kind: "query_refused", reason: "continuation_invalid" };
+      const after = trail.at(-1);
       const summaryCommand = protectedQuerySummaryCommandSchema.safeParse({
         moduleRootId: module.rootId,
         queryId: query.queryId,
         inputValues: {},
+        groupLimit: request.pageSize,
+        ...(after === undefined ? {} : { groupAfter: after }),
       });
       if (!summaryCommand.success) return { kind: "query_refused", reason: "request_invalid" };
       const read = await services.queries.summarise(session, selection, summaryCommand.data);
@@ -253,24 +279,7 @@ export const readStudioDataRecords = async (
         const field = fieldOf(String(fieldId));
         return field === undefined ? [] : [field];
       });
-      // Groups are paged by keyset like records: a page continues after (or before) the group whose
-      // key the token names. A token that names no group of this summary is refused, never guessed.
-      let start = 0;
-      let end = Math.min(completed.groups.length, request.pageSize);
-      if (request.continuationToken !== undefined) {
-        const at = completed.groups.findIndex(
-          (group) => `g:${group.groupKey}` === request.continuationToken,
-        );
-        if (at < 0) return { kind: "query_refused", reason: "continuation_invalid" };
-        if (request.pageDirection === "backward") {
-          end = at;
-          start = Math.max(0, at - request.pageSize);
-        } else {
-          start = at + 1;
-          end = Math.min(completed.groups.length, start + request.pageSize);
-        }
-      }
-      const shown = completed.groups.slice(start, end);
+      const shown = completed.groups;
       const groupLinks = collectRecordLinkValues(
         shown.flatMap((group) => Object.values<JsonValue>(group.groupValues)),
       );
@@ -301,11 +310,10 @@ export const readStudioDataRecords = async (
         totalRowCount: completed.totalRowCount,
         totals: totalsOf(completed.aggregates),
         groupColumns: groupFields.map((field) => ({ key: field.key, label: field.label })),
-        groupCount: completed.groups.length,
-        ...(end < completed.groups.length && shown.length > 0
-          ? { next: `g:${shown.at(-1)!.groupKey}` }
+        ...(typeof completed.nextGroupKey === "string"
+          ? { next: groupPageToken([...trail, completed.nextGroupKey]) }
           : {}),
-        ...(start > 0 && shown.length > 0 ? { previous: `g:${shown[0]!.groupKey}` } : {}),
+        ...(trail.length > 0 ? { previous: groupPageToken(trail.slice(0, -1)) } : {}),
         groups: shown.map((group) => ({
           key: group.groupKey,
           count: group.rowCount,
