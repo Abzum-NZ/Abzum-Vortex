@@ -55,9 +55,7 @@ export function PersonalFormattingDialog({
   onClose: () => void;
 }>): ReactElement {
   const ownId = useId();
-  const [rules, setRules] = useState<readonly GridViewFormatRule[]>(
-    selected.document.formatting ?? [],
-  );
+  const [rules, setRules] = useState<readonly GridViewFormatRule[]>(selected.document.formatting);
   // The revision these rules were read from: a save never claims a newer one it has not shown.
   const [baseRevision] = useState(selected.revision);
   const [activeId, setActiveId] = useState<string | undefined>(undefined);

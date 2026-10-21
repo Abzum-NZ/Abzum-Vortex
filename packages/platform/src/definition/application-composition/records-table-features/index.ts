@@ -1,4 +1,9 @@
-import { RECORDS_TABLE_UNVIRTUALIZED_ROW_LIMIT } from "./shared";
+import {
+  RECORDS_TABLE_UNVIRTUALIZED_ROW_LIMIT,
+  UnreadableSettingError,
+  requiredGroup,
+  withSettingPath,
+} from "./shared";
 import {
   recordsTableSpreadsheetFeature,
   type RecordsTableSpreadsheetSettings,
@@ -67,7 +72,6 @@ import { recordsTableExportFeature, type RecordsTableExportSettings } from "./ex
 import {
   featureAvailable,
   featureNotPossible,
-  settingGroup,
   type RecordsTableFeatureCheck,
   type RecordsTableFeatureRefusalCode,
   type RecordsTableFeatureDefinition,
@@ -239,75 +243,48 @@ export const recordsTableFeatureState = (
   key: RecordsTableFeatureKey,
 ): RecordsTableFeatureState<object> => features[registry[key].property];
 
+/** The `features` setting group read whole, or the path of the setting that cannot be read. */
+type RecordsTableFeaturesRead =
+  | Readonly<{ kind: "read"; features: RecordsTableFeatures }>
+  | Readonly<{ kind: "unreadable"; path: string }>;
+
 /**
  * Reads the `features` setting group. The catalogue default fills in every feature, so a group
- * that is missing, or a feature that does not say whether it is on, is not read: no renderer or
- * server ever guesses a feature the definition did not decide.
+ * that is missing, a feature that does not say whether it is on, or a feature with a setting or
+ * list entry it cannot read is unreadable, naming the part: no renderer or server ever guesses a
+ * feature the definition did not decide, and a partial entry never disappears.
  */
 export const readRecordsTableFeatures = (
   value: ComponentSettingValue | undefined,
+): RecordsTableFeaturesRead => {
+  try {
+    const group = requiredGroup(value, "features");
+    const read = <Key extends RecordsTableFeatureKey>(key: Key): RecordsTableFeatureState<object> =>
+      withSettingPath(`features.${key}`, () =>
+        registry[key].definition.read(requiredGroup(group[key], "group")),
+      );
+    const states = Object.fromEntries(
+      recordsTableFeatureKeys.map((key) => [registry[key].property, read(key)]),
+    );
+    return { kind: "read", features: states as RecordsTableFeatures };
+  } catch (error) {
+    if (error instanceof UnreadableSettingError) return { kind: "unreadable", path: error.path };
+    throw error;
+  }
+};
+
+/**
+ * The features of a `features` setting group, or undefined after logging where it cannot be read.
+ * `where` names the caller, so the log says which read refused the group.
+ */
+export const recordsTableFeaturesOrLog = (
+  value: ComponentSettingValue | undefined,
+  where: string,
 ): RecordsTableFeatures | undefined => {
-  const group = settingGroup(value);
-  if (group === undefined) return undefined;
-  const read = <Key extends RecordsTableFeatureKey>(key: Key) => {
-    const feature = settingGroup(group[key]);
-    return feature === undefined || feature["enabled"]?.kind !== "boolean"
-      ? undefined
-      : registry[key].definition.read(feature);
-  };
-  const spreadsheet = read("spreadsheet");
-  const search = read("search");
-  const columnFilters = read("column_filters");
-  const savedViews = read("saved_views");
-  const bulkActions = read("bulk_actions");
-  const inlineEdit = read("inline_edit");
-  const rowEdit = read("row_edit");
-  const rowActions = read("row_actions");
-  const masterDetail = read("master_detail");
-  const tree = read("tree");
-  const grouping = read("grouping");
-  const conditionalFormatting = read("conditional_formatting");
-  const pinning = read("pinning");
-  const pivot = read("pivot");
-  const board = read("board");
-  const exported = read("export");
-  if (
-    spreadsheet === undefined ||
-    search === undefined ||
-    columnFilters === undefined ||
-    savedViews === undefined ||
-    bulkActions === undefined ||
-    inlineEdit === undefined ||
-    rowEdit === undefined ||
-    rowActions === undefined ||
-    masterDetail === undefined ||
-    tree === undefined ||
-    grouping === undefined ||
-    conditionalFormatting === undefined ||
-    pinning === undefined ||
-    pivot === undefined ||
-    board === undefined ||
-    exported === undefined
-  )
-    return undefined;
-  return {
-    spreadsheet: spreadsheet as RecordsTableFeatures["spreadsheet"],
-    search,
-    pinning,
-    columnFilters: columnFilters as RecordsTableFeatures["columnFilters"],
-    savedViews: savedViews as RecordsTableFeatures["savedViews"],
-    bulkActions: bulkActions as RecordsTableFeatures["bulkActions"],
-    inlineEdit: inlineEdit as RecordsTableFeatures["inlineEdit"],
-    rowEdit: rowEdit as RecordsTableFeatures["rowEdit"],
-    rowActions,
-    masterDetail: masterDetail as RecordsTableFeatures["masterDetail"],
-    tree: tree as RecordsTableFeatures["tree"],
-    grouping: grouping as RecordsTableFeatures["grouping"],
-    conditionalFormatting: conditionalFormatting as RecordsTableFeatures["conditionalFormatting"],
-    pivot: pivot as RecordsTableFeatures["pivot"],
-    board: board as RecordsTableFeatures["board"],
-    export: exported as RecordsTableFeatures["export"],
-  };
+  const read = readRecordsTableFeatures(value);
+  if (read.kind === "read") return read.features;
+  console.error(`[grid] ${where} refused: DATA_GRID_SETTING_UNREADABLE path=${read.path}`);
+  return undefined;
 };
 
 /**
@@ -388,9 +365,8 @@ export const checkRecordsTableFeature = (
   // Paste and fill write through the table's inline edit, so they need it on with a field to change.
   if (
     key === "spreadsheet" &&
-    state.enabled &&
-    ((state as { paste?: boolean }).paste === true ||
-      (state as { fill?: boolean }).fill === true) &&
+    features.spreadsheet.enabled &&
+    (features.spreadsheet.paste || features.spreadsheet.fill) &&
     (!features.inlineEdit.enabled || features.inlineEdit.fields.length === 0)
   )
     return featureNotPossible(

@@ -186,7 +186,7 @@ const conditionalRequiredMessage = (property: BlockPropertySchemaContract): stri
  * The fields a field reference may name: the block's fields, narrowed to the field types its
  * declaration allows. Publication refuses any other, so the picker never offers one.
  */
-export const studioFittingFields = (
+const studioFittingFields = (
   property: BlockPropertySchemaContract,
   fields: readonly StudioQueryField[],
 ): readonly StudioQueryField[] =>

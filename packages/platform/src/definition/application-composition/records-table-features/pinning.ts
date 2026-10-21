@@ -13,7 +13,7 @@ export const recordsTablePinningFeature: RecordsTableFeatureDefinition<RecordsTa
     key: "pinning",
     label: "Column pinning",
     description: "Keep columns at the start or end while scrolling; choose defaults in Columns",
-    read: (group) => ({ enabled: featureEnabled(group) === true }),
+    read: (group) => ({ enabled: featureEnabled(group) }),
     check: (_state, facts) =>
       facts.fields.length > 0
         ? featureAvailable

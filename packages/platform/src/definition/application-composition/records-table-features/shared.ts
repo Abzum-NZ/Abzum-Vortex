@@ -29,22 +29,97 @@ export const settingField = (value: ComponentSettingValue | undefined): string |
     : "fieldId" in value
       ? String(value.fieldId)
       : String(value.field);
-/** A boolean setting read only when it is a boolean; otherwise absent. */
-export const settingBoolean = (value: ComponentSettingValue | undefined): boolean | undefined =>
-  value?.kind === "boolean" ? value.value : undefined;
-/** A choice setting read only when it names one of the allowed values; otherwise absent. */
-export const settingOptionalChoice = <Choice extends string>(
-  value: ComponentSettingValue | undefined,
-  allowed: readonly Choice[],
-): Choice | undefined =>
-  value?.kind === "choice" && (allowed as readonly string[]).includes(value.value)
-    ? (value.value as Choice)
-    : undefined;
+export const recordsTableColumnPins = ["start", "end", "unpinned"] as const;
+/** Row height of the grid: comfortable rows are 44px, compact rows 32px. */
+export const recordsTableDensities = ["comfortable", "compact"] as const;
+export const recordsTableSortDirections = ["ascending", "descending"] as const;
 /** The calendar units a date dimension (a pivot axis or a grouping) buckets by. */
 export const recordsTablePivotDateUnits = ["day", "week", "month", "quarter", "year"] as const;
 export type RecordsTablePivotDateUnit = (typeof recordsTablePivotDateUnits)[number];
-export const fieldList = (value: ComponentSettingValue | undefined): string[] =>
-  (settingItems(value) ?? []).flatMap((item) => settingField(item) ?? []);
+
+/**
+ * A setting the Data grid readers cannot read: the path names where, so a refusal and its log say
+ * which part of the authored settings is at fault. Readers never repair or skip what they cannot
+ * read; the whole table, or the whole feature, is refused.
+ */
+export class UnreadableSettingError extends Error {
+  constructor(readonly path: string) {
+    super(`DATA_GRID_SETTING_UNREADABLE path=${path}`);
+    this.name = "UnreadableSettingError";
+  }
+}
+
+export const unreadable = (path: string): never => {
+  throw new UnreadableSettingError(path);
+};
+
+/** Prefixes the path of an unreadable setting raised by `read`, so it names the part it sits in. */
+export const withSettingPath = <Result>(prefix: string, read: () => Result): Result => {
+  try {
+    return read();
+  } catch (error) {
+    if (error instanceof UnreadableSettingError)
+      throw new UnreadableSettingError(`${prefix}.${error.path}`);
+    throw error;
+  }
+};
+
+/**
+ * The strict readers: a setting the catalogue defaults fill in must be present with its kind,
+ * otherwise it is unreadable. The `optional` readers serve a setting that is absent until the
+ * builder names it, and refuse one that is present but of another kind or value.
+ */
+export const requiredGroup = (
+  value: ComponentSettingValue | undefined,
+  path: string,
+): SettingsRecord => settingGroup(value) ?? unreadable(path);
+export const requiredItems = (
+  value: ComponentSettingValue | undefined,
+  path: string,
+): readonly ComponentSettingValue[] => settingItems(value) ?? unreadable(path);
+export const requiredBoolean = (value: ComponentSettingValue | undefined, path: string): boolean =>
+  value?.kind === "boolean" ? value.value : unreadable(path);
+export const requiredNumber = (value: ComponentSettingValue | undefined, path: string): number =>
+  value?.kind === "number" ? value.value : unreadable(path);
+export const requiredText = (value: ComponentSettingValue | undefined, path: string): string =>
+  settingText(value) ?? unreadable(path);
+export const requiredField = (value: ComponentSettingValue | undefined, path: string): string =>
+  settingField(value) ?? unreadable(path);
+export const requiredChoice = <Choice extends string>(
+  value: ComponentSettingValue | undefined,
+  allowed: readonly Choice[],
+  path: string,
+): Choice =>
+  value?.kind === "choice" && (allowed as readonly string[]).includes(value.value)
+    ? (value.value as Choice)
+    : unreadable(path);
+/** Every item of a required list of field references; one that is not a field refuses the list. */
+export const requiredFieldList = (
+  value: ComponentSettingValue | undefined,
+  path: string,
+): string[] =>
+  requiredItems(value, path).map((item, index) => requiredField(item, `${path}[${index}]`));
+export const optionalText = (
+  value: ComponentSettingValue | undefined,
+  path: string,
+): string | undefined => (value === undefined ? undefined : requiredText(value, path));
+export const optionalField = (
+  value: ComponentSettingValue | undefined,
+  path: string,
+): string | undefined => (value === undefined ? undefined : requiredField(value, path));
+export const optionalNumber = (
+  value: ComponentSettingValue | undefined,
+  path: string,
+): number | undefined => (value === undefined ? undefined : requiredNumber(value, path));
+export const optionalChoice = <Choice extends string>(
+  value: ComponentSettingValue | undefined,
+  allowed: readonly Choice[],
+  path: string,
+): Choice | undefined => (value === undefined ? undefined : requiredChoice(value, allowed, path));
+
+/** Reads the `enabled` switch of one feature group; a group that does not declare it is unreadable. */
+export const featureEnabled = (group: SettingsRecord): boolean =>
+  requiredBoolean(group["enabled"], "enabled");
 
 /**
  * A feature is off, holding nothing else, or on with its own typed settings. Only an enabled feature
@@ -52,12 +127,6 @@ export const fieldList = (value: ComponentSettingValue | undefined): string[] =>
  */
 export type RecordsTableFeatureState<Settings extends object> =
   Readonly<{ enabled: false }> | Readonly<{ enabled: true } & Settings>;
-
-/** Reads the `enabled` switch of one feature group; undefined when the group does not declare it. */
-export const featureEnabled = (group: SettingsRecord | undefined): boolean | undefined => {
-  const enabled = group?.["enabled"];
-  return enabled?.kind === "boolean" ? enabled.value : undefined;
-};
 
 /**
  * One field of the bound query as a feature check sees it. `field` is spelled as the table's
@@ -320,7 +389,8 @@ export type RecordsTableFeatureDefinition<Settings extends object> = Readonly<{
   label: string;
   /** One short line saying what the feature lets people do. */
   description: string;
-  read(group: SettingsRecord): RecordsTableFeatureState<Settings> | undefined;
+  /** Reads the enabled feature's settings; a setting it cannot read throws `UnreadableSettingError`. */
+  read(group: SettingsRecord): RecordsTableFeatureState<Settings>;
   check(
     state: RecordsTableFeatureState<Settings>,
     facts: RecordsTableQueryFacts,

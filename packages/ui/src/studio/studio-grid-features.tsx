@@ -4,7 +4,7 @@ import { useId, useState, type ReactElement } from "react";
 import {
   checkRecordsTableFeature,
   plainSourceSettingValue,
-  readRecordsTableFeatures,
+  recordsTableFeaturesOrLog,
   recordsTableFeatureDescription,
   recordsTableFilterKindOf,
   recordsTableFeatureKeys,
@@ -145,7 +145,7 @@ export function StudioGridFeatures({
     kind: "group",
     properties: Object.fromEntries(recordsTableFeatureKeys.map((key) => [key, featureValue(key)])),
   };
-  const features = readRecordsTableFeatures(whole);
+  const features = recordsTableFeaturesOrLog(whole, "studio features editor");
   const authoredPageSize = tableSettings["page_size"];
   const tablePageSize = authoredPageSize?.kind === "number" ? authoredPageSize.value : undefined;
   const facts = studioRecordsTableQueryFacts(

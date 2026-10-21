@@ -1,11 +1,13 @@
 import type { GridLayoutState } from "../grid-view-state";
+import type {
+  ConditionalColumnFormatProjection,
+  ConditionalFormattingProjection,
+} from "../records-table-feature-projection";
 import {
   conditionalFormatRuleFields,
   type ConditionalFormatRule,
   conditionalFormattingDateParameters,
   type ConditionNode,
-  type ConditionalFormatStyle,
-  type ConditionalFormatToken,
   type ConditionalFormattingDateParameter,
   type JsonValue,
   type ModuleField,
@@ -18,27 +20,6 @@ import {
 } from "../../rules/index";
 import type { ProtectedQueryRow } from "../../queries/protected-query-contracts";
 import { relativeAnchorDate } from "../query-binding-resolver";
-
-/**
- * How one numeric column is drawn for this read: a data bar of one token, or a three-point colour
- * scale. Its measures (`RecordsTableRowFormat.measures`) are fractions of the page's own range.
- */
-export type ConditionalColumnFormatProjection =
-  | Readonly<{ kind: "data_bar"; token: ConditionalFormatToken }>
-  | Readonly<{
-      kind: "colour_scale";
-      tokens: readonly [ConditionalFormatToken, ConditionalFormatToken, ConditionalFormatToken];
-    }>;
-
-/**
- * The formatting one viewer sees on one read: the styles of the rules that matched a row of the
- * page (keyed by rule identity, the style key the rows carry) and the numeric columns drawn as bars
- * or scales. Nothing else of a rule travels: never its condition, never a value it read.
- */
-export type ConditionalFormattingProjection = Readonly<{
-  styles: Readonly<Record<string, ConditionalFormatStyle>>;
-  columns: Readonly<Record<string, ConditionalColumnFormatProjection>>;
-}>;
 
 /**
  * One row's formatting: the style key of the whole row, the style key of each formatted cell (a

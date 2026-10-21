@@ -5,7 +5,7 @@ import {
   moneyValueSchema,
   recordLinkValueSchema,
   readQueryBindings,
-  readRecordsTableContract,
+  recordsTableContractOrLog,
   type IdentitySession,
   type JsonValue,
   type OrganizationSelectionCandidate,
@@ -242,7 +242,7 @@ const measureNames: Readonly<Record<string, string>> = {
 export const readRecordsTablePivot = async (request: PivotRequest): Promise<PivotResult> => {
   const { context, placement } = request;
   const settings = placementSettingsOf(placement);
-  const contract = readRecordsTableContract(settings);
+  const contract = recordsTableContractOrLog(settings, "pivot");
   const feature = contract?.features.pivot;
   if (contract === undefined || feature === undefined || !feature.enabled)
     return refuse("feature_off");

@@ -220,12 +220,12 @@ export const readRecordsTable = async (
       )
         selectedQuery = {
           ...addressed.state,
-          sort: selected.document.sort ?? [],
-          filters: (selected.document.filters ?? []).flatMap(({ fieldId, filter }) => {
+          sort: selected.document.sort,
+          filters: selected.document.filters.flatMap(({ fieldId, filter }) => {
             const typed = decodeRecordsTableFieldFilter(filter);
             return typed === undefined ? [] : [{ fieldId, filter: typed }];
           }),
-          search: selected.document.search ?? null,
+          search: selected.document.search,
         };
       // A layout the person arranged from this view is theirs; otherwise the view's shows.
       if (stored?.basedOnViewId !== selected.viewId)

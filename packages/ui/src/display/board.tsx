@@ -13,7 +13,7 @@ import {
 } from "react";
 import {
   describeFailure,
-  readRecordsTableContract,
+  recordsTableContractOrLog,
   type BoardColumnSelector,
   type PipelineStageTone,
 } from "@vortex/platform/schema";
@@ -497,7 +497,7 @@ export function BoardView(props: DisplayRenderProps<BoardPayload>): ReactElement
     events,
   } = resolveDisplayContext<BoardPayload>(props, () => false, "No records to show");
   // The board's cards offer the grid's own declared row actions, each by its event identity.
-  const contract = readRecordsTableContract(props.settings);
+  const contract = recordsTableContractOrLog(props.settings, "board display");
   const rowActions: readonly BoardRowAction[] = contract?.features.rowActions.enabled
     ? contract.rowBehaviours.rowActions
     : [];

@@ -19,6 +19,7 @@ import {
   recordsTableGroupingRequired,
   recordsTableQueryFacts,
   type BlockPropertySchemaContract,
+  type RecordsTableContract,
   type RecordsTableQueryFacts,
   type RecordsTableRelatedRecordsFacts,
   compiledPageBindingFacts,
@@ -122,7 +123,7 @@ export function applicationPageRules(scope: ApplicationScope): void {
     bound: JsonObject,
     page: RecordsTableRelatedRecordsFacts["page"],
     signedIn: boolean,
-    table: NonNullable<ReturnType<typeof readRecordsTableContract>>,
+    table: RecordsTableContract,
   ): RecordsTableQueryFacts => {
     const recordTypeId = String(object(bound.recordType).recordTypeId);
     const record = records.get(recordTypeId);
@@ -431,7 +432,9 @@ export function applicationPageRules(scope: ApplicationScope): void {
             problem.sentence,
           ),
         );
-      const table = readRecordsTableContract(settings);
+      const tableRead =
+        blockKey === "platform.display.table" ? readRecordsTableContract(settings) : undefined;
+      const table = tableRead?.kind === "read" ? tableRead.contract : undefined;
       const detail = table === undefined ? readRecordDetailContract(settings) : undefined;
       if (
         blockKey === "platform.display.record_detail" &&
@@ -442,9 +445,12 @@ export function applicationPageRules(scope: ApplicationScope): void {
           failure(output, "vortex.definition.application_block_settings", "required_value"),
         );
       // A Records table always declares a readable contract: every column with all of its
-      // settings (format, width, alignment, responsive priority, default visibility, auto-size,
-      // pin position) and a page size.
-      if (blockKey === "platform.display.table" && table === undefined)
+      // settings, every default sort key and feature entry, and a page size. The refusal names
+      // the setting that cannot be read, in the server log and in the sentence.
+      if (tableRead?.kind === "unreadable") {
+        console.error(
+          `[publish] ${release?.name ?? "Data grid"} refused: DATA_GRID_SETTING_UNREADABLE path=${tableRead.path}`,
+        );
         failures.push(
           failure(
             output,
@@ -452,9 +458,10 @@ export function applicationPageRules(scope: ApplicationScope): void {
             "required_value",
             undefined,
             "definition_query_binding",
-            `${release?.name ?? "This block"} needs every column to state its format, width, alignment, responsive priority, whether it shows by default and where it is pinned, and a page size`,
+            `${release?.name ?? "This block"} has a setting that cannot be read (${tableRead.path}): every column, sort key and feature entry must state all of its settings`,
           ),
         );
+      }
       if (blockKey === "platform.display.calendar") {
         const settingFieldId = (value: unknown): string | undefined => {
           // An optional property the placement leaves out is absent, not an error.
@@ -734,7 +741,8 @@ export function applicationPageRules(scope: ApplicationScope): void {
             publicBlockReferencesSafe = false;
         });
         // A board reads its cards under the viewer's own record access, which a public page has none of.
-        if (readRecordsTableContract(object(placement.settings) as never)?.features.board.enabled)
+        const publicTable = readRecordsTableContract(object(placement.settings) as never);
+        if (publicTable.kind === "read" && publicTable.contract.features.board.enabled)
           publicBlockReferencesSafe = false;
         const inspectPublicSetting = (setting: JsonObject) => {
           if (setting.kind === "field_reference" && !pagePublicFields.has(String(setting.fieldId)))

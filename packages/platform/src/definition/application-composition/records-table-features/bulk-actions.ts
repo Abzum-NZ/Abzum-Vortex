@@ -3,9 +3,12 @@ import {
   featureAvailable,
   featureEnabled,
   featureNotPossible,
-  settingGroup,
-  settingItems,
-  settingText,
+  requiredBoolean,
+  requiredGroup,
+  requiredItems,
+  requiredNumber,
+  requiredText,
+  unreadable,
   type RecordsTableFeatureDefinition,
 } from "./shared";
 
@@ -33,32 +36,24 @@ export type RecordsTableBulkActionsSettings = Readonly<{
   actions: readonly RecordsTableBulkActionContract[];
 }>;
 
-const settingAction = (value: ComponentSettingValue | undefined): string | undefined =>
-  value?.kind !== "action_reference"
-    ? undefined
-    : "actionKey" in value
-      ? String(value.actionKey)
-      : String(value.action);
+const settingAction = (value: ComponentSettingValue | undefined, path: string): string => {
+  if (value?.kind !== "action_reference") return unreadable(path);
+  return "actionKey" in value ? String(value.actionKey) : String(value.action);
+};
 
-/** Reads the declared bulk actions, keeping only entries that name an action and a label. */
+/** Reads the declared bulk actions; an entry that does not say everything refuses the feature. */
 const readBulkActions = (
   value: ComponentSettingValue | undefined,
 ): RecordsTableBulkActionContract[] =>
-  (settingItems(value) ?? []).flatMap((item): RecordsTableBulkActionContract[] => {
-    const entry = settingGroup(item);
-    if (entry === undefined) return [];
-    const action = settingAction(entry["action"]);
-    const label = settingText(entry["label"]);
-    const confirm = entry["confirm"];
-    const maxRecords = entry["max_records"];
-    if (
-      action === undefined ||
-      label === undefined ||
-      confirm?.kind !== "boolean" ||
-      maxRecords?.kind !== "number"
-    )
-      return [];
-    return [{ action, label, confirm: confirm.value, maxRecords: maxRecords.value }];
+  requiredItems(value, "actions").map((item, index): RecordsTableBulkActionContract => {
+    const at = `actions[${index}]`;
+    const entry = requiredGroup(item, at);
+    return {
+      action: settingAction(entry["action"], `${at}.action`),
+      label: requiredText(entry["label"], `${at}.label`),
+      confirm: requiredBoolean(entry["confirm"], `${at}.confirm`),
+      maxRecords: requiredNumber(entry["max_records"], `${at}.max_records`),
+    };
   });
 
 const sameKey = (left: string, right: string): boolean =>
@@ -70,7 +65,7 @@ export const recordsTableBulkActionsFeature: RecordsTableFeatureDefinition<Recor
     label: "Bulk actions",
     description: "Select rows, or every matching record, and run a named action over them",
     read: (group) =>
-      featureEnabled(group) === true
+      featureEnabled(group)
         ? { enabled: true, actions: readBulkActions(group["actions"]) }
         : { enabled: false },
     // A selection of records needs rows that are records (a grouped or summarised query has none)

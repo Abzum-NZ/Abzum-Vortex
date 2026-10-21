@@ -1,6 +1,6 @@
 import {
   checkRecordsTableGrouping,
-  readRecordsTableFeatures,
+  recordsTableFeaturesOrLog,
   type BlockPropertySchemaContract,
   type PlatformBlockRelease,
   type SourceBlockPropertyValueContract,
@@ -98,7 +98,7 @@ export const studioGroupedTableSettings = (
       },
     },
   };
-  const state = readRecordsTableFeatures(features)?.grouping;
+  const state = recordsTableFeaturesOrLog(features, "studio grouped preset")?.grouping;
   if (state === undefined) throw new Error("The Group by settings of the Data grid are invalid");
   const check = checkRecordsTableGrouping(state, studioGroupingFacts(query));
   if (check.kind === "not_possible") return { problem: check.reason };

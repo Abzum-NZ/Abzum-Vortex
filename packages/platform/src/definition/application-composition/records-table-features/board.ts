@@ -8,11 +8,13 @@ import {
   featureAvailable,
   featureEnabled,
   featureNotPossible,
-  settingGroup,
-  settingItems,
-  settingText,
-  fieldList,
-  settingField,
+  optionalField,
+  optionalNumber,
+  requiredBoolean,
+  requiredFieldList,
+  requiredGroup,
+  requiredItems,
+  requiredText,
   type RecordsTableBoardFacts,
   type RecordsTableFeatureCheck,
   type RecordsTableFeatureDefinition,
@@ -41,7 +43,7 @@ export type RecordsTableBoardSettings = Readonly<{
   totals: readonly Readonly<{ alias: string; label: string }>[];
   wipLimit?: number;
   /** Each stage column offers adding a card there, through the flow bound to a card being added. */
-  quickAdd?: boolean;
+  quickAdd: boolean;
 }>;
 
 /** The Board feature while it is on: what the board projection and its capability check read. */
@@ -74,25 +76,26 @@ export const recordsTableBoardFeature: RecordsTableFeatureDefinition<RecordsTabl
   description:
     "Show the records as cards in columns, one for each stage; move a card to change its stage",
   read: (group) => {
-    if (featureEnabled(group) !== true) return { enabled: false };
-    const totals = (settingItems(group["totals"]) ?? []).flatMap((item) => {
-      const total = settingGroup(item);
-      const alias = settingText(total?.["alias"]);
-      const label = settingText(total?.["label"]);
-      return alias === undefined || label === undefined ? [] : [{ alias, label }];
+    if (!featureEnabled(group)) return { enabled: false };
+    const totals = requiredItems(group["totals"], "totals").map((item, index) => {
+      const at = `totals[${index}]`;
+      const total = requiredGroup(item, at);
+      return {
+        alias: requiredText(total["alias"], `${at}.alias`),
+        label: requiredText(total["label"], `${at}.label`),
+      };
     });
-    const columnField = settingField(group["column_field"]);
-    const cardTitleField = settingField(group["card_title_field"]);
-    const wipLimit = group["wip_limit"];
-    const quickAdd = group["quick_add"];
+    const columnField = optionalField(group["column_field"], "column_field");
+    const cardTitleField = optionalField(group["card_title_field"], "card_title_field");
+    const wipLimit = optionalNumber(group["wip_limit"], "wip_limit");
     return {
       enabled: true,
       ...(columnField === undefined ? {} : { columnField }),
       ...(cardTitleField === undefined ? {} : { cardTitleField }),
-      cardFields: fieldList(group["card_fields"]),
+      cardFields: requiredFieldList(group["card_fields"], "card_fields"),
       totals,
-      ...(wipLimit?.kind === "number" ? { wipLimit: wipLimit.value } : {}),
-      ...(quickAdd?.kind === "boolean" ? { quickAdd: quickAdd.value } : {}),
+      ...(wipLimit === undefined ? {} : { wipLimit }),
+      quickAdd: requiredBoolean(group["quick_add"], "quick_add"),
     };
   },
   // A board's columns and moves come from the pipeline of its stage field, so the bound query must
@@ -178,8 +181,6 @@ export const boardProblem = (
       state.wipLimit > RECORDS_TABLE_BOARD_MAXIMUM_WIP_LIMIT)
   )
     return refuse(`Limit a column to 1 to ${RECORDS_TABLE_BOARD_MAXIMUM_WIP_LIMIT} cards.`);
-  if (state.quickAdd === undefined)
-    return refuse("Choose whether each column offers adding a card.");
   return undefined;
 };
 

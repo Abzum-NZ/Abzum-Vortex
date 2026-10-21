@@ -2,7 +2,9 @@ import {
   featureAvailable,
   featureEnabled,
   featureNotPossible,
-  settingItems,
+  optionalNumber,
+  requiredChoice,
+  requiredItems,
   type RecordsTableFeatureDefinition,
 } from "./shared";
 
@@ -49,16 +51,14 @@ export const recordsTableExportFeature: RecordsTableFeatureDefinition<RecordsTab
     label: "Export",
     description: "Download the selected rows, the current view or every matching record as a file",
     read: (group) => {
-      if (featureEnabled(group) !== true) return { enabled: false };
-      const maxRows = group["max_rows"];
+      if (!featureEnabled(group)) return { enabled: false };
+      const maxRows = optionalNumber(group["max_rows"], "max_rows");
       return {
         enabled: true,
-        formats: (settingItems(group["formats"]) ?? []).flatMap((item) =>
-          item.kind === "choice"
-            ? recordsTableExportFormats.filter((format) => format === item.value)
-            : [],
+        formats: requiredItems(group["formats"], "formats").map((item, index) =>
+          requiredChoice(item, recordsTableExportFormats, `formats[${index}]`),
         ),
-        ...(maxRows?.kind === "number" ? { maxRows: maxRows.value } : {}),
+        ...(maxRows === undefined ? {} : { maxRows }),
       };
     },
     // Export reads whole records, so the query must return records, and the record type must

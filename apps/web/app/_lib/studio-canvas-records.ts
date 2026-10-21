@@ -17,7 +17,7 @@ import {
   gridLayoutSchema,
   organizationIdSchema,
   readRecordDetailContract,
-  readRecordsTableContract,
+  recordsTableContractOrLog,
   resolveGridLayout,
   RECORDS_TABLE_MAXIMUM_SEARCH_LENGTH,
   RECORDS_TABLE_MAXIMUM_SORT_KEYS,
@@ -31,6 +31,7 @@ import {
   type IdentitySession,
   type PageDefinition,
   type SourceItem,
+  sortKeySchema,
 } from "@vortex/platform/schema";
 import { z } from "zod";
 import { pageCompiledSlotsFor } from "./studio-application-draft";
@@ -61,13 +62,7 @@ const fieldIdSchema = z
  */
 const tableStateSchema = z
   .object({
-    sort: z
-      .array(
-        z
-          .object({ fieldId: fieldIdSchema, direction: z.enum(["ascending", "descending"]) })
-          .strict(),
-      )
-      .max(RECORDS_TABLE_MAXIMUM_SORT_KEYS),
+    sort: z.array(sortKeySchema).max(RECORDS_TABLE_MAXIMUM_SORT_KEYS),
     filters: z
       .array(
         z
@@ -427,7 +422,9 @@ export const readStudioCanvasRecords = async (
           : placements.find((placement) => sameId(placement.placementId, compiled));
       const queryId = table?.vortex.queryId;
       const contract =
-        table === undefined ? undefined : readRecordsTableContract(settingsOf(table));
+        table === undefined
+          ? undefined
+          : recordsTableContractOrLog(settingsOf(table), "studio canvas records");
       if (
         compiled === undefined ||
         table === undefined ||

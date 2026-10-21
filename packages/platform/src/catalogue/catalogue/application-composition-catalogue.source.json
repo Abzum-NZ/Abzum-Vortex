@@ -2948,6 +2948,10 @@
               ]
             }
           ]
+        },
+        "defaultValue": {
+          "kind": "list",
+          "items": []
         }
       },
       {
@@ -2964,6 +2968,10 @@
           "label": "Field",
           "help": "Field of the bound query",
           "required": true
+        },
+        "defaultValue": {
+          "kind": "list",
+          "items": []
         }
       },
       {
@@ -3316,6 +3324,10 @@
                 "enabled": {
                   "kind": "boolean",
                   "value": false
+                },
+                "fields": {
+                  "kind": "list",
+                  "items": []
                 }
               }
             },
@@ -3345,6 +3357,10 @@
                   "label": "Field",
                   "help": "Field of the bound query people filter by",
                   "required": true
+                },
+                "defaultValue": {
+                  "kind": "list",
+                  "items": []
                 }
               }
             ]
@@ -3365,6 +3381,10 @@
                 "personal_formatting": {
                   "kind": "boolean",
                   "value": false
+                },
+                "default_views": {
+                  "kind": "list",
+                  "items": []
                 }
               }
             },
@@ -3643,6 +3663,10 @@
                       ]
                     }
                   ]
+                },
+                "defaultValue": {
+                  "kind": "list",
+                  "items": []
                 }
               }
             ]
@@ -3659,6 +3683,10 @@
                 "enabled": {
                   "kind": "boolean",
                   "value": false
+                },
+                "actions": {
+                  "kind": "list",
+                  "items": []
                 }
               }
             },
@@ -3732,6 +3760,10 @@
                       }
                     }
                   ]
+                },
+                "defaultValue": {
+                  "kind": "list",
+                  "items": []
                 }
               }
             ]
@@ -3748,6 +3780,10 @@
                 "enabled": {
                   "kind": "boolean",
                   "value": false
+                },
+                "fields": {
+                  "kind": "list",
+                  "items": []
                 }
               }
             },
@@ -3800,6 +3836,10 @@
                     "web_address",
                     "link"
                   ]
+                },
+                "defaultValue": {
+                  "kind": "list",
+                  "items": []
                 }
               }
             ]
@@ -3816,6 +3856,10 @@
                 "enabled": {
                   "kind": "boolean",
                   "value": false
+                },
+                "fields": {
+                  "kind": "list",
+                  "items": []
                 }
               }
             },
@@ -3868,6 +3912,10 @@
                     "web_address",
                     "link"
                   ]
+                },
+                "defaultValue": {
+                  "kind": "list",
+                  "items": []
                 }
               },
               {
@@ -3897,6 +3945,14 @@
                 "enabled": {
                   "kind": "boolean",
                   "value": false
+                },
+                "rules": {
+                  "kind": "list",
+                  "items": []
+                },
+                "column_formats": {
+                  "kind": "list",
+                  "items": []
                 }
               }
             },
@@ -4146,6 +4202,10 @@
                       }
                     }
                   ]
+                },
+                "defaultValue": {
+                  "kind": "list",
+                  "items": []
                 }
               },
               {
@@ -4340,6 +4400,10 @@
                       }
                     }
                   ]
+                },
+                "defaultValue": {
+                  "kind": "list",
+                  "items": []
                 }
               }
             ]
@@ -4356,6 +4420,10 @@
                 "enabled": {
                   "kind": "boolean",
                   "value": false
+                },
+                "child_columns": {
+                  "kind": "list",
+                  "items": []
                 }
               }
             },
@@ -4402,6 +4470,10 @@
                   "label": "Field",
                   "help": "Field of the related records query",
                   "required": true
+                },
+                "defaultValue": {
+                  "kind": "list",
+                  "items": []
                 }
               },
               {
@@ -4603,6 +4675,18 @@
                 "enabled": {
                   "kind": "boolean",
                   "value": false
+                },
+                "card_fields": {
+                  "kind": "list",
+                  "items": []
+                },
+                "totals": {
+                  "kind": "list",
+                  "items": []
+                },
+                "quick_add": {
+                  "kind": "boolean",
+                  "value": false
                 }
               }
             },
@@ -4647,6 +4731,10 @@
                   "label": "Field",
                   "help": "Field of the bound query shown on each card",
                   "required": true
+                },
+                "defaultValue": {
+                  "kind": "list",
+                  "items": []
                 }
               },
               {
@@ -4684,6 +4772,10 @@
                       "maxLength": 60
                     }
                   ]
+                },
+                "defaultValue": {
+                  "kind": "list",
+                  "items": []
                 }
               },
               {
@@ -4701,7 +4793,11 @@
                 "key": "quick_add",
                 "label": "Add from a column",
                 "help": "Each column offers adding a card there; the flow bound to a card being added opens the create form with the column's stage chosen",
-                "required": false
+                "required": false,
+                "defaultValue": {
+                  "kind": "boolean",
+                  "value": false
+                }
               }
             ]
           },
@@ -4715,6 +4811,10 @@
               "kind": "group",
               "properties": {
                 "enabled": {
+                  "kind": "boolean",
+                  "value": false
+                },
+                "totals": {
                   "kind": "boolean",
                   "value": false
                 }
@@ -4848,7 +4948,11 @@
                 "key": "totals",
                 "label": "Show totals",
                 "help": "Add the row, column and grand totals",
-                "required": false
+                "required": false,
+                "defaultValue": {
+                  "kind": "boolean",
+                  "value": false
+                }
               },
               {
                 "kind": "number",
@@ -4874,6 +4978,15 @@
                 "enabled": {
                   "kind": "boolean",
                   "value": false
+                },
+                "formats": {
+                  "kind": "list",
+                  "items": [
+                    {
+                      "kind": "choice",
+                      "value": "csv"
+                    }
+                  ]
                 }
               }
             },
@@ -4912,6 +5025,15 @@
                       "label": "Excel"
                     }
                   ]
+                },
+                "defaultValue": {
+                  "kind": "list",
+                  "items": [
+                    {
+                      "kind": "choice",
+                      "value": "csv"
+                    }
+                  ]
                 }
               },
               {
@@ -4948,35 +5070,55 @@
                 "key": "range_select",
                 "label": "Range selection",
                 "help": "Shift and arrows, Shift and click, or drag; Ctrl+A selects this page",
-                "required": false
+                "required": false,
+                "defaultValue": {
+                  "kind": "boolean",
+                  "value": false
+                }
               },
               {
                 "kind": "boolean",
                 "key": "find",
                 "label": "Find on page",
                 "help": "Find values on this page; Ctrl+F opens the finder",
-                "required": false
+                "required": false,
+                "defaultValue": {
+                  "kind": "boolean",
+                  "value": false
+                }
               },
               {
                 "kind": "boolean",
                 "key": "paste",
                 "label": "Paste",
                 "help": "Paste copied cells into a selected range; every cell is checked on the server and all change or none",
-                "required": false
+                "required": false,
+                "defaultValue": {
+                  "kind": "boolean",
+                  "value": false
+                }
               },
               {
                 "kind": "boolean",
                 "key": "fill",
                 "label": "Fill down",
                 "help": "Ctrl+D copies the top cell of a selected range down the range",
-                "required": false
+                "required": false,
+                "defaultValue": {
+                  "kind": "boolean",
+                  "value": false
+                }
               },
               {
                 "kind": "boolean",
                 "key": "undo",
                 "label": "Undo",
                 "help": "Ctrl+Z and Ctrl+Y undo and redo the batches committed in this session",
-                "required": false
+                "required": false,
+                "defaultValue": {
+                  "kind": "boolean",
+                  "value": false
+                }
               },
               {
                 "kind": "list",
@@ -4993,6 +5135,10 @@
                   "help": "Field of the bound query the status bar totals",
                   "required": true,
                   "fieldTypes": ["whole_number", "decimal_number", "money", "date", "date_time"]
+                },
+                "defaultValue": {
+                  "kind": "list",
+                  "items": []
                 }
               },
               {
@@ -5009,12 +5155,31 @@
                   "label": "Total",
                   "required": true,
                   "options": [
-                    { "key": "count", "label": "Count" },
-                    { "key": "sum", "label": "Sum" },
-                    { "key": "average", "label": "Average" },
-                    { "key": "minimum", "label": "Minimum" },
-                    { "key": "maximum", "label": "Maximum" }
+                    {
+                      "key": "count",
+                      "label": "Count"
+                    },
+                    {
+                      "key": "sum",
+                      "label": "Sum"
+                    },
+                    {
+                      "key": "average",
+                      "label": "Average"
+                    },
+                    {
+                      "key": "minimum",
+                      "label": "Minimum"
+                    },
+                    {
+                      "key": "maximum",
+                      "label": "Maximum"
+                    }
                   ]
+                },
+                "defaultValue": {
+                  "kind": "list",
+                  "items": []
                 }
               }
             ],
@@ -5024,6 +5189,34 @@
                 "enabled": {
                   "kind": "boolean",
                   "value": false
+                },
+                "range_select": {
+                  "kind": "boolean",
+                  "value": false
+                },
+                "find": {
+                  "kind": "boolean",
+                  "value": false
+                },
+                "paste": {
+                  "kind": "boolean",
+                  "value": false
+                },
+                "fill": {
+                  "kind": "boolean",
+                  "value": false
+                },
+                "undo": {
+                  "kind": "boolean",
+                  "value": false
+                },
+                "status_bar_fields": {
+                  "kind": "list",
+                  "items": []
+                },
+                "status_bar_operations": {
+                  "kind": "list",
+                  "items": []
                 }
               }
             }
@@ -5076,6 +5269,10 @@
                 "enabled": {
                   "kind": "boolean",
                   "value": false
+                },
+                "fields": {
+                  "kind": "list",
+                  "items": []
                 }
               }
             },
@@ -5089,6 +5286,10 @@
                 "personal_formatting": {
                   "kind": "boolean",
                   "value": false
+                },
+                "default_views": {
+                  "kind": "list",
+                  "items": []
                 }
               }
             },
@@ -5098,6 +5299,10 @@
                 "enabled": {
                   "kind": "boolean",
                   "value": false
+                },
+                "actions": {
+                  "kind": "list",
+                  "items": []
                 }
               }
             },
@@ -5107,6 +5312,23 @@
                 "enabled": {
                   "kind": "boolean",
                   "value": false
+                },
+                "fields": {
+                  "kind": "list",
+                  "items": []
+                }
+              }
+            },
+            "row_edit": {
+              "kind": "group",
+              "properties": {
+                "enabled": {
+                  "kind": "boolean",
+                  "value": false
+                },
+                "fields": {
+                  "kind": "list",
+                  "items": []
                 }
               }
             },
@@ -5116,6 +5338,14 @@
                 "enabled": {
                   "kind": "boolean",
                   "value": false
+                },
+                "rules": {
+                  "kind": "list",
+                  "items": []
+                },
+                "column_formats": {
+                  "kind": "list",
+                  "items": []
                 }
               }
             },
@@ -5125,6 +5355,10 @@
                 "enabled": {
                   "kind": "boolean",
                   "value": false
+                },
+                "child_columns": {
+                  "kind": "list",
+                  "items": []
                 }
               }
             },
@@ -5165,6 +5399,18 @@
                 "enabled": {
                   "kind": "boolean",
                   "value": false
+                },
+                "card_fields": {
+                  "kind": "list",
+                  "items": []
+                },
+                "totals": {
+                  "kind": "list",
+                  "items": []
+                },
+                "quick_add": {
+                  "kind": "boolean",
+                  "value": false
                 }
               }
             },
@@ -5172,6 +5418,10 @@
               "kind": "group",
               "properties": {
                 "enabled": {
+                  "kind": "boolean",
+                  "value": false
+                },
+                "totals": {
                   "kind": "boolean",
                   "value": false
                 }
@@ -5183,6 +5433,15 @@
                 "enabled": {
                   "kind": "boolean",
                   "value": false
+                },
+                "formats": {
+                  "kind": "list",
+                  "items": [
+                    {
+                      "kind": "choice",
+                      "value": "csv"
+                    }
+                  ]
                 }
               }
             },
@@ -5192,15 +5451,34 @@
                 "enabled": {
                   "kind": "boolean",
                   "value": false
-                }
-              }
-            },
-            "row_edit": {
-              "kind": "group",
-              "properties": {
-                "enabled": {
+                },
+                "range_select": {
                   "kind": "boolean",
                   "value": false
+                },
+                "find": {
+                  "kind": "boolean",
+                  "value": false
+                },
+                "paste": {
+                  "kind": "boolean",
+                  "value": false
+                },
+                "fill": {
+                  "kind": "boolean",
+                  "value": false
+                },
+                "undo": {
+                  "kind": "boolean",
+                  "value": false
+                },
+                "status_bar_fields": {
+                  "kind": "list",
+                  "items": []
+                },
+                "status_bar_operations": {
+                  "kind": "list",
+                  "items": []
                 }
               }
             },

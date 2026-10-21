@@ -181,7 +181,7 @@ export type CalendarPlacementProjectionInput = Readonly<{
   timeZone: string;
   /** The query inputs the placement's bindings resolved on the server for this request. */
   inputValues: Readonly<Record<string, JsonValue>>;
-  /** The raw `view.<placement>` and `date.<placement>` page parameters. */
+  /** The raw `calendar.<placement>` (view) and `date.<placement>` page parameters. */
   requestedView: string | undefined;
   requestedDate: string | undefined;
   queries: CalendarQueryRunner;

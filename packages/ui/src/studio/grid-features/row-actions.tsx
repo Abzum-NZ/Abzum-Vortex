@@ -48,7 +48,7 @@ const placementOf = (source: ApplicationSourceDocument, alias: string) =>
     .flatMap((page) => sourcePageItems(page.composition))
     .find((item) => item.props.id === alias);
 
-export const studioRowActionsFor = (
+const studioRowActionsFor = (
   source: ApplicationSourceDocument,
   alias: string,
 ): readonly StudioRowAction[] | undefined => {
