@@ -13,6 +13,15 @@ import {
   type RecordLinkResolver,
   readCurrentRecordOwnerGroupsAfterAuthorization,
   pageSubjectFieldIds,
+  applyChoiceOptionGates,
+  choiceOptionAccessDeclarations,
+  pageSubjectType,
+  planChoiceOptionGates,
+  projectEditField,
+  type DateTimeZones,
+  isTablePlacement,
+  fieldControl,
+  formFieldOf,
 } from "@vortex/platform/server";
 import {
   FORM_CONTAINER_BLOCK_RELEASE,
@@ -64,8 +73,6 @@ import type {
   BoardReadTarget,
   TableContinuationTarget,
   ApplicationPageInternalResult,
-  PermissionEntry,
-  DateTimeZones,
   PageDataState,
   PlacementFlowBinding,
   ApplicationPageModel,
@@ -78,9 +85,6 @@ import {
   collectPlacements,
   isBoardPlacement,
   projectedUseAvailability,
-  isTablePlacement,
-  fieldControl,
-  fieldForPlacement,
   isEditFieldPlacement,
   isLinkInputPlacement,
 } from "./placement-helpers";
@@ -92,7 +96,11 @@ import {
   resolvedQueryRecordTypeId,
 } from "@vortex/platform/server";
 import { projectAttachmentInputs } from "./attachment-inputs";
-import { projectEditField } from "./reference-choice";
+import { projectCreateFormDefaults, projectEditForms } from "./edit-form-projection";
+import { readFieldAccess } from "./field-access-read";
+import { projectGroupCreateForms } from "./group-create-forms";
+import { projectGuidedForm } from "./guided-form-projection";
+import { startStreamedPlacementReads } from "./streamed-placements";
 import { projectInitialLinkInputs, titleLinkInputs } from "./link-input";
 import {
   projectPlacementBindings,
@@ -116,13 +124,7 @@ import {
   withContributedActionButtons,
   withContributedPlacements,
 } from "./contributed-placements";
-import {
-  applyFormFieldAccess,
-  decideFormFieldAccess,
-  flowCreatedRecordTypeIds,
-  formFieldOf,
-  readCreatableFieldIds,
-} from "./form-field-access";
+import { applyFormFieldAccess, decideFormPolicy } from "./form-field-access";
 
 export const requestDependencies = (): HumanOrganizationRequestDependencies =>
   humanOrganizationRequestDependencies();
@@ -414,126 +416,30 @@ const loadApplicationPageJoined = async (
     )
       return { kind: "unavailable" };
   }
-  const choicePlacements: Array<{
-    options: Record<string, unknown>;
-    items: unknown[];
-    permissionKeys: readonly (string | undefined)[];
-  }> = [];
-  const gatedPermissions = new Map<string, PermissionEntry>();
   let needsDateTimeZones = false;
-  for (const placement of allPlacements) {
-    const control = fieldControl(placement);
-    if (control === "date_time") needsDateTimeZones = true;
-    if (control !== "choice" && control !== "several_choices") continue;
-    const source = fieldForPlacement(placement, context.releaseSet.modules);
-    const options = placement.settings.options;
-    if (
-      source === undefined ||
-      (source.field.type !== "choice" && source.field.type !== "several_choices") ||
-      source.field.type !== control ||
-      !isRecord(options) ||
-      options.kind !== "list" ||
-      !Array.isArray(options.items) ||
-      options.items.length !== source.field.settings.options.length
-    )
-      return { kind: "temporarily_unavailable" };
-    const permissionKeys: Array<string | undefined> = [];
-    for (const [index, declared] of source.field.settings.options.entries()) {
-      const item = options.items[index];
-      if (
-        !isRecord(item) ||
-        !isRecord(item.properties) ||
-        !isRecord(item.properties.key) ||
-        !isRecord(item.properties.label) ||
-        item.properties.key.value !== declared.value ||
-        item.properties.label.value !== declared.label
-      )
-        return { kind: "temporarily_unavailable" };
-      const permissionId = declared.requiredPermissionId;
-      if (permissionId === undefined) {
-        permissionKeys.push(undefined);
-        continue;
-      }
-      const key = `${String(source.module.rootId).toLowerCase()}:${String(permissionId).toLowerCase()}`;
-      const matches = context.permissionRegistration.entries.filter(
-        (entry) =>
-          entry.ownerKind === "module" &&
-          sameId(String(entry.ownerId), String(source.module.rootId)) &&
-          sameId(String(entry.permission.permissionId), String(permissionId)),
-      );
-      if (matches.length !== 1 || matches[0] === undefined)
-        return { kind: "temporarily_unavailable" };
-      gatedPermissions.set(key, matches[0]);
-      permissionKeys.push(key);
-    }
-    choicePlacements.push({ options, items: options.items, permissionKeys });
-  }
+  for (const placement of allPlacements)
+    if (fieldControl(placement) === "date_time") needsDateTimeZones = true;
+  const choicePlan = planChoiceOptionGates(allPlacements, context);
+  if (choicePlan === undefined) return { kind: "temporarily_unavailable" };
 
   let dateTimeZones: DateTimeZones = {};
   let allowedPermissions = new Set<string>();
-  if (needsDateTimeZones || gatedPermissions.size > 0) {
-    const authorized = await humanOrganizationRequests(dependencies.identityAuthorityId).run(
+  if (needsDateTimeZones || choicePlan.permissions.size > 0) {
+    const authorized = await readFieldAccess({
       session,
+      dependencies,
       selection,
-      async (transaction, scope) => {
-        const zones: DateTimeZones = {};
-        if (needsDateTimeZones) {
-          const profileRows = await transaction.query<{ time_zone: unknown }>`
-            select time_zone from vortex_access.read_own_profile()
-          `;
-          if (profileRows.length !== 1 || profileRows[0] === undefined)
-            throw new Error("PAGE_PROFILE_TIME_ZONE_UNAVAILABLE");
-          const profileZone = profileRows[0].time_zone;
-          if (profileZone !== null) {
-            const parsed = organizationRuntimeSettingsSchema.shape.timeZone.safeParse(profileZone);
-            if (!parsed.success) throw new Error("PAGE_PROFILE_TIME_ZONE_UNAVAILABLE");
-            zones.personTimeZone = parsed.data;
-          }
-          const organizationSettings =
-            await readCurrentOrganizationRuntimeSettingsAfterAuthorization(transaction);
-          if (organizationSettings !== undefined)
-            zones.organizationTimeZone = organizationSettings.timeZone;
-        }
-        const keys: string[] = [];
-        const declarations: OrganizationAccessDeclaration[] = [];
-        for (const [key, entry] of gatedPermissions) {
-          const declaration: OrganizationAccessDeclaration = {
-            operationKey: "application.page.field_choice.view",
-            action: {
-              actionKind: entry.permission.actionKind,
-              ...(entry.permission.namedAction === undefined
-                ? {}
-                : { namedAction: entry.permission.namedAction }),
-            },
-            target: { kind: "application", applicationRootId: context.applicationRootId },
-            requiredPermission: {
-              applicationRootId: entry.applicationRootId,
-              ownerKind: entry.ownerKind,
-              ownerId: entry.ownerId,
-              permissionId: entry.permission.permissionId,
-            },
-            recentAuthentication: { kind: "none" },
-            authority: { kind: "permission" },
-          };
-          keys.push(key);
-          declarations.push(declaration);
-        }
-        const decisions = await decideOrganizationAccessBatch(transaction, scope, declarations);
-        const allowed = keys.filter((_, index) => decisions[index]?.allowed === true);
-        return { zones, allowed, accessVersion: scope.accessVersion };
-      },
-    );
+      applicationRootId: context.applicationRootId,
+      needsDateTimeZones,
+      choicePlan,
+    });
     if (authorized.kind !== "available") return authorized;
     if (page.accessVersion !== authorized.value.accessVersion)
       return { kind: "temporarily_unavailable" };
     dateTimeZones = authorized.value.zones;
     allowedPermissions = new Set(authorized.value.allowed);
   }
-  for (const choice of choicePlacements)
-    choice.options.items = choice.items.filter((_, index) => {
-      const key = choice.permissionKeys[index];
-      return key === undefined || allowedPermissions.has(key);
-    });
+  applyChoiceOptionGates(choicePlan, allowedPermissions);
 
   const navigation = await navigationRead;
   if (navigation.kind !== "available") return navigation;
@@ -551,14 +457,7 @@ const loadApplicationPageJoined = async (
   // The page subject: the one record the page's own address names, of the page's declared record
   // type, read once through the record read path under the viewer's own authority. Nothing here
   // comes from the browser except the id.
-  const subjectType =
-    (pageDefinition.type === "detail" ||
-      pageDefinition.type === "public" ||
-      pageDefinition.type === "form" ||
-      pageDefinition.type === "guided_form") &&
-    pageDefinition.recordType?.state === "resolved"
-      ? pageDefinition.recordType
-      : undefined;
+  const subjectType = pageSubjectType(pageDefinition);
   const subjectId = recordIdSchema.safeParse(first(parameters[pageSubjectParameter]));
   if (
     pageDefinition.type === "guided_form" &&
@@ -643,77 +542,20 @@ const loadApplicationPageJoined = async (
     )
   )
     return { kind: "unavailable" };
-  const editFormPlacementIds = new Set(
-    allPlacements.flatMap(({ placementId, vortex }) => {
-      const block = vortex.block;
-      const isFormContainer =
-        isRecord(block) &&
-        typeof block.blockId === "string" &&
-        sameId(block.blockId, FORM_CONTAINER_BLOCK_RELEASE.blockId);
-      const submitsPageRecord = application.content.flowBindings.some(
-        (binding) =>
-          sameId(binding.controlId, placementId) &&
-          binding.event === "form_submit" &&
-          Object.values(binding.flow.inputs).some(
-            (input) => isRecord(input) && input.kind === "caller" && input.name === "record",
-          ),
-      );
-      return isFormContainer && submitsPageRecord ? [placementId] : [];
-    }),
-  );
-  // The forms of a form page show each field as the viewer's field policy allows: decided once,
-  // before any placement is read, so a field left out is never read or sent.
-  const formRecordType =
-    pageDefinition.type === "form" && subjectType !== undefined
-      ? context.releaseSet.modules
-          .flatMap((module) => module.content.recordTypes)
-          .find((recordType) =>
-            sameId(String(recordType.recordTypeId), String(subjectType.recordTypeId)),
-          )
-      : undefined;
-  let refusedForms: ReadonlyMap<string, string> = new Map();
-  let createFormIds: readonly string[] = [];
-  if (formRecordType !== undefined) {
-    const recordTypeId = String(formRecordType.recordTypeId);
-    const editForms = new Map<string, ProtectedQueryRow>();
-    if (editFormPlacementIds.size > 0 && subjectId.success) {
-      const read = await readSubject(recordTypeId, subjectId.data);
-      if (read.kind === "read")
-        for (const formId of editFormPlacementIds) editForms.set(formId, read.row);
-    }
-    createFormIds = allPlacements.flatMap(({ placementId, vortex }) => {
-      const block = vortex.block;
-      return isRecord(block) &&
-        typeof block.blockId === "string" &&
-        sameId(block.blockId, FORM_CONTAINER_BLOCK_RELEASE.blockId) &&
-        !editFormPlacementIds.has(placementId) &&
-        application.content.flowBindings.some(
-          (binding) =>
-            sameId(binding.controlId, placementId) &&
-            binding.event === "form_submit" &&
-            flowCreatedRecordTypeIds(application.content.flows, String(binding.flow.flowId)).has(
-              recordTypeId.toLowerCase(),
-            ),
-        )
-        ? [placementId]
-        : [];
-    });
-    const createForms = new Map<string, ReadonlySet<string> | undefined>();
-    if (createFormIds.length > 0) {
-      const creatable = await readCreatableFieldIds(session, selection, context, recordTypeId);
-      if (creatable.kind !== "available") return creatable;
-      for (const formId of createFormIds) createForms.set(formId, creatable.fieldIds);
-    }
-    const access = decideFormFieldAccess({
-      placements: allPlacements,
-      recordType: formRecordType,
-      editForms,
-      createForms,
-    });
-    applyFormFieldAccess(page, access);
-    allPlacements = collectPlacements(page);
-    refusedForms = access.refused;
-  }
+  const formPolicy = await decideFormPolicy({
+    session,
+    selection,
+    context,
+    page,
+    pageDefinition,
+    subjectType,
+    subjectId: subjectId.success ? subjectId.data : undefined,
+    allPlacements,
+    readSubject,
+  });
+  if (formPolicy.kind === "refused") return formPolicy.result;
+  const { editFormPlacementIds, formRecordType, createFormIds, refusedForms } = formPolicy;
+  allPlacements = formPolicy.allPlacements;
   // A form baseline is valid only when every shown field was projected. A selected field also
   // needs its owning form's subject read, even though only the requested field is returned.
   const selectedForProjection =
@@ -851,15 +693,7 @@ const loadApplicationPageJoined = async (
               : Promise.resolve({ kind: "refused" }),
     subjectRecordTypeId: subjectType === undefined ? undefined : String(subjectType.recordTypeId),
     readViewerTeams: services.readViewerTeams,
-    readTimeZone: async () => {
-      try {
-        const read = await readCalendarSettings();
-        return read.kind === "available" ? read.value.settings?.timeZone : undefined;
-      } catch (error) {
-        console.error(`[page] organisation time zone unavailable: ${describeFailure(error)}`);
-        return undefined;
-      }
-    },
+    readTimeZone: services.readTimeZone,
   });
   const placementReaderInput: PlacementReaderInput = {
     context,
@@ -912,56 +746,17 @@ const loadApplicationPageJoined = async (
   // A Group-owned create form needs an explicit owner from the viewer's current
   // memberships. Every Group returned here is eligible for initial Group ownership;
   // the Record writer still locks and rechecks the selected membership at save time.
-  const ownershipByRecordType = new Map(
-    context.releaseSet.modules.flatMap((module) =>
-      module.content.recordTypes.map(
-        (recordType) =>
-          [String(recordType.recordTypeId).toLowerCase(), recordType.ownershipMode] as const,
-      ),
-    ),
-  );
-  const createsGroupRecord = (flowId: string): boolean =>
-    [...flowCreatedRecordTypeIds(application.content.flows, flowId)].some(
-      (recordTypeId) => ownershipByRecordType.get(recordTypeId) === "group",
-    );
-  const groupCreateBindings = placements.flatMap(({ placementId, vortex }) => {
-    const block = vortex.block;
-    if (
-      !isRecord(block) ||
-      typeof block.blockId !== "string" ||
-      !sameId(block.blockId, FORM_CONTAINER_BLOCK_RELEASE.blockId)
-    )
-      return [];
-    return (bindings[placementId] ?? [])
-      .filter((binding) => binding.event === "form_submit" && createsGroupRecord(binding.flowId))
-      .map((binding) => ({ formId: placementId, binding }));
+  const groupCreateRefusal = await projectGroupCreateForms({
+    context,
+    placements,
+    bindings,
+    dependencies,
+    session,
+    selection,
+    accessVersion: page.accessVersion,
+    data,
   });
-  if (groupCreateBindings.length > 0) {
-    if (
-      groupCreateBindings.some(
-        ({ binding }) => !binding.callerInputs.includes("selected_owner_group_id"),
-      )
-    )
-      return { kind: "temporarily_unavailable" };
-    const choices = await humanOrganizationRequests(dependencies.identityAuthorityId).run(
-      session,
-      selection,
-      async (transaction, scope) => {
-        return {
-          accessVersion: scope.accessVersion,
-          groups: await readCurrentRecordOwnerGroupsAfterAuthorization(transaction),
-        };
-      },
-    );
-    if (choices.kind !== "available") return choices;
-    if (choices.value.accessVersion !== page.accessVersion)
-      return { kind: "temporarily_unavailable" };
-    for (const formId of new Set(groupCreateBindings.map(({ formId }) => formId)))
-      data[formId] = {
-        status: "ready",
-        values: { kind: "form", ownerGroups: choices.value.groups },
-      };
-  }
+  if (groupCreateRefusal !== undefined) return groupCreateRefusal;
 
   // A detail or form page offers its subject to the flows it starts; a public page never does.
   const subjectRow =
@@ -982,157 +777,46 @@ const loadApplicationPageJoined = async (
 
   let guidedForm: ApplicationPageModel["guidedForm"];
   if (pageDefinition.type === "guided_form") {
-    const subjectCandidate = first(parameters[pageSubjectParameter]);
-    if (subjectCandidate !== undefined) {
-      if (subjectRow?.kind === "temporarily_unavailable")
-        return { kind: "temporarily_unavailable" };
-      if (subjectRow?.kind !== "read" || subject === undefined) return { kind: "unavailable" };
-    }
-    const recordType = getGuidedFormRecordType(pageDefinition, context.releaseSet.modules);
-    if (recordType === undefined) return { kind: "unavailable" };
-    const shells = context.releaseSet.application.content.shells;
-    const declaredStepFields = getGuidedFormStepFields(pageDefinition, recordType, shells);
-    const visiblePlacementIds = getGuidedFormVisiblePlacementIds(page, shells);
-    const stepFields = getGuidedFormStepFields(pageDefinition, recordType, shells, page);
-    const flowId = getGuidedFormFlowId(page, application.content.flowBindings, shells);
-    if (
-      declaredStepFields === undefined ||
-      visiblePlacementIds === undefined ||
-      stepFields === undefined ||
-      declaredStepFields.some((step) =>
-        step.fields.some(
-          (field) => field.required && !visiblePlacementIds.has(field.placementId.toLowerCase()),
-        ),
-      ) ||
-      flowId === undefined
-    )
-      return { kind: "unavailable" };
-    const draftScope = guidedFormDraftScope(
-      String(pageDefinition.pageId),
-      flowId,
-      subject?.recordId,
-    );
-    const openedDraft = await openGuidedFormDraft(
-      guidedFormDependencies(),
+    const guided = await projectGuidedForm({
+      context,
+      pageDefinition,
+      page,
+      parameters,
       session,
       selection,
-      draftScope,
-      guidedFormInitialValues(
-        stepFields,
-        subjectRow?.kind === "read" ? subjectRow.row.values : undefined,
-      ),
-    );
-    if (openedDraft.kind !== "available") return openedDraft;
-    const values = visibleGuidedFormValues(openedDraft.draft, stepFields);
-    const computedStepId = computeGuidedFormStepId(stepFields, openedDraft.draft.validation);
-    if (computedStepId === undefined) return { kind: "unavailable" };
-    const activeStepId = earlierGuidedStepId(stepFields, computedStepId, first(parameters.step));
-    const stepData = {
-      ...guidedFormInputData(page, recordType, values, dateTimeZones),
-    } as Record<string, PageDataState>;
-    // A linked record shows by its title, read under the viewer's access.
-    if ((await titleLinkInputs(stepData, resolveRecordLinks)).size > 0)
-      return { kind: "unavailable" };
-    Object.assign(data, stepData);
-    guidedForm = {
-      draftId: String(openedDraft.draft.draftId),
-      revision: openedDraft.draft.revision,
-      flowId,
-      activeStepId,
-      computedStepId,
-      values,
-      validation: visibleGuidedFormValidation(openedDraft.draft.validation, stepFields),
-    };
+      subjectRow,
+      subject,
+      dateTimeZones,
+      resolveRecordLinks,
+      data,
+    });
+    if (guided.kind === "refused") return guided.result;
+    guidedForm = guided.guidedForm;
   }
 
-  // Detail and ordinary form edit surfaces project their fields from the authorized subject read.
-  // Guided-form fields instead come from the person's revisioned draft above.
-  const editFormBaselines: Record<string, Record<string, JsonValue>> = {};
-  const unshown = new Set<string>();
-  if (pageDefinition.type !== "guided_form") {
-    for (const { placementId, vortex } of placements) {
-      if (!editFormPlacementIds.has(placementId)) continue;
-      const block = vortex.block;
-      if (
-        !isRecord(block) ||
-        typeof block.blockId !== "string" ||
-        !sameId(block.blockId, FORM_CONTAINER_BLOCK_RELEASE.blockId)
-      )
-        continue;
-      const editBinding = bindings[placementId]?.some(
-        (binding) => binding.event === "form_submit" && binding.callerInputs.includes("record"),
-      );
-      if (!editBinding) continue;
-      if (subjectRow?.kind !== "read" || subject === undefined || subjectRecordType === undefined) {
-        if (subjectRow === undefined || subjectRow.kind === "refused") subjectUnreadable = true;
-        data[placementId] = { status: "disabled", reason: "Record unavailable" };
-        continue;
-      }
-      const fields = placements.filter((entry) => {
-        if (entry.formId !== placementId || entry.placementId === placementId) return false;
-        // A form may carry the page record to an action and ask separate questions. Only
-        // inputs that actually name its record fields receive stored values and field policy.
-        return isEditFieldPlacement(entry) && formFieldOf(entry, subjectRecordType) !== undefined;
-      });
-      const baseline: Record<string, JsonValue> = {};
-      const projected: Record<string, PageDataState> = {};
-      const baselineKeys = new Map<string, string>();
-      for (const entry of fields) {
-        const projectedField = projectEditField(
-          entry,
-          subjectRecordType,
-          subjectRow.row.values,
-          dateTimeZones,
-        );
-        // A field whose stored value this form cannot show is left out of it, with the cause
-        // logged; the save then leaves that value as it is.
-        if (projectedField === undefined || Object.hasOwn(baseline, projectedField.key)) {
-          logPlacementFailure(address, entry.placementId, "edit_field_unprojected");
-          unshown.add(entry.placementId.toLowerCase());
-          continue;
-        }
-        baseline[projectedField.key] = projectedField.value;
-        baselineKeys.set(entry.placementId, projectedField.key);
-        projected[entry.placementId] = projectedField.data;
-      }
-      // A linked record shows by its title, read under the viewer's access in one batched read; a
-      // link whose record the viewer may not read is left out of the form, with the cause logged.
-      for (const untitled of await titleLinkInputs(projected, resolveRecordLinks)) {
-        logPlacementFailure(address, untitled, "link_titles_unavailable");
-        unshown.add(untitled.toLowerCase());
-        delete projected[untitled];
-        const key = baselineKeys.get(untitled);
-        if (key !== undefined) delete baseline[key];
-      }
-      Object.assign(data, projected);
-      data[placementId] = { status: "ready", values: { kind: "form" } };
-      editFormBaselines[placementId] = baseline;
-    }
-  }
-  // A create form starts each field at its definition's default, the value the save stores when
-  // the field is left as it is, so the person sees what will be saved.
-  if (formRecordType !== undefined)
-    for (const entry of placements) {
-      if (
-        entry.formId === undefined ||
-        !createFormIds.some((formId) => sameId(formId, entry.formId!)) ||
-        !isEditFieldPlacement(entry)
-      )
-        continue;
-      const field = formFieldOf(entry, formRecordType);
-      if (field?.default === undefined) continue;
-      const projected = projectEditField(
-        entry,
-        formRecordType,
-        { [String(field.fieldId)]: field.default as JsonValue },
-        dateTimeZones,
-      );
-      if (projected === undefined) {
-        logPlacementFailure(address, entry.placementId, "create_field_default_unprojected");
-        continue;
-      }
-      data[entry.placementId] = projected.data;
-    }
+  const editForms = await projectEditForms({
+    address,
+    placements,
+    isGuidedForm: pageDefinition.type === "guided_form",
+    editFormPlacementIds,
+    bindings,
+    subjectRow,
+    hasSubject: subject !== undefined,
+    subjectRecordType,
+    dateTimeZones,
+    resolveRecordLinks,
+    data,
+  });
+  const { editFormBaselines, unshown } = editForms;
+  if (editForms.subjectUnreadable) subjectUnreadable = true;
+  projectCreateFormDefaults({
+    address,
+    placements,
+    formRecordType,
+    createFormIds,
+    dateTimeZones,
+    data,
+  });
   const linkInputs = placements.filter(isLinkInputPlacement);
   // A new record's link field may start with the record its page address names.
   if (pageDefinition.type !== "guided_form") {
@@ -1186,43 +870,12 @@ const loadApplicationPageJoined = async (
   // Every refusal this loader can make has been made: only now do the streamed reads start, so a
   // page that is not shown never leaves a read running. A failed read shows its placement's error
   // state and is logged with its cause; it never fails the page or goes unobserved.
-  const streamedData: Record<string, Promise<PageDataState>> = {};
-  const streamedSlots = new Array<() => void>();
-  const streamedLimit = runtimeDatabasePoolSize();
-  let streamedRunning = 0;
-  const nextStreamedSlot = (): Promise<void> =>
-    streamedRunning < streamedLimit
-      ? ((streamedRunning += 1), Promise.resolve())
-      : new Promise<void>((resolve) => streamedSlots.push(resolve));
-  const releaseStreamedSlot = (): void => {
-    const next = streamedSlots.shift();
-    if (next === undefined) streamedRunning -= 1;
-    else next();
-  };
-  for (const entry of streamed) {
-    const own: Record<string, PageDataState> = {};
-    streamedData[entry.placementId] = nextStreamedSlot()
-      .then(() => readPlacement({ ...placementReaderInput, data: own }, entry))
-      .then(() => {
-        const state = own[entry.placementId];
-        if (state === undefined) throw new Error("PLACEMENT_DATA_NOT_PRODUCED");
-        return state;
-      })
-      .catch((error: unknown): PageDataState => {
-        logPlacementFailure(
-          address,
-          entry.placementId,
-          "placement_read_failed",
-          describeFailure(error),
-        );
-        // A defect in data the platform produced is surfaced in development; production degrades
-        // to the placement's error state.
-        if (process.env.NODE_ENV !== "production") throw error;
-        return { status: "error" };
-      })
-      .finally(releaseStreamedSlot);
-    data[entry.placementId] = { status: "loading" };
-  }
+  const streamedData = startStreamedPlacementReads({
+    streamed,
+    placementReaderInput,
+    address,
+    data,
+  });
   const permittedKeys = new Set(address.application.pageKeys);
   const applicationShellId = compiledPageShellId(pageDefinition.composition) ?? undefined;
   const applicationShell =

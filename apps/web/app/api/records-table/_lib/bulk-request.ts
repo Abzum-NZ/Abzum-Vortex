@@ -11,12 +11,11 @@ import {
   createRecordsTableBulkService,
   createRecordsTableExportService,
   createStoredPageCapabilityService,
-  requireProjectedPlacement,
+  resolveProjectedTablePlacement,
   runtimeContextSelection,
   type RecordsTableBulkAddress,
 } from "@vortex/platform/server";
 import { resolveApplicationAddress } from "../../../_lib/application-address";
-import { isTablePlacement } from "../../../_lib/application-page/placement-helpers";
 import { platformPermissionSource } from "../../../_lib/platform-permission-source";
 import { getQueryContinuationKey } from "../../../_lib/query-continuation-key";
 import { humanOrganizationRequestDependencies } from "../../../_lib/server-composition";
@@ -153,10 +152,13 @@ export const resolveBulkRequest = async <Body extends { pageKey: string; placeme
   if (projected.kind !== "available" || projected.value === undefined)
     return refused(`page_projection_${projected.kind}`, "not_available", 403);
   // The table must be on this page as projected for the person now, once, and usable by them.
-  const gate = requireProjectedPlacement(projected.value, body.data.placementId);
-  if (gate.kind === "refused") return refused(gate.reason, "not_available", 403);
-  if (!isTablePlacement(gate.placement))
-    return refused("placement_not_a_table", "not_available", 403);
+  const resolved = resolveProjectedTablePlacement(projected.value, body.data.placementId, {
+    context,
+    pageDefinition: page,
+    parameters: {},
+    subjectId: undefined,
+  });
+  if (resolved.kind === "refused") return refused(resolved.reason, "not_available", 403);
   return {
     kind: "resolved",
     session: identity.session,

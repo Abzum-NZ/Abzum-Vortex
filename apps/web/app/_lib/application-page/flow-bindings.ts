@@ -25,7 +25,7 @@ export const projectPlacementRecordTypes = (input: {
   pageDefinition: PageDefinition;
   pageSubjectRecordTypeId: string | undefined;
   context: InstalledRuntimeContext;
-  editFormPlacementIds: Set<string>;
+  editFormPlacementIds: ReadonlySet<string>;
 }) => {
   const { allPlacements, pageDefinition, pageSubjectRecordTypeId, context, editFormPlacementIds } =
     input;
@@ -123,7 +123,7 @@ export const projectFlowBindingTargets = (input: {
   allPlacements: ReturnType<typeof collectPlacements>;
   recordTypeByPlacement: Map<string, string>;
   pageSubjectRecordTypeId: string | undefined;
-  editFormPlacementIds: Set<string>;
+  editFormPlacementIds: ReadonlySet<string>;
   dataPlacementsByRecordType: Map<string, string[]>;
   editFormDataPlacementIds: Map<string, string[]>;
 }) => {

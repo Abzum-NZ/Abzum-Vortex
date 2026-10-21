@@ -1,6 +1,5 @@
 import type { InstalledRuntimeContext } from "@vortex/platform/server";
 import {
-  TABLE_BLOCK_RELEASE,
   FIELD_INPUT_BLOCK_RELEASE,
   FIELD_INPUT_CONTROL_RELEASES,
   FORM_CONTAINER_BLOCK_RELEASE,
@@ -22,7 +21,13 @@ import {
 } from "@vortex/platform/schema";
 import type { InstalledFlow, ModuleRelease, ModuleField } from "./types";
 
-export { isBoardPlacement, projectedUseAvailability } from "@vortex/platform/server";
+export {
+  fieldControl,
+  fieldForPlacement,
+  isBoardPlacement,
+  isTablePlacement,
+  projectedUseAvailability,
+} from "@vortex/platform/server";
 
 /**
  * The page address parameter that carries a detail page's subject record id, the same name the
@@ -99,11 +104,6 @@ export const projectedBodyContentAvailable = (
     });
   return visit(layout.content, visible);
 };
-
-export const isTablePlacement = ({ vortex }: Pick<PlacedItem, "vortex">): boolean =>
-  isRecord(vortex.block) &&
-  typeof vortex.block.blockId === "string" &&
-  sameId(vortex.block.blockId, TABLE_BLOCK_RELEASE.blockId);
 
 export const isEditFieldPlacement = (placement: PlacedItemParts): boolean => {
   const block = placement.vortex.block;
@@ -201,38 +201,6 @@ export const selectedReadInputTypes = (flow: InstalledFlow): ReadonlyMap<string,
       recordTypeId === null ? [] : [[inputName, recordTypeId] as const],
     ),
   );
-};
-
-export const fieldForPlacement = (
-  placement: PlacedItemParts,
-  modules: InstalledRuntimeContext["releaseSet"]["modules"],
-): Readonly<{ module: ModuleRelease; field: ModuleField }> | undefined => {
-  const settings = placement.settings;
-  if (!isRecord(settings.field)) return undefined;
-  const reference = settings.field;
-  if (reference.kind !== "field_reference" || typeof reference.fieldId !== "string")
-    return undefined;
-  for (const module of modules)
-    for (const recordType of module.content.recordTypes) {
-      const field = recordType.fields.find((candidate) =>
-        sameId(String(candidate.fieldId), reference.fieldId as string),
-      );
-      if (field !== undefined) return { module, field };
-    }
-  return undefined;
-};
-
-export const fieldControl = (placement: PlacedItemParts): string | undefined => {
-  const settings = placement.settings;
-  const block = placement.vortex.block;
-  return isRecord(block) &&
-    typeof block.blockId === "string" &&
-    sameId(block.blockId, FIELD_INPUT_BLOCK_RELEASE.blockId) &&
-    isRecord(settings.control) &&
-    settings.control.kind === "choice" &&
-    typeof settings.control.value === "string"
-    ? settings.control.value
-    : undefined;
 };
 
 /** Every placed item of the projected page with its stable identity, in document order. */
