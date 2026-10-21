@@ -50,6 +50,8 @@ export type RecordsTableExportRequest = z.infer<typeof recordsTableExportRequest
 export const recordsTableExportRefusalReasons = [
   /** Export is not on, not permitted now, or the request does not fit this table. */
   "not_available",
+  /** This format is known, but the installed table does not offer it. */
+  "format_not_authored",
   /** The selection holds more records than the table's row limit. */
   "too_many",
   /** The selection changed since it was made (a new release, or an expired read). */

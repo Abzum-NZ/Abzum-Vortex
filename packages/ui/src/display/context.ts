@@ -1,3 +1,4 @@
+import { DefinitionRenderError } from "../definition-error";
 import type { PlatformBlockRenderProps } from "../registry";
 import { cellValueToText } from "./cell";
 import { getAccessibleName } from "./display-state-container";
@@ -69,6 +70,28 @@ export function resolveDisplayContext<Values>(
     events: props.availability === "available" ? props.events : undefined,
   };
 }
+
+/**
+ * The event identity of a block's one row action: its required `row_action_event_id` setting.
+ * Every `row_action` the block emits carries it, so the host binds the command by identity and
+ * never by "the only binding of its kind". A block that lacks it is a definition error.
+ */
+export const rowActionEventIdOf = (props: PlatformBlockRenderProps): string => {
+  const setting = props.settings["row_action_event_id"];
+  const eventId = setting?.kind === "text" ? setting.value.trim() : "";
+  if (eventId.length === 0)
+    throw new DefinitionRenderError(
+      "INVALID_COMPOSITION",
+      "Setting 'row_action_event_id' must name the row action's event",
+      {
+        placementId: props.placementId,
+        blockId: props.metadata.blockId,
+        releaseVersion: props.metadata.releaseVersion,
+        propertyPath: ["row_action_event_id"],
+      },
+    );
+  return eventId;
+};
 
 /** Plain-text row name from its heading cell, used for control labels instead of raw identities. */
 export const rowName = (row: DisplayRow, headingKey: string | undefined): string => {

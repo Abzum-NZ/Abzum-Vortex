@@ -412,6 +412,7 @@ export type GridLayoutCommitResult =
 /** The stored view the address selected, as the store listed it for the viewer. */
 export type AddressedGridView = Readonly<{
   hiddenFilters: number;
+  hiddenSorts: number;
   hiddenFormatting: number;
   item: GridViewItem;
   document: GridViewDocument;
@@ -471,7 +472,7 @@ export const resolveSelectedGridView = (
       hidden: {
         columns: document.columns.length - kept.length,
         filters: addressed.hiddenFilters + (document.filters ?? []).length - filters.length,
-        sort: (document.sort ?? []).length - sort.length,
+        sort: addressed.hiddenSorts + (document.sort ?? []).length - sort.length,
         formatting: personalFormatting
           ? addressed.hiddenFormatting + (document.formatting ?? []).length - formatting.length
           : 0,
@@ -544,7 +545,12 @@ export const addressedDefaultGridViews = (
   roleKeys: ReadonlySet<string>,
   defaultDocuments: ReadonlyMap<
     string,
-    Readonly<{ document: GridViewDocument; hiddenFilters: number; hiddenFormatting: number }>
+    Readonly<{
+      document: GridViewDocument;
+      hiddenFilters: number;
+      hiddenSorts: number;
+      hiddenFormatting: number;
+    }>
   >,
 ) =>
   views
@@ -565,6 +571,7 @@ export const addressedDefaultGridViews = (
         },
         document: sanitized.document,
         hiddenFilters: sanitized.hiddenFilters,
+        hiddenSorts: sanitized.hiddenSorts,
         hiddenFormatting: sanitized.hiddenFormatting,
         sharing: null,
       };

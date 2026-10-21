@@ -49,10 +49,6 @@ begin
   if p_document is not null and p_document ? 'formatting' then
     installation := vortex_definition.read_current_active_installation();
     access_plan := vortex_record.resolve_installation_access_plan_internal(installation);
-    if (vortex_platform.grid_view_document_for_viewer_internal(
-        p_query_id, p_document, installation, access_plan) ->> 'hiddenFormatting')::integer > 0 then
-      return pg_catalog.jsonb_build_object('outcome', 'formatting_refused', 'cause', 'field_not_readable');
-    end if;
     select distinct (query.value #>> '{recordType,recordTypeId}')::uuid into record_type_id
     from pg_catalog.jsonb_array_elements(installation -> 'moduleBindings') as binding(value)
     join vortex_definition.releases as release
@@ -65,13 +61,16 @@ begin
     if record_type_id is null and access_plan -> 'recordTypes' ? p_query_id::text then
       record_type_id := p_query_id;
     end if;
-    select pg_catalog.jsonb_object_agg(field.value ->> 'fieldId', case
-        when kind.value in ('whole_number', 'decimal_number', 'money', 'yes_no', 'date', 'date_time')
-          then kind.value
-        when kind.value = 'several_choices' then 'text_collection'
-        when kind.value in ('link', 'link_to_one_of_several') then 'record_reference'
-        when kind.value in ('table', 'attachment') then 'opaque_json'
-        else 'text' end),
+    if (vortex_platform.grid_view_document_for_viewer_internal(
+        p_query_id, p_document, installation, access_plan,
+        case when record_type_id is null then '{}'::jsonb else pg_catalog.jsonb_build_object(
+          pg_catalog.lower(record_type_id::text),
+          vortex_record.resolve_record_type_visible_field_ids_internal(record_type_id, access_plan)
+        ) end) ->> 'hiddenFormatting')::integer > 0 then
+      return pg_catalog.jsonb_build_object('outcome', 'formatting_refused', 'cause', 'field_not_readable');
+    end if;
+    -- A field the mapping does not know stays out, so a rule naming it is refused as rule_invalid.
+    select pg_catalog.jsonb_object_agg(field.value ->> 'fieldId', kind.value),
       pg_catalog.jsonb_object_agg(field.value ->> 'fieldId', 'null'::jsonb)
     into field_types, field_nulls
     from pg_catalog.jsonb_array_elements(installation -> 'moduleBindings') as binding(value)
@@ -81,9 +80,9 @@ begin
     cross join lateral pg_catalog.jsonb_array_elements(
       release.compilation_output #> '{canonical,content,recordTypes}') as record_type(value)
     cross join lateral pg_catalog.jsonb_array_elements(record_type.value -> 'fields') as field(value)
-    cross join lateral (select case when field.value ->> 'type' in ('calculation', 'total')
-      then field.value #>> '{settings,resultType}' else field.value ->> 'type' end) as kind(value)
-    where (record_type.value ->> 'recordTypeId')::uuid = record_type_id;
+    cross join lateral (select vortex_access.condition_field_type_internal(field.value)) as kind(value)
+    where (record_type.value ->> 'recordTypeId')::uuid = record_type_id
+      and kind.value is not null;
     for format_rule in select value from pg_catalog.jsonb_array_elements(p_document -> 'formatting')
     loop
       begin

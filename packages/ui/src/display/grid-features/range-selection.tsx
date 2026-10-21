@@ -3,6 +3,8 @@
 import { lazy, Suspense, useEffect, useRef, useState, type ReactElement } from "react";
 import type { GridFeatureInteractionProps, GridFeatureModule } from "./registry";
 import { GRID_ROOT, isInteractiveGridTarget } from "../table-interaction";
+import { rangeToTsv } from "./range-copy";
+import { RangeStatusBar, type StatusBarRange } from "./range-status-bar";
 
 const Find = lazy(() => import("./find"));
 type Point = Readonly<{ row: number; column: number }>;
@@ -21,6 +23,8 @@ function RangeSelection({ context, surface }: GridFeatureInteractionProps): Reac
   const latest = useRef({ context, surface });
   latest.current = { context, surface };
   const range = useRef<Range | undefined>(undefined);
+  // The settled rectangle as the status bar reads it; the ref above stays the painting authority.
+  const [settled, setSettled] = useState<StatusBarRange | undefined>(undefined);
   const dragging = useRef(false);
   // Replacing rows or columns invalidates a rectangle; it never follows a different query/page.
   const page = context.lines;
@@ -33,6 +37,20 @@ function RangeSelection({ context, surface }: GridFeatureInteractionProps): Reac
     range.current = undefined;
     dragging.current = false;
     setAnnouncement("");
+    setSettled(undefined);
+    const publish = (): void => {
+      const held = range.current;
+      setSettled(
+        held === undefined
+          ? undefined
+          : {
+              firstRow: Math.min(held.anchor.row, held.end.row),
+              lastRow: Math.max(held.anchor.row, held.end.row),
+              firstColumn: Math.min(held.anchor.column, held.end.column),
+              lastColumn: Math.max(held.anchor.column, held.end.column),
+            },
+      );
+    };
     const columnIds = columns.map((column) => column.key);
     const pointOf = (target: EventTarget | null): Point | undefined => {
       if (!(target instanceof Element)) return;
@@ -70,6 +88,33 @@ function RangeSelection({ context, surface }: GridFeatureInteractionProps): Reac
     const select = (anchor: Point, end: Point): void => {
       range.current = { anchor, end };
       paint();
+      publish();
+    };
+    // Copy writes the canonical text of the range from the page the grid already holds: no read.
+    const copy = (event: ClipboardEvent): void => {
+      const held = range.current;
+      if (held === undefined || event.clipboardData === null) return;
+      if (
+        !(event.target instanceof Element) ||
+        event.target.closest(GRID_ROOT) !== root ||
+        isInteractiveGridTarget(event.target, root)
+      )
+        return;
+      const firstRow = Math.min(held.anchor.row, held.end.row);
+      const lastRow = Math.max(held.anchor.row, held.end.row);
+      const firstColumn = Math.min(held.anchor.column, held.end.column);
+      const lastColumn = Math.max(held.anchor.column, held.end.column);
+      const rows = page
+        .slice(firstRow, lastRow + 1)
+        .flatMap((line) => (line.kind === "row" ? [line.row] : []));
+      event.clipboardData.setData(
+        "text/plain",
+        rangeToTsv(rows, columns.slice(firstColumn, lastColumn + 1)),
+      );
+      event.preventDefault();
+      setAnnouncement(
+        `Copied ${rows.length} ${rows.length === 1 ? "row" : "rows"} and ${lastColumn - firstColumn + 1} ${lastColumn === firstColumn ? "column" : "columns"}.`,
+      );
     };
     const keydown = (event: KeyboardEvent): void => {
       if (
@@ -92,6 +137,7 @@ function RangeSelection({ context, surface }: GridFeatureInteractionProps): Reac
       if (event.key === "Escape") {
         range.current = undefined;
         paint();
+        publish();
         announce();
         return;
       }
@@ -137,6 +183,7 @@ function RangeSelection({ context, surface }: GridFeatureInteractionProps): Reac
       ) {
         range.current = undefined;
         paint();
+        publish();
         setAnnouncement("");
       }
     };
@@ -191,6 +238,7 @@ function RangeSelection({ context, surface }: GridFeatureInteractionProps): Reac
     root.addEventListener("pointerdown", pointerdown, true);
     root.addEventListener("pointermove", pointermove);
     root.addEventListener("click", click, true);
+    root.addEventListener("copy", copy);
     window.addEventListener("pointerup", pointerup);
     window.addEventListener("pointercancel", pointerup);
     paint();
@@ -202,6 +250,7 @@ function RangeSelection({ context, surface }: GridFeatureInteractionProps): Reac
       root.removeEventListener("pointerdown", pointerdown, true);
       root.removeEventListener("pointermove", pointermove);
       root.removeEventListener("click", click, true);
+      root.removeEventListener("copy", copy);
       window.removeEventListener("pointerup", pointerup);
       window.removeEventListener("pointercancel", pointerup);
       range.current = undefined;
@@ -224,6 +273,9 @@ function RangeSelection({ context, surface }: GridFeatureInteractionProps): Reac
         <Suspense fallback={null}>
           <Find context={context} surface={surface} />
         </Suspense>
+      ) : null}
+      {settings?.statusBar !== undefined ? (
+        <RangeStatusBar context={context} range={settled} />
       ) : null}
       <span role="status" aria-live="polite" aria-atomic="true" className="sr-only">
         {announcement}

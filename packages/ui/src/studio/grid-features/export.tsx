@@ -3,15 +3,18 @@
 import { useId, useState, type ReactElement } from "react";
 import {
   RECORDS_TABLE_EXPORT_MAXIMUM_ROWS,
+  recordsTableExportFormatLabels,
+  recordsTableExportFormats,
   type SourceBlockPropertyValueContract,
 } from "@vortex/platform/schema";
 import { Input } from "../../components/input";
 import { Label } from "../../components/label";
+import { Checkbox } from "../../components/checkbox";
 
 type Group = Extract<SourceBlockPropertyValueContract, { kind: "group" }>;
 
 /**
- * The Export feature's two authored settings: the file format (CSV today) and the most records one
+ * The Export feature's two authored settings: file formats and the most records one
  * export holds. A value the check refuses is kept as typed, so the sentence beside the switch
  * explains it instead of the field jumping back.
  */
@@ -26,13 +29,39 @@ export function StudioExportEditor({
 }>): ReactElement {
   const id = useId();
   const held = value.properties["max_rows"];
+  const formats = value.properties["formats"];
+  const selected = formats?.kind === "list" ? formats.items : [];
   const [typed, setTyped] = useState(held?.kind === "number" ? String(held.value) : "");
   return (
     <div className="space-y-2 pb-3">
       <p className="text-sm text-muted-foreground">
-        People download a CSV file of the columns they see. Records are never grouped in the file,
-        and a selection above the row limit is refused, never cut short.
+        Download the columns shown, as flat records. Selections above the row limit are refused.
       </p>
+      <fieldset className="space-y-2" disabled={disabled}>
+        <legend className="text-sm font-medium">File formats</legend>
+        {recordsTableExportFormats.map((format) => {
+          const checked = selected.some((item) => item.kind === "choice" && item.value === format);
+          return (
+            <div key={format} className="flex items-center gap-2">
+              <Checkbox
+                id={`${id}-${format}`}
+                checked={checked}
+                disabled={disabled || (checked && selected.length === 1)}
+                onCheckedChange={(next) => {
+                  const items = next
+                    ? [...selected, { kind: "choice" as const, value: format }]
+                    : selected.filter((item) => item.kind !== "choice" || item.value !== format);
+                  onChange({
+                    kind: "group",
+                    properties: { ...value.properties, formats: { kind: "list", items } },
+                  });
+                }}
+              />
+              <Label htmlFor={`${id}-${format}`}>{recordsTableExportFormatLabels[format]}</Label>
+            </div>
+          );
+        })}
+      </fieldset>
       <Label htmlFor={`${id}-max-rows`}>Most records in one export</Label>
       <Input
         id={`${id}-max-rows`}

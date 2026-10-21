@@ -16,8 +16,8 @@ import { studioHasSlotStarter } from "./composition-starters";
 /**
  * The Studio block palette for one place on a page: the one release of each block the catalogue
  * admits there, by name, description and group, and what a new block of it needs before it can be
- * stored. A new block gets its catalogue defaults; a required setting without a default is asked
- * for when the block is added.
+ * stored. A new block gets its catalogue defaults and the settings Studio owns; any other required
+ * setting without a default is asked for when the block is added.
  */
 
 export type StudioPaletteChoice = Readonly<{
@@ -75,6 +75,20 @@ export const studioSettingEditable = (property: BlockPropertySchemaContract): bo
       ? studioSettingEditable(property.item)
       : editableKinds.has(property.kind);
 
+/**
+ * The setting that names the event of a block's one row action. Studio owns it: a new block gets
+ * it from its block name when it is added, the inspector never shows it, and binding a flow to the
+ * row action keeps it.
+ */
+export const STUDIO_ROW_ACTION_EVENT_SETTING = "row_action_event_id";
+
+/** The event identity of the one row action of a new block, made from the block's name. */
+export const studioRowActionEventId = (placementAlias: string): string =>
+  `row_action_${placementAlias}`.slice(0, 60);
+
+/** Whether Studio, not the person, sets this top-level block setting. */
+export const studioOwnsSetting = (key: string): boolean => key === STUDIO_ROW_ACTION_EVENT_SETTING;
+
 /** Whether a block of this release reads its records from a query the person chooses. */
 export const studioReleaseReadsQuery = (release: PlatformBlockRelease): boolean =>
   release.paletteGroup === "data" || release.paletteGroup === "figures";
@@ -93,6 +107,8 @@ const choiceFor = (
       continue;
     }
     if (!property.required || property.defaultValue !== undefined) continue;
+    // Studio writes the settings it owns when it adds the block.
+    if (studioOwnsSetting(property.key)) continue;
     if (studioSettingEditable(property)) setup.push(property);
     else unavailable ??= `It needs its ${property.label} setting, which Studio can't set yet.`;
   }

@@ -36,6 +36,10 @@ declare
   eligible_valid_until timestamptz;
   refusal_reason text;
   evidence jsonb;
+  requirement jsonb;
+  requirement_candidate record;
+  requirement_granted record;
+  requirement_valid_until timestamptz;
 begin
   if p_declaration is null
     or pg_catalog.jsonb_typeof(p_declaration) <> 'object'
@@ -48,8 +52,35 @@ begin
       from pg_catalog.jsonb_object_keys(p_declaration) as supplied(key)
       where supplied.key <> all (array[
         'operationKey', 'action', 'target', 'requiredPermissions',
-        'recordBinding', 'recentAuthentication', 'authority'
+        'recordBinding', 'recentAuthentication', 'authority', 'contributorRequirements'
       ])
+    )
+    or (
+      p_declaration ? 'contributorRequirements'
+      and (
+        pg_catalog.jsonb_typeof(p_declaration -> 'contributorRequirements') <> 'array'
+        or pg_catalog.jsonb_array_length(p_declaration -> 'contributorRequirements') not between 1 and 10
+        or exists (
+          select 1
+          from pg_catalog.jsonb_array_elements(p_declaration -> 'contributorRequirements') as item(value)
+          where pg_catalog.jsonb_typeof(item.value) <> 'object'
+            or not item.value ?& array[
+              'moduleRootId', 'applicationRootIds', 'recordTypeId', 'permissionKeys', 'changeableFieldIds'
+            ]
+            or exists (
+              select 1
+              from pg_catalog.jsonb_object_keys(item.value) as supplied(key)
+              where supplied.key <> all (array[
+                'moduleRootId', 'applicationRootIds', 'recordTypeId', 'permissionKeys', 'changeableFieldIds'
+              ])
+            )
+            or not vortex_platform.is_non_nil_uuid(item.value ->> 'moduleRootId')
+            or not vortex_platform.is_non_nil_uuid(item.value ->> 'recordTypeId')
+            or pg_catalog.jsonb_typeof(item.value -> 'applicationRootIds') <> 'array'
+            or pg_catalog.jsonb_typeof(item.value -> 'permissionKeys') <> 'array'
+            or pg_catalog.jsonb_typeof(item.value -> 'changeableFieldIds') <> 'array'
+        )
+      )
     )
     or pg_catalog.jsonb_typeof(p_declaration -> 'operationKey') <> 'string'
     or pg_catalog.char_length(p_declaration ->> 'operationKey') not between 3 and 120
@@ -404,6 +435,91 @@ begin
       'outcome', 'refused',
       'reasonCode', refusal_reason
     );
+  end if;
+
+  -- Another installed Module that contributed what this operation acts on adds its own
+  -- requirement to the owner's: the person must also hold, through a current role path, a
+  -- permission that Module declared for the operation, whose record scope is unconditional and
+  -- whose field policy lets the person change every field the operation changes. The owner's
+  -- permissions above still decide the record; this only narrows who may use the contribution.
+  if p_declaration ? 'contributorRequirements' then
+    for requirement in
+      select item.value
+      from pg_catalog.jsonb_array_elements(p_declaration -> 'contributorRequirements') as item(value)
+    loop
+      requirement_valid_until := null;
+      for requirement_candidate in
+        select distinct entry.application_root_id, entry.owner_kind, entry.owner_id,
+          entry.permission_id, entry.record_type_id, entry.named_action
+        from vortex_access.permission_catalogue_entries as entry
+        where entry.organization_id = context_organization_value
+          and entry.registration_kind = 'application'
+          and entry.owner_kind = 'module'
+          and entry.owner_id = (requirement ->> 'moduleRootId')::uuid
+          and entry.record_type_id = (requirement ->> 'recordTypeId')::uuid
+          and entry.action_kind = 'named'
+          and entry.application_root_id in (
+            select pg_catalog.lower(application.value)::uuid
+            from pg_catalog.jsonb_array_elements_text(requirement -> 'applicationRootIds') as application(value)
+          )
+          and entry.permission_key in (
+            select permission_key.value
+            from pg_catalog.jsonb_array_elements_text(requirement -> 'permissionKeys') as permission_key(value)
+          )
+        order by entry.application_root_id, entry.permission_id
+      loop
+        for requirement_granted in
+          select path.permission_entry, path.path_valid_until
+          from vortex_access.evaluate_permission_role_path_internal(
+            context_value, decision_checked_at,
+            pg_catalog.jsonb_build_object(
+              'applicationRootId', requirement_candidate.application_root_id,
+              'ownerKind', requirement_candidate.owner_kind,
+              'ownerId', requirement_candidate.owner_id,
+              'permissionId', requirement_candidate.permission_id
+            ),
+            pg_catalog.jsonb_build_object(
+              'actionKind', 'named', 'namedAction', requirement_candidate.named_action
+            ),
+            requirement_candidate.record_type_id
+          ) as path
+        loop
+          if requirement_granted.path_valid_until is null
+            or requirement_granted.path_valid_until <= decision_checked_at
+            or pg_catalog.jsonb_typeof((requirement_granted.permission_entry).record_scope) is distinct from 'object'
+            or (requirement_granted.permission_entry).record_scope ? 'savedCondition'
+            or not coalesce(
+              (requirement_granted.permission_entry).record_scope -> 'routes' @> '[{"kind":"all_records"}]'::jsonb,
+              false
+            )
+            or pg_catalog.jsonb_typeof((requirement_granted.permission_entry).field_policy) is distinct from 'object'
+            or exists (
+              select 1
+              from pg_catalog.jsonb_array_elements_text(requirement -> 'changeableFieldIds') as required_field(value)
+              where not exists (
+                select 1
+                from pg_catalog.jsonb_array_elements_text(
+                  (requirement_granted.permission_entry).field_policy -> 'changeableFieldIds'
+                ) as allowed_field(value)
+                where pg_catalog.lower(allowed_field.value) = pg_catalog.lower(required_field.value)
+              )
+            ) then
+            continue;
+          end if;
+          requirement_valid_until := greatest(
+            coalesce(requirement_valid_until, requirement_granted.path_valid_until),
+            requirement_granted.path_valid_until
+          );
+        end loop;
+      end loop;
+      if requirement_valid_until is null then
+        return evidence || pg_catalog.jsonb_build_object(
+          'outcome', 'refused',
+          'reasonCode', 'permission_not_effective'
+        );
+      end if;
+      eligible_valid_until := least(eligible_valid_until, requirement_valid_until);
+    end loop;
   end if;
 
   return evidence || pg_catalog.jsonb_build_object(

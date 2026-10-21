@@ -1057,7 +1057,8 @@
                           }
                         }
                       }
-                    }
+                    },
+                    "row_action_event_id": "row_action_tenant_organization_detail"
                   }
                 }
               ],
@@ -1238,7 +1239,8 @@
                           }
                         }
                       }
-                    }
+                    },
+                    "row_action_event_id": "row_action_tenant_administrator_detail"
                   }
                 }
               ],

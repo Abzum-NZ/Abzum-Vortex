@@ -15,7 +15,10 @@ import {
   TemporarilyUnavailableAddress,
   unavailableAddress,
 } from "../../_components/address-states";
-import { openPermittedApplication } from "../../_components/open-application";
+import {
+  applicationLauncherEventIds,
+  openPermittedApplication,
+} from "../../_components/open-application";
 import { applicationHomeContinuationFromAddress } from "../../../../auth/_lib/sign-in-continuation";
 import { continueSessionOrEnd } from "../../../../auth/_lib/session-redirect";
 import {
@@ -112,11 +115,6 @@ export default async function ApplicationAddressPage({
       ? `${launcherPath(tenantShortName, organizationShortName)}/${encodeURIComponent(applicationKey)}`
       : addressPath(tenantShortName, organizationShortName, applicationKey, pageSegments[0])
   }${query === "" ? "" : `?${query}`}`;
-
-  async function openApplication(event: DisplaySemanticEvent): Promise<void> {
-    "use server";
-    await openPermittedApplication(tenantShortName, organizationShortName, event);
-  }
 
   /**
    * Deliberately adopts the offered release of the addressed application. The browser supplies the
@@ -300,6 +298,12 @@ export default async function ApplicationAddressPage({
       </BarePage>
     );
   if (page.kind === "unavailable") notFound();
+
+  const launcherEvents = applicationLauncherEventIds(page.model.page.composition);
+  async function openApplication(event: DisplaySemanticEvent): Promise<void> {
+    "use server";
+    await openPermittedApplication(tenantShortName, organizationShortName, event, launcherEvents);
+  }
 
   // The page renders only its content; the frame around it is the shell part of the same
   // projection, which the layout shows (and which this page hands to the frame on a later change).

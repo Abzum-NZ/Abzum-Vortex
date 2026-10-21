@@ -35,6 +35,7 @@ import {
   boardSettingChoices,
   studioBoardPipelines,
   studioGridFeaturesProperty,
+  studioOwnsSetting,
   studioCanvasGridKey,
   type StudioCanvasGridArrangement,
   type StudioCompositionBreakpoint,
@@ -418,7 +419,8 @@ export function ApplicationCompositionEditor(props: Props) {
                 (property) =>
                   property !== featuresProperty &&
                   property.key !== "query_parameters" &&
-                  property.key !== "row_actions",
+                  property.key !== "row_actions" &&
+                  !studioOwnsSetting(property.key),
               )}
               values={settingsInputs.settings}
               choices={choices}

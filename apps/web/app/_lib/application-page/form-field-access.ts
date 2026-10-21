@@ -1,7 +1,7 @@
 import {
   type InstalledRuntimeContext,
   type ProtectedQueryRow,
-  decideRecordTypeFieldIds,
+  decideRecordTypeCreatableFieldIds,
   runtimePreviewOf,
 } from "@vortex/platform/server";
 import {
@@ -114,7 +114,7 @@ export const readCreatableFieldIds = async (
 > => {
   if (runtimePreviewOf(context) !== undefined) return { kind: "available", fieldIds: undefined };
   const decided = await humanOrganizationRequests().run(session, selection, (transaction, scope) =>
-    decideRecordTypeFieldIds(transaction, scope, context, recordTypeId, "create"),
+    decideRecordTypeCreatableFieldIds(transaction, scope, context, recordTypeId),
   );
   if (decided.kind !== "available") return decided;
   return { kind: "available", fieldIds: decided.value };

@@ -18,6 +18,7 @@ declare
   policy_changeable text[];
   readable_ids text[] := array[]::text[];
   changeable_ids text[] := array[]::text[];
+  contributed_bounds jsonb;
 begin
   if p_decision ->> 'outcome' is distinct from 'allowed' then
     raise exception using errcode = '22023',
@@ -113,6 +114,21 @@ begin
     readable_ids := readable_ids || coalesce(policy_readable, array[]::text[]);
     changeable_ids := changeable_ids || coalesce(policy_changeable, array[]::text[]);
   end loop;
+
+  -- The fields other installed Modules contributed to this record's type, where the person
+  -- also holds the contributor's own permission for them. They only extend what the owner's
+  -- permissions already allowed for this record.
+  contributed_bounds := vortex_access.contributed_field_bounds_internal(p_decision);
+  readable_ids := readable_ids || array(
+    select item.value from pg_catalog.jsonb_array_elements_text(
+      contributed_bounds -> 'readableFieldIds'
+    ) as item(value)
+  );
+  changeable_ids := changeable_ids || array(
+    select item.value from pg_catalog.jsonb_array_elements_text(
+      contributed_bounds -> 'changeableFieldIds'
+    ) as item(value)
+  );
 
   readable_ids := array(
     select distinct field.value
