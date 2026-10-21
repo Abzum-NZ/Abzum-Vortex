@@ -1,5 +1,5 @@
 create or replace function vortex_platform.grid_view_document_for_viewer_internal(
-  p_query_id uuid, p_document jsonb, p_installation jsonb, p_plan jsonb
+  p_query_id uuid, p_document jsonb, p_installation jsonb, p_plan jsonb, p_visible_fields jsonb
 )
 returns jsonb
 language plpgsql
@@ -14,14 +14,16 @@ declare
   eligibility jsonb;
   readable text[] := '{}'::text[];
   filters jsonb;
+  sorts jsonb;
   formatting jsonb;
   omitted integer := 0;
+  omitted_sorts integer := 0;
   omitted_formatting integer := 0;
   document jsonb := p_document;
 begin
-  if not (p_document ? 'filters') and not (p_document ? 'formatting') then
+  if not (p_document ? 'filters') and not (p_document ? 'sort') and not (p_document ? 'formatting') then
     return pg_catalog.jsonb_build_object(
-      'document', document, 'hiddenFilters', 0, 'hiddenFormatting', 0);
+      'document', document, 'hiddenFilters', 0, 'hiddenSorts', 0, 'hiddenFormatting', 0);
   end if;
   context_value := vortex_access.validated_human_request_context();
   -- Resolve only releases pinned by this validated installation, including record-type listings.
@@ -45,11 +47,15 @@ begin
       p_plan, record_type_id, (context_value ->> 'applicationRootId')::uuid
     );
     if declaration is not null then
-      -- Reuse the query engine's current field bounds, including direct-share restrictions.
+      -- A saved operand stays only on a field every record the reader reaches exposes (the query
+      -- engine's field bounds, including direct-share restrictions) and the reader's column
+      -- decision (the visible fields) offers.
       eligibility := vortex_access.resolve_record_read_field_bounds_internal(declaration);
       select coalesce(pg_catalog.array_agg(pg_catalog.lower(field.value)), '{}'::text[])
       into readable
-      from pg_catalog.jsonb_array_elements_text(eligibility -> 'readableFieldIds') as field(value);
+      from pg_catalog.jsonb_array_elements_text(eligibility -> 'readableFieldIds') as field(value)
+      where coalesce(p_visible_fields -> pg_catalog.lower(record_type_id::text), '[]'::jsonb)
+        ? pg_catalog.lower(field.value);
     end if;
   end if;
   if p_document ? 'filters' then
@@ -62,6 +68,18 @@ begin
     document := document - 'filters';
     if pg_catalog.jsonb_array_length(filters) > 0 then
       document := document || pg_catalog.jsonb_build_object('filters', filters);
+    end if;
+  end if;
+  if p_document ? 'sort' then
+    select coalesce(pg_catalog.jsonb_agg(sort.value order by sort.ordinal), '[]'::jsonb)
+    into sorts
+    from pg_catalog.jsonb_array_elements(p_document -> 'sort')
+      with ordinality as sort(value, ordinal)
+    where pg_catalog.lower(sort.value ->> 'fieldId') = any(readable);
+    omitted_sorts := pg_catalog.jsonb_array_length(p_document -> 'sort') - pg_catalog.jsonb_array_length(sorts);
+    document := document - 'sort';
+    if pg_catalog.jsonb_array_length(sorts) > 0 then
+      document := document || pg_catalog.jsonb_build_object('sort', sorts);
     end if;
   end if;
   if p_document ? 'formatting' then
@@ -88,14 +106,19 @@ begin
       document := document || pg_catalog.jsonb_build_object('formatting', formatting);
     end if;
   end if;
+  if omitted > 0 or omitted_sorts > 0 or omitted_formatting > 0 then
+    raise log 'Grid view state omitted code=GRID_VIEW_FIELDS_WITHHELD filters=% sorts=% formatting=%',
+      omitted, omitted_sorts, omitted_formatting;
+  end if;
   return pg_catalog.jsonb_build_object(
-    'document', document, 'hiddenFilters', omitted, 'hiddenFormatting', omitted_formatting);
+    'document', document, 'hiddenFilters', omitted, 'hiddenSorts', omitted_sorts,
+    'hiddenFormatting', omitted_formatting);
 end
 $function$;
 
-revoke all on function vortex_platform.grid_view_document_for_viewer_internal(uuid, jsonb, jsonb, jsonb)
+revoke all on function vortex_platform.grid_view_document_for_viewer_internal(uuid, jsonb, jsonb, jsonb, jsonb)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
-alter function vortex_platform.grid_view_document_for_viewer_internal(uuid, jsonb, jsonb, jsonb)
+alter function vortex_platform.grid_view_document_for_viewer_internal(uuid, jsonb, jsonb, jsonb, jsonb)
   owner to vortex_owner;
-comment on function vortex_platform.grid_view_document_for_viewer_internal(uuid, jsonb, jsonb, jsonb) is
-  'Removes saved filter values and formatting rules outside the current reader permission field policy before a selected document leaves the database; owner-only, with counts for the omission notice.';
+comment on function vortex_platform.grid_view_document_for_viewer_internal(uuid, jsonb, jsonb, jsonb, jsonb) is
+  'Removes saved filter values, sorts and formatting rules outside the reader''s current column decision and field bounds before a selected document leaves the database; owner-only, with counts for the omission notice.';

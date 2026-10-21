@@ -113,7 +113,7 @@ export {
 } from "./records-table-features/export";
 export {
   decideRecordTypeExport,
-  decideRecordTypeFieldIds,
+  decideRecordTypeCreatableFieldIds,
 } from "./records-table-features/record-type-access";
 export {
   readNamedActionEligibility,

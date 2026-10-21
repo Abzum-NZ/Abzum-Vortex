@@ -9,7 +9,7 @@ import type { RequestDatabaseTransaction } from "../../db";
 import { evaluateOrganizationRecordPermissionAvailability } from "../../access/index";
 import type { InstalledRuntimeContext } from "../../definition/index";
 
-type AccessAction = "create" | "read" | "export";
+type AccessAction = "create" | "export";
 
 /**
  * The standard permissions of one record type the viewer holds now, each decided on its own,
@@ -70,25 +70,20 @@ const eligibleEntries = async (
 };
 
 /**
- * The fields the viewer may read, or set when they create a record, on at least one record of one
- * type: the union of the field policies of the eligible standard permissions. A read of the
- * records still withholds a field on a row whose own decision leaves it out.
+ * The fields the viewer may set when they create a record of one type: the union of the changeable
+ * fields of the eligible standard create permissions. The readable columns are decided in the
+ * database by access route (`readRecordTypeVisibleFieldIds`).
  */
-export const decideRecordTypeFieldIds = async (
+export const decideRecordTypeCreatableFieldIds = async (
   transaction: RequestDatabaseTransaction,
   scope: SelectedOrganizationScope,
   context: InstalledRuntimeContext,
   recordTypeId: string,
-  action: "create" | "read",
 ): Promise<ReadonlySet<string>> => {
   const fieldIds = new Set<string>();
-  for (const entry of await eligibleEntries(transaction, scope, context, recordTypeId, action)) {
-    const policy = entry.permission.fieldPolicy;
-    for (const fieldId of (action === "create"
-      ? policy?.changeableFieldIds
-      : policy?.readableFieldIds) ?? [])
+  for (const entry of await eligibleEntries(transaction, scope, context, recordTypeId, "create"))
+    for (const fieldId of entry.permission.fieldPolicy?.changeableFieldIds ?? [])
       fieldIds.add(String(fieldId).toLowerCase());
-  }
   return fieldIds;
 };
 
