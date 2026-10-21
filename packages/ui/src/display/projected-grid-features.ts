@@ -253,9 +253,8 @@ const parseBulkRun = (value: unknown, location: DefinitionRenderErrorLocation): 
   if (run.status !== "finished") return fail("A table bulk run is invalid", location);
   const summary = requireRecord(run.summary, "A bulk run summary is invalid", location);
   const parsed = recordsTableBulkRunLineSchema.safeParse({ ...summary, kind: "summary" });
-  if (!parsed.success)
-    return fail(`A bulk run summary is invalid: ${parsed.error.message}`, location);
-  if (parsed.data.kind !== "summary") return fail("A bulk run summary is invalid", location);
+  if (!parsed.success || parsed.data.kind !== "summary")
+    return fail("A bulk run summary is invalid", location);
   const finished = parsed.data;
   return Object.freeze({
     status: "finished",
