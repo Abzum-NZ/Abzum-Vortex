@@ -92,7 +92,7 @@ export function StudioOptionsControl({
         {visible.map((option) => (
           <label
             key={option.value}
-            className="flex min-w-0 cursor-pointer items-center gap-3 rounded-sm px-2 py-2 text-sm hover:bg-accent"
+            className="flex min-w-0 cursor-pointer items-center gap-3 rounded-md px-2 py-2 text-sm hover:bg-accent"
           >
             <Checkbox
               checked={value.includes(option.value)}

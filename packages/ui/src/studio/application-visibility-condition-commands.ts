@@ -29,7 +29,7 @@ export type StudioApplicationConditionContextResult =
   | Readonly<{ kind: "available"; context: StudioApplicationConditionContext }>
   | Readonly<{ kind: "refused" | "conflict" | "temporarily_unavailable" }>;
 
-const supportedTypes = new Set(["text", "long_text", "whole_number", "yes_no", "date", "date_time"]);
+const supportedTypes = new Set(["text", "long_text", "choice", "whole_number", "yes_no", "date", "date_time"]);
 const object = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === "object" && !Array.isArray(value);
 const exactKeys = (value: Record<string, unknown>, keys: readonly string[]): boolean =>
