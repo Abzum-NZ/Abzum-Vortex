@@ -4,7 +4,6 @@ import type { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import {
   logRefusal,
-  sameId,
   type IdentitySession,
   type RecordsTableRequestRejection,
 } from "@vortex/platform/schema";
@@ -12,15 +11,12 @@ import {
   createRecordsTableBulkService,
   createRecordsTableExportService,
   createStoredPageCapabilityService,
-  projectedUseAvailability,
+  requireProjectedPlacement,
   runtimeContextSelection,
   type RecordsTableBulkAddress,
 } from "@vortex/platform/server";
 import { resolveApplicationAddress } from "../../../_lib/application-address";
-import {
-  collectPlacements,
-  isTablePlacement,
-} from "../../../_lib/application-page/placement-helpers";
+import { isTablePlacement } from "../../../_lib/application-page/placement-helpers";
 import { platformPermissionSource } from "../../../_lib/platform-permission-source";
 import { getQueryContinuationKey } from "../../../_lib/query-continuation-key";
 import { humanOrganizationRequestDependencies } from "../../../_lib/server-composition";
@@ -157,16 +153,10 @@ export const resolveBulkRequest = async <Body extends { pageKey: string; placeme
   if (projected.kind !== "available" || projected.value === undefined)
     return refused(`page_projection_${projected.kind}`, "not_available", 403);
   // The table must be on this page as projected for the person now, once, and usable by them.
-  const placements = collectPlacements(projected.value).filter(({ placementId }) =>
-    sameId(placementId, body.data.placementId),
-  );
-  const placement = placements.length === 1 ? placements[0] : undefined;
-  if (
-    placement === undefined ||
-    !isTablePlacement(placement) ||
-    projectedUseAvailability(placement) !== "available"
-  )
-    return refused("placement_not_on_page", "not_available", 403);
+  const gate = requireProjectedPlacement(projected.value, body.data.placementId);
+  if (gate.kind === "refused") return refused(gate.reason, "not_available", 403);
+  if (!isTablePlacement(gate.placement))
+    return refused("placement_not_a_table", "not_available", 403);
   return {
     kind: "resolved",
     session: identity.session,
@@ -175,6 +165,7 @@ export const resolveBulkRequest = async <Body extends { pageKey: string; placeme
       organizationShortName: addressPart.data.organizationShortName,
     },
     address: {
+      pageId: String(page.pageId),
       selection: {
         organizationId: address.read.organizationId,
         applicationRootId: address.application.applicationRootId,

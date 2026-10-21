@@ -111,6 +111,7 @@ export function useFlowRuntime({
         organizationShortName: application.organizationShortName,
         applicationKey: application.applicationKey,
         pageKey: application.pageKey,
+        ...(subject === undefined ? {} : { pageRecordId: subject.recordId }),
       },
       installation: {
         installationRevision: application.installationRevision,
