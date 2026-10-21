@@ -1,6 +1,5 @@
 import {
   flowLiteralSchema,
-  flowJsonMemberType,
   flowMaximumForEachItemsDurable,
   flowMaximumForEachItemsOther,
   flowMaximumServerSeconds,
@@ -457,50 +456,25 @@ export function validateFlow(
             );
             return undefined;
           }
-          // A selected-record read and a protected operation's result name exactly one member.
-          if (task.type !== "interface.show_form") {
-            if (reference.path.length === 1) return declaredMember.type as StaticType;
+          if (reference.path.length !== 1) {
             add(
               path,
               "vortex.definition.workflow_node_values",
               "invalid_value",
-              `Task ${reference.task}.${reference.key} exposes only one declared member at a time`,
+              task.type === "interface.show_form"
+                ? `Step ${reference.task} answer ${declaredMember.name} can only be read as a whole`
+                : `Task ${reference.task}.${reference.key} exposes only one declared member at a time`,
             );
             return undefined;
           }
+          if (task.type !== "interface.show_form") return declaredMember.type as StaticType;
           const inputs = (task as Extract<FlowTask, { properties: Record<string, FlowValue> }>)
             .properties.inputs!;
-          // Show form's input map is its answer declaration. A nested map or a JSON object
-          // literal declares further names; an arbitrary JSON value has no known member shape.
-          let member: FlowValue = inputs;
-          for (const name of reference.path) {
-            if (member.kind === "map" && Object.hasOwn(member.entries, name)) {
-              member = member.entries[name]!;
-              continue;
-            }
-            const object =
-              member.kind === "literal" && member.literal.type === "json"
-                ? member.literal.value
-                : undefined;
-            if (
-              object !== null &&
-              typeof object === "object" &&
-              !Array.isArray(object) &&
-              Object.hasOwn(object, name)
-            ) {
-              const value = object[name]!;
-              member = { kind: "literal", literal: { type: flowJsonMemberType(value), value } };
-              continue;
-            }
-            add(
-              path,
-              "vortex.definition.workflow_node_references",
-              "broken_reference",
-              `Task ${reference.task}.${reference.key} declares no field ${name} at this path`,
-            );
-            return undefined;
-          }
-          return valueType(member, where, path);
+          return valueType(
+            (inputs as Extract<FlowValue, { kind: "map" }>).entries[declaredMember.name]!,
+            where,
+            path,
+          );
         }
         if (flowTaskOutputMembers(task, reference.key)?.whole === false) {
           add(

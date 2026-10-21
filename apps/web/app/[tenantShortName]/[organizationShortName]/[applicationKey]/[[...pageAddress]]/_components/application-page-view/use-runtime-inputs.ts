@@ -13,6 +13,7 @@ import {
 import {
   projectedLinkTilesSchema,
   mountedRecordPinFrameSchema,
+  recordsSelectionMaximumIds,
   type RecordsTablePivotView,
   type RecordsTableQueryChange,
   type ReferenceChoiceSelectionEvidenceMap,
@@ -33,6 +34,7 @@ import type {
 import { boardPayloadFor, tablePayloadFor } from "./placement-helpers";
 import type {
   DispatchOutcome,
+  PageSelection,
   TableContinuationTarget,
   Notice,
   SubmittedForm,
@@ -138,7 +140,7 @@ export function useRuntimeInputs({
     tableContinuation?: TableContinuationTarget,
     options?: Readonly<{ content?: true }>,
   ) => Promise<void>;
-  setSelection: Dispatch<SetStateAction<Readonly<Record<string, readonly string[]>>>>;
+  setSelection: Dispatch<SetStateAction<PageSelection>>;
   changeTableQuery: (
     placementId: string,
     change: Exclude<RecordsTableQueryChange, { kind: "page" }>,
@@ -194,7 +196,7 @@ export function useRuntimeInputs({
     sourceBindingId?: string,
   ) => Promise<unknown>;
   formBlock: ReturnType<typeof createFormBlockRuntime>;
-  selection: Readonly<Record<string, readonly string[]>>;
+  selection: PageSelection;
   application: ApplicationPageModel["invocation"];
   activeChoicePages: Readonly<Record<string, ChoiceInputPayload>>;
   pinActivationInFlightRef: RefObject<boolean>;
@@ -492,11 +494,35 @@ export function useRuntimeInputs({
               bulk.toggleMatching(placementId, tableData, event.recordId, event.selected)
             )
               return;
+            const selected = selection[placementId] ?? [];
+            if (
+              event.selected &&
+              selected.length >= recordsSelectionMaximumIds &&
+              !selected.some((item) => item.recordId === event.recordId)
+            ) {
+              setNotice({
+                tone: "problem",
+                text: `Select at most ${recordsSelectionMaximumIds} records. Clear some selections before adding another.`,
+              });
+              return;
+            }
             setSelection((current) => {
-              const held = new Set(current[placementId] ?? []);
-              if (event.selected) held.add(event.recordId);
-              else held.delete(event.recordId);
-              return { ...current, [placementId]: [...held] };
+              const held = current[placementId] ?? [];
+              if (!event.selected)
+                return {
+                  ...current,
+                  [placementId]: held.filter((item) => item.recordId !== event.recordId),
+                };
+              // Repeated select-all gestures must not replace a previously captured revision.
+              if (
+                held.some((item) => item.recordId === event.recordId) ||
+                held.length >= recordsSelectionMaximumIds
+              )
+                return current;
+              return {
+                ...current,
+                [placementId]: [...held, { recordId: event.recordId, revision: event.revision }],
+              };
             });
           };
         // Sort, filter and search change the table's query state in the address; that table alone
@@ -755,7 +781,11 @@ export function useRuntimeInputs({
               exported.decorate(
                 placementId,
                 bulk.decorate(placementId, shownTable, values) ?? values,
-              ))(held === undefined ? ready.values : { ...ready.values, selectedRecordIds: held });
+              ))(
+              held === undefined
+                ? ready.values
+                : { ...ready.values, selectedRecordIds: held.map((item) => item.recordId) },
+            );
       const pins =
         ready.status === "ready" && ready.values?.kind === "link_tiles"
           ? projectedLinkTilesSchema.safeParse(ready.values)

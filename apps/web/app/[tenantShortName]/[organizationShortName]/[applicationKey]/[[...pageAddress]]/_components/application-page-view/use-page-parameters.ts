@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, type Dispatch, type SetStateAc
 import { applyRecordsTableQueryChange } from "@vortex/platform/schema";
 import type { ControlSemanticEvent } from "@vortex/ui";
 import type { ApplicationPageModel } from "../../../../../../_lib/application-page";
+import type { PageSelection } from "./types";
 
 /** Published control values use shallow history, preserving unrelated placement data. */
 export function usePageParameters({
@@ -15,7 +16,7 @@ export function usePageParameters({
   currentSearch: string;
   navigationKey: string;
   refreshPlacements: (ids: readonly string[]) => Promise<void>;
-  setSelection: Dispatch<SetStateAction<Readonly<Record<string, readonly string[]>>>>;
+  setSelection: Dispatch<SetStateAction<PageSelection>>;
 }>) {
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const shown = useRef({ navigationKey, search: currentSearch });

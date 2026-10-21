@@ -12,6 +12,8 @@ import {
   repeatableSlotItemIdentities,
   repeatableSlotKey,
   isRepeatableSlotIdentity,
+  conditionalFormatRuleFields,
+  readRecordsTableFeatures,
   type ApplicationSourceDocument,
   type PlatformBlockRelease,
   type SourceBlockPropertyValueContract,
@@ -333,15 +335,24 @@ const applySettings = (
   // pipeline binds the grid to the query that groups by it (an existing one, or a new one written
   // like any other query, editable in Data); every other board setting is judged against it.
   const board = boardModeOf(settings);
+  const formatting = readRecordsTableFeatures(settings["features"] as never)?.conditionalFormatting;
+  const ruleFields =
+    board !== undefined && formatting?.enabled
+      ? [
+          ...new Set(
+            formatting.rules.filter((rule) => rule.enabled).flatMap(conditionalFormatRuleFields),
+          ),
+        ]
+      : [];
   const moveProblem =
     board === undefined ? undefined : boardMoveRecordTypeProblem(source, alias, board);
   if (moveProblem !== undefined) return { kind: "refused", reason: moveProblem };
   if (
     board?.columnField !== undefined &&
     board.cardTitleField !== undefined &&
-    (query === null || !studioBoardQueryFits(source, board, query))
+    (query === null || !studioBoardQueryFits(source, board, query, ruleFields))
   ) {
-    const made = createStudioBoardQuery(source, board, sourceNames(source), query);
+    const made = createStudioBoardQuery(source, board, sourceNames(source), query, ruleFields);
     if ("problem" in made)
       return {
         kind: "refused",
