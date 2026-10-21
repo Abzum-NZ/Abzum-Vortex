@@ -33,13 +33,6 @@ const requestSchema = z
     continuationToken: z.string().min(1).max(65_536).optional(),
     selectedKey: builderKeySchema.optional(),
     selectedEvidence: referenceChoiceSelectionEvidenceSchema.optional(),
-    dependencyChoice: z
-      .object({
-        key: builderKeySchema,
-        evidence: referenceChoiceSelectionEvidenceSchema,
-      })
-      .strict()
-      .optional(),
   })
   .strict();
 
@@ -105,7 +98,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         : { continuationToken: body.continuationToken }),
       ...(body.selectedKey === undefined ? {} : { selectedKey: body.selectedKey }),
       ...(body.selectedEvidence === undefined ? {} : { selectedEvidence: body.selectedEvidence }),
-      ...(body.dependencyChoice === undefined ? {} : { dependencyChoice: body.dependencyChoice }),
     });
     switch (result.kind) {
       case "completed":

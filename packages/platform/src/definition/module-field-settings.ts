@@ -36,6 +36,11 @@ export type ModuleFieldSettingsContext = Readonly<{
   fields: readonly Readonly<{ key: string; label: string; type: string }>[];
   /** The module's permissions, which may control who can choose a choice option. */
   permissions: readonly Readonly<{ key: string; label: string }>[];
+  /**
+   * The filterable link fields of the record type a link field points at: the fields its choices
+   * can be narrowed by when it depends on another link field of its own record type.
+   */
+  targetLinkFields: readonly Readonly<{ key: string; label: string }>[];
 }>;
 
 const base = (key: string, label: string, required: boolean, help?: string) =>
@@ -104,6 +109,23 @@ const tableColumnItem = (permissions: ModuleFieldSettingsContext["permissions"])
 }));
 
 /**
+ * A link field can take its choices from the records linked to another link field of its record
+ * type (Country, then Region). Offered only when both sides exist: another link field to choose
+ * as the parent, and a filterable link field on the linked record type to narrow by.
+ */
+const linkDependencyDeclaration = (context: ModuleFieldSettingsContext): Declaration[] => {
+  const parents = context.fields.filter((field) => field.type === "link");
+  if (parents.length === 0 || context.targetLinkFields.length === 0) return [];
+  return [group("depends_on", "Choices depend on another link", [
+    choice("parent_field", "Link it depends on", true, parents.map(({ key, label }) => [key, label] as const),
+      "Its chosen record narrows the choices here. It must come before this field."),
+    choice("filter_field", "Field the linked records are narrowed by", true,
+      context.targetLinkFields.map(({ key, label }) => [key, label] as const),
+      "A filterable link on the linked record type that points at the same record type as the link above."),
+  ], false)];
+};
+
+/**
  * The typed settings one field type declares. A calculation and a total declare none here: the
  * Data tab edits them with its formula and total editors (`module-field-formulas.ts`).
  */
@@ -155,7 +177,8 @@ export const moduleFieldSettingDeclarations = (
       return [{ ...base("target", "Linked record type", true), kind: "record_type_reference" },
         text("reverse_name", "Name of the link back", true, 1, 60, "The name people see on the linked record, for example Items. Its key is made automatically and stays the same when you rename it."),
         choice("on_parent_delete", "When the linked record is deleted", true, deleteRules),
-        boolean("application_root_required", "Only records of this application", false)];
+        boolean("application_root_required", "Only records of this application", false),
+        ...linkDependencyDeclaration(context)];
     case "link_to_one_of_several":
       return [list("targets", "Record types it may link to", true, 2, 20, { ...base("target", "Record type", true), kind: "record_type_reference" }),
         choice("on_parent_delete", "When the linked record is deleted", true, deleteRules)];

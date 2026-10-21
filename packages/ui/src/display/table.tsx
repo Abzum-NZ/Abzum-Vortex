@@ -519,7 +519,7 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
   // again when the person clears them; their own commits keep the controls (and their focus).
   const controlsKey = `${clearCount}:${values === undefined ? "reading" : "read"}`;
   const layoutControls =
-    !ready || (rows.length === 0 && grouped === undefined) || pivotOpen
+    !ready || (rows.length === 0 && grouped === undefined && !layout.canvas) || pivotOpen
       ? undefined
       : {
           layout,

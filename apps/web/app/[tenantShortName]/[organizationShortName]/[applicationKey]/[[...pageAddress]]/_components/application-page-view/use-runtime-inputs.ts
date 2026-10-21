@@ -76,7 +76,6 @@ export function useRuntimeInputs({
   commitPivotView,
   groupEventsFor,
   requestChoicePageRef,
-  changeChoiceField,
   subject,
   requestedStepId,
   guidedSummaryStepId,
@@ -90,7 +89,6 @@ export function useRuntimeInputs({
   formCancelledRef,
   applyDispatch,
   formBlock,
-  initializeChoiceForm,
   selection,
   application,
   activeChoicePages,
@@ -163,11 +161,6 @@ export function useRuntimeInputs({
       formId?: string,
     ) => Promise<void>
   >;
-  changeChoiceField: (
-    placementId: string,
-    event: ControlSemanticEvent,
-    dialogFormId?: string,
-  ) => void;
   subject: ApplicationPageModel["subject"];
   requestedStepId: RefObject<string | undefined>;
   guidedSummaryStepId: string | undefined;
@@ -199,11 +192,6 @@ export function useRuntimeInputs({
     sourceBindingId?: string,
   ) => Promise<unknown>;
   formBlock: ReturnType<typeof createFormBlockRuntime>;
-  initializeChoiceForm: (
-    formId: string,
-    dialogFormId?: string,
-    defaults?: Readonly<Record<string, unknown>>,
-  ) => void;
   selection: Readonly<Record<string, readonly string[]>>;
   application: ApplicationPageModel["invocation"];
   activeChoicePages: Readonly<Record<string, ChoiceInputPayload>>;
@@ -287,9 +275,6 @@ export function useRuntimeInputs({
       ...Object.keys(model.bindings),
       ...Object.keys(formFeedback),
       ...guidedActiveFormIds,
-      ...model.referenceChoiceInputs
-        .filter((field) => field.dependency !== undefined)
-        .map((field) => field.formId),
       ...model.linkInputPlacementIds,
       ...Object.keys(model.pageParameters.controls),
     ]);
@@ -552,6 +537,9 @@ export function useRuntimeInputs({
               {
                 fieldId: event.field,
                 purpose: event.purpose,
+                ...(event.parentRecordId === undefined
+                  ? {}
+                  : { parentRecordId: event.parentRecordId }),
                 ...(event.search === undefined ? {} : { search: event.search }),
                 ...(event.continuationToken === undefined
                   ? {}
@@ -609,9 +597,6 @@ export function useRuntimeInputs({
           if (event.event !== "choices_requested") return;
           return requestChoicePageRef.current(placementId, event);
         };
-      if (model.referenceChoiceInputs.some((field) => field.placementId === placementId))
-        events.field_changed = (event: ControlSemanticEvent) =>
-          changeChoiceField(placementId, event);
       // A link field's picker asks for its records; the page reads them under the person's access.
       if (model.linkInputPlacementIds.includes(placementId))
         events.records_requested = (event: ControlSemanticEvent) => {
@@ -758,18 +743,6 @@ export function useRuntimeInputs({
             resetBinding.bindingId,
           );
         };
-      if (
-        model.referenceChoiceInputs.some(
-          (field) => field.formId === placementId && field.dependency !== undefined,
-        )
-      ) {
-        const boundReset = events.form_reset;
-        events.form_reset = (event: ControlSemanticEvent) => {
-          if (event.event !== "form_reset") return;
-          initializeChoiceForm(placementId);
-          return boundReset?.(event);
-        };
-      }
       if (data === undefined) {
         if (Object.keys(events).length > 0 || flowFeedback !== undefined)
           inputs[placementId] = {
@@ -943,8 +916,6 @@ export function useRuntimeInputs({
     formOwners,
     launcherPlacements,
     choiceEvidenceFor,
-    changeChoiceField,
-    initializeChoiceForm,
     activeChoicePages,
     model,
     model.referenceChoiceInputs,
