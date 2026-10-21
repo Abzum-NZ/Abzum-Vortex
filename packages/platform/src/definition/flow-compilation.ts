@@ -20,7 +20,12 @@ import {
   DefinitionCompilationError,
   type DefinitionCompilerRefusalCode,
 } from "./compilation-error";
-import { flowIssueLocation, validateFlow, validateFlowSet } from "./flow-validation";
+import {
+  flowIssueLocation,
+  validateFlow,
+  validateFlowSet,
+  type FlowValidationOptions,
+} from "./flow-validation";
 
 /**
  * Compiles the flows one module or application owns from readable aliases to permanent
@@ -112,6 +117,8 @@ export type FlowCompilationInput = Readonly<{
   resolver: FlowCompilationResolver;
   /** The definition keys this definition declares as dependencies; a flow may reach only these. */
   declaredDefinitionKeys: readonly string[];
+  /** The declared inputs of each operation a Call protected operation task may name, by its key. */
+  operationInputs: NonNullable<FlowValidationOptions["operationInputs"]>;
 }>;
 
 type Refusal = ConstructorParameters<typeof DefinitionCompilationError>[1];
@@ -681,6 +688,7 @@ export function compileFlowSources(input: FlowCompilationInput): CompiledFlowSet
     const recordTypes = flowRecordTypes(source);
     const invalid = validateFlow(source, {
       targetFlow,
+      operationInputs: input.operationInputs,
       triggerRecordFieldExists: (field) =>
         recordTypes.every((recordType) => {
           try {
@@ -769,6 +777,7 @@ export function compileFlowSources(input: FlowCompilationInput): CompiledFlowSet
     // output paths acquire the compiler-resolved member types before publication.
     const invalid = validateFlow(entry.flow, {
       targetFlow: (reference) => compiledFlowsById.get(reference),
+      operationInputs: input.operationInputs,
     })[0];
     if (invalid !== undefined)
       throw new DefinitionCompilationError(

@@ -933,7 +933,8 @@ export type FlowDefinition = z.infer<typeof flowSchema>;
 
 /**
  * A value supplied by the invoking surface itself, for example a selection or a form's answers.
- * Its type is checked against the target flow's declared input at publication.
+ * Publication does not type it: the surface fills it at run time. What the flow does with it is
+ * typed in the flow, where a mapped operation input must be of its declared type.
  */
 export const flowBindingCallerValueSchema = z
   .object({ kind: z.literal("caller"), name: builderKeySchema })
