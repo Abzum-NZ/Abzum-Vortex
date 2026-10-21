@@ -7,7 +7,7 @@ import {
   type PlatformBlockRelease,
   type PlatformBlockReleaseSummary,
   type ModuleQueryExposure,
-  boardAggregateLabel,
+  queryTotalLabel,
   type RecordsTableBoardFacts,
 } from "@vortex/platform/schema";
 import { PALETTE_GROUP_TITLES } from "../palette-groups";
@@ -62,6 +62,7 @@ const editableKinds = new Set<BlockPropertySchemaContract["kind"]>([
   "rich_text",
   "icon",
   "field_reference",
+  "total_reference",
   "query_reference",
   "page_reference",
   "record_type_reference",
@@ -299,6 +300,8 @@ export type StudioQueryChoice = Readonly<{
   recordTypeLabel: string;
   allFields: readonly StudioQueryField[];
   fields: readonly StudioQueryField[];
+  /** Each declared total, stored by its alias and offered by its business name. */
+  totals: readonly Readonly<{ alias: string; label: string }>[];
   /** The query groups or totals its rows, so its rows are not records a person can act on. */
   grouped: boolean;
   /** The fields the query groups by, in its order, as a block's settings name them. */
@@ -405,7 +408,7 @@ export const studioBoardFacts = (
       alias: aggregate.alias,
       operation: aggregate.operation,
       ...(aggregate.field === undefined ? {} : { field: reference(aggregate.field) }),
-      label: boardAggregateLabel(
+      label: queryTotalLabel(
         aggregate.operation,
         record.fields.find((field) => field.key === aggregate.field)?.label,
       ),
@@ -522,6 +525,13 @@ const ownQueries = (
           ),
         ),
         grouped: query.group_by.length > 0 || query.aggregates.length > 0,
+        totals: query.aggregates.map((total) => ({
+          alias: total.alias,
+          label: queryTotalLabel(
+            total.operation,
+            record?.fields.find((field) => field.key === total.field)?.label,
+          ),
+        })),
         groupBy: Object.freeze(query.group_by.map((key) => `${recordType}.${key}`)),
         inputs: Object.freeze(inputs),
         pageSize: query.page_size,

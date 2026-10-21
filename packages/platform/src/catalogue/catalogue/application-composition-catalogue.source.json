@@ -6126,20 +6126,18 @@
         "required": true
       },
       {
-        "kind": "text",
+        "kind": "total_reference",
         "key": "measure",
         "label": "Measure",
-        "help": "Alias of a declared aggregate in the bound query, read for every group",
-        "required": true,
-        "minLength": 1,
-        "maxLength": 80
+        "help": "The total of the query each bar shows",
+        "required": true
       },
       {
         "kind": "text",
         "key": "measure_label",
         "label": "Measure label",
-        "help": "Safe display label for the measure",
-        "required": true,
+        "help": "An optional label to show instead of the chosen total's name",
+        "required": false,
         "minLength": 1,
         "maxLength": 60
       },

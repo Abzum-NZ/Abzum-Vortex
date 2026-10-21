@@ -14,6 +14,7 @@ import {
   readTimeCalculations,
   queryTotalAccepts,
   queryTotalOperationLabels,
+  queryTotalLabel,
   type ApplicationSourceDocument,
   type ConditionNode,
   type InlineQuery,
@@ -722,7 +723,11 @@ export function StudioQueryEditor({
               }
             >
               <Label className="text-sm" htmlFor={`query-${queryKey}-total-${index}`}>
-                Total {index + 1}
+                Total {index + 1}:{" "}
+                {queryTotalLabel(
+                  total.operation,
+                  record.fields.find((field) => field.key === total.field)?.label,
+                )}
               </Label>
               <StudioOptionControl
                 id={`query-${queryKey}-total-${index}`}

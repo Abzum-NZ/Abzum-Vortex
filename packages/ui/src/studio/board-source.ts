@@ -1,5 +1,5 @@
 import {
-  boardAggregateLabel,
+  queryTotalLabel,
   MODULE_QUERY_MAXIMUM_TOTALS,
   MODULE_MAXIMUM_QUERIES,
   queryNumericTotalFieldTypes,
@@ -199,7 +199,7 @@ export const studioBoardTotalChoices = (
             !facts.aggregates.some(
               (aggregate) => aggregate.operation === "sum" && aggregate.field === field.field,
             )
-            ? [{ alias, label: boardAggregateLabel("sum", field.label), sumOf: keyOf(field.field) }]
+            ? [{ alias, label: queryTotalLabel("sum", field.label), sumOf: keyOf(field.field) }]
             : [];
         });
   return [

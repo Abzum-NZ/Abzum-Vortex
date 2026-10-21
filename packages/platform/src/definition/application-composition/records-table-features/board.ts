@@ -1,3 +1,4 @@
+import { queryTotalLabel, queryTotalOperationLabels } from "../../module-query-edit";
 import { recordsTableFilterKindOf } from "./column-filters";
 import {
   conditionalFormatRuleIssue,
@@ -51,19 +52,6 @@ export type RecordsTableBoardMode = Extract<
   RecordsTableFeatureState<RecordsTableBoardSettings>,
   { enabled: true }
 >;
-
-const aggregateOperationLabels: Readonly<Record<string, string>> = {
-  count: "Count",
-  sum: "Sum",
-  minimum: "Lowest",
-  maximum: "Highest",
-  average: "Average",
-  distinct_count: "Distinct count",
-};
-
-/** The business label a query total is offered under, such as "Sum of Value" or "Count of records". */
-export const boardAggregateLabel = (operation: string, fieldLabel: string | undefined): string =>
-  `${aggregateOperationLabels[operation] ?? operation} of ${fieldLabel ?? "records"}`;
 
 const code = "definition_records_table_board" as const;
 const refuse = (reason: string): Extract<RecordsTableFeatureCheck, { kind: "not_possible" }> =>
@@ -323,14 +311,18 @@ export const recordsTableBoardFactsOf = (
   const aggregates: RecordsTableBoardFacts["aggregates"][number][] = [];
   for (const aggregate of query["aggregates"]) {
     const held = record(aggregate);
-    if (typeof held?.["alias"] !== "string" || typeof held["operation"] !== "string")
+    if (
+      typeof held?.["alias"] !== "string" ||
+      typeof held["operation"] !== "string" ||
+      !Object.hasOwn(queryTotalOperationLabels, held["operation"])
+    )
       return undefined;
     const fieldId = held["fieldId"];
     aggregates.push({
       alias: held["alias"],
       operation: held["operation"],
       ...(typeof fieldId === "string" ? { field: fieldId } : {}),
-      label: boardAggregateLabel(
+      label: queryTotalLabel(
         held["operation"],
         typeof fieldId === "string"
           ? fields.find((field) => field.field === fieldId)?.label

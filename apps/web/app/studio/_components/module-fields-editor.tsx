@@ -479,6 +479,7 @@ export function ModuleFieldsEditor({
     roles: [],
     fields: [],
     queries: [],
+    totals: [],
     pages: [],
     recordTypes,
     actions: [],

@@ -112,12 +112,7 @@ export {
   type RecordsTableGroupingFacts,
   type RecordsTableGroupingFieldType,
 } from "./grouping";
-export {
-  boardAggregateLabel,
-  boardFilterProblem,
-  boardProblem,
-  recordsTableBoardFactsOf,
-} from "./board";
+export { boardFilterProblem, boardProblem, recordsTableBoardFactsOf } from "./board";
 export {
   conditionalColumnFormatFieldTypes,
   conditionalColumnFormatIssue,
