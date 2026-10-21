@@ -14,6 +14,39 @@ import { exactRangeValid, formattedTextAllowedBlockSchema } from "./module-sourc
 
 // A text pattern must compile under the shared RE2 contract and always travels
 // with a maximum length. Module and application action and query inputs share it.
+// A choice input is a text input that declares its list of choices (value + label, the shape
+// choice fields use). The list is the one constraint: it excludes a pattern and a minimum length.
+const sourceTextInputChoiceSchema = z
+  .object({
+    value: sourceProvenanceUnchanged(z.string().min(1).max(120)),
+    label: sourceProvenanceUnchanged(labelSchema),
+  })
+  .strict();
+
+const refineTextInputChoices = (
+  validation:
+    | {
+        maximum_length?: number | undefined;
+        minimum_length?: number | undefined;
+        pattern?: string | undefined;
+        choices?: readonly { value: string }[] | undefined;
+      }
+    | undefined,
+  context: z.RefinementCtx,
+): void => {
+  const choices = validation?.choices;
+  if (choices === undefined) return;
+  const invalid = (path: string, message: string) =>
+    context.addIssue({ code: "custom", path: ["validation", path], message });
+  if (validation?.pattern !== undefined || validation?.minimum_length !== undefined)
+    invalid("choices", "A list of choices cannot be combined with a pattern or a minimum length");
+  if (new Set(choices.map((choice) => choice.value)).size !== choices.length)
+    invalid("choices", "Choice values must be unique");
+  const maximumLength = validation?.maximum_length;
+  if (maximumLength !== undefined && choices.some((choice) => choice.value.length > maximumLength))
+    invalid("maximum_length", "Every choice value must fit the maximum length");
+};
+
 const refineTextInputPattern = (
   validation: { maximum_length?: number | undefined; pattern?: string | undefined } | undefined,
   context: z.RefinementCtx,
@@ -69,6 +102,9 @@ export const moduleSourceActionInputSchema = z
               minimum_length: sourceProvenanceUnchanged(z.number().int().min(0).optional()),
               maximum_length: sourceProvenanceUnchanged(z.number().int().positive().optional()),
               pattern: sourceProvenanceUnchanged(z.string().min(1).max(500).optional()),
+              choices: sourceProvenanceUnchanged(
+                z.array(sourceTextInputChoiceSchema).min(1).max(200).optional(),
+              ),
             })
             .strict()
             .optional(),
@@ -192,7 +228,10 @@ export const moduleSourceActionInputSchema = z
         path: ["validation", "maximum_length"],
         message: "Maximum length cannot be below minimum length",
       });
-    if (value.type === "text") refineTextInputPattern(value.validation, context);
+    if (value.type === "text") {
+      refineTextInputPattern(value.validation, context);
+      refineTextInputChoices(value.validation, context);
+    }
     if (
       value.type === "whole_number" &&
       value.validation?.minimum !== undefined &&

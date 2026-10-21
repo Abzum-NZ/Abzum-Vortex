@@ -228,6 +228,17 @@ export function fieldSettings(
           ...(settings.application_root_required === undefined
             ? {}
             : { applicationRootIdRequired: settings.application_root_required }),
+          ...(settings.depends_on === undefined
+            ? {}
+            : {
+                dependsOn: {
+                  parentFieldId: localField(String(asObject(settings.depends_on).parent_field)),
+                  filterFieldId: resolution.field(
+                    String(settings.target),
+                    String(asObject(settings.depends_on).filter_field),
+                  ),
+                },
+              }),
         };
       } catch (error) {
         if (

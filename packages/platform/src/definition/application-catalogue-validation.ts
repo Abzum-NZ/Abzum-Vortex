@@ -228,7 +228,7 @@ export function validateApplicationSourceCatalogue(
         report(
           "vortex.definition.application_block_settings",
           "unsupported_choice",
-          at(refusal === "definition_records_table_row_action_limit" ? "row_actions" : "viewport"),
+          at(refusal === "definition_records_table_bounded_scrolling" ? "viewport" : "row_actions"),
           refusal,
         );
       // The default order is a sort a person could choose: each key is a declared sortable field.
