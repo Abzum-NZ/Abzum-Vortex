@@ -516,3 +516,6 @@ comment on function vortex_platform.append_record_occurrences_for_resolved_insta
   uuid, uuid, jsonb, jsonb
 ) is
   'Appends an exact validated record occurrence batch; resolves the active installation under the canonical binding lock unless a trusted reader supplies an exact pin-set it resolved under that same lock.';
+
+alter function vortex_platform.append_record_occurrences_for_resolved_installation_internal(uuid, uuid, jsonb, jsonb)
+  owner to vortex_owner;

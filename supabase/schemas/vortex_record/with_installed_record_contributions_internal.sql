@@ -60,7 +60,7 @@ alter function vortex_record.with_installed_record_contributions_internal(jsonb,
 revoke all on function vortex_record.with_installed_record_contributions_internal(jsonb, uuid, uuid)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_record.with_installed_record_contributions_internal(jsonb, uuid, uuid)
-  to vortex_record_adapter, vortex_owner, postgres;
+  to vortex_record_adapter, vortex_owner;
 
 comment on function vortex_record.with_installed_record_contributions_internal(jsonb, uuid, uuid) is
   'Private installed Module content with each record type''s fields extended by the fields other installed Modules of the organisation contributed to it. The one effective field list every record reader and writer builds from.';

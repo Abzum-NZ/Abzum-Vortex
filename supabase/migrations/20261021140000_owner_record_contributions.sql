@@ -64,7 +64,7 @@ alter function vortex_record.with_installed_record_contributions_internal(jsonb,
 revoke all on function vortex_record.with_installed_record_contributions_internal(jsonb, uuid, uuid)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_record.with_installed_record_contributions_internal(jsonb, uuid, uuid)
-  to vortex_record_adapter, vortex_owner, postgres;
+  to vortex_record_adapter, vortex_owner;
 
 comment on function vortex_record.with_installed_record_contributions_internal(jsonb, uuid, uuid) is
   'Private installed Module content with each record type''s fields extended by the fields other installed Modules of the organisation contributed to it. The one effective field list every record reader and writer builds from.';
@@ -2178,6 +2178,11 @@ comment on function vortex_record.resolve_named_action_context_internal(
 
 reset role;
 
+-- The baseline event-append function was retained with postgres ownership. Transfer it before
+-- changing its definition.
+-- guard-allow: migration-owner-role The baseline function is postgres owned, so its owner must transfer it first.
+alter function vortex_platform.append_record_occurrences_for_resolved_installation_internal(uuid, uuid, jsonb, jsonb) owner to vortex_owner;
+
 set local role vortex_owner;
 
 create or replace function vortex_record.installed_record_type_contributions_internal(
@@ -2247,7 +2252,7 @@ alter function vortex_record.installed_record_type_contributions_internal(uuid,u
 revoke all on function vortex_record.installed_record_type_contributions_internal(uuid, uuid, uuid)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_record.installed_record_type_contributions_internal(uuid, uuid, uuid)
-  to vortex_record_adapter, vortex_owner, postgres;
+  to vortex_record_adapter, vortex_owner;
 
 comment on function vortex_record.installed_record_type_contributions_internal(uuid, uuid, uuid) is
   'Private exact installed field contributions of one owner record type in one organisation: the active contributor field mappings on the owner''s storage whose contributor Module is bound by an active installation of that organisation, with the contributor''s exact field definition. Owner-only except for the fixed record adapter; it decides no access.';
@@ -3332,10 +3337,6 @@ GRANT ALL ON FUNCTION vortex_access.evaluate_organization_record_permission_elig
 grant execute on function vortex_access.evaluate_organization_record_permission_eligibility_internal(p_declaration jsonb, p_context jsonb, p_checked_at timestamp with time zone) to postgres;
 grant execute on function vortex_access.evaluate_organization_record_permission_eligibility_internal(p_declaration jsonb, p_context jsonb, p_checked_at timestamp with time zone) to vortex_record_adapter;
 
-reset role;
-
-set local role postgres;
-
 create or replace function vortex_platform.append_record_occurrences_for_resolved_installation_internal(
   p_storage_contract_id uuid,
   p_record_id uuid,
@@ -3854,5 +3855,8 @@ comment on function vortex_platform.append_record_occurrences_for_resolved_insta
   uuid, uuid, jsonb, jsonb
 ) is
   'Appends an exact validated record occurrence batch; resolves the active installation under the canonical binding lock unless a trusted reader supplies an exact pin-set it resolved under that same lock.';
+
+alter function vortex_platform.append_record_occurrences_for_resolved_installation_internal(uuid, uuid, jsonb, jsonb)
+  owner to vortex_owner;
 
 reset role;
