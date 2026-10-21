@@ -37,9 +37,10 @@ import { LinkDraftPicker, linkedRecordTitle } from "./record-choice-picker";
 import {
   dependentFieldsOf,
   parentFieldOf,
-  storedRecordId,
-  waitingForParent,
+  optionsForParent,
+  storedChoiceKey,
 } from "./link-dependency";
+import { waitingForParent } from "../../controls/dependent-field";
 import type { GridFeatureCellProps, GridFeatureModule } from "./registry";
 
 type Phase = "idle" | "editing" | "saving";
@@ -92,7 +93,7 @@ function EditableCell({
   /** The page's display callbacks, for a link editor's record picker. */
   events: DisplayEventHandlers | undefined;
   reload: (() => void) | undefined;
-  /** For a link that depends on another: the record chosen there in this row, and its label. */
+  /** For a link or choice that depends on another: what is chosen there in this row, and its label. */
   dependency: Readonly<{ parentRecordId: string | undefined; parentLabel: string }> | undefined;
   /** The labels of the fields that depend on this one and hold a record in this row. */
   dependents: readonly string[];
@@ -575,7 +576,7 @@ function InlineEditor({ context, row, column, children }: GridFeatureCellProps):
     parentField === undefined
       ? undefined
       : {
-          parentRecordId: storedRecordId(storedOf(parentField)),
+          parentRecordId: storedChoiceKey(storedOf(parentField)),
           parentLabel: labelOf(parentField),
         };
   if (dependency !== undefined && dependency.parentRecordId === undefined)
@@ -589,7 +590,7 @@ function InlineEditor({ context, row, column, children }: GridFeatureCellProps):
       </span>
     );
   const dependents = dependentFieldsOf(inlineEdit.fields, column.key)
-    .filter((child) => storedRecordId(storedOf(child.field)) !== undefined)
+    .filter((child) => storedChoiceKey(storedOf(child.field)) !== undefined)
     .map((child) => labelOf(child.field));
   return (
     // Keyed by record and field, never by value: a refresh keeps the draft and its refusal.
@@ -599,7 +600,11 @@ function InlineEditor({ context, row, column, children }: GridFeatureCellProps):
       row={row as DisplayRow & Readonly<{ revision: number }>}
       field={column.key}
       label={column.label}
-      editor={field.editor}
+      editor={
+        field.editor.kind === "choice"
+          ? { ...field.editor, options: optionsForParent(field.editor, dependency?.parentRecordId) }
+          : field.editor
+      }
       stored={row.edit[storedKey]}
       handler={onInlineEdit}
       events={context.events}

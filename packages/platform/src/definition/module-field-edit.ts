@@ -245,7 +245,8 @@ const linkProblem = (
   return undefined;
 };
 
-type LinkDependencyDeclaration = Readonly<{ parent_field: string; filter_field: string }>;
+/** A link field names the filter of its target; a choice field names only its parent. */
+type LinkDependencyDeclaration = Readonly<{ parent_field: string; filter_field?: string }>;
 
 /** A source record type's fields as the one link-dependency judgement reads them, by field key. */
 const linkDependencyViews = (
@@ -253,7 +254,11 @@ const linkDependencyViews = (
   record: RecordType,
 ): readonly LinkDependencyField[] =>
   record.fields.map((field) => {
-    const settings = field.settings as { target?: unknown; depends_on?: LinkDependencyDeclaration };
+    const settings = field.settings as {
+      target?: unknown;
+      depends_on?: LinkDependencyDeclaration;
+      options?: readonly { value: string; parent_values?: readonly string[] }[];
+    };
     return {
       id: field.key,
       label: field.label,
@@ -262,12 +267,22 @@ const linkDependencyViews = (
       ...(field.type === "link" && typeof settings.target === "string"
         ? { target: qualifiedLinkTarget(moduleKey, settings.target) }
         : {}),
+      ...(field.type === "choice" && settings.options !== undefined
+        ? {
+            options: settings.options.map((option) => ({
+              value: option.value,
+              ...(option.parent_values === undefined ? {} : { parentValues: option.parent_values }),
+            })),
+          }
+        : {}),
       ...(settings.depends_on === undefined
         ? {}
         : {
             dependsOn: {
               parent: settings.depends_on.parent_field,
-              filter: settings.depends_on.filter_field,
+              ...(settings.depends_on.filter_field === undefined
+                ? {}
+                : { filter: settings.depends_on.filter_field }),
             },
           }),
     };
