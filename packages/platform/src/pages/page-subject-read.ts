@@ -82,9 +82,30 @@ const readableSubjectSchema = z
     outcome: z.literal("allowed"),
     recordId: recordIdSchema,
     concurrencyNumber: revisionSchema,
-    values: z.record(z.string(), jsonValueSchema),
   })
   .passthrough();
+
+const readableSubjectValuesSchema = z.object({ values: z.record(z.string(), jsonValueSchema) });
+
+/**
+ * The readable projection of one fixed read, or the neutral refusal: the one parser every page
+ * subject and eligibility read goes through. An explicit database refusal stays neutral;
+ * malformed platform data raises an error.
+ */
+export const readableSubjectFromProjection = (
+  result: unknown,
+  recordId: string,
+):
+  | Readonly<{ kind: "refused" }>
+  | Readonly<{ kind: "readable"; subject: z.infer<typeof readableSubjectSchema> }> => {
+  if (typeof result !== "object" || result === null || !("outcome" in result))
+    throw new Error("PAGE_SUBJECT_RESULT_INVALID");
+  if (result.outcome === "refused") return { kind: "refused" };
+  const subject = readableSubjectSchema.parse(result);
+  if (subject.recordId.toLowerCase() !== recordId.toLowerCase())
+    throw new Error("PAGE_SUBJECT_ID_MISMATCH");
+  return { kind: "readable", subject };
+};
 
 /**
  * The page subject from one fixed read's projection and capabilities: the same record must answer
@@ -95,16 +116,13 @@ export const pageSubjectFromRead = (
   capabilitiesCandidate: unknown,
   recordId: string,
 ): PageSubjectReadResult => {
-  if (typeof result !== "object" || result === null || !("outcome" in result))
-    throw new Error("PAGE_SUBJECT_RESULT_INVALID");
-  if (result.outcome === "refused") return { kind: "refused" };
-  const readable = readableSubjectSchema.parse(result);
+  const projection = readableSubjectFromProjection(result, recordId);
+  if (projection.kind === "refused") return { kind: "refused" };
   const capabilities = protectedQueryRowCapabilitiesSchema.parse(capabilitiesCandidate);
-  if (readable.recordId.toLowerCase() !== recordId.toLowerCase())
-    throw new Error("PAGE_SUBJECT_ID_MISMATCH");
+  const readable = projection.subject;
   const row = protectedQueryRowSchema.parse({
     recordId: readable.recordId,
-    values: readable.values,
+    values: readableSubjectValuesSchema.parse(readable).values,
     revision: readable.concurrencyNumber,
     capabilities,
   });

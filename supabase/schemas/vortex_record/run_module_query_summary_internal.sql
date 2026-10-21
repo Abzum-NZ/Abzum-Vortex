@@ -81,6 +81,16 @@ declare
   pivot_column_limit constant integer := 50;
   group_presence_sql text;
   group_dimension_sql text;
+  group_axis_ctes_sql text;
+  group_axis_joins_sql text := '';
+  group_axis_index integer := 0;
+  group_field_type text;
+  group_axis_normalized text;
+  group_axis_rank text;
+  group_axis_title text;
+  group_first_rank_sql text;
+  group_axis_normalized_pairs text[] := array[]::text[];
+  group_axis_title_terms text[] := array[]::text[];
   aggregate_object_sql text := '';
   summary_totals_sql text;
   aggregate_result_sql text;
@@ -227,7 +237,7 @@ begin
       or field_type not in (
         'text', 'whole_number', 'decimal_number', 'yes_no', 'date', 'date_time',
         'choice', 'reference_number', 'email_address', 'phone_number', 'web_address',
-        'link', 'link_to_one_of_several'
+        'link'
       ) then
       return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
     end if;
@@ -750,42 +760,73 @@ begin
   end loop;
   group_values_sql := 'pg_catalog.jsonb_build_object(' || pg_catalog.array_to_string(group_value_pairs, ', ') || ')';
   group_presence_sql := pg_catalog.array_to_string(group_presence_terms, ' and ');
-  -- A grouped table orders its groups by (rank, title, canonical value). A link dimension takes
-  -- its rank and title from the one protected title batch pivot axes use, so unreadable targets
-  -- fold into one Not available group. A choice dimension follows the field's option order: a
+  -- A grouped table orders its groups by the tuple of (rank, title) per group field, in
+  -- groupByFieldIds order, then the canonical value. A link dimension takes its rank and title from
+  -- one protected title batch per link field (the batch pivot axes use), so unreadable targets fold
+  -- into one Not available value per field. A choice dimension follows the field's option order: a
   -- stored value the field no longer offers follows every option, and no value comes last (rank 1,
-  -- as for a link). Every other dimension keeps its canonical value order.
-  if not pivot_mode and pg_catalog.cardinality(group_ids) = 1
-    and fields_by_id -> group_ids[1] ->> 'type' = 'link' then
-    group_dimension_sql := pg_catalog.format(
-      'select pg_catalog.jsonb_build_object(%1$L, axis.value) as value,
-         pg_catalog.jsonb_build_object(%1$L, axis.normalized) as normalized,
-         axis.sort_rank, axis.sort_title
-       from vortex_record.dimension_value_internal(
-         (select pg_catalog.array_agg(distinct raw.group_values -> %1$L) from raw_dimensions as raw), %2$L::jsonb
-       ) as axis',
-      group_ids[1], (fields_by_id -> group_ids[1])::text
-    );
-  elsif not pivot_mode and pg_catalog.cardinality(group_ids) = 1
-    and fields_by_id -> group_ids[1] ->> 'type' = 'choice' then
-    group_dimension_sql := pg_catalog.format(
-      'select raw.group_values as value, raw.group_values as normalized,
-         case when coalesce(raw.group_values -> %1$L, ''null''::jsonb) = ''null''::jsonb then 1 else 0 end as sort_rank,
-         case when coalesce(raw.group_values -> %1$L, ''null''::jsonb) = ''null''::jsonb then ''''::text
+  -- as for a link). Every other dimension keeps its canonical value order. The first field's rank is
+  -- the group's rank; every field's title (terminated, the later ones led by their rank) is the
+  -- group's title, so the keyset cursor stays [rank, title, canonical value].
+  group_axis_ctes_sql := '';
+  foreach field_key in array group_ids loop
+    group_axis_index := group_axis_index + 1;
+    group_field_type := fields_by_id -> field_key ->> 'type';
+    if group_field_type = 'link' then
+      group_axis_ctes_sql := group_axis_ctes_sql || pg_catalog.format(
+        'link_axis_%1$s as materialized (
+           select * from vortex_record.dimension_value_internal(
+             (select pg_catalog.array_agg(distinct raw.group_values -> %2$L) from raw_dimensions as raw), %3$L::jsonb
+           )
+         ), ',
+        group_axis_index, field_key, (fields_by_id -> field_key)::text
+      );
+      group_axis_joins_sql := group_axis_joins_sql || pg_catalog.format(
+        ' left join link_axis_%1$s on link_axis_%1$s.value = raw.group_values -> %2$L',
+        group_axis_index, field_key
+      );
+      group_axis_normalized := pg_catalog.format('link_axis_%s.normalized', group_axis_index);
+      group_axis_rank := pg_catalog.format('coalesce(link_axis_%s.sort_rank, 0)', group_axis_index);
+      group_axis_title := pg_catalog.format('coalesce(link_axis_%s.sort_title, '''')', group_axis_index);
+    elsif group_field_type = 'choice' then
+      group_axis_normalized := pg_catalog.format('raw.group_values -> %L', field_key);
+      group_axis_rank := pg_catalog.format(
+        'case when coalesce(raw.group_values -> %L, ''null''::jsonb) = ''null''::jsonb then 1 else 0 end', field_key
+      );
+      group_axis_title := pg_catalog.format(
+        'case when coalesce(raw.group_values -> %1$L, ''null''::jsonb) = ''null''::jsonb then ''''::text
            else coalesce((
              select pg_catalog.lpad(choice_option.ordinal::text, 4, ''0'')
              from pg_catalog.jsonb_array_elements(%2$L::jsonb) with ordinality as choice_option(item, ordinal)
              where choice_option.item ->> ''value'' = raw.group_values ->> %1$L
              order by choice_option.ordinal limit 1
-           ), ''9999'') end as sort_title
-       from (select distinct group_values from raw_dimensions) as raw',
-      group_ids[1], coalesce(fields_by_id #> array[group_ids[1], 'settings', 'options'], '[]'::jsonb)::text
+           ), ''9999'') end',
+        field_key, coalesce(fields_by_id #> array[field_key, 'settings', 'options'], '[]'::jsonb)::text
+      );
+    else
+      group_axis_normalized := pg_catalog.format('raw.group_values -> %L', field_key);
+      group_axis_rank := '0';
+      group_axis_title := '''''::text';
+    end if;
+    group_axis_normalized_pairs := pg_catalog.array_append(
+      group_axis_normalized_pairs, pg_catalog.format('%L, %s', field_key, group_axis_normalized)
     );
-  else
-    group_dimension_sql :=
-      'select raw.group_values as value, raw.group_values as normalized, 0 as sort_rank, ''''::text as sort_title
-       from (select distinct group_values from raw_dimensions) as raw';
-  end if;
+    group_axis_title_terms := pg_catalog.array_append(
+      group_axis_title_terms,
+      case when group_axis_index = 1 then '' else '(' || group_axis_rank || ')::text || ' end
+        || pg_catalog.format('pg_catalog.translate(pg_catalog.left(%s, 256), pg_catalog.chr(1), '''') || pg_catalog.chr(1)', group_axis_title)
+    );
+    if group_axis_index = 1 then group_first_rank_sql := group_axis_rank; end if;
+  end loop;
+  group_dimension_sql := pg_catalog.format(
+    'select raw.group_values as value, pg_catalog.jsonb_build_object(%s) as normalized,
+       %s as sort_rank, %s as sort_title
+     from (select distinct group_values from raw_dimensions) as raw%s',
+    pg_catalog.array_to_string(group_axis_normalized_pairs, ', '),
+    group_first_rank_sql,
+    pg_catalog.array_to_string(group_axis_title_terms, ' || '),
+    group_axis_joins_sql
+  );
 
   if fast_path then
     candidate_sql := pg_catalog.format(
@@ -1246,7 +1287,7 @@ begin
          from selected as candidate
          where %s and (select value from candidate_count) <= %s
        ),
-       axis_values as materialized (%s),
+       %saxis_values as materialized (%s),
        dimensions as materialized (
          select source.projected_values, axis.normalized as group_values, axis.sort_rank, axis.sort_title
          from raw_dimensions as source
@@ -1295,6 +1336,7 @@ begin
       group_values_sql,
       group_presence_sql,
       summary_candidate_limit,
+      group_axis_ctes_sql,
       group_dimension_sql,
       aggregate_object_sql,
       group_after, group_cursor ->> 0, group_cursor ->> 1, group_cursor ->> 2,
@@ -1374,4 +1416,4 @@ grant execute on function vortex_record.run_module_query_summary_internal(uuid,u
   to vortex_record_adapter;
 
 comment on function vortex_record.run_module_query_summary_internal(uuid,uuid,bigint,jsonb,jsonb,jsonb) is
-  'Owner-only summary execution over the access plan prepared by the protected adapter entry point; explicit organisation and application scope and the exact read plan bound every aggregate scan, including a pivot crossed in one grouping-sets statement and a link grouping folded through one protected title batch; a grid''s grouped read also returns the reader''s guaranteed field bound.';
+  'Owner-only summary execution over the access plan prepared by the protected adapter entry point; explicit organisation and application scope and the exact read plan bound every aggregate scan, including a pivot crossed in one grouping-sets statement and every link grouping dimension folded through one protected title batch per link field; a grid''s grouped read also returns the reader''s guaranteed field bound.';

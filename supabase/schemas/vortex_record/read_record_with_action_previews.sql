@@ -51,7 +51,7 @@ begin
           (action_item ->> 'ownerId')::uuid, (action_item ->> 'releaseRevision')::bigint,
           (action_item ->> 'actionId')::uuid, p_record_type_id, p_record_id,
           (read_row.projection ->> 'concurrencyNumber')::bigint, '{}'::jsonb,
-          (action_item ->> 'activityId')::uuid, read_row.read_facts
+          (action_item ->> 'activityId')::uuid, read_row.read_facts, null::jsonb
         )
       ));
     end loop;
