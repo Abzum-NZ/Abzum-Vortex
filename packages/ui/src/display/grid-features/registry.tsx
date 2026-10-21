@@ -80,8 +80,8 @@ export type GridGroupingView = Readonly<{
 }>;
 
 export type GridPivotView = Readonly<{
-  view: Readonly<{ cursor?: string }> | undefined;
-  setView: (view: Readonly<{ cursor?: string }> | undefined) => void;
+  view: Readonly<{ cursor?: string | undefined }> | undefined;
+  setView: (view: Readonly<{ cursor?: string | undefined }> | undefined) => void;
 }>;
 
 /** The one grid focus model, shared with optional page interactions. */

@@ -4,7 +4,7 @@ import {
   describeFailure,
   unavailableResult,
   gridLayoutVisibleFieldIds,
-  readRecordsTableContract,
+  recordsTableContractOrLog,
   type BlockPropertyValueContract,
   type RecordsTableContract,
   type GridLayoutState,
@@ -16,7 +16,9 @@ import {
   readRecordsTableFieldFilter,
   recordsTableFilterKindOf,
   type RecordsTableFieldFilter,
+  type RecordsTableFeatureProjection,
   type RecordsTableFilterField,
+  type RecordsTableInlineEditor,
   type RecordsTableFilterValue,
   type RecordsTableQueryState,
   type RecordsTableSortKey,
@@ -56,8 +58,6 @@ import {
   recordsTableNarrowingRefusal,
   recordsTableRequestRefusal,
   type ConditionalFormattingContext,
-  type RecordsTableFeatureProjection,
-  type RecordsTableInlineEditor,
   type RecordsTableRequestRefusal,
 } from "./records-table-features";
 import {
@@ -465,7 +465,7 @@ export type RecordsTableQueryCommand = Readonly<{
 export const buildRecordsTableQueryCommand = (
   request: RecordsTableQueryRequest,
 ): RecordsTableQueryCommand | RecordsTableRequestRefusal => {
-  const contract = readRecordsTableContract(request.settings);
+  const contract = recordsTableContractOrLog(request.settings, "table query");
   if (contract === undefined || contract.columns.length === 0)
     return recordsTableRequestRefusal("contract", "contract_unreadable");
   const { state } = request;

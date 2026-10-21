@@ -15,7 +15,7 @@ import {
 import {
   isRecord,
   queryIdSchema,
-  readRecordsTableContract,
+  recordsTableContractOrLog,
   recordIdSchema,
   sameId,
   type BlockPropertyValueContract,
@@ -212,8 +212,9 @@ const tableLinkFieldTarget = (
   fieldId: string,
   purpose: "filter" | "edit",
 ): InstalledLinkField | undefined => {
-  const contract = readRecordsTableContract(
+  const contract = recordsTableContractOrLog(
     settings as Readonly<Record<string, BlockPropertyValueContract>>,
+    "link input",
   );
   if (contract === undefined) return undefined;
   const declared =

@@ -1,7 +1,7 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
-import { isRecord, readRecordsTableContract, sameId, type IdentitySession } from "../../schema";
+import { isRecord, recordsTableContractOrLog, sameId, type IdentitySession } from "../../schema";
 import { createHumanOrganizationRequestService } from "../../access/index";
 import type { RequestDatabaseTransaction } from "../../db/index";
 import {
@@ -105,7 +105,10 @@ export const readRecordsTableNamedActionAvailability = async (
       if (!isRecord(vortex) || !isRecord(vortex.block) || typeof vortex.queryId !== "string")
         return refuse("placement_metadata_unreadable");
       if (vortex.block.blockId !== TABLE_BLOCK_RELEASE.blockId) return refuse("not_a_table");
-      const contract = readRecordsTableContract(placementSettings(props));
+      const contract = recordsTableContractOrLog(
+        placementSettings(props),
+        "named action availability",
+      );
       if (contract === undefined) return refuse("contract_unreadable");
       const declared = recordsTableBulkActions(contract);
       if (declared.length === 0) return refuse("bulk_actions_not_offered");

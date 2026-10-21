@@ -4,14 +4,17 @@ import {
   gridLayoutVisibleFieldIds,
   isSafeLinkAddress,
   readRecordDetailContract,
-  readRecordsTableContract,
+  recordsTableContractOrLog,
   richTextDocumentSchema,
   timestampSchema,
   type BlockPropertyValueContract,
   type GridLayoutState,
   type JsonValue,
   type RecordsDisplayFormat,
+  type RecordsTableFeatureProjection,
   type RecordsTableFilterField,
+  type RecordsTableInlineEditor,
+  type RecordsTablePivotView,
   type RecordsTableFilterValue,
   type RecordsTableSortState,
   type tableCellTypeKeys,
@@ -25,9 +28,7 @@ import {
   personalFormattingRules,
   projectRecordsTableFeatures,
   rowMayChangeField,
-  type RecordsTableInlineEditor,
   type ConditionalFormattingContext,
-  type RecordsTableFeatureProjection,
   type RecordsTableRowFormat,
 } from "./records-table-features";
 
@@ -288,7 +289,7 @@ export type ComponentDataProjectionInput = Readonly<{
   /** How a cell edits each field of the installed definition (field identity to editor); supplied only when inline editing is on. */
   fieldEditors?: Readonly<Record<string, RecordsTableInlineEditor>>;
   /** The pivot view the address opens the table in; absent shows the ordinary grid. */
-  pivotView?: Readonly<{ cursor?: string }>;
+  pivotView?: RecordsTablePivotView;
   /** The viewer's export permission, decided in the same read; absent when Export is off. */
   exportAllowed?: boolean;
   /** The groups a grouped read counted; absent for an ordinary read. */
@@ -616,7 +617,7 @@ export const projectRecordsTableData = (
   rows: readonly TableSourceRow[],
   fieldBounds: ProtectedQueryFieldBounds,
 ): ProjectedComponentData<ProjectedTableValues> | undefined => {
-  const contract = readRecordsTableContract(input.settings);
+  const contract = recordsTableContractOrLog(input.settings, "table data projection");
   if (contract === undefined || contract.columns.length === 0) return undefined;
   if (new Set(rows.map((row) => row.recordId)).size !== rows.length) return undefined;
   // A list row must carry the revision and capabilities the engine decided for it; a row without

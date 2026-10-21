@@ -3,10 +3,10 @@ import {
   featureAvailable,
   featureEnabled,
   featureNotPossible,
-  fieldList,
+  optionalText,
   recordsTableDependencyMissing,
   recordsTableFieldNotEditableReason,
-  settingText,
+  requiredFieldList,
   type RecordsTableFeatureDefinition,
 } from "./shared";
 
@@ -28,12 +28,12 @@ export const recordsTableInlineEditFeature: RecordsTableFeatureDefinition<Record
     label: "Inline editing",
     description: "Change chosen values in place",
     read: (group) => {
-      if (featureEnabled(group) !== true) return { enabled: false };
-      const eventId = settingText(group["event_id"]);
+      if (!featureEnabled(group)) return { enabled: false };
+      const eventId = optionalText(group["event_id"], "event_id");
       return {
         enabled: true,
         ...(eventId === undefined ? {} : { eventId }),
-        fields: fieldList(group["fields"]),
+        fields: requiredFieldList(group["fields"], "fields"),
       };
     },
     // Every chosen field must be a stored value people may change, and a change needs the action

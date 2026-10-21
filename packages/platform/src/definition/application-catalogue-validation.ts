@@ -190,7 +190,10 @@ export function validateApplicationSourceCatalogue(
             ...keySegment("setting", "row_action_event_id"),
           ]);
     }
-    const table = readRecordsTableContract(settings);
+    // A table whose settings cannot be read is refused, with the path, by the page validation.
+    const tableRead =
+      release.key === "platform.display.table" ? readRecordsTableContract(settings) : undefined;
+    const table = tableRead?.kind === "read" ? tableRead.contract : undefined;
     const detail = table === undefined ? readRecordDetailContract(settings) : undefined;
     if (
       release.key === "platform.display.record_detail" &&

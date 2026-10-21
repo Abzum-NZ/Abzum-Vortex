@@ -22,6 +22,7 @@ import { readRecordsTable } from "./records-table";
 import {
   findModuleQuery,
   isApplicationLauncherPlacement,
+  tablePlacementContract,
   logPlacementFailure,
   placementBlockIs,
   placementSettingsOf,
@@ -82,12 +83,18 @@ export const readQueryPlacement = async (
   }
   // A Data grid is known by its block; settings it cannot read fail loudly, never as no data.
   const isTable = placementBlockIs(placement, TABLE_BLOCK_RELEASE);
-  const tableContract = isTable ? readRecordsTableContract(settings) : undefined;
-  if (isTable && tableContract === undefined) {
-    logPlacementFailure(read.address, placementId, "records_table_settings_invalid");
+  const tableRead = isTable ? readRecordsTableContract(settings) : undefined;
+  if (tableRead?.kind === "unreadable") {
+    logPlacementFailure(
+      read.address,
+      placementId,
+      "records_table_settings_invalid",
+      `path=${tableRead.path}`,
+    );
     read.data[placementId] = { status: "refused", reason: "not_permitted" };
     return;
   }
+  const tableContract = tableRead?.contract;
   const detailContract = isTable ? undefined : readRecordDetailContract(settings);
   const queryId =
     typeof placement.vortex.queryId === "string" ? placement.vortex.queryId : undefined;
@@ -144,7 +151,7 @@ export type TreeLevelResult =
 
 /** Whether a placement is a Records table whose rows open to the records beneath them. */
 export const isTreeTablePlacement = (placement: PlacementReadEntry): boolean =>
-  readRecordsTableContract(placementSettingsOf(placement))?.features.tree.enabled === true;
+  tablePlacementContract(placement, "tree placement")?.features.tree.enabled === true;
 
 /**
  * Reads one level of a tree table: the children of one record, a page at a time, through the
@@ -194,7 +201,7 @@ export type GroupMembersResult = TreeLevelResult;
 
 /** Whether a placement is a Records table the viewer may group by its authored choice field. */
 export const isGroupingTablePlacement = (placement: PlacementReadEntry): boolean =>
-  readRecordsTableContract(placementSettingsOf(placement))?.features.grouping.enabled === true;
+  tablePlacementContract(placement, "grouping placement")?.features.grouping.enabled === true;
 
 /**
  * Reads one page of one group of a grouped table, a page at a time, through the table's own read:
@@ -246,6 +253,7 @@ export { pageQueryBindingContext, placementParameterDependencies } from "./bindi
 export {
   findModuleQuery,
   isApplicationLauncherPlacement,
+  tablePlacementContract,
   isBoardPlacement,
   logPlacementFailure,
   projectedUseAvailability,

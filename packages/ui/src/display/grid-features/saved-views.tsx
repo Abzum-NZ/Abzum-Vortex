@@ -94,7 +94,7 @@ const differsFrom = (context: GridFeatureContext, selected: SelectedGridView): b
     })),
     context.narrowing?.search ?? null,
   );
-  const saved = queryKey(document.sort ?? [], document.filters ?? [], document.search ?? null);
+  const saved = queryKey(document.sort, document.filters, document.search);
   return current !== saved || columnsKey(context.arrangement) !== columnsKey(document);
 };
 
@@ -470,9 +470,7 @@ function ViewSwitcher({
                       viewId: selected.viewId,
                       expectedRevision: selected.revision,
                       layout: context.arrangement,
-                      ...(selected.document.formatting === undefined
-                        ? {}
-                        : { formatting: selected.document.formatting }),
+                      formatting: selected.document.formatting,
                     });
                   }}
                 >
@@ -586,9 +584,7 @@ function ViewSwitcher({
               kind: "create",
               name,
               layout: context.arrangement,
-              ...(selected?.document.formatting === undefined
-                ? {}
-                : { formatting: selected.document.formatting }),
+              formatting: selected?.document.formatting ?? [],
             })
           }
           onClose={() => setPrompt(null)}
