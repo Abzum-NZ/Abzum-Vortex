@@ -300,7 +300,10 @@
           "vortex.crm.activities.activity.export",
           "vortex.crm.activities.activity.complete",
           "application.crm.activity.complete",
-          "vortex.crm.tags.record_tag.manage"
+          "vortex.crm.tags.record_tag.manage",
+          "vortex.crm.locations.country.read",
+          "vortex.crm.locations.region.read",
+          "vortex.crm.locations.city.read"
         ]
       },
       {
@@ -381,7 +384,16 @@
           "vortex.crm.tags.record_tag.soft_delete",
           "vortex.crm.tags.record_tag.restore",
           "vortex.crm.tags.record_tag.export",
-          "vortex.crm.tags.record_tag.manage"
+          "vortex.crm.tags.record_tag.manage",
+          "vortex.crm.locations.country.create",
+          "vortex.crm.locations.country.read",
+          "vortex.crm.locations.country.update",
+          "vortex.crm.locations.region.create",
+          "vortex.crm.locations.region.read",
+          "vortex.crm.locations.region.update",
+          "vortex.crm.locations.city.create",
+          "vortex.crm.locations.city.read",
+          "vortex.crm.locations.city.update"
         ]
       }
     ],
@@ -612,6 +624,24 @@
                         "label": "Website",
                         "visible": true,
                         "pin": "unpinned"
+                      },
+                      {
+                        "field": "vortex.crm.organisations:company.country",
+                        "label": "Country",
+                        "visible": true,
+                        "pin": "unpinned"
+                      },
+                      {
+                        "field": "vortex.crm.organisations:company.region",
+                        "label": "Region",
+                        "visible": true,
+                        "pin": "unpinned"
+                      },
+                      {
+                        "field": "vortex.crm.organisations:company.city",
+                        "label": "City",
+                        "visible": true,
+                        "pin": "unpinned"
                       }
                     ],
                     "sortable_fields": [
@@ -657,6 +687,16 @@
                       },
                       "spreadsheet": {
                         "enabled": false
+                      },
+                      "row_edit": {
+                        "enabled": true,
+                        "event_id": "event_save_company_row",
+                        "trigger": "button",
+                        "fields": [
+                          "vortex.crm.organisations:company.country",
+                          "vortex.crm.organisations:company.region",
+                          "vortex.crm.organisations:company.city"
+                        ]
                       }
                     }
                   }
@@ -1190,8 +1230,20 @@
                         "enabled": true,
                         "range_select": true,
                         "find": true,
+                        "paste": true,
+                        "fill": true,
+                        "undo": true,
                         "status_bar_fields": ["vortex.crm.opportunities:opportunity.value"],
                         "status_bar_operations": ["count", "sum", "average"]
+                      },
+                      "inline_edit": {
+                        "enabled": true,
+                        "event_id": "event_edit_opportunity_cell",
+                        "fields": [
+                          "vortex.crm.opportunities:opportunity.name",
+                          "vortex.crm.opportunities:opportunity.expected_close_date",
+                          "vortex.crm.opportunities:opportunity.probability"
+                        ]
                       },
                       "row_edit": {
                         "enabled": true,
@@ -1713,6 +1765,78 @@
                               }
                             },
                             {
+                              "type": "platform.renderer.field_input",
+                              "props": {
+                                "id": "input_crm_company_create_country",
+                                "field": "vortex.crm.organisations:company.country",
+                                "vortex": {
+                                  "block": {
+                                    "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                                    "release_version": "1.0.0"
+                                  },
+                                  "responsive": {
+                                    "desktop": {
+                                      "visible": true,
+                                      "width": {
+                                        "kind": "fill"
+                                      },
+                                      "height": {
+                                        "kind": "content"
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            {
+                              "type": "platform.renderer.field_input",
+                              "props": {
+                                "id": "input_crm_company_create_region",
+                                "field": "vortex.crm.organisations:company.region",
+                                "vortex": {
+                                  "block": {
+                                    "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                                    "release_version": "1.0.0"
+                                  },
+                                  "responsive": {
+                                    "desktop": {
+                                      "visible": true,
+                                      "width": {
+                                        "kind": "fill"
+                                      },
+                                      "height": {
+                                        "kind": "content"
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            {
+                              "type": "platform.renderer.field_input",
+                              "props": {
+                                "id": "input_crm_company_create_city",
+                                "field": "vortex.crm.organisations:company.city",
+                                "vortex": {
+                                  "block": {
+                                    "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                                    "release_version": "1.0.0"
+                                  },
+                                  "responsive": {
+                                    "desktop": {
+                                      "visible": true,
+                                      "width": {
+                                        "kind": "fill"
+                                      },
+                                      "height": {
+                                        "kind": "content"
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            {
                               "type": "platform.renderer.button",
                               "props": {
                                 "id": "submit_crm_company_create",
@@ -1866,6 +1990,78 @@
                               "props": {
                                 "id": "input_crm_company_edit_logo",
                                 "field": "vortex.crm.organisations:company.logo",
+                                "vortex": {
+                                  "block": {
+                                    "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                                    "release_version": "1.0.0"
+                                  },
+                                  "responsive": {
+                                    "desktop": {
+                                      "visible": true,
+                                      "width": {
+                                        "kind": "fill"
+                                      },
+                                      "height": {
+                                        "kind": "content"
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            {
+                              "type": "platform.renderer.field_input",
+                              "props": {
+                                "id": "input_crm_company_edit_country",
+                                "field": "vortex.crm.organisations:company.country",
+                                "vortex": {
+                                  "block": {
+                                    "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                                    "release_version": "1.0.0"
+                                  },
+                                  "responsive": {
+                                    "desktop": {
+                                      "visible": true,
+                                      "width": {
+                                        "kind": "fill"
+                                      },
+                                      "height": {
+                                        "kind": "content"
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            {
+                              "type": "platform.renderer.field_input",
+                              "props": {
+                                "id": "input_crm_company_edit_region",
+                                "field": "vortex.crm.organisations:company.region",
+                                "vortex": {
+                                  "block": {
+                                    "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                                    "release_version": "1.0.0"
+                                  },
+                                  "responsive": {
+                                    "desktop": {
+                                      "visible": true,
+                                      "width": {
+                                        "kind": "fill"
+                                      },
+                                      "height": {
+                                        "kind": "content"
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            {
+                              "type": "platform.renderer.field_input",
+                              "props": {
+                                "id": "input_crm_company_edit_city",
+                                "field": "vortex.crm.organisations:company.city",
                                 "vortex": {
                                   "block": {
                                     "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
@@ -4629,6 +4825,22 @@
         "record_type": "vortex.crm.opportunities:opportunity",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "event_save_company_row",
+        "key": "vortex.app.events.save_company_row",
+        "label": "Save company row",
+        "record_type": "vortex.crm.organisations:company",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "event_edit_opportunity_cell",
+        "key": "vortex.app.events.edit_opportunity_cell",
+        "label": "Edit opportunity cell",
+        "record_type": "vortex.crm.opportunities:opportunity",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
       }
     ],
     "public_addresses": [],
@@ -6493,6 +6705,61 @@
           }
         ],
         "outputs": {}
+      },
+      {
+        "contractVersion": "1.0.0",
+        "id": "save_company_row",
+        "key": "save_company_row",
+        "labels": {
+          "name": "Save company row"
+        },
+        "execution": "interactive",
+        "runAs": {
+          "kind": "initiator"
+        },
+        "recordInput": "record",
+        "inputs": {
+          "record": {
+            "type": "record_reference",
+            "required": true,
+            "recordTypeIds": ["vortex.crm.organisations:company"]
+          },
+          "values": {
+            "type": "json",
+            "required": true
+          }
+        },
+        "tasks": [
+          {
+            "id": "save_row",
+            "type": "record.save",
+            "version": "1.0.0",
+            "properties": {
+              "record_type": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "vortex.crm.organisations:company"
+                }
+              },
+              "record": {
+                "kind": "reference",
+                "reference": {
+                  "source": "input",
+                  "name": "record"
+                }
+              },
+              "values": {
+                "kind": "reference",
+                "reference": {
+                  "source": "input",
+                  "name": "values"
+                }
+              }
+            }
+          }
+        ],
+        "outputs": {}
       }
     ],
     "flow_bindings": [
@@ -6910,6 +7177,40 @@
         "control": "content_4",
         "event_id": "event_save_opportunity_row",
         "event": "row_edit",
+        "flow": "save_opportunity_row",
+        "inputs": {
+          "record": {
+            "kind": "caller",
+            "name": "record_id"
+          },
+          "values": {
+            "kind": "caller",
+            "name": "values"
+          }
+        }
+      },
+      {
+        "id": "binding_save_company_row",
+        "control": "content_1",
+        "event_id": "event_save_company_row",
+        "event": "row_edit",
+        "flow": "save_company_row",
+        "inputs": {
+          "record": {
+            "kind": "caller",
+            "name": "record_id"
+          },
+          "values": {
+            "kind": "caller",
+            "name": "values"
+          }
+        }
+      },
+      {
+        "id": "binding_edit_opportunity_cell",
+        "control": "content_4",
+        "event_id": "event_edit_opportunity_cell",
+        "event": "inline_edit",
         "flow": "save_opportunity_row",
         "inputs": {
           "record": {

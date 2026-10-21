@@ -41,6 +41,10 @@ export type RecordsTableFeatureProjection = Readonly<{
   spreadsheet?: Readonly<{
     rangeSelect: boolean;
     find: boolean;
+    /** Paste, fill down and undo of batches; each is present only when usable now. */
+    paste?: true;
+    fill?: true;
+    undo?: true;
     /**
      * The status bar of a selected range: the configured fields (every one is shown, a field the
      * viewer cannot read as "Not available") and the totals. Absent while the status bar is off.
@@ -124,7 +128,20 @@ export type RecordsTableInlineEditor = Readonly<{ required: boolean }> &
         maximum?: string;
       }>
     | Readonly<{ kind: "yes_no" }>
-    | Readonly<{ kind: "choice"; options: readonly Readonly<{ value: string; label: string }>[] }>
+    | Readonly<{
+        kind: "choice";
+        options: readonly Readonly<{
+          value: string;
+          label: string;
+          parentValues?: readonly string[];
+        }>[];
+        /**
+         * The choice field of the same record type whose chosen option narrows this field's
+         * options, as the table's field identity (lower case): only options listing that parent
+         * option are offered, and changing the parent must clear or flag this field.
+         */
+        dependsOnField?: string;
+      }>
     | Readonly<{ kind: "date"; earliest?: string; latest?: string }>
     | Readonly<{ kind: "date_time" }>
     | Readonly<{
@@ -325,6 +342,20 @@ export const projectRecordsTableFeatures = (
         contract.columns.some((column) => sameField(column.field, field)),
       )
     : [];
+  const batchEditable =
+    features.spreadsheet.enabled &&
+    features.spreadsheet.rangeSelect === true &&
+    editableFields.length > 0 &&
+    inlineEdit.enabled &&
+    inlineEdit.eventId !== undefined;
+  const pasteUsable =
+    batchEditable && features.spreadsheet.enabled && features.spreadsheet.paste === true;
+  const fillUsable =
+    batchEditable && features.spreadsheet.enabled && features.spreadsheet.fill === true;
+  const undoUsable =
+    (pasteUsable || fillUsable) &&
+    features.spreadsheet.enabled &&
+    features.spreadsheet.undo === true;
   const projection: RecordsTableFeatureProjection = {
     ...(exportSettings.enabled &&
     exportAllowed === true &&
@@ -347,6 +378,9 @@ export const projectRecordsTableFeatures = (
           spreadsheet: {
             rangeSelect: features.spreadsheet.rangeSelect,
             find: features.spreadsheet.find,
+            ...(pasteUsable ? { paste: true as const } : {}),
+            ...(fillUsable ? { fill: true as const } : {}),
+            ...(undoUsable ? { undo: true as const } : {}),
             ...(features.spreadsheet.rangeSelect &&
             statusBarFields.length > 0 &&
             features.spreadsheet.statusBarOperations.length > 0

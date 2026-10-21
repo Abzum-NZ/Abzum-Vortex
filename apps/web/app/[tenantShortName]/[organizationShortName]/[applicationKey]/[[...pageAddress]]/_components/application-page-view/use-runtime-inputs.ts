@@ -47,6 +47,7 @@ import {
 } from "./published-control-data";
 import { usePageParameters } from "./use-page-parameters";
 import { useBulkSelection } from "./use-bulk-selection";
+import { useBatchUndo } from "./use-batch-undo";
 import { useRangeSummary } from "./use-range-summary";
 import { useRecordsExport } from "./use-records-export";
 import { requestRecordChoices } from "./record-choices";
@@ -235,6 +236,8 @@ export function useRuntimeInputs({
   const exported = useRecordsExport({ model, navigationKey, matchingOf: bulk.matchingOf });
   // The spreadsheet status bar's totals of a selected range, read from the server per settled range.
   const rangeSummary = useRangeSummary({ model });
+  // Paste, Fill and Undo: one validated batch per gesture, and the session's stack of batches.
+  const batchEdit = useBatchUndo({ model, navigationKey });
   const titles = useRef<{ scope: string; values: PublishedRecordTitles }>({
     scope: navigationKey,
     values: new Map(),
@@ -475,6 +478,12 @@ export function useRuntimeInputs({
           Object.assign(events, exported.eventsFor(placementId, tableData, selection[placementId]));
         if (tableData?.features?.spreadsheet?.statusBar !== undefined)
           Object.assign(events, rangeSummary.eventsFor(placementId, tableData));
+        if (
+          tableData?.features?.spreadsheet?.paste === true ||
+          tableData?.features?.spreadsheet?.fill === true ||
+          tableData?.features?.spreadsheet?.undo === true
+        )
+          Object.assign(events, batchEdit.eventsFor(placementId));
         if (supportsEvent("selection_changed"))
           events.selection_changed = (event: DisplaySemanticEvent) => {
             if (event.event !== "selection_changed") return;
@@ -941,6 +950,7 @@ export function useRuntimeInputs({
     bulk,
     exported,
     rangeSummary,
+    batchEdit,
   ]);
 
   runtimeInputsRef.current = runtimeInputs;

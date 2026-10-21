@@ -16,7 +16,7 @@ import { readBoundedRequestText } from "../../_lib/bounded-request-body";
 import { getIdentityJourneyConfiguration } from "../../../auth/_lib/authority-configuration";
 import { resolveIdentitySession } from "../../../auth/_lib/session-server";
 
-const maximumRequestBodyLength = 65_536;
+const defaultMaximumRequestBodyLength = 65_536;
 
 /** The organisation and application of the page the person works on; the body names the rest. */
 const addressSchema = z
@@ -57,12 +57,14 @@ export type ResolvedBulkRequest<Body> =
 /**
  * Reads one Records table bulk request: from this site's own JSON client, for the signed-in
  * person, addressed to an application page the person may open now. The page address is resolved
- * on the server; the request body never chooses the organisation or the application.
+ * on the server; the request body never chooses the organisation or the application. A request
+ * that carries many values (a batch of cell changes) names its own larger body limit.
  */
 export const resolveBulkRequest = async <Body extends { pageKey: string }>(
   request: NextRequest,
   route: string,
   bodySchema: z.ZodType<Body>,
+  maximumRequestBodyLength = defaultMaximumRequestBodyLength,
 ): Promise<ResolvedBulkRequest<Body>> => {
   const refused = (code: string, status = 404, cause?: unknown): ResolvedBulkRequest<Body> => {
     logRefusal(route, "records table bulk request", code, cause);

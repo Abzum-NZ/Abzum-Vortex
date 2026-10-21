@@ -1,6 +1,6 @@
 import "server-only";
 
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import {
   authoredGridLayout,
   sameId,
@@ -49,6 +49,7 @@ import {
   type RecordsTablePlacement,
 } from "./placement";
 import { readNamedActionEligibility } from "./named-action-eligibility";
+import { recordCommandId } from "./record-command-id";
 
 /**
  * Bulk named actions over a Records table selection, and the count behind "Select all matching
@@ -80,17 +81,6 @@ export const enumerationScanLimitedCeiling = Math.ceil(
 const refuse = (cause: string): undefined => {
   console.error(`[records-table] bulk request refused cause=${cause}`);
   return undefined;
-};
-
-/** The deterministic identity of one record's change in one bulk command, so a resubmit replays. */
-const recordCommandId = (commandId: string, recordId: string): string => {
-  const digest = createHash("sha256")
-    .update(`records.bulk:${commandId.toLowerCase()}:${recordId.toLowerCase()}`)
-    .digest();
-  digest[6] = ((digest[6] ?? 0) & 0x0f) | 0x50;
-  digest[8] = ((digest[8] ?? 0) & 0x3f) | 0x80;
-  const hex = digest.subarray(0, 16).toString("hex");
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 };
 
 const reasonOf = (
@@ -402,7 +392,7 @@ export const createRecordsTableBulkService = (dependencies: RecordsTableBulkDepe
         const commandIds = new Map(
           batch.map((target) => [
             target.recordId,
-            recordCommandId(request.commandId, target.recordId),
+            recordCommandId("records.bulk", request.commandId, target.recordId),
           ]),
         );
         // ONE call decides every record of the batch under current access.

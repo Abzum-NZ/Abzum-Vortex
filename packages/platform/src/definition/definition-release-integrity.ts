@@ -11,7 +11,7 @@ import {
   type OrganizationId,
   type SemanticVersion,
 } from "../schema";
-import { canonicalJson, fingerprintCanonicalValue } from "./canonical-json-definition";
+import { fingerprintCanonicalValue } from "./canonical-json-definition";
 import { flowOperationNodeDescriptors, platformOperationsCalledBy } from "./flow-operation-calls";
 
 type CustomerDefinitionOutput = Exclude<
@@ -41,9 +41,6 @@ type StoredCustomerDefinitionReleaseEvidence = Readonly<{
   compilationOutput: CustomerDefinitionOutput;
   resolutionSnapshot: CustomerDefinitionResolution;
 }>;
-
-export const sameCanonicalJson = (left: unknown, right: unknown): boolean =>
-  canonicalJson(left) === canonicalJson(right);
 
 export const hasAuthenticResolutionFingerprint = (
   snapshot: CustomerDefinitionResolution,

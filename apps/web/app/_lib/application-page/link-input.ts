@@ -147,37 +147,19 @@ export const projectInitialLinkInputs = async (
   return { kind: "ready" };
 };
 
-/**
- * The record type a Records table's link picker on `fieldId` may offer, for one purpose. A filter
- * needs the field declared by the table's Column filters feature; an edit needs it declared by the
- * enabled Inline editing or Row editing feature, which names the event that saves the change. Either
- * way it must be a single-target link field of the installed release with a resolved target.
- */
-const tableLinkFieldTarget = (
+/** A single-target link field of the installed release, with its resolved target and dependency. */
+type InstalledLinkField = Readonly<{
+  moduleRootId: string;
+  recordTypeId: string;
+  sourceRecordTypeId: string;
+  /** The declared dependency on another link field of the same record type, if any. */
+  dependency?: LinkDependency;
+}>;
+
+const installedLinkField = (
   context: InstalledRuntimeContext,
-  settings: Readonly<Record<string, unknown>>,
   fieldId: string,
-  purpose: "filter" | "edit",
-):
-  | Readonly<{
-      moduleRootId: string;
-      recordTypeId: string;
-      sourceRecordTypeId: string;
-      /** The declared dependency on another link field of the same record type, if any. */
-      dependency?: LinkDependency;
-    }>
-  | undefined => {
-  const contract = readRecordsTableContract(
-    settings as Readonly<Record<string, BlockPropertyValueContract>>,
-  );
-  if (contract === undefined) return undefined;
-  const declared =
-    purpose === "filter"
-      ? [contract.features.columnFilters.enabled ? contract.features.columnFilters.fields : []]
-      : [contract.features.inlineEdit, contract.features.rowEdit].map((feature) =>
-          feature.enabled && feature.eventId !== undefined ? feature.fields : [],
-        );
-  if (!declared.some((fields) => fields.some((field) => sameId(field, fieldId)))) return undefined;
+): InstalledLinkField | undefined => {
   for (const module of context.releaseSet.modules)
     for (const recordType of module.content.recordTypes)
       for (const field of recordType.fields)
@@ -216,6 +198,32 @@ const tableLinkFieldTarget = (
           };
         }
   return undefined;
+};
+
+/**
+ * The record type a Records table's link picker on `fieldId` may offer, for one purpose. A filter
+ * needs the field declared by the table's Column filters feature; an edit needs it declared by the
+ * enabled Inline editing or Row editing feature, which names the event that saves the change. Either
+ * way it must be a single-target link field of the installed release with a resolved target.
+ */
+const tableLinkFieldTarget = (
+  context: InstalledRuntimeContext,
+  settings: Readonly<Record<string, unknown>>,
+  fieldId: string,
+  purpose: "filter" | "edit",
+): InstalledLinkField | undefined => {
+  const contract = readRecordsTableContract(
+    settings as Readonly<Record<string, BlockPropertyValueContract>>,
+  );
+  if (contract === undefined) return undefined;
+  const declared =
+    purpose === "filter"
+      ? [contract.features.columnFilters.enabled ? contract.features.columnFilters.fields : []]
+      : [contract.features.inlineEdit, contract.features.rowEdit].map((feature) =>
+          feature.enabled && feature.eventId !== undefined ? feature.fields : [],
+        );
+  if (!declared.some((fields) => fields.some((field) => sameId(field, fieldId)))) return undefined;
+  return installedLinkField(context, fieldId);
 };
 
 /** A link field's declared dependency, resolved against the installed release. */
@@ -267,6 +275,22 @@ export const loadRecordChoicePage = async (
   const placement = placements.find((entry) => sameId(entry.placementId, request.placementId));
   if (placement === undefined) return { kind: "refused", cause: "placement_not_found" };
   let declaredTargets: readonly Readonly<{ moduleRootId: string; recordTypeId: string }>[];
+  /** The parent the viewer chose in a dependent field's draft: it must be a parent link the viewer may read. */
+  const dependencyOf = (
+    link: LinkDependency,
+    readable: ReadonlySet<string>,
+  ):
+    | Readonly<{ dependency: { link: LinkDependency; parentRecordId: string } }>
+    | Extract<RecordChoicePageResult, { kind: "refused" }> => {
+    const detail = `child=${request.fieldId ?? placement.placementId} parent=${link.parentFieldId}`;
+    if (request.parentRecordId === undefined)
+      return { kind: "refused", cause: `dependency_parent_missing ${detail}` };
+    if (link.parentTarget === undefined)
+      return { kind: "refused", cause: `dependency_parent_not_a_link ${detail}` };
+    if (!readable.has(link.parentFieldId.toLowerCase()))
+      return { kind: "refused", cause: `dependency_parent_withheld ${detail}` };
+    return { dependency: { link, parentRecordId: request.parentRecordId } };
+  };
   /** For a dependent field being edited: the parent the viewer chose, which narrows the choices. */
   let dependency: Readonly<{ link: LinkDependency; parentRecordId: string }> | undefined;
   if (request.fieldId !== undefined) {
@@ -295,17 +319,9 @@ export const loadRecordChoicePage = async (
     if (readable.kind !== "available" || !readable.value.has(request.fieldId.toLowerCase()))
       return { kind: "refused", cause: "link_field_withheld" };
     if (request.purpose === "edit" && filtered.dependency !== undefined) {
-      // The parent is the editor's draft, never authority: it must be a parent link the viewer may
-      // read, and the record itself is read again below under the viewer's access.
-      const link = filtered.dependency;
-      const detail = `child=${request.fieldId} parent=${link.parentFieldId}`;
-      if (request.parentRecordId === undefined)
-        return { kind: "refused", cause: `dependency_parent_missing ${detail}` };
-      if (link.parentTarget === undefined)
-        return { kind: "refused", cause: `dependency_parent_not_a_link ${detail}` };
-      if (!readable.value.has(link.parentFieldId.toLowerCase()))
-        return { kind: "refused", cause: `dependency_parent_withheld ${detail}` };
-      dependency = { link, parentRecordId: request.parentRecordId };
+      const refused = dependencyOf(filtered.dependency, readable.value);
+      if ("cause" in refused) return refused;
+      dependency = refused.dependency;
     }
     declaredTargets = [filtered];
   } else {
@@ -321,6 +337,22 @@ export const loadRecordChoicePage = async (
     )
       return { kind: "refused", cause: "placement_unavailable" };
     declaredTargets = linkInputTargets(placement.settings);
+    // An automatic field input of a dependent link field narrows its choices by the form's draft
+    // of the parent; the dependency is the field's own declaration, never the request's.
+    const bound = isRecord(placement.settings.field) ? placement.settings.field.fieldId : undefined;
+    const boundField = typeof bound === "string" ? installedLinkField(context, bound) : undefined;
+    if (boundField?.dependency !== undefined) {
+      const readable = await createHumanOrganizationRequestService(dependencies).run(
+        session,
+        selection,
+        (transaction) => readRecordTypeVisibleFieldIds(transaction, boundField.sourceRecordTypeId),
+      );
+      if (readable.kind === "temporarily_unavailable") return readable;
+      if (readable.kind !== "available") return { kind: "refused", cause: "link_field_withheld" };
+      const refused = dependencyOf(boundField.dependency, readable.value);
+      if ("cause" in refused) return refused;
+      dependency = refused.dependency;
+    }
   }
 
   const targets: RecordChoiceCommand["targets"][number][] = [];
@@ -379,7 +411,7 @@ export const loadRecordChoicePage = async (
       filterableFieldIds: [],
       searchableFieldIds: [],
       pageSize: 1,
-      exactRecordId: dependency.parentRecordId,
+      exactRecordIds: [dependency.parentRecordId],
     });
     if (parentRead.kind === "temporarily_unavailable") return { kind: "temporarily_unavailable" };
     if (
@@ -389,7 +421,7 @@ export const loadRecordChoicePage = async (
     )
       return {
         kind: "refused",
-        cause: `dependency_parent_unreadable child=${request.fieldId} parent=${dependency.link.parentFieldId}`,
+        cause: `dependency_parent_unreadable child=${request.fieldId ?? placement.placementId} parent=${dependency.link.parentFieldId}`,
       };
     narrowedBy = {
       fieldId: dependency.link.filterFieldId,

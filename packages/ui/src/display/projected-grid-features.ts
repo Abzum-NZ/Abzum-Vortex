@@ -370,17 +370,39 @@ const parseInlineEditor = (
       requireExactKeys(editor, ["kind", "required"], location);
       return Object.freeze({ kind: "yes_no", required });
     case "choice": {
-      requireExactKeys(editor, ["kind", "required", "options"], location);
+      requireExactKeys(editor, ["kind", "required", "options", "dependsOnField"], location);
       const options = requireArray(editor.options, message, location).map((option) => {
         const entry = requireRecord(option, message, location);
-        requireExactKeys(entry, ["value", "label"], location);
+        requireExactKeys(entry, ["value", "label", "parentValues"], location);
         return Object.freeze({
           value: requireNonEmptyString(entry.value, message, location),
           label: requireNonEmptyString(entry.label, message, location),
+          ...(entry.parentValues === undefined
+            ? {}
+            : {
+                parentValues: Object.freeze(
+                  requireArray(entry.parentValues, message, location).map((parent) =>
+                    requireNonEmptyString(parent, message, location),
+                  ),
+                ),
+              }),
         });
       });
       if (options.length === 0) fail(message, location);
-      return Object.freeze({ kind: "choice", required, options: Object.freeze(options) });
+      // A dependent choice carries which parent options each option belongs to, and only it does.
+      if (
+        (editor.dependsOnField === undefined) !==
+        options.every((option) => option.parentValues === undefined)
+      )
+        fail(message, location);
+      return Object.freeze({
+        kind: "choice",
+        required,
+        options: Object.freeze(options),
+        ...(editor.dependsOnField === undefined
+          ? {}
+          : { dependsOnField: requireFieldKey(editor.dependsOnField, message, location) }),
+      });
     }
     case "date": {
       requireExactKeys(editor, ["kind", "required", "earliest", "latest"], location);
@@ -703,13 +725,25 @@ export const parseTableFeatures = (
       "Projected spreadsheet controls are invalid",
       location,
     );
-    requireExactKeys(controls, ["rangeSelect", "find", "statusBar"], location);
+    requireExactKeys(
+      controls,
+      ["rangeSelect", "find", "paste", "fill", "undo", "statusBar"],
+      location,
+    );
     if (
       typeof controls.rangeSelect !== "boolean" ||
       typeof controls.find !== "boolean" ||
       (!controls.rangeSelect && !controls.find)
     )
       fail("Projected spreadsheet controls need an enabled control", location);
+    for (const key of ["paste", "fill", "undo"] as const)
+      if (controls[key] !== undefined && controls[key] !== true)
+        fail(`The projected spreadsheet ${key} control is invalid`, location);
+    if (
+      (controls.undo === true && controls.paste !== true && controls.fill !== true) ||
+      ((controls.paste === true || controls.fill === true) && controls.rangeSelect !== true)
+    )
+      fail("Projected paste, fill and undo need a range and an edit", location);
     let statusBar: NonNullable<RecordsTableFeatureProjection["spreadsheet"]>["statusBar"];
     if (controls.statusBar !== undefined) {
       const bar = requireRecord(
@@ -747,6 +781,9 @@ export const parseTableFeatures = (
     spreadsheet = Object.freeze({
       rangeSelect: controls.rangeSelect as boolean,
       find: controls.find as boolean,
+      ...(controls.paste === true ? { paste: true as const } : {}),
+      ...(controls.fill === true ? { fill: true as const } : {}),
+      ...(controls.undo === true ? { undo: true as const } : {}),
       ...(statusBar === undefined ? {} : { statusBar }),
     });
   }
