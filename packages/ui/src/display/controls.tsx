@@ -9,7 +9,7 @@ import { Pagination, PaginationContent, PaginationItem } from "../components/pag
 import { Skeleton } from "../components/skeleton";
 import { Spinner } from "../components/spinner";
 import { usePendingGesture } from "../controls/pending-gesture";
-import type { DisplayEventHandlers, DisplayRow } from "./projected-data";
+import type { DisplayEventHandlers, DisplayRow, DisplaySemanticEvent } from "./projected-data";
 
 /** Optional authored title with a refresh control bound to the declared `refresh` event. */
 export function DisplayHeader({
@@ -93,6 +93,20 @@ export function RecordsEmptyState({
 }
 
 /**
+ * A selection gesture on one drawn row, carrying the revision the person saw. A row drawn without
+ * a revision cannot be selected; the cause is logged.
+ */
+export const selectionChanged = (
+  row: DisplayRow,
+  selected: boolean,
+): Extract<DisplaySemanticEvent, { event: "selection_changed" }> | undefined => {
+  if (row.revision !== undefined)
+    return { event: "selection_changed", recordId: row.recordId, revision: row.revision, selected };
+  console.error("[display] selection needs the drawn row's revision", { recordId: row.recordId });
+  return undefined;
+};
+
+/**
  * The per-row selection control bound to the declared `selection_changed` event and stable record
  * identity. `multiple` renders a shadcn Checkbox. `single` renders one radio group scoped to the
  * table by `groupName`, so choosing another row replaces the choice; the shadcn radio group must
@@ -117,8 +131,7 @@ export function SelectionControl({
 }>): ReactElement | null {
   const onSelection = events?.selection_changed;
   if (onSelection === undefined) return null;
-  const revision = row.revision;
-  if (revision === undefined) {
+  if (row.revision === undefined) {
     console.error("[display] selection needs the drawn row's revision", { recordId: row.recordId });
     return null;
   }
@@ -131,14 +144,7 @@ export function SelectionControl({
         aria-label={`Select ${name}`}
         checked={selected}
         onClick={(event) => event.stopPropagation()}
-        onChange={() =>
-          onSelection({
-            event: "selection_changed",
-            recordId: row.recordId,
-            revision,
-            selected: true,
-          })
-        }
+        onChange={() => onSelection(selectionChanged(row, true)!)}
       />
     );
   return (
@@ -146,14 +152,7 @@ export function SelectionControl({
       aria-label={`Select ${name}`}
       checked={selected}
       onClick={(event) => event.stopPropagation()}
-      onCheckedChange={(checked) =>
-        onSelection({
-          event: "selection_changed",
-          recordId: row.recordId,
-          revision,
-          selected: checked,
-        })
-      }
+      onCheckedChange={(checked) => onSelection(selectionChanged(row, checked)!)}
     />
   );
 }
@@ -195,18 +194,8 @@ export function SelectAllControl({
           return;
         }
         for (const row of rows) {
-          if (row.revision === undefined) {
-            console.error("[display] selection needs the drawn row's revision", {
-              recordId: row.recordId,
-            });
-            continue;
-          }
-          onSelection({
-            event: "selection_changed",
-            recordId: row.recordId,
-            revision: row.revision,
-            selected: !allSelected,
-          });
+          const event = selectionChanged(row, !allSelected);
+          if (event !== undefined) onSelection(event);
         }
       }}
     />

@@ -40,6 +40,7 @@ import type { GridInteractionSurface } from "./grid-features/registry";
 import { ColumnMenu } from "./grid-features/column-menu";
 import { Icon } from "../icons/icon";
 import { cn } from "../lib/utils";
+import { selectionChanged } from "./controls";
 import type { DisplayEventHandlers, DisplayRow } from "./projected-data";
 import { useRowEntrance } from "./row-entrance";
 import type { RowExpansionControls } from "./row-expansion";
@@ -696,38 +697,18 @@ export function RecordsGrid({
   const toggleSelection = (row: DisplayRow | undefined): void => {
     const onSelection = events?.selection_changed;
     if (row === undefined || onSelection === undefined || selection === undefined) return;
-    if (row.revision === undefined) {
-      console.error("[display] selection needs the drawn row's revision", {
-        recordId: row.recordId,
-      });
-      return;
-    }
     const selected = selectedRecordIds.includes(row.recordId);
     if (selection === "single" && selected) return;
-    void onSelection({
-      event: "selection_changed",
-      recordId: row.recordId,
-      revision: row.revision,
-      selected: !selected,
-    });
+    const event = selectionChanged(row, !selected);
+    if (event !== undefined) void onSelection(event);
   };
   const toggleAll = (): void => {
     const onSelection = events?.selection_changed;
     if (onSelection === undefined || selection !== "multiple") return;
     const all = rows.length > 0 && rows.every((row) => selectedRecordIds.includes(row.recordId));
     for (const row of rows) {
-      if (row.revision === undefined) {
-        console.error("[display] selection needs the drawn row's revision", {
-          recordId: row.recordId,
-        });
-        continue;
-      }
-      void onSelection({
-        event: "selection_changed",
-        recordId: row.recordId,
-        revision: row.revision,
-        selected: !all,
-      });
+      const event = selectionChanged(row, !all);
+      if (event !== undefined) void onSelection(event);
     }
   };
 
