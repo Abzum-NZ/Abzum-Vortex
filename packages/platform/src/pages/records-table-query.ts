@@ -35,6 +35,7 @@ import {
   type ProtectedQueryRefusalReasonCode,
   type ProtectedQueryResult,
   type ProtectedQueryRow,
+  type ProtectedQuerySummaryCompleted,
   type ProtectedQueryTreeLevelCommand,
   type ProtectedQueryTreeLevelResult,
 } from "../queries/index";
@@ -61,8 +62,9 @@ import {
 } from "./records-table-features";
 import {
   projectRecordsTableGroups,
+  recordsTableGroupLinks,
   recordsTableGroupSelector,
-  RECORDS_TABLE_GROUP_READ_LIMIT,
+  recordsTableSummaryGroupKeys,
   type RecordsTableGroupRead,
 } from "./records-table-features/grouping";
 import { CalendarEndpointError, calendarAddDays, calendarStartOfDay } from "./calendar-date";
@@ -571,7 +573,12 @@ type GroupedRead =
    * offers no Group by control that would only repeat the same refusal.
    */
   | Readonly<{ kind: "flat"; groups?: ProjectedTableGroups; withheld?: true }>
-  | Readonly<{ kind: "read"; groups?: ProjectedTableGroups; page: GroupedPage }>;
+  | Readonly<{
+      kind: "read";
+      /** The summary that counted the groups; projected once the page's links are titled. */
+      summary?: ProtectedQuerySummaryCompleted;
+      page: GroupedPage;
+    }>;
 
 /**
  * Reads a grouped table: one summary read counts every group (unless only the open group's page
@@ -588,14 +595,30 @@ const readGrouped = async (
   group: RecordsTableGroupRead,
   built: RecordsTableQueryCommand,
 ): Promise<GroupedRead> => {
-  let groups: ProjectedTableGroups | undefined;
+  let summaryRead: ProtectedQuerySummaryCompleted | undefined;
+  let groupKeys: readonly string[] | undefined;
   let fieldBounds: ProtectedQueryFieldBounds | undefined;
+  // A date field is bucketed in the organisation's zone, passed explicitly with the unit.
+  const isDate = group.fieldType === "date" || group.fieldType === "date_time";
+  if (isDate && (group.dateUnit === undefined || group.timeZone === undefined)) {
+    logRecordsTableRequestRefusal(
+      recordsTableRequestRefusal("group", "date_bucket_unavailable"),
+      "table_read",
+    );
+    return { kind: "resolution", resolution: refused };
+  }
+  const grouping = {
+    fieldId: group.fieldId,
+    limit: group.pageSize,
+    ...(isDate ? { dateBucket: { unit: group.dateUnit, timeZone: group.timeZone } } : {}),
+  };
   if (!group.membersOnly) {
     const summaryCommand = protectedQuerySummaryCommandSchema.safeParse({
       moduleRootId: request.moduleRootId,
       queryId: request.queryId,
       inputValues: request.inputValues,
-      grouping: { fieldId: group.fieldId, limit: RECORDS_TABLE_GROUP_READ_LIMIT },
+      grouping,
+      ...(group.after === null ? {} : { groupAfter: group.after }),
       ...(built.command.search === undefined ? {} : { search: built.command.search }),
       searchableFieldIds: built.command.searchableFieldIds,
       ...(built.command.filter === undefined ? {} : { filter: built.command.filter }),
@@ -619,26 +642,15 @@ const readGrouped = async (
       if (reason === "field_unbounded") return { kind: "flat", withheld: true };
       return { kind: "resolution", resolution: { kind: "refused", reasonCode: reason } };
     }
-    // More stored values than one grouped read counts (choices removed since records were saved):
-    // the groups it returned would hide the rest, so the table stays flat until it is narrowed.
-    if (summary.value.nextGroupKey !== undefined && summary.value.nextGroupKey !== null)
-      return { kind: "flat", groups: { status: "too_many" } };
     fieldBounds = summary.value.fieldBounds;
-    groups = projectRecordsTableGroups(
-      summary.value,
-      {
-        fieldId: group.fieldId,
-        unassignedLabel: group.unassignedLabel,
-        options: request.fieldChoiceLabels?.[group.fieldId] ?? [],
-      },
-      group.expanded,
-    );
-    if (fieldBounds === undefined || groups === undefined)
+    summaryRead = summary.value;
+    groupKeys = recordsTableSummaryGroupKeys(summary.value, group);
+    if (fieldBounds === undefined || groupKeys === undefined)
       throw new Error("PROTECTED_QUERY_RESULT_INVALID");
   }
   // The open group: the one the summary counted, or the one a members-only read names.
   const opened =
-    group.expanded === null || (groups?.status === "ready" && groups.expanded === undefined)
+    group.expanded === null || (groupKeys !== undefined && !groupKeys.includes(group.expanded))
       ? undefined
       : group.expanded;
   if (opened === undefined) {
@@ -646,18 +658,18 @@ const readGrouped = async (
       return { kind: "resolution", resolution: refused };
     return {
       kind: "read",
-      ...(groups === undefined ? {} : { groups }),
+      ...(summaryRead === undefined ? {} : { summary: summaryRead }),
       page: { rows: [], fieldBounds, scanLimited: false },
     };
   }
-  const selector = recordsTableGroupSelector(group.fieldId, opened);
+  const selector = recordsTableGroupSelector(group.fieldId, group.fieldType, opened);
   // A group's members are never one exact record, so the grouped command has no such part.
   const memberBase: Record<string, unknown> = { ...built.command };
   delete memberBase["exactRecordId"];
   const memberCommand = protectedQueryGroupedMembersCommandSchema.safeParse({
     ...memberBase,
     selector,
-    grouping: { fieldId: group.fieldId, limit: RECORDS_TABLE_GROUP_READ_LIMIT },
+    grouping,
   });
   if (selector === undefined || !memberCommand.success) {
     logRecordsTableRequestRefusal(
@@ -677,7 +689,7 @@ const readGrouped = async (
     };
   return {
     kind: "read",
-    ...(groups === undefined ? {} : { groups }),
+    ...(summaryRead === undefined ? {} : { summary: summaryRead }),
     page: {
       rows: members.value.rows,
       fieldBounds: members.value.fieldBounds,
@@ -787,7 +799,6 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
               }
             : undefined;
       if (read === undefined) return refused;
-      const groups = grouped?.groups;
       const projectedRows = visibleRows(read.rows, built.fieldIds);
       // The records a link filter names are titled in the same batched read as the page's links.
       const filterLinks = built.narrowing.filters.flatMap(({ fieldId, filter }) => {
@@ -796,11 +807,32 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
           ? []
           : filter.recordIds.map((recordId) => ({ recordTypeId, recordId }));
       });
-      const links = [...collectRecordLinks(projectedRows), ...filterLinks];
+      // A link group is titled by the same batched read as the page's own links.
+      const groupSummary = grouped?.kind === "read" ? grouped.summary : undefined;
+      const groupLinks =
+        groupSummary === undefined || request.group === undefined
+          ? []
+          : recordsTableGroupLinks(groupSummary, request.group);
+      const links = [...collectRecordLinks(projectedRows), ...filterLinks, ...groupLinks];
       const recordLinks =
         links.length === 0 || request.resolveRecordLinks === undefined
           ? undefined
           : await request.resolveRecordLinks(links);
+      const groups =
+        groupSummary === undefined || request.group === undefined
+          ? grouped?.kind === "flat"
+            ? grouped.groups
+            : undefined
+          : projectRecordsTableGroups(
+              groupSummary,
+              {
+                ...request.group,
+                options: request.fieldChoiceLabels?.[request.group.fieldId] ?? [],
+              },
+              recordLinks,
+            );
+      if (groupSummary !== undefined && groups === undefined)
+        throw new Error("PROTECTED_QUERY_RESULT_INVALID");
       const narrowing: RecordsTableNarrowing =
         filterLinks.length === 0
           ? built.narrowing

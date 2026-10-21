@@ -1,4 +1,4 @@
-create or replace function vortex_record.pivot_dimension_internal(
+create or replace function vortex_record.dimension_value_internal(
   p_values jsonb[],
   p_field jsonb
 )
@@ -24,7 +24,8 @@ begin
   target_type_id := (p_field #>> '{settings,target,recordTypeId}')::uuid;
   target_context := vortex_record.resolve_record_action_context_internal(target_type_id, 'read');
   title_field_id := (target_context #>> '{recordType,titleFieldId}')::uuid;
-  -- One protected batch for the distinct targets, before grouping or paging. Missing, withheld
+  -- One protected batch for the distinct targets, before grouping or paging, shared by a pivot axis
+  -- and a grid grouping. Missing, withheld
   -- and unreadable targets share one value: their identities never become separate axes.
   select coalesce(pg_catalog.array_agg(titles.record_id), array[]::uuid[]),
     coalesce(pg_catalog.jsonb_object_agg(
@@ -67,10 +68,10 @@ begin
 end
 $function$;
 
-alter function vortex_record.pivot_dimension_internal(jsonb[],jsonb) owner to vortex_record_adapter;
-revoke all on function vortex_record.pivot_dimension_internal(jsonb[],jsonb)
+alter function vortex_record.dimension_value_internal(jsonb[],jsonb) owner to vortex_record_adapter;
+revoke all on function vortex_record.dimension_value_internal(jsonb[],jsonb)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-grant execute on function vortex_record.pivot_dimension_internal(jsonb[],jsonb) to vortex_owner;
+grant execute on function vortex_record.dimension_value_internal(jsonb[],jsonb) to vortex_owner;
 
-comment on function vortex_record.pivot_dimension_internal(jsonb[],jsonb) is
-  'Normalizes distinct pivot dimension values through one protected target-title batch for a link and returns each value with its sort key (rank, readable title); all unreadable link targets fold into one Not available value before the summary groups and orders them.';
+comment on function vortex_record.dimension_value_internal(jsonb[],jsonb) is
+  'Normalizes the distinct values of one pivot axis or grid grouping dimension through one protected target-title batch for a link and returns each value with its sort key (rank, readable title); all unreadable link targets fold into one Not available value before the summary groups and orders them.';

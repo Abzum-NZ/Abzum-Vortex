@@ -4393,7 +4393,7 @@
             "kind": "group",
             "key": "grouping",
             "label": "Group by",
-            "help": "Group the records by a choice or stage field, counted on the server",
+            "help": "Group the records by a choice, stage, link or date field, counted on the server",
             "required": false,
             "defaultValue": {
               "kind": "group",
@@ -4420,9 +4420,9 @@
                 "kind": "field_reference",
                 "key": "field",
                 "label": "Group by",
-                "help": "A choice or stage field people can filter by, with at most 50 choices",
+                "help": "A choice, stage, link or date field people can filter by; a choice field has at most 50 choices",
                 "required": false,
-                "fieldTypes": ["choice"]
+                "fieldTypes": ["choice", "link", "date", "date_time"]
               },
               {
                 "kind": "text",
@@ -4432,6 +4432,45 @@
                 "required": false,
                 "minLength": 1,
                 "maxLength": 40
+              },
+              {
+                "kind": "choice",
+                "key": "date_unit",
+                "label": "Group dates by",
+                "help": "The calendar unit when the field is a date, counted in the organisation's time zone",
+                "required": false,
+                "options": [
+                  {
+                    "key": "day",
+                    "label": "Day"
+                  },
+                  {
+                    "key": "week",
+                    "label": "Week"
+                  },
+                  {
+                    "key": "month",
+                    "label": "Month"
+                  },
+                  {
+                    "key": "quarter",
+                    "label": "Quarter"
+                  },
+                  {
+                    "key": "year",
+                    "label": "Year"
+                  }
+                ]
+              },
+              {
+                "kind": "number",
+                "key": "group_page_size",
+                "label": "Groups at a time",
+                "help": "How many groups one page shows, at most 200; more groups continue on the next page",
+                "required": false,
+                "integer": true,
+                "minimum": 1,
+                "maximum": 200
               }
             ]
           },

@@ -723,7 +723,8 @@ export type TableGroup = Readonly<{
 /**
  * The groups a grouped table was read with: one bounded count per group from the same read as the
  * table's filters and search, or the statement that there are too many filtered records to count
- * them in groups. The open group's key is one of the groups.
+ * them in groups. The open group's key is one of the groups. The groups continue in pages: `page`
+ * says whether this is the first and where the next one starts.
  */
 export type TableGroups =
   | Readonly<{
@@ -732,6 +733,8 @@ export type TableGroups =
       groups: readonly TableGroup[];
       total: number;
       expanded?: string;
+      /** Where this page of groups sits: the first one, and the opaque position of the next page. */
+      page: Readonly<{ first: boolean; next?: string }>;
     }>
   | Readonly<{ status: "too_many" }>;
 
@@ -745,7 +748,15 @@ export const parseTableGroups = (
     return Object.freeze({ status: "too_many" as const });
   }
   if (record.status !== "ready") return fail("Projected groups need a status", location);
-  requireExactKeys(record, ["status", "fieldId", "groups", "total", "expanded"], location);
+  requireExactKeys(record, ["status", "fieldId", "groups", "total", "expanded", "page"], location);
+  const position = requireRecord(record.page, "Projected groups need their page", location);
+  requireExactKeys(position, ["first", "next"], location);
+  if (typeof position.first !== "boolean")
+    fail("A group page says whether it is the first", location);
+  const next =
+    position.next === undefined
+      ? undefined
+      : requireNonEmptyString(position.next, "The next group page needs its position", location);
   const groups = requireArray(record.groups, "Projected groups must be an array", location).map(
     (item): TableGroup => {
       const group = requireRecord(item, "A projected group must be an object", location);
@@ -778,5 +789,9 @@ export const parseTableGroups = (
     groups: Object.freeze(groups),
     total: record.total as number,
     ...(expanded === undefined ? {} : { expanded }),
+    page: Object.freeze({
+      first: position.first as boolean,
+      ...(next === undefined ? {} : { next }),
+    }),
   });
 };
