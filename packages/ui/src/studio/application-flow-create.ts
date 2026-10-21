@@ -343,7 +343,18 @@ const bindControl = (
       : body.flow_bindings.find(
           (binding) => binding.event === event && declared.has(binding.event_id),
         )?.event_id;
+  // A block with one row action names its event in `row_action_event_id`: the binding takes that
+  // identity (the setting stays when the binding is removed), or the block gets the new one.
+  const blockRowAction =
+    event === "row_action" && !rowActionMenu && item !== undefined
+      ? item.props.row_action_event_id
+      : undefined;
+  const blockEventId =
+    typeof blockRowAction === "string" && blockRowAction.trim().length > 0
+      ? blockRowAction.trim()
+      : undefined;
   const eventId =
+    blockEventId ??
     shared ??
     keyFrom(
       rowActionMenu || recordType === undefined
@@ -353,7 +364,7 @@ const bindControl = (
     );
   if (eventId === undefined)
     return refuse("No free name could be made for the binding's event. Choose another name.");
-  if (shared === undefined) {
+  if (!body.events.some((entry) => entry.id === eventId)) {
     if (body.events.length >= 100)
       refuse("An application can declare at most 100 events, so no more controls can be bound.");
     body.events.push({
@@ -373,6 +384,8 @@ const bindControl = (
     flow: flowKey,
     inputs,
   });
+  if (event === "row_action" && !rowActionMenu && item !== undefined)
+    (item.props as Record<string, unknown>).row_action_event_id = eventId;
   if (event === "row_clicked") {
     if (item !== undefined) item.props.row_click = { mode: "flow", event_id: eventId };
   }

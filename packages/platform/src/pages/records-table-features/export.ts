@@ -5,6 +5,7 @@ import {
   authoredGridLayout,
   isRecord,
   sameId,
+  recordsTableColumnWidth,
   type GridLayout,
   type IdentitySession,
   type JsonValue,
@@ -15,17 +16,20 @@ import {
 } from "../../schema";
 import {
   createHumanOrganizationRequestService,
+  readCurrentOrganizationRuntimeSettingsAfterAuthorization,
   type HumanOrganizationRequestDependencies,
 } from "../../access/index";
 import {
   createProtectedQueryService,
   prepareRecordsExport,
   recordsCsvFormat,
+  recordsXlsxFormat,
   type QueryContinuationKey,
   type RecordsExportCell,
   type RecordsExportFormat,
   type RecordsExportOutcome,
   type RecordsExportPage,
+  type RecordsXlsxColumn,
 } from "../../queries/index";
 import type { ProtectedQueryRow } from "../../queries/protected-query-contracts";
 import { recordLinkLabelKey } from "../../definition/app-index";
@@ -58,7 +62,7 @@ import {
   type RecordsTableCommandAddress,
   type RecordsTablePlacement,
 } from "./placement";
-import { decideRecordTypeExport, decideRecordTypeFieldIds } from "./record-type-access";
+import { decideRecordTypeExport } from "./record-type-access";
 import { personalFormattingAllowed } from "./conditional-formatting";
 import type { InstalledRuntimeContext } from "../../definition/index";
 
@@ -78,8 +82,8 @@ import type { InstalledRuntimeContext } from "../../definition/index";
 export type RecordsTableExportDependencies = HumanOrganizationRequestDependencies &
   Readonly<{ continuationKey: QueryContinuationKey }>;
 
-/** The most rows a read of a selection of shown rows yields at once, so the first bytes come soon. */
-const selectedRowsPageSize = 25;
+/** The most record ids one exact read names; the protected query refuses more. */
+const exactRecordIdsPerRead = 200;
 
 /** A failure the transport reports as the export's reason; the person only sees a neutral message. */
 const exportFailure = (reason: string, cause?: unknown): Error =>
@@ -97,7 +101,49 @@ const failureReason = (cause: unknown): string =>
     ? cause.reason
     : "preparation_failed";
 
-type ExportColumn = Readonly<{ fieldId: string; label: string; field: PlacementField }>;
+type ExportColumn = Readonly<{
+  fieldId: string;
+  label: string;
+  field: PlacementField;
+  width: number;
+}>;
+
+/** Totals inherit their source precision; ordinary money has no declared decimal scale. */
+const columnScale = (
+  field: PlacementField,
+  fields: readonly PlacementField[],
+  visited: ReadonlySet<string> = new Set(),
+): number | "value" => {
+  if (visited.has(String(field.fieldId))) throw exportFailure("column_precision_cycle");
+  if ("decimalPlaces" in field.settings && field.settings.decimalPlaces !== undefined)
+    return field.settings.decimalPlaces;
+  if (field.type === "total" && field.settings.fieldId !== undefined) {
+    const source = fields.find((candidate) => sameId(candidate.fieldId, field.settings.fieldId!));
+    if (source === undefined) throw exportFailure("column_precision_unavailable");
+    return columnScale(source, fields, new Set([...visited, String(field.fieldId)]));
+  }
+  return "value";
+};
+
+const xlsxColumns = (
+  columns: readonly ExportColumn[],
+  fields: readonly PlacementField[],
+): readonly RecordsXlsxColumn[] =>
+  columns.map(({ field, width }) => {
+    const type = valueTypeOf(field);
+    switch (type) {
+      case "decimal_number":
+      case "money":
+        return { type, width, scale: columnScale(field, fields) };
+      case "whole_number":
+      case "date":
+      case "date_time":
+      case "yes_no":
+        return { type, width };
+      default:
+        return { type: "text", width };
+    }
+  });
 
 /** The value type a column's cells carry: a calculation's or total's result type, else its own. */
 const valueTypeOf = (field: PlacementField): string =>
@@ -224,11 +270,11 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
     pageId: string,
     placementId: string,
     viewId: string | undefined,
-    readable: ReadonlySet<string> | undefined,
+    recordTypeId: string,
     preview: boolean,
   ): Promise<GridLayout | undefined> => {
-    const authored = authoredGridLayout(placement.contract, readable);
-    if (authored === undefined || preview) return authored;
+    // A preview has no stored layouts or views; its columns are the authored arrangement.
+    if (preview) return authoredGridLayout(placement.contract, undefined);
     const queryId = String(placement.query.queryId).toLowerCase();
     const savedViews = placement.contract.features.savedViews;
     const key = placementId.toLowerCase();
@@ -237,6 +283,7 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
       pageId,
       [placementId],
       savedViews.enabled && viewId !== undefined ? [viewId] : [],
+      [recordTypeId],
       savedViews.enabled
         ? savedViews.defaultViews.map((view) => ({
             viewId: view.viewId,
@@ -245,6 +292,16 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
           }))
         : [],
     );
+    // The one field-visibility decision of the request, made by the grid-view read.
+    const readable = stored.readable.get(recordTypeId.toLowerCase());
+    if (readable === undefined) {
+      console.error(
+        `[records-table] export columns missing: code=GRID_VIEW_FIELD_VISIBILITY_MISSING recordTypeId=${recordTypeId.toLowerCase()}`,
+      );
+      throw new Error("GRID_VIEW_FIELD_VISIBILITY_MISSING");
+    }
+    const authored = authoredGridLayout(placement.contract, readable);
+    if (authored === undefined) return undefined;
     const own = stored.layouts.get(key);
     let viewLayout: GridLayout | undefined;
     if (savedViews.enabled) {
@@ -379,9 +436,14 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
       const { installed, contract, recordTypeId } = placement;
       const feature = contract.features.export;
       // Every request is judged again: a disabled export compiles to nothing and is refused here.
-      if (!feature.enabled || feature.maxRows === undefined || !feature.formats.includes("csv")) {
+      if (!feature.enabled || feature.maxRows === undefined) {
         refuse("feature_off");
         return notAvailable;
+      }
+      // Judged before the permission decision, so like a disabled export it is logged, not audited.
+      if (!feature.formats.includes(request.format)) {
+        refuse("format_not_authored");
+        return { kind: "refused", reason: "format_not_authored" };
       }
       const maxRows = feature.maxRows;
       const preview = address.selection.previewInstallationId !== undefined;
@@ -402,11 +464,9 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
           recordTypeId,
         );
         if (permission.kind === "refused") return permission;
-        const readable = preview
-          ? undefined
-          : await decideRecordTypeFieldIds(transaction, scope, installed, recordTypeId, "read");
         return {
           kind: "permitted" as const,
+          accessVersion: scope.accessVersion,
           exportFieldIds: permission.fieldIds,
           layout: await effectiveLayout(
             transaction,
@@ -414,7 +474,7 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
             String(page.pageId),
             request.placementId,
             request.viewId,
-            readable,
+            recordTypeId,
             preview,
           ),
         };
@@ -455,7 +515,10 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
           (exportFieldIds !== undefined && !exportFieldIds.has(fieldId.toLowerCase()))
         )
           return [];
-        return [{ fieldId: fieldId.toLowerCase(), label, field }];
+        const width =
+          layout.columns.find((column) => sameField(column.fieldId, fieldId))?.width ??
+          recordsTableColumnWidth(declared);
+        return [{ fieldId: fieldId.toLowerCase(), label, field, width }];
       });
       if (columns.length === 0) {
         refuse("no_exportable_columns");
@@ -470,6 +533,27 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
       if (descriptor === undefined) {
         await audit(session, address, recordTypeId, columnIds, "refused");
         return { kind: "refused", reason: "changed" };
+      }
+      let timeZone = descriptor.timeZone;
+      if (request.format === "xlsx" && timeZone === undefined) {
+        const settings = await requests.run(
+          session,
+          address.selection,
+          async (transaction, scope) => ({
+            settings: await readCurrentOrganizationRuntimeSettingsAfterAuthorization(transaction),
+            accessVersion: scope.accessVersion,
+          }),
+        );
+        if (
+          settings.kind !== "available" ||
+          settings.value.accessVersion !== decided.value.accessVersion ||
+          settings.value.settings === undefined
+        ) {
+          refuse("time_zone_unavailable", settings.kind);
+          await audit(session, address, recordTypeId, columnIds, "refused");
+          return unavailable;
+        }
+        timeZone = settings.value.settings.timeZone;
       }
       const matching = request.selection.kind === "matching";
       const built = buildRecordsTableQueryCommand({
@@ -543,29 +627,21 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
         }
         // Only unticked records the read still matches lower the count: one gone or changed since
         // would otherwise understate it, and near the row limit end the stream short of it.
-        let stillExcluded = excluded.size;
-        if (excluded.size > 0 && descriptor.search !== null) {
-          // A single record's read does not apply the search, so its exclusions cannot be
-          // confirmed; near the limit the selection is judged by what the read matches.
-          if (counted.count > maxRows && counted.count - excluded.size <= maxRows) {
-            refuse("selection_over_row_limit", "exclusions_unconfirmed");
-            await audit(session, address, recordTypeId, columnIds, "refused");
-            return { kind: "refused", reason: "too_many", limit: maxRows, count: counted.count };
+        let stillExcluded = 0;
+        // Each 200 exclusions are confirmed in one protected read that applies the search and filters.
+        const excludedIds = [...excluded];
+        for (let start = 0; start < excludedIds.length; start += exactRecordIdsPerRead) {
+          const batch = excludedIds.slice(start, start + exactRecordIdsPerRead);
+          const read = await queries.run(session, address.selection, {
+            ...command,
+            pageSize: batch.length,
+            exactRecordIds: batch,
+          });
+          if (read.kind !== "available" || read.value.outcome !== "completed") {
+            refuse("exclusion_unreadable");
+            return unavailable;
           }
-        } else if (excluded.size > 0) {
-          stillExcluded = 0;
-          for (const recordId of excluded) {
-            const read = await queries.run(session, address.selection, {
-              ...command,
-              pageSize: 1,
-              exactRecordId: recordId,
-            });
-            if (read.kind !== "available" || read.value.outcome !== "completed") {
-              refuse("exclusion_unreadable");
-              return unavailable;
-            }
-            if (read.value.rows.length > 0) stillExcluded += 1;
-          }
+          stillExcluded += read.value.rows.length;
         }
         expected = Math.max(0, counted.count - stillExcluded);
       }
@@ -633,7 +709,7 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
       };
 
       const readPage = async (
-        extra: Readonly<{ exactRecordId?: string; continuationToken?: string }>,
+        extra: Readonly<{ exactRecordIds?: readonly string[]; continuationToken?: string }>,
       ): Promise<
         Readonly<{
           rows: readonly ProtectedQueryRow[];
@@ -643,8 +719,10 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
       > => {
         const result = await queries.run(session, address.selection, {
           ...command,
-          pageSize: extra.exactRecordId === undefined ? pageSize : 1,
-          ...(extra.exactRecordId === undefined ? {} : { exactRecordId: extra.exactRecordId }),
+          pageSize: extra.exactRecordIds === undefined ? pageSize : extra.exactRecordIds.length,
+          ...(extra.exactRecordIds === undefined
+            ? {}
+            : { exactRecordIds: [...extra.exactRecordIds] }),
           ...(extra.continuationToken === undefined
             ? {}
             : { pageDirection: "forward" as const, continuationToken: extra.continuationToken }),
@@ -666,19 +744,30 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
 
       async function* pages(pageSignal: AbortSignal): AsyncGenerator<RecordsExportPage> {
         if (request.selection.kind === "ids") {
-          // The rows the person ticked, each read under their current access in the order they
-          // were shown; a row that is gone or no longer readable is left out, never guessed.
-          for (let start = 0; start < selectedIds.length; start += selectedRowsPageSize) {
-            const rows: ProtectedQueryRow[] = [];
-            for (const recordId of selectedIds.slice(start, start + selectedRowsPageSize)) {
-              pageSignal.throwIfAborted();
-              if (rows.length === 0) await recheck();
-              const read = (await readPage({ exactRecordId: recordId })).rows;
-              for (const row of read)
-                if (row.revision !== undefined && row.revision !== selectedRevisions.get(recordId))
-                  changed += 1;
-              rows.push(...read);
-            }
+          // The rows the person ticked, each 200 read in one protected read under their current
+          // access and listed in the order they were shown; a row that is gone or no longer
+          // readable is left out, never guessed.
+          const shownAt = new Map(selectedIds.map((recordId, index) => [recordId, index]));
+          for (let start = 0; start < selectedIds.length; start += exactRecordIdsPerRead) {
+            pageSignal.throwIfAborted();
+            await recheck();
+            const rows = [
+              ...(
+                await readPage({
+                  exactRecordIds: selectedIds.slice(start, start + exactRecordIdsPerRead),
+                })
+              ).rows,
+            ].sort(
+              (left, right) =>
+                shownAt.get(String(left.recordId).toLowerCase())! -
+                shownAt.get(String(right.recordId).toLowerCase())!,
+            );
+            for (const row of rows)
+              if (
+                row.revision !== undefined &&
+                row.revision !== selectedRevisions.get(String(row.recordId).toLowerCase())
+              )
+                changed += 1;
             if (rows.length > 0) yield await toPage(rows);
           }
           return;
@@ -706,9 +795,20 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
         } while (continuationToken !== undefined);
       }
 
-      const format: RecordsExportFormat = recordsCsvFormat();
       let prepared: Awaited<ReturnType<typeof prepareRecordsExport>>;
       try {
+        const format: RecordsExportFormat =
+          request.format === "xlsx"
+            ? await recordsXlsxFormat({
+                columns: xlsxColumns(
+                  columns,
+                  installed.releaseSet.modules.flatMap((module) =>
+                    module.content.recordTypes.flatMap((record) => record.fields),
+                  ),
+                ),
+                timeZone: timeZone!,
+              })
+            : recordsCsvFormat();
         prepared = await prepareRecordsExport({
           name: String(placement.query.key),
           labels: columns.map((column) => column.label),

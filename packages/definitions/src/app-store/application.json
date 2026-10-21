@@ -444,7 +444,8 @@
                           }
                         }
                       }
-                    }
+                    },
+                    "row_action_event_id": "row_action_store_application_detail"
                   }
                 },
                 {

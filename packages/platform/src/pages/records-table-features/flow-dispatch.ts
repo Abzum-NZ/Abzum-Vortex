@@ -86,7 +86,15 @@ export const recordsTableBindingRefusal = async (
   const vortex = props.vortex;
   if (!isRecord(vortex) || !isRecord(vortex.block))
     return recordsTableRequestRefusal("contract", "placement_metadata_unreadable");
-  if (vortex.block.blockId !== TABLE_BLOCK_RELEASE.blockId) return undefined;
+  if (vortex.block.blockId !== TABLE_BLOCK_RELEASE.blockId) {
+    // A block without a row-action list names its one row action in `row_action_event_id`; a
+    // `row_action` binding of any other identity is not a compiled binding of that placement.
+    if (event !== "row_action") return undefined;
+    const declared = placementSettings(props).row_action_event_id;
+    return declared?.kind === "text" && sameId(declared.value, binding.eventId)
+      ? undefined
+      : recordsTableRequestRefusal(event, "command_not_declared");
+  }
   const contract = readRecordsTableContract(placementSettings(props));
   if (contract === undefined)
     return recordsTableRequestRefusal("contract", "placement_contract_unreadable");

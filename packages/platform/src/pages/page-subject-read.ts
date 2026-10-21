@@ -10,6 +10,7 @@ import {
   isRecord,
   readRecordDetailContract,
   readQueryBindings,
+  type ExecuteNamedActionCommand,
   type IdentitySession,
   type OrganizationSelectionCandidate,
 } from "../schema";
@@ -18,7 +19,11 @@ import {
   type HumanOrganizationRequestDependencies,
 } from "../access/index";
 import type { RequestDatabaseTransaction } from "../db/index";
-import { readSubjectWithNamedActionAvailability } from "../records/action-record-port";
+import {
+  readSubjectWithNamedActionAvailability,
+  type NamedActionAvailability,
+} from "../records/action-record-port";
+import type { ActionFlowRunner } from "../rules/index";
 import {
   protectedQueryRowCapabilitiesSchema,
   protectedQueryRowSchema,
@@ -55,14 +60,20 @@ export const pageSubjectFieldIds = (
 /**
  * What a detail placement reads for its page subject: the one record the page is about, addressed
  * by its record type (from the installed page definition) and its record id (from the page's own
- * address). The read runs through the fixed page subject read with an empty action set, under the
- * viewer's own verified request scope and
- * current authority. A missing record, a record of another organisation or application and a
- * record the viewer may not read all come back as the same `refused`, so the caller can never tell
- * them apart and no field the viewer cannot read is ever returned.
+ * address). The read runs through the fixed page subject read, under the viewer's own verified
+ * request scope and current authority, previewing in the same call the named actions the caller
+ * asks about; their availability, keyed by lower-case action id, comes back with a read subject.
+ * A missing record, a record of another organisation or application and a record the viewer may
+ * not read all come back as the same `refused`, so the caller can never tell them apart and no
+ * field the viewer cannot read is ever returned.
  */
 export type PageSubjectReadResult =
-  | Readonly<{ kind: "read"; row: ProtectedQueryRow }>
+  | Readonly<{
+      kind: "read";
+      row: ProtectedQueryRow;
+      /** Present exactly when the read asked for action previews. */
+      actionAvailability?: ReadonlyMap<string, NamedActionAvailability>;
+    }>
   | Readonly<{ kind: "refused" }>
   | Readonly<{ kind: "temporarily_unavailable" }>;
 
@@ -100,14 +111,23 @@ export const pageSubjectFromRead = (
   return { kind: "read", row };
 };
 
+/** The named actions a subject read previews on its record, and how each one's flow is run. */
+export type PageSubjectActionPreviews = Readonly<{
+  references: readonly ExecuteNamedActionCommand["action"][];
+  runFor: (action: ExecuteNamedActionCommand["action"]) => ActionFlowRunner;
+}>;
+
+type PageSubjectRequest = Readonly<{
+  recordTypeId: string;
+  recordId: string;
+  requestedFieldIds?: readonly string[];
+  actions?: PageSubjectActionPreviews;
+}>;
+
 /** Reuses the fixed subject read only inside an already verified human request transaction. */
 export const readPageSubjectInTransaction = async (
   transaction: RequestDatabaseTransaction,
-  subject: Readonly<{
-    recordTypeId: string;
-    recordId: string;
-    requestedFieldIds?: readonly string[];
-  }>,
+  subject: PageSubjectRequest,
 ): Promise<PageSubjectReadResult> => {
   const recordTypeId = recordTypeIdSchema.safeParse(subject.recordTypeId);
   const recordId = recordIdSchema.safeParse(subject.recordId);
@@ -120,13 +140,17 @@ export const readPageSubjectInTransaction = async (
         recordId: recordId.data,
         requestedFieldIds: subject.requestedFieldIds ?? null,
       },
-      [],
+      subject.actions?.references ?? [],
       new Date().toISOString(),
-      () => {
-        throw new Error("PAGE_ACTION_UNEXPECTED");
-      },
+      subject.actions?.runFor ??
+        (() => {
+          throw new Error("PAGE_ACTION_UNEXPECTED");
+        }),
     );
-    return pageSubjectFromRead(combined.record, combined.capabilities, recordId.data);
+    const read = pageSubjectFromRead(combined.record, combined.capabilities, recordId.data);
+    return read.kind === "read" && subject.actions !== undefined
+      ? { ...read, actionAvailability: combined.availability }
+      : read;
   } catch (error) {
     console.error(`[page] subject read failed: ${describeFailure(error)}`);
     return { kind: "temporarily_unavailable" };
@@ -139,11 +163,7 @@ export const createPageSubjectReader = (dependencies: HumanOrganizationRequestDe
     async read(
       session: IdentitySession,
       selection: OrganizationSelectionCandidate,
-      subject: Readonly<{
-        recordTypeId: string;
-        recordId: string;
-        requestedFieldIds?: readonly string[];
-      }>,
+      subject: PageSubjectRequest,
     ): Promise<PageSubjectReadResult> {
       if (
         !recordTypeIdSchema.safeParse(subject.recordTypeId).success ||

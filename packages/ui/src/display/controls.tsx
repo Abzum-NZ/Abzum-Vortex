@@ -203,7 +203,7 @@ export function RowActionControl({
   recordId: string;
   revision?: number;
   name: string;
-  eventId?: string;
+  eventId: string;
   label?: string;
   events: DisplayEventHandlers | undefined;
 }>): ReactElement | null {
@@ -223,13 +223,7 @@ export function RowActionControl({
       onClick={(clickEvent) => {
         clickEvent.stopPropagation();
         if (gesture.running()) return;
-        gesture.track(
-          onRowAction(
-            eventId === undefined
-              ? { event: "row_action", ...identity }
-              : { event: "row_action", eventId, ...identity },
-          ),
-        );
+        gesture.track(onRowAction({ event: "row_action", eventId, ...identity }));
       }}
     >
       {gesture.pending ? <Spinner data-icon="inline-start" aria-hidden="true" /> : null}

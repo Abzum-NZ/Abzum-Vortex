@@ -6,7 +6,7 @@ import { Separator } from "../components/separator";
 import { cn } from "../lib/utils";
 import { cellValueToText, DisplayCellView } from "./cell";
 import { DisplayHeader, RowActionControl } from "./controls";
-import { resolveDisplayContext, type DisplayRenderProps } from "./context";
+import { resolveDisplayContext, rowActionEventIdOf, type DisplayRenderProps } from "./context";
 import { DisplayStateContainer } from "./display-state-container";
 import type { DisplayField, RecordDetailPayload } from "./projected-data";
 
@@ -18,21 +18,35 @@ import type { DisplayField, RecordDetailPayload } from "./projected-data";
  * the viewer cannot read is absent from the projection and stays absent here. Never executes or
  * fetches a Query.
  */
-export function RecordDetailDisplay(
-  props: DisplayRenderProps<RecordDetailPayload>,
-): ReactElement {
+export function RecordDetailDisplay(props: DisplayRenderProps<RecordDetailPayload>): ReactElement {
   const { placementId, availability } = props;
-  const { title: configuredTitle, accessibleName, values, state, emptyMessage, refusedMessage, errorMessage, events } =
-    resolveDisplayContext<RecordDetailPayload>(
-      props,
-      (detail) => detail.fields.length === 0,
-      "No details to show",
-    );
+  const {
+    title: configuredTitle,
+    accessibleName,
+    values,
+    state,
+    emptyMessage,
+    refusedMessage,
+    errorMessage,
+    events,
+  } = resolveDisplayContext<RecordDetailPayload>(
+    props,
+    (detail) => detail.fields.length === 0,
+    "No details to show",
+  );
   const contract = readRecordDetailContract(props.settings);
   if (contract?.headingField !== undefined && values !== undefined && values.heading === undefined)
-    throw new DefinitionRenderError("INVALID_COMPOSITION", "A record heading requires its projected field value", { placementId });
-  const title = contract?.headingField === undefined ? configuredTitle
-    : values?.heading === undefined ? undefined : cellValueToText(values.heading);
+    throw new DefinitionRenderError(
+      "INVALID_COMPOSITION",
+      "A record heading requires its projected field value",
+      { placementId },
+    );
+  const title =
+    contract?.headingField === undefined
+      ? configuredTitle
+      : values?.heading === undefined
+        ? undefined
+        : cellValueToText(values.heading);
   const fields: readonly DisplayField[] =
     values === undefined
       ? []
@@ -88,7 +102,14 @@ export function RecordDetailDisplay(
                 </div>
               ))}
             </dl>
-            <RowActionControl recordId={values.recordId} name={accessibleName} events={events} />
+            {events?.row_action === undefined ? null : (
+              <RowActionControl
+                recordId={values.recordId}
+                name={accessibleName}
+                eventId={rowActionEventIdOf(props)}
+                events={events}
+              />
+            )}
           </CardContent>
         </Card>
       )}

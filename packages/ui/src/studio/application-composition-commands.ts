@@ -50,9 +50,12 @@ import { studioLayoutOutletPlacementUses } from "./application-layout-outlets";
 import { studioPageAreaLabel } from "./application-page-layout";
 import { createStudioDiscoveryAdapter } from "./discovery-adapter";
 import {
+  STUDIO_ROW_ACTION_EVENT_SETTING,
+  studioOwnsSetting,
   studioPaletteChoices,
   studioQueryOffered,
   studioReleaseReadsQuery,
+  studioRowActionEventId,
 } from "./contextual-palette";
 import {
   adjustedSlotOrder,
@@ -709,9 +712,9 @@ const groupsTaken = (target: StudioCompositionAddTarget): string => {
 };
 
 /**
- * Adds one new block at one place on a page: a fresh block name, the catalogue's defaults for
- * every setting the person does not give, an empty list for every fixed slot and the default
- * layout. The required settings the catalogue has no default for, and the query of a data block,
+ * Adds one new block at one place on a page: a fresh block name, the settings Studio owns, the
+ * catalogue's defaults for every setting the person does not give, an empty list for every fixed
+ * slot and the default layout. The required settings the catalogue has no default for, and the query of a data block,
  * come with the command. The edited slot is judged as stored data, and a block release the source
  * does not depend on yet becomes a dependency.
  */
@@ -772,6 +775,8 @@ const applyAdd = (
   // The settings the person gave (the setup asks for each required one without a default), each
   // of its declared kind; every other setting takes its catalogue default.
   const settings = commandSettings(input.settings, release.properties);
+  // Studio owns some settings and writes them itself, so a command never supplies them.
+  if (Object.keys(settings).some(studioOwnsSetting)) return { kind: "invalid" };
   const query = input.query;
   if (
     choice.needsQuery !== (query !== null) ||
@@ -787,6 +792,10 @@ const applyAdd = (
     props: {
       id: alias,
       ...plainSettings(settings),
+      // A block with one row action names that action's event from its own block name.
+      ...(release.properties.some((property) => property.key === STUDIO_ROW_ACTION_EVENT_SETTING)
+        ? { [STUDIO_ROW_ACTION_EVENT_SETTING]: studioRowActionEventId(alias) }
+        : {}),
       ...Object.fromEntries(
         release.slots.filter((slot) => slot.repeats === undefined).map((slot) => [slot.key, []]),
       ),
@@ -979,6 +988,11 @@ const applySettings = (
   if (resolved.kind !== "available") return resolved;
   const { source, target, alias, release } = resolved;
   const settings = commandSettings(input.settings, release.properties);
+  // Studio owns some settings: a settings edit keeps each exactly as stored.
+  const stored = itemReading(current.catalogue, target.item).settings;
+  for (const key of Object.keys(settings)) if (studioOwnsSetting(key)) delete settings[key];
+  for (const [key, value] of Object.entries(stored))
+    if (studioOwnsSetting(key)) settings[key] = value;
   restoreStudioGridFeatureBindings(settings, release.properties, source.body.flow_bindings, alias);
   let query = input.query;
   if (

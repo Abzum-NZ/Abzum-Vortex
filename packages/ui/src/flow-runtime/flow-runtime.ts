@@ -91,7 +91,8 @@ export function createFlowRuntime(options: FlowRuntimeOptions): FlowRuntime {
     signal?: AbortSignal,
     subject?: FlowSubjectContext,
   ): Promise<FlowDispatchResult> => {
-    if (signal?.aborted) return { ranIn: "server", result: { kind: "abandoned" } };
+    if (signal?.aborted)
+      return { ranIn: "server", result: { kind: "abandoned", unanswered: true } };
     const first = await options.client.startBinding(
       { bindingId: binding.bindingId, flowId: binding.flowId },
       callerInputs,
@@ -107,9 +108,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions): FlowRuntime {
         first,
         options.host,
         signal,
-        options.committed === undefined
-          ? undefined
-          : () => options.committed?.(binding.bindingId),
+        options.committed === undefined ? undefined : () => options.committed?.(binding.bindingId),
       ),
     };
   };

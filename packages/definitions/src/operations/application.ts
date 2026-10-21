@@ -292,6 +292,7 @@ const pages = [
       operations_incident_detail_body: placement(RECORD_DETAIL_BLOCK_RELEASE, {
         heading_source: "title",
         title: "Incident",
+        row_action_event_id: "row_action_operations_incident_detail_body",
         detail_fields: incidentColumns.map(([field, label]) => ({
           field: `${incidentRecordType}.${field}`,
           label,
