@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import type { moduleCompilationRequestSchema } from "../../schema";
 import {
   moduleDraftSchema,
@@ -9,11 +8,7 @@ import {
   type FlowDefinition,
   type DefinitionCompilationOutput,
 } from "../../schema";
-import {
-  canonicalJson,
-  compareCanonicalStrings,
-  fingerprintCanonicalValue,
-} from "../canonical-json-definition";
+import { compareCanonicalStrings, fingerprintCanonicalValue } from "../canonical-json-definition";
 import { DefinitionCompilationError } from "../compilation-error";
 import { compileActionFlow, platformServiceProtectedOperationReference } from "./action-flows";
 import { dependencyOrder, resolvedDependencies } from "./dependencies";
@@ -434,10 +429,7 @@ function compileModule(
         expected: test.expected,
       })),
     };
-    const fingerprint = `sha256:${createHash("sha256")
-      .update(canonicalJson(resolved), "utf8")
-      .digest("hex")}`;
-    return { ...resolved, contractFingerprint: fingerprint };
+    return { ...resolved, contractFingerprint: fingerprintCanonicalValue(resolved) };
   });
   const permissions = (body.permissions as JsonObject[]).map((permission) => {
     const recordScope = compilePermissionRecordScope(

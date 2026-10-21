@@ -156,16 +156,6 @@ export const loadApplicationFrame = cache(
     const pageDefinition = content.pages.find((page) => page.key === resolved.pageKey);
     if (pageDefinition === undefined) return undefined;
     const subject = addressed.query.get(pageSubjectParameter) ?? undefined;
-    const { projectedPageRead, navigationRead } = readPageProjections(
-      session,
-      context,
-      pageDefinition.pageId,
-      subject,
-    );
-    const [projected, navigation] = await Promise.all([projectedPageRead, navigationRead]);
-    if (projected.kind !== "available" || projected.value === undefined) return undefined;
-    if (navigation.kind !== "available") return undefined;
-
     const shellId = compiledPageShellId(pageDefinition.composition) ?? undefined;
     const shell =
       shellId === undefined
@@ -175,12 +165,27 @@ export const loadApplicationFrame = cache(
       throw new Error(
         `Compiled page '${pageDefinition.key}' references missing shell '${shellId}'`,
       );
+    const { projectedPageRead, navigationRead } = readPageProjections(
+      session,
+      context,
+      pageDefinition.pageId,
+      subject,
+      undefined,
+    );
+    // The application switcher reads the viewer's other applications under its own request, so it
+    // runs beside the page and menu projections instead of after them.
+    const switcherRequest =
+      shell?.presentation.topBar.applicationSwitcher === true
+        ? loadPermittedApplicationsAtAddress(session, tenantShortName, organizationShortName)
+        : undefined;
+    void switcherRequest?.catch(() => undefined);
+    const [projected, navigation] = await Promise.all([projectedPageRead, navigationRead]);
+    if (projected.kind !== "available" || projected.value === undefined) return undefined;
+    if (navigation.kind !== "available") return undefined;
+
     const { frame } = splitProjectedPage(projected.value, shell);
 
-    const switcherRead =
-      shell?.presentation.topBar.applicationSwitcher === true
-        ? await loadPermittedApplicationsAtAddress(session, tenantShortName, organizationShortName)
-        : undefined;
+    const switcherRead = await switcherRequest;
     if (switcherRead?.kind === "temporarily_unavailable")
       console.error(
         `[application-shell] permitted applications unavailable: cause=${switcherRead.cause ?? "cause_not_provided"}`,
