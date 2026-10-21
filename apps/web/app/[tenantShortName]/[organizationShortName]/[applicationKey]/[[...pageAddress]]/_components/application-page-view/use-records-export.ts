@@ -121,8 +121,9 @@ export function useRecordsExport({
         selection = { kind: "matching", token: table.selectionToken, excluded: [] };
       }
       const controller = new AbortController();
+      const runId = crypto.randomUUID();
       controllers.current.set(placementId, controller);
-      record(placementId, { status: "running", scope, bytes: 0 });
+      record(placementId, { runId, status: "running", scope, bytes: 0 });
       try {
         const viewId = table.layout.views?.selected?.viewId;
         const response = await fetch("/api/records-table/export", {
@@ -146,6 +147,7 @@ export function useRecordsExport({
             await response.json().catch(() => undefined),
           );
           record(placementId, {
+            runId,
             status: "refused",
             message: refusalMessage(refusal.success ? refusal.data : { kind: "unavailable" }),
           });
@@ -168,6 +170,7 @@ export function useRecordsExport({
           if (Date.now() - reported >= progressInterval) {
             reported = Date.now();
             record(placementId, {
+              runId,
               status: "running",
               scope,
               bytes,
@@ -185,12 +188,12 @@ export function useRecordsExport({
         link.click();
         link.remove();
         window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
-        record(placementId, { status: "finished", scope, filename });
+        record(placementId, { runId, status: "finished", scope, filename });
       } catch (error) {
-        if (controller.signal.aborted) record(placementId, { status: "cancelled" });
+        if (controller.signal.aborted) record(placementId, { runId, status: "cancelled" });
         else {
           console.error("[page] the export did not finish", error);
-          record(placementId, { status: "incomplete" });
+          record(placementId, { runId, status: "incomplete" });
         }
       } finally {
         controllers.current.delete(placementId);

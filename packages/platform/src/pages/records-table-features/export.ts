@@ -82,8 +82,12 @@ import type { InstalledRuntimeContext } from "../../definition/index";
 export type RecordsTableExportDependencies = HumanOrganizationRequestDependencies &
   Readonly<{ continuationKey: QueryContinuationKey }>;
 
-/** The most record ids one exact read names; the protected query refuses more. */
-const exactRecordIdsPerRead = 200;
+/**
+ * The most records one export page holds and the most record ids one exact read names. A keyset
+ * read is refused above the query's authored page size, so a page of every matching record is
+ * that many authored-size reads in one request transaction.
+ */
+const recordsPerRead = 200;
 
 /** A failure the transport reports as the export's reason; the person only sees a neutral message. */
 const exportFailure = (reason: string, cause?: unknown): Error =>
@@ -591,7 +595,6 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
       }
       // Only the exported columns are read; a value read only for formatting never leaves.
       const command = { ...built.command, requestedFieldIds: columnIds };
-      const pageSize = Math.min(200, placement.query.pageSize);
 
       // How many records the selection holds, through the one capped count path.
       let expected: number;
@@ -630,8 +633,8 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
         let stillExcluded = 0;
         // Each 200 exclusions are confirmed in one protected read that applies the search and filters.
         const excludedIds = [...excluded];
-        for (let start = 0; start < excludedIds.length; start += exactRecordIdsPerRead) {
-          const batch = excludedIds.slice(start, start + exactRecordIdsPerRead);
+        for (let start = 0; start < excludedIds.length; start += recordsPerRead) {
+          const batch = excludedIds.slice(start, start + recordsPerRead);
           const read = await queries.run(session, address.selection, {
             ...command,
             pageSize: batch.length,
@@ -673,18 +676,6 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
         ["link", "link_to_one_of_several"].includes(valueTypeOf(column.field)),
       );
 
-      /** The export permission and fields, decided again before each page is written. */
-      const recheck = async (): Promise<void> => {
-        const current = await requests.run(session, address.selection, (transaction, scope) =>
-          decideRecordTypeExport(transaction, scope, installed, recordTypeId),
-        );
-        if (current.kind !== "available") throw exportFailure(`access_${current.kind}`);
-        if (current.value.kind === "refused") throw exportFailure(current.value.reason);
-        const allowed = current.value.fieldIds;
-        if (allowed !== undefined && columnIds.some((fieldId) => !allowed.has(fieldId)))
-          throw exportFailure("export_fields_changed");
-      };
-
       /** One page of protected rows as export cells, with the page's link titles read once. */
       const toPage = async (rows: readonly ProtectedQueryRow[]): Promise<RecordsExportPage> => {
         const links = collectRecordLinkValues(
@@ -708,6 +699,43 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
         );
       };
 
+      // A keyset read is refused above the authored page size; an exact read names its own ids.
+      const keysetPageSize = Math.min(recordsPerRead, placement.query.pageSize);
+      const keysetReadsPerPage = Math.max(1, Math.floor(recordsPerRead / keysetPageSize));
+
+      /** One validated protected read, or the reason it is refused. */
+      const prepare = (
+        extra: Readonly<{ exactRecordIds?: readonly string[]; continuationToken?: string }>,
+      ) => {
+        const prepared = queries.prepareRead(session, address.selection, {
+          ...command,
+          pageSize:
+            extra.exactRecordIds === undefined ? keysetPageSize : extra.exactRecordIds.length,
+          ...(extra.exactRecordIds === undefined
+            ? {}
+            : { exactRecordIds: [...extra.exactRecordIds] }),
+          ...(extra.continuationToken === undefined
+            ? {}
+            : { pageDirection: "forward" as const, continuationToken: extra.continuationToken }),
+        });
+        if (prepared.kind === "ready") return prepared;
+        const { result } = prepared;
+        return {
+          kind: "final" as const,
+          reason:
+            result.kind !== "available"
+              ? `read_${result.kind}`
+              : result.value.outcome === "refused"
+                ? `read_refused_${result.value.reasonCode}`
+                : "read_unavailable",
+        };
+      };
+
+      /**
+       * One page: the export permission and fields decided again, then up to 200 records of
+       * protected reads, in the one request transaction of the page. A revocation stops the stream
+       * at the next page. A scan-limited read ends its page, so the enumeration ceiling counts reads.
+       */
       const readPage = async (
         extra: Readonly<{ exactRecordIds?: readonly string[]; continuationToken?: string }>,
       ): Promise<
@@ -717,25 +745,36 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
           scanLimited: boolean;
         }>
       > => {
-        const result = await queries.run(session, address.selection, {
-          ...command,
-          pageSize: extra.exactRecordIds === undefined ? pageSize : extra.exactRecordIds.length,
-          ...(extra.exactRecordIds === undefined
-            ? {}
-            : { exactRecordIds: [...extra.exactRecordIds] }),
-          ...(extra.continuationToken === undefined
-            ? {}
-            : { pageDirection: "forward" as const, continuationToken: extra.continuationToken }),
+        const page = await requests.run(session, address.selection, async (transaction, scope) => {
+          const current = await decideRecordTypeExport(transaction, scope, installed, recordTypeId);
+          if (current.kind === "refused")
+            return { kind: "denied" as const, reason: current.reason };
+          const allowed = current.fieldIds;
+          if (allowed !== undefined && columnIds.some((fieldId) => !allowed.has(fieldId)))
+            return { kind: "denied" as const, reason: "export_fields_changed" };
+          const rows: ProtectedQueryRow[] = [];
+          let next: string | undefined;
+          let scanLimited = false;
+          const reads = extra.exactRecordIds === undefined ? keysetReadsPerPage : 1;
+          for (let call = 0; call < reads; call += 1) {
+            const prepared = prepare(
+              call === 0 || next === undefined ? extra : { continuationToken: next },
+            );
+            if (prepared.kind === "final")
+              return { kind: "denied" as const, reason: prepared.reason };
+            const result = await prepared.read(transaction, scope);
+            if (result.outcome !== "completed")
+              return { kind: "denied" as const, reason: `read_refused_${result.reasonCode}` };
+            rows.push(...result.rows);
+            next = result.nextContinuationToken;
+            scanLimited = result.scanLimited;
+            if (next === undefined || scanLimited) break;
+          }
+          return { kind: "read" as const, rows, next, scanLimited };
         });
-        if (result.kind !== "available")
-          throw exportFailure(`read_${result.kind}`, "cause" in result ? result.cause : undefined);
-        if (result.value.outcome !== "completed")
-          throw exportFailure(`read_refused_${result.value.reasonCode}`);
-        return {
-          rows: result.value.rows,
-          next: result.value.nextContinuationToken,
-          scanLimited: result.value.scanLimited,
-        };
+        if (page.kind !== "available") throw exportFailure(`access_${page.kind}`);
+        if (page.value.kind === "denied") throw exportFailure(page.value.reason);
+        return page.value;
       };
 
       // Shown rows that changed since the person ticked them: exported as they are now, and
@@ -748,13 +787,12 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
           // access and listed in the order they were shown; a row that is gone or no longer
           // readable is left out, never guessed.
           const shownAt = new Map(selectedIds.map((recordId, index) => [recordId, index]));
-          for (let start = 0; start < selectedIds.length; start += exactRecordIdsPerRead) {
+          for (let start = 0; start < selectedIds.length; start += recordsPerRead) {
             pageSignal.throwIfAborted();
-            await recheck();
             const rows = [
               ...(
                 await readPage({
-                  exactRecordIds: selectedIds.slice(start, start + exactRecordIdsPerRead),
+                  exactRecordIds: selectedIds.slice(start, start + recordsPerRead),
                 })
               ).rows,
             ].sort(
@@ -779,7 +817,6 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
         let scanLimitedCount = 0;
         do {
           pageSignal.throwIfAborted();
-          await recheck();
           const read = await readPage(continuationToken === undefined ? {} : { continuationToken });
           const fresh = read.rows.filter((row) => {
             const recordId = String(row.recordId).toLowerCase();

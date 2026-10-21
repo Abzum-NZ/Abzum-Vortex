@@ -51,39 +51,69 @@ export const createProtectedQueryService = (dependencies: ProtectedQueryServiceD
   const { continuationKey, sharedCacheStore, resolveQueryCacheContext } = dependencies;
   const now = dependencies.clock ?? (() => new Date());
 
+  /**
+   * The one validation and cache wiring of a protected read. A refusal is the final result; a
+   * ready read runs inside a request transaction the caller already holds, so a caller that must
+   * decide authority and read in one transaction (the export) shares this path with `run`.
+   */
+  const prepareRead = (
+    caller: IdentitySession | ExecutionAuthorityContext,
+    selection: OrganizationSelectionCandidate,
+    commandCandidate: unknown,
+  ):
+    | Readonly<{
+        kind: "ready";
+        person: IdentitySession;
+        read: (
+          transaction: Parameters<typeof runCommand>[0],
+          scope: Parameters<typeof runCommand>[1],
+        ) => Promise<ProtectedQueryResult>;
+      }>
+    | Readonly<{ kind: "final"; result: HumanOrganizationRequestResult<ProtectedQueryResult> }> => {
+    // Do not turn a non-person authority into a person session on this adapter.
+    if (caller !== null && typeof caller === "object" && "kind" in caller)
+      return { kind: "final", result: { kind: "unavailable" } };
+    const command = protectedQueryCommandSchema.safeParse(commandCandidate);
+    if (!command.success) {
+      console.error("[protected-query] request refused", {
+        part: "command",
+        reason: "request_invalid",
+        issues: command.error.issues.map(({ code, path }) => ({ code, path })),
+      });
+      return { kind: "final", result: { kind: "available", value: refusal("request_invalid") } };
+    }
+    if (selection.applicationRootId === undefined)
+      return { kind: "final", result: { kind: "unavailable" } };
+    const cache: QueryCache | undefined =
+      sharedCacheStore === undefined || resolveQueryCacheContext === undefined
+        ? undefined
+        : {
+            store: sharedCacheStore,
+            resolveContext: resolveQueryCacheContext,
+            now,
+            // Verified by the request service before this operation runs.
+            sessionExpiresAt: caller.accessTokenExpiresAt,
+          };
+    return {
+      kind: "ready",
+      person: caller,
+      read: (transaction, scope) =>
+        runCommand(transaction, scope, command.data, continuationKey, cache),
+    };
+  };
+
   return Object.freeze({
     async run(
       caller: IdentitySession | ExecutionAuthorityContext,
       selection: OrganizationSelectionCandidate,
       commandCandidate: unknown,
     ): Promise<HumanOrganizationRequestResult<ProtectedQueryResult>> {
-      // Do not turn a non-person authority into a person session on this adapter.
-      if (caller !== null && typeof caller === "object" && "kind" in caller)
-        return { kind: "unavailable" };
-      const command = protectedQueryCommandSchema.safeParse(commandCandidate);
-      if (!command.success) {
-        console.error("[protected-query] request refused", {
-          part: "command",
-          reason: "request_invalid",
-          issues: command.error.issues.map(({ code, path }) => ({ code, path })),
-        });
-        return { kind: "available", value: refusal("request_invalid") };
-      }
-      if (selection.applicationRootId === undefined) return { kind: "unavailable" };
-      const cache: QueryCache | undefined =
-        sharedCacheStore === undefined || resolveQueryCacheContext === undefined
-          ? undefined
-          : {
-              store: sharedCacheStore,
-              resolveContext: resolveQueryCacheContext,
-              now,
-              // Verified by the request service before this operation runs.
-              sessionExpiresAt: caller.accessTokenExpiresAt,
-            };
-      return requests.run(caller, selection, (transaction, scope) =>
-        runCommand(transaction, scope, command.data, continuationKey, cache),
-      );
+      const prepared = prepareRead(caller, selection, commandCandidate);
+      if (prepared.kind === "final") return prepared.result;
+      return requests.run(prepared.person, selection, prepared.read);
     },
+    /** Validates a protected read for a caller that runs it inside its own request transaction. */
+    prepareRead,
     async boardMembers(
       caller: IdentitySession | ExecutionAuthorityContext,
       selection: OrganizationSelectionCandidate,
