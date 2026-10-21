@@ -143,7 +143,11 @@ export type StudioCompositionOutcome = Readonly<{
 export type StudioCompositionRemovalModel =
   | Readonly<{ kind: "available"; placementAlias: string; willRemoveUnusedRelease: boolean }>
   | Readonly<{ kind: "blocked"; reason: StudioCompositionRemovalReason }>
-  | Readonly<{ kind: "invalid" | "unsupported" }>;
+  | Readonly<{ kind: "unsupported"; reason: StudioCompositionRemovalUnsupportedReason }>
+  | Readonly<{ kind: "invalid" }>;
+
+export type StudioCompositionRemovalUnsupportedReason =
+  "page_kind" | "public_page" | "manifest_mismatch" | "repeating_slot" | "has_children";
 
 export type StudioCompositionEditorModel =
   | Readonly<{

@@ -12,7 +12,7 @@ import {
   type RecordsTableFilterValue,
   readRecordsTableFieldFilter,
   recordsTableBulkActionRecordLimit,
-  recordsTableBulkRefusalReasons,
+  recordsTableBulkRunLineSchema,
   recordsSelectionMaximumIds,
   recordsTableFilterKinds,
   RECORDS_TABLE_EXPORT_MAXIMUM_ROWS,
@@ -173,6 +173,7 @@ export type TableSelectionScope =
 export type TableBulkRunSummary = Readonly<{
   total: number;
   done: number;
+  warnings: readonly Readonly<{ message: string; count: number }>[];
   refused: readonly Readonly<{ reason: RecordsTableBulkRefusalReason; count: number }>[];
   notProcessed: number;
   limited: boolean;
@@ -251,26 +252,21 @@ const parseBulkRun = (value: unknown, location: DefinitionRenderErrorLocation): 
     });
   if (run.status !== "finished") return fail("A table bulk run is invalid", location);
   const summary = requireRecord(run.summary, "A bulk run summary is invalid", location);
+  const parsed = recordsTableBulkRunLineSchema.safeParse({ ...summary, kind: "summary" });
+  if (!parsed.success || parsed.data.kind !== "summary")
+    return fail("A bulk run summary is invalid", location);
+  const finished = parsed.data;
   return Object.freeze({
     status: "finished",
     label,
     selected: wholeCount(run.selected, location),
     summary: Object.freeze({
-      total: wholeCount(summary.total, location),
-      done: wholeCount(summary.done, location),
-      refused: Object.freeze(
-        requireArray(summary.refused, "Bulk run refusals are invalid", location).map((item) => {
-          const refusal = requireRecord(item, "A bulk run refusal is invalid", location);
-          if (!(recordsTableBulkRefusalReasons as readonly unknown[]).includes(refusal.reason))
-            fail("A bulk run refusal names an unknown reason", location);
-          return Object.freeze({
-            reason: refusal.reason as RecordsTableBulkRefusalReason,
-            count: wholeCount(refusal.count, location),
-          });
-        }),
-      ),
-      notProcessed: wholeCount(summary.notProcessed, location),
-      limited: summary.limited === true,
+      total: finished.total,
+      done: finished.done,
+      warnings: Object.freeze(finished.warnings),
+      refused: Object.freeze(finished.refused),
+      notProcessed: finished.notProcessed,
+      limited: finished.limited,
     }),
   });
 };
