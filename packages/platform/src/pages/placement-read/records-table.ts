@@ -52,7 +52,7 @@ import type { PlacementReadInput } from "./types";
  * The organisation's time zone when a filterable field holds a date and time, read under the same
  * access version the page was projected with; undefined when no such field is filterable.
  */
-const filterTimeZone = async (
+export const filterTimeZone = async (
   read: PlacementReadInput,
   needed: boolean,
 ): Promise<string | "unavailable" | undefined> => {
