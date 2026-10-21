@@ -282,11 +282,21 @@ export const resolveLinkTitles = async (
           );
           continue;
         }
+        const readable = candidates.length;
         candidates = candidates.filter(
           (candidate) =>
             candidate.parentRecordId !== undefined &&
             sameId(candidate.parentRecordId, parent.recordId),
         );
+        // The title names records the person may read, none of them under this row's parent.
+        if (readable > 0 && candidates.length === 0) {
+          problemOf(
+            cell,
+            "link_title_parent",
+            `"${cell.title}" is not one of the ${targetType.pluralLabel} of this ${labelOf(parentField)}.`,
+          );
+          continue;
+        }
       }
       if (candidates.length === 1)
         references.set(linkTitleCellKey(cell.recordId, field), {
