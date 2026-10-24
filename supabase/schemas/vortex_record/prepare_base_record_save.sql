@@ -86,9 +86,9 @@ begin
         'outcome', 'conflict', 'correlationId', correlation_id_value
       );
     end if;
-    projection := vortex_record.read_record(
+    projection := (vortex_record.read_record(
       p_record_type_id, (receipt_claim ->> 'recordId')::uuid
-    );
+    )) -> 'record';
     if projection ->> 'outcome' <> 'allowed' then
       return pg_catalog.jsonb_build_object(
         'outcome', 'refused', 'reasonCode', 'record_unavailable',

@@ -7,7 +7,7 @@ enforced by the platform and the database.
 
 ## One way only
 
-Vortex is a fresh project with no backward compatibility. Every concern has exactly one format, one contract and one code path. Replace contracts and formats in place, convert shipped definitions in the same change, and reset data with demo:setup. Do not add converters, upgraders, dual readers, compatibility branches, legacy mirrors, or a second way of doing something that already has one. When you find two ways, remove one.
+Vortex is a fresh project with no backward compatibility. Every concern has exactly one format, one contract and one code path. Replace contracts and formats in place, convert shipped definitions in the same change, and rebuild existing data with a forward migration. Destructive reset/demo:setup is permitted only when the authoritative slot record explicitly identifies the data as ABANDONED by its responsible owner, or retained data has an explicit owner disposition AND verified recoverability (export plus tested restore), or the user approved abandonment. Owning or acquiring a lane alone does not authorize resetting retained data. Do not add converters, upgraders, dual readers, compatibility branches, legacy mirrors, or a second way of doing something that already has one. When you find two ways, remove one.
 
 ## Layout
 
@@ -27,7 +27,7 @@ Vortex is a fresh project with no backward compatibility. Every concern has exac
 ```
 pnpm install
 pnpm db:start      # local Supabase
-pnpm db:reset      # apply migrations and seed
+pnpm db:reset      # apply migrations and seed (destructive: a fresh clone only)
 pnpm setup:local   # provision the development organisation and install modules
 pnpm dev
 ```
@@ -45,16 +45,25 @@ with every port shifted by 1000 per lane (db3 API 56321, database 56322; db4 573
 db5 58321/58322; db7 60321/60322; db8 61321/61322). Lane db2 is blocked on this Windows host by
 dynamic port exclusion 55262–55361. Lane db9 is unsupported by `tooling/supabase/lane.mjs`.
 Lanes db7 and db8 were adopted on 24 October 2026. The coordinator grants a lane by its exact
-number through `lane-take.sh <tag> <N>`; do not choose or take a different lane. The worker holds
-its own `.claude/orchestrator/db<N>.lock` while using the lane, then releases it by removing that
-lock and telling the coordinator.
+number through `lane-take.sh <tag> <N>`; do not choose or take a different lane. Every grant names
+the exact lane and its data disposition. The worker holds its own `.claude/orchestrator/db<N>.lock`
+while using the lane, then releases it by removing that lock and telling the coordinator the data
+disposition: `ABANDON`, `EXPORTED+VERIFIED`, or `RETAIN`. Lane data survives lock and process
+release. Destructive reset/demo:setup is permitted only when the authoritative slot record explicitly identifies the data as ABANDONED by its responsible owner, or retained data has an explicit owner disposition AND verified recoverability (export plus tested restore), or the user approved abandonment. Owning or acquiring a lane alone does not authorize resetting retained data. The same applies to cleanup or regrant of a lane
+holding retained data. Silence and “reset unless KEEP” are not consent. When `main` moves, forward
+migrate and rebuild the lane rather than resetting it. `pnpm demo:setup` always resets its target
+database (see `apps/web/scripts/demo-setup/demo-setup.ts`), so it is a reset. To set up without a
+reset, run `pnpm --filter @vortex/web demo:owner` and then `pnpm setup:local -- --local-development
+--first-owner-identity-id <uuid>` with the printed identity and without `--seed-demo`.
 
 ```
 node tooling/supabase/lane.mjs init <n>     # once: generate the lane config
 node tooling/supabase/lane.mjs start <n>    # start the lane (stop <n> stops only that lane)
 node tooling/supabase/lane.mjs env <n>      # lines for apps/web/.env.development.local
-node tooling/supabase/lane.mjs reset <n> .  # mirror this worktree's migrations and seed, then reset
-VORTEX_SUPABASE_WORKDIR=<lane directory> pnpm demo:setup
+node tooling/supabase/lane.mjs sync <n> .   # mirror this worktree's migrations and seed, no reset
+node node_modules/supabase/dist/supabase.js migration up --include-all --local --workdir <lane directory>  # forward migrate
+node tooling/supabase/lane.mjs reset <n> .  # destructive: mirror migrations and seed, then reset (rule above)
+VORTEX_SUPABASE_WORKDIR=<lane directory> pnpm demo:setup  # destructive: resets, then seeds (rule above)
 ```
 
 `env` prints `VORTEX_SUPABASE_URL`, `VORTEX_SUPABASE_PUBLISHABLE_KEY`,
@@ -95,8 +104,9 @@ The [target architecture](docs/build-plan/target-architecture.md) is binding: re
 - Fail loudly on platform-produced data: never turn a parse failure or database error into a silent
   `null`/"unavailable"; log the cause.
 - No layers without two implementations; no source file over 1,500 lines (TypeScript and canonical `supabase/schemas/` files; migrations are exempt because they carry full function bodies, one per PR).
-- Every behaviour change is walked through in the running app on a freshly reset local database
-  before merge; visible changes include screenshots in the pull request.
+- Every behaviour change is walked through in the running app on a local database before merge. A
+  fresh reset for that walk follows the lane rule: Destructive reset/demo:setup is permitted only when the authoritative slot record explicitly identifies the data as ABANDONED by its responsible owner, or retained data has an explicit owner disposition AND verified recoverability (export plus tested restore), or the user approved abandonment. Owning or acquiring a lane alone does not authorize resetting retained data.
+  Visible changes include screenshots in the pull request.
 
 ## Guardrails
 
