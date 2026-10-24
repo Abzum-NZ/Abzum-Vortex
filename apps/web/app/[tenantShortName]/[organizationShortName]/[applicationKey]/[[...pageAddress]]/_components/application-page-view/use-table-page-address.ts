@@ -60,6 +60,41 @@ export function useTablePageAddress({
   ) => Promise<void>;
   setSelection: Dispatch<SetStateAction<PageSelection>>;
 }>) {
+  // Controls compose against the last requested address, even before navigation has rendered it.
+  const requestedAddress = useRef({
+    owner: model,
+    observed: currentSearch,
+    search: currentSearch,
+    awaiting: [] as string[],
+  });
+  if (requestedAddress.current.owner !== model)
+    requestedAddress.current = {
+      owner: model,
+      observed: currentSearch,
+      search: currentSearch,
+      awaiting: [],
+    };
+  useEffect(() => {
+    const address = requestedAddress.current;
+    if (address.observed === currentSearch) return;
+    address.observed = currentSearch;
+    const landed = address.awaiting.lastIndexOf(currentSearch);
+    // An intermediate navigation acknowledges its write without replacing a later request.
+    if (landed !== -1) address.awaiting.splice(0, landed + 1);
+    else {
+      address.search = currentSearch;
+      address.awaiting = [];
+    }
+  }, [currentSearch, model]);
+  useEffect(() => {
+    const navigated = (): void => {
+      requestedAddress.current.search = new URLSearchParams(window.location.search).toString();
+      requestedAddress.current.awaiting = [];
+    };
+    window.addEventListener("popstate", navigated);
+    return () => window.removeEventListener("popstate", navigated);
+  }, []);
+
   // The table state the shown data was read for; a new server model starts from its own.
   const shownRef = useRef<{ owner: ApplicationPageModel; keys: Map<string, string> }>({
     owner: model,
@@ -74,10 +109,14 @@ export function useTablePageAddress({
     [],
   );
 
-  const push = (parameters: URLSearchParams): void => {
+  const writeAddress = useCallback((parameters: URLSearchParams, replace = false): void => {
     const query = parameters.toString();
-    window.history.pushState(null, "", query === "" ? window.location.pathname : `?${query}`);
-  };
+    requestedAddress.current.search = query;
+    requestedAddress.current.awaiting.push(query);
+    const url = query === "" ? window.location.pathname : `?${query}`;
+    if (replace) window.history.replaceState(null, "", url);
+    else window.history.pushState(null, "", url);
+  }, []);
 
   /** Only the shown page is held, so a table that shows another page or state selects nothing. */
   const clearSelection = useCallback(
@@ -97,7 +136,7 @@ export function useTablePageAddress({
   /** Records a page the table is about to show and adds it to the address. */
   const commitTablePage = useCallback(
     (placementId: string, request: RecordsTablePageRequest) => {
-      const parameters = new URLSearchParams(window.location.search);
+      const parameters = new URLSearchParams(requestedAddress.current.search);
       applyRecordsTableQueryChange(parameters, placementId, { kind: "page", request });
       const key = recordsTableAddressKey(placementId, [...parameters]);
       const shown = shownRef.current.keys;
@@ -107,9 +146,9 @@ export function useTablePageAddress({
       if (key === "") shown.delete(placement);
       else shown.set(placement, key);
       clearSelection(placementId);
-      push(parameters);
+      writeAddress(parameters);
     },
-    [clearSelection],
+    [clearSelection, writeAddress],
   );
 
   /**
@@ -118,18 +157,17 @@ export function useTablePageAddress({
    */
   const commitPivotView = useCallback(
     (placementId: string, view: RecordsTablePivotView | undefined) => {
-      const parameters = new URLSearchParams(window.location.search);
+      const parameters = new URLSearchParams(requestedAddress.current.search);
       applyRecordsTablePivotView(parameters, placementId, view);
-      const query = parameters.toString();
-      window.history.replaceState(null, "", query === "" ? window.location.pathname : `?${query}`);
+      writeAddress(parameters, true);
     },
-    [],
+    [writeAddress],
   );
 
   /** Applies a person's sort, filter, search or column change; the address effect rereads the table. */
   const changeTableQuery = useCallback(
     (placementId: string, change: Exclude<RecordsTableQueryChange, { kind: "page" }>) => {
-      const parameters = new URLSearchParams(window.location.search);
+      const parameters = new URLSearchParams(requestedAddress.current.search);
       const before = recordsTableAddressKey(placementId, [...parameters]);
       // An automatic default can supply the shown query without naming it in the address.
       // Adopt it before editing, so clearing one part preserves the rest and clearing every
@@ -156,9 +194,9 @@ export function useTablePageAddress({
       if (recordsTableAddressKey(placementId, [...parameters]) === before) return;
       pendingRef.current.set(placementId.toLowerCase(), CHANGED);
       clearSelection(placementId);
-      push(parameters);
+      writeAddress(parameters);
     },
-    [clearSelection, currentData],
+    [clearSelection, currentData, writeAddress],
   );
 
   /**
@@ -168,7 +206,7 @@ export function useTablePageAddress({
    */
   const openTableView = useCallback(
     (placementId: string, viewId: string | null) => {
-      const parameters = new URLSearchParams(window.location.search);
+      const parameters = new URLSearchParams(requestedAddress.current.search);
       const before = recordsTableAddressKey(placementId, [...parameters]);
       applyRecordsTableView(
         parameters,
@@ -178,9 +216,9 @@ export function useTablePageAddress({
       if (recordsTableAddressKey(placementId, [...parameters]) === before) return;
       pendingRef.current.set(placementId.toLowerCase(), CHANGED);
       clearSelection(placementId);
-      push(parameters);
+      writeAddress(parameters);
     },
-    [clearSelection],
+    [clearSelection, writeAddress],
   );
 
   /**
@@ -189,7 +227,7 @@ export function useTablePageAddress({
    */
   const selectTableViewInPlace = useCallback(
     (placementId: string, viewId: string | null, document?: GridViewDocument) => {
-      const parameters = new URLSearchParams(window.location.search);
+      const parameters = new URLSearchParams(requestedAddress.current.search);
       const current = readRecordsTableQueryState(placementId, parameters);
       if (document === undefined)
         applyRecordsTableQueryChange(parameters, placementId, { kind: "view", viewId });
@@ -211,9 +249,9 @@ export function useTablePageAddress({
         placementId.toLowerCase(),
         recordsTableAddressKey(placementId, [...parameters]),
       );
-      push(parameters);
+      writeAddress(parameters);
     },
-    [],
+    [writeAddress],
   );
 
   // A view opened by its address alone (a shared link, or a view just chosen) shows its own sort,
@@ -221,6 +259,7 @@ export function useTablePageAddress({
   // replacing the entry, so every control, a copied link and Back agree with what is shown. The
   // table is not read again: the address now names exactly what was read.
   useEffect(() => {
+    if (currentSearch !== requestedAddress.current.search) return;
     const parameters = new URLSearchParams(currentSearch);
     const entries = [...parameters];
     let changed = false;
@@ -258,12 +297,13 @@ export function useTablePageAddress({
       );
       changed = true;
     }
-    if (changed) window.history.replaceState(null, "", `?${parameters.toString()}`);
-  }, [currentData, currentSearch, model]);
+    if (changed) writeAddress(parameters, true);
+  }, [currentData, currentSearch, model, writeAddress]);
 
   // The address the shown page parameters were read for; a new server model read its own address.
   const parameterSearch = useRef({ owner: model, search: currentSearch });
   useEffect(() => {
+    if (currentSearch !== requestedAddress.current.search) return;
     const previousParameters = new URLSearchParams(
       parameterSearch.current.owner === model ? parameterSearch.current.search : currentSearch,
     );
