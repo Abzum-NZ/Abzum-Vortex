@@ -100,6 +100,7 @@ begin
   end if;
 
   return pg_catalog.jsonb_build_object(
+    'installation', installation,
     'moduleReleaseRevision', query_release_revision,
     'moduleReleaseVersion', query_release_version,
     'query', query_item,

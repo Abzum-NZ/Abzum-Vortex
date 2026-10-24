@@ -1,5 +1,6 @@
 create or replace function vortex_record.plan_record_read_scan_internal(
-  p_record_type_id uuid
+  p_record_type_id uuid,
+  p_installation jsonb
 )
 returns table (
   restricted boolean,
@@ -9,7 +10,8 @@ returns table (
   readable_field_ids text[],
   access_predicate text,
   access_parameters jsonb,
-  bound_field_ids text[]
+  bound_field_ids text[],
+  installation_access_plan jsonb
 )
 language plpgsql
 volatile
@@ -81,7 +83,7 @@ begin
   context_account_id := (context_value ->> 'organizationAccountId')::uuid;
 
   plan := vortex_record.resolve_installation_access_plan_internal(
-    vortex_definition.read_current_active_installation()
+    p_installation
   );
   if (plan ->> 'organizationId')::uuid is distinct from context_organization_id
     or (plan ->> 'applicationRootId')::uuid is distinct from context_application_root_id then
@@ -102,7 +104,7 @@ begin
   );
   if declaration is null then
     return query select false, null::uuid, array[]::uuid[], array[]::uuid[],
-      array[]::text[], 'false'::text, '[]'::jsonb, array[]::text[];
+      array[]::text[], 'false'::text, '[]'::jsonb, array[]::text[], plan;
     return;
   end if;
 
@@ -403,16 +405,17 @@ begin
         ) as field(value)
       ),
       array[]::text[]
-    );
+    ),
+    plan;
   return;
 end
 $function$;
 
-alter function vortex_record.plan_record_read_scan_internal(uuid) owner to vortex_record_adapter;
+alter function vortex_record.plan_record_read_scan_internal(uuid, jsonb) owner to vortex_record_adapter;
 
-revoke all on function vortex_record.plan_record_read_scan_internal(uuid)
+revoke all on function vortex_record.plan_record_read_scan_internal(uuid, jsonb)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-grant execute on function vortex_record.plan_record_read_scan_internal(uuid) to vortex_owner;
+grant execute on function vortex_record.plan_record_read_scan_internal(uuid, jsonb) to vortex_owner;
 
-comment on function vortex_record.plan_record_read_scan_internal(uuid) is
+comment on function vortex_record.plan_record_read_scan_internal(uuid, jsonb) is
   'Private read-scan narrowing for the record query: builds the read declaration for one record type of the exact active installation and returns the owner account, owner groups and directly shared record identifiers a caller can be admitted through, the fields every eligible read alternative is guaranteed to expose, kept only when every row the scan examines is one the exact decision admits, the same guaranteed fields unconditionally as the reader''s current field bound (what a list may offer to filter, search or sort by), and one scan predicate that OR-s every eligible alternative''s exact route test with its saved condition compiled into the same scan; any route without an exact stored predicate or any condition the compiler cannot express as a superset is left unrestricted or true, so the per-row decision remains the only thing that decides access.';

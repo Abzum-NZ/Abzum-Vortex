@@ -1221,12 +1221,17 @@ begin
         page_eligibility_checked := true;
         -- The installation and its access plan are resolved once for the page;
         -- every exact record decision below consumes this local plan.
-        page_shared := pg_catalog.jsonb_build_object(
-          'installation', case when preview_mode
-            then vortex_record.read_current_preview_installation_internal()
-            else vortex_definition.read_current_active_installation() end);
-        page_shared := page_shared || pg_catalog.jsonb_build_object('plan',
-          vortex_record.resolve_installation_access_plan_internal(page_shared -> 'installation'));
+        if preview_mode then
+          page_shared := pg_catalog.jsonb_build_object(
+            'installation', vortex_record.read_current_preview_installation_internal());
+          page_shared := page_shared || pg_catalog.jsonb_build_object('plan',
+            vortex_record.resolve_installation_access_plan_internal(page_shared -> 'installation'));
+        else
+          page_shared := prepared_plan -> 'pageAccess';
+          if pg_catalog.jsonb_typeof(page_shared) is distinct from 'object' then
+            raise exception using errcode = '55000', message = 'Query access plan is unavailable';
+          end if;
+        end if;
         page_access_loaded := vortex_record.load_record_access_facts_with_plan_internal(
           record_type_id_value, 'read', scan_record.record_id, null,
           page_shared -> 'installation', page_shared -> 'plan', scan_record.projection_row
