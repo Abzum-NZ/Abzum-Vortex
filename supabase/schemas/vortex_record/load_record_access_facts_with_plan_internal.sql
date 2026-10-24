@@ -151,8 +151,7 @@ begin
         message = 'Protected projection sort field is invalid';
     end if;
     target_projection_sort_key := coalesce(target_projection_sort_key, 'record_id');
-    -- Shape each protected reader row as the existing view's composite type.
-    -- The view supplies the type only: its unbounded reader is never scanned.
+    -- Shape protected reader values with explicit definition-derived columns.
     projection_reader_sql := case when p_projection_row is null then pg_catalog.format(
       'vortex_record.read_system_projection_rows_internal(%L::uuid, array[$2]::uuid[], %L, ''ascending'', null::jsonb, 1, null::jsonb) as projection',
       (target_meta ->> 'storageContractId')::uuid, target_projection_sort_key
@@ -161,8 +160,7 @@ begin
     end;
     target_source_sql := pg_catalog.format($source$
       %s
-      cross join lateral pg_catalog.jsonb_populate_record(
-        null::record_data.%I,
+      cross join lateral pg_catalog.jsonb_to_record(
         pg_catalog.jsonb_build_object(
           'organisation_id', projection.organization_id,
           'module_root_id', %L::uuid,
@@ -185,12 +183,13 @@ begin
           )
           from pg_catalog.jsonb_array_elements(%L::jsonb -> 'fields') as field(value)
         ), '{}'::jsonb)
-      ) as stored$source$,
-      projection_reader_sql, target_table, target_module_root_id, p_record_type_id,
+      ) as stored(%s)$source$,
+      projection_reader_sql, target_module_root_id, p_record_type_id,
       (target_meta ->> 'storageContractId')::uuid, target_release_revision,
       target_projection_definition #>> '{systemProjection,organizationFieldId}',
       target_projection_definition #>> '{systemProjection,revisionFieldId}',
-      target_projection_definition
+      target_projection_definition,
+      vortex_record.system_projection_columns_internal(target_projection_definition)
     );
   end if;
 
@@ -334,7 +333,7 @@ begin
     );
   end if;
 
-  -- A compatible reprovision can advance the shared projection view while an
+  -- A compatible reprovision can advance the catalogue definition while an
   -- older release remains installed. Report that exact projection definition;
   -- generated records keep their persisted last-written definition revision.
   if target_is_system_projection then
