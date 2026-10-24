@@ -27,7 +27,7 @@ Vortex is a fresh project with no backward compatibility. Every concern has exac
 ```
 pnpm install
 pnpm db:start      # local Supabase
-pnpm db:reset      # apply migrations and seed
+pnpm db:reset      # apply migrations and seed (destructive: a fresh clone only)
 pnpm setup:local   # provision the development organisation and install modules
 pnpm dev
 ```
@@ -60,8 +60,10 @@ reset, run `pnpm --filter @vortex/web demo:owner` and then `pnpm setup:local -- 
 node tooling/supabase/lane.mjs init <n>     # once: generate the lane config
 node tooling/supabase/lane.mjs start <n>    # start the lane (stop <n> stops only that lane)
 node tooling/supabase/lane.mjs env <n>      # lines for apps/web/.env.development.local
-node tooling/supabase/lane.mjs reset <n> .  # mirror this worktree's migrations and seed, then reset
-VORTEX_SUPABASE_WORKDIR=<lane directory> pnpm demo:setup
+node tooling/supabase/lane.mjs sync <n> .   # mirror this worktree's migrations and seed, no reset
+node node_modules/supabase/dist/supabase.js migration up --include-all --local --workdir <lane directory>  # forward migrate
+node tooling/supabase/lane.mjs reset <n> .  # destructive: mirror migrations and seed, then reset (rule above)
+VORTEX_SUPABASE_WORKDIR=<lane directory> pnpm demo:setup  # destructive: resets, then seeds (rule above)
 ```
 
 `env` prints `VORTEX_SUPABASE_URL`, `VORTEX_SUPABASE_PUBLISHABLE_KEY`,
