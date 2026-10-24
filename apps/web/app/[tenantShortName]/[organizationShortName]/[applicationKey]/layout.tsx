@@ -36,7 +36,7 @@ async function ApplicationStartLoader({ route }: { route: Route }) {
       className="grid min-h-svh place-items-center"
       aria-busy="true"
     >
-      <BrandLoader {...(theme.loaderMark === undefined ? {} : { mark: theme.loaderMark })} />
+      <BrandLoader mark={theme.loaderMark} />
     </div>
   );
 }

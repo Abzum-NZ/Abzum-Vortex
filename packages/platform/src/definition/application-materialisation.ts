@@ -153,16 +153,15 @@ export const materialiseApplicationTheme = (
     },
     selection: selection.resolved.selection,
     tokens: selection.resolved.tokens,
-    ...(authored.loader_mark === undefined
-      ? {}
-      : {
-          loaderMark: {
+    loaderMark:
+      authored.loader_mark === undefined
+        ? release.loaderMark
+        : {
             segments: authored.loader_mark.segments,
             ...(authored.loader_mark.cycle_seconds === undefined
               ? {}
               : { cycleSeconds: authored.loader_mark.cycle_seconds }),
           },
-        }),
   });
   const assetIds = new Set<PlatformId>();
   for (const token of Object.values(release.tokens))

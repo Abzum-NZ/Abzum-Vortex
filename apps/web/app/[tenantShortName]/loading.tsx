@@ -1,3 +1,4 @@
+import { DEFAULT_PLATFORM_THEME_RELEASE } from "@vortex/platform/server";
 import { BrandLoader } from "@vortex/ui";
 
 /**
@@ -11,7 +12,7 @@ import { BrandLoader } from "@vortex/ui";
 export default function Loading() {
   return (
     <div className="grid min-h-svh place-items-center" aria-busy="true">
-      <BrandLoader />
+      <BrandLoader mark={DEFAULT_PLATFORM_THEME_RELEASE.loaderMark} />
     </div>
   );
 }
