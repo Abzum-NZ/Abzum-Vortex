@@ -39,10 +39,15 @@ Environment variables are described in `README.md` and `apps/web/.env.example`.
 ## Local database lanes
 
 The main Local Supabase stack (`supabase/config.toml`, ports 543xx) is the owner's demo and the
-lead's walks: workers never reset or stop it. Workers use lanes db2 to db5, lighter stacks
-(no Studio, logs or edge runtime) under `VORTEX_LANES_ROOT` (default `A:/Apps/vortex-lanes`) with
-every port shifted by 1000 per lane (db2 API 55321, database 55322; db3 56321; db4 57321; db5 58321). Each lane is
-guarded by `.claude/orchestrator/db<n>.lock`: hold the lock before using a lane.
+lead's walks: workers never reset or stop it. Workers use lanes db3, db4, db5, db7 and db8, lighter
+stacks (no Studio, logs or edge runtime) under `VORTEX_LANES_ROOT` (default `A:/Apps/vortex-lanes`)
+with every port shifted by 1000 per lane (db3 API 56321, database 56322; db4 57321/57322;
+db5 58321/58322; db7 60321/60322; db8 61321/61322). Lane db2 is blocked on this Windows host by
+dynamic port exclusion 55262–55361. Lane db9 is unsupported by `tooling/supabase/lane.mjs`.
+Lanes db7 and db8 were adopted on 24 October 2026. The coordinator grants a lane by its exact
+number through `lane-take.sh <tag> <N>`; do not choose or take a different lane. The worker holds
+its own `.claude/orchestrator/db<N>.lock` while using the lane, then releases it by removing that
+lock and telling the coordinator.
 
 ```
 node tooling/supabase/lane.mjs init <n>     # once: generate the lane config
@@ -51,6 +56,12 @@ node tooling/supabase/lane.mjs env <n>      # lines for apps/web/.env.developmen
 node tooling/supabase/lane.mjs reset <n> .  # mirror this worktree's migrations and seed, then reset
 VORTEX_SUPABASE_WORKDIR=<lane directory> pnpm demo:setup
 ```
+
+Studio preview work may continue an idle background fill after satisfying visible reader demand.
+This follows the owner's paging rule: serve the requested visible page first, then fill remaining
+work while idle; do not add speculative prefetch before visible demand. This behavior is recorded
+in [#3079](https://github.com/Abzum-NZ/Abzum-Vortex/issues/3079) and its implementation
+[#3249](https://github.com/Abzum-NZ/Abzum-Vortex/pull/3249).
 
 `env` prints `VORTEX_SUPABASE_URL`, `VORTEX_SUPABASE_PUBLISHABLE_KEY`,
 `VORTEX_RUNTIME_DATABASE_URL`, `VORTEX_DEV_SERVICE_ROLE_KEY` and `VORTEX_SUPABASE_WORKDIR`; put them
