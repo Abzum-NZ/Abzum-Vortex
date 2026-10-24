@@ -77,6 +77,14 @@ export const refusalNotices: Readonly<
     tone: "problem",
     text: "This version changes stored fields in a way existing records cannot accept. Keep existing choice options unchanged when adding options, and preserve field types, storage and ownership settings.",
   },
+  application_not_installed: {
+    tone: "problem",
+    text: "This application is not installed in this organisation. Install it before upgrading or changing its roles.",
+  },
+  application_not_newer: {
+    tone: "problem",
+    text: "There is no newer application release to install. Review the latest published release before trying again.",
+  },
   applications_manage_required: {
     tone: "problem",
     text: "Installing or upgrading applications needs the Manage applications permission. An organisation steward can give you a role that has it in IAM.",
