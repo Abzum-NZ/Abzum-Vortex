@@ -14,6 +14,7 @@ import {
   type PlacementReadEntry,
 } from "./shared";
 import type { PlacementReadInput } from "./types";
+import { controlSelectedRecordType } from "./bindings";
 import type { PageSubjectReadResult } from "../page-subject-read";
 
 const detailState = (display: ReturnType<typeof projectRecordDetailData>): PageDataState =>
@@ -70,11 +71,7 @@ export const readSelectedDetail = async (
 ): Promise<void> => {
   const { placementId } = placement;
   const name = read.bindings.controls.get(control.toLowerCase());
-  const declared = name === undefined ? undefined : read.bindings.parameters.get(name);
-  const recordTypeId =
-    declared?.kind === "record" && declared.recordTypes.length === 1
-      ? declared.recordTypes[0]
-      : undefined;
+  const recordTypeId = controlSelectedRecordType(read.bindings, control);
   if (name === undefined || recordTypeId === undefined) {
     logPlacementFailure(read.address, placementId, "detail_selection_unbound");
     read.data[placementId] = { status: "error" };

@@ -251,7 +251,11 @@ export const readRecordsTableGroupMembers = async (
   }
 };
 
-export { pageQueryBindingContext, placementParameterDependencies } from "./bindings";
+export {
+  controlSelectedRecordType,
+  pageQueryBindingContext,
+  placementParameterDependencies,
+} from "./bindings";
 export {
   findModuleQuery,
   isApplicationLauncherPlacement,

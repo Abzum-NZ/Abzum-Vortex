@@ -26,6 +26,8 @@ export const projectPlacementRecordTypes = (input: {
   pageSubjectRecordTypeId: string | undefined;
   context: InstalledRuntimeContext;
   editFormPlacementIds: ReadonlySet<string>;
+  /** The one record type a control on the page selects, for a Record detail showing it. */
+  selectedRecordType: (control: string) => string | undefined;
 }) => {
   const { allPlacements, pageDefinition, pageSubjectRecordTypeId, context, editFormPlacementIds } =
     input;
@@ -91,11 +93,14 @@ export const projectPlacementRecordTypes = (input: {
 
     const queryId =
       typeof placement.vortex.queryId === "string" ? placement.vortex.queryId : undefined;
+    const recordFrom = settings["record_from"];
     const recordTypeId =
       queryId === undefined
         ? detailContract === undefined || pageDefinition.type === "form"
           ? undefined
-          : pageSubjectRecordTypeId
+          : recordFrom?.kind === "text"
+            ? input.selectedRecordType(recordFrom.value)
+            : pageSubjectRecordTypeId
         : isLinkTilesBlock
           ? buildLinkTilesQueryBinding(context, queryId, settings, {})?.recordTypeId
           : resolvedQueryRecordTypeId(context, queryId);

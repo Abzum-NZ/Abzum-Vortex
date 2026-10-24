@@ -146,6 +146,18 @@ export const pageQueryBindingContext = (
 };
 
 /** The page parameters each placement's bindings read, so a control change rereads only those. */
+/** The one record type a control on the page selects, or undefined when it selects none or several. */
+export const controlSelectedRecordType = (
+  bindings: Pick<QueryBindingContext, "controls" | "parameters">,
+  control: string,
+): string | undefined => {
+  const name = bindings.controls.get(control.toLowerCase());
+  const declared = name === undefined ? undefined : bindings.parameters.get(name);
+  return declared?.kind === "record" && declared.recordTypes.length === 1
+    ? declared.recordTypes[0]
+    : undefined;
+};
+
 export const placementParameterDependencies = (
   placements: readonly PlacementReadEntry[],
   bindings: QueryBindingContext,

@@ -65,6 +65,7 @@ import {
 import {
   isApplicationLauncherPlacement,
   logPlacementFailure,
+  controlSelectedRecordType,
   pageQueryBindingContext,
   placementParameterDependencies,
   resolvedQueryRecordTypeId,
@@ -636,6 +637,24 @@ const loadApplicationPageJoined = async (
       ? permittedApplicationsRead.applications.map((application) => application.key)
       : undefined;
 
+  // Every query input of the page's blocks resolves from the same server-side facts: what the page
+  // declares, its address, the subject read above and the viewer. A relative date reads the
+  // organisation's time zone once, only when one asks for it.
+  const bindingContext = pageQueryBindingContext({
+    context,
+    pageDefinition,
+    parameters,
+    readSubject:
+      subjectType === undefined
+        ? undefined
+        : () =>
+            subjectId.success
+              ? readSubject(String(subjectType.recordTypeId), subjectId.data)
+              : Promise.resolve({ kind: "refused" }),
+    subjectRecordTypeId: subjectType === undefined ? undefined : String(subjectType.recordTypeId),
+    readViewerTeams: services.readViewerTeams,
+    readTimeZone: services.readTimeZone,
+  });
   const pageSubjectRecordTypeId =
     subjectType === undefined ? undefined : String(subjectType.recordTypeId);
   const { recordTypeByPlacement, dataPlacementsByRecordType, editFormDataPlacementIds } =
@@ -645,6 +664,7 @@ const loadApplicationPageJoined = async (
       pageSubjectRecordTypeId,
       context,
       editFormPlacementIds,
+      selectedRecordType: (control) => controlSelectedRecordType(bindingContext, control),
     });
 
   const { refreshPlacementsByBinding, selectedReadTypesByFlow } = projectFlowBindingTargets({
@@ -692,24 +712,6 @@ const loadApplicationPageJoined = async (
   };
   const resolveRecordLinks: RecordLinkResolver = services.recordLinkResolver(context);
   const gridLayouts = await gridLayoutsRead;
-  // Every query input of the page's blocks resolves from the same server-side facts: what the page
-  // declares, its address, the subject read above and the viewer. A relative date reads the
-  // organisation's time zone once, only when one asks for it.
-  const bindingContext = pageQueryBindingContext({
-    context,
-    pageDefinition,
-    parameters,
-    readSubject:
-      subjectType === undefined
-        ? undefined
-        : () =>
-            subjectId.success
-              ? readSubject(String(subjectType.recordTypeId), subjectId.data)
-              : Promise.resolve({ kind: "refused" }),
-    subjectRecordTypeId: subjectType === undefined ? undefined : String(subjectType.recordTypeId),
-    readViewerTeams: services.readViewerTeams,
-    readTimeZone: services.readTimeZone,
-  });
   const placementReaderInput: PlacementReaderInput = {
     context,
     session,
