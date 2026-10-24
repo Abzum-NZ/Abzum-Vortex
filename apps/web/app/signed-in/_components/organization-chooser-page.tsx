@@ -70,13 +70,12 @@ export function OrganizationChooserPage({
         platformThemeTokens={platformThemeTokens}
         pageId={page.pageId}
         applicationSurface
+        applicationSwitcher={{ state: "available", applications: [] }}
         applicationShellRuntime={{
           applicationName: shell.name,
           applicationHref: "/signed-in",
           organizationName: page.name,
           pageName: page.name,
-          applicationSwitcherState: "available",
-          applications: [],
         }}
         runtimeInputs={
           values === undefined
