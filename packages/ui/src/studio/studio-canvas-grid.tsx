@@ -306,7 +306,7 @@ export function useStudioCanvasGridEvents(
   const { report, interactive } = useContext(StudioCanvasGridContext);
   // Every canvas block calls this hook; only a table owns grid settings and held state.
   const tableRelease =
-    release?.rendererKey === PLATFORM_BLOCK_RELEASE_IDENTITIES.TABLE_BLOCK_RELEASE.rendererKey
+    release?.blockId === PLATFORM_BLOCK_RELEASE_IDENTITIES.TABLE_BLOCK_RELEASE.blockId
       ? release
       : undefined;
   const setup =
@@ -329,7 +329,8 @@ export function useStudioCanvasGridEvents(
   const { contract, fields } = setup;
   const send = (event: StudioCanvasGridEvent) =>
     report({ ...event, placementAlias: alias, key: setup.key, fields });
-  const supports = (event: string): boolean => release!.supportedEvents.includes(event as never);
+  const supports = (event: string): boolean =>
+    tableRelease!.supportedEvents.includes(event as never);
   return {
     columns_changed: async (event): Promise<GridLayoutCommitResult> => {
       if (event.event !== "columns_changed") return { outcome: "unavailable" };
@@ -418,8 +419,9 @@ const gridSource = (props: Readonly<Record<string, unknown>>, release: PlatformB
 };
 
 /**
- * The grid's table contract and field names; undefined for a non-table block, and while the
- * compiled table is behind its draft settings (it catches up on the next compilation).
+ * The table's contract and field names; undefined while the compiled table is behind its draft
+ * settings (it catches up on the next compilation). Only a table release is ever passed here, so a
+ * contract that does not read is a real defect and is logged.
  */
 const gridSetup = (
   props: Readonly<Record<string, unknown>>,
