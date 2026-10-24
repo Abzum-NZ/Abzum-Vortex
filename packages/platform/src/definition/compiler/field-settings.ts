@@ -1,11 +1,9 @@
-import {
-  calculationMaximumNestingDepth,
-  conditionNodeSchema,
-  jsonValueSchema,
-  walkDefinitionContract,
-  type ModuleCompilationOutput,
-  type DefinitionCompilationOutput,
-  type DefinitionValidationLocation,
+import { flowFormulaSchema, flowFormulaUsesNow } from "../../workflows/flow-values";
+import { calculationFormulaDependencies } from "../module-calculation-formula";
+import type {
+  ModuleCompilationOutput,
+  DefinitionCompilationOutput,
+  DefinitionValidationLocation,
 } from "../../schema";
 import { fingerprintCanonicalValue } from "../canonical-json-definition";
 import { DefinitionCompilationError } from "../compilation-error";
@@ -267,93 +265,30 @@ export function fieldSettings(
         onParentDelete: settings.on_parent_delete,
       };
     case "calculation": {
-      const expression = asObject(settings.expression);
-      let compiled: unknown;
-      let dependencies: string[];
-      if (expression.operation === "join_text") {
-        dependencies = (expression.fields as string[]).map(localField);
-        compiled = { kind: "join_text", fieldIds: dependencies, separator: expression.separator };
-      } else if (expression.operation === "numeric") {
-        const dependenciesInOrder: string[] = [];
-        const numberValue = (operand: JsonObject, depth: number): unknown => {
-          if (depth > calculationMaximumNestingDepth)
+      const authored = flowFormulaSchema.parse(settings.expression);
+      // Resolve names only: the authored and compiled expression are both FlowFormula.
+      const resolve = (value: unknown): unknown => {
+        if (value === null || typeof value !== "object") return value;
+        if (Array.isArray(value)) return value.map(resolve);
+        const node = value as JsonObject;
+        if (node.op === "literal") return node;
+        if (node.op === "reference") {
+          const reference = asObject(node.reference);
+          if (reference.source !== "trigger_record")
             fail("vortex.definition.invalid_object", "invalid_value");
-          if (operand.source === "numeric")
-            return {
-              source: "numeric",
-              operation: operand.numeric_operation,
-              operands: (operand.operands as JsonObject[]).map((nested) =>
-                numberValue(asObject(nested), depth + 1),
-              ),
-            };
-          if (operand.source === "field") {
-            const fieldId = localField(String(operand.field));
-            dependenciesInOrder.push(fieldId);
-            return { source: "field", fieldId };
-          }
-          return { source: "literal", value: normaliseExact(operand.value) };
-        };
-        const operands = (expression.operands as JsonObject[]).map((operand) =>
-          numberValue(asObject(operand), 1),
+          return {
+            op: "reference",
+            reference: { source: "module_field", fieldId: localField(String(reference.field)) },
+          };
+        }
+        return Object.fromEntries(
+          Object.entries(node).map(([key, child]) => [key, resolve(child)]),
         );
-        dependencies = dependenciesInOrder;
-        compiled = {
-          kind: "numeric",
-          operation: expression.numeric_operation,
-          operands,
-        };
-      } else if (expression.operation === "condition") {
-        const compiledCondition = condition(expression.condition, localField, valueContext);
-        const dependencySet = new Set<string>();
-        walkDefinitionContract(conditionNodeSchema, compiledCondition, (schema, value) => {
-          if (schema === jsonValueSchema) return;
-          if (value === null || typeof value !== "object") return;
-          const entry = value as JsonObject;
-          if (entry.source === "field" && typeof entry.fieldId === "string")
-            dependencySet.add(entry.fieldId);
-        });
-        dependencies = [...dependencySet];
-        compiled = { kind: "condition", condition: compiledCondition };
-      } else if (expression.operation === "date_offset") {
-        const dateFieldId = localField(String(expression.date_field));
-        const amount = asObject(expression.amount);
-        const compiledAmount =
-          amount.source === "field"
-            ? { source: "field", fieldId: localField(String(amount.field)) }
-            : {
-                source: "literal",
-                value: normaliseExact(amount.value),
-              };
-        dependencies = [
-          dateFieldId,
-          ...(amount.source === "field" ? [String(compiledAmount.fieldId)] : []),
-        ];
-        compiled = {
-          kind: "date_offset",
-          dateFieldId,
-          amount: compiledAmount,
-          unit: expression.unit,
-        };
-      } else {
-        const dueFieldId = localField(String(expression.due_field));
-        const statusFieldId =
-          expression.status_field === undefined
-            ? undefined
-            : localField(String(expression.status_field));
-        dependencies = [dueFieldId, ...(statusFieldId ? [statusFieldId] : [])];
-        compiled = {
-          kind: "deadline_passed",
-          dueFieldId,
-          ...(statusFieldId ? { statusFieldId } : {}),
-          terminalStatusValues: expression.terminal_status_values,
-        };
-      }
+      };
+      const compiled = flowFormulaSchema.parse(resolve(authored));
+      const dependencies = calculationFormulaDependencies(compiled);
       const evaluation =
-        settings.evaluation === "read_time" || settings.evaluation === "stored"
-          ? settings.evaluation
-          : expression.operation === "deadline_passed"
-            ? "read_time"
-            : "stored";
+        settings.evaluation ?? (flowFormulaUsesNow(compiled) ? "read_time" : "stored");
       return {
         resultType: settings.result_type,
         evaluation,

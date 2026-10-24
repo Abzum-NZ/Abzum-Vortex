@@ -20,7 +20,7 @@ begin
   where pg_catalog.lower(record_type.value ->> 'recordTypeId') = pg_catalog.lower(p_record_type_id::text)
     and field.value ->> 'type' = 'calculation'
     and (field.value #>> '{settings,evaluation}' = 'read_time'
-      or field.value #>> '{settings,expression,kind}' = 'deadline_passed');
+      or field.value #>> '{settings,expression,op}' = 'deadline_passed');
   read_time := pg_catalog.jsonb_build_object('readTimeFields', read_time_fields)
     || case when read_time_fields <> '{}'::jsonb
       then pg_catalog.jsonb_build_object('readTimeClock', vortex_record.read_time_clock_internal())

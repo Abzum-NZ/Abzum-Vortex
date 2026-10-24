@@ -125,14 +125,17 @@ export const deriveEarliestPendingDeadlineTransition = (
   let earliest:
     Readonly<{ transition: PendingDeadlineTransition; instant: ExactInstant }> | undefined;
   for (const field of recordType.data.fields) {
-    if (field.type !== "calculation" || field.settings.expression.kind !== "deadline_passed")
+    if (field.type !== "calculation" || field.settings.expression.op !== "deadline_passed")
       continue;
     if (input.finalAuthoritativeFieldValues[field.fieldId] !== false) continue;
 
     const expression = field.settings.expression;
-    const status = expression.statusFieldId
-      ? input.finalAuthoritativeFieldValues[expression.statusFieldId]
-      : undefined;
+    const statusId =
+      expression.status?.op === "reference" && expression.status.reference.source === "module_field"
+        ? expression.status.reference.fieldId
+        : undefined;
+    const status =
+      statusId === undefined ? undefined : input.finalAuthoritativeFieldValues[statusId];
     const parsedStatus = jsonValueSchema.safeParse(status);
     if (
       status !== undefined &&
@@ -141,8 +144,11 @@ export const deriveEarliestPendingDeadlineTransition = (
     )
       continue;
 
-    const dueField = fields.get(expression.dueFieldId);
-    const dueValue = input.finalAuthoritativeFieldValues[expression.dueFieldId];
+    if (expression.due.op !== "reference" || expression.due.reference.source !== "module_field")
+      continue;
+    const dueId = expression.due.reference.fieldId;
+    const dueField = fields.get(dueId);
+    const dueValue = input.finalAuthoritativeFieldValues[dueId];
     if (!dueField || typeof dueValue !== "string") continue;
 
     let transitionAt: string | undefined;
