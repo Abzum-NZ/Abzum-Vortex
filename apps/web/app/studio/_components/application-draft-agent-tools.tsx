@@ -70,12 +70,15 @@ const inputSchema = (schema: z.ZodType) => {
   const variants = (json.oneOf ?? json.anyOf ?? []).filter(
     (variant) => typeof variant === "object",
   );
+  // A recursive input (a JSON value) is advertised through references; its definitions travel with it.
+  const definitions = json.$defs === undefined ? {} : { $defs: json.$defs };
   if (json.properties !== undefined || variants.length === 0)
     return {
       type: "object",
       properties: json.properties ?? {},
       required: json.required ?? [],
       additionalProperties: false,
+      ...definitions,
     };
   // A discriminated union has no top-level properties: advertise the union of its variants' properties, the
   // discriminator as an enum, and as required only what every variant requires (zod still validates each variant).
@@ -94,7 +97,7 @@ const inputSchema = (schema: z.ZodType) => {
   const required = Object.keys(properties).filter((key) =>
     variants.every((variant) => variant.required?.includes(key)),
   );
-  return { type: "object", properties, required, additionalProperties: false };
+  return { type: "object", properties, required, additionalProperties: false, ...definitions };
 };
 const tool = (
   name: ToolName,
