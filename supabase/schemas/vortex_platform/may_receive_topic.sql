@@ -37,3 +37,12 @@ comment on function vortex_platform.may_receive_topic(text) is
 
 alter function vortex_platform.may_receive_topic(text)
   owner to postgres;
+
+-- Realtime admits a private join only through this policy.
+drop policy if exists vortex_private_invalidation_member_read on realtime.messages;
+
+create policy vortex_private_invalidation_member_read
+on realtime.messages
+for select
+to authenticated
+using (vortex_platform.may_receive_topic(realtime.topic()));
