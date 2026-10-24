@@ -232,10 +232,10 @@ public class ProtectedCallback extends Task implements RunnableTask<ProtectedCal
         }
         renderRuntimeScope(runContext, (ObjectNode) scopeNode);
         ObjectNode inputContract = (ObjectNode) request.get("inputs");
-        if (inputContract.has("runtimeScope")) {
+        if (inputContract.has("runtime_scope")) {
             throw refused();
         }
-        inputContract.set("runtimeScope", scopeNode);
+        inputContract.set("runtime_scope", scopeNode);
     }
 
     private static void renderRuntimeScope(RunContext runContext, ObjectNode scope) throws Exception {

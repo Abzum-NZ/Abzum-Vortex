@@ -526,7 +526,7 @@ export const createProtectedNodeExecution = (dependencies: ProtectedNodeExecutio
         const properties = objectRecord(envelope.data.inputs.properties);
         const value = evaluateValue(
           properties?.expression,
-          envelope.data.inputs.runtimeScope,
+          envelope.data.inputs.runtime_scope,
           context.issuedAt,
         );
         return value === undefined
