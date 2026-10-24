@@ -89,33 +89,22 @@ begin
         and stored.application_root_id is not distinct from policy_scope
     );
 
-    -- The platform default: recoverable deletion with a thirty-day recovery window and no
-    -- automatic age or count limit. Administration changes it afterwards.
-    if 'delete' <> all (limits_row.allowed_actions)
-      or not limits_row.allow_unlimited_retention_days
-      or not limits_row.allow_unlimited_record_count then
+    if limits_row.initial_policy is null then
       raise exception using errcode = '23514',
-        message = 'Default record-type lifecycle policy is not permitted by organisation limits',
-        detail = 'storage contract ' || target.storage_contract_id::text;
+        message = 'Configure an initial record lifecycle policy before installing applications';
     end if;
 
     next_policy_id := pg_catalog.gen_random_uuid();
-    full_policy := pg_catalog.jsonb_build_object(
+    full_policy := limits_row.initial_policy || pg_catalog.jsonb_build_object(
       'policyId', next_policy_id,
       'organizationId', p_organization_id,
       'storageContractId', target.storage_contract_id,
       'applicationRootId', policy_scope,
-      'policyRevision', 1,
-      'action', 'delete',
-      'maxAgeDays', null,
-      'maxCount', null,
-      'allowUnlimitedAge', true,
-      'allowUnlimitedCount', true,
-      'recoveryWindowDays', 30
+      'policyRevision', 1
     );
     if not vortex_record.is_record_type_lifecycle_policy(full_policy) then
       raise exception using errcode = '22023',
-        message = 'Default record-type lifecycle policy is invalid',
+        message = 'Configured initial record lifecycle policy is invalid',
         detail = 'storage contract ' || target.storage_contract_id::text;
     end if;
 
@@ -125,7 +114,7 @@ begin
       policy_revision, action, policy_body
     ) values (
       next_policy_id, p_organization_id, target.storage_contract_id,
-      policy_scope, 1, 'delete', full_policy
+      policy_scope, 1, full_policy ->> 'action', full_policy
     )
     on conflict on constraint record_type_lifecycle_policies_scope_unique do nothing;
     get diagnostics inserted_count = row_count;
@@ -149,4 +138,4 @@ grant execute on function vortex_record.ensure_application_lifecycle_policies(uu
   to vortex_request;
 
 comment on function vortex_record.ensure_application_lifecycle_policies(uuid, uuid, bigint, jsonb) is
-  'The one installation step that gives every record type of an activating Application release its lifecycle policy: a record type without one gets the platform default (recoverable deletion, thirty-day recovery window, no automatic age or count limit) at revision 1, within the organisation limits. A stored policy is never changed. Returns the number stored.';
+  'The one installation step that gives every record type of an activating Application release its lifecycle policy: a record type without one gets the explicit organisation setup policy at revision 1, within the organisation limits. A stored policy is never changed. Returns the number stored.';
