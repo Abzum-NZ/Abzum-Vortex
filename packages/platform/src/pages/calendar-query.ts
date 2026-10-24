@@ -18,6 +18,7 @@ import {
   type OrganizationSelectionCandidate,
   isRecord,
   sameId,
+  logRefusal,
 } from "../schema";
 import type { HumanOrganizationRequestResult } from "../access/index";
 import { arrangeDataset, protectedQueryCommandSchema } from "../queries/index";
@@ -318,7 +319,8 @@ export const projectCalendarPlacement = async (
   let queryResult: Awaited<ReturnType<typeof queries.run>>;
   try {
     queryResult = await queries.run(session, selection, command.data);
-  } catch {
+  } catch (cause) {
+    logRefusal("calendar", "query", "calendar_query_unavailable", cause);
     queryResult = { kind: "temporarily_unavailable" as const };
   }
   if (queryResult.kind === "temporarily_unavailable") {
