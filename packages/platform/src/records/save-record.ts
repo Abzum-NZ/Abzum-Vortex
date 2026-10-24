@@ -265,7 +265,8 @@ const correctionsFor = (
       // leaves with a located correction.
       ...((issue.code === beforeSaveRuleRefusedIssueCode ||
         issue.code === "required_field_missing" ||
-        issue.code === "stage_move_refused") &&
+        issue.code === "stage_move_refused" ||
+        issue.code === "invalid_value") &&
       issue.requirement !== undefined
         ? { message: issue.requirement.message }
         : {}),

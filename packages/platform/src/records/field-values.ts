@@ -1,6 +1,7 @@
 import { isDeepStrictEqual } from "node:util";
 import {
   currencyCodeSchema,
+  exactDecimalDigitCounts,
   exactDecimalTextSchema,
   exactDecimalWithinBounds,
   moduleFieldSchema,
@@ -492,6 +493,16 @@ const normalizeValue = (
         path,
         field.fieldId,
       );
+    const decimal = parseExactDecimal(parsed.data);
+    if (
+      policy === "final" &&
+      decimal !== undefined &&
+      exactDecimalDigitCounts(decimal).decimalPlaces > field.settings.decimalPlaces
+    )
+      return issue(context, "invalid_value", path, field.fieldId, {
+        code: "decimal_precision_exceeded",
+        message: `This field allows ${field.settings.decimalPlaces} decimal places.`,
+      });
     candidate = normalizeExactDecimal(parsed.data);
   }
 
