@@ -822,6 +822,18 @@
                       }
                     },
                     "features": {
+                      "search": {
+                        "enabled": true
+                      },
+                      "column_filters": {
+                        "enabled": true,
+                        "fields": [
+                          "vortex.crm.people:contact.contact_number",
+                          "vortex.crm.people:contact.email",
+                          "vortex.crm.people:contact.company",
+                          "vortex.crm.people:contact.relationship_owner"
+                        ]
+                      },
                       "pinning": {
                         "enabled": true
                       },
@@ -1229,6 +1241,20 @@
                             "kind": "data_bar",
                             "token": "info"
                           }
+                        ]
+                      },
+                      "search": {
+                        "enabled": true
+                      },
+                      "column_filters": {
+                        "enabled": true,
+                        "fields": [
+                          "vortex.crm.opportunities:opportunity.name",
+                          "vortex.crm.opportunities:opportunity.company",
+                          "vortex.crm.opportunities:opportunity.value",
+                          "vortex.crm.opportunities:opportunity.stage",
+                          "vortex.crm.opportunities:opportunity.expected_close_date",
+                          "vortex.crm.opportunities:opportunity.probability"
                         ]
                       },
                       "pinning": {

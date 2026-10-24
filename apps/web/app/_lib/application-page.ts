@@ -1,4 +1,4 @@
-import { sameId, splitProjectedPage } from "@vortex/platform/schema";
+import { logRefusal, sameId, splitProjectedPage } from "@vortex/platform/schema";
 import "server-only";
 
 import {
@@ -70,7 +70,8 @@ export const loadProjectedReferenceChoiceForm = async (
           request.formId,
         )
       : undefined;
-  } catch {
+  } catch (cause) {
+    logRefusal("reference-choices", "project form", "reference_choice_form_unavailable", cause);
     return undefined;
   }
 };
@@ -163,7 +164,8 @@ export const loadReferenceChoicePage = async (
           : { optionEvidenceOverrides: selectedEvidenceOverride }),
       }),
     };
-  } catch {
+  } catch (cause) {
+    logRefusal("reference-choices", "choice page", "reference_choice_page_unavailable", cause);
     return { kind: "temporarily_unavailable" };
   }
 };

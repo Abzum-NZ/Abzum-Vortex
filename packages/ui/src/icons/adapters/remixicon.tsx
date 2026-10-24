@@ -50,6 +50,10 @@ import {
   RiEyeOffLine,
   RiFullscreenLine,
   RiFullscreenExitLine,
+  RiFilter3Line,
+  RiPencilLine,
+  RiArrowLeftDoubleLine,
+  RiArrowRightDoubleLine,
 } from "@remixicon/react";
 import type { ComponentType } from "react";
 
@@ -96,6 +100,10 @@ export const icons: VortexIconAdapter = {
   "contact-round": remixIcon(RiContactsBookLine),
   users: remixIcon(RiGroupLine),
   "sliders-horizontal": remixIcon(RiEqualizerLine),
+  filter: remixIcon(RiFilter3Line),
+  pencil: remixIcon(RiPencilLine),
+  "chevrons-left": remixIcon(RiArrowLeftDoubleLine),
+  "chevrons-right": remixIcon(RiArrowRightDoubleLine),
   "life-buoy": remixIcon(RiLifebuoyLine),
   "building-2": remixIcon(RiBuilding2Line),
   sitemap: remixIcon(RiOrganizationChart),
