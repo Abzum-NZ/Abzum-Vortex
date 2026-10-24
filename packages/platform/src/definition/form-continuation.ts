@@ -4,6 +4,7 @@ import {
   formContinuationOutcomeSchema,
   formContinuationRequestSchema,
   formContinuationStartRequestSchema,
+  logRefusal,
   safeFlowResultDescriptors,
   type FormContinuationInstallation,
   type FormContinuationOutcome,
@@ -149,7 +150,9 @@ export const createFormContinuationService = (
   /** Every response leaves through the contract schema; anything it rejects is refused, not sent. */
   const validated = (outcome: FormContinuationOutcome): FormContinuationOutcome => {
     const parsed = formContinuationOutcomeSchema.safeParse(outcome);
-    return parsed.success ? parsed.data : refuse("unavailable");
+    if (parsed.success) return parsed.data;
+    logRefusal("form-continuation", "validate outcome", "outcome_invalid", parsed.error);
+    return refuse("unavailable");
   };
 
   return Object.freeze({
@@ -186,7 +189,8 @@ export const createFormContinuationService = (
             resumed: false,
           }),
         );
-      } catch {
+      } catch (cause) {
+        logRefusal("form-continuation", "request", "request_failed", cause);
         return refuse("unavailable");
       }
     },
@@ -241,7 +245,8 @@ export const createFormContinuationService = (
             resumed: true,
           }),
         );
-      } catch {
+      } catch (cause) {
+        logRefusal("form-continuation", "continue", "continuation_failed", cause);
         return refuse("unavailable");
       }
     },

@@ -43,6 +43,7 @@ import {
   type DefinitionPublicationCatalogue,
 } from "./definition-publication-contracts";
 import { moduleDependencies } from "./module-dependencies";
+import { DefinitionError } from "./definition-error";
 
 type Requirement = Readonly<{ key: string; version: VersionRequirement }>;
 
@@ -209,8 +210,8 @@ const verifyParsedModuleRelease = (
       moduleOutputContractVersion(release.compilationOutput),
       publication.validationContractVersion,
     );
-  } catch {
-    return refuse("DEFINITION_DEPENDENCY_SUBSTITUTED");
+  } catch (cause) {
+    throw new DefinitionError("DEFINITION_DEPENDENCY_SUBSTITUTED", { cause });
   }
   const parsedResolution = definitionResolutionSnapshotSchema.safeParse(release.resolutionSnapshot);
   const ownResolution = parsedResolution.success
