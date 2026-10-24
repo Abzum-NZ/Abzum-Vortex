@@ -1,10 +1,9 @@
--- Platform ownership transfer removed postgres privileges from the publisher. Realtime's
--- send function is SECURITY INVOKER, so its owner needs both schema access and INSERT.
--- These grants belong to platform installation, not the local lane/bootstrap.
-grant usage on schema realtime to vortex_owner;
-grant execute on function realtime.send(jsonb, text, text, boolean) to vortex_owner;
-grant insert on table realtime.messages to vortex_owner;
-
+-- Platform ownership transfer moved the publisher from postgres to vortex_owner. realtime.send
+-- runs with its caller's privileges and inserts into realtime.messages, which
+-- supabase_realtime_admin owns: postgres may insert there but holds no grant option, so the
+-- privilege cannot follow the publisher to vortex_owner (such a grant only warns). Like the other
+-- integration functions, the publisher keeps postgres ownership; vortex_owner gains nothing in
+-- realtime.
 set local role vortex_owner;
 create or replace function vortex_platform.publish_change_notice(
   p_organization_id uuid,
@@ -121,8 +120,11 @@ comment on function vortex_platform.publish_change_notice(
 ) is
   'Protected post-commit broadcast of the bounded content-free invalidation envelope on the private topic for one organisation and application.';
 
-alter function vortex_platform.publish_change_notice(p_organization_id uuid, p_application_root_id uuid, p_record_type_id uuid, p_record_id uuid, p_record_version bigint, p_change_kind text, p_data_version bigint, p_sequence bigint, p_correlation_id uuid) owner to vortex_owner;
+reset role;
 
-grant execute on function vortex_platform.publish_change_notice(p_organization_id uuid, p_application_root_id uuid, p_record_type_id uuid, p_record_id uuid, p_record_version bigint, p_change_kind text, p_data_version bigint, p_sequence bigint, p_correlation_id uuid) to postgres;
+-- guard-allow: migration-owner-role realtime.messages privileges cannot be granted onward, so its postgres owner must take the publisher back.
+alter function vortex_platform.publish_change_notice(
+  uuid, uuid, uuid, uuid, bigint, text, bigint, bigint, uuid
+) owner to postgres;
 
 reset role;
