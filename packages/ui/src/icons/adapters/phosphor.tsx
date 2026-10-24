@@ -50,6 +50,10 @@ import {
   EyeSlashIcon,
   CornersOutIcon,
   CornersInIcon,
+  FunnelIcon,
+  PencilSimpleIcon,
+  CaretDoubleLeftIcon,
+  CaretDoubleRightIcon,
 } from "@phosphor-icons/react";
 import type { ComponentType } from "react";
 
@@ -96,6 +100,10 @@ export const icons: VortexIconAdapter = {
   "contact-round": phosphorIcon(AddressBookIcon),
   users: phosphorIcon(UsersIcon),
   "sliders-horizontal": phosphorIcon(SlidersHorizontalIcon),
+  filter: phosphorIcon(FunnelIcon),
+  pencil: phosphorIcon(PencilSimpleIcon),
+  "chevrons-left": phosphorIcon(CaretDoubleLeftIcon),
+  "chevrons-right": phosphorIcon(CaretDoubleRightIcon),
   "life-buoy": phosphorIcon(LifebuoyIcon),
   "building-2": phosphorIcon(BuildingsIcon),
   sitemap: phosphorIcon(TreeStructureIcon),

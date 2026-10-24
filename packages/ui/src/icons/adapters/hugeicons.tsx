@@ -48,6 +48,10 @@ import {
   ViewOffIcon,
   Maximize01Icon,
   Minimize01Icon,
+  FilterIcon,
+  PencilEdit01Icon,
+  ArrowLeftDoubleIcon,
+  ArrowRightDoubleIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react";
 import type { ComponentType } from "react";
@@ -99,6 +103,10 @@ export const icons: VortexIconAdapter = {
   "contact-round": hugeicon(Contact01Icon),
   users: hugeicon(UserGroupIcon),
   "sliders-horizontal": hugeicon(SlidersHorizontalIcon),
+  filter: hugeicon(FilterIcon),
+  pencil: hugeicon(PencilEdit01Icon),
+  "chevrons-left": hugeicon(ArrowLeftDoubleIcon),
+  "chevrons-right": hugeicon(ArrowRightDoubleIcon),
   "life-buoy": hugeicon(LifebuoyIcon),
   "building-2": hugeicon(Building02Icon),
   sitemap: hugeicon(HierarchySquare01Icon),

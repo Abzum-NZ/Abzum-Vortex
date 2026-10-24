@@ -50,6 +50,10 @@ import {
   IconEyeOff,
   IconMaximize,
   IconMinimize,
+  IconFilter,
+  IconPencil,
+  IconChevronsLeft,
+  IconChevronsRight,
 } from "@tabler/icons-react";
 import type { ComponentType } from "react";
 
@@ -96,6 +100,10 @@ export const icons: VortexIconAdapter = {
   "contact-round": tablerIcon(IconAddressBook),
   users: tablerIcon(IconUsers),
   "sliders-horizontal": tablerIcon(IconAdjustmentsHorizontal),
+  filter: tablerIcon(IconFilter),
+  pencil: tablerIcon(IconPencil),
+  "chevrons-left": tablerIcon(IconChevronsLeft),
+  "chevrons-right": tablerIcon(IconChevronsRight),
   "life-buoy": tablerIcon(IconLifebuoy),
   "building-2": tablerIcon(IconBuilding),
   sitemap: tablerIcon(IconSitemap),
