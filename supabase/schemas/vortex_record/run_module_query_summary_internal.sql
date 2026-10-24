@@ -134,6 +134,11 @@ begin
   resolved := prepared_plan -> 'resolved';
   query_item := prepared_plan -> 'query';
   record_type_item := prepared_plan -> 'recordType';
+  if record_type_item ? 'systemProjection' then
+    -- A protected reader supplies bounded pages, not an unbounded relation
+    -- for aggregate scans.
+    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
+  end if;
   record_type_id_value := (prepared_plan ->> 'recordTypeId')::uuid;
   context_organization_id := (prepared_plan #>> '{scope,organizationId}')::uuid;
   context_application_root_id := (prepared_plan #>> '{scope,applicationRootId}')::uuid;

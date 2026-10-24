@@ -25,7 +25,7 @@ declare
   scan_sql text;
   predicate_plan jsonb;
 begin
-  if p_sort_key not in ('record_id', 'starts_at', 'expires_at', 'state', 'account_display_name')
+  if p_sort_key not in ('record_id', 'starts_at', 'expires_at', 'state')
     or p_sort_key is null or p_direction not in ('ascending', 'descending')
     or p_direction is null or (p_limit is not null and p_limit < 1)
     or (p_sort_key <> 'record_id' and p_limit is null) then
@@ -35,30 +35,21 @@ begin
     when 'starts_at' then 'membership.starts_at'
     when 'expires_at' then 'membership.expires_at'
     when 'state' then 'membership.state'
-    when 'account_display_name' then 'account.display_name'
     else 'membership.membership_id' end;
   sort_kind := case p_sort_key
     when 'starts_at' then 'time'
     when 'expires_at' then 'nullable_time'
     when 'state' then 'text'
-    when 'account_display_name' then 'nullable_text'
     else 'id' end;
   direction_sql := case when p_direction = 'ascending' then 'asc' else 'desc' end;
-  if sort_kind = 'nullable_text' then
-    -- A stored release can still request a sort dropped from current publishable definitions.
-    candidate_joins := $joins$join vortex_identity.organization_accounts as account
-      on account.organization_id = membership.organization_id
-      and account.organization_account_id = membership.organization_account_id$joins$;
-  end if;
-  if sort_kind in ('nullable_time', 'nullable_text') then
-    sort_expression := sort_column || case when sort_kind = 'nullable_text' then ' collate "C"' else '' end;
+  if sort_kind = 'nullable_time' then
+    sort_expression := sort_column;
     order_sql := pg_catalog.format('%s %s nulls %s, membership.membership_id %s',
       sort_expression, direction_sql,
       case when p_direction = 'ascending' then 'first' else 'last' end, direction_sql);
-    outer_order_sql := pg_catalog.format('candidate.sort_value%s %s nulls %s, candidate.record_id %s',
-      case when sort_kind = 'nullable_text' then ' collate "C"' else '' end,
+    outer_order_sql := pg_catalog.format('candidate.sort_value %s nulls %s, candidate.record_id %s',
       direction_sql, case when p_direction = 'ascending' then 'first' else 'last' end, direction_sql);
-  elsif sort_kind in ('text', 'legacy_text') then
+  elsif sort_kind = 'text' then
     sort_expression := sort_column || ' collate "C"';
     order_sql := pg_catalog.format('%s %s, membership.membership_id %s', sort_expression, direction_sql, direction_sql);
     outer_order_sql := pg_catalog.format('candidate.sort_value collate "C" %s, candidate.record_id %s',
@@ -77,7 +68,7 @@ begin
         pg_catalog.jsonb_typeof(p_after -> 'sortKey') is distinct from 'array'
         or pg_catalog.jsonb_array_length(p_after -> 'sortKey') is distinct from 1
         or (pg_catalog.jsonb_typeof(p_after -> 'sortKey' -> 0) is distinct from 'string'
-          and (sort_kind not in ('nullable_time', 'nullable_text')
+          and (sort_kind <> 'nullable_time'
             or pg_catalog.jsonb_typeof(p_after -> 'sortKey' -> 0) is distinct from 'null'))
       )) then
       raise exception using errcode = '22023', message = 'Membership projection cursor is invalid';
@@ -94,10 +85,10 @@ begin
     if sort_kind = 'id' then
       keyset_sql := pg_catalog.format(' and membership.membership_id %s $4',
         case when p_direction = 'ascending' then '>' else '<' end);
-    elsif sort_kind in ('text', 'legacy_text') then
+    elsif sort_kind = 'text' then
       keyset_sql := pg_catalog.format(' and (%s, membership.membership_id) %s ($3 collate "C", $4)',
         sort_expression, case when p_direction = 'ascending' then '>' else '<' end);
-    elsif sort_kind in ('nullable_time', 'nullable_text') then
+    elsif sort_kind = 'nullable_time' then
       keyset_sql := pg_catalog.format(case when p_direction = 'ascending' then
         ' and ((%1$s is null and (%2$s is not null or (%2$s is null and membership.membership_id > $4)))'
           || ' or (%1$s is not null and (%2$s, membership.membership_id) > (%3$s, $4)))'
@@ -105,9 +96,9 @@ begin
         ' and ((%1$s is null and %2$s is null and membership.membership_id < $4)'
           || ' or (%1$s is not null and (%2$s is null or (%2$s, membership.membership_id) < (%3$s, $4))))'
         end,
-        case when sort_kind = 'nullable_time' then '$5' else '$3' end,
+        '$5',
         sort_expression,
-        case when sort_kind = 'nullable_time' then '$5' else '$3 collate "C"' end);
+        '$5');
     else
       keyset_sql := pg_catalog.format(' and (%s, membership.membership_id) %s ($5, $4)',
         sort_expression, case when p_direction = 'ascending' then '>' else '<' end);
