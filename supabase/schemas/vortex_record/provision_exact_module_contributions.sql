@@ -43,10 +43,6 @@ declare
   sql_type text;
   is_projection boolean;
   protected_view_key text;
-  reader_schema_value text;
-  reader_function_value text;
-  view_oid oid;
-  reader_function_oid oid;
   contribution_ids uuid[] := array[]::uuid[];
   any_change boolean := false;
 begin
@@ -295,106 +291,6 @@ begin
       raise exception using errcode = '55000',
         message = 'Target record storage lineage is incompatible';
     end if;
-    select registered.reader_schema, registered.reader_function
-    into reader_schema_value, reader_function_value
-    from vortex_record.protected_read_model_views as registered
-    where registered.protected_read_model_key = protected_view_key;
-    if not found then
-      raise exception using errcode = '55000',
-        message = 'Protected projection view is unavailable';
-    end if;
-    view_oid := pg_catalog.to_regclass(pg_catalog.format(
-      '%I.%I', 'record_data', stored_catalogue.physical_table_token
-    ))::oid;
-    reader_function_oid := pg_catalog.to_regprocedure(pg_catalog.format(
-      '%I.%I(uuid[],text,text,jsonb,integer,jsonb)', reader_schema_value, reader_function_value
-    ))::oid;
-    if view_oid is null
-      or reader_function_oid is null
-      or not exists (
-        select 1
-        from pg_catalog.pg_class as relation
-        where relation.oid = view_oid
-          and relation.relkind = 'v'
-          and relation.relowner = 'vortex_owner'::regrole
-      )
-      or exists (
-        select 1 from pg_catalog.pg_trigger as trigger
-        where trigger.tgrelid = view_oid and not trigger.tgisinternal
-      )
-      or exists (
-        select 1 from pg_catalog.pg_rewrite as rule
-        where rule.ev_class = view_oid and rule.rulename <> '_RETURN'
-      )
-      or not exists (
-        select 1
-        from pg_catalog.pg_rewrite as rule
-        join pg_catalog.pg_depend as dependency
-          on dependency.classid = 'pg_rewrite'::regclass
-          and dependency.objid = rule.oid
-          and dependency.refclassid = 'pg_proc'::regclass
-          and dependency.refobjid = reader_function_oid
-        where rule.ev_class = view_oid and rule.rulename = '_RETURN'
-      )
-      or not exists (
-        select 1 from pg_catalog.pg_attribute as attribute
-        where attribute.attrelid = view_oid
-          and attribute.attname = 'record_id'
-          and attribute.attnum > 0 and not attribute.attisdropped
-      )
-      or not exists (
-        select 1 from pg_catalog.pg_attribute as attribute
-        where attribute.attrelid = view_oid
-          and attribute.attname = 'organisation_id'
-          and attribute.attnum > 0 and not attribute.attisdropped
-      )
-      or exists (
-        select 1
-        from pg_catalog.jsonb_array_elements(target_record_type -> 'fields') as field_item(value)
-        where not exists (
-          select 1 from pg_catalog.pg_attribute as attribute
-          where attribute.attrelid = view_oid
-            and attribute.attname = 'f_' || pg_catalog.replace(
-              pg_catalog.lower(field_item.value ->> 'fieldId'), '-', ''
-            )
-            and attribute.attnum > 0 and not attribute.attisdropped
-        )
-      )
-      or (
-        select pg_catalog.count(*)
-        from pg_catalog.pg_class as relation
-        cross join lateral pg_catalog.aclexplode(coalesce(
-          relation.relacl, pg_catalog.acldefault('r', relation.relowner)
-        )) as privilege
-        where relation.oid = view_oid
-          and privilege.grantee = 'vortex_record_adapter'::regrole::oid
-          and privilege.privilege_type = 'SELECT'
-          and not privilege.is_grantable
-      ) <> 1
-      or exists (
-        select 1
-        from pg_catalog.pg_class as relation
-        cross join lateral pg_catalog.aclexplode(coalesce(
-          relation.relacl, pg_catalog.acldefault('r', relation.relowner)
-        )) as privilege
-        where relation.oid = view_oid
-          and (privilege.grantee not in (
-              'vortex_owner'::regrole::oid,
-              'vortex_record_adapter'::regrole::oid
-            )
-            or (privilege.grantee = 'vortex_record_adapter'::regrole::oid
-              and privilege.privilege_type <> 'SELECT')
-            or (privilege.grantee = 'vortex_record_adapter'::regrole::oid
-              and privilege.is_grantable))
-      )
-      or exists (
-        select 1 from pg_catalog.pg_attribute as attribute
-        where attribute.attrelid = view_oid and attribute.attacl is not null
-      ) then
-      raise exception using errcode = '55000',
-        message = 'Protected projection view lineage is incompatible';
-    end if;
-
     perform vortex_record.create_system_projection_companion_storage_internal(
       storage_id, target_module_root_id, target_record_type_id,
       p_module_root_id, source_field, true
