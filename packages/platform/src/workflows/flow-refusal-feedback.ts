@@ -13,6 +13,8 @@ export const flowRefusalFeedbackCodeSchema = z.enum([
   "recent_authentication_required",
   "role_settings_change_required",
   "application_storage_incompatible",
+  "application_not_installed",
+  "application_not_newer",
   "applications_manage_required",
   "installation_delegation_required",
   "assignments_manage_required",
@@ -27,6 +29,8 @@ type FlowRefusalFeedbackCode = z.infer<typeof flowRefusalFeedbackCodeSchema>;
 const platformGuidanceCodes: ReadonlySet<string> = new Set<FlowRefusalFeedbackCode>([
   "recent_authentication_required",
   "application_storage_incompatible",
+  "application_not_installed",
+  "application_not_newer",
   "applications_manage_required",
   "installation_delegation_required",
   "assignments_manage_required",

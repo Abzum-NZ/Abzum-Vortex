@@ -36,12 +36,12 @@ export type PlacementFlowBinding = Readonly<{
   }>[];
 }>;
 
-export type ApplicationPageModel = Readonly<{
+/** What a read of selected placements returns: the page without the menu and the page tools. */
+export type PlacementReadModel = Readonly<{
   page: Readonly<Record<string, unknown>>;
   pageId: string;
   pageName: string;
   theme: InstalledRuntimeContext["releaseSet"]["application"]["content"]["theme"];
-  navigation: ProjectedNavigation;
   /** Structural body visibility only; absence on guided pages preserves their active-step UI. */
   bodyContentAvailable?: boolean;
   /**
@@ -51,8 +51,6 @@ export type ApplicationPageModel = Readonly<{
   firstRecordTypeHref?: string;
   /** Current Access revision used to re-register page tools after a permission change. */
   accessVersion: number;
-  /** Permission-filtered tools that map to one usable control on this page. */
-  webMcpTools: readonly PageWebMcpTool[];
   /** Ready display data per data placement, by stable placement identity. */
   data: Readonly<Record<string, PageDataState>>;
   /**
@@ -139,6 +137,13 @@ export type ApplicationPageModel = Readonly<{
   }>;
 }>;
 
+export type ApplicationPageModel = PlacementReadModel &
+  Readonly<{
+    navigation: ProjectedNavigation;
+    /** Permission-filtered tools that map to one usable control on this page. */
+    webMcpTools: readonly PageWebMcpTool[];
+  }>;
+
 export type PageLoadOptions = Readonly<{
   /** Send the page before the placements that only show their own query's rows have read. */
   streamPlacementReads?: boolean;
@@ -168,7 +173,14 @@ export type ApplicationPagePlacementReadResult =
   | Readonly<{ kind: "unavailable" }>
   | Readonly<{ kind: "temporarily_unavailable" }>;
 
-export type ApplicationPageInternalResult = ApplicationPageResult | Readonly<{ kind: "reload" }>;
+export type ApplicationPageInternalResult =
+  | ApplicationPageResult
+  | Readonly<{
+      kind: "placements";
+      model: PlacementReadModel;
+      applicationShell?: ApplicationShell;
+    }>
+  | Readonly<{ kind: "reload" }>;
 
 export type ApplicationPageLoaderAddress = Readonly<{
   tenantShortName: string;

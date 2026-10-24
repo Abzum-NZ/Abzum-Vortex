@@ -1,4 +1,4 @@
-import { sameId, splitProjectedPage } from "@vortex/platform/schema";
+import { logRefusal, sameId, splitProjectedPage } from "@vortex/platform/schema";
 import "server-only";
 
 import {
@@ -70,7 +70,8 @@ export const loadProjectedReferenceChoiceForm = async (
           request.formId,
         )
       : undefined;
-  } catch {
+  } catch (cause) {
+    logRefusal("reference-choices", "project form", "reference_choice_form_unavailable", cause);
     return undefined;
   }
 };
@@ -163,7 +164,8 @@ export const loadReferenceChoicePage = async (
           : { optionEvidenceOverrides: selectedEvidenceOverride }),
       }),
     };
-  } catch {
+  } catch (cause) {
+    logRefusal("reference-choices", "choice page", "reference_choice_page_unavailable", cause);
     return { kind: "temporarily_unavailable" };
   }
 };
@@ -183,7 +185,10 @@ export const loadApplicationPage = (
     undefined,
     undefined,
     options,
-  ).then((result) => (result.kind === "reload" ? { kind: "unavailable" } : result));
+  ).then((result) => {
+    if (result.kind === "placements") throw new Error("PLACEMENT_READ_FOR_WHOLE_PAGE");
+    return result.kind === "reload" ? { kind: "unavailable" } : result;
+  });
 
 /** Loads only the requested placements through the same protected page, Query and Record reads. */
 export const loadApplicationPagePlacements = async (
@@ -215,7 +220,10 @@ export const loadApplicationPagePlacements = async (
     tableContinuation,
   );
   if (loaded.kind === "reload") return loaded;
-  if (loaded.kind !== "available") return loaded;
+  if (loaded.kind !== "placements") {
+    if (loaded.kind === "available") throw new Error("WHOLE_PAGE_READ_FOR_PLACEMENTS");
+    return loaded;
+  }
 
   const loadedData = Object.entries(loaded.model.data);
   const loadedBaselines = Object.entries(loaded.model.editFormBaselines);

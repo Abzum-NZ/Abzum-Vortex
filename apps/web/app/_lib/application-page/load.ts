@@ -46,6 +46,7 @@ import type {
   PageDataState,
   PlacementFlowBinding,
   ApplicationPageModel,
+  PlacementReadModel,
   PageLoadOptions,
 } from "./types";
 import {
@@ -128,9 +129,10 @@ export const loadInstalledContext = (
  * The viewer's projection of one page and of the application menu, read once per server render:
  * the application frame layout and the page of one request share them instead of deciding the same
  * access twice. The next request reads again, so no access decision outlives its request. React's
- * `cache` keys on the number of arguments as well as their values, so every caller passes all five
- * (the selected placements are required, `undefined` for a whole page): a call with fewer would
- * miss the shared read and project the page and the menu a second time.
+ * `cache` keys on the number of arguments as well as their values, so every caller passes all six
+ * (the selected placements are required, `undefined` for a whole page; `navigation` says whether
+ * the caller shows the menu): a call with fewer would miss the shared read and project the page and
+ * the menu a second time.
  */
 export const readPageProjections = cache(
   (
@@ -139,6 +141,7 @@ export const readPageProjections = cache(
     pageId: string,
     subjectRecordId: string | undefined,
     selectedPlacementIds: ReadonlySet<string> | undefined,
+    navigation: boolean,
   ) => {
     const dependencies = requestDependencies();
     const selection: OrganizationSelectionCandidate = runtimeContextSelection(context);
@@ -181,22 +184,27 @@ export const readPageProjections = cache(
         } as const;
       return projected;
     });
-    const navigationRead = subjectReady.then((ready) =>
-      ready.kind === "ready"
-        ? createStoredNavigationProjectionService({
-            ...dependencies,
-            context,
-            permissions: platformPermissionSource,
-          }).project(session, selection)
-        : ({
-            kind:
-              ready.kind === "temporarily_unavailable" ? "temporarily_unavailable" : "unavailable",
-          } as const),
-    );
+    // A read of selected placements shows no menu, so it projects none.
+    const navigationRead = navigation
+      ? subjectReady.then((ready) =>
+          ready.kind === "ready"
+            ? createStoredNavigationProjectionService({
+                ...dependencies,
+                context,
+                permissions: platformPermissionSource,
+              }).project(session, selection)
+            : ({
+                kind:
+                  ready.kind === "temporarily_unavailable"
+                    ? "temporarily_unavailable"
+                    : "unavailable",
+              } as const),
+        )
+      : undefined;
     // A failure is rethrown where its result is consulted, never left unobserved meanwhile, and
     // every reader joins both reads before it returns on any path (early returns included).
     void projectedPageRead.catch(() => undefined);
-    void navigationRead.catch(() => undefined);
+    void navigationRead?.catch(() => undefined);
     return { projectedPageRead, navigationRead };
   },
 );
@@ -319,8 +327,10 @@ const loadApplicationPageJoined = async (
     pageDefinition.pageId,
     conditionSubjectId,
     selectedPlacementIds,
+    selectedPlacementIds === undefined,
   );
-  startedReads.push(projectedPageRead, navigationRead);
+  startedReads.push(projectedPageRead);
+  if (navigationRead !== undefined) startedReads.push(navigationRead);
   const adoptionTarget = await adoptionRead;
   const projectedPage = await projectedPageRead;
   if (projectedPage.kind !== "available") return projectedPage;
@@ -392,27 +402,35 @@ const loadApplicationPageJoined = async (
   const choicePlan = planChoiceOptionGates(allPlacements, context);
   if (choicePlan === undefined) return { kind: "temporarily_unavailable" };
 
+  // The page subject: the one record the page's own address names, of the page's declared record
+  // type, read once through the record read path under the viewer's own authority. Nothing here
+  // comes from the browser except the id.
+  const subjectType = pageSubjectType(pageDefinition);
+  const subjectId = recordIdSchema.safeParse(first(parameters[pageSubjectParameter]));
+
   let dateTimeZones: DateTimeZones = {};
-  let allowedPermissions = new Set<string>();
+  let allowedPermissions: ReadonlySet<string> = new Set();
   if (needsDateTimeZones || choicePlan.permissions.size > 0) {
     const authorized = await readFieldAccess({
       session,
       dependencies,
       selection,
-      applicationRootId: context.applicationRootId,
       needsDateTimeZones,
       choicePlan,
+      choiceSubject:
+        subjectType !== undefined && subjectId.success
+          ? { recordTypeId: String(subjectType.recordTypeId), recordId: subjectId.data }
+          : undefined,
     });
     if (authorized.kind !== "available") return authorized;
     if (page.accessVersion !== authorized.value.accessVersion)
       return { kind: "temporarily_unavailable" };
     dateTimeZones = authorized.value.zones;
-    allowedPermissions = new Set(authorized.value.allowed);
+    allowedPermissions = authorized.value.allowed;
   }
-  applyChoiceOptionGates(choicePlan, allowedPermissions);
 
-  const navigation = await navigationRead;
-  if (navigation.kind !== "available") return navigation;
+  const navigation = navigationRead === undefined ? undefined : await navigationRead;
+  if (navigation !== undefined && navigation.kind !== "available") return navigation;
 
   const services = createPlacementReadServices({
     session,
@@ -424,11 +442,6 @@ const loadApplicationPageJoined = async (
   });
   const { referenceChoices, subjects, readConcurrently } = services;
 
-  // The page subject: the one record the page's own address names, of the page's declared record
-  // type, read once through the record read path under the viewer's own authority. Nothing here
-  // comes from the browser except the id.
-  const subjectType = pageSubjectType(pageDefinition);
-  const subjectId = recordIdSchema.safeParse(first(parameters[pageSubjectParameter]));
   if (
     pageDefinition.type === "guided_form" &&
     first(parameters[pageSubjectParameter]) !== undefined &&
@@ -526,6 +539,35 @@ const loadApplicationPageJoined = async (
   if (formPolicy.kind === "refused") return formPolicy.result;
   const { editFormPlacementIds, formRecordType, createFormIds, refusedForms } = formPolicy;
   allPlacements = formPolicy.allPlacements;
+  // The gated options leave the page payload the form renders, after the subject is known: an option
+  // the record already holds stays offered, so a restricted viewer keeps the field and its value.
+  // A pipeline's stage field keeps only the stages its record may move to.
+  if (
+    choicePlan.permissions.size > 0 ||
+    choicePlan.gates.some((gate) => gate.pipeline !== undefined)
+  ) {
+    const heldSubject =
+      subjectType !== undefined &&
+      subjectId.success &&
+      pageDefinition.type !== "public" &&
+      choicePlan.gates.some((gate) => sameId(gate.recordTypeId, String(subjectType.recordTypeId)))
+        ? await readSubject(String(subjectType.recordTypeId), subjectId.data)
+        : undefined;
+    applyChoiceOptionGates(choicePlan, allowedPermissions, (gate) => {
+      if (heldSubject?.kind !== "read") return new Set();
+      const held = Object.entries(heldSubject.row.values).find(([key]) =>
+        sameId(key, gate.fieldId),
+      )?.[1];
+      return new Set(
+        typeof held === "string"
+          ? [held]
+          : Array.isArray(held)
+            ? held.filter((value): value is string => typeof value === "string")
+            : [],
+      );
+    });
+    allPlacements = collectPlacements(page);
+  }
   // A form baseline is valid only when every shown field was projected. A selected field also
   // needs its owning form's subject read, even though only the requested field is returned.
   const selectedForProjection =
@@ -858,28 +900,14 @@ const loadApplicationPageJoined = async (
     throw new Error(
       `Compiled page '${pageDefinition.key}' references missing shell '${applicationShellId}'`,
     );
-  const model: ApplicationPageModel = {
+  const model: PlacementReadModel = {
     page,
     pageId: pageDefinition.pageId,
     pageName: pageDefinition.name,
     theme: application.content.theme,
-    navigation: navigation.value,
     ...(bodyContentAvailable === undefined ? {} : { bodyContentAvailable }),
     ...(firstRecordTypeHref === undefined ? {} : { firstRecordTypeHref }),
     accessVersion: page.accessVersion,
-    webMcpTools: projectPageWebMcpTools({
-      page,
-      ...(guidedForm === undefined ? {} : { activeStepId: guidedForm.activeStepId }),
-      bindings,
-      applicationBindings: application.content.flowBindings,
-      toolBundle: application.toolBundle,
-      applicationRootId: String(application.rootId),
-      applicationKey: address.application.key,
-      permittedApplications: address.read.applications.map((candidate) => ({
-        applicationRootId: candidate.applicationRootId,
-        key: candidate.key,
-      })),
-    }),
     data,
     ...(streamed.length === 0 ? {} : { streamedData }),
     tableAddress: Object.fromEntries(
@@ -942,9 +970,31 @@ const loadApplicationPageJoined = async (
       ].join(":"),
     },
   };
+  if (navigation === undefined)
+    return {
+      kind: "placements",
+      model,
+      ...(applicationShell === undefined ? {} : { applicationShell }),
+    };
   return {
     kind: "available",
-    model,
+    model: {
+      ...model,
+      navigation: navigation.value,
+      webMcpTools: projectPageWebMcpTools({
+        page,
+        ...(guidedForm === undefined ? {} : { activeStepId: guidedForm.activeStepId }),
+        bindings,
+        applicationBindings: application.content.flowBindings,
+        toolBundle: application.toolBundle,
+        applicationRootId: String(application.rootId),
+        applicationKey: address.application.key,
+        permittedApplications: address.read.applications.map((candidate) => ({
+          applicationRootId: candidate.applicationRootId,
+          key: candidate.key,
+        })),
+      }),
+    },
     shells: application.content.shells,
     ...(applicationShell === undefined ? {} : { applicationShell }),
   };

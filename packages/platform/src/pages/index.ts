@@ -1,11 +1,5 @@
 import "server-only";
 export {
-  projectRowActionAvailability,
-  rowActionInstallationOf,
-  type RowActionInstallation,
-} from "./records-table-features/row-actions";
-
-export {
   readRecordsTableNamedActionAvailability,
   projectNamedActionAvailability,
 } from "./records-table-features/named-action-availability";
@@ -55,7 +49,7 @@ export {
 } from "./projected-placement-gate";
 export {
   applyChoiceOptionGates,
-  choiceOptionAccessDeclarations,
+  decideChoiceOptionGates,
   fieldControl,
   fieldForPlacement,
   formFieldOf,
@@ -63,6 +57,7 @@ export {
   projectEditField,
   type ChoiceOptionPlan,
   type DateTimeZones,
+  type HeldChoiceOptions,
 } from "./field-placement";
 export {
   isTablePlacement,
@@ -146,10 +141,7 @@ export {
   createRecordsTableExportService,
   type RecordsTableExportDependencies,
 } from "./records-table-features/export";
-export {
-  decideRecordTypeExport,
-  decideRecordTypeCreatableFieldIds,
-} from "./records-table-features/record-type-access";
+export { decideRecordTypeCreatableFieldIds } from "./records-table-features/record-type-access";
 export {
   readNamedActionEligibility,
   type NamedActionEligibilityTarget,

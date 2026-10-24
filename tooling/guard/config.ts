@@ -123,6 +123,13 @@ export const guardRules = {
     reviewNote: "Reconsider once #2235 splits the two remaining files",
     description: "Source and canonical SQL files over 1,500 lines",
   },
+  "silent-catch": {
+    tier: "warning",
+    owner: "lead",
+    reviewBy: "2027-01-15",
+    description:
+      "A catch in platform services or web server helpers that swallows its cause without logging or rethrowing",
+  },
   "definition-validation": {
     tier: "blocking",
     owner: "lead",
@@ -181,6 +188,7 @@ export const scannedRuleIds = new Set([
   "versioned-export",
   "versioned-file",
   "file-size",
+  "silent-catch",
   "ui-literal-style",
   "definition-validation",
   "derived-id-parity",

@@ -64,12 +64,13 @@ export const loadApplicationPivot = async (
   if (pageDefinition === undefined) return { kind: "unavailable" };
 
   const subjectId = first(parameters[pageSubjectParameter]);
-  const { projectedPageRead, navigationRead } = readPageProjections(
+  const { projectedPageRead } = readPageProjections(
     session,
     context,
     pageDefinition.pageId,
     subjectId,
     undefined,
+    false,
   );
   try {
     const projectedPage = await projectedPageRead;
@@ -120,6 +121,6 @@ export const loadApplicationPivot = async (
     });
     return { kind: "available", pivot };
   } finally {
-    await Promise.allSettled([projectedPageRead, navigationRead]);
+    await Promise.allSettled([projectedPageRead]);
   }
 };

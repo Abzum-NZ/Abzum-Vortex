@@ -43,6 +43,8 @@ import {
 } from "./relationship-total-save";
 import { calculateAndFinalize, operationClock } from "./field-candidate";
 import { firstFieldDependencyRefusal } from "./link-dependencies";
+import { decideChoiceOptionPermission } from "./choice-option-permission";
+import type { RecordFieldValuePendingCheck } from "./field-values";
 import {
   parentCycleRefusal,
   uniqueValueRefusal,
@@ -192,21 +194,20 @@ const parsePreparation = (candidate: unknown): PreparationOutcome => {
   );
   if (readableFieldIds.some((fieldId) => !fieldId.success))
     throw contractError("RECORD_SAVE_PREPARATION_INVALID", "invalid readableFieldIds");
-  let existingValues = value.existingValues as Readonly<Record<string, unknown>>;
-  if (recordType.data.systemProjection === undefined) {
-    // Unset optional SQL columns are absent from the ordinary field candidate.
-    const ordinaryValues = { ...existingValues };
-    for (const field of recordType.data.fields) {
-      if (
-        !field.required &&
-        field.type !== "reference_number" &&
-        field.type !== "calculation" &&
-        field.type !== "total" &&
-        ordinaryValues[field.fieldId] === null
-      )
-        delete ordinaryValues[field.fieldId];
-    }
-    existingValues = ordinaryValues;
+  // An unset optional value is absent from the field candidate, whether it is an ordinary SQL
+  // column or a value a system projection (organisation settings) has not stored yet.
+  const existingValues: Record<string, unknown> = {
+    ...(value.existingValues as Readonly<Record<string, unknown>>),
+  };
+  for (const field of recordType.data.fields) {
+    if (
+      !field.required &&
+      field.type !== "reference_number" &&
+      field.type !== "calculation" &&
+      field.type !== "total" &&
+      existingValues[field.fieldId] === null
+    )
+      delete existingValues[field.fieldId];
   }
   return {
     outcome: "prepared",
@@ -624,11 +625,20 @@ const invalidSettingsCorrections = (
     }
   }
 
+  // An unset default application is absent from the candidate, like every unset optional value.
+  const defaultApplicationFieldId = settingsFieldId(
+    prepared.recordType,
+    "default_application_root_id",
+  );
   const defaultApplication = applicationRootIdSchema
     .nullable()
-    .safeParse(valueFor("default_application_root_id"));
+    .safeParse(
+      defaultApplicationFieldId === undefined
+        ? undefined
+        : (values[defaultApplicationFieldId] ?? null),
+    );
   if (!defaultApplication.success) {
-    const fieldId = settingsFieldId(prepared.recordType, "default_application_root_id");
+    const fieldId = defaultApplicationFieldId;
     if (fieldId === undefined || !prepared.readableFieldIds.has(fieldId)) return undefined;
     corrections.set(fieldId, {
       code: "invalid_value",
@@ -796,12 +806,38 @@ const finalizeCalculatedValues = async (
     });
   }
 
-  const unsupportedChecks = values.pendingChecks.filter(
-    (check) =>
-      check.kind !== "record_reference" &&
-      check.kind !== "file_reference" &&
-      !(preview && check.kind === "choice_permission"),
-  );
+  // A gated option is stored only when the person may use it on this record now (the decision that
+  // offered it). An option the record already holds is not chosen again, so it is not re-checked.
+  const choiceDecisions = new Map<string, boolean>();
+  const refusedChoices: RecordFieldValuePendingCheck[] = [];
+  if (!preview)
+    for (const check of values.pendingChecks) {
+      if (check.kind !== "choice_permission") continue;
+      const held = prepared.existingValues[check.fieldId];
+      if (held === check.optionValue || (Array.isArray(held) && held.includes(check.optionValue)))
+        continue;
+      const decisionKey = String(check.permissionId).toLowerCase();
+      let allowed = choiceDecisions.get(decisionKey);
+      if (allowed === undefined) {
+        allowed = await decideChoiceOptionPermission(
+          transaction,
+          prepared.recordType.recordTypeId,
+          check.permissionId,
+          command.operation === "update" ? command.recordId : undefined,
+        );
+        choiceDecisions.set(decisionKey, allowed);
+      }
+      if (!allowed) refusedChoices.push(check);
+    }
+  const unsupportedChecks = [
+    ...values.pendingChecks.filter(
+      (check) =>
+        check.kind !== "record_reference" &&
+        check.kind !== "file_reference" &&
+        check.kind !== "choice_permission",
+    ),
+    ...refusedChoices,
+  ];
   if (unsupportedChecks.length > 0) {
     if (unsupportedChecks.some((check) => !prepared.readableFieldIds.has(check.fieldId)))
       return safeRefusal(prepared.correlationId, "operation_refused");

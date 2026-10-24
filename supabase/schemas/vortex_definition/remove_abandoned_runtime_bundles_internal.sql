@@ -34,7 +34,7 @@ begin
       where binding.organization_id = bundle.organization_id
         and binding.application_root_id = bundle.application_root_id
         and binding.application_release_revision = bundle.application_release_revision
-        and binding.state in ('active', 'draining')
+        and binding.state = 'active'
     )
       and (
         exists (
@@ -43,7 +43,7 @@ begin
           where later_binding.organization_id = bundle.organization_id
             and later_binding.application_root_id = bundle.application_root_id
             and later_binding.application_release_revision > bundle.application_release_revision
-            and later_binding.state in ('active', 'draining')
+            and later_binding.state = 'active'
         )
         or (
           bundle.built_at <= pg_catalog.statement_timestamp() - abandoned_bundle_ttl
@@ -85,7 +85,7 @@ begin
       where binding.organization_id = bundle_row.organization_id
         and binding.application_root_id = bundle_row.application_root_id
         and binding.application_release_revision = bundle_row.application_release_revision
-        and binding.state in ('active', 'draining')
+        and binding.state = 'active'
     ) then
       continue;
     end if;
@@ -96,7 +96,7 @@ begin
         where later_binding.organization_id = bundle_row.organization_id
           and later_binding.application_root_id = bundle_row.application_root_id
           and later_binding.application_release_revision > bundle_row.application_release_revision
-          and later_binding.state in ('active', 'draining')
+          and later_binding.state = 'active'
       ) and (
         bundle_row.built_at > pg_catalog.statement_timestamp() - abandoned_bundle_ttl
         or exists (
@@ -162,7 +162,7 @@ begin
         where binding.organization_id = candidate.organization_id
           and binding.application_root_id = candidate.application_root_id
           and binding.application_release_revision = candidate.application_release_revision
-          and binding.state in ('active', 'draining')
+          and binding.state = 'active'
       )
     order by candidate.plan_key
     limit p_limit
@@ -188,7 +188,7 @@ begin
         where binding.organization_id = candidate.organization_id
           and binding.application_root_id = candidate.application_root_id
           and binding.application_release_revision = candidate.application_release_revision
-          and binding.state in ('active', 'draining')
+          and binding.state = 'active'
       )
     order by candidate.plan_key
     limit p_limit

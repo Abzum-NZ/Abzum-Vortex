@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactElement } from "react";
 import { Button } from "../../components/button";
+import { Icon } from "../../icons/icon";
 import { gridOwnsEvent, useBatchEdit } from "./batch-edit-client";
 import type { GridFeatureInteractionProps } from "./registry";
 import type { DisplayBatchEditAnswer } from "../projected-data";
@@ -81,8 +82,10 @@ export default function Undo({ context, surface }: GridFeatureInteractionProps):
           variant="outline"
           size="xs"
           disabled={batch.busy || depth.undo === 0}
+          aria-keyshortcuts="Control+Z"
           onClick={() => void step("undo")}
         >
+          <Icon name="undo" data-icon="inline-start" aria-hidden="true" />
           Undo
         </Button>
         <Button
@@ -90,8 +93,10 @@ export default function Undo({ context, surface }: GridFeatureInteractionProps):
           variant="outline"
           size="xs"
           disabled={batch.busy || depth.redo === 0}
+          aria-keyshortcuts="Control+Y"
           onClick={() => void step("redo")}
         >
+          <Icon name="redo" data-icon="inline-start" aria-hidden="true" />
           Redo
         </Button>
         <span className="text-xs text-muted-foreground">

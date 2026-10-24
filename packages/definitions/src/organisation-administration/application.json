@@ -1266,6 +1266,31 @@
                         }
                       },
                       {
+                        "type": "platform.renderer.field_input",
+                        "props": {
+                          "id": "input_organization_settings_app_store_address",
+                          "field": "vortex.organisation_administration:organization_settings.app_store_address",
+                          "label": "App Store address",
+                          "vortex": {
+                            "block": {
+                              "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
+                              "release_version": "1.0.0"
+                            },
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
                         "type": "platform.renderer.button",
                         "props": {
                           "id": "submit_organization_settings",

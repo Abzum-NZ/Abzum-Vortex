@@ -305,7 +305,7 @@ const callbackNodeIdNamespace = "8f7d4f2a-6c31-4b0e-9f5a-2d1c3b4a5e60";
  * flow and task always yield the same UUID, and no two tasks of one flow
  * collide, so retained-run authority can be rebuilt without extra state.
  */
-const deriveNodeId = (
+export const deriveKestraNodeId = (
   identity: KestraFlowIdentity,
   flowId: string,
   taskId: string,
@@ -475,7 +475,7 @@ const protectedCallbackTask = (
 
 /** The deterministic node id of one published task of the flow being compiled. */
 const derivedNodeId = (ctx: CompileContext, seed: string): string =>
-  deriveNodeId(ctx.identity, ctx.flow.id, seed);
+  deriveKestraNodeId(ctx.identity, ctx.flow.id, seed);
 
 const jsonOf = (value: unknown): JsonValue => value as unknown as JsonValue;
 
@@ -1052,7 +1052,9 @@ const compileRegisteredTask = (
       inputs,
       task.type,
       undefined,
-      {},
+      task.type === "record.set_fields"
+        ? { runtimeScope: evaluatorRuntimeScope(ctx, { kind: "map", entries: task.properties }) }
+        : {},
       operations,
     ),
   ]);

@@ -61,37 +61,30 @@ export const accessChangeSchema = z
   })
   .strict();
 
-export const installationDrainResultSchema = z
-  .object({
-    organizationId: organizationIdSchema,
-    applicationRootId: applicationRootIdSchema,
-    applicationReleaseRevision: revisionSchema,
-    state: z.literal("draining"),
-    changed: z.boolean(),
-    moduleBindings: z.array(moduleInstallationBindingEvidenceSchema).max(10_000),
-  })
-  .strict();
-
 export type InstallationBindings = z.infer<typeof installationBindingsSchema>;
 type ExpectedModuleBinding = Readonly<{ moduleRootId: ModuleRootId; bindingRevision: number }>;
 type ModulePin = Readonly<{ moduleRootId: ModuleRootId; moduleReleaseRevision: number }>;
-export type ContributionGroup = ModulePin & Readonly<{
-  contributions: readonly ResolvedContributionBinding[];
-}>;
+export type ContributionGroup = ModulePin &
+  Readonly<{
+    contributions: readonly ResolvedContributionBinding[];
+  }>;
 export type ExactStorageRelease = Readonly<{
   releaseSet: SystemApplicationBoundReleaseSetResult;
   pins: readonly ModulePin[];
   contributionGroups: readonly ContributionGroup[];
 }>;
-export type ExactRelease = ExactStorageRelease & Readonly<{
-  preparedTemplates: PreparedApplicationRoleTemplates;
-}>;
+export type ExactRelease = ExactStorageRelease &
+  Readonly<{
+    preparedTemplates: PreparedApplicationRoleTemplates;
+  }>;
 export type ReleaseTarget = InstallationReleaseTarget;
 
 export const canonicalModuleRootId = (value: string): ModuleRootId =>
   moduleRootIdSchema.parse(value.toLowerCase());
 
-export const byModuleRoot = <Value extends { readonly moduleRootId: string }>(values: Value[]): Value[] =>
+export const byModuleRoot = <Value extends { readonly moduleRootId: string }>(
+  values: Value[],
+): Value[] =>
   values.sort((left, right) =>
     left.moduleRootId < right.moduleRootId ? -1 : left.moduleRootId > right.moduleRootId ? 1 : 0,
   );
@@ -215,16 +208,6 @@ export const activeRelease = (
   return { releaseRevision, bindings: active };
 };
 
-/**
- * A draining installation is being uninstalled: it is never prepared, activated, upgraded or
- * withdrawn until the uninstall completes, so no step returns it to service or removes the access
- * that work still running relies on.
- */
-export const requireNotDraining = (state: InstallationBindings): void => {
-  if (state.moduleBindings.some((binding) => binding.state === "draining"))
-    throw fail("APPLICATION_INSTALLATION_STALE");
-};
-
 export const expectedBindings = (
   bindings: readonly Pick<ModuleInstallationBindingEvidence, "moduleRootId" | "bindingRevision">[],
 ): ExpectedModuleBinding[] =>
@@ -286,44 +269,6 @@ export const recordOutcome = async (
       ${state}::text
     )
   `;
-};
-
-type DrainRow = Readonly<{ drain_result: unknown }>;
-
-/** Moves one exact active installation to draining through the fixed protected operation. */
-export const drainInstallation = async (
-  transaction: InstallerTransaction,
-  activityId: string,
-  applicationRootId: ApplicationRootId,
-  applicationReleaseRevision: number,
-  expectedModuleBindings: readonly ExpectedModuleBinding[],
-): Promise<z.infer<typeof installationDrainResultSchema>> => {
-  const rows = await transaction.query<DrainRow>`
-    select vortex_definition.drain_installation(
-      ${activityId}::uuid,
-      ${applicationRootId}::uuid,
-      ${applicationReleaseRevision}::bigint,
-      ${JSON.stringify(expectedModuleBindings)}::jsonb
-    ) as drain_result
-  `;
-  const parsed =
-    rows.length === 1 ? installationDrainResultSchema.safeParse(rows[0]?.drain_result) : null;
-  if (
-    parsed === null ||
-    !parsed.success ||
-    !sameId(parsed.data.applicationRootId, applicationRootId) ||
-    parsed.data.applicationReleaseRevision !== applicationReleaseRevision ||
-    parsed.data.moduleBindings.length !== expectedModuleBindings.length ||
-    parsed.data.moduleBindings.some(
-      (binding) =>
-        binding.state !== "draining" ||
-        !sameId(binding.organizationId, parsed.data.organizationId) ||
-        !sameId(binding.applicationRootId, applicationRootId) ||
-        binding.applicationReleaseRevision !== applicationReleaseRevision,
-    )
-  )
-    throw fail("APPLICATION_INSTALLATION_FAILED");
-  return parsed.data;
 };
 
 /** Storage for every pinned Module release; commits only inactive, idempotent bindings. */
@@ -400,28 +345,42 @@ export const sameUniqueEvidence = <Value>(
   evidence: (value: Value) => string,
 ): boolean => {
   if (left.length !== right.length) return false;
-  const ordered = (values: readonly Value[]) => values
-    .map((value) => ({ identity: identity(value), evidence: evidence(value) }))
-    .sort((a, b) => a.identity < b.identity ? -1 : a.identity > b.identity ? 1 : 0);
+  const ordered = (values: readonly Value[]) =>
+    values
+      .map((value) => ({ identity: identity(value), evidence: evidence(value) }))
+      .sort((a, b) => (a.identity < b.identity ? -1 : a.identity > b.identity ? 1 : 0));
   const oldEntries = ordered(left);
   const newEntries = ordered(right);
-  return new Set(oldEntries.map((entry) => entry.identity)).size === left.length &&
+  return (
+    new Set(oldEntries.map((entry) => entry.identity)).size === left.length &&
     new Set(newEntries.map((entry) => entry.identity)).size === right.length &&
-    oldEntries.every((entry, index) => entry.identity === newEntries[index]!.identity &&
-      entry.evidence === newEntries[index]!.evidence);
+    oldEntries.every(
+      (entry, index) =>
+        entry.identity === newEntries[index]!.identity &&
+        entry.evidence === newEntries[index]!.evidence,
+    )
+  );
 };
 
 /** The full immutable release evidence; request-specific correlation is not release identity. */
 export const releaseEvidenceKey = (release: PermissionRegistryDefinitionRelease): string =>
   JSON.stringify([
-    release.kind, release.rootId, release.definitionKey, release.releaseRevision,
-    release.releaseVersion, release.validationContractVersion,
-    release.contentFingerprint, release.resolutionFingerprint,
+    release.kind,
+    release.rootId,
+    release.definitionKey,
+    release.releaseRevision,
+    release.releaseVersion,
+    release.validationContractVersion,
+    release.contentFingerprint,
+    release.resolutionFingerprint,
   ]);
 
 const permissionIdentity = (entry: PermissionRegistryEntryCandidate): string =>
   JSON.stringify([
-    entry.applicationRootId, entry.ownerKind, entry.ownerId, entry.permission.permissionId,
+    entry.applicationRootId,
+    entry.ownerKind,
+    entry.ownerId,
+    entry.permission.permissionId,
   ]);
 
 /** Used only after each candidate has been verified against its own exact release. */
@@ -430,8 +389,12 @@ const permissionAuthorityKey = (entry: PermissionRegistryEntryCandidate): string
     permissionIdentity(entry),
     fingerprintPermissionMeaning(entry.ownerKind, entry.ownerId, entry.permission),
     entry.ownerKind === "application"
-      ? [entry.sourceRelease.kind, entry.sourceRelease.rootId,
-          entry.sourceRelease.definitionKey, entry.sourceRelease.validationContractVersion]
+      ? [
+          entry.sourceRelease.kind,
+          entry.sourceRelease.rootId,
+          entry.sourceRelease.definitionKey,
+          entry.sourceRelease.validationContractVersion,
+        ]
       : releaseEvidenceKey(entry.sourceRelease),
   ]);
 
@@ -477,7 +440,9 @@ export const changeContributions = async (
       mode === "attach"
         ? await storage.attachContributions(command)
         : await storage.detachContributions(command);
-    const expectedIds = new Set(group.contributions.map((item) => item.contributionId.toLowerCase()));
+    const expectedIds = new Set(
+      group.contributions.map((item) => item.contributionId.toLowerCase()),
+    );
     const actualIds = result.contributionIds.map((id) => id.toLowerCase());
     if (
       !sameId(result.applicationRootId, target.applicationRootId) ||

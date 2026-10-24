@@ -171,6 +171,7 @@ export const loadApplicationFrame = cache(
       pageDefinition.pageId,
       subject,
       undefined,
+      true,
     );
     // The application switcher reads the viewer's other applications under its own request, so it
     // runs beside the page and menu projections instead of after them.
@@ -179,6 +180,7 @@ export const loadApplicationFrame = cache(
         ? loadPermittedApplicationsAtAddress(session, tenantShortName, organizationShortName)
         : undefined;
     void switcherRequest?.catch(() => undefined);
+    if (navigationRead === undefined) throw new Error("FRAME_NAVIGATION_NOT_READ");
     const [projected, navigation] = await Promise.all([projectedPageRead, navigationRead]);
     if (projected.kind !== "available" || projected.value === undefined) return undefined;
     if (navigation.kind !== "available") return undefined;

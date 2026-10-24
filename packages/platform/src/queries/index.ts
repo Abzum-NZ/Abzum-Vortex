@@ -97,6 +97,7 @@ export { tableReadCandidatesPerRequest } from "./protected-query-table";
 export {
   createProtectedQueryService,
   type ProtectedQueryCacheContext,
+  type ProtectedReadDecider,
   type ProtectedQueryServiceDependencies,
 } from "./protected-query-service";
 

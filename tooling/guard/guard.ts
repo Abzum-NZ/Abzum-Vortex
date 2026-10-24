@@ -122,6 +122,9 @@ const systemApplicationFiles = new Set(
   ),
 );
 const names = new Set<string>();
+// The App Store is a platform system application, but engines still must resolve its address from
+// organisation configuration instead of embedding its definition key.
+names.add("vortex.app.app_store");
 for (const file of files.filter(
   (file) =>
     file.startsWith(paths.applicationSources) &&
@@ -226,6 +229,34 @@ for (const file of codeFiles) {
     true,
     file.endsWith("x") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
   );
+  if (file.startsWith("packages/platform/src/") || file.startsWith("apps/web/app/_lib/")) {
+    const inspectSilentCatch = (node: ts.Node): void => {
+      if (ts.isCatchClause(node) && node.variableDeclaration === undefined) {
+        let reportsCause = false;
+        const inspectBody = (statement: ts.Node): void => {
+          if (ts.isThrowStatement(statement)) reportsCause = true;
+          if (ts.isCallExpression(statement)) {
+            const name = statement.expression.getText(source);
+            if (
+              /^(?:logRefusal|logError|console\.(?:error|warn)|logger\.(?:error|warn))$/.test(name)
+            )
+              reportsCause = true;
+          }
+          ts.forEachChild(statement, inspectBody);
+        };
+        inspectBody(node.block);
+        if (!reportsCause)
+          add(
+            "silent-catch",
+            file,
+            lineAt(content, node.getStart(source)),
+            "bare catch swallows the cause without logging or rethrowing",
+          );
+      }
+      ts.forEachChild(node, inspectSilentCatch);
+    };
+    inspectSilentCatch(source);
+  }
   // Renderers compose the official shadcn components, whose per-style variants decide radius,
   // padding and fonts. A literal radius, an arbitrary pixel length or an arbitrary font family in a
   // class name bypasses the theme. The official component sources themselves are exempt.
