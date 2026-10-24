@@ -150,7 +150,7 @@ Prepared candidates that are never activated are cleaned up.
 
 ## Uninstallation
 
-**States.** An installation moves from active, to draining, to removed. While draining, callbacks for work already running are honoured, and no new work starts. The uninstaller either lets running work finish or cancels it under the cancellation policy in [09](../09-workflows-and-pipelines.md). Draining ends when no run remains.
+**Withdrawal.** Uninstallation withdraws the installation in one atomic step: its module bindings detach, so stored records remain, and its access is withdrawn. From that moment no new work is accepted, including scheduled starts. An accepted start that has not begun is refused or cancelled with a retained status, and an already running execution follows the cancellation policy in [09](../09-workflows-and-pipelines.md). There is no intermediate draining state.
 
 **Registration ledger.** Each owning service records the registrations it creates for an installation, and can list and remove them. The uninstall report is the union of those lists. Uninstallation is complete when nothing remains except the items the uninstaller chose to keep.
 
@@ -230,7 +230,7 @@ Validation returns located errors, so an agent can correct its draft and try aga
   - The component renders through the bootstrap document, receives only the mapped fields, and has no session.
   - Its "shape changed" event runs at most one preview flow at a time; the last run uses the latest event.
 - **Uninstall.** Uninstalling that package:
-  - drains running work, then removes every registration in the ledger;
+  - withdraws the installation atomically, refuses or cancels its accepted and running work, then removes every registration in the ledger;
   - keeps or deletes records as chosen, never deleting a record type another installation binds;
   - produces a report. A later search finds no registration that belongs to the installation.
 - **Agent building.** An agent acting for a person with the draft, release and applications permissions:

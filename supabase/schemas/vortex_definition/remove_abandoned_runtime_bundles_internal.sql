@@ -85,7 +85,7 @@ begin
       where binding.organization_id = bundle_row.organization_id
         and binding.application_root_id = bundle_row.application_root_id
         and binding.application_release_revision = bundle_row.application_release_revision
-          and binding.state = 'active'
+        and binding.state = 'active'
     ) then
       continue;
     end if;
@@ -96,7 +96,7 @@ begin
         where later_binding.organization_id = bundle_row.organization_id
           and later_binding.application_root_id = bundle_row.application_root_id
           and later_binding.application_release_revision > bundle_row.application_release_revision
-            and later_binding.state = 'active'
+          and later_binding.state = 'active'
       ) and (
         bundle_row.built_at > pg_catalog.statement_timestamp() - abandoned_bundle_ttl
         or exists (

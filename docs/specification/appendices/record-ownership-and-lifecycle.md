@@ -211,6 +211,6 @@ Kestra as inactive and enables them only after the installation revision is
 activated. An upgrade or explicit rollback enables the matching revision's
 schedules and disables superseded ones, and every scheduled start rechecks that
 its exact installation revision is still active. Uninstallation stops new
-scheduled starts while draining and then removes the schedules with the
-installation's other Kestra registrations. There is no second scheduler, no
+scheduled starts when it withdraws the installation and then removes the
+schedules with the installation's other Kestra registrations. There is no second scheduler, no
 separate Vortex recalculation engine and no deployed flow per record.
