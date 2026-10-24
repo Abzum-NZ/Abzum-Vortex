@@ -315,7 +315,7 @@ const calculateGeneratedValues = (
  * already owns: the one record writer prepares the delete, the runtime
  * recalculates totals, and the same writer finalises the command. Every
  * non-final outcome throws `RecordLifecycleRollback` so the whole transaction
- * is discarded, because the preflight has already deleted rows
+ * is discarded, because the preparation has already deleted rows
  * behind a pending receipt. The named-action `record.delete` task runs
  * this same function, so there is no second delete path.
  */
