@@ -89,4 +89,4 @@ export {
 } from "./query-notice";
 
 // The platform loader for long waits (#2519)
-export { BrandLoader } from "./brand-loader";
+export { BrandLoader, type LoaderMark } from "./brand-loader";
