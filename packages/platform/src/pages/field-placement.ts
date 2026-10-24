@@ -52,7 +52,8 @@ export const formFieldOf = (
 export const fieldForPlacement = (
   placement: Pick<PlacementReadEntry, "settings">,
   modules: Modules,
-): Readonly<{ module: Modules[number]; recordType: RecordType; field: ModuleField }> | undefined => {
+):
+  Readonly<{ module: Modules[number]; recordType: RecordType; field: ModuleField }> | undefined => {
   const reference = placement.settings.field;
   if (!isRecord(reference)) return undefined;
   if (reference.kind !== "field_reference" || typeof reference.fieldId !== "string")
