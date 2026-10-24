@@ -54,6 +54,7 @@ import { moduleReferenceRule } from "./validation/module-references";
 import { applicationRule } from "./validation/application-rule";
 import { object, array } from "./validation/helpers";
 import { moduleDependencies } from "./module-dependencies";
+import { runtimeSupportRule, runtimeSupportRuleCodes } from "./validation/runtime-support";
 
 export const definitionSemanticRules: readonly DefinitionSemanticRule[] = Object.freeze([
   {
@@ -190,6 +191,15 @@ export const definitionSemanticRules: readonly DefinitionSemanticRule[] = Object
     ["compiled_set"],
     "connection",
     connectionRule,
+  ),
+  semanticAggregateRule(
+    "vortex.definition.runtime_support",
+    runtimeSupportRuleCodes,
+    "publish",
+    ["module", "application"],
+    ["compiled_set"],
+    "document",
+    runtimeSupportRule,
   ),
   semanticAggregateRule(
     "vortex.definition.publication_compatibility",
@@ -368,7 +378,13 @@ export function compileDefinitionSet(
   });
   if (!validation.valid) {
     const first = validation.failures[0]!;
-    throw new DefinitionCompilationError(first.ruleCode, first.family, first.location);
+    throw new DefinitionCompilationError(
+      first.ruleCode,
+      first.family,
+      first.location,
+      first.code,
+      first.sentence,
+    );
   }
   return outputs;
 }
