@@ -187,13 +187,8 @@ export function useStudioReleasesTab({
 
   // A prepared publication is for one saved revision: an edit, an undo or a reload makes it out of date.
   useEffect(() => {
-    if (
-      preparedRef.current !== null &&
-      !sameSnapshot(preparedRef.current.snapshot, readSnapshot())
-    ) {
+    if (preparedRef.current !== null && !sameSnapshot(preparedRef.current.snapshot, readSnapshot()))
       setPrepared(null);
-      setProblem("The draft changed after its summary was checked. Check again before publishing.");
-    }
   }, [draft.state, draft.saved, draft.lifetime, readSnapshot, setPrepared]);
 
   /** A flow refusal the platform reported when publishing, in the words Studio shows for it. */
@@ -226,9 +221,14 @@ export function useStudioReleasesTab({
   ): Promise<StudioPublicationOutcome> => {
     if (draft.isHeld("publication") || latest.current.blockedReason() !== undefined)
       return { kind: "not_started", reason: "busy" };
-    if (!(await latest.current.flush())) return { kind: "not_started", reason: "not_saved" };
-    const snapshot = readSnapshot();
-    if (snapshot === null) return { kind: "not_started", reason: "not_saved" };
+    // A check shows as under way while the latest edits finish saving, so the dialog never offers it twice.
+    if (mode === "prepare") setPreparing(true);
+    const snapshot = (await latest.current.flush()) ? readSnapshot() : null;
+    if (snapshot === null) {
+      if (mode === "prepare" && request.current === null && latest.current.isActive())
+        setPreparing(false);
+      return { kind: "not_started", reason: "not_saved" };
+    }
     const confirmed = preparedRef.current;
     const releaseNote = (suppliedNote ?? note).trim();
     if (
@@ -254,13 +254,12 @@ export function useStudioReleasesTab({
     setPrepared(null);
     setProblem("");
     if (mode === "prepare") setPreparing(true);
-    const superseded = () =>
-      !latest.current.isActive() ||
-      ticket.cancelled ||
-      request.current !== ticket ||
-      latest.current.lifetime !== snapshot.lifetime;
+    // The dialog still waits on this request: it was neither closed, replaced nor unmounted.
+    const current = () =>
+      latest.current.isActive() && !ticket.cancelled && request.current === ticket;
+    const superseded = () => !current() || latest.current.lifetime !== snapshot.lifetime;
     const discard = (): StudioPublicationOutcome => {
-      if (latest.current.isActive() && !ticket.cancelled && request.current === ticket)
+      if (current())
         setProblem(
           mode === "prepare"
             ? "The draft was reloaded while its summary was being checked. Check again before publishing."
@@ -376,7 +375,7 @@ export function useStudioReleasesTab({
         : { kind: "declined", result: result.kind, reason: result.reason };
     } catch (error) {
       console.error(`[studio] publication ${mode} request failed: ${describeFailure(error)}`);
-      if (!superseded())
+      if (current())
         setProblem(
           mode === "prepare"
             ? "The platform could not read what will be published. Try again in a moment."
