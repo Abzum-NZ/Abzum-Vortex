@@ -984,323 +984,6 @@ comment on function vortex_record.read_record_page_envelope_internal(uuid,jsonb)
 comment on function vortex_record.read_record_page_row_facts_internal(jsonb,jsonb) is
   'Private page read helper: one page record''s complete read facts, rebuilt from the page envelope and the record''s own compact scope (stored fact, concurrency number, definition revision).';
 
-create or replace function vortex_record.read_record_projection_with_validated_types_internal(
-  p_record_type_id uuid,
-  p_record_id uuid,
-  p_page_declaration jsonb,
-  p_page_eligibility jsonb,
-  p_validated_record_types jsonb,
-  p_projection_row jsonb,
-  p_loaded jsonb,
-  p_decision jsonb,
-  p_bounds jsonb,
-  p_page jsonb
-)
-returns table (projection jsonb, read_facts jsonb, read_bounds jsonb)
-language plpgsql
-volatile
-security invoker
-set search_path = ''
-as $function$
-declare
-  loaded jsonb;
-  -- The page-wide part of the facts (the envelope) when this record arrives
-  -- as a compact record scope; otherwise the record's own complete facts.
-  shared jsonb;
-  compact boolean;
-  decision jsonb;
-  bounds jsonb;
-  values_value jsonb := '{}'::jsonb;
-  field_id text;
-  field_values jsonb;
-  read_time_fields jsonb;
-  read_time_clock jsonb;
-  read_time_expression jsonb;
-  read_time_value jsonb;
-  preview_meta jsonb;
-  preview_bounds jsonb;
-  due_key text;
-  status_key text;
-  due_value jsonb;
-  status_value jsonb;
-  batched boolean := false;
-  requested_field_ids jsonb := nullif(p_page -> 'requestedFieldIds', 'null'::jsonb);
-  projected_field_ids jsonb;
-  stored_field_ids jsonb;
-  selected_fields jsonb;
-  selected_value_expression text;
-  selected_values jsonb;
-  selected_loaded jsonb;
-begin
-  if p_record_type_id is null or p_record_id is null
-    or p_record_type_id = '00000000-0000-0000-0000-000000000000'::uuid
-    or p_record_id = '00000000-0000-0000-0000-000000000000'::uuid then
-    projection := pg_catalog.jsonb_build_object('outcome', 'refused');
-    return next;
-    return;
-  end if;
-  -- A page passes the page-wide part of the facts once (p_page.envelope) and
-  -- each decided record as its compact record scope; the complete facts are
-  -- rebuilt only on the paths that read more than this record's own values.
-  compact := p_loaded is not null and p_loaded ? 'record'
-    and pg_catalog.jsonb_typeof(p_page -> 'envelope') = 'object';
-  if p_loaded is not null and p_loaded ? 'record' and not compact then
-    raise exception using errcode = '22023', message = 'Page record facts are invalid';
-  end if;
-  loaded := case when compact then null else p_loaded end;
-  if loaded is null and not compact then
-    if p_page ? 'installation' then
-      -- The installation and access plan this invocation's caller read,
-      -- validated and resolved once for the whole page.
-      loaded := vortex_record.load_record_access_facts_with_plan_internal(
-        p_record_type_id, 'read', p_record_id, null, p_page -> 'installation', p_page -> 'plan',
-        p_projection_row, case when requested_field_ids is null then null else '[]'::jsonb end
-      );
-    else
-      loaded := vortex_record.load_record_access_facts_internal(
-        p_record_type_id, 'read', p_record_id, null, p_projection_row,
-        case when requested_field_ids is null then null else '[]'::jsonb end
-      );
-    end if;
-  end if;
-  shared := case when compact then p_page -> 'envelope' else loaded end;
-  if p_loaded is not null and shared ->> 'outcome' = 'loaded' and (
-    shared -> 'facts' -> 'binding' ->> 'recordTypeId' is distinct from
-      pg_catalog.lower(p_record_type_id::text)
-    or case when compact
-      then p_loaded -> 'record' -> 'recordScope' ->> 'recordId' is distinct from pg_catalog.lower(p_record_id::text)
-      else not exists (
-        select 1 from pg_catalog.jsonb_array_elements(loaded -> 'facts' -> 'records') as item(value)
-        where item.value -> 'recordScope' ->> 'recordId' = pg_catalog.lower(p_record_id::text)
-      ) end
-  ) then
-    raise exception using errcode = '22023', message = 'Page record facts are invalid';
-  end if;
-  if shared ->> 'outcome' <> 'loaded'
-    or pg_catalog.jsonb_typeof(shared -> 'declaration') <> 'object' then
-    projection := pg_catalog.jsonb_build_object('outcome', 'refused');
-    return next;
-    return;
-  end if;
-  if shared ? 'previewInstallationId' then
-    if p_page -> 'envelope' -> 'previewInstallationId' = shared -> 'previewInstallationId'
-      and pg_catalog.jsonb_typeof(p_page -> 'previewBounds') = 'object' then
-      preview_bounds := p_page -> 'previewBounds';
-    else
-      loaded := coalesce(loaded, vortex_record.read_record_page_row_facts_internal(shared, p_loaded));
-      preview_meta := vortex_record.resolve_record_action_context_internal(
-        p_record_type_id, 'read'
-      );
-      preview_bounds := vortex_record.preview_record_field_bounds_internal(
-        p_record_type_id, (preview_meta ->> 'storageContractId')::uuid,
-        preview_meta -> 'recordType'
-      );
-    end if;
-    if preview_bounds is null then
-      projection := pg_catalog.jsonb_build_object('outcome', 'refused');
-      return next;
-      return;
-    end if;
-    bounds := preview_bounds;
-  else
-    if p_decision is not null then
-      -- The page's set pass decided this exact record in this invocation from
-      -- these facts; only the fixed record adapter can pass it.
-      if p_loaded is null
-        or p_decision ->> 'recordId' is distinct from pg_catalog.lower(p_record_id::text) then
-        raise exception using errcode = '22023', message = 'Page record decision is invalid';
-      end if;
-      -- It is used only while it is still current now: an allowed decision
-      -- whose own deadline (every matched permission path, share and group
-      -- membership) and the page eligibility are both still in the future.
-      -- Anything else is decided again exactly, at this row's own time.
-      batched := coalesce(p_decision ->> 'outcome' = 'allowed'
-        and (p_decision ->> 'validUntil')::timestamptz > pg_catalog.clock_timestamp()
-        and p_page_eligibility ->> 'outcome' = 'eligible'
-        and (p_page_eligibility ->> 'validUntil')::timestamptz > pg_catalog.clock_timestamp(), false);
-    end if;
-    if batched then
-      decision := p_decision;
-    else
-      loaded := coalesce(loaded, vortex_record.read_record_page_row_facts_internal(shared, p_loaded));
-      if p_page_eligibility ->> 'outcome' = 'eligible'
-        and loaded -> 'declaration' = p_page_declaration
-        and (p_page_eligibility ->> 'validUntil')::timestamptz > pg_catalog.clock_timestamp() then
-        decision := vortex_access.evaluate_record_access_with_validated_types_internal(
-          loaded -> 'declaration', p_record_id, loaded -> 'facts', p_page_eligibility,
-          p_validated_record_types
-        );
-      else
-        decision := vortex_access.evaluate_organization_record_access_internal(
-          loaded -> 'declaration', p_record_id, loaded -> 'facts'
-        );
-      end if;
-    end if;
-    if decision ->> 'outcome' <> 'allowed' then
-      projection := pg_catalog.jsonb_build_object('outcome', 'refused');
-      -- A decision, even a refusal, means the record types passed validation;
-      -- the page reuses them. Callers read read_facts only for allowed rows.
-      read_facts := pg_catalog.jsonb_build_object(
-        'validatedRecordTypes', shared -> 'facts' -> 'recordTypes'
-      );
-      return next;
-      return;
-    end if;
-    bounds := coalesce(case when batched then p_bounds end,
-      vortex_record.decide_record_field_bounds_internal(decision));
-  end if;
-  -- Keep full access bounds for capabilities; intersect only the values requested by the screen.
-  projected_field_ids := bounds -> 'readableFieldIds';
-  if requested_field_ids is not null then
-    select coalesce(pg_catalog.jsonb_agg(item.value order by item.ordinality), '[]'::jsonb)
-    into projected_field_ids
-    from pg_catalog.jsonb_array_elements(projected_field_ids) with ordinality as item(value, ordinality)
-    where requested_field_ids ? (item.value #>> '{}');
-  end if;
-  if requested_field_ids is not null and not compact then
-    if (loaded ->> 'isSystemProjection')::boolean then
-      -- Protected projections keep their bounded reader; never scan their composite view.
-      selected_loaded := vortex_record.load_record_access_facts_internal(
-        p_record_type_id, 'read', p_record_id, null, p_projection_row, projected_field_ids
-      );
-      if selected_loaded ->> 'concurrencyNumber' is distinct from loaded ->> 'concurrencyNumber' then
-        projection := pg_catalog.jsonb_build_object('outcome', 'refused');
-        return next;
-        return;
-      end if;
-      selected_values := selected_loaded -> 'fieldValues';
-    else
-      -- Decide access from condition operands first, then fetch only requested readable values.
-      -- A concurrent record change cannot splice new values into the earlier access decision.
-      select coalesce(pg_catalog.jsonb_agg(distinct item.value), '[]'::jsonb)
-      into stored_field_ids
-      from (
-        select value from pg_catalog.jsonb_array_elements(projected_field_ids)
-        union all
-        select dependency.value
-        from pg_catalog.jsonb_array_elements(loaded #> '{recordTypeMeta,fields}') as field(value)
-        cross join lateral (values
-          (field.value #> '{settings,expression,dueFieldId}'),
-          (field.value #> '{settings,expression,statusFieldId}')
-        ) as dependency(value)
-        where projected_field_ids ? pg_catalog.lower(field.value ->> 'fieldId')
-          and field.value ->> 'type' = 'calculation' and dependency.value is not null
-      ) as item(value);
-      select coalesce(pg_catalog.jsonb_agg(field.value), '[]'::jsonb) into selected_fields
-      from pg_catalog.jsonb_array_elements(loaded #> '{recordTypeMeta,fields}') as field(value)
-      where stored_field_ids ? pg_catalog.lower(field.value ->> 'fieldId');
-      selected_value_expression := coalesce(vortex_record.named_action_storage_columns_internal(
-        (loaded #>> '{recordTypeMeta,storageContractId}')::uuid, selected_fields
-      ) ->> 'valueExpression', '');
-      execute pg_catalog.format(
-        'select pg_catalog.jsonb_build_object(%s) from record_data.%I as stored
-         where stored.organisation_id = $1 and stored.record_id = $2
-           and stored.concurrency_number = $3',
-        selected_value_expression, loaded ->> 'table'
-      ) into selected_values using (loaded #>> '{context,organizationId}')::uuid,
-        p_record_id, (loaded ->> 'concurrencyNumber')::bigint;
-      if selected_values is null then
-        projection := pg_catalog.jsonb_build_object('outcome', 'refused');
-        return next;
-        return;
-      end if;
-    end if;
-    loaded := pg_catalog.jsonb_set(loaded, '{fieldValues}', selected_values);
-  end if;
-  field_values := case when compact then p_loaded -> 'record' -> 'fieldValues'
-    else loaded -> 'fieldValues' end;
-  -- Read-time calculations are worked out here, at one statement timestamp in
-  -- the organisation's time zone, from the record's stored values. They are
-  -- never read from storage. A page works out the record type's read-time
-  -- fields and the statement's clock once and passes them here.
-  if compact and p_page ? 'readTimeFields' then
-    read_time_fields := p_page -> 'readTimeFields';
-  else
-    select coalesce(pg_catalog.jsonb_object_agg(pg_catalog.lower(field.value ->> 'fieldId'), field.value), '{}'::jsonb)
-    into read_time_fields
-    from pg_catalog.jsonb_array_elements(shared -> 'facts' -> 'recordTypes') as record_type(value)
-    cross join lateral pg_catalog.jsonb_array_elements(record_type.value -> 'fields') as field(value)
-    where pg_catalog.lower(record_type.value ->> 'recordTypeId') = pg_catalog.lower(p_record_type_id::text)
-      and field.value ->> 'type' = 'calculation'
-      and (field.value #>> '{settings,evaluation}' = 'read_time'
-        or field.value #>> '{settings,expression,op}' = 'deadline_passed');
-  end if;
-  if read_time_fields <> '{}'::jsonb then
-    read_time_clock := case when compact and p_page ? 'readTimeClock' then p_page -> 'readTimeClock'
-      else vortex_record.read_time_clock_internal() end;
-  end if;
-  if read_time_fields = '{}'::jsonb then
-    -- Without read-time fields every readable stored value is projected as
-    -- stored: one statement instead of one step per field.
-    select coalesce(pg_catalog.jsonb_object_agg(item.value #>> '{}', field_values -> (item.value #>> '{}')
-        order by item.ordinality), '{}'::jsonb)
-    into values_value
-    from pg_catalog.jsonb_array_elements(projected_field_ids) with ordinality as item(value, ordinality)
-    where shared -> 'columns' ? (item.value #>> '{}');
-  end if;
-  for field_id in
-    select item.value #>> '{}' from pg_catalog.jsonb_array_elements(projected_field_ids) as item(value)
-    where read_time_fields <> '{}'::jsonb
-  loop
-    if not (shared -> 'columns' ? field_id) then
-      continue;
-    end if;
-    if read_time_fields ? pg_catalog.lower(field_id) then
-      read_time_expression := read_time_fields -> pg_catalog.lower(field_id) #> '{settings,expression}';
-      -- Only the deadline-passed form is defined; another read-time form is
-      -- withheld rather than disclosed from a stored column.
-      if read_time_expression ->> 'op' is distinct from 'deadline_passed' then
-        continue;
-      end if;
-      due_key := pg_catalog.lower(read_time_expression #>> '{due,reference,fieldId}');
-      status_key := pg_catalog.lower(read_time_expression #>> '{status,reference,fieldId}');
-      due_value := field_values -> due_key;
-      status_value := case when status_key is null then null else field_values -> status_key end;
-      if status_value is not null and status_value <> 'null'::jsonb and exists (
-        select 1
-        from pg_catalog.jsonb_array_elements(coalesce(read_time_expression -> 'terminalStatusValues', '[]'::jsonb))
-          as terminal(value)
-        where terminal.value = status_value
-      ) then
-        read_time_value := 'false'::jsonb;
-      elsif pg_catalog.jsonb_typeof(due_value) = 'string'
-        and shared -> 'columns' -> due_key ->> 'databaseValueType' = 'date' then
-        -- Without the organisation's time zone the local date is unknown.
-        if read_time_clock ->> 'organizationLocalDate' is null then
-          continue;
-        end if;
-        read_time_value := pg_catalog.to_jsonb((read_time_clock ->> 'organizationLocalDate') > (due_value #>> '{}'));
-      elsif pg_catalog.jsonb_typeof(due_value) = 'string'
-        and shared -> 'columns' -> due_key ->> 'databaseValueType' = 'timestamp_with_time_zone' then
-        read_time_value := pg_catalog.to_jsonb(
-          (read_time_clock ->> 'instant')::timestamp with time zone
-            >= (due_value #>> '{}')::timestamp with time zone
-        );
-      else
-        read_time_value := 'null'::jsonb;
-      end if;
-      values_value := values_value || pg_catalog.jsonb_build_object(field_id, read_time_value);
-    else
-      values_value := values_value || pg_catalog.jsonb_build_object(field_id, field_values -> field_id);
-    end if;
-  end loop;
-  projection := pg_catalog.jsonb_build_object('outcome', 'allowed', 'recordId', p_record_id,
-    'concurrencyNumber', case when compact then p_loaded -> 'concurrencyNumber'
-      else loaded -> 'concurrencyNumber' end,
-    'values', values_value);
-  -- A compact record keeps its compact scope; the caller holds the envelope.
-  read_facts := case when compact then p_loaded else loaded end;
-  read_bounds := bounds;
-  return next;
-end
-$function$;
-
-alter function vortex_record.read_record_projection_with_validated_types_internal(uuid,uuid,jsonb,jsonb,jsonb,jsonb,jsonb,jsonb,jsonb,jsonb) owner to vortex_owner;
-revoke all on function vortex_record.read_record_projection_with_validated_types_internal(uuid,uuid,jsonb,jsonb,jsonb,jsonb,jsonb,jsonb,jsonb,jsonb)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-grant execute on function vortex_record.read_record_projection_with_validated_types_internal(uuid,uuid,jsonb,jsonb,jsonb,jsonb,jsonb,jsonb,jsonb,jsonb)
-  to vortex_record_adapter;
-
 create or replace function vortex_record.run_module_query(
   p_module_root_id uuid,
   p_query_id uuid,
@@ -2984,6 +2667,327 @@ grant execute on function vortex_record.run_module_query(uuid, uuid, bigint, jso
   to vortex_request;
 comment on function vortex_record.run_module_query(uuid, uuid, bigint, jsonb, jsonb, integer, jsonb, jsonb, jsonb, text, uuid[]) is
   'One bounded keyset page of rows readable through read_record for one installed Module query, or one exact current human-owned preview query over isolated preview storage, each carrying the record''s concurrency number and the per-row capabilities from read_record_capabilities, each action decided exactly as its own writer decides it, with only the declared Record system values, or one refusal before any row is exposed; accepts a bound list component''s declared sortable, filterable and searchable field sets together with the viewer''s chosen sort, typed filter and search term, refuses a sort or filter outside the declared sets, keeps a user sort only over a field the record type declares sortable and the reader is guaranteed to see, ANDs the user filter with the published filter so it can only narrow, and matches a search only through searchable fields the returned row exposes to the reader; returns with every plain page and board column read, even an empty one, the reader''s current field bound (the fields it is guaranteed to see on every record it may read, and whether any searchable field is among them) so a list offers and accepts its filter, search and sort controls from the same read; requires every filtered field to be declared filterable; pushes a filter or a sort into the candidate scan only for fields the reader is guaranteed to see for the whole record type, evaluates a filter on a possibly-withheld field per row, and keeps the keyset cursor over readable sort values and a record identity so no cursor carries a hidden field value and the scan order and budget never depend on one; narrows an installed scan with one predicate that OR-s every eligible alternative''s exact owner, owner-group and direct-share route test with its saved condition compiled over the record''s own catalogue columns where that condition can be expressed as a superset of the per-row decision, leaves the installed scan unrestricted where a route or condition has no exact stored form, and still decides every returned row through read_record; validates every preview stage against the current human, candidate revision and exact release and storage pins, uses only active preview catalogue mappings and preview field bounds, and never falls through to installed resolution; works out read-time fields, such as a deadline-passed calculation, inside an installed query at one statement timestamp in the organisation time zone, so no installed query is refused for freshness; admits board members only through a separately validated board selector over the sole filterable choice grouping key, reads one column''s member page or, for a board''s first pages, the first page of every requested column in one invocation with its own budget and position per column, classifies those columns from current readable values and, when the choice field is guaranteed readable on every scanned row, narrows each column''s candidate scan to its own stored choice value so a column reads only its own cards, and otherwise reads the table once for every column, each readable row going to the column its readable value names, and admits generic grouped members only when every installed grouping value is present in the current readable projection and JSONB-equal to the closed typed selector; missing or withheld values belong to no generic group while JSON null is a value, and generic group membership never uses hidden stored values, and a grid dimension narrows the stored candidate scan only after the field is proven guaranteed readable, with date bucket membership using the same authored-zone canonical value as the summary and typed half-open calendar ranges; reads one level of a tree over a one-record link of the record type to itself, either the roots (records whose parent no readable record matching the query''s filter and search holds, so an unreadable parent is never revealed and a matching record under a non-matching parent stays reachable) or the children of one parent, through the same keyset order, access scan, filter, search and exact per-row decision as a plain page, requiring the parent link to be a field the reader is guaranteed to see and reporting for every returned record, from one bounded set of rounds over the whole page rather than one query per row, whether the reader may read a child of it that matches the query, or that this is undecided when the rounds'' examination budget ran out; orders board pages by record identity and generic members by the requested or query order with bidirectional keysets, returns generic group identity and the reader''s field bound even for empty pages, and binds each member operation, selector and projection in its own uncached continuation; reads the copied records of a preview like installed ones and refuses a system projection in a preview; with a list of 1 to 200 distinct record ids it reads exactly those records in one page, each under the same scope, release, filter, search and readability decision as any row, and returns only those readable now.';
+
+reset role;
+
+set local role vortex_owner;
+
+create or replace function vortex_record.read_record_projection_with_validated_types_internal(
+  p_record_type_id uuid,
+  p_record_id uuid,
+  p_page_declaration jsonb,
+  p_page_eligibility jsonb,
+  p_validated_record_types jsonb,
+  p_projection_row jsonb,
+  p_loaded jsonb,
+  p_decision jsonb,
+  p_bounds jsonb,
+  p_page jsonb
+)
+returns table (projection jsonb, read_facts jsonb, read_bounds jsonb)
+language plpgsql
+volatile
+security invoker
+set search_path = ''
+as $function$
+declare
+  loaded jsonb;
+  -- The page-wide part of the facts (the envelope) when this record arrives
+  -- as a compact record scope; otherwise the record's own complete facts.
+  shared jsonb;
+  compact boolean;
+  decision jsonb;
+  bounds jsonb;
+  values_value jsonb := '{}'::jsonb;
+  field_id text;
+  field_values jsonb;
+  read_time_fields jsonb;
+  read_time_clock jsonb;
+  read_time_expression jsonb;
+  read_time_value jsonb;
+  preview_meta jsonb;
+  preview_bounds jsonb;
+  due_key text;
+  status_key text;
+  due_value jsonb;
+  status_value jsonb;
+  batched boolean := false;
+  requested_field_ids jsonb := nullif(p_page -> 'requestedFieldIds', 'null'::jsonb);
+  projected_field_ids jsonb;
+  stored_field_ids jsonb;
+  selected_fields jsonb;
+  selected_value_expression text;
+  selected_values jsonb;
+  selected_loaded jsonb;
+begin
+  if p_record_type_id is null or p_record_id is null
+    or p_record_type_id = '00000000-0000-0000-0000-000000000000'::uuid
+    or p_record_id = '00000000-0000-0000-0000-000000000000'::uuid then
+    projection := pg_catalog.jsonb_build_object('outcome', 'refused');
+    return next;
+    return;
+  end if;
+  -- A page passes the page-wide part of the facts once (p_page.envelope) and
+  -- each decided record as its compact record scope; the complete facts are
+  -- rebuilt only on the paths that read more than this record's own values.
+  compact := p_loaded is not null and p_loaded ? 'record'
+    and pg_catalog.jsonb_typeof(p_page -> 'envelope') = 'object';
+  if p_loaded is not null and p_loaded ? 'record' and not compact then
+    raise exception using errcode = '22023', message = 'Page record facts are invalid';
+  end if;
+  loaded := case when compact then null else p_loaded end;
+  if loaded is null and not compact then
+    if p_page ? 'installation' then
+      -- The installation and access plan this invocation's caller read,
+      -- validated and resolved once for the whole page.
+      loaded := vortex_record.load_record_access_facts_with_plan_internal(
+        p_record_type_id, 'read', p_record_id, null, p_page -> 'installation', p_page -> 'plan',
+        p_projection_row, case when requested_field_ids is null then null else '[]'::jsonb end
+      );
+    else
+      loaded := vortex_record.load_record_access_facts_internal(
+        p_record_type_id, 'read', p_record_id, null, p_projection_row,
+        case when requested_field_ids is null then null else '[]'::jsonb end
+      );
+    end if;
+  end if;
+  shared := case when compact then p_page -> 'envelope' else loaded end;
+  if p_loaded is not null and shared ->> 'outcome' = 'loaded' and (
+    shared -> 'facts' -> 'binding' ->> 'recordTypeId' is distinct from
+      pg_catalog.lower(p_record_type_id::text)
+    or case when compact
+      then p_loaded -> 'record' -> 'recordScope' ->> 'recordId' is distinct from pg_catalog.lower(p_record_id::text)
+      else not exists (
+        select 1 from pg_catalog.jsonb_array_elements(loaded -> 'facts' -> 'records') as item(value)
+        where item.value -> 'recordScope' ->> 'recordId' = pg_catalog.lower(p_record_id::text)
+      ) end
+  ) then
+    raise exception using errcode = '22023', message = 'Page record facts are invalid';
+  end if;
+  if shared ->> 'outcome' <> 'loaded'
+    or pg_catalog.jsonb_typeof(shared -> 'declaration') <> 'object' then
+    projection := pg_catalog.jsonb_build_object('outcome', 'refused');
+    return next;
+    return;
+  end if;
+  if shared ? 'previewInstallationId' then
+    if p_page -> 'envelope' -> 'previewInstallationId' = shared -> 'previewInstallationId'
+      and pg_catalog.jsonb_typeof(p_page -> 'previewBounds') = 'object' then
+      preview_bounds := p_page -> 'previewBounds';
+    else
+      loaded := coalesce(loaded, vortex_record.read_record_page_row_facts_internal(shared, p_loaded));
+      preview_meta := vortex_record.resolve_record_action_context_internal(
+        p_record_type_id, 'read'
+      );
+      preview_bounds := vortex_record.preview_record_field_bounds_internal(
+        p_record_type_id, (preview_meta ->> 'storageContractId')::uuid,
+        preview_meta -> 'recordType'
+      );
+    end if;
+    if preview_bounds is null then
+      projection := pg_catalog.jsonb_build_object('outcome', 'refused');
+      return next;
+      return;
+    end if;
+    bounds := preview_bounds;
+  else
+    if p_decision is not null then
+      -- The page's set pass decided this exact record in this invocation from
+      -- these facts; only the fixed record adapter can pass it.
+      if p_loaded is null
+        or p_decision ->> 'recordId' is distinct from pg_catalog.lower(p_record_id::text) then
+        raise exception using errcode = '22023', message = 'Page record decision is invalid';
+      end if;
+      -- It is used only while it is still current now: an allowed decision
+      -- whose own deadline (every matched permission path, share and group
+      -- membership) and the page eligibility are both still in the future.
+      -- Anything else is decided again exactly, at this row's own time.
+      batched := coalesce(p_decision ->> 'outcome' = 'allowed'
+        and (p_decision ->> 'validUntil')::timestamptz > pg_catalog.clock_timestamp()
+        and p_page_eligibility ->> 'outcome' = 'eligible'
+        and (p_page_eligibility ->> 'validUntil')::timestamptz > pg_catalog.clock_timestamp(), false);
+    end if;
+    if batched then
+      decision := p_decision;
+    else
+      loaded := coalesce(loaded, vortex_record.read_record_page_row_facts_internal(shared, p_loaded));
+      if p_page_eligibility ->> 'outcome' = 'eligible'
+        and loaded -> 'declaration' = p_page_declaration
+        and (p_page_eligibility ->> 'validUntil')::timestamptz > pg_catalog.clock_timestamp() then
+        decision := vortex_access.evaluate_record_access_with_validated_types_internal(
+          loaded -> 'declaration', p_record_id, loaded -> 'facts', p_page_eligibility,
+          p_validated_record_types
+        );
+      else
+        decision := vortex_access.evaluate_organization_record_access_internal(
+          loaded -> 'declaration', p_record_id, loaded -> 'facts'
+        );
+      end if;
+    end if;
+    if decision ->> 'outcome' <> 'allowed' then
+      projection := pg_catalog.jsonb_build_object('outcome', 'refused');
+      -- A decision, even a refusal, means the record types passed validation;
+      -- the page reuses them. Callers read read_facts only for allowed rows.
+      read_facts := pg_catalog.jsonb_build_object(
+        'validatedRecordTypes', shared -> 'facts' -> 'recordTypes'
+      );
+      return next;
+      return;
+    end if;
+    bounds := coalesce(case when batched then p_bounds end,
+      vortex_record.decide_record_field_bounds_internal(decision));
+  end if;
+  -- Keep full access bounds for capabilities; intersect only the values requested by the screen.
+  projected_field_ids := bounds -> 'readableFieldIds';
+  if requested_field_ids is not null then
+    select coalesce(pg_catalog.jsonb_agg(item.value order by item.ordinality), '[]'::jsonb)
+    into projected_field_ids
+    from pg_catalog.jsonb_array_elements(projected_field_ids) with ordinality as item(value, ordinality)
+    where requested_field_ids ? (item.value #>> '{}');
+  end if;
+  if requested_field_ids is not null and not compact then
+    if (loaded ->> 'isSystemProjection')::boolean then
+      -- Protected projections keep their bounded reader; never scan their composite view.
+      selected_loaded := vortex_record.load_record_access_facts_internal(
+        p_record_type_id, 'read', p_record_id, null, p_projection_row, projected_field_ids
+      );
+      if selected_loaded ->> 'concurrencyNumber' is distinct from loaded ->> 'concurrencyNumber' then
+        projection := pg_catalog.jsonb_build_object('outcome', 'refused');
+        return next;
+        return;
+      end if;
+      selected_values := selected_loaded -> 'fieldValues';
+    else
+      -- Decide access from condition operands first, then fetch only requested readable values.
+      -- A concurrent record change cannot splice new values into the earlier access decision.
+      select coalesce(pg_catalog.jsonb_agg(distinct item.value), '[]'::jsonb)
+      into stored_field_ids
+      from (
+        select value from pg_catalog.jsonb_array_elements(projected_field_ids)
+        union all
+        select dependency.value
+        from pg_catalog.jsonb_array_elements(loaded #> '{recordTypeMeta,fields}') as field(value)
+        cross join lateral (values
+          (field.value #> '{settings,expression,dueFieldId}'),
+          (field.value #> '{settings,expression,statusFieldId}')
+        ) as dependency(value)
+        where projected_field_ids ? pg_catalog.lower(field.value ->> 'fieldId')
+          and field.value ->> 'type' = 'calculation' and dependency.value is not null
+      ) as item(value);
+      select coalesce(pg_catalog.jsonb_agg(field.value), '[]'::jsonb) into selected_fields
+      from pg_catalog.jsonb_array_elements(loaded #> '{recordTypeMeta,fields}') as field(value)
+      where stored_field_ids ? pg_catalog.lower(field.value ->> 'fieldId');
+      selected_value_expression := coalesce(vortex_record.named_action_storage_columns_internal(
+        (loaded #>> '{recordTypeMeta,storageContractId}')::uuid, selected_fields
+      ) ->> 'valueExpression', '');
+      execute pg_catalog.format(
+        'select pg_catalog.jsonb_build_object(%s) from record_data.%I as stored
+         where stored.organisation_id = $1 and stored.record_id = $2
+           and stored.concurrency_number = $3',
+        selected_value_expression, loaded ->> 'table'
+      ) into selected_values using (loaded #>> '{context,organizationId}')::uuid,
+        p_record_id, (loaded ->> 'concurrencyNumber')::bigint;
+      if selected_values is null then
+        projection := pg_catalog.jsonb_build_object('outcome', 'refused');
+        return next;
+        return;
+      end if;
+    end if;
+    loaded := pg_catalog.jsonb_set(loaded, '{fieldValues}', selected_values);
+  end if;
+  field_values := case when compact then p_loaded -> 'record' -> 'fieldValues'
+    else loaded -> 'fieldValues' end;
+  -- Read-time calculations are worked out here, at one statement timestamp in
+  -- the organisation's time zone, from the record's stored values. They are
+  -- never read from storage. A page works out the record type's read-time
+  -- fields and the statement's clock once and passes them here.
+  if compact and p_page ? 'readTimeFields' then
+    read_time_fields := p_page -> 'readTimeFields';
+  else
+    select coalesce(pg_catalog.jsonb_object_agg(pg_catalog.lower(field.value ->> 'fieldId'), field.value), '{}'::jsonb)
+    into read_time_fields
+    from pg_catalog.jsonb_array_elements(shared -> 'facts' -> 'recordTypes') as record_type(value)
+    cross join lateral pg_catalog.jsonb_array_elements(record_type.value -> 'fields') as field(value)
+    where pg_catalog.lower(record_type.value ->> 'recordTypeId') = pg_catalog.lower(p_record_type_id::text)
+      and field.value ->> 'type' = 'calculation'
+      and (field.value #>> '{settings,evaluation}' = 'read_time'
+        or field.value #>> '{settings,expression,op}' = 'deadline_passed');
+  end if;
+  if read_time_fields <> '{}'::jsonb then
+    read_time_clock := case when compact and p_page ? 'readTimeClock' then p_page -> 'readTimeClock'
+      else vortex_record.read_time_clock_internal() end;
+  end if;
+  if read_time_fields = '{}'::jsonb then
+    -- Without read-time fields every readable stored value is projected as
+    -- stored: one statement instead of one step per field.
+    select coalesce(pg_catalog.jsonb_object_agg(item.value #>> '{}', field_values -> (item.value #>> '{}')
+        order by item.ordinality), '{}'::jsonb)
+    into values_value
+    from pg_catalog.jsonb_array_elements(projected_field_ids) with ordinality as item(value, ordinality)
+    where shared -> 'columns' ? (item.value #>> '{}');
+  end if;
+  for field_id in
+    select item.value #>> '{}' from pg_catalog.jsonb_array_elements(projected_field_ids) as item(value)
+    where read_time_fields <> '{}'::jsonb
+  loop
+    if not (shared -> 'columns' ? field_id) then
+      continue;
+    end if;
+    if read_time_fields ? pg_catalog.lower(field_id) then
+      read_time_expression := read_time_fields -> pg_catalog.lower(field_id) #> '{settings,expression}';
+      -- Only the deadline-passed form is defined; another read-time form is
+      -- withheld rather than disclosed from a stored column.
+      if read_time_expression ->> 'op' is distinct from 'deadline_passed' then
+        continue;
+      end if;
+      due_key := pg_catalog.lower(read_time_expression #>> '{due,reference,fieldId}');
+      status_key := pg_catalog.lower(read_time_expression #>> '{status,reference,fieldId}');
+      due_value := field_values -> due_key;
+      status_value := case when status_key is null then null else field_values -> status_key end;
+      if status_value is not null and status_value <> 'null'::jsonb and exists (
+        select 1
+        from pg_catalog.jsonb_array_elements(coalesce(read_time_expression -> 'terminalStatusValues', '[]'::jsonb))
+          as terminal(value)
+        where terminal.value = status_value
+      ) then
+        read_time_value := 'false'::jsonb;
+      elsif pg_catalog.jsonb_typeof(due_value) = 'string'
+        and shared -> 'columns' -> due_key ->> 'databaseValueType' = 'date' then
+        -- Without the organisation's time zone the local date is unknown.
+        if read_time_clock ->> 'organizationLocalDate' is null then
+          continue;
+        end if;
+        read_time_value := pg_catalog.to_jsonb((read_time_clock ->> 'organizationLocalDate') > (due_value #>> '{}'));
+      elsif pg_catalog.jsonb_typeof(due_value) = 'string'
+        and shared -> 'columns' -> due_key ->> 'databaseValueType' = 'timestamp_with_time_zone' then
+        read_time_value := pg_catalog.to_jsonb(
+          (read_time_clock ->> 'instant')::timestamp with time zone
+            >= (due_value #>> '{}')::timestamp with time zone
+        );
+      else
+        read_time_value := 'null'::jsonb;
+      end if;
+      values_value := values_value || pg_catalog.jsonb_build_object(field_id, read_time_value);
+    else
+      values_value := values_value || pg_catalog.jsonb_build_object(field_id, field_values -> field_id);
+    end if;
+  end loop;
+  projection := pg_catalog.jsonb_build_object('outcome', 'allowed', 'recordId', p_record_id,
+    'concurrencyNumber', case when compact then p_loaded -> 'concurrencyNumber'
+      else loaded -> 'concurrencyNumber' end,
+    'values', values_value);
+  -- A compact record keeps its compact scope; the caller holds the envelope.
+  read_facts := case when compact then p_loaded else loaded end;
+  read_bounds := bounds;
+  return next;
+end
+$function$;
+
+alter function vortex_record.read_record_projection_with_validated_types_internal(uuid,uuid,jsonb,jsonb,jsonb,jsonb,jsonb,jsonb,jsonb,jsonb) owner to vortex_owner;
+revoke all on function vortex_record.read_record_projection_with_validated_types_internal(uuid,uuid,jsonb,jsonb,jsonb,jsonb,jsonb,jsonb,jsonb,jsonb)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+grant execute on function vortex_record.read_record_projection_with_validated_types_internal(uuid,uuid,jsonb,jsonb,jsonb,jsonb,jsonb,jsonb,jsonb,jsonb)
+  to vortex_record_adapter;
 
 create or replace function vortex_record.run_module_query_summary_internal(
   p_module_root_id uuid,

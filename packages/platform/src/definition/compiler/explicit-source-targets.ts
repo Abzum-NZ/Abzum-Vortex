@@ -80,6 +80,8 @@ export function explicitSourceTargets(
     resolution,
   );
   if (recordScopeTargets) return recordScopeTargets;
+  // Literal JSON stays inert, even when its property names resemble a formula reference.
+  if (isOpaqueDataPath(positions, sourcePath)) return undefined;
   // Calculation formulas retain their tree; only local field references resolve to identities.
   if (
     source.kind === "module" &&
