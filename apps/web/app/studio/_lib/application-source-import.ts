@@ -114,8 +114,13 @@ export function readStudioApplicationSourceImport(
       return { kind: "invalid", message: "The JSON source has duplicate members or exceeds its nesting limit." };
     const input: unknown = JSON.parse(text);
     const parsed = applicationSourceDocumentSchema.safeParse(input);
-    if (!parsed.success)
-      return { kind: "invalid", message: "Use one valid authored Application source document in format 2.0.0." };
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0]!;
+      return {
+        kind: "invalid",
+        message: `Use one valid authored Application source document in format 2.0.0 (${issue.path.join(".")}: ${issue.message}).`,
+      };
+    }
     if (parsed.data.key !== key || parsed.data.root_alias !== rootAlias)
       return { kind: "invalid", message: "The source must keep this draft's Application key and root alias." };
     return { kind: "valid", source: parsed.data };
