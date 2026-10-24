@@ -63,21 +63,28 @@ export const observeProtectedRead = async <ResultRow extends DatabaseRow>(
   let failed = true;
   try {
     const rows = await query(strings, ...values);
-    // run_module_query returns one JSON envelope. Count its rows, never their contents.
+    // run_module_query returns one JSON envelope: `rows`, or `columns[].rows` for a batched board
+    // read. Count its rows, never their contents.
+    const envelopeRows = (result: unknown): number => {
+      if (typeof result !== "object" || result === null) return 0;
+      if ("rows" in result && Array.isArray(result.rows)) return result.rows.length;
+      if ("columns" in result && Array.isArray(result.columns))
+        return result.columns.reduce(
+          (count: number, column: unknown) =>
+            count +
+            (typeof column === "object" &&
+            column !== null &&
+            "rows" in column &&
+            Array.isArray(column.rows)
+              ? column.rows.length
+              : 0),
+          0,
+        );
+      return 0;
+    };
     returnedRows =
       family === "module_query"
-        ? rows.reduce((count, row) => {
-            const result = row.result;
-            return (
-              count +
-              (typeof result === "object" &&
-              result !== null &&
-              "rows" in result &&
-              Array.isArray(result.rows)
-                ? result.rows.length
-                : 0)
-            );
-          }, 0)
+        ? rows.reduce((count, row) => count + envelopeRows(row.result), 0)
         : rows.length;
     failed = false;
     return rows;
