@@ -11,8 +11,9 @@ import {
   type ReactNode,
 } from "react";
 import {
-  formatDecimal,
+  projectInlineEditedCell,
   type JsonValue,
+  type RecordsDisplayFormat,
   type RecordsTableInlineEditor,
 } from "@vortex/platform/schema";
 import { Button } from "../../components/button";
@@ -20,7 +21,6 @@ import { Checkbox } from "../../components/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "../../components/popover";
 import { Spinner } from "../../components/spinner";
 import { useUnsavedWorkRegistry } from "../../controls/unsaved-work";
-import { DefinitionRenderError } from "../../definition-error";
 import { useDateFormatOptions } from "../date-format-context";
 import { DisplayCellView } from "../cell";
 import type {
@@ -28,7 +28,6 @@ import type {
   DisplayInlineEditResult,
   DisplayRow,
   DisplaySemanticEvent,
-  DisplayScalarCellValue,
 } from "../projected-data";
 import {
   readEditDraft,
@@ -44,36 +43,6 @@ import { waitingForParent } from "../../controls/dependent-field";
 import type { GridFeatureCellProps, GridFeatureModule } from "./registry";
 
 type Phase = "idle" | "editing" | "saving";
-
-/** The confirmed edit uses the normal cell renderer until the server projects the new row. */
-const acceptedCellValue = (
-  editor: RecordsTableInlineEditor,
-  value: JsonValue,
-  draft: EditDraft,
-): DisplayScalarCellValue => {
-  if (value === null) return { kind: "empty" };
-  if (typeof value === "boolean") return { kind: "boolean", value };
-  if (typeof value === "number") return { kind: "number", value, formatted: formatDecimal(value) };
-  if (typeof value === "string") {
-    if (editor.kind === "date" || editor.kind === "date_time") return { kind: "date", iso: value };
-    if (editor.kind === "decimal")
-      return { kind: "number", value: Number(value), formatted: formatDecimal(value) };
-    if (editor.kind === "choice")
-      return {
-        kind: "choice",
-        key: value,
-        label: editor.options.find((option) => option.value === value)!.label,
-      };
-    return { kind: "text", text: value };
-  }
-  // Link drafts carry the title from the permission-checked picker, never the stored UUID.
-  if (editor.kind === "link" && typeof draft === "object" && draft !== null)
-    return { kind: "record_link", label: draft.title ?? "Chosen record" };
-  throw new DefinitionRenderError(
-    "INVALID_COMPOSITION",
-    "A confirmed cell edit has an invalid value",
-  );
-};
 
 /** What the host answered; anything that is not a recognised result is shown as not saved. */
 const asResult = (value: unknown): DisplayInlineEditResult => {
@@ -105,6 +74,7 @@ function EditableCell({
   field,
   label,
   editor,
+  format,
   stored,
   handler,
   events,
@@ -118,6 +88,8 @@ function EditableCell({
   field: string;
   label: string;
   editor: RecordsTableInlineEditor;
+  /** The column's declared display format, which the server projects this field's cells in. */
+  format: RecordsDisplayFormat;
   stored: JsonValue | undefined;
   handler: (event: DisplaySemanticEvent) => unknown;
   /** The page's display callbacks, for a link editor's record picker. */
@@ -412,7 +384,14 @@ function EditableCell({
           {pending === undefined ? (
             children
           ) : (
-            <DisplayCellView value={acceptedCellValue(editor, pending.value, pending.draft)} />
+            <DisplayCellView
+              value={projectInlineEditedCell(
+                pending.value,
+                format,
+                editor,
+                typeof pending.draft === "object" ? pending.draft?.title : undefined,
+              )}
+            />
           )}
           <span className="sr-only">. Press Enter to edit {label}.</span>
         </button>
@@ -557,6 +536,7 @@ function InlineEditor({ context, row, column, children }: GridFeatureCellProps):
       field={column.key}
       label={column.label}
       editor={field.editor}
+      format={column.declared.format}
       stored={row.edit[storedKey]}
       handler={onInlineEdit}
       events={context.events}
