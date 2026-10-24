@@ -63,6 +63,14 @@ export const readApplicationRemoval = async (
           organizationId,
         });
         await readInstallationOrdinaryRoot(transaction, rootId);
+        // The bindings reader's refusal names delegation, so Manage applications is proved first;
+        // the complete requirement (custom code included) is checked once the release is known.
+        await requireInstallationAuthority(
+          transaction,
+          scope,
+          environment.permissions,
+          removalOperation(rootId, false),
+        );
         const bindings = await readInstallationBindings(transaction, rootId);
         const revision = bindings.registeredReleaseRevision;
         // Never installed, or every module already detached: there is nothing here to remove.
