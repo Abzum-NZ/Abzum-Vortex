@@ -405,6 +405,11 @@ export const checkRecordsTableFeature = (
         `Turn ${other} off to group the records.`,
       );
   }
+  if (key === "pivot" && state.enabled && features.tree.enabled)
+    return featureNotPossible(
+      "definition_records_table_pivot",
+      "Turn Tree off to pivot the records.",
+    );
   // A board draws cards, not table rows, so a feature the board view does not implement is
   // refused rather than silently ignored. Grouping and tree carry their own sentences above.
   if (

@@ -145,6 +145,16 @@ export const recordsTablePivotFeature: RecordsTableFeatureDefinition<RecordsTabl
     if (columnProblem !== undefined) return featureNotPossible(code, columnProblem);
     if (rows!.field.toLowerCase() === columns!.field.toLowerCase())
       return featureNotPossible(code, "Choose different fields for the rows and the columns.");
+    if (!facts.columnFieldIds.some((field) => field.toLowerCase() === rows!.field.toLowerCase()))
+      return featureNotPossible(
+        code,
+        `Add ${rows!.label} to Column filters so people can drill into pivot rows.`,
+      );
+    if (!facts.columnFieldIds.some((field) => field.toLowerCase() === columns!.field.toLowerCase()))
+      return featureNotPossible(
+        code,
+        `Add ${columns!.label} to Column filters so people can drill into pivot columns.`,
+      );
     if (state.measureFunction === undefined)
       return featureNotPossible(code, "Choose what each cell shows: a count or a total.");
     if (state.measureFunction !== "count") {
