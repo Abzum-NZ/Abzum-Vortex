@@ -220,6 +220,19 @@ export const deleteRecordLifecyclePolicySchema = z
   .strict()
   .superRefine(validatePolicyLimitsConsistency);
 
+/** Explicit setup choice for record types that do not yet have an organisation policy. */
+export const initialRecordLifecyclePolicySchema = z
+  .object({
+    action: deleteRecordLifecyclePolicySchema.shape.action,
+    maxAgeDays: policyBaseFields.maxAgeDays,
+    maxCount: policyBaseFields.maxCount,
+    allowUnlimitedAge: policyBaseFields.allowUnlimitedAge,
+    allowUnlimitedCount: policyBaseFields.allowUnlimitedCount,
+    recoveryWindowDays: recoveryWindowDaysSchema,
+  })
+  .strict()
+  .superRefine(validatePolicyLimitsConsistency);
+
 export type DeleteRecordLifecyclePolicy = z.infer<typeof deleteRecordLifecyclePolicySchema>;
 
 /**

@@ -11,6 +11,7 @@ import {
   maximumRecoveryWindowDays,
   organizationIdSchema,
   organizationLifecycleLimitsSchema,
+  initialRecordLifecyclePolicySchema,
   recordLifecycleActionSchema,
   recordTypeLifecyclePolicySchema,
   revisionSchema,
@@ -276,7 +277,11 @@ export const createOrganizationLifecycleLimitsStore = (
   const runtimeTransaction = dependencies.runtimeTransaction ?? withRuntimeTransaction;
 
   return Object.freeze({
-    async initialize(limitsCandidate: unknown): Promise<OrganizationLifecycleLimits> {
+    async initialize(
+      limitsCandidate: unknown,
+      initialPolicyCandidate: unknown,
+    ): Promise<OrganizationLifecycleLimits> {
+      const initialPolicy = initialRecordLifecyclePolicySchema.parse(initialPolicyCandidate);
       const limits = organizationLifecycleLimitsSchema.safeParse(limitsCandidate);
       if (
         !limits.success ||
@@ -300,7 +305,7 @@ export const createOrganizationLifecycleLimitsStore = (
         const rows = await transaction.query<LimitsRow>`
           select vortex_record.initialize_organization_lifecycle_limits(
             ${canonicalLimits.organizationId}::uuid,
-            ${JSON.stringify(canonicalLimits)}::text::jsonb
+            ${JSON.stringify({ ...canonicalLimits, initialPolicy })}::text::jsonb
           ) as limits
         `;
         const row = requireOneRow(rows);
@@ -376,7 +381,9 @@ export const createRecordTypeLifecyclePolicyService = (
     ): Promise<HumanOrganizationRequestResult<RecordTypeLifecyclePolicy>> => {
       const command = parseSaveRecordTypeLifecyclePolicyCommand(commandCandidate);
       if (command === undefined) {
-        console.error("[records] lifecycle policy save refused LIFECYCLE_POLICY_SAVE_COMMAND_INVALID");
+        console.error(
+          "[records] lifecycle policy save refused LIFECYCLE_POLICY_SAVE_COMMAND_INVALID",
+        );
         return { kind: "unavailable" };
       }
       let activityId: string;
@@ -432,7 +439,6 @@ export const createRecordTypeLifecyclePolicyService = (
         return parsed.data;
       });
     },
-
   });
 };
 
