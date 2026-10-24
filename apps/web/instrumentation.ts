@@ -10,9 +10,7 @@ export async function register(): Promise<void> {
   const deliveryMode = process.env.VORTEX_EVENT_DELIVERY_MODE;
   if (deliveryMode !== "in_process" && deliveryMode !== "external")
     throw new Error(
-      process.env.VORTEX_ENVIRONMENT === "local"
-        ? "Configure VORTEX_EVENT_DELIVERY_MODE: add the line VORTEX_EVENT_DELIVERY_MODE=in_process to apps/web/.env.development.local"
-        : "Configure VORTEX_EVENT_DELIVERY_MODE as in_process or external",
+      "Configure VORTEX_EVENT_DELIVERY_MODE: a local server adds VORTEX_EVENT_DELIVERY_MODE=in_process to apps/web/.env.development.local; a hosted deployment sets external",
     );
   if (deliveryMode === "external" && !process.env.VORTEX_EVENT_DISPATCHER_CREDENTIAL_SHA256)
     throw new Error("External event delivery requires a dispatcher credential digest");
