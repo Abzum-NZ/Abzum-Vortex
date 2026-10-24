@@ -75,7 +75,7 @@ export function StudioPublishDialog(props: StudioPublishDialogProps) {
     onPrepare();
   }, [open, waiting, canPrepare, prepared, preparing, publishing, onPrepare, revision]);
   const noteValid = props.note.trim().length >= 1 && props.note.trim().length <= 2000;
-  const preparingSummary = !waiting && !publishing && prepared === null && props.problem === "";
+  const preparingSummary = !waiting && preparing;
   return (
     <Dialog
       open={open}
@@ -108,11 +108,13 @@ export function StudioPublishDialog(props: StudioPublishDialogProps) {
           <div className="min-w-0 space-y-4">
             {prepared === null ? (
               <p role="status" aria-live="polite">
-                {preparing
-                  ? "Checking what will be published…"
-                  : props.problem === ""
-                    ? "Preparing the summary…"
-                    : null}
+                {publishing
+                  ? "Publishing the saved draft…"
+                  : preparing
+                    ? "Checking what will be published…"
+                    : props.problem === ""
+                      ? "The summary is not ready. Check again before publishing."
+                      : null}
               </p>
             ) : (
               <PublicationSummary
@@ -154,7 +156,7 @@ export function StudioPublishDialog(props: StudioPublishDialogProps) {
           >
             Cancel
           </Button>
-          {!waiting && prepared === null && !preparing && props.problem !== "" ? (
+          {!waiting && prepared === null && !preparing && !publishing ? (
             <Button type="button" variant="outline" disabled={!canPrepare} onClick={onPrepare}>
               Check again
             </Button>

@@ -187,8 +187,13 @@ export function useStudioReleasesTab({
 
   // A prepared publication is for one saved revision: an edit, an undo or a reload makes it out of date.
   useEffect(() => {
-    if (preparedRef.current !== null && !sameSnapshot(preparedRef.current.snapshot, readSnapshot()))
+    if (
+      preparedRef.current !== null &&
+      !sameSnapshot(preparedRef.current.snapshot, readSnapshot())
+    ) {
       setPrepared(null);
+      setProblem("The draft changed after its summary was checked. Check again before publishing.");
+    }
   }, [draft.state, draft.saved, draft.lifetime, readSnapshot, setPrepared]);
 
   /** A flow refusal the platform reported when publishing, in the words Studio shows for it. */
@@ -254,13 +259,22 @@ export function useStudioReleasesTab({
       ticket.cancelled ||
       request.current !== ticket ||
       latest.current.lifetime !== snapshot.lifetime;
+    const discard = (): StudioPublicationOutcome => {
+      if (latest.current.isActive() && !ticket.cancelled && request.current === ticket)
+        setProblem(
+          mode === "prepare"
+            ? "The draft was reloaded while its summary was being checked. Check again before publishing."
+            : publicationProblemText("temporarily_unavailable", undefined),
+        );
+      return { kind: "discarded" };
+    };
     try {
       if (mode === "prepare") {
         const result = await prepareStudioApplicationPublication(organizationId, {
           rootId: snapshot.rootId,
           expectedDraftRevision: snapshot.draftRevision,
         });
-        if (superseded()) return { kind: "discarded" };
+        if (superseded()) return discard();
         const parsed =
           result.kind === "available"
             ? prepareDefinitionPublicationResultSchema.safeParse(result.preparation)
@@ -278,7 +292,7 @@ export function useStudioReleasesTab({
             latest.current.readCatalogue().releases.length === 0
           ) {
             const resources = await latest.current.loadAuthoringResources();
-            if (superseded()) return { kind: "discarded" };
+            if (superseded()) return discard();
             if (resources === null) {
               setProblem(
                 "The pages could not be checked for new fields. Close this window and try again.",
@@ -316,7 +330,7 @@ export function useStudioReleasesTab({
       }
       const confirmation = confirmed!.confirmation;
       const result = await publishStudioApplication(organizationId, { confirmation, releaseNote });
-      if (superseded()) return { kind: "discarded" };
+      if (superseded()) return discard();
       const parsed =
         result.kind === "available"
           ? publishDefinitionResultSchema.safeParse(result.publication)
