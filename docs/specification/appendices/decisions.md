@@ -28,7 +28,10 @@ September 2026: local organisation accounts remain the sole entry path. An activ
 named super administrator selecting an eligible organisation without an account
 receives a provisioned local account with assignment provenance and Activity
 evidence; a suspended account is refused without reactivation. Person-backed
-ceiling commands and reactivation belong to #1441. The configured system operator
+ceiling commands and reactivation belong to #1441. For capability policy ceilings,
+the configured system operator retains the context-free bootstrap path, and an
+active named Vortex super administrator may set, re-pin or revoke a ceiling as a
+verified person after recent primary authentication. The configured system operator
 remains the sole caller for the #1384 entitlement authority. See [people and
 sign-in](../02-people-organisations-and-sign-in.md#named-vortex-super-administrators)
 and [access and permissions](../04-access-and-permissions.md#named-vortex-super-administrators).
