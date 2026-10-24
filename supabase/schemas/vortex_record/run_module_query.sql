@@ -172,7 +172,7 @@ declare
   board_option jsonb;
   board_member_matches boolean;
   -- Every board column this call reads: one for a member page, every displayed
-  -- column for a board's first pages, each read in its own pass below.
+  -- column for a board's first pages, each finished in its own pass below.
   board_columns_mode boolean := false;
   board_columns jsonb := '[]'::jsonb;
   board_column_item jsonb;
@@ -182,6 +182,20 @@ declare
   -- field on every scanned row, and the current column's candidate predicate.
   board_choice_column text;
   board_scan_sql text := '';
+  -- A board's first pages read the table once for every column when the choice field is not
+  -- guaranteed readable: each readable row is classified into its column from its own readable
+  -- value, and every column keeps its own page state (rows, capability inputs, first and last
+  -- returned row, and whether more cards follow) in the arrays below, by column position.
+  board_shared_scan boolean := false;
+  board_column_index integer;
+  shared_rows jsonb[] := array[]::jsonb[];
+  shared_capabilities jsonb[] := array[]::jsonb[];
+  shared_counts integer[] := array[]::integer[];
+  shared_more boolean[] := array[]::boolean[];
+  shared_first_keys jsonb[] := array[]::jsonb[];
+  shared_first_ids uuid[] := array[]::uuid[];
+  shared_last_keys jsonb[] := array[]::jsonb[];
+  shared_last_ids uuid[] := array[]::uuid[];
   group_member jsonb;
   group_selector jsonb;
   group_selector_values jsonb := '{}'::jsonb;
@@ -1059,6 +1073,17 @@ begin
     board_column_item := board_columns -> (board_column_position - 1);
     board_column_kind := board_column_item ->> 'kind';
     board_column_value := board_column_item ->> 'value';
+    if board_column_position = 1 and board_columns_mode and board_choice_column is null then
+      board_shared_scan := true;
+      shared_rows := pg_catalog.array_fill('[]'::jsonb, array[pg_catalog.jsonb_array_length(board_columns)]);
+      shared_capabilities := shared_rows;
+      shared_counts := pg_catalog.array_fill(0, array[pg_catalog.jsonb_array_length(board_columns)]);
+      shared_more := pg_catalog.array_fill(false, array[pg_catalog.jsonb_array_length(board_columns)]);
+      shared_first_keys := pg_catalog.array_fill('null'::jsonb, array[pg_catalog.jsonb_array_length(board_columns)]);
+      shared_first_ids := pg_catalog.array_fill(null::uuid, array[pg_catalog.jsonb_array_length(board_columns)]);
+      shared_last_keys := shared_first_keys;
+      shared_last_ids := shared_first_ids;
+    end if;
     board_scan_sql := case
       when board_choice_column is null then ''
       when board_column_kind = 'option' then pg_catalog.format(
@@ -1067,7 +1092,7 @@ begin
         ' and (stored.%1$I is null or not (stored.%1$I collate "C" = any ($14::text[])))',
         board_choice_column)
     end;
-    if board_column_position > 1 then
+    if board_column_position > 1 and not board_shared_scan then
       examined := 0;
       budget_exhausted := false;
       more_rows := false;
@@ -1088,6 +1113,7 @@ begin
       opposite_value := null;
     end if;
   end if;
+  if not (board_shared_scan and board_column_position > 1) then
   foreach segment_sql in array segment_predicates loop
   loop
   if projection_page_scan then
@@ -1320,7 +1346,49 @@ begin
           -- a hidden value can neither satisfy a search nor be inferred from one.
           -- Only a text or number value, or the text members of a list value, is
           -- searched; a structured value's JSON keys and identifiers never match.
-          if board_member_mode then
+          if board_shared_scan then
+            -- The one scan serves every column: this row belongs to the column its readable
+            -- choice value names, or to the unassigned column when it names no option. A row of a
+            -- column that already holds its page and the card after it is not read again.
+            board_column_index := (
+              select requested.ordinality::integer
+              from pg_catalog.jsonb_array_elements(board_columns) with ordinality
+                as requested(value, ordinality)
+              where case when (readable_values ? board_choice_field_id)
+                  and pg_catalog.jsonb_typeof(readable_values -> board_choice_field_id) = 'string'
+                  and (readable_values ->> board_choice_field_id) collate "C"
+                    = any (board_option_values)
+                then requested.value ->> 'kind' = 'option'
+                  and (requested.value ->> 'value') collate "C"
+                    = (readable_values ->> board_choice_field_id) collate "C"
+                else requested.value ->> 'kind' = 'unassigned' end
+              limit 1
+            );
+            if board_column_index is null or shared_more[board_column_index] then
+              last_examined_sort_key := scan_record.sort_key;
+              last_examined_record_id := scan_record.record_id;
+              continue;
+            end if;
+            rows_value := shared_rows[board_column_index];
+            capability_rows := array(select item.value from pg_catalog.jsonb_array_elements(
+              shared_capabilities[board_column_index]) as item(value));
+            row_count := shared_counts[board_column_index];
+            first_returned_record_id := shared_first_ids[board_column_index];
+            first_returned_sort_key := case
+              when pg_catalog.jsonb_typeof(shared_first_keys[board_column_index]) = 'array'
+              then array(select item.value from pg_catalog.jsonb_array_elements_text(
+                shared_first_keys[board_column_index]) as item(value)) end;
+            if row_count = p_page_size then
+              shared_more[board_column_index] := true;
+              if pg_catalog.array_position(shared_more, false) is null then
+                more_rows := true;
+                exit;
+              end if;
+              last_examined_sort_key := scan_record.sort_key;
+              last_examined_record_id := scan_record.record_id;
+              continue;
+            end if;
+          elsif board_member_mode then
             if board_column_kind = 'option' then
               board_member_matches := (readable_values ? board_choice_field_id)
                 and pg_catalog.jsonb_typeof(readable_values -> board_choice_field_id) = 'string'
@@ -1428,6 +1496,15 @@ begin
           row_count := row_count + 1;
           last_returned_sort_key := scan_record.sort_key;
           last_returned_record_id := scan_record.record_id;
+          if board_shared_scan then
+            shared_rows[board_column_index] := rows_value;
+            shared_capabilities[board_column_index] := pg_catalog.to_jsonb(capability_rows);
+            shared_counts[board_column_index] := row_count;
+            shared_first_keys[board_column_index] := pg_catalog.to_jsonb(first_returned_sort_key);
+            shared_first_ids[board_column_index] := first_returned_record_id;
+            shared_last_keys[board_column_index] := pg_catalog.to_jsonb(last_returned_sort_key);
+            shared_last_ids[board_column_index] := last_returned_record_id;
+          end if;
         end if;
       end if;
     end if;
@@ -1447,6 +1524,25 @@ begin
   end loop;
   exit when more_rows or budget_exhausted;
   end loop;
+  end if;
+  -- The shared scan has read every column: this column's page state is the one its rows left.
+  if board_shared_scan then
+    rows_value := shared_rows[board_column_position];
+    capability_rows := array(select item.value from pg_catalog.jsonb_array_elements(
+      shared_capabilities[board_column_position]) as item(value));
+    row_count := shared_counts[board_column_position];
+    more_rows := shared_more[board_column_position];
+    first_returned_record_id := shared_first_ids[board_column_position];
+    first_returned_sort_key := case
+      when pg_catalog.jsonb_typeof(shared_first_keys[board_column_position]) = 'array'
+      then array(select item.value from pg_catalog.jsonb_array_elements_text(
+        shared_first_keys[board_column_position]) as item(value)) end;
+    last_returned_record_id := shared_last_ids[board_column_position];
+    last_returned_sort_key := case
+      when pg_catalog.jsonb_typeof(shared_last_keys[board_column_position]) = 'array'
+      then array(select item.value from pg_catalog.jsonb_array_elements_text(
+        shared_last_keys[board_column_position]) as item(value)) end;
+  end if;
   if projection_batch_exhausted and not more_rows then
     budget_exhausted := true;
     last_examined_sort_key := projection_last_sort_key;
@@ -1572,4 +1668,4 @@ revoke all on function vortex_record.run_module_query(uuid, uuid, bigint, jsonb,
 grant execute on function vortex_record.run_module_query(uuid, uuid, bigint, jsonb, jsonb, integer, jsonb, jsonb, jsonb, text, uuid[])
   to vortex_request;
 comment on function vortex_record.run_module_query(uuid, uuid, bigint, jsonb, jsonb, integer, jsonb, jsonb, jsonb, text, uuid[]) is
-  'One bounded keyset page of rows readable through read_record for one installed Module query, or one exact current human-owned preview query over isolated preview storage, each carrying the record''s concurrency number and the per-row capabilities from read_record_capabilities, each action decided exactly as its own writer decides it, with only the declared Record system values, or one refusal before any row is exposed; accepts a bound list component''s declared sortable, filterable and searchable field sets together with the viewer''s chosen sort, typed filter and search term, refuses a sort or filter outside the declared sets, keeps a user sort only over a field the record type declares sortable and the reader is guaranteed to see, ANDs the user filter with the published filter so it can only narrow, and matches a search only through searchable fields the returned row exposes to the reader; returns with every plain page and board column read, even an empty one, the reader''s current field bound (the fields it is guaranteed to see on every record it may read, and whether any searchable field is among them) so a list offers and accepts its filter, search and sort controls from the same read; requires every filtered field to be declared filterable; pushes a filter or a sort into the candidate scan only for fields the reader is guaranteed to see for the whole record type, evaluates a filter on a possibly-withheld field per row, and keeps the keyset cursor over readable sort values and a record identity so no cursor carries a hidden field value and the scan order and budget never depend on one; narrows an installed scan with one predicate that OR-s every eligible alternative''s exact owner, owner-group and direct-share route test with its saved condition compiled over the record''s own catalogue columns where that condition can be expressed as a superset of the per-row decision, leaves the installed scan unrestricted where a route or condition has no exact stored form, and still decides every returned row through read_record; validates every preview stage against the current human, candidate revision and exact release and storage pins, uses only active preview catalogue mappings and preview field bounds, and never falls through to installed resolution; works out read-time fields, such as a deadline-passed calculation, inside an installed query at one statement timestamp in the organisation time zone, so no installed query is refused for freshness; admits board members only through a separately validated board selector over the sole filterable choice grouping key, reads one column''s member page or, for a board''s first pages, the first page of every requested column in one invocation with its own budget and position per column, classifies those columns from current readable values and, when the choice field is guaranteed readable on every scanned row, narrows each column''s candidate scan to its own stored choice value so a column reads only its own cards, and admits generic grouped members only when every installed grouping value is present in the current readable projection and JSONB-equal to the closed typed selector; missing or withheld values belong to no generic group while JSON null is a value, and generic group membership never uses hidden stored values, and a grid dimension narrows the stored candidate scan only after the field is proven guaranteed readable, with date bucket membership using the same authored-zone canonical value as the summary and typed half-open calendar ranges; reads one level of a tree over a one-record link of the record type to itself, either the roots (records whose parent no readable record matching the query''s filter and search holds, so an unreadable parent is never revealed and a matching record under a non-matching parent stays reachable) or the children of one parent, through the same keyset order, access scan, filter, search and exact per-row decision as a plain page, requiring the parent link to be a field the reader is guaranteed to see and reporting for every returned record, from one bounded set of rounds over the whole page rather than one query per row, whether the reader may read a child of it that matches the query, or that this is undecided when the rounds'' examination budget ran out; orders board pages by record identity and generic members by the requested or query order with bidirectional keysets, returns generic group identity and the reader''s field bound even for empty pages, and binds each member operation, selector and projection in its own uncached continuation; reads the copied records of a preview like installed ones and refuses a system projection in a preview; with a list of 1 to 200 distinct record ids it reads exactly those records in one page, each under the same scope, release, filter, search and readability decision as any row, and returns only those readable now.';
+  'One bounded keyset page of rows readable through read_record for one installed Module query, or one exact current human-owned preview query over isolated preview storage, each carrying the record''s concurrency number and the per-row capabilities from read_record_capabilities, each action decided exactly as its own writer decides it, with only the declared Record system values, or one refusal before any row is exposed; accepts a bound list component''s declared sortable, filterable and searchable field sets together with the viewer''s chosen sort, typed filter and search term, refuses a sort or filter outside the declared sets, keeps a user sort only over a field the record type declares sortable and the reader is guaranteed to see, ANDs the user filter with the published filter so it can only narrow, and matches a search only through searchable fields the returned row exposes to the reader; returns with every plain page and board column read, even an empty one, the reader''s current field bound (the fields it is guaranteed to see on every record it may read, and whether any searchable field is among them) so a list offers and accepts its filter, search and sort controls from the same read; requires every filtered field to be declared filterable; pushes a filter or a sort into the candidate scan only for fields the reader is guaranteed to see for the whole record type, evaluates a filter on a possibly-withheld field per row, and keeps the keyset cursor over readable sort values and a record identity so no cursor carries a hidden field value and the scan order and budget never depend on one; narrows an installed scan with one predicate that OR-s every eligible alternative''s exact owner, owner-group and direct-share route test with its saved condition compiled over the record''s own catalogue columns where that condition can be expressed as a superset of the per-row decision, leaves the installed scan unrestricted where a route or condition has no exact stored form, and still decides every returned row through read_record; validates every preview stage against the current human, candidate revision and exact release and storage pins, uses only active preview catalogue mappings and preview field bounds, and never falls through to installed resolution; works out read-time fields, such as a deadline-passed calculation, inside an installed query at one statement timestamp in the organisation time zone, so no installed query is refused for freshness; admits board members only through a separately validated board selector over the sole filterable choice grouping key, reads one column''s member page or, for a board''s first pages, the first page of every requested column in one invocation with its own budget and position per column, classifies those columns from current readable values and, when the choice field is guaranteed readable on every scanned row, narrows each column''s candidate scan to its own stored choice value so a column reads only its own cards, and otherwise reads the table once for every column, each readable row going to the column its readable value names, and admits generic grouped members only when every installed grouping value is present in the current readable projection and JSONB-equal to the closed typed selector; missing or withheld values belong to no generic group while JSON null is a value, and generic group membership never uses hidden stored values, and a grid dimension narrows the stored candidate scan only after the field is proven guaranteed readable, with date bucket membership using the same authored-zone canonical value as the summary and typed half-open calendar ranges; reads one level of a tree over a one-record link of the record type to itself, either the roots (records whose parent no readable record matching the query''s filter and search holds, so an unreadable parent is never revealed and a matching record under a non-matching parent stays reachable) or the children of one parent, through the same keyset order, access scan, filter, search and exact per-row decision as a plain page, requiring the parent link to be a field the reader is guaranteed to see and reporting for every returned record, from one bounded set of rounds over the whole page rather than one query per row, whether the reader may read a child of it that matches the query, or that this is undecided when the rounds'' examination budget ran out; orders board pages by record identity and generic members by the requested or query order with bidirectional keysets, returns generic group identity and the reader''s field bound even for empty pages, and binds each member operation, selector and projection in its own uncached continuation; reads the copied records of a preview like installed ones and refuses a system projection in a preview; with a list of 1 to 200 distinct record ids it reads exactly those records in one page, each under the same scope, release, filter, search and readability decision as any row, and returns only those readable now.';

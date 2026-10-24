@@ -46,6 +46,7 @@ import type {
   PageDataState,
   PlacementFlowBinding,
   ApplicationPageModel,
+  PlacementReadModel,
   PageLoadOptions,
 } from "./types";
 import {
@@ -128,9 +129,10 @@ export const loadInstalledContext = (
  * The viewer's projection of one page and of the application menu, read once per server render:
  * the application frame layout and the page of one request share them instead of deciding the same
  * access twice. The next request reads again, so no access decision outlives its request. React's
- * `cache` keys on the number of arguments as well as their values, so every caller passes all five
- * (the selected placements are required, `undefined` for a whole page): a call with fewer would
- * miss the shared read and project the page and the menu a second time.
+ * `cache` keys on the number of arguments as well as their values, so every caller passes all six
+ * (the selected placements are required, `undefined` for a whole page; `navigation` says whether
+ * the caller shows the menu): a call with fewer would miss the shared read and project the page and
+ * the menu a second time.
  */
 export const readPageProjections = cache(
   (
@@ -139,6 +141,7 @@ export const readPageProjections = cache(
     pageId: string,
     subjectRecordId: string | undefined,
     selectedPlacementIds: ReadonlySet<string> | undefined,
+    navigation: boolean,
   ) => {
     const dependencies = requestDependencies();
     const selection: OrganizationSelectionCandidate = runtimeContextSelection(context);
@@ -181,22 +184,27 @@ export const readPageProjections = cache(
         } as const;
       return projected;
     });
-    const navigationRead = subjectReady.then((ready) =>
-      ready.kind === "ready"
-        ? createStoredNavigationProjectionService({
-            ...dependencies,
-            context,
-            permissions: platformPermissionSource,
-          }).project(session, selection)
-        : ({
-            kind:
-              ready.kind === "temporarily_unavailable" ? "temporarily_unavailable" : "unavailable",
-          } as const),
-    );
+    // A read of selected placements shows no menu, so it projects none.
+    const navigationRead = navigation
+      ? subjectReady.then((ready) =>
+          ready.kind === "ready"
+            ? createStoredNavigationProjectionService({
+                ...dependencies,
+                context,
+                permissions: platformPermissionSource,
+              }).project(session, selection)
+            : ({
+                kind:
+                  ready.kind === "temporarily_unavailable"
+                    ? "temporarily_unavailable"
+                    : "unavailable",
+              } as const),
+        )
+      : undefined;
     // A failure is rethrown where its result is consulted, never left unobserved meanwhile, and
     // every reader joins both reads before it returns on any path (early returns included).
     void projectedPageRead.catch(() => undefined);
-    void navigationRead.catch(() => undefined);
+    void navigationRead?.catch(() => undefined);
     return { projectedPageRead, navigationRead };
   },
 );
@@ -319,8 +327,10 @@ const loadApplicationPageJoined = async (
     pageDefinition.pageId,
     conditionSubjectId,
     selectedPlacementIds,
+    selectedPlacementIds === undefined,
   );
-  startedReads.push(projectedPageRead, navigationRead);
+  startedReads.push(projectedPageRead);
+  if (navigationRead !== undefined) startedReads.push(navigationRead);
   const adoptionTarget = await adoptionRead;
   const projectedPage = await projectedPageRead;
   if (projectedPage.kind !== "available") return projectedPage;
@@ -411,8 +421,8 @@ const loadApplicationPageJoined = async (
   }
   applyChoiceOptionGates(choicePlan, allowedPermissions);
 
-  const navigation = await navigationRead;
-  if (navigation.kind !== "available") return navigation;
+  const navigation = navigationRead === undefined ? undefined : await navigationRead;
+  if (navigation !== undefined && navigation.kind !== "available") return navigation;
 
   const services = createPlacementReadServices({
     session,
@@ -858,28 +868,14 @@ const loadApplicationPageJoined = async (
     throw new Error(
       `Compiled page '${pageDefinition.key}' references missing shell '${applicationShellId}'`,
     );
-  const model: ApplicationPageModel = {
+  const model: PlacementReadModel = {
     page,
     pageId: pageDefinition.pageId,
     pageName: pageDefinition.name,
     theme: application.content.theme,
-    navigation: navigation.value,
     ...(bodyContentAvailable === undefined ? {} : { bodyContentAvailable }),
     ...(firstRecordTypeHref === undefined ? {} : { firstRecordTypeHref }),
     accessVersion: page.accessVersion,
-    webMcpTools: projectPageWebMcpTools({
-      page,
-      ...(guidedForm === undefined ? {} : { activeStepId: guidedForm.activeStepId }),
-      bindings,
-      applicationBindings: application.content.flowBindings,
-      toolBundle: application.toolBundle,
-      applicationRootId: String(application.rootId),
-      applicationKey: address.application.key,
-      permittedApplications: address.read.applications.map((candidate) => ({
-        applicationRootId: candidate.applicationRootId,
-        key: candidate.key,
-      })),
-    }),
     data,
     ...(streamed.length === 0 ? {} : { streamedData }),
     tableAddress: Object.fromEntries(
@@ -942,9 +938,31 @@ const loadApplicationPageJoined = async (
       ].join(":"),
     },
   };
+  if (navigation === undefined)
+    return {
+      kind: "placements",
+      model,
+      ...(applicationShell === undefined ? {} : { applicationShell }),
+    };
   return {
     kind: "available",
-    model,
+    model: {
+      ...model,
+      navigation: navigation.value,
+      webMcpTools: projectPageWebMcpTools({
+        page,
+        ...(guidedForm === undefined ? {} : { activeStepId: guidedForm.activeStepId }),
+        bindings,
+        applicationBindings: application.content.flowBindings,
+        toolBundle: application.toolBundle,
+        applicationRootId: String(application.rootId),
+        applicationKey: address.application.key,
+        permittedApplications: address.read.applications.map((candidate) => ({
+          applicationRootId: candidate.applicationRootId,
+          key: candidate.key,
+        })),
+      }),
+    },
     shells: application.content.shells,
     ...(applicationShell === undefined ? {} : { applicationShell }),
   };

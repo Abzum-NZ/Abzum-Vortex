@@ -40,6 +40,7 @@ import {
   type ProtectedQuerySummaryCompleted,
   type ProtectedQueryTreeLevelCommand,
   type ProtectedQueryTreeLevelResult,
+  type ProtectedReadDecider,
 } from "../queries/index";
 import {
   collectRecordLinks,
@@ -55,6 +56,7 @@ import {
   conditionalFormattingFieldIds,
   personalFormattingRules,
   logRecordsTableRequestRefusal,
+  recordsTableNarrowingContractRefusal,
   recordsTableNarrowingRefusal,
   recordsTableRequestRefusal,
   type RecordsTableRequestPart,
@@ -81,24 +83,28 @@ export type RecordsTableQueryRunner = Readonly<{
     session: IdentitySession,
     selection: OrganizationSelectionCandidate,
     command: ProtectedQueryCommand,
+    decide?: ProtectedReadDecider,
   ): Promise<HumanOrganizationRequestResult<ProtectedQueryResult>>;
   /** The counts of a grouped table's groups, in one bounded summary read. */
   summarise(
     session: IdentitySession,
     selection: OrganizationSelectionCandidate,
     command: unknown,
+    decide?: ProtectedReadDecider,
   ): Promise<HumanOrganizationRequestResult<ProtectedQuerySummaryResult>>;
   /** One page of the currently readable members of one group. */
   groupedMembers(
     session: IdentitySession,
     selection: OrganizationSelectionCandidate,
     command: unknown,
+    decide?: ProtectedReadDecider,
   ): Promise<HumanOrganizationRequestResult<ProtectedQueryGroupedMembersResult>>;
   /** One level of a tree: the roots or the children of one parent record. */
   treeLevel(
     session: IdentitySession,
     selection: OrganizationSelectionCandidate,
     command: ProtectedQueryTreeLevelCommand,
+    decide?: ProtectedReadDecider,
   ): Promise<HumanOrganizationRequestResult<ProtectedQueryTreeLevelResult>>;
 }>;
 
@@ -151,8 +157,12 @@ export type RecordsTableQueryRequest = Readonly<{
   formatting?: ConditionalFormattingContext;
   /** How a cell edits each field of the installed definition; supplied only when inline editing is on. */
   fieldEditors?: Readonly<Record<string, RecordsTableInlineEditor>>;
-  /** The viewer's export permission for the table's record type, supplied only when Export is on. */
-  exportAllowed?: boolean;
+  /**
+   * The viewer decisions the table shows beside its rows (export permission, row action
+   * availability), taken in the read's own request transaction from the rows it returned: one
+   * protected request carries the read and every decision.
+   */
+  decide?: RecordsTableReadDecider;
   /**
    * Set when the table is a tree: the read is one level of it, the roots (no parent) or the
    * children of one record, `pageSize` at a time, over the link that names each record's parent.
@@ -185,6 +195,18 @@ export type RecordsTableQueryResolution =
     }>
   | Readonly<{ kind: "refused"; reasonCode?: ProtectedQueryRefusalReasonCode }>
   | Readonly<{ kind: "unavailable" }>;
+
+/** What the viewer may do on this table, decided with its rows. Absent parts are not offered. */
+export type RecordsTableReadDecisions = Readonly<{
+  /** The viewer holds an export permission that reaches every record, supplied only when Export is on. */
+  exportAllowed?: boolean;
+  /** Row action availability for the rows of the page, supplied only when row actions are on. */
+  rowActions?: NonNullable<RecordsTableFeatureProjection["rowActions"]>;
+}>;
+
+export type RecordsTableReadDecider = (
+  ...decided: Parameters<ProtectedReadDecider>
+) => Promise<RecordsTableReadDecisions>;
 
 const refused = Object.freeze({ kind: "refused" as const });
 
@@ -550,6 +572,23 @@ export const buildRecordsTableQueryCommand = (
     : recordsTableRequestRefusal("command", "query_command_invalid");
 };
 
+/** The row actions the read decided in its own transaction replace the ones the rows imply. */
+const withDecidedRowActions = (
+  projected: ProjectedComponentData<ProjectedTableValues>,
+  decisions: RecordsTableReadDecisions | undefined,
+): ProjectedComponentData<ProjectedTableValues> =>
+  decisions?.rowActions === undefined ||
+  projected.status !== "ready" ||
+  projected.values.features?.rowActions === undefined
+    ? projected
+    : {
+        ...projected,
+        values: {
+          ...projected.values,
+          features: { ...projected.values.features, rowActions: decisions.rowActions },
+        },
+      };
+
 /** The table without its Group by control, for a viewer the grouped read refused the field. */
 const withoutGrouping = (values: ProjectedTableValues): ProjectedTableValues => {
   if (values.features?.grouping === undefined) return values;
@@ -610,6 +649,7 @@ const readGrouped = async (
   request: RecordsTableQueryRequest,
   group: RecordsTableGroupRead,
   built: RecordsTableQueryCommand,
+  decide: ProtectedReadDecider | undefined,
 ): Promise<GroupedRead> => {
   let summaryRead: ProtectedQuerySummaryCompleted | undefined;
   let groupKeys: readonly string[] | undefined;
@@ -647,7 +687,14 @@ const readGrouped = async (
       );
       return { kind: "resolution", resolution: refused };
     }
-    const summary = await runner.summarise(session, selection, summaryCommand.data);
+    // A closed table reads no member, so its summary carries the decisions; an open group's
+    // members carry them.
+    const summary = await runner.summarise(
+      session,
+      selection,
+      summaryCommand.data,
+      group.expanded === null ? decide : undefined,
+    );
     if (summary.kind === "temporarily_unavailable")
       return { kind: "resolution", resolution: unavailableResult };
     if (summary.kind !== "available")
@@ -703,7 +750,7 @@ const readGrouped = async (
     );
     return { kind: "resolution", resolution: refused };
   }
-  const members = await runner.groupedMembers(session, selection, memberCommand.data);
+  const members = await runner.groupedMembers(session, selection, memberCommand.data, decide);
   if (members.kind === "temporarily_unavailable")
     return { kind: "resolution", resolution: unavailableResult };
   if (members.kind !== "available")
@@ -750,6 +797,24 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
       logRecordsTableRequestRefusal(built, "table_read");
       return refused;
     }
+    // A filter on a field the table does not describe a control for is not the viewer's to use:
+    // refused before any row is read. What depends on the viewer's own field bound is decided
+    // after the read below, because the bound comes only with it.
+    const undescribed = recordsTableNarrowingContractRefusal(built.filterFields, built.narrowing);
+    if (undescribed !== undefined) {
+      logRecordsTableRequestRefusal(undescribed, "table_read");
+      return refused;
+    }
+    // The viewer decisions ride on the read's own request: the last decision taken wins, and a
+    // table with several reads (a grouped one) decides on the read that carries its rows.
+    let decisions: RecordsTableReadDecisions | undefined;
+    const requestDecide = request.decide;
+    const decide: ProtectedReadDecider | undefined =
+      requestDecide === undefined
+        ? undefined
+        : async (...decided) => {
+            decisions = await requestDecide(...decided);
+          };
     try {
       // The tree level reads honour the query's filter and the viewer's own search and filters at
       // every level: a matching record whose parent does not match is a root.
@@ -779,7 +844,7 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
       const grouped =
         request.group === undefined
           ? undefined
-          : await readGrouped(runner, session, selection, request, request.group, built);
+          : await readGrouped(runner, session, selection, request, request.group, built, decide);
       if (grouped?.kind === "resolution") return grouped.resolution;
       let result:
         | HumanOrganizationRequestResult<ProtectedQueryResult | ProtectedQueryTreeLevelResult>
@@ -787,8 +852,8 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
         grouped?.kind === "read"
           ? undefined
           : treeCommand === undefined
-            ? await runner.run(session, selection, built.command)
-            : await runner.treeLevel(session, selection, treeCommand.data);
+            ? await runner.run(session, selection, built.command, decide)
+            : await runner.treeLevel(session, selection, treeCommand.data, decide);
       // A viewer who may not see the parent link on every record it may read has no tree: the
       // table lists its records flat, as a table without the feature does. That viewer's next page
       // carries a flat position, which the tree read refuses as stale before it reaches the field
@@ -804,7 +869,7 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
             (result.value.reasonCode === "cursor_stale" ||
               result.value.reasonCode === "cursor_invalid")))
       )
-        result = await runner.run(session, selection, built.command);
+        result = await runner.run(session, selection, built.command, decide);
       if (result?.kind === "temporarily_unavailable") return unavailableResult;
       if (result !== undefined && result.kind !== "available")
         return refusedBecause("columns", `read_${result.kind}`);
@@ -879,7 +944,7 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
               ),
             };
       const page = request.state.page?.page ?? 1;
-      const projected = projectRecordsTableData(
+      const projectedRead = projectRecordsTableData(
         request.layout,
         {
           settings: request.settings,
@@ -897,14 +962,21 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
             : { fieldLinkTypes: request.fieldLinkTypes }),
           ...(request.formatting === undefined ? {} : { formatting: request.formatting }),
           ...(request.fieldEditors === undefined ? {} : { fieldEditors: request.fieldEditors }),
-          ...(request.exportAllowed === undefined ? {} : { exportAllowed: request.exportAllowed }),
+          ...(decisions?.exportAllowed === undefined
+            ? {}
+            : { exportAllowed: decisions.exportAllowed }),
           ...(request.state.pivot === undefined ? {} : { pivotView: request.state.pivot }),
           ...(groups === undefined ? {} : { groups }),
         },
         read.rows,
         read.fieldBounds,
       );
-      if (projected === undefined) return refusedBecause("columns", "projection_unavailable");
+      if (projectedRead === undefined) return refusedBecause("columns", "projection_unavailable");
+      if (request.decide !== undefined && decisions === undefined)
+        console.warn(
+          "[records-table] viewer decisions not taken: the read carrying them did not complete",
+        );
+      const projected = withDecidedRowActions(projectedRead, decisions);
       // The projection that draws the controls also decides whether this read's own search and
       // filters were the viewer's to use; a refused read returns none of its rows.
       const narrowingRefusal = recordsTableNarrowingRefusal(
