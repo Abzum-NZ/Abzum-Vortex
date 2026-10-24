@@ -49,7 +49,7 @@ export {
 } from "./projected-placement-gate";
 export {
   applyChoiceOptionGates,
-  choiceOptionAccessDeclarations,
+  decideChoiceOptionGates,
   fieldControl,
   fieldForPlacement,
   formFieldOf,
@@ -57,6 +57,7 @@ export {
   projectEditField,
   type ChoiceOptionPlan,
   type DateTimeZones,
+  type HeldChoiceOptions,
 } from "./field-placement";
 export {
   isTablePlacement,

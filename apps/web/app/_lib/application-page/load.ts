@@ -402,24 +402,32 @@ const loadApplicationPageJoined = async (
   const choicePlan = planChoiceOptionGates(allPlacements, context);
   if (choicePlan === undefined) return { kind: "temporarily_unavailable" };
 
+  // The page subject: the one record the page's own address names, of the page's declared record
+  // type, read once through the record read path under the viewer's own authority. Nothing here
+  // comes from the browser except the id.
+  const subjectType = pageSubjectType(pageDefinition);
+  const subjectId = recordIdSchema.safeParse(first(parameters[pageSubjectParameter]));
+
   let dateTimeZones: DateTimeZones = {};
-  let allowedPermissions = new Set<string>();
+  let allowedPermissions: ReadonlySet<string> = new Set();
   if (needsDateTimeZones || choicePlan.permissions.size > 0) {
     const authorized = await readFieldAccess({
       session,
       dependencies,
       selection,
-      applicationRootId: context.applicationRootId,
       needsDateTimeZones,
       choicePlan,
+      choiceSubject:
+        subjectType !== undefined && subjectId.success
+          ? { recordTypeId: String(subjectType.recordTypeId), recordId: subjectId.data }
+          : undefined,
     });
     if (authorized.kind !== "available") return authorized;
     if (page.accessVersion !== authorized.value.accessVersion)
       return { kind: "temporarily_unavailable" };
     dateTimeZones = authorized.value.zones;
-    allowedPermissions = new Set(authorized.value.allowed);
+    allowedPermissions = authorized.value.allowed;
   }
-  applyChoiceOptionGates(choicePlan, allowedPermissions);
 
   const navigation = navigationRead === undefined ? undefined : await navigationRead;
   if (navigation !== undefined && navigation.kind !== "available") return navigation;
@@ -434,11 +442,6 @@ const loadApplicationPageJoined = async (
   });
   const { referenceChoices, subjects, readConcurrently } = services;
 
-  // The page subject: the one record the page's own address names, of the page's declared record
-  // type, read once through the record read path under the viewer's own authority. Nothing here
-  // comes from the browser except the id.
-  const subjectType = pageSubjectType(pageDefinition);
-  const subjectId = recordIdSchema.safeParse(first(parameters[pageSubjectParameter]));
   if (
     pageDefinition.type === "guided_form" &&
     first(parameters[pageSubjectParameter]) !== undefined &&
@@ -536,6 +539,31 @@ const loadApplicationPageJoined = async (
   if (formPolicy.kind === "refused") return formPolicy.result;
   const { editFormPlacementIds, formRecordType, createFormIds, refusedForms } = formPolicy;
   allPlacements = formPolicy.allPlacements;
+  // The gated options leave the page payload the form renders, after the subject is known: an option
+  // the record already holds stays offered, so a restricted viewer keeps the field and its value.
+  if (choicePlan.permissions.size > 0) {
+    const heldSubject =
+      subjectType !== undefined &&
+      subjectId.success &&
+      pageDefinition.type !== "public" &&
+      choicePlan.gates.some((gate) => sameId(gate.recordTypeId, String(subjectType.recordTypeId)))
+        ? await readSubject(String(subjectType.recordTypeId), subjectId.data)
+        : undefined;
+    applyChoiceOptionGates(choicePlan, allowedPermissions, (gate) => {
+      if (heldSubject?.kind !== "read") return new Set();
+      const held = Object.entries(heldSubject.row.values).find(([key]) =>
+        sameId(key, gate.fieldId),
+      )?.[1];
+      return new Set(
+        typeof held === "string"
+          ? [held]
+          : Array.isArray(held)
+            ? held.filter((value): value is string => typeof value === "string")
+            : [],
+      );
+    });
+    allPlacements = collectPlacements(page);
+  }
   // A form baseline is valid only when every shown field was projected. A selected field also
   // needs its owning form's subject read, even though only the requested field is returned.
   const selectedForProjection =

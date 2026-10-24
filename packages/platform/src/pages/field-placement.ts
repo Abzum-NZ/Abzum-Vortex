@@ -8,13 +8,14 @@ import {
   sameId,
   timestampSchema,
   type JsonValue,
-  type OrganizationAccessDeclaration,
 } from "../schema";
 import {
   FIELD_INPUT_BLOCK_RELEASE,
   FIELD_INPUT_CONTROL_RELEASES,
   type InstalledRuntimeContext,
 } from "../definition/index";
+import type { RequestDatabaseTransaction } from "../db/index";
+import { decideChoiceOptionPermission } from "../records/choice-option-permission";
 import type { PageDataState, PlacementReadEntry } from "./placement-read/shared";
 
 type PlacementParts = Pick<PlacementReadEntry, "vortex" | "settings">;
@@ -49,7 +50,7 @@ export const formFieldOf = (
 export const fieldForPlacement = (
   placement: Pick<PlacementReadEntry, "settings">,
   modules: Modules,
-): Readonly<{ module: Modules[number]; field: ModuleField }> | undefined => {
+): Readonly<{ module: Modules[number]; recordType: RecordType; field: ModuleField }> | undefined => {
   const reference = placement.settings.field;
   if (!isRecord(reference)) return undefined;
   if (reference.kind !== "field_reference" || typeof reference.fieldId !== "string")
@@ -59,7 +60,7 @@ export const fieldForPlacement = (
       const field = recordType.fields.find((candidate) =>
         sameId(String(candidate.fieldId), reference.fieldId as string),
       );
-      if (field !== undefined) return { module, field };
+      if (field !== undefined) return { module, recordType, field };
     }
   return undefined;
 };
@@ -278,18 +279,25 @@ export const projectEditField = (
   };
 };
 
+/** A placement with the plain props the page payload carries, which the form renders. */
+type GatedPlacement = PlacementParts & Readonly<{ props: Record<string, unknown> }>;
+
 /** One choice placement's option list and, per option, the permission key that gates it. */
 type ChoiceOptionGate = Readonly<{
-  options: Record<string, unknown>;
-  items: unknown[];
+  /** The placement's plain props: their `options` list is what the form renders. */
+  props: Record<string, unknown>;
+  /** The plain option list as projected, in the field's declared order. */
+  items: readonly unknown[];
   permissionKeys: readonly (string | undefined)[];
+  recordTypeId: string;
+  fieldId: string;
 }>;
 
 /** The option permissions the projected page's choice placements name, planned for one page. */
 export type ChoiceOptionPlan = Readonly<{
   gates: readonly ChoiceOptionGate[];
-  /** The registered permission each gated option needs, by `module:permission` key. */
-  permissions: ReadonlyMap<string, PermissionEntry>;
+  /** The record type and permission each gated option needs, by `recordTypeId:permissionId` key. */
+  permissions: ReadonlyMap<string, Readonly<{ recordTypeId: string; permissionId: string }>>;
 }>;
 
 /**
@@ -299,16 +307,17 @@ export type ChoiceOptionPlan = Readonly<{
  * projection being out of step with the installed release, so the plan is refused.
  */
 export const planChoiceOptionGates = (
-  placements: readonly PlacementParts[],
+  placements: readonly GatedPlacement[],
   context: InstalledRuntimeContext,
 ): ChoiceOptionPlan | undefined => {
   const gates: ChoiceOptionGate[] = [];
-  const permissions = new Map<string, PermissionEntry>();
+  const permissions = new Map<string, { recordTypeId: string; permissionId: string }>();
   for (const placement of placements) {
     const control = fieldControl(placement);
     if (control !== "choice" && control !== "several_choices") continue;
     const source = fieldForPlacement(placement, context.releaseSet.modules);
     const options = placement.settings.options;
+    const plainItems = placement.props.options;
     if (
       source === undefined ||
       (source.field.type !== "choice" && source.field.type !== "several_choices") ||
@@ -316,19 +325,25 @@ export const planChoiceOptionGates = (
       !isRecord(options) ||
       options.kind !== "list" ||
       !Array.isArray(options.items) ||
-      options.items.length !== source.field.settings.options.length
+      options.items.length !== source.field.settings.options.length ||
+      !Array.isArray(plainItems) ||
+      plainItems.length !== source.field.settings.options.length
     )
       return undefined;
+    const recordTypeId = String(source.recordType.recordTypeId).toLowerCase();
     const permissionKeys: Array<string | undefined> = [];
     for (const [index, declared] of source.field.settings.options.entries()) {
       const item: unknown = options.items[index];
+      const plain: unknown = plainItems[index];
       if (
         !isRecord(item) ||
         !isRecord(item.properties) ||
         !isRecord(item.properties.key) ||
         !isRecord(item.properties.label) ||
         item.properties.key.value !== declared.value ||
-        item.properties.label.value !== declared.label
+        item.properties.label.value !== declared.label ||
+        !isRecord(plain) ||
+        plain.key !== declared.value
       )
         return undefined;
       const permissionId = declared.requiredPermissionId;
@@ -336,7 +351,6 @@ export const planChoiceOptionGates = (
         permissionKeys.push(undefined);
         continue;
       }
-      const key = `${String(source.module.rootId).toLowerCase()}:${String(permissionId).toLowerCase()}`;
       const matches = context.permissionRegistration.entries.filter(
         (entry) =>
           entry.ownerKind === "module" &&
@@ -344,56 +358,70 @@ export const planChoiceOptionGates = (
           sameId(String(entry.permission.permissionId), String(permissionId)),
       );
       if (matches.length !== 1 || matches[0] === undefined) return undefined;
-      permissions.set(key, matches[0]);
+      const key = `${recordTypeId}:${String(permissionId).toLowerCase()}`;
+      permissions.set(key, { recordTypeId, permissionId: String(permissionId) });
       permissionKeys.push(key);
     }
-    gates.push({ options, items: options.items, permissionKeys });
+    gates.push({
+      props: placement.props,
+      items: plainItems,
+      permissionKeys,
+      recordTypeId,
+      fieldId: String(source.field.fieldId).toLowerCase(),
+    });
   }
   return { gates, permissions };
 };
 
-/** The access declarations that decide, for the person now, each gated option permission. */
-export const choiceOptionAccessDeclarations = (
+/**
+ * The gated options the person may use now: for each distinct record-type permission the page
+ * names, the one database decision the form save asks as well. A permission on the page subject's
+ * record type is decided for that record; any other for a new record.
+ */
+export const decideChoiceOptionGates = async (
+  transaction: RequestDatabaseTransaction,
   plan: ChoiceOptionPlan,
-  applicationRootId: InstalledRuntimeContext["applicationRootId"],
-): Readonly<{
-  keys: readonly string[];
-  declarations: readonly OrganizationAccessDeclaration[];
-}> => {
-  const keys: string[] = [];
-  const declarations: OrganizationAccessDeclaration[] = [];
-  for (const [key, entry] of plan.permissions) {
-    keys.push(key);
-    declarations.push({
-      operationKey: "application.page.field_choice.view",
-      action: {
-        actionKind: entry.permission.actionKind,
-        ...(entry.permission.namedAction === undefined
-          ? {}
-          : { namedAction: entry.permission.namedAction }),
-      },
-      target: { kind: "application", applicationRootId },
-      requiredPermission: {
-        applicationRootId: entry.applicationRootId,
-        ownerKind: entry.ownerKind,
-        ownerId: entry.ownerId,
-        permissionId: entry.permission.permissionId,
-      },
-      recentAuthentication: { kind: "none" },
-      authority: { kind: "permission" },
-    });
-  }
-  return { keys, declarations };
+  subject: Readonly<{ recordTypeId: string; recordId: string }> | undefined,
+): Promise<ReadonlySet<string>> => {
+  const allowed = new Set<string>();
+  for (const [key, { recordTypeId, permissionId }] of plan.permissions)
+    if (
+      await decideChoiceOptionPermission(
+        transaction,
+        recordTypeId,
+        permissionId,
+        subject !== undefined && sameId(subject.recordTypeId, recordTypeId)
+          ? subject.recordId
+          : undefined,
+      )
+    )
+      allowed.add(key);
+  return allowed;
 };
 
-/** Leaves in each placement's option list only the options the person may use. */
+/** The option values of one gate's field that the record being edited already holds. */
+export type HeldChoiceOptions = (
+  gate: Readonly<{ recordTypeId: string; fieldId: string }>,
+) => ReadonlySet<string>;
+
+/**
+ * Leaves in each placement's option list, the page payload the form renders, only the options the
+ * person may use. An option the record already holds stays, so the field keeps its value.
+ */
 export const applyChoiceOptionGates = (
   plan: ChoiceOptionPlan,
   allowedKeys: ReadonlySet<string>,
+  held: HeldChoiceOptions,
 ): void => {
-  for (const gate of plan.gates)
-    gate.options.items = gate.items.filter((_, index) => {
+  for (const gate of plan.gates) {
+    const kept = held(gate);
+    gate.props.options = gate.items.filter((item, index) => {
       const key = gate.permissionKeys[index];
-      return key === undefined || allowedKeys.has(key);
+      return (
+        key === undefined ||
+        allowedKeys.has(key) ||
+        (isRecord(item) && typeof item.key === "string" && kept.has(item.key))
+      );
     });
+  }
 };

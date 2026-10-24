@@ -4,7 +4,6 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 
 import {
   createHumanOrganizationRequestService,
-  runOrganizationAccessOperation,
   type HumanOrganizationRequestResult,
 } from "../access/index";
 import type { RequestDatabaseTransaction } from "../db/index";
@@ -16,7 +15,7 @@ import {
   type InstalledRuntimeContext,
 } from "../definition/index";
 import type { QueryContinuationKey } from "../queries/index";
-import { prepareRecordFieldValues } from "../records/index";
+import { decideChoiceOptionPermission, prepareRecordFieldValues } from "../records/index";
 import {
   organizationAccessDeclarationSchema,
   builderKeySchema,
@@ -650,10 +649,6 @@ const createAuthorityAdapter = (
     for (const step of steps)
       for (const entry of step.fields) fields.set(entry.fieldKey, entry.field);
     const fieldChoices: Record<string, JsonValue[]> = {};
-    const recordTypeReference = page.recordType;
-    if (!isRecord(recordTypeReference) || typeof recordTypeReference.moduleRootId !== "string")
-      return undefined;
-    const moduleRootId = recordTypeReference.moduleRootId;
     const permissionDecisions = new Map<string, boolean>();
     for (const [fieldKey, field] of fields) {
       if (field.type !== "choice" && field.type !== "several_choices") continue;
@@ -664,42 +659,15 @@ const createAuthorityAdapter = (
           choices.push(option.value);
           continue;
         }
-        const permissionKey = `${moduleRootId.toLowerCase()}:${String(permissionId).toLowerCase()}`;
+        const permissionKey = String(permissionId).toLowerCase();
         let allowed = permissionDecisions.get(permissionKey);
         if (allowed === undefined) {
-          const matches = context.permissionRegistration.entries.filter(
-            (entry) =>
-              entry.ownerKind === "module" &&
-              sameId(String(entry.ownerId), moduleRootId) &&
-              sameId(String(entry.permission.permissionId), String(permissionId)),
-          );
-          if (matches.length !== 1 || matches[0] === undefined) return undefined;
-          const entry = matches[0];
-          const declaration: OrganizationAccessDeclaration = {
-            operationKey: "application.page.field_choice.view",
-            action: {
-              actionKind: entry.permission.actionKind,
-              ...(entry.permission.namedAction === undefined
-                ? {}
-                : { namedAction: entry.permission.namedAction }),
-            },
-            target: { kind: "application", applicationRootId: context.applicationRootId },
-            requiredPermission: {
-              applicationRootId: entry.applicationRootId,
-              ownerKind: entry.ownerKind,
-              ownerId: entry.ownerId,
-              permissionId: entry.permission.permissionId,
-            },
-            recentAuthentication: { kind: "none" },
-            authority: { kind: "permission" },
-          };
-          const decision = await runOrganizationAccessOperation(
+          allowed = await decideChoiceOptionPermission(
             transaction,
-            scope,
-            declaration,
-            async () => true,
+            String(recordType.recordTypeId),
+            String(permissionId),
+            undefined,
           );
-          allowed = decision.outcome === "completed";
           permissionDecisions.set(permissionKey, allowed);
         }
         if (allowed) choices.push(option.value);
