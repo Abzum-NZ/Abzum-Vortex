@@ -82,15 +82,6 @@ export const applicationInstallationWithdrawalRequestSchema = z
   })
   .strict();
 
-/** Begin the uninstall of exactly the named active installation by draining it. */
-export const applicationInstallationDrainRequestSchema = z
-  .object({
-    organizationId: organizationIdSchema,
-    applicationRootId: applicationRootIdSchema,
-    applicationReleaseRevision: revisionSchema,
-  })
-  .strict();
-
 export type ApplicationInstallationPreparationRequest = z.infer<
   typeof applicationInstallationPreparationRequestSchema
 >;
@@ -99,9 +90,6 @@ export type ApplicationInstallationActivationRequest = z.infer<
 >;
 export type ApplicationInstallationWithdrawalRequest = z.infer<
   typeof applicationInstallationWithdrawalRequestSchema
->;
-export type ApplicationInstallationDrainRequest = z.infer<
-  typeof applicationInstallationDrainRequestSchema
 >;
 
 /** An optional reader the deployment may not supply; absence is reported, never assumed. */
@@ -139,14 +127,6 @@ export type ApplicationInstallationWithdrawalResult = Readonly<{
   applicationReleaseRevision: number;
   moduleBindings: readonly ModuleInstallationBindingEvidence[];
   runtimeBundles: InstallationRuntimeBundleRemovalReport;
-}>;
-
-export type ApplicationInstallationDrainResult = Readonly<{
-  outcome: "draining" | "unchanged";
-  organizationId: OrganizationId;
-  applicationRootId: ApplicationRootId;
-  applicationReleaseRevision: number;
-  moduleBindings: readonly ModuleInstallationBindingEvidence[];
 }>;
 
 /** The exact organisation, application and release an installation operation targets. */
