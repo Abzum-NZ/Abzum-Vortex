@@ -17,6 +17,12 @@ import {
   type RequestDatabaseLifetimeOwner,
 } from "./request-lifetime";
 import { RequestOwnedSocketFactory } from "./request-owned-socket";
+import {
+  currentProtectedReadObserver,
+  observeProtectedRead,
+  withProtectedReadObserver,
+  type ProtectedReadObserver,
+} from "./query-attribution";
 
 export type DatabaseValue = string | number | boolean | Date | Uint8Array | null;
 export type DatabaseRow = Readonly<Record<string, unknown>>;
@@ -117,12 +123,20 @@ const getSavepointOperation = (
   }
 };
 
-const wrapRequestTransaction = (transaction: TransactionDriver): RequestDatabaseTransaction => {
+const wrapRequestTransaction = (
+  transaction: TransactionDriver,
+  observer?: ProtectedReadObserver,
+): RequestDatabaseTransaction => {
   const queryOnly: RequestDatabaseTransaction = {
     query: <ResultRow extends DatabaseRow>(
       strings: TemplateStringsArray,
       ...values: readonly DatabaseValue[]
-    ) => transaction.query<ResultRow>(strings, ...values),
+    ) =>
+      observer === undefined
+        ? transaction.query<ResultRow>(strings, ...values)
+        : observeProtectedRead<ResultRow>(observer, strings, values, (strings, ...values) =>
+            transaction.query<ResultRow>(strings, ...values),
+          ),
   };
   const withSavepoint = getSavepointOperation(transaction);
   if (withSavepoint === undefined) return queryOnly;
@@ -134,7 +148,12 @@ const wrapRequestTransaction = (transaction: TransactionDriver): RequestDatabase
     ) =>
       (withSavepoint<Result>).call(
         transaction,
-        async (child) => await operation(requireRequestSavepoint(child)),
+        async (child) =>
+          await operation(
+            requireRequestSavepoint(
+              observer === undefined ? child : wrapRequestTransaction(child, observer),
+            ),
+          ),
       ),
   };
   return capable;
@@ -190,8 +209,10 @@ const createResolvedRequestTransactionRunner =
   async <Scope, Result>(
     resolve: RequestContextResolver<Scope>,
     operation: ResolvedRequestOperation<Scope, Result>,
-  ): Promise<Result> =>
-    driver.transaction(async (transaction) => {
+  ): Promise<Result> => {
+    // Capture before the driver callback, which may run outside the caller's async context.
+    const observer = currentProtectedReadObserver();
+    return driver.transaction(async (transaction) => {
       await setRequestTimeouts(transaction);
       const resolved = await invokeRequestDatabaseCallback(() => resolve(transaction));
       const validated = validateContext(resolved.context);
@@ -209,10 +230,13 @@ const createResolvedRequestTransactionRunner =
       await transaction.query`select vortex_platform.initialize(${serialized}::text::jsonb)`;
       await transaction.query`set local role vortex_request`;
 
-      return invokeRequestDatabaseCallback(() =>
-        operation(wrapRequestTransaction(transaction), resolved.scope),
-      );
+      const run = () =>
+        invokeRequestDatabaseCallback(() =>
+          operation(wrapRequestTransaction(transaction, observer), resolved.scope),
+        );
+      return observer === undefined ? run() : withProtectedReadObserver(observer, run);
     });
+  };
 
 /** A request's abort signal and deadline, applied to pooled-runner queries made under it. */
 export type PooledRequestLifetime = Readonly<{ signal: AbortSignal; deadline: number }>;
