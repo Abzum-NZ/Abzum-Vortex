@@ -4,6 +4,7 @@ import type { NextRequest } from "next/server";
 import { mapWebError } from "../../../_lib/web-error-mapper";
 import {
   createDurableActorRequestService,
+  createRecordSaveService,
   createOrganizationAccessAdministrationService,
   type DurableActorRequestScope,
   type HumanOrganizationRequestDependencies,
@@ -125,6 +126,7 @@ const createCallbackService = () => {
     const durableRequests = humanOrganizationRequestsFor(requestDependencies);
     return {
       accessAdministration: createOrganizationAccessAdministrationService(requestDependencies),
+      records: createRecordSaveService(requestDependencies),
       tenantGovernance: {
         run: <Result>(
           session: IdentitySession,
