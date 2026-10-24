@@ -86,6 +86,8 @@ The [target architecture](docs/build-plan/target-architecture.md) is binding: re
   visible reader demand is satisfied; never prefetch speculatively before it
   ([#3079](https://github.com/Abzum-NZ/Abzum-Vortex/issues/3079),
   [#3249](https://github.com/Abzum-NZ/Abzum-Vortex/pull/3249)).
+  This follows the owner's paging rule: background fill continues only after the visible page's
+  requested data is served.
 - No absent-setting behaviour: defaults live in definitions (Puck `defaultProps`), not in renderers.
 - One current version of every contract: no `V2`/`V3` copies.
 - One record write path (`apply_record_changes`), one activity append, one idempotency table.
