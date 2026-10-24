@@ -1,5 +1,6 @@
 import {
   applicationSourceDocumentSchema,
+  safeHttpsUrlSchema,
   VORTEX_ICON_NAMES,
   type ApplicationSourceDocument,
   type VortexIconName,
@@ -217,8 +218,9 @@ const change = (
   }
   if (address !== undefined) {
     if (item.type !== "external") refuse("Only a link entry opens an address.");
-    if (!/^https:\/\/[^\s]+$/.test(address.trim()))
-      refuse("Enter an address that starts with https://.");
+    const parsed = safeHttpsUrlSchema.safeParse(address.trim());
+    if (!parsed.success)
+      refuse(`Enter an https:// address (${parsed.error.issues[0]!.message}).`);
     next.address = address.trim();
   }
   place.list[place.index] = next as StudioMenuItem;
