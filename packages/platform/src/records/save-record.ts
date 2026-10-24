@@ -194,21 +194,20 @@ const parsePreparation = (candidate: unknown): PreparationOutcome => {
   );
   if (readableFieldIds.some((fieldId) => !fieldId.success))
     throw contractError("RECORD_SAVE_PREPARATION_INVALID", "invalid readableFieldIds");
-  let existingValues = value.existingValues as Readonly<Record<string, unknown>>;
-  if (recordType.data.systemProjection === undefined) {
-    // Unset optional SQL columns are absent from the ordinary field candidate.
-    const ordinaryValues = { ...existingValues };
-    for (const field of recordType.data.fields) {
-      if (
-        !field.required &&
-        field.type !== "reference_number" &&
-        field.type !== "calculation" &&
-        field.type !== "total" &&
-        ordinaryValues[field.fieldId] === null
-      )
-        delete ordinaryValues[field.fieldId];
-    }
-    existingValues = ordinaryValues;
+  // An unset optional value is absent from the field candidate, whether it is an ordinary SQL
+  // column or a value a system projection (organisation settings) has not stored yet.
+  const existingValues: Record<string, unknown> = {
+    ...(value.existingValues as Readonly<Record<string, unknown>>),
+  };
+  for (const field of recordType.data.fields) {
+    if (
+      !field.required &&
+      field.type !== "reference_number" &&
+      field.type !== "calculation" &&
+      field.type !== "total" &&
+      existingValues[field.fieldId] === null
+    )
+      delete existingValues[field.fieldId];
   }
   return {
     outcome: "prepared",
@@ -626,11 +625,20 @@ const invalidSettingsCorrections = (
     }
   }
 
+  // An unset default application is absent from the candidate, like every unset optional value.
+  const defaultApplicationFieldId = settingsFieldId(
+    prepared.recordType,
+    "default_application_root_id",
+  );
   const defaultApplication = applicationRootIdSchema
     .nullable()
-    .safeParse(valueFor("default_application_root_id"));
+    .safeParse(
+      defaultApplicationFieldId === undefined
+        ? undefined
+        : (values[defaultApplicationFieldId] ?? null),
+    );
   if (!defaultApplication.success) {
-    const fieldId = settingsFieldId(prepared.recordType, "default_application_root_id");
+    const fieldId = defaultApplicationFieldId;
     if (fieldId === undefined || !prepared.readableFieldIds.has(fieldId)) return undefined;
     corrections.set(fieldId, {
       code: "invalid_value",

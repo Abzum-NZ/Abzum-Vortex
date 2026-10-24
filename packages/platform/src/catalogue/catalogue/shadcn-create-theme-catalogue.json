@@ -25,7 +25,7 @@
   },
   "baseRelease": {
     "catalogueThemeId": "3f0a2b14-9c6d-4e58-8a71-6d2e5f4b1c09",
-    "releaseVersion": "3.0.0"
+    "releaseVersion": "3.1.0"
   },
   "releasesFile": "shadcn-create-theme-releases.json",
   "dimensions": {

@@ -7,25 +7,6 @@ type MarkSegment = readonly [number, number, number, number];
 /** The mark a loader draws: its strokes, in the order they are traced. */
 export type LoaderMark = Readonly<{ segments: readonly MarkSegment[] }>;
 
-/**
- * The platform mark, drawn as six line segments in the order the loader traces them (all in a
- * 120 x 120 box): the outer triangle's left, right and base sides, then the inner diagonal, the
- * middle bar and the inner leg. A theme that declares a loader mark of its own replaces it.
- *
- * Platform default until the next platform theme release carries it (#2666); also the org-level
- * loader before any application theme exists.
- */
-const PLATFORM_MARK: LoaderMark = {
-  segments: [
-    [12, 101.569, 60, 18.431],
-    [60, 18.431, 108, 101.569],
-    [108, 101.569, 12, 101.569],
-    [12, 101.569, 84, 60],
-    [84, 60, 36, 60],
-    [36, 60, 48, 80.784],
-  ],
-};
-
 /** The loader's stylesheet, hoisted once into the document by React wherever a loader renders. */
 const BRAND_LOADER_CSS = `/*
  * The platform loader. Outside an application's theme root (the first load of an application) the
@@ -135,16 +116,16 @@ const segmentCss = (count: number): string => {
  * is the still, fully drawn mark. It is for long waits only (the first load of an application and a
  * page change that is still waiting after the loader delay), never for a button or a row.
  *
- * `mark` is the theme's loader mark; without one the platform mark is drawn.
+ * `mark` is the theme release's resolved loader mark.
  * `overlay` centres it over the area it is placed in, without taking layout space.
  */
 export function BrandLoader({
-  mark = PLATFORM_MARK,
+  mark,
   overlay = false,
   label = "Loading",
   className,
 }: Readonly<{
-  mark?: LoaderMark;
+  mark: LoaderMark;
   overlay?: boolean;
   label?: string;
   className?: string;
