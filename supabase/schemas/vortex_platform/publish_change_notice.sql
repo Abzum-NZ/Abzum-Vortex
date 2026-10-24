@@ -87,7 +87,15 @@ begin
   || case when p_record_version is null then '{}'::jsonb
     else pg_catalog.jsonb_build_object('recordVersion', p_record_version) end;
 
-  perform realtime.send(selected_payload, 'invalidation', selected_topic, true);
+  begin
+    perform realtime.send(selected_payload, 'invalidation', selected_topic, true);
+  exception
+    when others then
+      -- Callers keep invalidation advisory; retain its cause before they catch it.
+      raise warning using errcode = sqlstate,
+        message = 'RECORD_INVALIDATION_FAILED publish_change_notice: ' || sqlerrm;
+      raise;
+  end;
 
   return selected_topic;
 end
