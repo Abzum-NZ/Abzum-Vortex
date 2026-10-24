@@ -1051,8 +1051,12 @@ export const recordTypeDefinitionSchema = z
     }
   })
   .superRefine((value, context) => {
-    // The eight-sortable-field limit is a publish rule (module-source-contracts.ts). Stored releases
-    // are immutable, so this reader accepts every release that was publishable when it was made.
+    if (value.fields.filter((field) => field.sortable).length > 8)
+      context.addIssue({
+        code: "custom",
+        path: ["fields"],
+        message: "A record type may declare at most eight sortable fields",
+      });
     if ((value.ownershipMode === "inherited") !== (value.ownershipRelationshipId !== undefined))
       context.addIssue({
         code: "custom",
