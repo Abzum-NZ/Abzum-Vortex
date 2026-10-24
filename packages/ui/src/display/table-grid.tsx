@@ -1058,6 +1058,8 @@ export function RecordsGrid({
           <>
             <span
               className="truncate"
+              // A narrow column truncates its heading; the full heading shows on hover.
+              title={column?.label}
               draggable
               onDragStart={(event) => {
                 dragged.current = slot.id;

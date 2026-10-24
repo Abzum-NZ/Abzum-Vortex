@@ -161,9 +161,11 @@ function TextEditor({
   return (
     <div className="flex flex-col gap-1.5">
       <Label htmlFor={id}>Contains</Label>
+      {/* A plain text box: a search box empties itself on Escape, and closing the popover with
+          Escape would then commit an empty filter. "Clear filter" clears it. */}
       <Input
         id={id}
-        type="search"
+        type="text"
         value={text}
         maxLength={200}
         autoFocus
