@@ -45,9 +45,18 @@ with every port shifted by 1000 per lane (db3 API 56321, database 56322; db4 573
 db5 58321/58322; db7 60321/60322; db8 61321/61322). Lane db2 is blocked on this Windows host by
 dynamic port exclusion 55262–55361. Lane db9 is unsupported by `tooling/supabase/lane.mjs`.
 Lanes db7 and db8 were adopted on 24 October 2026. The coordinator grants a lane by its exact
-number through `lane-take.sh <tag> <N>`; do not choose or take a different lane. The worker holds
-its own `.claude/orchestrator/db<N>.lock` while using the lane, then releases it by removing that
-lock and telling the coordinator.
+number through `lane-take.sh <tag> <N>`; do not choose or take a different lane. Every grant names
+the exact lane and its data disposition. The worker holds its own `.claude/orchestrator/db<N>.lock`
+while using the lane, then releases it by removing that lock and telling the coordinator the data
+disposition: `ABANDON`, `EXPORTED+VERIFIED`, or `RETAIN`. Lane data survives lock and process
+release. Reset, `demo:setup`, cleanup, or regrant of a lane holding retained data requires the prior
+owner's explicit disposition and verified recoverability (export plus tested restore), or the
+user's approved abandonment. Silence and “reset unless KEEP” are not consent. When `main` moves,
+forward migrate and rebuild the lane rather than resetting it. `pnpm demo:setup` always resets its
+target database (see `apps/web/scripts/demo-setup/demo-setup.ts`), so it is a reset. To set up
+without a reset, use `local-demo-owner.ts` followed by `pnpm setup:local -- --local-development
+--first-owner-identity-id <uuid>` without `--seed-demo`. The fresh-reset walkthrough requirement
+applies only to a lane you own and may reset, never a retained lane.
 
 ```
 node tooling/supabase/lane.mjs init <n>     # once: generate the lane config
