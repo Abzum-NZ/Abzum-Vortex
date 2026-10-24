@@ -530,7 +530,8 @@ export const saveGridView = async (
     )
   )
     throw new Error("GRID_VIEW_PLACEMENT_INVALID");
-  if (document?.formatting !== undefined) {
+  // Every document carries a rule list; only a view that holds rules needs personal formatting.
+  if (document !== null && document.formatting.length > 0) {
     const contract = gridViewPlacement(save.page, save.placementId)?.contract;
     const features = contract?.features;
     if (
