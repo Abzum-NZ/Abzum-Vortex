@@ -5,6 +5,7 @@ import {
   canonicalJson,
   compiledItemSettings,
   isRecord,
+  PLATFORM_BLOCK_RELEASE_IDENTITIES,
   recordsTableContractOrLog,
   plainSourceSettingValue,
   typedSourceSettings,
@@ -303,14 +304,21 @@ export function useStudioCanvasGridEvents(
   release: PlatformBlockRelease | undefined,
 ): DisplayEventHandlers | undefined {
   const { report, interactive } = useContext(StudioCanvasGridContext);
+  // Every canvas block calls this hook; only a table owns grid settings and held state.
+  const tableRelease =
+    release?.blockId === PLATFORM_BLOCK_RELEASE_IDENTITIES.TABLE_BLOCK_RELEASE.blockId
+      ? release
+      : undefined;
   const setup =
-    report === undefined || compiled === undefined || release === undefined
+    report === undefined || compiled === undefined || tableRelease === undefined
       ? undefined
-      : gridSetup(props, compiled, release);
+      : gridSetup(props, compiled, tableRelease);
   // Source settings invalidate held reads before the next compilation/row response arrives; a
   // draft whose settings do not read (the inspector names why) holds no canvas state at all.
   const key =
-    release === undefined ? undefined : (gridSource(props, release)?.key ?? UNREADABLE_GRID_KEY);
+    tableRelease === undefined
+      ? undefined
+      : (gridSource(props, tableRelease)?.key ?? UNREADABLE_GRID_KEY);
   const alias = String(props.id);
   // The held state follows the settings the grid has now.
   useEffect(() => {
@@ -321,7 +329,8 @@ export function useStudioCanvasGridEvents(
   const { contract, fields } = setup;
   const send = (event: StudioCanvasGridEvent) =>
     report({ ...event, placementAlias: alias, key: setup.key, fields });
-  const supports = (event: string): boolean => release!.supportedEvents.includes(event as never);
+  const supports = (event: string): boolean =>
+    tableRelease!.supportedEvents.includes(event as never);
   return {
     columns_changed: async (event): Promise<GridLayoutCommitResult> => {
       if (event.event !== "columns_changed") return { outcome: "unavailable" };
@@ -410,8 +419,9 @@ const gridSource = (props: Readonly<Record<string, unknown>>, release: PlatformB
 };
 
 /**
- * The grid's table contract and field names; undefined for a non-table block, and while the
- * compiled table is behind its draft settings (it catches up on the next compilation).
+ * The table's contract and field names; undefined while the compiled table is behind its draft
+ * settings (it catches up on the next compilation). Only a table release is ever passed here, so a
+ * contract that does not read is a real defect and is logged.
  */
 const gridSetup = (
   props: Readonly<Record<string, unknown>>,
