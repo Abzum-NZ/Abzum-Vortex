@@ -1,6 +1,13 @@
 import "server-only";
 
-import { Agent as HttpAgent, request as requestHttp, type ClientRequest, type IncomingMessage } from "node:http";
+import { logRefusal } from "@vortex/platform/schema";
+
+import {
+  Agent as HttpAgent,
+  request as requestHttp,
+  type ClientRequest,
+  type IncomingMessage,
+} from "node:http";
 import { Agent as HttpsAgent, request as requestHttps } from "node:https";
 import { Socket } from "node:net";
 import { connect as connectTls, type TLSSocket } from "node:tls";
@@ -18,7 +25,9 @@ const providerMilliseconds = 10_000;
 const unavailable = () => new Error("PRIVATE_INVALIDATION_TRANSPORT_UNAVAILABLE");
 const deferred = () => {
   let resolve!: () => void;
-  const promise = new Promise<void>((complete) => { resolve = complete; });
+  const promise = new Promise<void>((complete) => {
+    resolve = complete;
+  });
   return { promise, resolve };
 };
 
@@ -72,7 +81,9 @@ export class PrivateInvalidationTransportOwner {
     if (this.stopping || Date.now() >= this.deadline) throw unavailable();
   };
 
-  private accepting(): boolean { return !this.stopping && Date.now() < this.deadline; }
+  private accepting(): boolean {
+    return !this.stopping && Date.now() < this.deadline;
+  }
 
   private fail(): void {
     if (this.stopping) return;
@@ -86,7 +97,11 @@ export class PrivateInvalidationTransportOwner {
   });
 
   track<Result>(result: Promise<Result>): Promise<Result> {
-    const observed = result.then(() => undefined, () => undefined);
+    // The caller observes the original rejection; this latch only joins owned work.
+    const observed = result.then(
+      () => undefined,
+      () => undefined,
+    );
     this.pending.add(observed);
     void observed.then(() => this.pending.delete(observed));
     return result;
@@ -114,12 +129,16 @@ export class PrivateInvalidationTransportOwner {
     // Public Agent construction owns connection dispatch; agent:false would create
     // a default Agent and could bypass a request-level createConnection option.
     const agent = secure
-      ? new class extends HttpsAgent {
-          override createConnection(): TLSSocket { return owner.createPhysical(true, hostname, port); }
-        }({ keepAlive: false, maxSockets: 1, maxCachedSessions: 0 })
-      : new class extends HttpAgent {
-          override createConnection(): Socket { return owner.createPhysical(false, hostname, port); }
-        }({ keepAlive: false, maxSockets: 1 });
+      ? new (class extends HttpsAgent {
+          override createConnection(): TLSSocket {
+            return owner.createPhysical(true, hostname, port);
+          }
+        })({ keepAlive: false, maxSockets: 1, maxCachedSessions: 0 })
+      : new (class extends HttpAgent {
+          override createConnection(): Socket {
+            return owner.createPhysical(false, hostname, port);
+          }
+        })({ keepAlive: false, maxSockets: 1 });
     this.agents.add(agent);
     return agent;
   }
@@ -129,12 +148,18 @@ export class PrivateInvalidationTransportOwner {
     const original = socket.write.bind(socket);
     let writes = 0;
     function write(bytes: Uint8Array | string, callback?: (error?: Error | null) => void): boolean;
-    function write(bytes: Uint8Array | string, encoding?: BufferEncoding,
-      callback?: (error?: Error | null) => void): boolean;
-    function write(bytes: Uint8Array | string,
+    function write(
+      bytes: Uint8Array | string,
+      encoding?: BufferEncoding,
+      callback?: (error?: Error | null) => void,
+    ): boolean;
+    function write(
+      bytes: Uint8Array | string,
       encodingOrCallback?: BufferEncoding | ((error?: Error | null) => void),
-      suppliedCallback?: (error?: Error | null) => void): boolean {
-      const callback = typeof encodingOrCallback === "function" ? encodingOrCallback : suppliedCallback;
+      suppliedCallback?: (error?: Error | null) => void,
+    ): boolean {
+      const callback =
+        typeof encodingOrCallback === "function" ? encodingOrCallback : suppliedCallback;
       const encoding = typeof encodingOrCallback === "string" ? encodingOrCallback : undefined;
       const written = deferred();
       owner.track(written.promise);
@@ -143,9 +168,19 @@ export class PrivateInvalidationTransportOwner {
         if (completed) return;
         completed = true;
         writes -= 1;
-        try { callback?.(error); }
-        catch { owner.fail(); }
-        finally { written.resolve(); }
+        try {
+          callback?.(error);
+        } catch (cause) {
+          logRefusal(
+            "private-invalidation",
+            "physical write callback",
+            "write_callback_failed",
+            cause,
+          );
+          owner.fail();
+        } finally {
+          written.resolve();
+        }
       };
       writes += 1;
       if (owner.stopping || writes > maximumPhysicalWrites) {
@@ -153,8 +188,10 @@ export class PrivateInvalidationTransportOwner {
         if (!owner.stopping) owner.fail();
         return false;
       }
-      try { return original(bytes, encoding, complete); }
-      catch {
+      try {
+        return original(bytes, encoding, complete);
+      } catch (cause) {
+        logRefusal("private-invalidation", "physical write", "write_failed", cause);
         complete(unavailable());
         owner.fail();
         return false;
@@ -163,7 +200,9 @@ export class PrivateInvalidationTransportOwner {
     // Only this newly allocated socket is adapted through its public write API.
     // Include HTTP, SDK and ws automatic close-frame callbacks, not just send().
     socket.write = write;
-    this.writeRemovers.add(() => { socket.write = original; });
+    this.writeRemovers.add(() => {
+      socket.write = original;
+    });
     const closed = deferred();
     const ignoreError = () => undefined;
     socket.on("error", ignoreError);
@@ -187,6 +226,7 @@ export class PrivateInvalidationTransportOwner {
     });
     this.requests.add(request);
     this.track(closed.promise);
+    // Request errors reach fetch or WebSocket; this observer only joins deliberate destruction.
     this.track(finished(request, { readable: false, cleanup: true }).catch(() => undefined));
   }
 
@@ -194,16 +234,24 @@ export class PrivateInvalidationTransportOwner {
     this.checkpoint();
     const url = new URL(input instanceof Request ? input.url : String(input));
     const method = init?.method ?? (input instanceof Request ? input.method : "GET");
-    if (++this.requestCount > maximumProviderRequests || method.toUpperCase() !== "GET" ||
-        url.origin !== this.providerUrl.origin || url.username !== "" || url.password !== "" ||
-        url.search !== "" || url.hash !== "" ||
-        (url.pathname !== "/auth/v1/user" && url.pathname !== "/auth/v1/.well-known/jwks.json"))
+    if (
+      ++this.requestCount > maximumProviderRequests ||
+      method.toUpperCase() !== "GET" ||
+      url.origin !== this.providerUrl.origin ||
+      url.username !== "" ||
+      url.password !== "" ||
+      url.search !== "" ||
+      url.hash !== "" ||
+      (url.pathname !== "/auth/v1/user" && url.pathname !== "/auth/v1/.well-known/jwks.json")
+    )
       throw unavailable();
     const headers = new Headers(input instanceof Request ? input.headers : undefined);
     new Headers(init?.headers).forEach((value, name) => headers.set(name, value));
     // Credential transport is fixed to the configured provider and never follows redirects.
     const wireHeaders: Record<string, string> = {};
-    headers.forEach((value, name) => { wireHeaders[name] = value; });
+    headers.forEach((value, name) => {
+      wireHeaders[name] = value;
+    });
     const signal = init?.signal ?? (input instanceof Request ? input.signal : undefined);
     const actual = new Promise<Response>((resolve, reject) => {
       let completed = false;
@@ -215,7 +263,10 @@ export class PrivateInvalidationTransportOwner {
       const finish = (result?: Response) => {
         if (completed) return;
         completed = true;
-        if (timer !== undefined) { clearTimeout(timer); this.timers.delete(timer); }
+        if (timer !== undefined) {
+          clearTimeout(timer);
+          this.timers.delete(timer);
+        }
         signal?.removeEventListener("abort", fail);
         this.removers.delete(remove);
         response?.removeListener("data", data);
@@ -235,10 +286,15 @@ export class PrivateInvalidationTransportOwner {
         else resolve(result);
       };
       const fail = () => finish();
-      const remove = () => { signal?.removeEventListener("abort", fail); };
+      const remove = () => {
+        signal?.removeEventListener("abort", fail);
+      };
       const data = (chunk: Buffer) => {
         length += chunk.length;
-        if (length > maximumProviderBodyBytes) { fail(); return; }
+        if (length > maximumProviderBodyBytes) {
+          fail();
+          return;
+        }
         chunks.push(chunk);
       };
       const end = () => {
@@ -246,40 +302,74 @@ export class PrivateInvalidationTransportOwner {
           this.checkpoint();
           const body = Buffer.concat(chunks, length).toString("utf8");
           const status = response?.statusCode ?? 500;
-          if (status < 200 || status >= 300) { fail(); return; }
+          if (status < 200 || status >= 300) {
+            fail();
+            return;
+          }
           finish(new Response(body, { status, headers: { "Content-Type": "application/json" } }));
-        } catch { fail(); }
+        } catch (cause) {
+          logRefusal(
+            "private-invalidation",
+            "provider response",
+            "provider_response_failed",
+            cause,
+          );
+          fail();
+        }
       };
       try {
-        if (signal?.aborted) { fail(); return; }
+        if (signal?.aborted) {
+          fail();
+          return;
+        }
         const secure = url.protocol === "https:";
-        if (!secure && url.protocol !== "http:") { fail(); return; }
-        request = (secure ? requestHttps : requestHttp)(url, {
-          method: "GET", headers: wireHeaders,
-          agent: this.createAgent(secure, url.hostname, Number(url.port || (secure ? 443 : 80))),
-        }, (received) => {
-          response = received;
-          this.responses.add(received);
-          const closed = deferred();
-          received.once("close", () => { this.responses.delete(received); closed.resolve(); });
-          this.track(closed.promise);
-          if (this.stopping || completed) { received.destroy(); fail(); return; }
-          received.on("data", data);
-          received.once("end", end);
-          received.once("error", fail);
-          received.once("aborted", fail);
-          received.once("close", fail);
-        });
+        if (!secure && url.protocol !== "http:") {
+          fail();
+          return;
+        }
+        request = (secure ? requestHttps : requestHttp)(
+          url,
+          {
+            method: "GET",
+            headers: wireHeaders,
+            agent: this.createAgent(secure, url.hostname, Number(url.port || (secure ? 443 : 80))),
+          },
+          (received) => {
+            response = received;
+            this.responses.add(received);
+            const closed = deferred();
+            received.once("close", () => {
+              this.responses.delete(received);
+              closed.resolve();
+            });
+            this.track(closed.promise);
+            if (this.stopping || completed) {
+              received.destroy();
+              fail();
+              return;
+            }
+            received.on("data", data);
+            received.once("end", end);
+            received.once("error", fail);
+            received.once("aborted", fail);
+            received.once("close", fail);
+          },
+        );
         this.observeRequest(request);
         request.once("error", fail);
         request.once("close", fail);
         signal?.addEventListener("abort", fail, { once: true });
         this.removers.add(remove);
-        timer = setTimeout(fail, Math.max(0,
-          Math.min(providerMilliseconds, this.deadline - Date.now())));
+        timer = setTimeout(
+          fail,
+          Math.max(0, Math.min(providerMilliseconds, this.deadline - Date.now())),
+        );
         this.timers.add(timer);
         request.end();
-      } catch { fail(); }
+      } catch (cause) {
+        logRefusal("private-invalidation", "provider request", "provider_request_failed", cause);
+        fail();
+      }
     });
     return this.track(actual);
   }
@@ -299,9 +389,15 @@ export class PrivateInvalidationTransportOwner {
       onmessage: ((event: MessageEvent) => void) | null = null;
       onclose: ((event: CloseEvent) => void) | null = null;
       onerror: ((event: Event) => void) | null = null;
-      get readyState(): number { return this.socket.readyState; }
-      get protocol(): string { return this.socket.protocol; }
-      get bufferedAmount(): number { return this.socket.bufferedAmount; }
+      get readyState(): number {
+        return this.socket.readyState;
+      }
+      get protocol(): string {
+        return this.socket.protocol;
+      }
+      get bufferedAmount(): number {
+        return this.socket.bufferedAmount;
+      }
 
       constructor(address: string | URL, protocols?: string | string[]) {
         super();
@@ -310,26 +406,41 @@ export class PrivateInvalidationTransportOwner {
         const url = new URL(destination);
         const expected = new URL(owner.providerUrl);
         expected.protocol = expected.protocol === "https:" ? "wss:" : "ws:";
-        if (owner.socketConstructed || url.origin !== expected.origin ||
-            url.pathname !== "/realtime/v1/websocket" || url.username || url.password || url.hash)
+        if (
+          owner.socketConstructed ||
+          url.origin !== expected.origin ||
+          url.pathname !== "/realtime/v1/websocket" ||
+          url.username ||
+          url.password ||
+          url.hash
+        )
           throw unavailable();
         owner.socketConstructed = true; // Reconnect requires a new route admission.
         this.url = destination;
         const secure = url.protocol === "wss:";
         // These documented ws 8.21.3 options are not yet in @types/ws 8.18.1.
         const socketOptions = {
-          followRedirects: false, perMessageDeflate: false, maxPayload: 16_384,
+          followRedirects: false,
+          perMessageDeflate: false,
+          maxPayload: 16_384,
           autoPong: false,
-          closeTimeout: 1_000, maxBufferedChunks: 64, maxFragments: 64,
+          closeTimeout: 1_000,
+          maxBufferedChunks: 64,
+          maxFragments: 64,
           handshakeTimeout: providerMilliseconds,
           agent: owner.createAgent(secure, url.hostname, Number(url.port || (secure ? 443 : 80))),
           finishRequest(request: ClientRequest) {
             owner.observeRequest(request);
-            if (owner.stopping) { request.destroy(); return; }
+            if (owner.stopping) {
+              request.destroy();
+              return;
+            }
             request.end();
           },
         } satisfies WebSocket.ClientOptions & {
-          closeTimeout: number; maxBufferedChunks: number; maxFragments: number;
+          closeTimeout: number;
+          maxBufferedChunks: number;
+          maxFragments: number;
         };
         this.socket = new WebSocket(destination, protocols, socketOptions);
         this.socket.binaryType = "arraybuffer";
@@ -338,9 +449,23 @@ export class PrivateInvalidationTransportOwner {
         const stop = () => this.socket.terminate();
         owner.websocketStops.add(stop);
         this.socket.on("open", () => {
-          if (owner.stopping) { stop(); return; }
+          if (owner.stopping) {
+            stop();
+            return;
+          }
           const event = new Event("open");
-          try { this.onopen?.(event); this.dispatchEvent(event); } catch { owner.fail(); }
+          try {
+            this.onopen?.(event);
+            this.dispatchEvent(event);
+          } catch (cause) {
+            logRefusal(
+              "private-invalidation",
+              "socket open callback",
+              "socket_open_callback_failed",
+              cause,
+            );
+            owner.fail();
+          }
         });
         this.socket.on("message", (data, binary) => {
           if (owner.stopping) return;
@@ -348,9 +473,16 @@ export class PrivateInvalidationTransportOwner {
             const length = Array.isArray(data)
               ? data.reduce((total, fragment) => total + fragment.byteLength, 0)
               : data.byteLength;
-            if (length > 16_384) { owner.fail(); return; }
-            const bytes = data instanceof ArrayBuffer ? new Uint8Array(data)
-              : Array.isArray(data) ? Buffer.concat(data, length) : data;
+            if (length > 16_384) {
+              owner.fail();
+              return;
+            }
+            const bytes =
+              data instanceof ArrayBuffer
+                ? new Uint8Array(data)
+                : Array.isArray(data)
+                  ? Buffer.concat(data, length)
+                  : data;
             let payload: string | ArrayBuffer;
             if (binary) {
               // The pinned public SDK decodes its v2 Broadcast JSON binary frame.
@@ -358,17 +490,30 @@ export class PrivateInvalidationTransportOwner {
               payload = new ArrayBuffer(bytes.byteLength);
               new Uint8Array(payload).set(bytes);
             } else {
-              payload = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength).toString("utf8");
+              payload = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength).toString(
+                "utf8",
+              );
             }
             const event = new MessageEvent("message", { data: payload });
             this.onmessage?.(event);
             this.dispatchEvent(event);
-          } catch { owner.fail(); }
+          } catch (cause) {
+            logRefusal(
+              "private-invalidation",
+              "socket message callback",
+              "socket_message_callback_failed",
+              cause,
+            );
+            owner.fail();
+          }
         });
         this.socket.on("ping", (data) => {
           if (owner.stopping) return;
           // Own protocol-control writes too; ws automatic pong is disabled.
-          if (this.sends >= maximumSocketWrites) { owner.fail(); return; }
+          if (this.sends >= maximumSocketWrites) {
+            owner.fail();
+            return;
+          }
           const written = deferred();
           owner.track(written.promise);
           this.sends += 1;
@@ -378,7 +523,8 @@ export class PrivateInvalidationTransportOwner {
               written.resolve();
               if (error) owner.fail();
             });
-          } catch {
+          } catch (cause) {
+            logRefusal("private-invalidation", "socket pong", "socket_pong_failed", cause);
             this.sends -= 1;
             written.resolve();
             owner.fail();
@@ -387,7 +533,18 @@ export class PrivateInvalidationTransportOwner {
         this.socket.on("error", () => {
           if (owner.stopping) return;
           const event = new Event("error");
-          try { this.onerror?.(event); this.dispatchEvent(event); } catch { /* Neutral terminal below. */ }
+          try {
+            this.onerror?.(event);
+            this.dispatchEvent(event);
+          } catch (cause) {
+            // A failed SDK error callback must still reach the terminal fence below.
+            logRefusal(
+              "private-invalidation",
+              "socket error callback",
+              "socket_error_callback_failed",
+              cause,
+            );
+          }
           owner.fail();
         });
         this.socket.once("close", () => {
@@ -396,9 +553,18 @@ export class PrivateInvalidationTransportOwner {
           // clears its heartbeat timers here; route callbacks already refuse output.
           // The owning route starts public disconnect before this asynchronous close.
           const event = new OwnedCloseEvent(owner.stopping);
-          try { this.onclose?.(event); this.dispatchEvent(event); }
-          catch { /* A terminal SDK callback cannot retain the owned closure latch. */ }
-          finally {
+          try {
+            this.onclose?.(event);
+            this.dispatchEvent(event);
+          } catch (cause) {
+            // A terminal SDK callback cannot retain the owned closure latch.
+            logRefusal(
+              "private-invalidation",
+              "socket close callback",
+              "socket_close_callback_failed",
+              cause,
+            );
+          } finally {
             this.onopen = this.onmessage = this.onclose = this.onerror = null;
             this.socket.removeAllListeners();
             closed.resolve();
@@ -417,10 +583,16 @@ export class PrivateInvalidationTransportOwner {
           owner.fail();
           return;
         }
-        const bytes = typeof data === "string" ? Buffer.from(data)
-          : ArrayBuffer.isView(data) ? Buffer.from(data.buffer, data.byteOffset, data.byteLength)
-          : Buffer.from(new Uint8Array(data));
-        if (bytes.length > 16_384) { owner.fail(); return; }
+        const bytes =
+          typeof data === "string"
+            ? Buffer.from(data)
+            : ArrayBuffer.isView(data)
+              ? Buffer.from(data.buffer, data.byteOffset, data.byteLength)
+              : Buffer.from(new Uint8Array(data));
+        if (bytes.length > 16_384) {
+          owner.fail();
+          return;
+        }
         const written = deferred();
         owner.track(written.promise);
         this.sends += 1;
@@ -430,7 +602,8 @@ export class PrivateInvalidationTransportOwner {
             written.resolve();
             if (error) owner.fail();
           });
-        } catch {
+        } catch (cause) {
+          logRefusal("private-invalidation", "socket send", "socket_send_failed", cause);
           this.sends -= 1;
           written.resolve();
           owner.fail();
