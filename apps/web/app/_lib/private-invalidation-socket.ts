@@ -308,12 +308,14 @@ export class PrivateInvalidationTransportOwner {
           }
           finish(new Response(body, { status, headers: { "Content-Type": "application/json" } }));
         } catch (cause) {
-          logRefusal(
-            "private-invalidation",
-            "provider response",
-            "provider_response_failed",
-            cause,
-          );
+          // The checkpoint refuses by design once this owner stops; only a live failure is logged.
+          if (!this.stopping)
+            logRefusal(
+              "private-invalidation",
+              "provider response",
+              "provider_response_failed",
+              cause,
+            );
           fail();
         }
       };
