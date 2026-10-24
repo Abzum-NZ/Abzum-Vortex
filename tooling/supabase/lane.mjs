@@ -36,7 +36,7 @@ const usage = `Usage:
   node tooling/supabase/lane.mjs reset <n> <worktreePath>
   node tooling/supabase/lane.mjs status <n>
   node tooling/supabase/lane.mjs env <n>
-where <n> is ${[...laneNumbers].join(" or ")}. Lanes live under VORTEX_LANES_ROOT (${lanesRoot}).`;
+where <n> is ${[...laneNumbers].join(" or ")}. Lane 2 is blocked on this Windows host by dynamic port exclusion 55262-55361. Lanes live under VORTEX_LANES_ROOT (${lanesRoot}).`;
 
 const fail = (message) => {
   process.stderr.write(`[lane] ${message}\n`);
