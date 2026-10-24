@@ -4,6 +4,7 @@ import { useId, useState, type ReactElement } from "react";
 import { Button } from "../../components/button";
 import { Input } from "../../components/input";
 import { Label } from "../../components/label";
+import { Icon } from "../../icons/icon";
 import type { DisplayEventHandlers } from "../projected-data";
 import type { GridFeatureModule, GridFeaturePointProps } from "./registry";
 
@@ -50,6 +51,7 @@ function SearchControl({
         onChange={(event) => setQuery(event.currentTarget.value)}
       />
       <Button type="submit" size="sm">
+        <Icon name="search" data-icon="inline-start" aria-hidden="true" />
         Search
       </Button>
     </form>
