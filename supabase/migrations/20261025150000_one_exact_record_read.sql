@@ -1,4 +1,4 @@
-set local role vortex_owner;
+set local role vortex_record_adapter;
 
 create or replace function vortex_record.read_record(
   p_record_type_id uuid,
@@ -2948,6 +2948,12 @@ comment on function vortex_record.prepare_base_record_save(
 ) is
   'Server-only operation-scoped preparation read for one exact active installed or owner-validated preview base Record save.';
 
+drop function vortex_record.read_record_capabilities(uuid, uuid);
+drop function vortex_record.read_record_with_capabilities(uuid, uuid);
+
+reset role;
+set local role vortex_owner;
+
 CREATE OR REPLACE FUNCTION vortex_platform.decide_file_read(p_file_id uuid) RETURNS jsonb
     LANGUAGE plpgsql
     SET search_path TO ''
@@ -3018,8 +3024,5 @@ REVOKE ALL ON FUNCTION vortex_platform.decide_file_read(p_file_id uuid) FROM PUB
 GRANT ALL ON FUNCTION vortex_platform.decide_file_read(p_file_id uuid) TO vortex_request;
 
 grant execute on function vortex_platform.decide_file_read(p_file_id uuid) to postgres;
-
-drop function vortex_record.read_record_capabilities(uuid, uuid);
-drop function vortex_record.read_record_with_capabilities(uuid, uuid);
 
 reset role;
