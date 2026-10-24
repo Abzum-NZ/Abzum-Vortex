@@ -1,6 +1,6 @@
 "use client";
 
-import type { CSSProperties, ReactElement, ReactNode } from "react";
+import { useContext, type CSSProperties, type ReactElement, type ReactNode } from "react";
 import type { ApplicationPuckRootShell } from "@vortex/platform/schema";
 import {
   Breadcrumb,
@@ -21,6 +21,7 @@ import {
 } from "../components/dropdown-menu";
 import { Button } from "../components/button";
 import { SidebarProvider, SidebarTrigger } from "../components/sidebar";
+import { FlowSurfaceContext } from "../flow-runtime/flow-surface-context";
 import { Icon } from "../icons/icon";
 import { AppearanceToggle } from "./appearance-toggle";
 import { ApplicationAccountMenu, useApplicationAccountActions } from "./account-actions";
@@ -89,17 +90,19 @@ function SwitcherButton({
 }
 
 /** The visible indicator and per-session switch for browser agent tools, shared by every surface that registers them. */
-export function WebMcpStatus({ runtime }: Readonly<{ runtime: ApplicationWebMcpRuntime }>): ReactElement {
+export function WebMcpStatus({
+  runtime,
+}: Readonly<{ runtime: ApplicationWebMcpRuntime }>): ReactElement {
   const label =
     runtime.working !== undefined
       ? `An agent is making a change (${runtime.working})...`
       : runtime.status === "active"
-      ? "Browser agent tools are active on this page."
-      : runtime.status === "off"
-        ? "Browser agent tools are off for this session."
-        : runtime.status === "registering"
-          ? "Enabling browser agent tools..."
-          : "Browser agent tools could not be enabled.";
+        ? "Browser agent tools are active on this page."
+        : runtime.status === "off"
+          ? "Browser agent tools are off for this session."
+          : runtime.status === "registering"
+            ? "Enabling browser agent tools..."
+            : "Browser agent tools could not be enabled.";
   return (
     <div
       className="flex max-w-full min-w-0 flex-wrap items-center gap-2 text-xs"
@@ -138,7 +141,9 @@ function Breadcrumbs({
           {runtime === undefined ? (
             <span className="truncate">{applicationName}</span>
           ) : (
-            <BreadcrumbLink href={runtime.applicationHref} className="truncate">{applicationName}</BreadcrumbLink>
+            <BreadcrumbLink href={runtime.applicationHref} className="truncate">
+              {applicationName}
+            </BreadcrumbLink>
           )}
         </BreadcrumbItem>
         <BreadcrumbSeparator className="max-sm:hidden">
@@ -257,12 +262,14 @@ export function ApplicationShellRoot({
   editing?: boolean;
   children: ReactNode;
 }>): ReactElement {
+  // A flow dialog already insets what it shows, so its page keeps the gap but not the padding.
+  const inFlowSurface = useContext(FlowSurfaceContext);
   if (shell.kind === "default")
     return (
       <div
         data-vortex-puck-root=""
         className="vortex-puck-slot"
-        style={contentStyle}
+        style={inFlowSurface ? { ...contentStyle, padding: 0 } : contentStyle}
         {...(editing ? { "data-vortex-editing": "" } : {})}
       >
         {runtime?.webMcp === undefined ? null : <WebMcpStatus runtime={runtime.webMcp} />}

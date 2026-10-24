@@ -76,6 +76,11 @@ export type FlowSetValidationIssue = FlowValidationIssue & Readonly<{ flowId: st
 
 export type FlowValidationOptions = Readonly<{
   /**
+   * The authored title of a form named by a Show form step, when validating an application: an
+   * empty string for a form without one, undefined when no form has that reference.
+   */
+  formTitle?: ((reference: string) => string | undefined) | undefined;
+  /**
    * Finds a flow compiled together with this one, in either shape, from the reference a `run_flow`
    * or `flow.run_background` task names. A target it does not return has no declared inputs,
    * outputs or execution kind here, so the call is refused rather than left untyped.
@@ -862,6 +867,20 @@ export function validateFlow(
     where: Where,
     path: Path,
   ) => {
+    if (
+      task.type === "interface.show_form" &&
+      name === "form" &&
+      value.kind === "literal" &&
+      value.literal.type === "text" &&
+      typeof value.literal.value === "string" &&
+      options.formTitle?.(value.literal.value)?.trim() === ""
+    )
+      add(
+        path,
+        "vortex.definition.workflow_node_values",
+        "required_value",
+        `Show form step ${task.description ?? definition.title} names form ${value.literal.value}, which has no title. Give the form a title.`,
+      );
     const declared = Object.hasOwn(definition.properties, name)
       ? definition.properties[name]
       : undefined;

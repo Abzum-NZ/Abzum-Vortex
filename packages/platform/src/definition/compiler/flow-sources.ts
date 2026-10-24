@@ -1,5 +1,7 @@
 import {
   sourceFlowCollectionSchema,
+  sourcePageItems,
+  type ApplicationSourceDocument,
   type ModuleCompilationOutput,
   type DefinitionCompilationOutput,
 } from "../../schema";
@@ -28,6 +30,7 @@ import {
   type JsonObject,
 } from "./shared";
 import { moduleDependencies } from "../module-dependencies";
+import { FORM_CONTAINER_BLOCK_RELEASE } from "../application-composition-catalogue";
 
 /**
  * Compiles the flows a module or application owns to permanent identities, refusing an
@@ -52,7 +55,10 @@ function compileOwnedFlowSources(
     source.kind === "module"
       ? (moduleDependencies(source) as unknown as JsonObject[])
       : source.kind === "application"
-        ? applicationModuleKeysOf(body).map((module) => ({ module, version: CURRENT_MODULE_RELEASE }))
+        ? applicationModuleKeysOf(body).map((module) => ({
+            module,
+            version: CURRENT_MODULE_RELEASE,
+          }))
         : [];
   const dependencyModuleOutput = (moduleKey: string): ModuleCompilationOutput => {
     const bindings = moduleDependencyEntries.filter(
@@ -134,7 +140,20 @@ function compileOwnedFlowSources(
   const qualifiedRecord = (reference: string) =>
     reference.includes(":") ? reference : `${ownKey}:${reference}`;
   const recordOwner = (reference: string) => qualifiedRecord(reference).split(":")[0]!;
+  const formTitles = new Map<string, string>();
+  if (source.kind === "application")
+    for (const page of (body as unknown as ApplicationSourceDocument["body"]).pages)
+      for (const item of sourcePageItems(page.composition))
+        if (
+          item.props.vortex.block.block_id === FORM_CONTAINER_BLOCK_RELEASE.blockId &&
+          item.props.vortex.block.release_version === FORM_CONTAINER_BLOCK_RELEASE.releaseVersion
+        )
+          formTitles.set(
+            item.props.id,
+            typeof item.props.title === "string" ? item.props.title : "",
+          );
   return compileFlowSources({
+    formTitle: source.kind === "application" ? (reference) => formTitles.get(reference) : undefined,
     flows: parsed.data,
     declaredDefinitionKeys,
     operationInputs: callableOperation,
