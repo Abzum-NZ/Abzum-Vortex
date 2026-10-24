@@ -2,9 +2,11 @@ import "server-only";
 
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 import {
+  BuilderAuthorityError,
   createBuilderAuthority,
   requireBuilderAuthority,
   runOrganizationAccessOperation,
+  type BuilderAuthority,
   type BuilderConferredPermission,
   type BuilderOperation,
 } from "../access/index";
@@ -252,8 +254,27 @@ export const requireInstallationAuthority = async (
       installationProblem("recent_authentication_required", "authentication_required", undefined, {
         cause: error,
       });
-    return installationProblem("builder_authority_refused", "refused", undefined, { cause: error });
+    return error instanceof BuilderAuthorityError &&
+      error.code === "BUILDER_PERMISSION_REFUSED" &&
+      operation.kind === "installation"
+      ? refuseWithoutManage(authority, operation.applicationRootId, error)
+      : installationProblem("builder_authority_refused", "refused", undefined, { cause: error });
   });
+};
+
+/**
+ * The refusal does not say which requirement failed, so Manage applications alone is asked again:
+ * only its absence is named; another requirement (custom code, a system application) stays untyped.
+ */
+const refuseWithoutManage = async (
+  authority: BuilderAuthority,
+  rootId: string,
+  cause: BuilderAuthorityError,
+): Promise<never> => {
+  const manage = await authority.require(installationOperation(rootId, false));
+  return manage.outcome === "refused"
+    ? refuseInstallationAuthority(cause)
+    : installationProblem("builder_authority_refused", "refused", undefined, { cause });
 };
 
 export const installationOperation = (rootId: string, containsCustomComponents: boolean) =>
