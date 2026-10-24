@@ -129,6 +129,7 @@ export const compiledPageBindingFacts = <Entry extends Placement>(
         label: text(settings.label) ?? text(settings.title),
         blockName: block?.name ?? "This block",
         parameter: readPublishedParameter(settings as Settings),
+        openWith: text(settings.open_with),
         linkTargets: linkInputTypes(settings),
         fieldType: field === undefined ? undefined : fieldFacts(field).type,
         selectedRecordType:

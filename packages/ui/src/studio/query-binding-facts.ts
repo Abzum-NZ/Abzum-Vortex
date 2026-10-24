@@ -110,6 +110,7 @@ export function studioQueryBindingFacts(
         label: named(props.label) ?? named(props.title),
         blockName: release?.name ?? "This block",
         parameter: named(props.publishes_parameter),
+        openWith: named(props.open_with),
         linkTargets: Array.isArray(props.record_types)
           ? props.record_types.filter((value): value is string => typeof value === "string")
           : [],

@@ -289,6 +289,7 @@ export function useRuntimeInputs({
       ...guidedActiveFormIds,
       ...model.linkInputPlacementIds,
       ...Object.keys(model.pageParameters.controls),
+      ...Object.keys(model.pageParameters.drawers),
     ]);
     if (guidedActivePlacementIds !== undefined)
       for (const placementId of placementIds)
@@ -678,6 +679,14 @@ export function useRuntimeInputs({
             subject?.recordId,
           );
         };
+      if (model.pageParameters.drawers[placementId] !== undefined && supportsEvent("action")) {
+        const action = events.action as ((event: ControlSemanticEvent) => void) | undefined;
+        events.action = (event: ControlSemanticEvent) => {
+          if (event.event === "action" && event.intent === "dismiss")
+            pageParameters.dismiss(placementId, event);
+          else return action?.(event);
+        };
+      }
       // A form container emits its one submission for a gesture; it runs the bound flow once
       // through the runtime, which resumes every pause with the server-issued continuation. The
       // handler returns that run, so the form shows busy from the press until the run settles.

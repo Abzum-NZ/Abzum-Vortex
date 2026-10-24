@@ -25,6 +25,14 @@ export function publishedControlData(
   search: URLSearchParams,
   titles: PublishedRecordTitles,
 ): Data | undefined {
+  const drawerControl = model.pageParameters.drawers[id];
+  if (drawerControl !== undefined) {
+    const parameter = model.pageParameters.controls[drawerControl];
+    return {
+      status: "ready",
+      values: { kind: "drawer", open: parameter !== undefined && !!search.get(parameter) },
+    };
+  }
   const name = model.pageParameters.controls[id];
   if (name === undefined) return data;
   const kind = model.pageParameters.controlKinds[id];

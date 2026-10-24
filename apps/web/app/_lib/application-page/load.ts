@@ -1,6 +1,8 @@
 import { cache } from "react";
 import {
   placementBlockRelease,
+  placementSettings,
+  DRAWER_BLOCK_RELEASE,
   type InstalledRuntimeContext,
   type HumanOrganizationRequestDependencies,
   createHumanInstalledPageBundleContextLoader,
@@ -23,6 +25,7 @@ import {
   type OrganizationSelectionCandidate,
   recordIdSchema,
   sameId,
+  isRecord,
   compiledPageShellId,
   recordsTableParameterPlacement,
 } from "@vortex/platform/schema";
@@ -922,6 +925,15 @@ const loadApplicationPageJoined = async (
     refreshPlacementsByBinding,
     refreshWhileByPlacement,
     pageParameters: {
+      drawers: Object.fromEntries(
+        allPlacements.flatMap((placement) => {
+          const block = placement.vortex.block;
+          if (!isRecord(block) || !sameId(String(block.blockId), DRAWER_BLOCK_RELEASE.blockId))
+            return [];
+          const source = placementSettings(placement.props).open_with;
+          return source?.kind === "text" ? [[placement.placementId, source.value]] : [];
+        }),
+      ),
       tableIds: allPlacements.filter(isTablePlacement).map((placement) => placement.placementId),
       controlKinds: Object.fromEntries(
         allPlacements

@@ -90,5 +90,5 @@ export {
   type StudioCanvasGridState,
 } from "./studio-canvas-grid";
 
-export { StudioQueryBindings } from "./studio-query-bindings";
+export { StudioQueryBindings, StudioDrawerBinding } from "./studio-query-bindings";
 export { studioQueryBindingFacts, studioRecordBindingFields } from "./query-binding-facts";

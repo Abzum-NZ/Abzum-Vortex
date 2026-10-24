@@ -24,12 +24,59 @@ import {
   SelectItem,
 } from "../components/select";
 import { StudioReferencePicker } from "./studio-reference-picker";
+import { StudioField } from "./studio-field";
 import { StudioRecordReferenceControl } from "./studio-record-reference-control";
 import type { StudioSettingChoices } from "./studio-setting-controls";
 import type { StudioQueryChoice } from "./contextual-palette";
 
 type Value = SourceBlockPropertyValueContract;
 const text = (value: string): Value => ({ kind: "text", value });
+
+/** Drawers use the same published record controls offered to a record query input. */
+export function StudioDrawerBinding({
+  value,
+  facts,
+  disabled,
+  onChange,
+}: Readonly<{
+  value: Value | undefined;
+  facts: QueryBindingPageFacts;
+  disabled: boolean;
+  onChange: (value: Value | undefined) => void;
+}>) {
+  const controls = facts.controls.filter((control) =>
+    facts.parameters.some(
+      (parameter) => parameter.name === control.parameter && parameter.type.kind === "record",
+    ),
+  );
+  return (
+    <>
+      <StudioField
+        label="Open with"
+        hint="Choose a control that publishes a record. Closing this drawer clears its selection."
+        optional
+      >
+        {(control) => (
+          <StudioReferencePicker
+            {...control}
+            aria-label="Open with"
+            value={value?.kind === "text" ? value.value : ""}
+            options={controls.map((entry) => ({ value: entry.placement, label: entry.label }))}
+            unset="Initially open setting"
+            disabled={disabled}
+            onChange={(next) => onChange(next === "" ? undefined : text(next))}
+          />
+        )}
+      </StudioField>
+      {facts.pageProblems.map((problem) => (
+        <p key={problem.sentence} role="alert" className="text-sm text-destructive">
+          {problem.sentence}
+        </p>
+      ))}
+    </>
+  );
+}
+
 const partLabels: Record<CurrentPersonPart, string> = {
   person: "Person",
   organisation: "Organisation",

@@ -1411,6 +1411,15 @@
         "required": false
       },
       {
+        "kind": "text",
+        "key": "open_with",
+        "label": "Open with",
+        "help": "Open while this control publishes a selected record; closing clears its selection",
+        "required": false,
+        "minLength": 1,
+        "maxLength": 200
+      },
+      {
         "kind": "choice",
         "key": "placement",
         "label": "Placement",

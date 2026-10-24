@@ -104,5 +104,13 @@ export function usePageParameters({
     },
     [model.pageParameters.controlKinds, publish],
   );
-  return useMemo(() => ({ change, publish }), [change, publish]);
+  const dismiss = useCallback(
+    (placementId: string, event: ControlSemanticEvent) => {
+      const control = model.pageParameters.drawers[placementId];
+      if (control !== undefined && event.event === "action" && event.intent === "dismiss")
+        publish(control, "", false);
+    },
+    [model.pageParameters.drawers, publish],
+  );
+  return useMemo(() => ({ change, publish, dismiss }), [change, publish, dismiss]);
 }

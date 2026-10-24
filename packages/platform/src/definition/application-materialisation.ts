@@ -241,7 +241,7 @@ const compilePropertyValue = (
       compiled =
         schema.key === "event_id" || schema.key === "row_action_event_id"
           ? { kind: "text", value: resolution.identity("event", authored.value) }
-          : schema.key === "control_placement"
+          : schema.key === "control_placement" || schema.key === "open_with"
             ? {
                 kind: "text",
                 value: resolution.identity("block_placement", authored.value, "content"),

@@ -264,6 +264,8 @@ export type QueryBindingPlacement = Readonly<{
   fieldType: QueryBindingValueType | undefined;
   /** The record type of a table that selects a record on click; undefined for any other table. */
   selectedRecordType: string | undefined;
+  /** The control whose published record opens a drawer. */
+  openWith?: string | undefined;
 }>;
 
 type Published =
@@ -360,6 +362,18 @@ export const pageBindingFacts = (
       seen.add(name);
       parameters.push({ name, label, type: published.type, control: placement.placement });
     }
+  }
+  for (const placement of input.placements) {
+    if (placement.blockKey !== "platform.layout.drawer" || placement.openWith === undefined)
+      continue;
+    const control = controls.find(
+      (candidate) => candidate.placement.toLowerCase() === placement.openWith!.toLowerCase(),
+    );
+    const parameter = parameters.find((candidate) => candidate.name === control?.parameter);
+    if (parameter?.type.kind !== "record")
+      pageProblems.push({
+        sentence: `${placement.label ?? placement.blockName} must open with a control on this page that publishes a record.`,
+      });
   }
   return {
     currentPersonRecordType: input.currentPersonRecordType,
