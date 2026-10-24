@@ -19,10 +19,10 @@ import {
 import type { ProtectedQueryRow } from "../../queries/index";
 import {
   collectRecordLinks,
-  type LinkFieldType,
   type RecordLinkResolver,
   type TableFieldColumn,
 } from "../component-data-projection";
+import type { LinkFieldType } from "../cell-projection";
 import type { BoardPlacementFailureCause } from "../board-query";
 import type { RecordsTableFilterTarget } from "../records-table-query";
 
