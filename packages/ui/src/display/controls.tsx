@@ -9,6 +9,7 @@ import { Pagination, PaginationContent, PaginationItem } from "../components/pag
 import { Skeleton } from "../components/skeleton";
 import { Spinner } from "../components/spinner";
 import { usePendingGesture } from "../controls/pending-gesture";
+import { Icon } from "../icons/icon";
 import type { DisplayEventHandlers, DisplayRow, DisplaySemanticEvent } from "./projected-data";
 
 /** Optional authored title with a refresh control bound to the declared `refresh` event. */
@@ -291,10 +292,12 @@ export function PaginationControl({
               type="button"
               size="sm"
               variant="ghost"
+              className="max-sm:min-h-11"
               disabled={firstDisabled}
               aria-label="First page"
               onClick={() => onPage({ event: "page_changed", page: 1, direction: "first" })}
             >
+              <Icon name="chevrons-left" data-icon="inline-start" aria-hidden="true" />
               First
             </Button>
           </PaginationItem>
@@ -305,6 +308,7 @@ export function PaginationControl({
               type="button"
               size="sm"
               variant="ghost"
+              className="max-sm:min-h-11"
               disabled={previousDisabled}
               aria-label="Previous page"
               onClick={() =>
@@ -318,6 +322,7 @@ export function PaginationControl({
                 })
               }
             >
+              <Icon name="chevron-left" data-icon="inline-start" aria-hidden="true" />
               Previous
             </Button>
           </PaginationItem>
@@ -335,6 +340,7 @@ export function PaginationControl({
               type="button"
               size="sm"
               variant="ghost"
+              className="max-sm:min-h-11"
               disabled={nextDisabled}
               aria-label="Next page"
               onClick={() =>
@@ -349,6 +355,7 @@ export function PaginationControl({
               }
             >
               Next
+              <Icon name="chevron-right" data-icon="inline-end" aria-hidden="true" />
             </Button>
           </PaginationItem>
         )}
@@ -358,11 +365,13 @@ export function PaginationControl({
               type="button"
               size="sm"
               variant="ghost"
+              className="max-sm:min-h-11"
               disabled={nextDisabled}
               aria-label="Last page"
               onClick={() => onPage({ event: "page_changed", page: lastTarget, direction: "last" })}
             >
               Last
+              <Icon name="chevrons-right" data-icon="inline-end" aria-hidden="true" />
             </Button>
           </PaginationItem>
         )}

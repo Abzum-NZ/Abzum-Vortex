@@ -1058,6 +1058,8 @@ export function RecordsGrid({
           <>
             <span
               className="truncate"
+              // A narrow column truncates its heading; the full heading shows on hover.
+              title={column?.label}
               draggable
               onDragStart={(event) => {
                 dragged.current = slot.id;
@@ -1103,6 +1105,7 @@ export function RecordsGrid({
                 onMove={(offset) => moveColumnBy(slot.id, offset)}
                 grid={() => gridRef.current}
                 onAutoSize={(width) => autoSize(slot.id, width)}
+                onResize={(direction) => resizeBy(slot.id, direction * RESIZE_STEP)}
                 featureItems={renderers.columnMenuItems?.(column)}
               />
             )}
