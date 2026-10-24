@@ -161,6 +161,18 @@ const commandFailure = (problem: InstallationProblemShape): ApplicationStoreResu
       diagnostic: { code: "application_storage_incompatible" },
     };
   if (problem.kind === "conflict") return "conflict";
+  if (problem.unavailableReason === "not_installed")
+    return {
+      kind: "confirmed_failure",
+      outcome: "refused",
+      diagnostic: { code: "application_not_installed" },
+    };
+  if (problem.unavailableReason === "not_newer")
+    return {
+      kind: "confirmed_failure",
+      outcome: "refused",
+      diagnostic: { code: "application_not_newer" },
+    };
   if (problem.kind === "authentication_required")
     return { kind: "unavailable", code: "recent_authentication_required" };
   if (problem.kind === "refused") {
