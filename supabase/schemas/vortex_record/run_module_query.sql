@@ -866,6 +866,13 @@ begin
     ) and vortex_record.has_bounded_system_projection_reader_internal(
       v_storage_contract_id, fields_by_id -> sort_ids[1] ->> 'key'
     );
+  if record_type_item ? 'systemProjection' and not projection_page_scan then
+    -- Protected rows have exactly one bounded scan path. Unsupported shapes
+    -- must never fall through to generated record_data storage.
+    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode',
+      case when board_member_mode or group_member_mode or tree_mode
+        then 'descriptor_invalid' else 'sort_invalid' end);
+  end if;
   if projection_page_scan then
       projection_sort_key := fields_by_id -> sort_ids[1] ->> 'key';
       if projection_sort_key is null then
