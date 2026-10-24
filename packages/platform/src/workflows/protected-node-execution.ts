@@ -5,6 +5,7 @@ import {
   describeFailure,
   findPlatformServiceOperation,
   flowValueSchema,
+  flowTaskChildLists,
   flowTaskRegistry,
   jsonValueSchema,
   PLATFORM_SERVICE_OPERATIONS,
@@ -16,6 +17,7 @@ import {
   workflowNodeIdSchema,
   workflowRunIdSchema,
   type FlowReference,
+  type FlowTask,
   type FlowValue,
   type JsonValue,
   type WorkflowExecutionReference,
@@ -26,9 +28,11 @@ import { z } from "zod";
 import {
   resolveDurableActorContext,
   retainedRunAuthoritySchema,
-  type VerifiedDurableActorContext,
 } from "./durable-actor-context";
 import { protectedRunRegisteredReleaseSchema } from "./flow-registration";
+import { deriveKestraNodeId } from "./kestra-compiler";
+import type { ProtectedOperationExecutor } from "../definition/protected-operation-executor";
+import { durableRecordUpdateSchema, type DurableRecordUpdate } from "../definition/durable-record-update";
 
 const maximumCallbackAttempts = 5;
 const callbackRetryDelayMs = 1_000;
@@ -214,21 +218,7 @@ export type ProtectedNodeEffectLedger = Readonly<{
 
 export type ProtectedNodeOperationIdentity = z.infer<typeof protectedOperationIdentitySchema>;
 
-export type ProtectedNodeOperationResult =
-  | Readonly<{ outcome: "committed"; outputs: Readonly<Record<string, JsonValue>> }>
-  | Readonly<{ outcome: "refused" | "conflict" | "validation" | "failed" }>;
-
-export type ProtectedNodeOperationExecutor = Readonly<{
-  executeDurableActor: <Result>(request: Readonly<{
-    operation: ProtectedNodeOperationIdentity;
-    actorContext: VerifiedDurableActorContext;
-    inputs: Readonly<Record<string, unknown>>;
-    effect: (
-      transaction: RequestDatabaseTransaction,
-      executeOperation: () => Promise<ProtectedNodeOperationResult>,
-    ) => Promise<Result>;
-  }>) => Promise<Readonly<{ kind: "available"; value: Result }> | Readonly<{ kind: "refused" | "failed" }>>;
-}>;
+export type ProtectedNodeOperationExecutor = Pick<ProtectedOperationExecutor, "executeDurableActor">;
 
 /** Safe callback response. `outputs` contains only the descriptor's declared values. */
 export type ProtectedNodeCallbackResponse = Readonly<{
@@ -426,6 +416,55 @@ const evaluateValue = (
   return resolveValue(value.data)?.value;
 };
 
+/** Selects the exact published task; a signed callback cannot substitute its own properties. */
+const recordUpdateForBinding = (
+  registered: ProtectedNodeRegisteredRun,
+  binding: ProtectedNodeRunRecord["nodes"][number],
+  runtimeScope: unknown,
+  now: string,
+): DurableRecordUpdate | undefined => {
+  if (!binding.grantable || binding.operations?.length !== 1) return undefined;
+  const operation = binding.operations[0]!;
+  if (operation.owner.kind !== "module") return undefined;
+  const release = registered.registeredRelease;
+  if (release.definition.runAs.kind !== "initiator") return undefined;
+  const find = (tasks: readonly FlowTask[]): FlowTask | undefined => {
+    for (const task of tasks) {
+      const nodeId = deriveKestraNodeId(
+        { ...release, workflowRevision: release.compilerWorkflowRevision },
+        release.definition.id, task.id,
+      );
+      if (sameIdentity(nodeId, binding.nodeId)) return task;
+      for (const children of flowTaskChildLists(task)) {
+        const found = find(children.tasks);
+        if (found !== undefined) return found;
+      }
+    }
+    return undefined;
+  };
+  const task = find(release.definition.tasks) ?? find(release.definition.errors) ?? find(release.definition.finally);
+  if (task?.type !== "record.set_fields" || !("properties" in task) ||
+      binding.operationKey !== flowTaskRegistry["record.set_fields"].protectedOperationKey)
+    return undefined;
+  const properties = task.properties;
+  const recordReference = flowValueSchema.safeParse(properties.record);
+  const declaration = recordReference.success && recordReference.data.kind === "reference" &&
+    recordReference.data.reference.source === "input"
+    ? release.definition.inputs[recordReference.data.reference.name] : undefined;
+  const recordTypeId = properties.record_type === undefined
+    ? declaration?.recordTypeIds?.length === 1 ? declaration.recordTypeIds[0] : undefined
+    : properties.record_type.kind === "literal" ? properties.record_type.literal.value : undefined;
+  if (typeof recordTypeId !== "string" || !sameIdentity(recordTypeId, operation.operationId))
+    return undefined;
+  const result = durableRecordUpdateSchema.safeParse({
+    recordTypeId, moduleRootId: operation.owner.moduleRootId,
+    installationRevision: release.installationRevision,
+    recordId: evaluateValue(properties.record, runtimeScope, now),
+    values: evaluateValue(properties.values, runtimeScope, now),
+  });
+  return result.success ? result.data : undefined;
+};
+
 const kestraStateMap: Readonly<Record<string, WorkflowExecutionReference["lastKnownState"]>> = {
   CREATED: "queued",
   QUEUED: "queued",
@@ -511,7 +550,7 @@ export const createProtectedNodeExecution = (dependencies: ProtectedNodeExecutio
       if (binding === undefined || binding.operationKey !== context.purpose.operationKey)
         return { outcome: "permanent_refusal", safeCode: "callback_refused" };
 
-      if (isUnavailableTaskType(binding.taskType)) {
+      if (isUnavailableTaskType(binding.taskType) && binding.taskType !== "record.set_fields") {
         console.warn(
           `[workflow] protected callback refused: no callback runner for task type ${binding.taskType}`,
         );
@@ -539,25 +578,29 @@ export const createProtectedNodeExecution = (dependencies: ProtectedNodeExecutio
         : undefined;
       if (task === undefined || !task.runLocations.includes("durable"))
         return { outcome: "permanent_refusal", safeCode: "task_unavailable" };
-      if (binding.taskType !== "operation.call")
+      if (binding.taskType !== "operation.call" && binding.taskType !== "record.set_fields")
         return { outcome: "permanent_refusal", safeCode: "task_unavailable" };
 
+      const recordUpdate = binding.taskType === "record.set_fields"
+        ? recordUpdateForBinding(registeredRun, binding, envelope.data.inputs.runtime_scope, context.issuedAt)
+        : undefined;
+      if (binding.taskType === "record.set_fields" && recordUpdate === undefined)
+        return { outcome: "permanent_refusal", safeCode: "invalid_input" };
       const properties = envelope.data.inputs.properties;
-      const operation = registeredOperationForBinding(properties, binding);
-      const inputs = operationInputs(properties);
-      if (operation === undefined)
+      const operation = recordUpdate === undefined ? registeredOperationForBinding(properties, binding) : undefined;
+      const inputs = recordUpdate === undefined ? operationInputs(properties) : {};
+      if (recordUpdate === undefined && operation === undefined)
         return { outcome: "permanent_refusal", safeCode: "operation_unavailable" };
       if (inputs === undefined)
         return { outcome: "permanent_refusal", safeCode: "invalid_input" };
       if (context.policy.kind !== "initiating_person")
         return { outcome: "permanent_refusal", safeCode: "actor_unavailable" };
-      const registeredOperation = findPlatformServiceOperation(
-        operation.serviceId,
-        operation.operationId,
-        operation.releaseVersion,
+      const registeredOperation = operation === undefined ? undefined : findPlatformServiceOperation(
+        operation.serviceId, operation.operationId, operation.releaseVersion,
       );
-      if (registeredOperation === undefined)
+      if (recordUpdate === undefined && registeredOperation === undefined)
         return { outcome: "permanent_refusal", safeCode: "operation_unavailable" };
+      const target = recordUpdate === undefined ? { operation: operation! } : { recordUpdate };
 
       const effectKey: ProtectedNodeEffectKey = {
         runId: context.purpose.runId,
@@ -580,18 +623,18 @@ export const createProtectedNodeExecution = (dependencies: ProtectedNodeExecutio
         return { outcome: "retryable_failure", safeCode: "effect_store_unavailable", nextPollAt: nextPollAt(clock()) };
       if (prior.kind === "in_progress")
         return { outcome: "waiting", safeCode: "effect_in_progress", nextPollAt: nextPollAt(clock()) };
-      if (prior.kind === "completed") {
+      if (prior.kind === "completed" && recordUpdate === undefined) {
         const replay = storedResponse(prior.outputs);
         return replay === undefined
           ? { outcome: "retryable_failure", safeCode: "effect_result_unavailable", nextPollAt: nextPollAt(clock()) }
           : { ...replay, outcome: replay.outcome === "completed" ? "already_completed" : replay.outcome };
       }
-      if (run.data.authority.state !== "running")
+      if (run.data.authority.state !== "running" && prior.kind !== "completed")
         return { outcome: "permanent_refusal", safeCode: "callback_refused" };
       if (context.purpose.attempt > maximumCallbackAttempts)
         return { outcome: "permanent_refusal", safeCode: "attempt_limit" };
       const execution = await dependencies.operations.executeDurableActor({
-        operation,
+        ...target,
         actorContext: context,
         inputs,
         effect: async (transaction, executeOperation): Promise<ProtectedNodeCallbackResponse> => {
@@ -603,19 +646,24 @@ export const createProtectedNodeExecution = (dependencies: ProtectedNodeExecutio
           if (claim.kind === "completed") {
             const replay = storedResponse(claim.outputs);
             if (replay === undefined) throw new Error("PROTECTED_EFFECT_RESULT_UNAVAILABLE");
+            const outputs = replay.outputs;
+            if (recordUpdate !== undefined && replay.outcome === "completed" &&
+                (outputs === undefined || typeof outputs.record !== "string" ||
+                 !sameIdentity(outputs.record, recordUpdate.recordId) || Object.keys(outputs).length !== 1))
+              return { outcome: "permanent_refusal", safeCode: "callback_refused" };
             return { ...replay, outcome: replay.outcome === "completed" ? "already_completed" : replay.outcome };
           }
 
           const result = await executeOperation();
           if (result.outcome === "failed") throw new Error("PROTECTED_OPERATION_FAILED");
-          const sensitiveOutputs = new Set(registeredOperation.descriptor.sensitiveOutputs ?? []);
+          const sensitiveOutputs = new Set(registeredOperation?.descriptor.sensitiveOutputs ?? []);
           let response: ProtectedNodeCallbackResponse;
           switch (result.outcome) {
             case "committed":
               response = {
                 outcome: "completed",
                 safeCode: "completed",
-                outputs: {
+                outputs: recordUpdate !== undefined ? result.outputs : {
                   result: Object.fromEntries(
                     Object.entries(result.outputs).filter(([key]) => !sensitiveOutputs.has(key)),
                   ),
