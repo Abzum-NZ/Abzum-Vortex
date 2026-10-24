@@ -89,11 +89,6 @@ begin
         and stored.application_root_id is not distinct from policy_scope
     );
 
-    if limits_row.initial_policy is null then
-      raise exception using errcode = '23514',
-        message = 'Configure an initial record lifecycle policy before installing applications';
-    end if;
-
     next_policy_id := pg_catalog.gen_random_uuid();
     full_policy := limits_row.initial_policy || pg_catalog.jsonb_build_object(
       'policyId', next_policy_id,
