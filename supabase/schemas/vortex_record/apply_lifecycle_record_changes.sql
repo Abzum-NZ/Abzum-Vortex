@@ -18,14 +18,13 @@ declare
   result_value jsonb;
   correlation_id_value uuid;
 begin
-  -- The request role reaches the one record-change operation's terminal delete,
-  -- restore and ownership-transfer writes only through this closed entry. It
-  -- accepts exactly those three operations and delegates once, so an ordinary
-  -- save or named action can never reach apply_record_changes without its own
-  -- preparation and authority.
+  -- Closed lifecycle entry to apply_record_changes. Delete alone accepts null
+  -- mutations to begin its traversal; the second call supplies calculated parent
+  -- mutations and finalises the same command in the same request transaction.
   if p_operation is null
     or p_operation not in ('delete', 'restore', 'transfer_ownership')
-    or pg_catalog.jsonb_typeof(p_mutations) is distinct from 'array' then
+    or (pg_catalog.jsonb_typeof(p_mutations) is distinct from 'array'
+      and not (p_operation = 'delete' and p_mutations is null)) then
     return pg_catalog.jsonb_build_object(
       'outcome', 'refused', 'reasonCode', 'command_invalid'
     );
@@ -64,4 +63,4 @@ grant execute on function vortex_record.apply_lifecycle_record_changes(
 comment on function vortex_record.apply_lifecycle_record_changes(
   uuid, text, uuid, uuid, bigint, jsonb, uuid, uuid
 ) is
-  'The request role''s closed entry to the terminal delete, restore and ownership-transfer record-change writes: it refuses any other operation and delegates once to the one protected apply_record_changes operation.';
+  'The request role''s closed entry to delete preparation and finalisation, restore and ownership-transfer record-change writes: it refuses any other operation and delegates once to the one protected apply_record_changes operation.';

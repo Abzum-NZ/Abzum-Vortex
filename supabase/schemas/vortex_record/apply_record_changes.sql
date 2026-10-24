@@ -101,6 +101,7 @@ declare
   event_payload jsonb;
   event_result jsonb;
   classification_value jsonb;
+  delete_effect record;
 begin
   preview_installation :=
     vortex_record.read_current_preview_installation_internal();
@@ -118,13 +119,9 @@ begin
     );
   end if;
 
-  -- A lifecycle command is the terminal delete, restore or ownership transfer.
-  -- Delete and restore reach here only after their protected preflight has
-  -- already run and claimed the record_lifecycle receipt; this operation owns
-  -- the one terminal write and completes it. The request role reaches these
-  -- branches only through apply_lifecycle_record_changes: a lifecycle command
-  -- carries no submitted values, selected group or action, so the named-action
-  -- entry can never reach a lifecycle write under an action identity.
+  -- Every lifecycle write, including the delete traversal and its finalisation,
+  -- enters here. Delete preparation uses null mutations; calculated parent
+  -- mutations complete the same receipt within the same request transaction.
   if p_operation in ('delete', 'restore', 'transfer_ownership') then
     if p_action is not null
       or p_selected_group_id is not null
@@ -133,10 +130,44 @@ begin
         'outcome', 'refused', 'reasonCode', 'command_invalid'
       );
     end if;
-    return vortex_record.apply_lifecycle_record_changes_internal(
+    result_value := vortex_record.apply_lifecycle_record_changes_internal(
       p_operation, p_command_id, p_record_type_id, p_record_id,
       p_expected_concurrency_number, p_mutations, p_activity_id, p_occurrence_id
     );
+    if p_operation = 'delete' and result_value ->> 'outcome' = 'deleted'
+      and result_value ->> 'replayed' = 'false' then
+      context_value := vortex_access.validated_human_request_context();
+      -- Publish once per deleted record after totals, Activity, Events and the
+      -- receipt are complete. Replays and preparations publish nothing.
+      for delete_effect in
+        select effect.*
+        from vortex_record.record_lifecycle_command_effects as effect
+        join vortex_record.storage_catalogue as storage
+          on storage.storage_contract_id = effect.storage_contract_id
+        where effect.command_id = p_command_id
+          and effect.organization_id = (context_value ->> 'organizationId')::uuid
+          and effect.application_root_id = (context_value ->> 'applicationRootId')::uuid
+          and effect.actor_organization_account_id = (context_value ->> 'organizationAccountId')::uuid
+          and effect.effect_kind = 'soft_deleted'
+          and storage.storage_scope = 'application_contained'
+        order by effect.effect_sequence
+      loop
+        begin
+          notice_sequence := pg_catalog.nextval(
+            'vortex_record.record_invalidation_sequence'::pg_catalog.regclass
+          );
+          perform vortex_platform.publish_change_notice(
+            delete_effect.organization_id, delete_effect.application_root_id,
+            delete_effect.record_type_id, delete_effect.record_id,
+            delete_effect.post_concurrency_number, 'deleted',
+            notice_sequence, notice_sequence, (context_value ->> 'correlationId')::uuid
+          );
+        exception when others then
+          raise warning 'Record delete notice failed: [%] %', sqlstate, sqlerrm;
+        end;
+      end loop;
+    end if;
+    return result_value;
   end if;
 
   -- Settings use the same command entry and one settings mutation. Their
