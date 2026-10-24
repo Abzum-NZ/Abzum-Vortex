@@ -74,13 +74,12 @@ export function OrganizationLauncherPage({
         platformThemeTokens={platformThemeTokens}
         pageId={page.pageId}
         applicationSurface
+        applicationSwitcher={{ state: "available", applications: [] }}
         applicationShellRuntime={{
           applicationName: shell.name,
           applicationHref: launcherHref,
           organizationName,
           pageName: page.name,
-          applicationSwitcherState: "available",
-          applications: [],
         }}
         runtimeInputs={{
           [placementId]: {

@@ -264,8 +264,6 @@ export function ApplicationFrame({
       pageState.page !== undefined && sameId(pageState.page.pageId, currentPage?.pageId ?? "")
         ? pageState.page.name
         : (currentPage?.name ?? pageState.page?.name ?? application.name),
-    applicationSwitcherState: model.applicationSwitcherState,
-    applications: model.applications,
     ...(pageState.webMcp === undefined ? {} : { webMcp: pageState.webMcp }),
   };
 
@@ -302,6 +300,7 @@ export function ApplicationFrame({
             {...(shell === undefined ? {} : { shell })}
             theme={model.theme}
             applicationShellRuntime={applicationShellRuntime}
+            applicationSwitcher={model.applicationSwitcher}
             applicationSearch={applicationSearch}
             applicationSearchPageSubject={applicationSearchPageSubject}
             projectedNavigation={pageState.navigation ?? model.navigation}
