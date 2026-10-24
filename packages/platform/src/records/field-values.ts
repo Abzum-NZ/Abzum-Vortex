@@ -501,7 +501,10 @@ const normalizeValue = (
     )
       return issue(context, "invalid_value", path, field.fieldId, {
         code: "decimal_precision_exceeded",
-        message: `This field allows ${field.settings.decimalPlaces} decimal places.`,
+        message:
+          field.settings.decimalPlaces === 0
+            ? "This field allows whole numbers only."
+            : `This field allows ${field.settings.decimalPlaces} decimal ${field.settings.decimalPlaces === 1 ? "place" : "places"}.`,
       });
     candidate = normalizeExactDecimal(parsed.data);
   }

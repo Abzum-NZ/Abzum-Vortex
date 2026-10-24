@@ -248,9 +248,12 @@ const correctionsFor = (
     if (issue.fieldId === undefined) return undefined;
     const code = correctionCode(issue.code);
     // A create has no readable bounds before the row exists, and the caller is shown the whole
-    // form, so naming a required field whose value is missing discloses nothing new.
+    // form, so naming a required field whose value is missing, or a value the person submitted,
+    // discloses nothing new.
     const visible =
-      readableFieldIds.has(issue.fieldId) || (code === "required_value" && operation === "create");
+      readableFieldIds.has(issue.fieldId) ||
+      (operation === "create" &&
+        (code === "required_value" || issue.path[0] === "submittedValues"));
     if (!visible) return undefined;
     // The nested path is whatever follows the field id, wherever the issue's path root puts it.
     const fieldPosition = issue.path.indexOf(issue.fieldId);
