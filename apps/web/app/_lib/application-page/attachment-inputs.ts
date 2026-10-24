@@ -1,6 +1,7 @@
 import {
   createSqlFileReadRepository,
   decideFileRead,
+  formFieldOf,
   type InstalledRuntimeContext,
 } from "@vortex/platform/server";
 import {
@@ -11,7 +12,6 @@ import {
   type IdentitySession,
 } from "@vortex/platform/schema";
 import { humanOrganizationRequests } from "../server-composition";
-import { formFieldOf } from "./form-field-access";
 import { fieldControl, type collectPlacements } from "./placement-helpers";
 import type { ApplicationPageLoaderAddress, PageDataState } from "./types";
 

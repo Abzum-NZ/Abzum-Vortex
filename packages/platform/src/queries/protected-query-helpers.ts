@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { z } from "zod";
+import type { z, ZodError } from "zod";
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
 import type {
   ProtectedQueryRefusalReasonCode,
@@ -20,6 +20,31 @@ export const refusal = (
   outcome: "refused",
   reasonCode,
 });
+
+/**
+ * A refusal the engine answers with: the client sees only the neutral reason code; the part of the
+ * request and the cause are logged here so a refusal never goes without one.
+ */
+export const refuseWithCause = (
+  reasonCode: ProtectedQueryRefusalReasonCode,
+  part: string,
+  cause: string,
+): Extract<ProtectedQueryResult, { outcome: "refused" }> => {
+  console.error("[protected-query] request refused", { part, reason: reasonCode, cause });
+  return refusal(reasonCode);
+};
+
+/** A command that does not parse is refused; the issues' codes and paths (never values) are logged. */
+export const refuseInvalidCommand = (
+  error: ZodError,
+): Extract<ProtectedQueryResult, { outcome: "refused" }> => {
+  console.error("[protected-query] request refused", {
+    part: "command",
+    reason: "request_invalid",
+    issues: error.issues.map(({ code, path }) => ({ code, path })),
+  });
+  return refusal("request_invalid");
+};
 
 export const one = (rows: readonly ResultRow[]): unknown => {
   if (rows.length !== 1 || rows[0] === undefined) throw new Error("PROTECTED_QUERY_RESULT_INVALID");

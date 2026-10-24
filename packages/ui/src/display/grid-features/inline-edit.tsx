@@ -13,11 +13,8 @@ import {
 import type { JsonValue, RecordsTableInlineEditor } from "@vortex/platform/schema";
 import { Button } from "../../components/button";
 import { Checkbox } from "../../components/checkbox";
-import { Input } from "../../components/input";
 import { Popover, PopoverContent, PopoverTrigger } from "../../components/popover";
-import { NativeSelect, NativeSelectOption } from "../../components/native-select";
 import { Spinner } from "../../components/spinner";
-import { Textarea } from "../../components/textarea";
 import { useUnsavedWorkRegistry } from "../../controls/unsaved-work";
 import { useDateFormatOptions } from "../date-format-context";
 import type {
@@ -33,13 +30,9 @@ import {
   startEditDraft,
   type EditDraft,
 } from "./edit-values";
-import { LinkDraftPicker, linkedRecordTitle } from "./record-choice-picker";
-import {
-  dependentFieldsOf,
-  parentFieldOf,
-  optionsForParent,
-  storedChoiceKey,
-} from "./link-dependency";
+import { EditFieldControl } from "./edit-field-control";
+import { linkedRecordTitle } from "./record-choice-picker";
+import { dependentFieldsOf, parentFieldOf, storedChoiceKey } from "./link-dependency";
 import { waitingForParent } from "../../controls/dependent-field";
 import type { GridFeatureCellProps, GridFeatureModule } from "./registry";
 
@@ -386,21 +379,55 @@ function EditableCell({
       </>
     );
 
-  const common = {
-    "aria-label": `Edit ${label}`,
-    "aria-invalid": message === undefined ? undefined : true,
-    "aria-describedby": describedBy,
-    "aria-busy": phase === "saving" ? true : undefined,
-    disabled: phase === "saving",
-    onKeyDown,
-    onClick: (event: { stopPropagation: () => void }) => event.stopPropagation(),
-    onBlur: () => {
-      if (phaseNow.current === "editing" && !committing.current) void commit();
-    },
-  } as const;
-
-  if (editor.kind === "link") {
-    const currentTitle = linkedRecordTitle(row, field);
+  const parent =
+    dependency === undefined
+      ? undefined
+      : { choiceKey: dependency.parentRecordId, label: dependency.parentLabel };
+  const control = (
+    <EditFieldControl
+      editor={editor}
+      fieldId={field}
+      label={label}
+      draft={draft}
+      onChange={(next, final) => {
+        setDraft(next);
+        if (final) void commit(next);
+      }}
+      disabled={phase === "saving"}
+      invalid={message !== undefined}
+      describedBy={describedBy}
+      events={events}
+      current={editor.kind === "link" ? linkedRecordTitle(row, field) : undefined}
+      parent={parent}
+      inline
+      busy={phase === "saving"}
+      autoOpenPicker
+      controlRef={(element) => {
+        editing.current = element;
+      }}
+      onControlKeyDown={onKeyDown}
+      onControlBlur={() => {
+        if (phaseNow.current === "editing" && !committing.current) void commit();
+      }}
+      onPickerOpenChange={(open) => {
+        if (open) return;
+        // The picker closing without a choice ends the edit, unless focus moved to the
+        // editor's own clear control or a commit is under way.
+        setTimeout(() => {
+          if (
+            phaseNow.current === "editing" &&
+            !committing.current &&
+            message === undefined &&
+            !linkEditor.current?.contains(document.activeElement)
+          ) {
+            restoreFocus.current = false;
+            cancelRef.current();
+          }
+        }, 0);
+      }}
+    />
+  );
+  if (editor.kind === "link")
     return (
       <span
         ref={linkEditor}
@@ -415,124 +442,12 @@ function EditableCell({
           }
         }}
       >
-        {withNotice(
-          <LinkDraftPicker
-            fieldId={field}
-            label={label}
-            events={events}
-            draft={typeof draft === "object" ? draft : null}
-            {...(currentTitle === undefined ? {} : { current: currentTitle })}
-            {...(dependency === undefined ? {} : { dependency })}
-            inline
-            required={editor.required}
-            disabled={phase === "saving"}
-            autoOpen
-            inputRef={(element) => {
-              editing.current = element;
-            }}
-            invalid={message !== undefined}
-            {...(describedBy === undefined ? {} : { describedBy })}
-            onChange={(next) => {
-              setDraft(next);
-              void commit(next);
-            }}
-            onOpenChange={(open) => {
-              if (open) return;
-              // The picker closing without a choice ends the edit, unless focus moved to the
-              // editor's own clear control or a commit is under way.
-              setTimeout(() => {
-                if (
-                  phaseNow.current === "editing" &&
-                  !committing.current &&
-                  message === undefined &&
-                  !linkEditor.current?.contains(document.activeElement)
-                ) {
-                  restoreFocus.current = false;
-                  cancelRef.current();
-                }
-              }, 0);
-            }}
-          />,
-        )}
+        {withNotice(control)}
         {status}
       </span>
     );
-  }
-
-  let control: ReactElement;
-  switch (editor.kind) {
-    case "choice":
-      control = (
-        <NativeSelect
-          {...common}
-          ref={(element: HTMLSelectElement | null) => {
-            editing.current = element;
-          }}
-          size="sm"
-          className="w-full"
-          value={typeof draft === "string" ? draft : ""}
-          onChange={(event) => {
-            setDraft(event.currentTarget.value);
-            void commit(event.currentTarget.value);
-          }}
-        >
-          {editor.required ? null : <NativeSelectOption value="">None</NativeSelectOption>}
-          {editor.options.map((option) => (
-            <NativeSelectOption key={option.value} value={option.value}>
-              {option.label}
-            </NativeSelectOption>
-          ))}
-        </NativeSelect>
-      );
-      break;
-    case "text":
-      control =
-        editor.input === "long_text" ? (
-          <Textarea
-            {...common}
-            ref={(element) => {
-              editing.current = element;
-            }}
-            rows={2}
-            value={typeof draft === "string" ? draft : ""}
-            onChange={(event) => setDraft(event.currentTarget.value)}
-          />
-        ) : (
-          <Input
-            {...common}
-            ref={(element) => {
-              editing.current = element;
-            }}
-            type={editor.input === "email" ? "email" : editor.input === "phone" ? "tel" : "text"}
-            value={typeof draft === "string" ? draft : ""}
-            onChange={(event) => setDraft(event.currentTarget.value)}
-          />
-        );
-      break;
-    default:
-      control = (
-        <Input
-          {...common}
-          ref={(element) => {
-            editing.current = element;
-          }}
-          type={
-            editor.kind === "date"
-              ? "date"
-              : editor.kind === "date_time"
-                ? "datetime-local"
-                : "text"
-          }
-          {...(editor.kind === "date_time" ? { step: 1 } : {})}
-          {...(editor.kind === "whole_number" ? { inputMode: "numeric" as const } : {})}
-          {...(editor.kind === "decimal" ? { inputMode: "decimal" as const } : {})}
-          value={typeof draft === "string" ? draft : ""}
-          onChange={(event) => setDraft(event.currentTarget.value)}
-        />
-      );
-  }
   return (
-    <span className="flex min-w-0 flex-col">
+    <span className="flex min-w-0 flex-col" onClick={(event) => event.stopPropagation()}>
       {withNotice(control)}
       {status}
     </span>
@@ -600,11 +515,7 @@ function InlineEditor({ context, row, column, children }: GridFeatureCellProps):
       row={row as DisplayRow & Readonly<{ revision: number }>}
       field={column.key}
       label={column.label}
-      editor={
-        field.editor.kind === "choice"
-          ? { ...field.editor, options: optionsForParent(field.editor, dependency?.parentRecordId) }
-          : field.editor
-      }
+      editor={field.editor}
       stored={row.edit[storedKey]}
       handler={onInlineEdit}
       events={context.events}

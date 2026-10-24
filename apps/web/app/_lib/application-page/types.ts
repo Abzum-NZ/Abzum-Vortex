@@ -203,10 +203,6 @@ export type ModuleRelease = InstalledRuntimeContext["releaseSet"]["modules"][num
 
 export type ModuleField = ModuleRelease["content"]["recordTypes"][number]["fields"][number];
 
-export type PermissionEntry = InstalledRuntimeContext["permissionRegistration"]["entries"][number];
-
-export type DateTimeZones = { personTimeZone?: string; organizationTimeZone?: string };
-
 export type InstalledFlow =
   InstalledRuntimeContext["releaseSet"]["application"]["content"]["flows"][number];
 

@@ -129,7 +129,10 @@ export function useRuntimeInputs({
     clickId?: string,
     reportOnControl?: true,
   ) => Promise<DispatchOutcome>;
-  readBoardColumns: (placementId: string, event: DisplaySemanticEvent) => Promise<boolean>;
+  readBoardColumns: (
+    placementId: string,
+    event: DisplaySemanticEvent,
+  ) => Promise<boolean | "deferred">;
   continueTablePage: (
     placementId: string,
     event: DisplaySemanticEvent,

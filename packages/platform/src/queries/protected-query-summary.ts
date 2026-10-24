@@ -13,7 +13,7 @@ import {
 import {
   type ResultRow,
   one,
-  refusal,
+  refuseWithCause,
   filterInputRefusal,
   readInputs,
 } from "./protected-query-helpers";
@@ -90,20 +90,24 @@ export const summariseCommand = async (
   scope: SelectedOrganizationScope,
   command: ProtectedQuerySummaryCommand,
 ): Promise<ProtectedQuerySummaryResult> => {
-  if (scope.applicationRootId === undefined) return refusal("request_invalid");
+  if (scope.applicationRootId === undefined)
+    return refuseWithCause("request_invalid", "scope", "application_not_selected");
   const userRefusal = filterInputRefusal(command);
-  if (userRefusal !== undefined) return refusal(userRefusal);
+  if (userRefusal !== undefined) return refuseWithCause(userRefusal, "filter", userRefusal);
 
   const declared = await readInputs(transaction, command);
-  if (declared.outcome === "refused") return refusal(declared.reasonCode);
+  if (declared.outcome === "refused")
+    return refuseWithCause(declared.reasonCode, "query_inputs", declared.reasonCode);
   const declarations = parseQueryInputDeclarations(declared.inputs);
-  if (declarations === undefined) return refusal("descriptor_invalid");
+  if (declarations === undefined)
+    return refuseWithCause("descriptor_invalid", "query_inputs", "declarations_unreadable");
 
   let inputValues: Readonly<Record<string, JsonValue>>;
   try {
     inputValues = validateQueryInputValues(declarations, command.inputValues);
   } catch (error) {
-    if (error instanceof QueryInputRefusalError) return refusal("input_invalid");
+    if (error instanceof QueryInputRefusalError)
+      return refuseWithCause("input_invalid", "query_inputs", error.message);
     throw error;
   }
 
@@ -154,20 +158,24 @@ export const boardSummaryCommand = async (
   scope: SelectedOrganizationScope,
   command: ProtectedQueryBoardSummaryCommand,
 ): Promise<ProtectedQueryBoardSummaryResult> => {
-  if (scope.applicationRootId === undefined) return refusal("request_invalid");
+  if (scope.applicationRootId === undefined)
+    return refuseWithCause("request_invalid", "scope", "application_not_selected");
   const userRefusal = filterInputRefusal(command);
-  if (userRefusal !== undefined) return refusal(userRefusal);
+  if (userRefusal !== undefined) return refuseWithCause(userRefusal, "filter", userRefusal);
 
   const declared = await readInputs(transaction, command);
-  if (declared.outcome === "refused") return refusal(declared.reasonCode);
+  if (declared.outcome === "refused")
+    return refuseWithCause(declared.reasonCode, "query_inputs", declared.reasonCode);
   const declarations = parseQueryInputDeclarations(declared.inputs);
-  if (declarations === undefined) return refusal("descriptor_invalid");
+  if (declarations === undefined)
+    return refuseWithCause("descriptor_invalid", "query_inputs", "declarations_unreadable");
 
   let inputValues: Readonly<Record<string, JsonValue>>;
   try {
     inputValues = validateQueryInputValues(declarations, command.inputValues);
   } catch (error) {
-    if (error instanceof QueryInputRefusalError) return refusal("input_invalid");
+    if (error instanceof QueryInputRefusalError)
+      return refuseWithCause("input_invalid", "query_inputs", error.message);
     throw error;
   }
 

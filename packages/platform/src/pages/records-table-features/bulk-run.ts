@@ -266,7 +266,10 @@ export const createRecordsTableBulkService = (dependencies: RecordsTableBulkDepe
         searchableFieldIds: built.command.searchableFieldIds,
       });
       if (summary.kind === "temporarily_unavailable") return { kind: "unavailable" };
-      if (summary.kind !== "available") return { kind: "refused", reason: "not_available" };
+      if (summary.kind !== "available") {
+        refuse(`selection_count_${summary.kind}`);
+        return { kind: "refused", reason: "not_available" };
+      }
       if (summary.value.outcome === "completed")
         return { kind: "counted", count: summary.value.totalRowCount };
       if (summary.value.reasonCode === "dataset_limit_exceeded") return { kind: "too_many" };
@@ -372,6 +375,11 @@ export const createRecordsTableBulkService = (dependencies: RecordsTableBulkDepe
       let warningsTruncated = false;
       const refusals = new Map<RecordsTableBulkRefusalReason, number>();
       const refused = (reason: RecordsTableBulkRefusalReason, count = 1): void => {
+        // The run reports each reason once, counted; the log names a reason the first time it occurs.
+        if (!refusals.has(reason))
+          console.error(
+            `[records-table] bulk record refused reason=${reason} action=${request.action} commandId=${request.commandId}`,
+          );
         refusals.set(reason, (refusals.get(reason) ?? 0) + count);
       };
       let done = 0;
@@ -415,6 +423,7 @@ export const createRecordsTableBulkService = (dependencies: RecordsTableBulkDepe
           ),
         );
         if (decided.kind !== "available") {
+          refuse(`eligibility_${decided.kind} action=${request.action}`);
           notProcessed += targets.length - start;
           break;
         }

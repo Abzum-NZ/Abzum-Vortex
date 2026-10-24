@@ -23,7 +23,7 @@ import {
   conditionFieldIds,
   type ResultRow,
   one,
-  refusal,
+  refuseWithCause,
   readInputs,
 } from "./protected-query-helpers";
 import { pageAnchorSchema, pageReadSchema } from "./protected-query-read-schemas";
@@ -112,21 +112,22 @@ export const runCommand = async (
   cache: QueryCache | undefined,
 ): Promise<ProtectedQueryResult> => {
   const applicationRootId = scope.applicationRootId;
-  if (applicationRootId === undefined) return refusal("request_invalid");
+  if (applicationRootId === undefined)
+    return refuseWithCause("request_invalid", "scope", "application_not_selected");
   if (
     command.exactRecordIds !== undefined &&
     (command.continuationToken !== undefined || command.exactRecordIds.length !== command.pageSize)
   ) {
-    console.error("[protected-query] request refused", {
-      part: "exact_ids",
-      reason: command.continuationToken !== undefined ? "exact_ids_cursor" : "exact_ids_page_size",
-    });
-    return refusal("request_invalid");
+    return refuseWithCause(
+      "request_invalid",
+      "exact_ids",
+      command.continuationToken !== undefined ? "exact_ids_cursor" : "exact_ids_page_size",
+    );
   }
 
   // A user sort or filter outside the component-declared sets is refused before any read.
   const userRefusal = userInputRefusal(command);
-  if (userRefusal !== undefined) return refusal(userRefusal);
+  if (userRefusal !== undefined) return refuseWithCause(userRefusal, "user_input", userRefusal);
 
   // A continuation is accepted only for the same actor, installation, query,
   // release and inputs it was issued for.
@@ -136,7 +137,8 @@ export const runCommand = async (
     try {
       after = decodeQueryContinuationToken(command.continuationToken, continuationKey);
     } catch (error) {
-      if (error instanceof QueryContinuationTokenError) return refusal("cursor_invalid");
+      if (error instanceof QueryContinuationTokenError)
+        return refuseWithCause("cursor_invalid", "continuation", "token_not_authentic");
       throw error;
     }
     if (
@@ -147,21 +149,24 @@ export const runCommand = async (
       !sameId(after.queryId, command.queryId) ||
       after.direction !== direction
     )
-      return refusal("cursor_stale");
+      return refuseWithCause("cursor_stale", "continuation", "other_scope_or_query");
   }
 
   const declared = await readInputs(transaction, command);
-  if (declared.outcome === "refused") return refusal(declared.reasonCode);
+  if (declared.outcome === "refused")
+    return refuseWithCause(declared.reasonCode, "query_inputs", declared.reasonCode);
   if (after !== undefined && after.moduleReleaseRevision !== declared.moduleReleaseRevision)
-    return refusal("cursor_stale");
+    return refuseWithCause("cursor_stale", "continuation", "release_changed");
   const declarations = parseQueryInputDeclarations(declared.inputs);
-  if (declarations === undefined) return refusal("descriptor_invalid");
+  if (declarations === undefined)
+    return refuseWithCause("descriptor_invalid", "query_inputs", "declarations_unreadable");
 
   let inputValues: Readonly<Record<string, JsonValue>>;
   try {
     inputValues = validateQueryInputValues(declarations, command.inputValues);
   } catch (error) {
-    if (error instanceof QueryInputRefusalError) return refusal("input_invalid");
+    if (error instanceof QueryInputRefusalError)
+      return refuseWithCause("input_invalid", "query_inputs", error.message);
     throw error;
   }
   // The fingerprint binds the query inputs, the user's sort, filter and search and the page size,
@@ -176,7 +181,7 @@ export const runCommand = async (
     pageSize: command.pageSize,
   });
   if (after !== undefined && after.inputFingerprint !== inputFingerprint)
-    return refusal("cursor_stale");
+    return refuseWithCause("cursor_stale", "continuation", "inputs_or_order_changed");
 
   const load = async (): Promise<ProtectedQueryResult> => {
     let cursor = after;
@@ -197,7 +202,8 @@ export const runCommand = async (
         inputValues,
         cursor,
       );
-      if (page.outcome === "refused") return refusal(page.reasonCode);
+      if (page.outcome === "refused")
+        return refuseWithCause(page.reasonCode, "page_read", page.reasonCode);
       releaseVersion = page.moduleReleaseVersion;
       // Every call of one request reads under the same authority; the first decides the bound.
       fieldBounds ??= page.fieldBounds;

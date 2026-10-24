@@ -62,6 +62,11 @@ const SHARED_COMPONENT_STYLES_CSS = `
   font-weight: var(--vortex-font-weight);
 }
 
+/* A flow dialog is the surface of the page it shows, so that page paints no background of its own. */
+[data-vortex-flow-surface] [data-vortex-theme] {
+  background-color: transparent;
+}
+
 /* Only installed application hosts cover the viewport; previews and dialogs remain bounded. */
 [data-vortex-application-surface] {
   min-height: 100svh;

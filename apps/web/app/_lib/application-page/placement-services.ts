@@ -7,7 +7,7 @@ import {
   createRecordsSelectionSealer,
   createRecordsTableQueryResolver,
   projectRowActionAvailability,
-  installedNamedActions,
+  rowActionInstallationOf,
   createReferenceChoiceService,
   createViewerSafeRecordLinkService,
   decideRecordTypeExport,
@@ -23,7 +23,11 @@ import {
 import { applicationLauncherQueryRowsToListValues } from "@vortex/ui/launcher/bindings";
 import { parseBoardPayload } from "@vortex/ui/display/board-payload";
 import { parseDisplayData } from "@vortex/ui/display/projected-data";
-import type { IdentitySession, OrganizationSelectionCandidate } from "@vortex/platform/schema";
+import {
+  describeFailure,
+  type IdentitySession,
+  type OrganizationSelectionCandidate,
+} from "@vortex/platform/schema";
 import { createApplicationPageLinkReader } from "../application-page-link";
 import { humanOrganizationRequests } from "../server-composition";
 import { platformPermissionSource } from "../platform-permission-source";
@@ -55,24 +59,13 @@ export const createPlacementReadServices = (
       ...args: Parameters<PlacementReadInput["services"]["tables"]["projectRowActions"]>
     ) => {
       const [context, placementId, recordTypeId, projection] = args;
-      const application = context.releaseSet.application;
-      const modules = context.releaseSet.modules;
       const result = await humanOrganizationRequests(dependencies.identityAuthorityId).run(
         session,
         selection,
         async (transaction, _scope, issuedAt) =>
           projectRowActionAvailability(
             transaction,
-            {
-              bindings: application.content.flowBindings,
-              flows: new Map(
-                [
-                  ...application.content.flows,
-                  ...modules.flatMap((module) => module.content.flows),
-                ].map((flow) => [String(flow.id), flow]),
-              ),
-              namedActions: installedNamedActions(application, modules),
-            },
+            rowActionInstallationOf(context),
             placementId,
             recordTypeId,
             projection,
@@ -159,6 +152,16 @@ export const createPlacementReadServices = (
     );
   let calendarSettingsRead: ReturnType<typeof loadCalendarSettings> | undefined;
   const readCalendarSettings = () => (calendarSettingsRead ??= loadCalendarSettings());
+  // The organisation's time zone for a relative date; a failure is logged with its cause.
+  const readTimeZone = async (): Promise<string | undefined> => {
+    try {
+      const read = await readCalendarSettings();
+      return read.kind === "available" ? read.value.settings?.timeZone : undefined;
+    } catch (error) {
+      console.error(`[page] organisation time zone unavailable: ${describeFailure(error)}`);
+      return undefined;
+    }
+  };
   // The viewer's active organisation groups (their teams), read once per request under the
   // viewer's own verified context; a failure is logged with its cause and reads as unavailable.
   const loadViewerTeams = async (): Promise<readonly string[] | undefined> => {
@@ -252,6 +255,7 @@ export const createPlacementReadServices = (
     linkTiles,
     readCalendarSettings,
     readViewerTeams,
+    readTimeZone,
     subjects,
     recordLinkResolver,
     readConcurrently,

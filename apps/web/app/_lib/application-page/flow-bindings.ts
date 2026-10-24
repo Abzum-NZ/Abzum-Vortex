@@ -17,19 +17,15 @@ import {
 } from "@vortex/platform/schema";
 import type { collectPlacements } from "./placement-helpers";
 import type { PlacementFlowBinding } from "./types";
-import {
-  isEditFieldPlacement,
-  isTablePlacement,
-  selectedReadInputTypes,
-} from "./placement-helpers";
-import { resolvedQueryRecordTypeId } from "@vortex/platform/server";
+import { isEditFieldPlacement, selectedReadInputTypes } from "./placement-helpers";
+import { isTablePlacement, resolvedQueryRecordTypeId } from "@vortex/platform/server";
 
 export const projectPlacementRecordTypes = (input: {
   allPlacements: ReturnType<typeof collectPlacements>;
   pageDefinition: PageDefinition;
   pageSubjectRecordTypeId: string | undefined;
   context: InstalledRuntimeContext;
-  editFormPlacementIds: Set<string>;
+  editFormPlacementIds: ReadonlySet<string>;
 }) => {
   const { allPlacements, pageDefinition, pageSubjectRecordTypeId, context, editFormPlacementIds } =
     input;
@@ -129,7 +125,7 @@ export const projectFlowBindingTargets = (input: {
   allPlacements: ReturnType<typeof collectPlacements>;
   recordTypeByPlacement: Map<string, string>;
   pageSubjectRecordTypeId: string | undefined;
-  editFormPlacementIds: Set<string>;
+  editFormPlacementIds: ReadonlySet<string>;
   dataPlacementsByRecordType: Map<string, string[]>;
   editFormDataPlacementIds: Map<string, string[]>;
 }) => {

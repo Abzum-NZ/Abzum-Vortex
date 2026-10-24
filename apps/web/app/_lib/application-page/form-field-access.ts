@@ -1,7 +1,11 @@
 import {
   type InstalledRuntimeContext,
+  type PageSubjectReadResult,
+  type PageSubjectType,
   type ProtectedQueryRow,
+  FORM_CONTAINER_BLOCK_RELEASE,
   decideRecordTypeCreatableFieldIds,
+  formFieldOf,
   runtimePreviewOf,
 } from "@vortex/platform/server";
 import {
@@ -9,13 +13,14 @@ import {
   type IdentitySession,
   type JsonValue,
   type OrganizationSelectionCandidate,
+  type PageDefinition,
   flowTaskChildLists,
   isRecord,
   sameId,
 } from "@vortex/platform/schema";
 import { humanOrganizationRequests } from "../server-composition";
-import { type collectPlacements, isEditFieldPlacement } from "./placement-helpers";
-import type { ModuleField } from "./types";
+import { collectPlacements, isEditFieldPlacement } from "./placement-helpers";
+import type { ApplicationPageInternalResult, ModuleField } from "./types";
 
 type Placement = ReturnType<typeof collectPlacements>[number];
 type RecordType =
@@ -37,25 +42,6 @@ export type FormFieldAccess = Readonly<{
   /** Refused forms, by lowercase placement identity, with the reason that names the field. */
   refused: ReadonlyMap<string, string>;
 }>;
-
-/** The record field one form field placement edits: by its field reference, else by its name. */
-export const formFieldOf = (
-  placement: Readonly<{ settings: Readonly<Record<string, unknown>> }>,
-  recordType: RecordType,
-): ModuleField | undefined => {
-  const fieldSetting = placement.settings.field;
-  const nameSetting = placement.settings.name;
-  return recordType.fields.find((candidate) =>
-    isRecord(fieldSetting) &&
-    fieldSetting.kind === "field_reference" &&
-    typeof fieldSetting.fieldId === "string"
-      ? sameId(String(candidate.fieldId), fieldSetting.fieldId)
-      : isRecord(nameSetting) &&
-        nameSetting.kind === "text" &&
-        typeof nameSetting.value === "string" &&
-        candidate.key === nameSetting.value,
-  );
-};
 
 /** The record types a flow creates with a `record.save` that names no existing record. */
 export const flowCreatedRecordTypeIds = (
@@ -256,4 +242,118 @@ export const applyFormFieldAccess = (
   if (isRecord(composition.stepContent))
     for (const layout of Object.values(composition.stepContent)) applyToLayout(layout, access);
   else applyToLayout(composition, access);
+};
+
+/**
+ * Decides, once and before any placement is read, how the page's forms show each field to this
+ * viewer (see FormFieldAccess), and applies it to the page. Returns the page's edit forms (those
+ * that submit its own record), a form page's record type, its create forms, the forms refused for a
+ * required field the viewer cannot fill in, and the placements as they now stand; or a refusal to
+ * answer the page with.
+ */
+export const decideFormPolicy = async (
+  input: Readonly<{
+    session: IdentitySession;
+    selection: OrganizationSelectionCandidate;
+    context: InstalledRuntimeContext;
+    page: Record<string, unknown>;
+    pageDefinition: PageDefinition;
+    subjectType: PageSubjectType | undefined;
+    subjectId: string | undefined;
+    allPlacements: readonly Placement[];
+    readSubject: (recordTypeId: string, recordId: string) => Promise<PageSubjectReadResult>;
+  }>,
+): Promise<
+  | Readonly<{
+      kind: "decided";
+      editFormPlacementIds: ReadonlySet<string>;
+      formRecordType: RecordType | undefined;
+      createFormIds: readonly string[];
+      refusedForms: ReadonlyMap<string, string>;
+      allPlacements: Placement[];
+    }>
+  | Readonly<{ kind: "refused"; result: ApplicationPageInternalResult }>
+> => {
+  const { session, selection, context, pageDefinition, subjectType } = input;
+  const application = context.releaseSet.application;
+  const editFormPlacementIds = new Set(
+    input.allPlacements.flatMap(({ placementId, vortex }) => {
+      const block = vortex.block;
+      const isFormContainer =
+        isRecord(block) &&
+        typeof block.blockId === "string" &&
+        sameId(block.blockId, FORM_CONTAINER_BLOCK_RELEASE.blockId);
+      const submitsPageRecord = application.content.flowBindings.some(
+        (binding) =>
+          sameId(binding.controlId, placementId) &&
+          binding.event === "form_submit" &&
+          Object.values(binding.flow.inputs).some(
+            (input) => isRecord(input) && input.kind === "caller" && input.name === "record",
+          ),
+      );
+      return isFormContainer && submitsPageRecord ? [placementId] : [];
+    }),
+  );
+  // The forms of a form page show each field as the viewer's field policy allows: decided once,
+  // before any placement is read, so a field left out is never read or sent.
+  const formRecordType =
+    pageDefinition.type === "form" && subjectType !== undefined
+      ? context.releaseSet.modules
+          .flatMap((module) => module.content.recordTypes)
+          .find((recordType) =>
+            sameId(String(recordType.recordTypeId), String(subjectType.recordTypeId)),
+          )
+      : undefined;
+  let refusedForms: ReadonlyMap<string, string> = new Map();
+  let createFormIds: readonly string[] = [];
+  let allPlacements = input.allPlacements;
+  if (formRecordType !== undefined) {
+    const recordTypeId = String(formRecordType.recordTypeId);
+    const editForms = new Map<string, ProtectedQueryRow>();
+    if (editFormPlacementIds.size > 0 && input.subjectId !== undefined) {
+      const read = await input.readSubject(recordTypeId, input.subjectId);
+      if (read.kind === "read")
+        for (const formId of editFormPlacementIds) editForms.set(formId, read.row);
+    }
+    createFormIds = allPlacements.flatMap(({ placementId, vortex }) => {
+      const block = vortex.block;
+      return isRecord(block) &&
+        typeof block.blockId === "string" &&
+        sameId(block.blockId, FORM_CONTAINER_BLOCK_RELEASE.blockId) &&
+        !editFormPlacementIds.has(placementId) &&
+        application.content.flowBindings.some(
+          (binding) =>
+            sameId(binding.controlId, placementId) &&
+            binding.event === "form_submit" &&
+            flowCreatedRecordTypeIds(application.content.flows, String(binding.flow.flowId)).has(
+              recordTypeId.toLowerCase(),
+            ),
+        )
+        ? [placementId]
+        : [];
+    });
+    const createForms = new Map<string, ReadonlySet<string> | undefined>();
+    if (createFormIds.length > 0) {
+      const creatable = await readCreatableFieldIds(session, selection, context, recordTypeId);
+      if (creatable.kind !== "available") return { kind: "refused", result: creatable };
+      for (const formId of createFormIds) createForms.set(formId, creatable.fieldIds);
+    }
+    const access = decideFormFieldAccess({
+      placements: allPlacements,
+      recordType: formRecordType,
+      editForms,
+      createForms,
+    });
+    applyFormFieldAccess(input.page, access);
+    allPlacements = collectPlacements(input.page);
+    refusedForms = access.refused;
+  }
+  return {
+    kind: "decided",
+    editFormPlacementIds,
+    formRecordType,
+    createFormIds,
+    refusedForms,
+    allPlacements: [...allPlacements],
+  };
 };
