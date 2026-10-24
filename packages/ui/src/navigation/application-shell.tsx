@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  createContext,
   Suspense,
   use,
   useContext,
@@ -42,18 +43,25 @@ export type ApplicationWebMcpRuntime = Readonly<{
   working?: string;
 }>;
 
-type ApplicationSwitcherData = Readonly<{
+export type ApplicationSwitcherData = Readonly<{
   state: "available" | "unavailable" | "temporarily_unavailable";
   applications: readonly Readonly<{ key: string; name: string; href: string }>[];
 }>;
+
+/**
+ * The application switcher's applications, resolved or as a server-started read that streams in.
+ * It travels in a context, not in Puck metadata: Puck copies metadata, and a copied streamed read
+ * is no longer a promise.
+ */
+export const ApplicationSwitcherContext = createContext<
+  ApplicationSwitcherData | Promise<ApplicationSwitcherData> | undefined
+>(undefined);
 
 export type ApplicationShellRuntime = Readonly<{
   applicationName: string;
   applicationHref: string;
   organizationName: string;
   pageName: string;
-  /** A server-started read may stream without suspending the rest of the frame. */
-  applicationSwitcher: ApplicationSwitcherData | Promise<ApplicationSwitcherData>;
   /** Page agent-tool state supplied through Puck metadata to the definition-selected shell. */
   webMcp?: ApplicationWebMcpRuntime;
 }>;
@@ -221,20 +229,16 @@ function ApplicationSwitcher({
         </Button>
       }
     >
-      <ResolvedApplicationSwitcher applicationName={applicationName} runtime={runtime} />
+      <ResolvedApplicationSwitcher applicationName={applicationName} />
     </Suspense>
   );
 }
 
 function ResolvedApplicationSwitcher({
   applicationName,
-  runtime,
-}: Readonly<{
-  applicationName: string;
-  runtime: ApplicationShellRuntime | undefined;
-}>): ReactElement {
+}: Readonly<{ applicationName: string }>): ReactElement {
   const actions = useApplicationAccountActions();
-  const read = runtime?.applicationSwitcher;
+  const read = useContext(ApplicationSwitcherContext);
   const switcher = read !== undefined && "then" in read ? use(read) : read;
   if (switcher?.state === "temporarily_unavailable")
     return (

@@ -18,7 +18,7 @@ import {
 } from "@vortex/platform/schema";
 import type {
   ApplicationAccount,
-  ApplicationShellRuntime,
+  ApplicationSwitcherData,
   PlatformThemeTokens,
   FieldInputControlReleaseMap,
 } from "@vortex/ui";
@@ -50,7 +50,8 @@ export type ApplicationFrameModel = Readonly<{
   }>;
   /** The pages the viewer may open, for the current page's menu state and breadcrumb. */
   pages: readonly Readonly<{ pageId: string; key: string; name: string }>[];
-  applicationSwitcher: ApplicationShellRuntime["applicationSwitcher"];
+  /** Resolved, or the server-started read the shell's switcher streams in. */
+  applicationSwitcher: ApplicationSwitcherData | Promise<ApplicationSwitcherData>;
   account: ApplicationAccount;
   search: ApplicationSearchView;
   platformBlockReleases: readonly PlatformBlockRelease[];
@@ -186,7 +187,7 @@ export const loadApplicationFrame = cache(
     const switcherRequest: ApplicationFrameModel["applicationSwitcher"] =
       shell?.presentation.topBar.applicationSwitcher === true
         ? loadPermittedApplicationsAtAddress(session, tenantShortName, organizationShortName).then(
-            (read) => {
+            (read): ApplicationSwitcherData => {
               if (read.kind === "temporarily_unavailable")
                 console.error(
                   `[application-shell] permitted applications unavailable: cause=${read.cause ?? "cause_not_provided"}`,
@@ -202,14 +203,14 @@ export const loadApplicationFrame = cache(
                   read.kind === "available" ? switcherApplications(read.applications) : [],
               };
             },
+            // The streamed switcher has no error boundary of its own: an unexpected failure is the
+            // switcher's temporarily unavailable state, never a failed page.
+            (error: unknown): ApplicationSwitcherData => {
+              console.error("[application-shell] permitted applications failed", error);
+              return { state: "temporarily_unavailable", applications: [] };
+            },
           )
         : { state: "available", applications: switcherApplications(resolved.read.applications) };
-    // A refused frame may never consume this promise. Observe unexpected failures in that case,
-    // while leaving the original rejection for the switcher's rendering error boundary.
-    if ("then" in switcherRequest)
-      void switcherRequest.catch((error: unknown) => {
-        console.error("[application-shell] permitted applications failed", error);
-      });
     if (navigationRead === undefined) throw new Error("FRAME_NAVIGATION_NOT_READ");
     const [projected, navigation] = await Promise.all([projectedPageRead, navigationRead]);
     if (projected.kind !== "available" || projected.value === undefined) return undefined;
