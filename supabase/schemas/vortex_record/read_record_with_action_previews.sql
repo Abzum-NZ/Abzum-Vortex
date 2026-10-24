@@ -29,7 +29,7 @@ begin
     raise exception using errcode = '22023', message = 'Named action previews are invalid';
   end if;
   -- One exact read decision for the page subject: the projection and the
-  -- capabilities vortex_record.read_record_with_capabilities returns, and the
+  -- capabilities vortex_record.read_record returns, and the
   -- read facts every bound action's preview reuses where they are exactly the
   -- facts its named loader would build. Each action is still decided against
   -- its own declaration; a subject the viewer cannot read previews nothing.
@@ -74,4 +74,4 @@ revoke all on function vortex_record.read_record_with_action_previews(uuid, uuid
 grant execute on function vortex_record.read_record_with_action_previews(uuid, uuid, jsonb, jsonb) to vortex_runtime;
 
 comment on function vortex_record.read_record_with_action_previews(uuid, uuid, jsonb, jsonb) is
-  'Fixed record adapter for a page subject and the named actions its placements are bound to: from one read decision under the caller''s current authority, the readable projection (record) and capabilities vortex_record.read_record_with_capabilities returns, and, only when the record is readable, each action''s preview exactly as vortex_record.preview_named_action_set_announce returns it for the record''s current concurrency number and no inputs (previews, in the order given), writing nothing.';
+  'Fixed record adapter for a page subject and the named actions its placements are bound to: from one read decision under the caller''s current authority, the readable projection (record) and capabilities vortex_record.read_record returns, and, only when the record is readable, each action''s preview exactly as vortex_record.preview_named_action_set_announce returns it for the record''s current concurrency number and no inputs (previews, in the order given), writing nothing.';

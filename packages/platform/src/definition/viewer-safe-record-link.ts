@@ -32,9 +32,9 @@ import type { RequestDatabaseTransaction } from "../db/index";
 import type { ViewerSafeRecordLinkTitle } from "../schema";
 import {
   createViewerSafeRecordLinkReadService,
+  viewerSafeRecordLinkTitleKey,
   viewerSafeRecordLinkTitleRecordLimit,
   viewerSafeRecordLinkTitleTypeLimit,
-  type ViewerSafeRecordLinkTitleReadResult,
 } from "../queries/index";
 import {
   requireInstalledRuntimeContext,
@@ -270,12 +270,12 @@ const completeRead = (
   context: InstalledRuntimeContext,
   identity: ReturnType<typeof viewerSafeRecordLinkIdentitySchema.parse>,
   page: NonNullable<ReturnType<typeof matchingDetailPage>>,
-  readTitle: ViewerSafeRecordLinkTitleReadResult,
+  title: ViewerSafeRecordLinkTitle | undefined,
 ): ViewerSafeRecordLinkResult => {
-  if (readTitle.outcome !== "read") return unavailable;
+  if (title === undefined) return unavailable;
   return viewerSafeRecordLinkResultSchema.parse({
     outcome: "available",
-    title: readTitle.title,
+    title,
     detailAddress: {
       applicationRootId: context.applicationRootId,
       applicationKey: context.releaseSet.application.definitionKey,
@@ -388,13 +388,22 @@ export const createViewerSafeRecordLinkService = (
               ))
             )
               return pinUnavailable;
-            const titleRead = await records.read(transaction, scope, {
-              identity,
+            const { recordId, ...titleIdentity } = identity;
+            const titleRead = await records.readTitles(transaction, scope, {
               applicationReleaseRevision: context.applicationReleaseRevision,
-              titleFieldId: recordType.titleFieldId,
+              targets: [
+                {
+                  identity: titleIdentity,
+                  titleFieldId: recordType.titleFieldId,
+                  recordIds: [recordId],
+                },
+              ],
             });
             // The protected read proves the record is available. Its display value never leaves here.
-            return titleRead.outcome === "read"
+            return titleRead.outcome === "read" &&
+              titleRead.titles.has(
+                viewerSafeRecordLinkTitleKey(identity.recordTypeId, identity.recordId),
+              )
               ? viewerSafeRecordPinAcquisitionResultSchema.parse({ outcome: "available", identity })
               : pinUnavailable;
           },
@@ -684,12 +693,24 @@ export const createViewerSafeRecordLinkService = (
                     read.push(unavailable);
                     continue;
                   }
-                  const titleRead = await records.read(transaction, scope, {
-                    identity,
+                  const { recordId, ...titleIdentity } = identity;
+                  const titleRead = await records.readTitles(transaction, scope, {
                     applicationReleaseRevision: context.applicationReleaseRevision,
-                    titleFieldId: recordType.titleFieldId,
+                    targets: [
+                      {
+                        identity: titleIdentity,
+                        titleFieldId: recordType.titleFieldId,
+                        recordIds: [recordId],
+                      },
+                    ],
                   });
-                  read.push(completeRead(context, identity, page, titleRead));
+                  const title =
+                    titleRead.outcome === "read"
+                      ? titleRead.titles.get(
+                          viewerSafeRecordLinkTitleKey(identity.recordTypeId, identity.recordId),
+                        )
+                      : undefined;
+                  read.push(completeRead(context, identity, page, title));
                 }
                 return read;
               },
