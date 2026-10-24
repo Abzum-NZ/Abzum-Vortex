@@ -318,9 +318,12 @@ public class ProtectedCallback extends Task implements RunnableTask<ProtectedCal
         if (outputs == null || !outputs.isObject()) {
             throw refused();
         }
+        // Exactly one declared task output: an evaluator value, an operation result or a record.
         boolean hasValue = outputs.has("value");
         boolean hasResult = outputs.has("result");
-        if (hasValue == hasResult) {
+        boolean hasRecord = outputs.has("record");
+        if ((hasValue ? 1 : 0) + (hasResult ? 1 : 0) + (hasRecord ? 1 : 0) != 1
+            || (hasRecord && !outputs.get("record").isTextual())) {
             throw refused();
         }
         JsonNode maximumItems = request.path("inputs").path("properties").get("maximum_items");
@@ -333,7 +336,8 @@ public class ProtectedCallback extends Task implements RunnableTask<ProtectedCal
         }
         Object value = hasValue ? OBJECT_MAPPER.convertValue(outputs.get("value"), Object.class) : null;
         Object result = hasResult ? OBJECT_MAPPER.convertValue(outputs.get("result"), Object.class) : null;
-        return Output.builder().value(value).result(result).build();
+        String record = hasRecord ? outputs.get("record").textValue() : null;
+        return Output.builder().value(value).result(result).record(record).build();
     }
 
     private static String sign(ObjectNode request, String signingKey) throws Exception {
@@ -415,5 +419,8 @@ public class ProtectedCallback extends Task implements RunnableTask<ProtectedCal
 
         @Schema(description = "The result returned by a protected operation callback.")
         private final Object result;
+
+        @Schema(description = "The record a protected record callback changed.")
+        private final String record;
     }
 }
