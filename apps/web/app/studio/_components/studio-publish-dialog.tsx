@@ -76,6 +76,8 @@ export function StudioPublishDialog(props: StudioPublishDialogProps) {
   }, [open, waiting, canPrepare, prepared, preparing, publishing, onPrepare, revision]);
   const noteValid = props.note.trim().length >= 1 && props.note.trim().length <= 2000;
   const preparingSummary = !waiting && preparing;
+  // Nothing is under way and nothing was found: offered only while open, not while a published dialog closes.
+  const idle = open && !waiting && prepared === null && !preparing && !publishing;
   return (
     <Dialog
       open={open}
@@ -112,7 +114,7 @@ export function StudioPublishDialog(props: StudioPublishDialogProps) {
                   ? "Publishing the saved draft…"
                   : preparing
                     ? "Checking what will be published…"
-                    : props.problem === ""
+                    : idle && props.problem === ""
                       ? "The summary is not ready. Check again before publishing."
                       : null}
               </p>
@@ -156,7 +158,7 @@ export function StudioPublishDialog(props: StudioPublishDialogProps) {
           >
             Cancel
           </Button>
-          {!waiting && prepared === null && !preparing && !publishing ? (
+          {idle ? (
             <Button type="button" variant="outline" disabled={!canPrepare} onClick={onPrepare}>
               Check again
             </Button>
