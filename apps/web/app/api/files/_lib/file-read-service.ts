@@ -225,7 +225,11 @@ export const handleFileReadRequest = async (
   );
 
   if (protectedRead.kind !== "available") {
-    await opened.stream?.cancel().catch(() => undefined);
+    await opened.stream?.cancel().catch((error: unknown) => {
+      // An aborted request may already have cancelled the upstream stream.
+      if (!request.signal.aborted)
+        logRefusal("files", "cancel uncommitted read", "stream_cancellation_failed", error);
+    });
     return protectedRead.kind === "temporarily_unavailable"
       ? refusalResponse("storage_unavailable", "protected_read_unavailable")
       : refusalResponse("file_not_found", `protected_read_${protectedRead.kind}`);

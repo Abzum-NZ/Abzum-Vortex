@@ -13,6 +13,7 @@ const readDataProperty = (value: unknown, key: string): unknown => {
   if (typeof value !== "object" || value === null) return undefined;
   try {
     return Object.getOwnPropertyDescriptor(value, key)?.value;
+    // guard-allow: silent-catch A hostile error proxy may reject inspection; logging must preserve the neutral response.
   } catch {
     return undefined;
   }
@@ -67,6 +68,7 @@ const safeCause = (error: unknown): readonly Readonly<Record<string, unknown>>[]
     let isError = false;
     try {
       isError = current instanceof Error;
+      // guard-allow: silent-catch A hostile error proxy may reject prototype inspection; retain only its safe type.
     } catch {
       isError = false;
     }
@@ -80,8 +82,9 @@ const safeCause = (error: unknown): readonly Readonly<Record<string, unknown>>[]
     let issues: readonly SafeZodIssue[] | undefined = undefined;
     try {
       if (current instanceof ZodError) issues = safeZodIssues(current);
+      // guard-allow: silent-catch Error inspection is best-effort; logging must not change the neutral response.
     } catch {
-      // Error inspection is best-effort; logging must not change the neutral response.
+      // Keep the safe class and code when schema issue inspection is unavailable.
     }
     causes.push({
       name,
