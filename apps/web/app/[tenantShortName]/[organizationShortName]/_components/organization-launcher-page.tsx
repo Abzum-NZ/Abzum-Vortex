@@ -75,10 +75,10 @@ export function OrganizationLauncherPage({
         pageId={page.pageId}
         applicationSurface
         applicationShellRuntime={{
-          applicationName: "Applications",
+          applicationName: shell.name,
           applicationHref: launcherHref,
           organizationName,
-          pageName: "Applications",
+          pageName: page.name,
           applicationSwitcherState: "available",
           applications: [],
         }}

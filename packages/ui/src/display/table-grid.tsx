@@ -33,6 +33,7 @@ import {
   RECORDS_TABLE_UNVIRTUALIZED_ROW_LIMIT,
   nextRecordsTableSort,
   type RecordsTableContract,
+  type RecordsTableSortKey,
   type RecordsTableSortState,
 } from "@vortex/platform/schema";
 import { Card } from "../components/card";
@@ -430,6 +431,21 @@ export function RecordsGrid({
       }),
     [columns, sort],
   );
+  // The sort a gesture asked for, until the page read in it replaces `sort`. A second gesture
+  // before that read lands (Shift+click straight after a click) builds on what was asked, so the
+  // first key is not dropped. A page shown in another sort (its read, Back) supersedes it.
+  const [requestedSort, setRequestedSort] =
+    useState<
+      Readonly<{ shown: RecordsTableSortState | undefined; state: RecordsTableSortState }>
+    >();
+  const latestSort =
+    requestedSort !== undefined && requestedSort.shown === sort ? requestedSort.state : sort;
+  const requestSort = (keys: readonly RecordsTableSortKey[]): void => {
+    const onSort = events?.sort_changed;
+    if (onSort === undefined) return;
+    setRequestedSort({ shown: sort, state: { keys, explicit: true } });
+    void onSort({ event: "sort_changed", sort: keys });
+  };
   const rowSelection = useMemo<RowSelectionState>(
     () => Object.fromEntries(selectedRecordIds.map((recordId) => [recordId, true])),
     [selectedRecordIds],
@@ -687,10 +703,9 @@ export function RecordsGrid({
   const onSubToggle = useCallback((recordId: string) => subToggleRef.current?.(recordId), []);
 
   const sortBy = (columnId: string, additive: boolean): void => {
-    const onSort = events?.sort_changed;
     const column = columnsById.get(columnId);
-    if (onSort === undefined || column === undefined || !column.sortable) return;
-    void onSort({ event: "sort_changed", sort: nextRecordsTableSort(sort, column.key, additive) });
+    if (column === undefined || !column.sortable) return;
+    requestSort(nextRecordsTableSort(latestSort, column.key, additive));
   };
 
   // Each gesture selects only its drawn row, at the revision the person saw.
@@ -1094,11 +1109,9 @@ export function RecordsGrid({
                 returnFocus={() =>
                   cellElement(-1, slot.id) ?? cellElement(-1, activeColumnIdRef.current)
                 }
-                sort={sort}
+                sort={latestSort}
                 sortable={sortable}
-                onSort={(keys) =>
-                  void events?.sort_changed?.({ event: "sort_changed", sort: keys })
-                }
+                onSort={requestSort}
                 position={layout.state.order.indexOf(slot.id) + 1}
                 shownCount={layout.state.order.length}
                 onHide={() => hideColumn(slot.id)}
