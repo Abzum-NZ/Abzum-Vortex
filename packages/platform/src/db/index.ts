@@ -1,5 +1,7 @@
 import "server-only";
 
+export { withProtectedReadObserver, type ProtectedReadMeasurement } from "./query-attribution";
+
 export {
   withRequestDatabaseLifetime,
   type RequestDatabaseLifetime,

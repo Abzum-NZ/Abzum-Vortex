@@ -1,4 +1,5 @@
 import "server-only";
+import { withPageReadAttribution } from "../../../../_lib/page-read-attribution";
 
 import { revalidatePath } from "next/cache";
 import { notFound, redirect } from "next/navigation";
@@ -87,10 +88,11 @@ type ApplicationAddressPageProps = Readonly<{
  * stays mounted while pages change. A state that is not a page of this application (a refusal, a
  * suspended account, an unavailable read) is shown on its own, over the frame.
  */
-export default async function ApplicationAddressPage({
-  params,
-  searchParams,
-}: ApplicationAddressPageProps) {
+export default function ApplicationAddressPage(props: ApplicationAddressPageProps) {
+  return withPageReadAttribution(() => readApplicationAddressPage(props));
+}
+
+async function readApplicationAddressPage({ params, searchParams }: ApplicationAddressPageProps) {
   const { tenantShortName, organizationShortName, applicationKey, pageAddress } = await params;
   const pageSegments = pageAddress ?? [];
   const continuation = applicationHomeContinuationFromAddress(

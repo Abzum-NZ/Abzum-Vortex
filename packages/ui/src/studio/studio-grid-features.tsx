@@ -4,7 +4,7 @@ import { useId, useState, type ReactElement } from "react";
 import {
   checkRecordsTableFeature,
   plainSourceSettingValue,
-  recordsTableFeaturesOrLog,
+  readRecordsTableFeatures,
   recordsTableFeatureDescription,
   recordsTableFilterKindOf,
   recordsTableFeatureKeys,
@@ -13,6 +13,7 @@ import {
   type BlockPropertySchemaContract,
   type ModuleField,
   type RecordsTableFeatureKey,
+  type RecordsTableFeatures,
   type SourceBlockPropertyValueContract,
 } from "@vortex/platform/schema";
 import { Badge } from "../components/badge";
@@ -134,18 +135,54 @@ export function StudioGridFeatures({
   const ownId = useId();
   const [changedFeature, setChangedFeature] = useState<RecordsTableFeatureKey | undefined>();
   const authored = value?.kind === "group" ? value.properties : {};
-  const featureValue = (key: RecordsTableFeatureKey): GroupValue => {
-    const held = authored[key];
+  const catalogueDefault = (key: RecordsTableFeatureKey): GroupValue => {
     const declared = property.properties.find((feature) => feature.key === key)?.defaultValue;
-    if (held?.kind === "group") return held;
     if (declared?.kind !== "group") throw new Error(`Grid feature ${key} has no catalogue default`);
     return declared as GroupValue;
+  };
+  const featureValue = (key: RecordsTableFeatureKey): GroupValue => {
+    const held = authored[key];
+    return held?.kind === "group" ? held : catalogueDefault(key);
   };
   const whole: GroupValue = {
     kind: "group",
     properties: Object.fromEntries(recordsTableFeatureKeys.map((key) => [key, featureValue(key)])),
   };
-  const features = recordsTableFeaturesOrLog(whole, "studio features editor");
+  // A feature whose own settings cannot be read yet, such as a list entry the builder is still
+  // filling in, is judged as its catalogue default so it flags only itself: its switch and editor
+  // stay open on what was authored, and every other feature keeps its state.
+  const incomplete = new Set<RecordsTableFeatureKey>();
+  let features: RecordsTableFeatures | undefined;
+  for (;;) {
+    const read = readRecordsTableFeatures({
+      kind: "group",
+      properties: Object.fromEntries(
+        recordsTableFeatureKeys.map((key) => [
+          key,
+          incomplete.has(key) ? catalogueDefault(key) : featureValue(key),
+        ]),
+      ),
+    });
+    if (read.kind === "read") {
+      features = read.features;
+      break;
+    }
+    const key = recordsTableFeatureKeys.find(
+      (candidate) =>
+        read.path === `features.${candidate}` || read.path.startsWith(`features.${candidate}.`),
+    );
+    if (key === undefined || incomplete.has(key)) {
+      console.error(
+        `[grid] studio features editor refused: DATA_GRID_SETTING_UNREADABLE path=${read.path}`,
+      );
+      break;
+    }
+    incomplete.add(key);
+  }
+  const authoredEnabled = (key: RecordsTableFeatureKey): boolean => {
+    const enabled = featureValue(key).properties["enabled"];
+    return enabled?.kind === "boolean" && enabled.value;
+  };
   const authoredPageSize = tableSettings["page_size"];
   const tablePageSize = authoredPageSize?.kind === "number" ? authoredPageSize.value : undefined;
   const facts = studioRecordsTableQueryFacts(
@@ -241,11 +278,15 @@ export function StudioGridFeatures({
         {recordsTableFeatureKeys.map((key) => {
           const declaration = property.properties.find((feature) => feature.key === key);
           const { label, description } = recordsTableFeatureDescription(key);
-          const enabled = features !== undefined && recordsTableFeatureState(features, key).enabled;
+          const enabled = incomplete.has(key)
+            ? authoredEnabled(key)
+            : features !== undefined && recordsTableFeatureState(features, key).enabled;
           // In Board mode a feature that is off is not judged; one that is on is refused unless the
-          // board implements it.
+          // board implements it. An incomplete feature is judged once its settings can be read.
           const check =
-            features === undefined || (features.board.enabled && key !== "board" && !enabled)
+            features === undefined ||
+            incomplete.has(key) ||
+            (features.board.enabled && key !== "board" && !enabled)
               ? undefined
               : checkRecordsTableFeature(
                   key,
@@ -357,7 +398,10 @@ export function StudioGridFeatures({
                   onChange={(next) => write(key, next)}
                 />
               ) : null}
-              {enabled && key === "conditional_formatting" && features !== undefined ? (
+              {enabled &&
+              key === "conditional_formatting" &&
+              features !== undefined &&
+              !incomplete.has(key) ? (
                 <div className="pb-2">
                   <StudioConditionalFormattingEditor
                     idPrefix={`${switchId}-editor`}
