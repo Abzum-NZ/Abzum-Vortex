@@ -117,6 +117,7 @@ An interrupted `pnpm setup:local` run resumes from the identifiers recorded in `
 
 | Variable | Local value | Purpose |
 | --- | --- | --- |
+| `VORTEX_EVENT_DELIVERY_MODE` | `in_process` | Required explicit event delivery trigger; hosted deployments use `external` with `VORTEX_EVENT_DISPATCHER_CREDENTIAL_SHA256` and the protected dispatch route. |
 | `VORTEX_ENVIRONMENT` | `local` | Selects local behaviour. The local site URL must then be `http` on loopback; the development setup refuses any other value. |
 | `VORTEX_SITE_URL` | `http://127.0.0.1:3000` | The configured site URL. Use this exact host for browser requests and redirects. The local server binds to `127.0.0.1`. |
 | `VORTEX_SUPABASE_URL` | `http://127.0.0.1:54321` | The local Supabase API and Auth endpoint. |

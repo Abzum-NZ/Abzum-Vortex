@@ -9,11 +9,9 @@ import {
 } from "@vortex/platform/server";
 
 /**
- * A server with no configured wake-up credential (local development and the local production demo)
- * has no database webhook or Kestra recovery tick, so the committed Event outbox would never be
- * delivered. This runs the same bounded dispatcher in process with a credential generated for this
- * process alone; hosted deployments configure the credential and keep the protected
- * `/api/events/dispatch` route as their only trigger.
+ * Runs the bounded dispatcher when the deployment explicitly selects in-process event delivery.
+ * The process-local credential authenticates this trigger through the same dispatcher used by the
+ * protected dispatch route. Credential presence never selects the deployment delivery mode.
  */
 type LocalEventDispatcher = Readonly<{
   /** One bounded dispatch; throws with the refusal reason or the failed delivery counts. */
@@ -70,7 +68,7 @@ export const createLocalEventDispatcher = (): LocalEventDispatcher => {
 
 const localDispatchIntervalMs = 2_000;
 
-/** Delivers committed occurrences every few seconds in `next dev`; a failure is logged with its cause. */
+/** Delivers committed occurrences every few seconds in a deployment configured for in-process delivery; a failure is logged with its cause. */
 export const startLocalEventDispatch = (): void => {
   const dispatcher = createLocalEventDispatcher();
   let running = false;
