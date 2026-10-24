@@ -276,7 +276,12 @@ export const evaluateRecordCalculations = (
         };
       },
     };
-    const evaluated = evaluateFlowFormula(formula, scope, { preserveExactArithmetic: true });
+    const evaluated = evaluateFlowFormula(formula, scope, {
+      preserveExactArithmetic: true,
+      ...(field.settings.decimalPlaces === undefined
+        ? {}
+        : { resultScale: field.settings.decimalPlaces }),
+    });
     const exactWhole =
       field.settings.resultType === "whole_number" && evaluated !== undefined
         ? evaluateFlowFormula(formula, scope, {

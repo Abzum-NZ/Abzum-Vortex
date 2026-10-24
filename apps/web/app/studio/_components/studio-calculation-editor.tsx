@@ -194,10 +194,9 @@ function Formula({
               id={`${id}-type`}
               disabled={disabled}
               value={value.type}
-              options={Object.entries(calculationResultTypeLabels).map(([type, label]) => ({
-                value: type,
-                label,
-              }))}
+              options={Object.entries(calculationResultTypeLabels)
+                .filter(([type]) => type !== "money")
+                .map(([type, label]) => ({ value: type, label }))}
               onChange={(type) =>
                 onChange({
                   op: "literal",
@@ -207,7 +206,7 @@ function Formula({
                       ? false
                       : type === "whole_number"
                         ? 0
-                        : type === "decimal_number" || type === "money"
+                        : type === "decimal_number"
                           ? "0"
                           : "",
                 })

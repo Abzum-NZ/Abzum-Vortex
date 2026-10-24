@@ -467,7 +467,12 @@ const joined = (candidate: FlowRuntimeValue): string | undefined => {
 export const evaluateFlowFormula = (
   formula: FlowFormula,
   scope: FlowFormulaScope,
-  options: Readonly<{ preserveExactArithmetic?: boolean; requireExactInteger?: boolean }> = {},
+  options: Readonly<{
+    preserveExactArithmetic?: boolean;
+    requireExactInteger?: boolean;
+    /** Rounds a decimal or money result once, from its exact value, to this many places. */
+    resultScale?: number;
+  }> = {},
 ): FlowRuntimeValue | undefined => {
   const exactValues = new WeakMap<FlowRuntimeValue, ExactRational>();
   const evaluate = (node: FlowFormula): FlowRuntimeValue | undefined => {
@@ -651,7 +656,20 @@ export const evaluateFlowFormula = (
       }
     }
   };
-  const result = evaluate(formula);
+  const evaluated = evaluate(formula);
+  if (evaluated === undefined) return undefined;
+  const result =
+    options.resultScale !== undefined &&
+    (evaluated.type === "decimal_number" || evaluated.type === "money")
+      ? arithmetic(
+          "add",
+          [evaluated],
+          options.resultScale,
+          "rounding" in formula ? formula.rounding : "half_even",
+          exactValues,
+          false,
+        )
+      : evaluated;
   if (result === undefined) return undefined;
   if (options.requireExactInteger) {
     const exact = exactValues.get(result);

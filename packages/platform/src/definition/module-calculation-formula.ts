@@ -29,7 +29,8 @@ export const calculationFormulaType = (
   const date = (value: string | undefined) => value === "date" || value === "date_time";
   switch (formula.op) {
     case "literal":
-      return formula.type;
+      // Record money carries its currency; a currency-free money literal cannot combine with it.
+      return formula.type === "money" ? undefined : formula.type;
     case "reference":
       return dialect === "source" && formula.reference.source === "trigger_record"
         ? fieldType(formula.reference.field)
