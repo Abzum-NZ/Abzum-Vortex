@@ -1,4 +1,5 @@
 import {
+  controlReferenceSettingKeys,
   releaseSettingDeclarations,
   type ApplicationSourceDocument,
   type BlockPropertySchemaContract,
@@ -471,7 +472,7 @@ export function applicationCompositionProvenance(
         (canonicalPath.at(-1) === "event_id" || canonicalPath.at(-1) === "row_action_event_id") &&
         canonicalValue === resolution.id(source.key, "event", String(sourceValue), "content");
       const controlReference =
-        (canonicalPath.at(-1) === "control_placement" || canonicalPath.at(-1) === "open_with") &&
+        controlReferenceSettingKeys.has(String(canonicalPath.at(-1))) &&
         canonicalValue ===
           resolution.id(source.key, "block_placement", String(sourceValue), "content");
       // A condition's authored short form is reshaped into the canonical tree, and its fields resolve.

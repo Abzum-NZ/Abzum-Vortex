@@ -151,8 +151,18 @@ export const placementParameterDependencies = (
   bindings: QueryBindingContext,
 ): Readonly<Record<string, readonly string[]>> => {
   const dependents: Record<string, string[]> = {};
+  const depend = (name: string | undefined, placementId: string): void => {
+    if (name === undefined) return;
+    const held = (dependents[name] ??= []);
+    if (!held.includes(placementId)) held.push(placementId);
+  };
   for (const placement of placements) {
-    const read = readQueryBindings(placementSettingsOf(placement));
+    const settings = placementSettingsOf(placement);
+    // A Record detail showing a control's selected record reads again when the selection changes.
+    const recordFrom = settings["record_from"];
+    if (recordFrom?.kind === "text")
+      depend(bindings.controls.get(recordFrom.value.toLowerCase()), placement.placementId);
+    const read = readQueryBindings(settings);
     if (read.kind !== "read") continue;
     for (const binding of read.bindings) {
       const name =
@@ -161,9 +171,7 @@ export const placementParameterDependencies = (
           : binding.source.kind === "control"
             ? bindings.controls.get(binding.source.placement.toLowerCase())
             : undefined;
-      if (name === undefined) continue;
-      const held = (dependents[name] ??= []);
-      if (!held.includes(placement.placementId)) held.push(placement.placementId);
+      depend(name, placement.placementId);
     }
   }
   return dependents;

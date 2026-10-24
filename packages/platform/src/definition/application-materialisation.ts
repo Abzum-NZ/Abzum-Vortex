@@ -31,6 +31,7 @@ import {
   sourcePageDataOf,
   sourcePageRootSlots,
   type SourcePageData,
+  controlReferenceSettingKeys,
 } from "../schema";
 import {
   FIELD_INPUT_BLOCK_RELEASE,
@@ -241,7 +242,7 @@ const compilePropertyValue = (
       compiled =
         schema.key === "event_id" || schema.key === "row_action_event_id"
           ? { kind: "text", value: resolution.identity("event", authored.value) }
-          : schema.key === "control_placement" || schema.key === "open_with"
+          : controlReferenceSettingKeys.has(schema.key)
             ? {
                 kind: "text",
                 value: resolution.identity("block_placement", authored.value, "content"),

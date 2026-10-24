@@ -1,6 +1,6 @@
 import "server-only";
 
-import { readRecordDetailContract, sameId, type JsonValue } from "../../schema";
+import { readRecordDetailContract, recordIdSchema, sameId, type JsonValue } from "../../schema";
 import { protectedQueryCommandSchema, type ProtectedQueryRow } from "../../queries/index";
 import { projectRecordDetailData } from "../component-data-projection";
 import {
@@ -14,6 +14,7 @@ import {
   type PlacementReadEntry,
 } from "./shared";
 import type { PlacementReadInput } from "./types";
+import type { PageSubjectReadResult } from "../page-subject-read";
 
 const detailState = (display: ReturnType<typeof projectRecordDetailData>): PageDataState =>
   display === undefined
@@ -33,7 +34,7 @@ export const readSubjectDetail = async (
   placement: PlacementReadEntry,
 ): Promise<void> => {
   const { placementId } = placement;
-  const { pageDefinition, subjectType, context } = read;
+  const { pageDefinition, subjectType } = read;
   const subjectFieldIds =
     pageDefinition.type === "public" ? pageDefinition.publicFieldIds.map(String) : undefined;
   if (subjectType === undefined || pageDefinition.type === "form") {
@@ -46,30 +47,111 @@ export const readSubjectDetail = async (
     read.data[placementId] = { status: "refused", reason: "not_found" };
     return;
   }
-  const subjectModule = context.releaseSet.modules.find((module) =>
-    sameId(String(module.rootId), String(subjectType.moduleRootId)),
+  const subjectId = read.subjectId;
+  await readRecordForDetail(
+    read,
+    placement,
+    String(subjectType.recordTypeId),
+    () => read.services.readSubject(String(subjectType.recordTypeId), subjectId),
+    subjectFieldIds,
+    () => read.markSubjectUnreadable(),
   );
-  const subject = await read.services.readSubject(String(subjectType.recordTypeId), read.subjectId);
-  if (subject.kind === "temporarily_unavailable") {
+};
+
+/**
+ * A query-less Record detail with Record from shows the record its control selects: the record
+ * identity that control publishes in the address, read as the control's one record type through
+ * the same record read path under the viewer's own authority. With no selection it reads nothing.
+ */
+export const readSelectedDetail = async (
+  read: PlacementReadInput,
+  placement: PlacementReadEntry,
+  control: string,
+): Promise<void> => {
+  const { placementId } = placement;
+  const name = read.bindings.controls.get(control.toLowerCase());
+  const declared = name === undefined ? undefined : read.bindings.parameters.get(name);
+  const recordTypeId =
+    declared?.kind === "record" && declared.recordTypes.length === 1
+      ? declared.recordTypes[0]
+      : undefined;
+  if (name === undefined || recordTypeId === undefined) {
+    logPlacementFailure(read.address, placementId, "detail_selection_unbound");
+    read.data[placementId] = { status: "error" };
+    return;
+  }
+  const held = read.bindings.address[name];
+  const raw = typeof held === "string" ? held : held?.[0];
+  if (raw === undefined || raw === "") {
+    read.data[placementId] = { status: "empty" };
+    return;
+  }
+  const recordId = recordIdSchema.safeParse(raw);
+  const contract = readRecordDetailContract(placementSettingsOf(placement));
+  if (!recordId.success || contract === undefined) {
+    read.data[placementId] = { status: "refused", reason: "not_found" };
+    return;
+  }
+  // Only the fields the detail shows are requested; the record read withholds the unreadable ones.
+  const requestedFieldIds = [
+    ...new Set(
+      [
+        ...contract.fields.map((field) => field.field),
+        ...(contract.headingField === undefined ? [] : [contract.headingField]),
+      ].map((field) => field.toLowerCase()),
+    ),
+  ];
+  await readRecordForDetail(
+    read,
+    placement,
+    recordTypeId,
+    () =>
+      read.services.records.read(read.session, read.selection, {
+        recordTypeId,
+        recordId: recordId.data,
+        requestedFieldIds,
+      }),
+    undefined,
+    () => {},
+  );
+};
+
+/** One record shown by a Record detail, read by its type and identity under the viewer's authority. */
+const readRecordForDetail = async (
+  read: PlacementReadInput,
+  placement: PlacementReadEntry,
+  recordTypeId: string,
+  readRecord: () => Promise<PageSubjectReadResult>,
+  readableFieldIds: readonly string[] | undefined,
+  markUnreadable: () => void,
+): Promise<void> => {
+  const { placementId } = placement;
+  const recordModule = read.context.releaseSet.modules.find((module) =>
+    module.content.recordTypes.some((recordType) =>
+      sameId(String(recordType.recordTypeId), recordTypeId),
+    ),
+  );
+  const record = await readRecord();
+  if (record.kind === "temporarily_unavailable") {
     logPlacementFailure(read.address, placementId, "subject_unavailable");
     read.data[placementId] = { status: "error" };
     return;
   }
-  if (subject.kind === "refused") {
-    read.markSubjectUnreadable();
+  if (record.kind === "refused") {
+    markUnreadable();
     read.data[placementId] = { status: "refused", reason: "not_found" };
     return;
   }
-  const subjectLinks = await readRecordLinks(read.services.resolveRecordLinks, [subject.row]);
+  const recordLinks = await readRecordLinks(read.services.resolveRecordLinks, [record.row]);
   read.data[placementId] = detailState(
     projectRecordDetailData(
       {
         settings: placementSettingsOf(placement),
-        ...(subjectLinks === undefined ? {} : { recordLinks: subjectLinks }),
-        ...(subjectModule === undefined ? {} : moduleFieldDisplay(subjectModule)),
-        ...(subjectFieldIds === undefined ? {} : { readableFieldIds: subjectFieldIds }),
+        ...(recordLinks === undefined ? {} : { recordLinks }),
+        ...(recordModule === undefined ? {} : moduleFieldDisplay(recordModule)),
+        ...(readableFieldIds === undefined ? {} : { readableFieldIds }),
       },
-      [subject.row],
+      [record.row],
     ),
   );
 };

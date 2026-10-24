@@ -29,7 +29,7 @@ import {
   studioSettingProblems,
   StudioQueryPicker,
   StudioQueryBindings,
-  StudioDrawerBinding,
+  StudioSelectionControlBinding,
   studioQueryBindingFacts,
   studioRecordBindingFields,
   StudioSettingFields,
@@ -466,6 +466,7 @@ export function ApplicationCompositionEditor(props: Props) {
                   property.key !== "query_parameters" &&
                   property.key !== "row_actions" &&
                   property.key !== "open_with" &&
+                  property.key !== "record_from" &&
                   !studioOwnsSetting(property.key),
               )}
               values={settingsInputs.settings}
@@ -473,23 +474,27 @@ export function ApplicationCompositionEditor(props: Props) {
               disabled={props.disabled}
               onChange={(settings) => changeSettings({ ...settingsInputs, settings })}
             />
-            {settingsModel.properties.some((property) => property.key === "open_with") && (
-              <StudioDrawerBinding
-                value={settingsInputs.settings.open_with}
-                facts={studioQueryBindingFacts(
-                  props.context,
-                  settingsModel.placementAlias,
-                  props.choices.queries,
-                )}
-                disabled={props.disabled}
-                onChange={(value) => {
-                  const next = { ...settingsInputs.settings };
-                  if (value === undefined) delete next.open_with;
-                  else next.open_with = value;
-                  changeSettings({ ...settingsInputs, settings: next });
-                }}
-              />
-            )}
+            {(["open_with", "record_from"] as const)
+              .filter((key) => settingsModel.properties.some((property) => property.key === key))
+              .map((key) => (
+                <StudioSelectionControlBinding
+                  key={key}
+                  setting={key}
+                  value={settingsInputs.settings[key]}
+                  facts={studioQueryBindingFacts(
+                    props.context,
+                    settingsModel.placementAlias,
+                    props.choices.queries,
+                  )}
+                  disabled={props.disabled}
+                  onChange={(value) => {
+                    const next = { ...settingsInputs.settings };
+                    if (value === undefined) delete next[key];
+                    else next[key] = value;
+                    changeSettings({ ...settingsInputs, settings: next });
+                  }}
+                />
+              ))}
           </fieldset>
           <StudioHelp hint="A setting you leave unset uses its default." />
           {settings.problem !== "" && problemArea === "settings" && (

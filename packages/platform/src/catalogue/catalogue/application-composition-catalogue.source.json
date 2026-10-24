@@ -330,6 +330,15 @@
       },
       {
         "kind": "text",
+        "key": "record_from",
+        "label": "Record from",
+        "help": "Show the record this control selects instead of the page's record",
+        "required": false,
+        "minLength": 1,
+        "maxLength": 200
+      },
+      {
+        "kind": "text",
         "key": "title",
         "presentation": true,
         "label": "Title",

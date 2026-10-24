@@ -3,6 +3,7 @@ import {
   pageBindingFacts,
   peopleDirectory,
   recordPageTypes,
+  selectionControlSettingKey,
   sourceItemTree,
   sourcePageItems,
   sourcePageShell,
@@ -103,6 +104,7 @@ export function studioQueryBindingFacts(
     subject: hasSubject ? { recordType: subject, label: recordTypeLabel(subject) } : undefined,
     placements: (owner?.items ?? []).map(({ props }): QueryBindingPlacement => {
       const release = releaseOf(props);
+      const selectionKey = selectionControlSettingKey(release?.key);
       const rowClick = props.row_click;
       return {
         placement: props.id,
@@ -110,7 +112,10 @@ export function studioQueryBindingFacts(
         label: named(props.label) ?? named(props.title),
         blockName: release?.name ?? "This block",
         parameter: named(props.publishes_parameter),
-        openWith: named(props.open_with),
+        selectionControl:
+          selectionKey === undefined
+            ? undefined
+            : named((props as Readonly<Record<string, unknown>>)[selectionKey]),
         linkTargets: Array.isArray(props.record_types)
           ? props.record_types.filter((value): value is string => typeof value === "string")
           : [],

@@ -14,7 +14,7 @@ import type { createRecordsTableQueryResolver } from "../records-table-query";
 import type { RecordsTablePageRequest } from "../records-table-state";
 import type { StoredGridViews } from "../grid-views";
 import type { GridLayoutStorage } from "../grid-view-state";
-import type { PageSubjectReadResult } from "../page-subject-read";
+import type { createPageSubjectReader, PageSubjectReadResult } from "../page-subject-read";
 import type { QueryBindingContext } from "../query-binding-resolver";
 import type { RecordsSelectionSealer } from "../records-selection-seal";
 import type {
@@ -71,6 +71,8 @@ export type PlacementReadServices = Readonly<{
     }>
   >;
   readSubject: (recordTypeId: string, recordId: string) => Promise<PageSubjectReadResult>;
+  /** Reads any one record under the viewer's authority; the page subject reads through readSubject. */
+  records: ReturnType<typeof createPageSubjectReader>;
   launcherValues: (
     rows: readonly LauncherQueryRow[],
     permittedApplicationKeys: readonly string[],

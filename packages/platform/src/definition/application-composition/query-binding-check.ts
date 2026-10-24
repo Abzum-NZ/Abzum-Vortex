@@ -250,6 +250,25 @@ export const checkQueryBindings = (
   return problems;
 };
 
+/**
+ * The settings that name a control on the same page by its placement: a query input bound to a
+ * control, a drawer's Open with and a Record detail's Record from. Each compiles to the control's
+ * permanent placement identity.
+ */
+export const controlReferenceSettingKeys: ReadonlySet<string> = new Set([
+  "control_placement",
+  "open_with",
+  "record_from",
+]);
+
+/** The setting that names a block's selection control, by block key. */
+export const selectionControlSettingKey = (blockKey: string | undefined): string | undefined =>
+  blockKey === "platform.layout.drawer"
+    ? "open_with"
+    : blockKey === "platform.display.record_detail"
+      ? "record_from"
+      : undefined;
+
 /** One placement of a page as a binding sees it: its block, its name and what it may publish. */
 export type QueryBindingPlacement = Readonly<{
   placement: string;
@@ -264,8 +283,11 @@ export type QueryBindingPlacement = Readonly<{
   fieldType: QueryBindingValueType | undefined;
   /** The record type of a table that selects a record on click; undefined for any other table. */
   selectedRecordType: string | undefined;
-  /** A drawer's Open with control: the drawer is open while that control publishes a record. */
-  openWith: string | undefined;
+  /**
+   * The control whose published record a drawer opens with (Open with) or a query-less Record
+   * detail shows (Record from); undefined for any other block.
+   */
+  selectionControl: string | undefined;
 }>;
 
 type Published =
@@ -364,13 +386,16 @@ export const pageBindingFacts = (
     }
   }
   for (const placement of input.placements) {
-    const openWith = placement.openWith?.toLowerCase();
-    if (placement.blockKey !== "platform.layout.drawer" || openWith === undefined) continue;
-    const control = controls.find((candidate) => candidate.placement.toLowerCase() === openWith);
+    const selected = placement.selectionControl?.toLowerCase();
+    if (selected === undefined) continue;
+    const control = controls.find((candidate) => candidate.placement.toLowerCase() === selected);
     const parameter = parameters.find((candidate) => candidate.name === control?.parameter);
-    if (parameter?.type.kind !== "record")
+    if (parameter?.type.kind !== "record" || parameter.type.recordTypes.length !== 1)
       pageProblems.push({
-        sentence: `${placement.label ?? placement.blockName} must open with a control on this page that publishes a record.`,
+        sentence:
+          placement.blockKey === "platform.layout.drawer"
+            ? `${placement.label ?? placement.blockName} must open with a control on this page that publishes a record.`
+            : `${placement.label ?? placement.blockName} must show the record of a control on this page that publishes one kind of record.`,
       });
   }
   return {
