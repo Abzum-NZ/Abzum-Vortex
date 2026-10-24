@@ -6,7 +6,10 @@ import { resolveIdentitySession } from "../auth/_lib/session-server";
 import { applicationStoreService } from "../_lib/application-store-service";
 import { loadStudioApplicationDraft } from "../_lib/studio-application-draft";
 import { mapWebError } from "../_lib/web-error-mapper";
-import { applicationLifecycleTools } from "./_lib/application-lifecycle-tools";
+import {
+  applicationLifecycleTools,
+  type ApplicationLifecycleToolName,
+} from "./_lib/application-lifecycle-tools";
 import { unavailableMessage } from "./_components/studio-refusal-messages";
 
 const requestSchema = z
@@ -14,8 +17,8 @@ const requestSchema = z
     rootId: applicationRootIdSchema,
     tool: z.enum(
       Object.keys(applicationLifecycleTools) as [
-        keyof typeof applicationLifecycleTools,
-        ...Array<keyof typeof applicationLifecycleTools>,
+        ApplicationLifecycleToolName,
+        ...ApplicationLifecycleToolName[],
       ],
     ),
     input: z.unknown(),
@@ -29,6 +32,26 @@ const journeys = {
   review_application_removal: "reviewRemoval",
   uninstall_application: "remove",
 } as const;
+
+/** What a completed journey tells the agent, including which tool confirms a review. */
+const completedMessage = (tool: ApplicationLifecycleToolName, change: unknown): string => {
+  switch (tool) {
+    case "review_application_installation":
+      return change === "install"
+        ? "This would be a first install. Confirm with install_application, passing expected unchanged and choosing whether to take the member role."
+        : change === "upgrade" || change === "roles"
+          ? "Confirm with upgrade_application, passing expected unchanged and the role_template_ids to accept."
+          : "The latest published release is installed and has no role changes waiting. Nothing to confirm.";
+    case "review_application_removal":
+      return "Confirm with uninstall_application, passing expected unchanged. Records and storage will remain in place.";
+    case "install_application":
+      return "The application was installed. Read the report for its release and member role.";
+    case "upgrade_application":
+      return "The application was upgraded. Read the report for its release and the role changes accepted or still waiting.";
+    case "uninstall_application":
+      return "The application was uninstalled and its access withdrawn. Records and storage remain in place.";
+  }
+};
 
 /** Studio's agent uses the catalogue's one protected lifecycle, under the signed-in person's authority. */
 export async function runStudioApplicationLifecycle(organizationId: string, candidate: unknown) {
@@ -95,12 +118,7 @@ export async function runStudioApplicationLifecycle(organizationId: string, cand
                 ? "uninstalled"
                 : "reviewed",
         report: result.value,
-        message:
-          tool === "uninstall_application"
-            ? "The application was uninstalled and its access withdrawn. Records and storage remain in place."
-            : tool === "review_application_removal"
-              ? "Review the installed version before confirming uninstall. Records and storage will remain in place."
-              : "The application request completed. Read the report for its release and role changes.",
+        message: completedMessage(tool, result.value.change),
       };
     const code =
       result.kind === "confirmed_failure"
@@ -125,7 +143,7 @@ export async function runStudioApplicationLifecycle(organizationId: string, cand
               ? "This release cannot use the organisation's current record storage. Choose a compatible release."
               : result.kind === "temporarily_unavailable"
                 ? "The request did not complete. Review the application's current state before retrying."
-                : "You cannot perform this application change with your current access. Ask an administrator for permission to manage applications and any roles you accept.",
+                : "The application change was refused. Pass the expected state from the matching review unchanged; if you did, ask an administrator for permission to manage applications and any roles you accept.",
     };
   } catch (error) {
     return mapWebError(error, {

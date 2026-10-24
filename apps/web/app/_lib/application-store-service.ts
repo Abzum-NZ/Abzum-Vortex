@@ -18,10 +18,11 @@ import {
 
 /**
  * The application catalogue's install and upgrade journeys for one request: the installed release
- * catalogue and permissions, and the person's own request transactions and Access operations.
+ * catalogue and permissions, and the person's own request transactions and Access operations,
+ * attributed to the channel the trusted entry point was reached through.
  */
 export const applicationStoreService = (
-  channel: ProtectedOperationChannel = "web",
+  channel: ProtectedOperationChannel,
 ): ApplicationStoreService =>
   createApplicationStoreService({
     catalogue: installedReleaseCatalogue,
