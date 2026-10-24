@@ -106,7 +106,7 @@ export const createFlowInvocationHandler =
 
       const result = await invokeInstalledFlow(identity.session, body, address, {
         authorityId: getIdentityAuthorityConfiguration().authorityId,
-        applicationStore: applicationStoreService(channel),
+        applicationStore: applicationStoreService(),
         channel,
         telemetry: appTelemetry,
         releaseCatalogue: installedReleaseCatalogue,

@@ -53,7 +53,10 @@ const completedMessage = (tool: ApplicationLifecycleToolName, change: unknown): 
   }
 };
 
-/** Studio's agent uses the catalogue's one protected lifecycle, under the signed-in person's authority. */
+/**
+ * Studio's agent uses the catalogue's one protected lifecycle, under the signed-in person's
+ * authority and on the web channel like Studio's other agent tools.
+ */
 export async function runStudioApplicationLifecycle(organizationId: string, candidate: unknown) {
   try {
     const organization = organizationIdSchema.safeParse(organizationId);
@@ -81,7 +84,7 @@ export async function runStudioApplicationLifecycle(organizationId: string, cand
     const identity = await resolveIdentitySession();
     if (identity.kind !== "active")
       return { outcome: "refused", message: "Sign in again before managing this application." };
-    const result = await applicationStoreService("mcp")[journeys[tool]](
+    const result = await applicationStoreService()[journeys[tool]](
       identity.session,
       { organizationId: organization.data },
       { ...input.data, application_root_id: rootId },
@@ -143,7 +146,10 @@ export async function runStudioApplicationLifecycle(organizationId: string, cand
               ? "This release cannot use the organisation's current record storage. Choose a compatible release."
               : result.kind === "temporarily_unavailable"
                 ? "The request did not complete. Review the application's current state before retrying."
-                : "The application change was refused. Pass the expected state from the matching review unchanged; if you did, ask an administrator for permission to manage applications and any roles you accept.",
+                : tool === "review_application_installation" ||
+                    tool === "review_application_removal"
+                  ? "You cannot review this application change with your current access. Ask an administrator for permission to manage applications."
+                  : "The application change was refused. Pass the expected state from the matching review unchanged; if you did, ask an administrator for permission to manage applications and any roles you accept.",
     };
   } catch (error) {
     return mapWebError(error, {
