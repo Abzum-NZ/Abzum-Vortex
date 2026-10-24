@@ -18,15 +18,15 @@ declare
 begin
   if p_storage_contract_id is null or p_clock is null
     or pg_catalog.jsonb_typeof(p_expression) is distinct from 'object'
-    or p_expression ->> 'kind' is distinct from 'deadline_passed'
-    or pg_catalog.jsonb_typeof(p_expression -> 'dueFieldId') is distinct from 'string'
+    or p_expression ->> 'op' is distinct from 'deadline_passed'
+    or pg_catalog.jsonb_typeof(p_expression #> '{due,reference,fieldId}') is distinct from 'string'
     or pg_catalog.jsonb_typeof(p_clock -> 'instant') is distinct from 'string' then
     return null;
   end if;
   select mapping.* into due_mapping
   from vortex_record.field_storage_mappings as mapping
   where mapping.storage_contract_id = p_storage_contract_id
-    and mapping.field_id = (pg_catalog.lower(p_expression ->> 'dueFieldId'))::uuid;
+    and mapping.field_id = (pg_catalog.lower(p_expression #>> '{due,reference,fieldId}'))::uuid;
   if not found or due_mapping.state <> 'active' then
     raise exception using errcode = '55000',
       message = 'Record storage disagrees with the installed definition';
@@ -36,7 +36,7 @@ begin
       and pg_catalog.jsonb_typeof(p_clock -> 'organizationLocalDate') is distinct from 'string') then
     return null;
   end if;
-  if pg_catalog.jsonb_typeof(p_expression -> 'statusFieldId') = 'string' then
+  if pg_catalog.jsonb_typeof(p_expression #> '{status,reference,fieldId}') = 'string' then
     terminal_values := coalesce(p_expression -> 'terminalStatusValues', '[]'::jsonb);
     if pg_catalog.jsonb_typeof(terminal_values) <> 'array' then
       return null;
@@ -44,7 +44,7 @@ begin
     select mapping.* into status_mapping
     from vortex_record.field_storage_mappings as mapping
     where mapping.storage_contract_id = p_storage_contract_id
-      and mapping.field_id = (pg_catalog.lower(p_expression ->> 'statusFieldId'))::uuid;
+      and mapping.field_id = (pg_catalog.lower(p_expression #>> '{status,reference,fieldId}'))::uuid;
     if not found or status_mapping.state <> 'active' then
       raise exception using errcode = '55000',
         message = 'Record storage disagrees with the installed definition';

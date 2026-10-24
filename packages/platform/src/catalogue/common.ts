@@ -58,18 +58,6 @@ export const correlationIdSchema = platformIdSchema.brand<"CorrelationId">();
 /** Closed safety limits shared by every authored and canonical condition tree. */
 export const conditionMaximumNestingDepth = 10;
 export const conditionMaximumOperandCount = 100;
-/** Closed safety limits shared by every authored and canonical nested numeric calculation. */
-export const calculationMaximumNestingDepth = 8;
-export const calculationMaximumOperandCount = 40;
-/** The result types each calculation operation can produce, for the contract and Studio's formula editor. */
-export const calculationResultTypesByOperation = {
-  join_text: ["text"],
-  numeric: ["whole_number", "decimal_number", "money"],
-  condition: ["yes_no"],
-  date_offset: ["date", "date_time"],
-  deadline_passed: ["yes_no"],
-} as const satisfies Readonly<Record<string, readonly string[]>>;
-
 export type JsonValue =
   string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
 export const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>

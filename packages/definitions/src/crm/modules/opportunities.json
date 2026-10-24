@@ -141,38 +141,49 @@
             "result_type": "money",
             "decimal_places": 2,
             "expression": {
-              "operation": "numeric",
-              "numeric_operation": "multiply",
-              "operands": [
+              "op": "multiply",
+              "args": [
                 {
-                  "source": "field",
-                  "field": "value"
+                  "op": "reference",
+                  "reference": {
+                    "source": "trigger_record",
+                    "field": "value"
+                  }
                 },
                 {
-                  "source": "numeric",
-                  "numeric_operation": "subtract",
-                  "operands": [
+                  "op": "subtract",
+                  "args": [
                     {
-                      "source": "literal",
+                      "op": "literal",
+                      "type": "decimal_number",
                       "value": "1"
                     },
                     {
-                      "source": "numeric",
-                      "numeric_operation": "divide",
-                      "operands": [
+                      "op": "divide",
+                      "args": [
                         {
-                          "source": "field",
-                          "field": "discount_percent"
+                          "op": "reference",
+                          "reference": {
+                            "source": "trigger_record",
+                            "field": "discount_percent"
+                          }
                         },
                         {
-                          "source": "literal",
+                          "op": "literal",
+                          "type": "decimal_number",
                           "value": "100"
                         }
-                      ]
+                      ],
+                      "scale": 18,
+                      "rounding": "half_even"
                     }
-                  ]
+                  ],
+                  "scale": 18,
+                  "rounding": "half_even"
                 }
-              ]
+              ],
+              "scale": 2,
+              "rounding": "half_even"
             }
           }
         },

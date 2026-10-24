@@ -151,12 +151,17 @@ export const searchInstalledApplication = async (
               where pg_catalog.lower(binding.value ->> 'moduleRootId') = pg_catalog.lower(${module.rootId}::text)
                 and (binding.value ->> 'moduleReleaseRevision')::bigint = ${module.releaseRevision}::bigint
                 and binding.value ->> 'state' = 'active')
+        ), current_records as materialized (
+          select requested.record_id,
+            (select vortex_record.read_record(${request.recordTypeId}::uuid, requested.record_id::uuid)
+              from verified_installation) as value
+          from pg_catalog.jsonb_array_elements_text(${JSON.stringify(request.recordIds)}::text::jsonb) as requested(record_id)
         )
-        select active_installation.value as installation, requested.record_id,
-          (select vortex_record.read_record(${request.recordTypeId}::uuid, requested.record_id::uuid) from verified_installation) as record,
-          (select vortex_record.read_record_capabilities(${request.recordTypeId}::uuid, requested.record_id::uuid) from verified_installation) as capabilities
+        select active_installation.value as installation, current_records.record_id,
+          current_records.value -> 'record' as record,
+          current_records.value -> 'capabilities' as capabilities
         from active_installation
-        cross join pg_catalog.jsonb_array_elements_text(${JSON.stringify(request.recordIds)}::text::jsonb) as requested(record_id)
+        cross join current_records
       `;
       const allowedFields = new Set(
         [
