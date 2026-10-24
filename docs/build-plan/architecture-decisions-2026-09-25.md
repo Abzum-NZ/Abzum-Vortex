@@ -259,7 +259,7 @@ Abandoned prepared candidates are cleaned up.
 
 **Upgrade** prepares the new release set and activates it the same way. The previous release set stays active if anything fails (#598).
 
-**Uninstall** moves an installation through three states: from active to draining, where callbacks for work already running are still honoured, and then to removed. The uninstaller either lets running work finish or cancels it under 09's cancellation policy. Draining ends when no run remains.
+**Uninstall** withdraws the installation in one atomic step: module bindings detach (stored records remain) and access is withdrawn. No new work is accepted afterwards; accepted work that has not begun is refused or cancelled with a retained status, and running executions follow 09's cancellation policy. There is no intermediate draining state (#2871).
 
 Each owning service records the registrations it creates for an installation, and can list and remove them. The uninstall report is the union of those lists. Uninstall is complete when nothing remains except items the uninstaller chose to keep. The registrations covered are:
 - Kestra flows, triggers, namespace files, key-value entries and execution storage, purged according to retention and legal hold;
