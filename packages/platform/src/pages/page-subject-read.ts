@@ -22,7 +22,7 @@ import type { RequestDatabaseTransaction } from "../db/index";
 import {
   readSubjectWithNamedActionAvailability,
   type NamedActionAvailability,
-} from "../records/action-record-port";
+} from "../records/action-record-availability";
 import type { ActionFlowRunner } from "../rules/index";
 import {
   protectedQueryRowCapabilitiesSchema,

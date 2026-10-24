@@ -58,7 +58,7 @@ VORTEX_SUPABASE_WORKDIR=<lane directory> pnpm demo:setup
 ```
 
 `env` prints `VORTEX_SUPABASE_URL`, `VORTEX_SUPABASE_PUBLISHABLE_KEY`,
-`VORTEX_RUNTIME_DATABASE_URL`, `VORTEX_DEV_SERVICE_ROLE_KEY` and `VORTEX_SUPABASE_WORKDIR`; put them
+`VORTEX_RUNTIME_DATABASE_URL`, `VORTEX_DEV_SERVICE_ROLE_KEY`, `VORTEX_SUPABASE_WORKDIR` and `VORTEX_EVENT_DELIVERY_MODE=in_process`; put them
 in the worktree's ignored `apps/web/.env.development.local`, never in a tracked file or a log. With
 `VORTEX_SUPABASE_WORKDIR` set, the demo and development setup scripts pass `--workdir` to every
 Supabase CLI call. `status <n>` shows the lane's URLs and keys.
