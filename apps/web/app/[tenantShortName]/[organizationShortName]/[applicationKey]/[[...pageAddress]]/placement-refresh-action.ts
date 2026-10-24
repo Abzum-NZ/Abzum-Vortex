@@ -1,4 +1,5 @@
 "use server";
+import { withPageReadAttribution } from "../../../../_lib/page-read-attribution";
 
 import {
   boardColumnReadRequestSchema,
@@ -106,6 +107,26 @@ export async function rereadApplicationPlacements(
   tableContinuationInput?: unknown,
   includeContentInput?: unknown,
 ): Promise<ApplicationPagePlacementReadResult> {
+  return withPageReadAttribution(
+    () =>
+      readApplicationPlacements(
+        addressInput,
+        placementIdsInput,
+        boardReadsInput,
+        tableContinuationInput,
+        includeContentInput,
+      ),
+    "placements",
+  );
+}
+
+async function readApplicationPlacements(
+  addressInput: unknown,
+  placementIdsInput: unknown,
+  boardReadsInput?: unknown,
+  tableContinuationInput?: unknown,
+  includeContentInput?: unknown,
+): Promise<ApplicationPagePlacementReadResult> {
   const address = placementRefreshAddressSchema.safeParse(addressInput);
   const placementIds = placementIdsSchema.safeParse(placementIdsInput);
   const boardReads =
@@ -152,6 +173,7 @@ export async function rereadApplicationPlacements(
     address.data.organizationShortName,
     address.data.applicationKey,
     address.data.pageKey,
+    "addressed",
   );
   if (resolved.kind === "temporarily_unavailable") return { kind: "temporarily_unavailable" };
   if (resolved.kind !== "application_page") return { kind: "unavailable" };
