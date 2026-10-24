@@ -22,7 +22,7 @@ import { openLane, personaEmails, type LaneFacts } from "./lane";
  * an assignment is left as it is, so the script can be re-run.
  *
  * This provisions measurement identities, not browser sign-in credentials.
- * Usage: pnpm --filter @vortex/web list:personas -- --lane 4
+ * Usage: pnpm --filter @vortex/web list:personas -- --lane <N>
  */
 
 type Persona = Readonly<{ email: string; roleKeyPrefixes: readonly string[] }>;
@@ -171,8 +171,4 @@ if (
       process.exitCode = 1;
     })
     // All work and owned DB cleanup have settled. Flush diagnostics before the one-shot exit.
-    .finally(() =>
-      process.stdout.write("", () =>
-        process.stderr.write("", () => process.exit(process.exitCode ?? 0)),
-      ),
-    );
+    .finally(() => process.stdout.write("", () => process.stderr.write("", () => process.exit())));
