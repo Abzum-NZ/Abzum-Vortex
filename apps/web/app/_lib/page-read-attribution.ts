@@ -20,9 +20,8 @@ type Summary = {
 type Collector = { summary: Summary; observe: (measurement: ProtectedReadMeasurement) => void };
 const active = new AsyncLocalStorage<Collector>();
 
-const enabled = (): boolean =>
-  process.env.VORTEX_PAGE_READ_ATTRIBUTION === "1" ||
-  (process.env.VORTEX_PAGE_READ_ATTRIBUTION !== "0" && process.env.VORTEX_ENVIRONMENT === "local");
+// Opt-in only, in every environment: a measurement run sets it; ordinary use logs nothing.
+const enabled = (): boolean => process.env.VORTEX_PAGE_READ_ATTRIBUTION === "1";
 
 const createCollector = (operation: Summary["operation"]): Collector => {
   const counter = (): Counter => ({ count: 0, durationMs: 0, returnedRows: 0, failures: 0 });
