@@ -23,7 +23,6 @@ declare
   protected_view_key text;
   reader_schema_value text;
   reader_function_value text;
-  view_oid oid;
   reader_function_oid oid;
   relation_oid oid;
   owner_role_oid oid := 'vortex_owner'::regrole::oid;
@@ -98,66 +97,19 @@ begin
   where registered.protected_read_model_key = protected_view_key;
   if not found then
     raise exception using errcode = '55000',
-      message = 'Protected projection view is unavailable';
+      message = 'Protected projection reader is unavailable';
   end if;
-  view_oid := pg_catalog.to_regclass(pg_catalog.format(
-    '%I.%I', 'record_data', catalogue_row.physical_table_token
-  ))::oid;
   reader_function_oid := pg_catalog.to_regprocedure(pg_catalog.format(
     '%I.%I(uuid[],text,text,jsonb,integer,jsonb)', reader_schema_value, reader_function_value
   ))::oid;
-  if view_oid is null
-    or reader_function_oid is null
-    or not exists (
-      select 1
-      from pg_catalog.pg_class as relation
-      where relation.oid = view_oid
-        and relation.relkind = 'v'
-        and relation.relowner = owner_role_oid
-    )
-    or exists (
-      select 1 from pg_catalog.pg_trigger as trigger
-      where trigger.tgrelid = view_oid and not trigger.tgisinternal
-    )
-    or exists (
-      select 1 from pg_catalog.pg_rewrite as rule
-      where rule.ev_class = view_oid and rule.rulename <> '_RETURN'
-    )
-    or (
-      select pg_catalog.count(*)
-      from pg_catalog.pg_rewrite as rule
-      join pg_catalog.pg_depend as dependency
-        on dependency.classid = 'pg_rewrite'::regclass
-        and dependency.objid = rule.oid
-        and dependency.refclassid = 'pg_proc'::regclass
-      where rule.ev_class = view_oid and rule.rulename = '_RETURN'
-    ) <> 1
-    or exists (
-      select 1
-      from pg_catalog.pg_rewrite as rule
-      join pg_catalog.pg_depend as dependency
-        on dependency.classid = 'pg_rewrite'::regclass
-        and dependency.objid = rule.oid
-        and dependency.refclassid = 'pg_class'::regclass
-      where rule.ev_class = view_oid and rule.rulename = '_RETURN'
-        and dependency.refobjid <> view_oid
-    )
-    or not exists (
-      select 1 from pg_catalog.pg_proc as reader
-      where reader.oid = reader_function_oid and reader.prosecdef
-    )
-    or not exists (
-      select 1
-      from pg_catalog.pg_rewrite as rule
-      join pg_catalog.pg_depend as dependency
-        on dependency.classid = 'pg_rewrite'::regclass
-        and dependency.objid = rule.oid
-        and dependency.refclassid = 'pg_proc'::regclass
-        and dependency.refobjid = reader_function_oid
-      where rule.ev_class = view_oid and rule.rulename = '_RETURN'
-    ) then
+  if reader_function_oid is null or not exists (
+    select 1 from pg_catalog.pg_proc as reader
+    where reader.oid = reader_function_oid and reader.prosecdef
+      and reader.proowner = owner_role_oid
+      and reader.proconfig @> array['search_path=""']::text[]
+  ) then
     raise exception using errcode = '55000',
-      message = 'Protected projection view lineage is incompatible';
+      message = 'Protected projection reader lineage is incompatible';
   end if;
 
   select mapping.* into mapping_row

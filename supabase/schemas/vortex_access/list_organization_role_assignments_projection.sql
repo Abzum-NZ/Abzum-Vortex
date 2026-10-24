@@ -25,7 +25,7 @@ declare
   scan_sql text;
   predicate_plan jsonb;
 begin
-  if p_sort_key not in ('record_id', 'starts_at', 'expires_at', 'state', 'role_key', 'role_label')
+  if p_sort_key not in ('record_id', 'starts_at', 'expires_at', 'state')
     or p_sort_key is null or p_direction not in ('ascending', 'descending')
     or p_direction is null or (p_limit is not null and p_limit < 1)
     or (p_sort_key <> 'record_id' and p_limit is null) then
@@ -35,25 +35,13 @@ begin
     when 'starts_at' then 'assignment.starts_at'
     when 'expires_at' then 'assignment.expires_at'
     when 'state' then 'assignment.state'
-    when 'role_key' then 'role_revision.role_key'
-    when 'role_label' then 'role_revision.label'
     else 'assignment.role_assignment_id' end;
   sort_kind := case p_sort_key
     when 'starts_at' then 'time'
     when 'expires_at' then 'nullable_time'
     when 'state' then 'text'
-    when 'role_key' then 'legacy_text'
-    when 'role_label' then 'legacy_text'
     else 'id' end;
   direction_sql := case when p_direction = 'ascending' then 'asc' else 'desc' end;
-  if sort_kind = 'legacy_text' then
-    -- A stored release can still request a sort dropped from current publishable definitions.
-    candidate_joins := $joins$join vortex_access.organization_roles as role
-      on role.organization_id = assignment.organization_id and role.role_id = assignment.role_id
-    join vortex_access.organization_role_revisions as role_revision
-      on role_revision.organization_id = role.organization_id
-      and role_revision.role_id = role.role_id and role_revision.revision = role.live_revision$joins$;
-  end if;
   if sort_kind = 'nullable_time' then
     sort_expression := sort_column;
     order_sql := pg_catalog.format('%s %s nulls %s, assignment.role_assignment_id %s',
@@ -61,7 +49,7 @@ begin
       case when p_direction = 'ascending' then 'first' else 'last' end, direction_sql);
     outer_order_sql := pg_catalog.format('candidate.sort_value %s nulls %s, candidate.record_id %s',
       direction_sql, case when p_direction = 'ascending' then 'first' else 'last' end, direction_sql);
-  elsif sort_kind in ('text', 'legacy_text') then
+  elsif sort_kind = 'text' then
     sort_expression := sort_column || ' collate "C"';
     order_sql := pg_catalog.format('%s %s, assignment.role_assignment_id %s', sort_expression, direction_sql, direction_sql);
     outer_order_sql := pg_catalog.format('candidate.sort_value collate "C" %s, candidate.record_id %s',
@@ -97,7 +85,7 @@ begin
     if sort_kind = 'id' then
       keyset_sql := pg_catalog.format(' and assignment.role_assignment_id %s $4',
         case when p_direction = 'ascending' then '>' else '<' end);
-    elsif sort_kind in ('text', 'legacy_text') then
+    elsif sort_kind = 'text' then
       keyset_sql := pg_catalog.format(' and (%s, assignment.role_assignment_id) %s ($3 collate "C", $4)',
         sort_expression, case when p_direction = 'ascending' then '>' else '<' end);
     elsif sort_kind = 'nullable_time' then
