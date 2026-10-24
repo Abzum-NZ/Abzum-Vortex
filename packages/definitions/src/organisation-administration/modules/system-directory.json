@@ -13,14 +13,22 @@
       "storage_contract_id": "srt_system_directory_person",
       "storage_scope": "organization_shared",
       "ownership_mode": "none",
-      "standard_actions": ["read"],
+      "standard_actions": [
+        "read"
+      ],
       "custom_actions": [],
       "system_projection": {
         "protected_view": "organization_accounts",
         "organization_field": "organization_id",
         "revision_field": "revision",
-        "filterable_fields": ["state", "display_name"],
-        "sortable_fields": ["display_name", "state"]
+        "filterable_fields": [
+          "state",
+          "display_name"
+        ],
+        "sortable_fields": [
+          "display_name",
+          "state"
+        ]
       },
       "fields": [
         {
@@ -138,14 +146,22 @@
       "storage_contract_id": "srt_system_directory_invitation",
       "storage_scope": "organization_shared",
       "ownership_mode": "none",
-      "standard_actions": ["read"],
+      "standard_actions": [
+        "read"
+      ],
       "custom_actions": [],
       "system_projection": {
         "protected_view": "organization_invitations",
         "organization_field": "organization_id",
         "revision_field": "revision",
-        "filterable_fields": ["state", "invited_email"],
-        "sortable_fields": ["invited_email", "expires_at"]
+        "filterable_fields": [
+          "state",
+          "invited_email"
+        ],
+        "sortable_fields": [
+          "invited_email",
+          "expires_at"
+        ]
       },
       "fields": [
         {
@@ -267,14 +283,23 @@
       "storage_contract_id": "srt_system_directory_group",
       "storage_scope": "organization_shared",
       "ownership_mode": "none",
-      "standard_actions": ["read"],
+      "standard_actions": [
+        "read"
+      ],
       "custom_actions": [],
       "system_projection": {
         "protected_view": "groups",
         "organization_field": "organization_id",
         "revision_field": "revision",
-        "filterable_fields": ["state", "label"],
-        "sortable_fields": ["key", "label", "state"]
+        "filterable_fields": [
+          "state",
+          "label"
+        ],
+        "sortable_fields": [
+          "key",
+          "label",
+          "state"
+        ]
       },
       "fields": [
         {
@@ -374,7 +399,9 @@
       "storage_contract_id": "srt_system_directory_group_membership",
       "storage_scope": "organization_shared",
       "ownership_mode": "none",
-      "standard_actions": ["read"],
+      "standard_actions": [
+        "read"
+      ],
       "custom_actions": [],
       "system_projection": {
         "protected_view": "people",
@@ -387,7 +414,11 @@
           "temporal_state",
           "account_display_name"
         ],
-        "sortable_fields": ["starts_at", "expires_at", "state"]
+        "sortable_fields": [
+          "starts_at",
+          "expires_at",
+          "state"
+        ]
       },
       "fields": [
         {
@@ -563,7 +594,9 @@
       "storage_contract_id": "srt_system_directory_role",
       "storage_scope": "organization_shared",
       "ownership_mode": "none",
-      "standard_actions": ["read"],
+      "standard_actions": [
+        "read"
+      ],
       "custom_actions": [],
       "system_projection": {
         "protected_view": "roles",
@@ -576,7 +609,11 @@
           "assignment_policy",
           "label"
         ],
-        "sortable_fields": ["key", "label", "lifecycle"]
+        "sortable_fields": [
+          "key",
+          "label",
+          "lifecycle"
+        ]
       },
       "fields": [
         {
@@ -769,7 +806,9 @@
       "storage_contract_id": "srt_system_directory_role_assignment",
       "storage_scope": "organization_shared",
       "ownership_mode": "none",
-      "standard_actions": ["read"],
+      "standard_actions": [
+        "read"
+      ],
       "custom_actions": [],
       "system_projection": {
         "protected_view": "effective_assignments",
@@ -785,7 +824,11 @@
           "temporal_state",
           "role_label"
         ],
-        "sortable_fields": ["starts_at", "expires_at", "state"]
+        "sortable_fields": [
+          "starts_at",
+          "expires_at",
+          "state"
+        ]
       },
       "fields": [
         {
@@ -1040,7 +1083,9 @@
       "storage_contract_id": "srt_system_directory_role_activation",
       "storage_scope": "organization_shared",
       "ownership_mode": "none",
-      "standard_actions": ["read"],
+      "standard_actions": [
+        "read"
+      ],
       "custom_actions": [],
       "system_projection": {
         "protected_view": "role_activations",
@@ -1054,7 +1099,11 @@
           "temporal_state",
           "account_display_name"
         ],
-        "sortable_fields": ["activated_at", "expires_at", "state"]
+        "sortable_fields": [
+          "activated_at",
+          "expires_at",
+          "state"
+        ]
       },
       "fields": [
         {
@@ -1281,7 +1330,9 @@
       "storage_contract_id": "srt_system_directory_delegation",
       "storage_scope": "organization_shared",
       "ownership_mode": "none",
-      "standard_actions": ["read"],
+      "standard_actions": [
+        "read"
+      ],
       "custom_actions": [],
       "system_projection": {
         "protected_view": "delegations",
@@ -1295,7 +1346,12 @@
           "state",
           "temporal_state"
         ],
-        "sortable_fields": ["scope_kind", "starts_at", "expires_at", "state"]
+        "sortable_fields": [
+          "scope_kind",
+          "starts_at",
+          "expires_at",
+          "state"
+        ]
       },
       "fields": [
         {
@@ -1503,14 +1559,25 @@
       "storage_contract_id": "srt_system_directory_organization",
       "storage_scope": "organization_shared",
       "ownership_mode": "none",
-      "standard_actions": ["read"],
+      "standard_actions": [
+        "read"
+      ],
       "custom_actions": [],
       "system_projection": {
         "protected_view": "tenant_structure",
         "organization_field": "organization_id",
         "revision_field": "revision",
-        "filterable_fields": ["state", "display_name"],
-        "sortable_fields": ["short_name", "display_name", "state", "state_changed_at", "created_at"]
+        "filterable_fields": [
+          "state",
+          "display_name"
+        ],
+        "sortable_fields": [
+          "short_name",
+          "display_name",
+          "state",
+          "state_changed_at",
+          "created_at"
+        ]
       },
       "fields": [
         {
@@ -1678,14 +1745,22 @@
       "storage_contract_id": "srt_system_directory_tenant_administrator",
       "storage_scope": "organization_shared",
       "ownership_mode": "none",
-      "standard_actions": ["read"],
+      "standard_actions": [
+        "read"
+      ],
       "custom_actions": [],
       "system_projection": {
         "protected_view": "tenant_administrators",
         "organization_field": "organization_id",
         "revision_field": "revision",
-        "filterable_fields": ["state", "identity_id"],
-        "sortable_fields": ["starts_at", "expires_at"]
+        "filterable_fields": [
+          "state",
+          "identity_id"
+        ],
+        "sortable_fields": [
+          "starts_at",
+          "expires_at"
+        ]
       },
       "fields": [
         {
@@ -1887,7 +1962,9 @@
         }
       },
       "field_policy": {
-        "readable_fields": ["display_name"],
+        "readable_fields": [
+          "display_name"
+        ],
         "changeable_fields": []
       }
     }
@@ -1900,7 +1977,9 @@
       "id": "ext_person_organisation_fields",
       "key": "person_organisation_fields",
       "record_type": "person",
-      "accepts": ["field"]
+      "accepts": [
+        "field"
+      ]
     }
   ],
   "sharing_conditions": [
@@ -1914,7 +1993,9 @@
         "operator": "equals",
         "value": "active"
       },
-      "declared_fields": ["state"],
+      "declared_fields": [
+        "state"
+      ],
       "publication_tests": [
         {
           "name": "Active member is available for reference",
@@ -1951,7 +2032,12 @@
       "label": "People",
       "record_type": "person",
       "inputs": [],
-      "select": ["display_name", "state", "language", "time_zone"],
+      "select": [
+        "display_name",
+        "state",
+        "language",
+        "time_zone"
+      ],
       "filter": null,
       "group_by": [],
       "aggregates": [],
@@ -1971,7 +2057,12 @@
       "label": "Organisation invitations",
       "record_type": "organization_invitation",
       "inputs": [],
-      "select": ["invited_email", "state", "invited_at", "expires_at"],
+      "select": [
+        "invited_email",
+        "state",
+        "invited_at",
+        "expires_at"
+      ],
       "filter": null,
       "group_by": [],
       "aggregates": [],
@@ -2020,7 +2111,11 @@
       "label": "Groups",
       "record_type": "group",
       "inputs": [],
-      "select": ["key", "label", "state"],
+      "select": [
+        "key",
+        "label",
+        "state"
+      ],
       "filter": null,
       "group_by": [],
       "aggregates": [],
@@ -2156,7 +2251,13 @@
       "label": "Organisations",
       "record_type": "organization",
       "inputs": [],
-      "select": ["display_name", "short_name", "state", "state_changed_at", "created_at"],
+      "select": [
+        "display_name",
+        "short_name",
+        "state",
+        "state_changed_at",
+        "created_at"
+      ],
       "filter": null,
       "group_by": [],
       "aggregates": [],
@@ -2176,7 +2277,12 @@
       "label": "Tenant administrators",
       "record_type": "tenant_administrator",
       "inputs": [],
-      "select": ["identity_id", "starts_at", "expires_at", "state"],
+      "select": [
+        "identity_id",
+        "starts_at",
+        "expires_at",
+        "state"
+      ],
       "filter": null,
       "group_by": [],
       "aggregates": [],
