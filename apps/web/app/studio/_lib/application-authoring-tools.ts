@@ -92,7 +92,7 @@ export const applicationAuthoringTools = {
   },
   change_application_flows: {
     description:
-      "Create or change application flows and bind placement events (including buttons) through flow_bindings. Include pages when adding or changing a bound placement in the same edit. Use the current flow source contract." +
+      "Create or change application flows and bind placement events (including buttons) through flow_bindings. Every binding's event_id names an entry in events; include events when adding a binding. Include pages when adding or changing a bound placement in the same edit. Use the current flow source contract." +
       instruction,
     input: z
       .object({
@@ -101,6 +101,7 @@ export const applicationAuthoringTools = {
           .object({
             flows: body.flows,
             flow_bindings: body.flow_bindings.optional(),
+            events: body.events.optional(),
             pages: body.pages.optional(),
             shells: body.shells.optional(),
             platform_block_dependencies: body.platform_block_dependencies.optional(),
