@@ -1,5 +1,6 @@
 create or replace function vortex_record.decide_record_field_bounds_internal(
-  p_decision jsonb
+  p_decision jsonb,
+  p_plan jsonb default null
 )
 returns jsonb
 language plpgsql
@@ -12,6 +13,7 @@ declare
   record_type_id_value uuid;
   preview_installation jsonb;
   plan jsonb;
+  context_value jsonb;
   readable_ids jsonb;
 begin
   -- The one field-read decision for an exact record: the field policy of the
@@ -24,15 +26,28 @@ begin
   end if;
   record_type_id_value := (p_decision #>> '{recordBinding,recordTypeId}')::uuid;
 
-  preview_installation := vortex_record.read_current_preview_installation_internal();
-  if preview_installation is not null
-    and preview_installation ->> 'outcome' = 'refused' then
-    raise exception using errcode = '42501',
-      message = 'Record installation is unavailable';
+  if p_plan is null then
+    preview_installation := vortex_record.read_current_preview_installation_internal();
+    if preview_installation is not null
+      and preview_installation ->> 'outcome' = 'refused' then
+      raise exception using errcode = '42501',
+        message = 'Record installation is unavailable';
+    end if;
+    plan := vortex_record.resolve_installation_access_plan_internal(
+      coalesce(preview_installation, vortex_definition.read_current_active_installation())
+    );
+  else
+    -- A page reader supplies its own already resolved installation plan. This
+    -- private helper still checks the current scope before using that metadata;
+    -- the exact record decision and produced-field policy below are unchanged.
+    context_value := vortex_access.validated_human_request_context();
+    plan := p_plan;
+    if (plan ->> 'organizationId')::uuid is distinct from (context_value ->> 'organizationId')::uuid
+      or (plan ->> 'applicationRootId')::uuid is distinct from (context_value ->> 'applicationRootId')::uuid then
+      raise exception using errcode = '42501',
+        message = 'Record adapter requires an application context';
+    end if;
   end if;
-  plan := vortex_record.resolve_installation_access_plan_internal(
-    coalesce(preview_installation, vortex_definition.read_current_active_installation())
-  );
   if (plan ->> 'organizationId')::uuid is distinct from (p_decision ->> 'organizationId')::uuid then
     raise exception using errcode = '42501',
       message = 'Record adapter requires an application context';
@@ -54,11 +69,11 @@ begin
 end
 $function$;
 
-alter function vortex_record.decide_record_field_bounds_internal(jsonb)
+alter function vortex_record.decide_record_field_bounds_internal(jsonb, jsonb)
   owner to vortex_record_adapter;
 
-revoke all on function vortex_record.decide_record_field_bounds_internal(jsonb)
+revoke all on function vortex_record.decide_record_field_bounds_internal(jsonb, jsonb)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
-comment on function vortex_record.decide_record_field_bounds_internal(jsonb) is
+comment on function vortex_record.decide_record_field_bounds_internal(jsonb, jsonb) is
   'Private field-read decision over one allowed exact-record access decision: the readable and changeable fields of the matched contributions'' field policies, with every calculation and total the reader may not fully read withheld so that every reader shows it as Restricted.';

@@ -161,7 +161,13 @@ begin
       return;
     end if;
     bounds := coalesce(case when batched then p_bounds end,
-      vortex_record.decide_record_field_bounds_internal(decision));
+      vortex_record.decide_record_field_bounds_internal(
+        decision,
+        -- A preview retains its own live/system-projection handling. Live
+        -- query rows share the plan their caller resolved for this page.
+        case when nullif(pg_catalog.current_setting('vortex_record.preview_installation_id', true), '') is null
+          then p_page -> 'plan' end
+      ));
   end if;
   -- Keep full access bounds for capabilities; intersect only the values requested by the screen.
   projected_field_ids := bounds -> 'readableFieldIds';
