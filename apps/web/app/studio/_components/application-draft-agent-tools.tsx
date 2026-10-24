@@ -3,7 +3,10 @@ import { WebMcpStatus, type ApplicationWebMcpRuntime } from "@vortex/ui";
 import { useCallback, useMemo, useRef, useState } from "react";
 import {
   applicationSourceDocumentSchema,
+  canonicalJson,
   describeFailure,
+  moduleFieldTypeLabels,
+  sourceApplicationBodySchema,
   type DefinitionPublicationConfirmation,
   type ApplicationSourceDocument,
   type PublishDefinitionResult,
@@ -29,6 +32,11 @@ import { WebMcpAdapter, type WebMcpToolDescriptor } from "../../_components/webm
 import { applyStudioItemLabels } from "@vortex/ui/studio";
 import { previewStudioApplication } from "../preview-actions";
 import { runStudioApplicationLifecycle } from "../application-lifecycle-actions";
+import { reviewStudioApplicationAuthoring } from "../application-authoring-actions";
+import {
+  applicationAuthoringTools,
+  type ApplicationAuthoringToolName,
+} from "../_lib/application-authoring-tools";
 import {
   applicationLifecycleTools,
   type ApplicationLifecycleToolName,
@@ -46,6 +54,8 @@ export type SavedDraftContext = Readonly<{
 
 type ToolName =
   | ApplicationLifecycleToolName
+  | ApplicationAuthoringToolName
+  | "list_module_fields"
   | "read_application_draft"
   | "rename_application_item"
   | "add_placement"
@@ -113,6 +123,20 @@ const tool = (
 });
 
 const applicationTools: readonly StudioApplicationTool[] = [
+  ...Object.entries(applicationAuthoringTools).map(([name, definition]) =>
+    tool(
+      name as ApplicationAuthoringToolName,
+      definition.description,
+      definition.input,
+      definition.readOnly,
+    ),
+  ),
+  tool(
+    "list_module_fields",
+    "Read the owned data model, including record and field aliases, current field configurations, queries and setting declarations for each field type. Borrowed modules are edited by their owning application. Call before adding or changing a module field.",
+    z.object({}).strict(),
+    true,
+  ),
   ...Object.entries(applicationLifecycleTools).map(([name, definition]) =>
     tool(
       name as ApplicationLifecycleToolName,
@@ -421,6 +445,7 @@ export function ApplicationDraftAgentTools({
     });
     return {
       draftRevision: state.draftRevision,
+      source: state.source,
       savingEdits: state.isDirty || state.isSaving,
       application: { name: state.source.body.name, description: state.source.body.description },
       outline: trimOutline(outline),
@@ -547,6 +572,7 @@ export function ApplicationDraftAgentTools({
         if (
           [
             "read_application_draft",
+            "list_module_fields",
             "rename_application_item",
             "add_placement",
             "remove_placement",
@@ -566,6 +592,18 @@ export function ApplicationDraftAgentTools({
             };
         }
         if (found.name === "read_application_draft") return { outcome: "read", ...describeNow() };
+        if (found.name === "list_module_fields")
+          return {
+            outcome: "read",
+            draftRevision: history.getState().draftRevision,
+            savingEdits: history.getState().isDirty || history.getState().isSaving,
+            modules: history.getState().source.body.modules,
+            fieldTypes: moduleFieldTypeLabels,
+            modulesSchema: z.toJSONSchema(sourceApplicationBodySchema.shape.modules, {
+              io: "input",
+              unrepresentable: "any",
+            }),
+          };
         if (Object.hasOwn(applicationLifecycleTools, found.name)) {
           return await runStudioApplicationLifecycle(organizationId, {
             rootId: history.getState().rootId,
@@ -575,6 +613,60 @@ export function ApplicationDraftAgentTools({
         }
         const blocked = blockedReason();
         if (blocked !== undefined) return { outcome: "blocked", message: blocked };
+        if (Object.hasOwn(applicationAuthoringTools, found.name)) {
+          if (!(await latest.current.flush()))
+            return {
+              outcome: "blocked",
+              message: "Save the pending edits before authoring. Call read_application_draft.",
+            };
+          const saved = latest.current.readSaved();
+          const input = parsed.data as { draftRevision: number };
+          if (input.draftRevision !== saved.draftRevision)
+            return {
+              outcome: "conflict",
+              message:
+                "The saved revision changed. Call read_application_draft before editing again.",
+            };
+          const lifetime = latest.current.lifetime;
+          const expected = history.getState().source;
+          if (signal?.aborted) return { outcome: "cancelled" };
+          const reviewed = await reviewStudioApplicationAuthoring(organizationId, {
+            rootId: saved.rootId,
+            expectedSavedSourceFingerprint: saved.sourceFingerprint,
+            tool: found.name,
+            input: parsed.data,
+          });
+          if (signal?.aborted)
+            return {
+              outcome: "cancelled",
+              message: "Cancelled before the reviewed edit was applied.",
+            };
+          if (reviewed.kind !== "available") return { ...reviewed, outcome: reviewed.kind };
+          if (
+            latest.current.lifetime !== lifetime ||
+            !latest.current.isActive() ||
+            latest.current.readSaved().draftRevision !== saved.draftRevision ||
+            canonicalJson(history.getState().source) !== canonicalJson(expected)
+          )
+            return {
+              outcome: "conflict",
+              message:
+                "The workspace changed during review. Nothing was applied. Call read_application_draft.",
+            };
+          const edited = latest.current.run(
+            () => ({ kind: "edit", source: reviewed.source, result: true }),
+            { expected },
+          );
+          if (edited.kind !== "done") return { outcome: "blocked", message: edited.message };
+          const savedEdit = await latest.current.flush();
+          return {
+            outcome: savedEdit ? "saved" : "not_saved",
+            message: savedEdit
+              ? "Saved into the application draft."
+              : "Applied to the workspace, but saving was not confirmed. Read the draft and resolve its save status before continuing.",
+            ...describeNow(),
+          };
+        }
         if (found.name === "preview_saved_application") {
           const input = parsed.data as { draftRevision: number };
           const context = (await latest.current.flush()) ? actions.current.readSavedDraft() : null;
