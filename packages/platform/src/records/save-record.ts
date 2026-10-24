@@ -625,11 +625,20 @@ const invalidSettingsCorrections = (
     }
   }
 
+  // An unset default application is absent from the candidate, like every unset optional value.
+  const defaultApplicationFieldId = settingsFieldId(
+    prepared.recordType,
+    "default_application_root_id",
+  );
   const defaultApplication = applicationRootIdSchema
     .nullable()
-    .safeParse(valueFor("default_application_root_id"));
+    .safeParse(
+      defaultApplicationFieldId === undefined
+        ? undefined
+        : (values[defaultApplicationFieldId] ?? null),
+    );
   if (!defaultApplication.success) {
-    const fieldId = settingsFieldId(prepared.recordType, "default_application_root_id");
+    const fieldId = defaultApplicationFieldId;
     if (fieldId === undefined || !prepared.readableFieldIds.has(fieldId)) return undefined;
     corrections.set(fieldId, {
       code: "invalid_value",
