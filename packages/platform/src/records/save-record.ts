@@ -43,6 +43,8 @@ import {
 } from "./relationship-total-save";
 import { calculateAndFinalize, operationClock } from "./field-candidate";
 import { firstFieldDependencyRefusal } from "./link-dependencies";
+import { decideChoiceOptionPermission } from "./choice-option-permission";
+import type { RecordFieldValuePendingCheck } from "./field-values";
 import {
   parentCycleRefusal,
   uniqueValueRefusal,
@@ -796,12 +798,37 @@ const finalizeCalculatedValues = async (
     });
   }
 
-  const unsupportedChecks = values.pendingChecks.filter(
-    (check) =>
-      check.kind !== "record_reference" &&
-      check.kind !== "file_reference" &&
-      !(preview && check.kind === "choice_permission"),
-  );
+  // A gated option is stored only when the person holds its permission now (the decision that
+  // offered it). An option the record already holds is not chosen again, so it is not re-checked.
+  const choiceDecisions = new Map<string, boolean>();
+  const refusedChoices: RecordFieldValuePendingCheck[] = [];
+  if (!preview)
+    for (const check of values.pendingChecks) {
+      if (check.kind !== "choice_permission") continue;
+      const held = prepared.existingValues[check.fieldId];
+      if (held === check.optionValue || (Array.isArray(held) && held.includes(check.optionValue)))
+        continue;
+      const decisionKey = String(check.permissionId).toLowerCase();
+      let allowed = choiceDecisions.get(decisionKey);
+      if (allowed === undefined) {
+        allowed = await decideChoiceOptionPermission(
+          transaction,
+          prepared.recordType.recordTypeId,
+          check.permissionId,
+        );
+        choiceDecisions.set(decisionKey, allowed);
+      }
+      if (!allowed) refusedChoices.push(check);
+    }
+  const unsupportedChecks = [
+    ...values.pendingChecks.filter(
+      (check) =>
+        check.kind !== "record_reference" &&
+        check.kind !== "file_reference" &&
+        check.kind !== "choice_permission",
+    ),
+    ...refusedChoices,
+  ];
   if (unsupportedChecks.length > 0) {
     if (unsupportedChecks.some((check) => !prepared.readableFieldIds.has(check.fieldId)))
       return safeRefusal(prepared.correlationId, "operation_refused");

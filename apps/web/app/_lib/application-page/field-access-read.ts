@@ -1,11 +1,9 @@
 import {
-  decideOrganizationAccessBatch,
-  choiceOptionAccessDeclarations,
+  decideChoiceOptionGates,
   readCurrentOrganizationRuntimeSettingsAfterAuthorization,
   type ChoiceOptionPlan,
   type DateTimeZones,
   type HumanOrganizationRequestDependencies,
-  type InstalledRuntimeContext,
 } from "@vortex/platform/server";
 import {
   organizationRuntimeSettingsSchema,
@@ -24,7 +22,6 @@ export const readFieldAccess = (
     session: IdentitySession;
     dependencies: HumanOrganizationRequestDependencies;
     selection: OrganizationSelectionCandidate;
-    applicationRootId: InstalledRuntimeContext["applicationRootId"];
     needsDateTimeZones: boolean;
     choicePlan: ChoiceOptionPlan;
   }>,
@@ -51,12 +48,7 @@ export const readFieldAccess = (
         if (organizationSettings !== undefined)
           zones.organizationTimeZone = organizationSettings.timeZone;
       }
-      const { keys, declarations } = choiceOptionAccessDeclarations(
-        input.choicePlan,
-        input.applicationRootId,
-      );
-      const decisions = await decideOrganizationAccessBatch(transaction, scope, declarations);
-      const allowed = keys.filter((_, index) => decisions[index]?.allowed === true);
+      const allowed = await decideChoiceOptionGates(transaction, input.choicePlan);
       return { zones, allowed, accessVersion: scope.accessVersion };
     },
   );
