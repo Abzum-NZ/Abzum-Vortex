@@ -40,16 +40,6 @@ const protectedOperationIdentitySchema = z
     releaseVersion: stableDefinitionReleaseVersionSchema,
   })
   .strict();
-const unavailableAdapterOwnerSchema = z.enum([
-  "#1398",
-  "#81",
-  "#100",
-  "#101",
-  "#113",
-  "#666",
-  "#1399",
-]);
-
 const retainedNodeBindingSchema = z
   .object({
     nodeId: workflowNodeIdSchema,
@@ -58,7 +48,6 @@ const retainedNodeBindingSchema = z
     operation: protectedOperationIdentitySchema.optional(),
     operations: protectedOperationReferenceSetSchema.optional(),
     grantable: z.boolean().optional(),
-    unavailableOwner: unavailableAdapterOwnerSchema.optional(),
   })
   .strict()
   .superRefine((binding, context) => {
@@ -311,18 +300,19 @@ const parseRegisteredRun = (
   return parsed.data;
 };
 
-const unavailableOwnerForTask = (taskType: string): string | undefined => {
-  if (taskType.startsWith("record.")) return "#1398";
-  if (taskType === "record.query") return "#1398";
-  if (taskType === "interface.show_form" || taskType === "interface.confirm") return "#81";
-  if (taskType === "workflow.human_task") return "#81";
-  if (taskType === "connection.call") return "#100";
-  if (taskType === "message.acknowledge") return "#101";
-  if (taskType === "file.export") return "#113";
-  if (taskType === "event.announce") return "#1399";
-  if (taskType === "flow.run_background") return "#666";
-  return undefined;
-};
+const isUnavailableTaskType = (taskType: string): boolean =>
+  taskType.startsWith("record.") || unavailableTaskTypes.has(taskType);
+
+const unavailableTaskTypes = new Set([
+  "connection.call",
+  "message.acknowledge",
+  "file.export",
+  "event.announce",
+  "flow.run_background",
+  "interface.show_form",
+  "interface.confirm",
+  "workflow.human_task",
+]);
 
 /** Task properties use the closed FlowValue literal wrapper for fixed values. */
 const literalValue = (candidate: unknown): unknown => {
@@ -520,11 +510,10 @@ export const createProtectedNodeExecution = (dependencies: ProtectedNodeExecutio
       if (binding === undefined || binding.operationKey !== context.purpose.operationKey)
         return { outcome: "permanent_refusal", safeCode: "callback_refused" };
 
-      const owner = binding.unavailableOwner ?? unavailableOwnerForTask(binding.taskType);
-      if (owner !== undefined)
+      if (isUnavailableTaskType(binding.taskType))
         return {
           outcome: "permanent_refusal",
-          safeCode: `adapter_unavailable_${owner.replace(/^#/, "")}`,
+          safeCode: "task_unavailable",
         };
 
       if (binding.taskType === "workflow.evaluate") {

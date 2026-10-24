@@ -35,7 +35,7 @@ import {
   carriesSensitive,
   dedupeFieldCorrections,
   effectCommandId,
-  notYetAvailable,
+  unavailableTaskMessages,
   redactSensitiveOutputs,
   refusalOutcome,
   requestOutcome,
@@ -149,12 +149,12 @@ export const createFlowTaskRunner = (
   };
 
   /** Records a task the platform cannot run here: it fails as not available, never as refused. */
-  const notAvailable = (run: Run, call: FlowProtectedTaskCall, requires: string): TaskResult => {
+  const notAvailable = (run: Run, call: FlowProtectedTaskCall, message: string): TaskResult => {
     run.unavailable.push({
       taskId: call.taskId,
       taskType: call.taskType,
-      code: "not_yet_available",
-      requires,
+      code: "capability_unavailable",
+      message,
     });
     return { outcome: "failed" };
   };
@@ -333,7 +333,11 @@ export const createFlowTaskRunner = (
     }
 
     if (call.taskType !== "operation.call")
-      return notAvailable(run, call, notYetAvailable[call.taskType] ?? "a server task runner");
+      return notAvailable(
+        run,
+        call,
+        unavailableTaskMessages[call.taskType] ?? "This action can't be completed in a workflow.",
+      );
 
     const operationKey = call.properties.operation?.value;
     const inputs = operationInputs(call);
@@ -673,7 +677,7 @@ export const createFlowTaskRunner = (
         ? run.authority.selection.organizationId
         : run.authority.organizationId;
     if (run.authority.kind === "execution_authority")
-      return notAvailable(run, call, "per-task Access grant resolution (#1562)");
+      return notAvailable(run, call, "This workflow can't check access for each task.");
     const planned = planTask(run, state, call);
     if (!("plan" in planned)) return planned;
 
