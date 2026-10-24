@@ -11,6 +11,7 @@ import {
   type RecordsTableBatchEditRefusalReason,
   type RecordsTableBatchEditRequest,
   type RecordsTableBatchEditResult,
+  type RecordsTableRequestRejection,
 } from "../../schema";
 import {
   createHumanOrganizationRequestService,
@@ -119,7 +120,7 @@ export const createRecordsTableBatchEditService = (
     session: IdentitySession,
     address: RecordsTableCommandAddress,
     request: RecordsTableBatchEditRequest,
-  ): Promise<RecordsTablePlacement | undefined> => {
+  ): Promise<RecordsTablePlacement | RecordsTableRequestRejection | undefined> => {
     const loaded = await loadRecordsTablePlacement(requests, session, address, request.placementId);
     if ("refused" in loaded) return log(loaded.refused) as undefined;
     const { inlineEdit, spreadsheet } = loaded.contract.features;
@@ -127,9 +128,11 @@ export const createRecordsTableBatchEditService = (
       !inlineEdit.enabled ||
       !spreadsheet.enabled ||
       spreadsheet.rangeSelect !== true ||
-      (spreadsheet.paste !== true && spreadsheet.fill !== true && spreadsheet.undo !== true)
-    )
-      return log("feature_off") as undefined;
+      spreadsheet[request.operation === "redo" ? "undo" : request.operation] !== true
+    ) {
+      log(`feature_off:${request.operation}`);
+      return { kind: "refused", reason: "not_available" };
+    }
     return loaded;
   };
 
@@ -141,6 +144,7 @@ export const createRecordsTableBatchEditService = (
     ): Promise<RecordsTableBatchEditResult> {
       const placement = await placementFor(session, address, request);
       if (placement === undefined) return { kind: "unavailable" };
+      if ("kind" in placement) return placement;
       const { contract, module, installed, recordTypeId } = placement;
       const inline = contract.features.inlineEdit;
       if (!inline.enabled) return { kind: "unavailable" };
