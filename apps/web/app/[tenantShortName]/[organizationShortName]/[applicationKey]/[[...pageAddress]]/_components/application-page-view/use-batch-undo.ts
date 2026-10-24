@@ -73,7 +73,11 @@ export function useBatchUndo({
   );
 
   const post = useCallback(
-    async (placementId: string, rows: Rows): Promise<RecordsTableBatchEditResult> => {
+    async (
+      placementId: string,
+      operation: RecordsTableBatchEditRequest["operation"],
+      rows: Rows,
+    ): Promise<RecordsTableBatchEditResult> => {
       try {
         const response = await fetch("/api/records-table/batch-edit", {
           method: "POST",
@@ -84,6 +88,7 @@ export function useBatchUndo({
             ...recordsTableAddress(model),
             placementId,
             commandId: crypto.randomUUID(),
+            operation,
             rows,
           }),
         });
@@ -112,9 +117,9 @@ export function useBatchUndo({
           redoDepth: stacks.redo.length,
         });
         if (event.action === "state") return depths(undefined);
-        if (event.action === "commit") {
+        if (event.action === "paste" || event.action === "fill") {
           if (event.rows === undefined) return undefined;
-          const result = await post(placementId, event.rows);
+          const result = await post(placementId, event.action, event.rows);
           if (result.kind === "saved") {
             rebase(stacks, event.rows, result);
             stacks.undo.push(inverseOf(result));
@@ -126,7 +131,7 @@ export function useBatchUndo({
         const to = event.action === "undo" ? stacks.redo : stacks.undo;
         const rows = from.pop();
         if (rows === undefined) return depths(undefined);
-        const result = await post(placementId, rows);
+        const result = await post(placementId, event.action, rows);
         if (result.kind === "saved") {
           rebase(stacks, rows, result);
           to.push(inverseOf(result));
