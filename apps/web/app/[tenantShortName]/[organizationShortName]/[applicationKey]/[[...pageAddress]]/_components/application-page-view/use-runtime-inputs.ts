@@ -679,11 +679,12 @@ export function useRuntimeInputs({
             subject?.recordId,
           );
         };
+      // A drawer opened by a control's selection closes by clearing that selection.
       if (model.pageParameters.drawers[placementId] !== undefined && supportsEvent("action")) {
         const action = events.action as ((event: ControlSemanticEvent) => void) | undefined;
         events.action = (event: ControlSemanticEvent) => {
           if (event.event === "action" && event.intent === "dismiss")
-            pageParameters.dismiss(placementId, event);
+            pageParameters.dismiss(placementId);
           else return action?.(event);
         };
       }

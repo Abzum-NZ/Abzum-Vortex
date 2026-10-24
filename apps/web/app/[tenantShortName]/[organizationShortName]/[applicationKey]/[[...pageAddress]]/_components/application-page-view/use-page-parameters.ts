@@ -104,11 +104,11 @@ export function usePageParameters({
     },
     [model.pageParameters.controlKinds, publish],
   );
+  // Dismissing a drawer opened by a control clears that control's selection.
   const dismiss = useCallback(
-    (placementId: string, event: ControlSemanticEvent) => {
+    (placementId: string) => {
       const control = model.pageParameters.drawers[placementId];
-      if (control !== undefined && event.event === "action" && event.intent === "dismiss")
-        publish(control, "", false);
+      if (control !== undefined) publish(control, "", false);
     },
     [model.pageParameters.drawers, publish],
   );

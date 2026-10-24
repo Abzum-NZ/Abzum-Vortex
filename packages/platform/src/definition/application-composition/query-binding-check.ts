@@ -264,8 +264,8 @@ export type QueryBindingPlacement = Readonly<{
   fieldType: QueryBindingValueType | undefined;
   /** The record type of a table that selects a record on click; undefined for any other table. */
   selectedRecordType: string | undefined;
-  /** The control whose published record opens a drawer. */
-  openWith?: string | undefined;
+  /** A drawer's Open with control: the drawer is open while that control publishes a record. */
+  openWith: string | undefined;
 }>;
 
 type Published =
@@ -364,11 +364,9 @@ export const pageBindingFacts = (
     }
   }
   for (const placement of input.placements) {
-    if (placement.blockKey !== "platform.layout.drawer" || placement.openWith === undefined)
-      continue;
-    const control = controls.find(
-      (candidate) => candidate.placement.toLowerCase() === placement.openWith!.toLowerCase(),
-    );
+    const openWith = placement.openWith?.toLowerCase();
+    if (placement.blockKey !== "platform.layout.drawer" || openWith === undefined) continue;
+    const control = controls.find((candidate) => candidate.placement.toLowerCase() === openWith);
     const parameter = parameters.find((candidate) => candidate.name === control?.parameter);
     if (parameter?.type.kind !== "record")
       pageProblems.push({

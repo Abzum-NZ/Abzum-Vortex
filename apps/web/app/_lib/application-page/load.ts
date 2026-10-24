@@ -931,7 +931,11 @@ const loadApplicationPageJoined = async (
           if (!isRecord(block) || !sameId(String(block.blockId), DRAWER_BLOCK_RELEASE.blockId))
             return [];
           const source = placementSettings(placement.props).open_with;
-          return source?.kind === "text" ? [[placement.placementId, source.value]] : [];
+          const control =
+            source?.kind === "text"
+              ? allPlacements.find((candidate) => sameId(candidate.placementId, source.value))
+              : undefined;
+          return control === undefined ? [] : [[placement.placementId, control.placementId]];
         }),
       ),
       tableIds: allPlacements.filter(isTablePlacement).map((placement) => placement.placementId),
