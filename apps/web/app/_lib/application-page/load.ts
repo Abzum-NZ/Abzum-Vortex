@@ -541,7 +541,11 @@ const loadApplicationPageJoined = async (
   allPlacements = formPolicy.allPlacements;
   // The gated options leave the page payload the form renders, after the subject is known: an option
   // the record already holds stays offered, so a restricted viewer keeps the field and its value.
-  if (choicePlan.permissions.size > 0) {
+  // A pipeline's stage field keeps only the stages its record may move to.
+  if (
+    choicePlan.permissions.size > 0 ||
+    choicePlan.gates.some((gate) => gate.pipeline !== undefined)
+  ) {
     const heldSubject =
       subjectType !== undefined &&
       subjectId.success &&
