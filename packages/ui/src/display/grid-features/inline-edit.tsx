@@ -10,13 +10,19 @@ import {
   type ReactElement,
   type ReactNode,
 } from "react";
-import type { JsonValue, RecordsTableInlineEditor } from "@vortex/platform/schema";
+import {
+  projectInlineEditedCell,
+  type JsonValue,
+  type RecordsDisplayFormat,
+  type RecordsTableInlineEditor,
+} from "@vortex/platform/schema";
 import { Button } from "../../components/button";
 import { Checkbox } from "../../components/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "../../components/popover";
 import { Spinner } from "../../components/spinner";
 import { useUnsavedWorkRegistry } from "../../controls/unsaved-work";
 import { useDateFormatOptions } from "../date-format-context";
+import { DisplayCellView } from "../cell";
 import type {
   DisplayEventHandlers,
   DisplayInlineEditResult,
@@ -68,6 +74,7 @@ function EditableCell({
   field,
   label,
   editor,
+  format,
   stored,
   handler,
   events,
@@ -81,6 +88,8 @@ function EditableCell({
   field: string;
   label: string;
   editor: RecordsTableInlineEditor;
+  /** The column's declared display format, which the server projects this field's cells in. */
+  format: RecordsDisplayFormat;
   stored: JsonValue | undefined;
   handler: (event: DisplaySemanticEvent) => unknown;
   /** The page's display callbacks, for a link editor's record picker. */
@@ -122,15 +131,16 @@ function EditableCell({
     };
   }, []);
 
-  // The saved note is announced for a moment. Until the page read again after a saved commit shows
-  // the new stored value, a switch keeps showing the confirmed draft: it is shown only while the
-  // stored value is still the one the commit replaced.
-  const storedNow = useRef(stored);
-  storedNow.current = stored;
-  const [replaced, setReplaced] = useState<Readonly<{ value: JsonValue | undefined }> | undefined>(
-    undefined,
-  );
-  const awaitingRefresh = replaced !== undefined && replaced.value === stored;
+  // Only a newer row revision releases the confirmed value. A reread may already have landed
+  // when the save resolves; comparing with the submitted revision handles either arrival order.
+  // Keep the accepted draft separately so starting or cancelling another edit cannot change it.
+  const [accepted, setAccepted] = useState<
+    Readonly<{ revision: number; value: JsonValue; draft: EditDraft }> | undefined
+  >(undefined);
+  const pending = accepted?.revision === row.revision ? accepted : undefined;
+  const currentStored = pending === undefined ? stored : pending.value;
+  const currentDraft = (): EditDraft =>
+    pending === undefined ? startEditDraft(editor, stored, zone) : pending.draft;
   useEffect(() => {
     if (!saved) return;
     const timer = setTimeout(() => setSaved(false), 4000);
@@ -142,15 +152,14 @@ function EditableCell({
     setPhase("idle");
     setMessage(undefined);
     setChangedFrom(undefined);
-    setDraft(startEditDraft(editor, stored, zone));
+    setDraft(currentDraft());
   };
   const cancelRef = useRef(cancel);
   cancelRef.current = cancel;
   // An edit with a draft or a standing refusal is unsaved work for the page's leave prompt.
   const holdsWork =
     phase === "saving" ||
-    (phase === "editing" &&
-      (message !== undefined || !sameEditDraft(draft, startEditDraft(editor, stored, zone))));
+    (phase === "editing" && (message !== undefined || !sameEditDraft(draft, currentDraft())));
   useEffect(() => {
     if (unsaved === undefined || !holdsWork) return;
     const formId = `inline-edit:${row.recordId}:${field}`;
@@ -176,7 +185,7 @@ function EditableCell({
   }, [phase]);
 
   const start = (): void => {
-    setDraft(startEditDraft(editor, stored, zone));
+    setDraft(currentDraft());
     setMessage(undefined);
     setChangedFrom(undefined);
     setSaved(false);
@@ -191,7 +200,7 @@ function EditableCell({
       setPhase("editing");
       return;
     }
-    if (sameEditValue(editor, stored, reading.value)) {
+    if (sameEditValue(editor, currentStored, reading.value)) {
       restoreFocus.current = true;
       cancel();
       afterCommit?.();
@@ -229,7 +238,7 @@ function EditableCell({
     if (!mounted.current) return;
     if (result.kind === "saved") {
       setSaved(true);
-      setReplaced({ value: storedNow.current });
+      setAccepted({ revision: row.revision, value: reading.value, draft: next });
       setMessage(undefined);
       setChangedFrom(undefined);
       restoreFocus.current = true;
@@ -321,7 +330,7 @@ function EditableCell({
   );
 
   if (editor.kind === "yes_no") {
-    const checked = phase === "saving" || awaitingRefresh ? draft === true : stored === true;
+    const checked = phase === "saving" ? draft === true : currentStored === true;
     return (
       <span
         className="flex flex-col"
@@ -372,7 +381,18 @@ function EditableCell({
             }
           }}
         >
-          {children}
+          {pending === undefined ? (
+            children
+          ) : (
+            <DisplayCellView
+              value={projectInlineEditedCell(
+                pending.value,
+                format,
+                editor,
+                typeof pending.draft === "object" ? pending.draft?.title : undefined,
+              )}
+            />
+          )}
           <span className="sr-only">. Press Enter to edit {label}.</span>
         </button>
         {status}
@@ -516,6 +536,7 @@ function InlineEditor({ context, row, column, children }: GridFeatureCellProps):
       field={column.key}
       label={column.label}
       editor={field.editor}
+      format={column.declared.format}
       stored={row.edit[storedKey]}
       handler={onInlineEdit}
       events={context.events}

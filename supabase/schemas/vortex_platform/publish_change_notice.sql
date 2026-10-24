@@ -87,7 +87,15 @@ begin
   || case when p_record_version is null then '{}'::jsonb
     else pg_catalog.jsonb_build_object('recordVersion', p_record_version) end;
 
-  perform realtime.send(selected_payload, 'invalidation', selected_topic, true);
+  begin
+    perform realtime.send(selected_payload, 'invalidation', selected_topic, true);
+  exception
+    when others then
+      -- Callers keep invalidation advisory; retain its cause before they catch it.
+      raise warning using errcode = sqlstate,
+        message = 'RECORD_INVALIDATION_FAILED publish_change_notice: ' || sqlerrm;
+      raise;
+  end;
 
   return selected_topic;
 end
@@ -105,6 +113,6 @@ comment on function vortex_platform.publish_change_notice(
 ) is
   'Protected post-commit broadcast of the bounded content-free invalidation envelope on the private topic for one organisation and application.';
 
-alter function vortex_platform.publish_change_notice(p_organization_id uuid, p_application_root_id uuid, p_record_type_id uuid, p_record_id uuid, p_record_version bigint, p_change_kind text, p_data_version bigint, p_sequence bigint, p_correlation_id uuid) owner to vortex_owner;
-
-grant execute on function vortex_platform.publish_change_notice(p_organization_id uuid, p_application_root_id uuid, p_record_type_id uuid, p_record_id uuid, p_record_version bigint, p_change_kind text, p_data_version bigint, p_sequence bigint, p_correlation_id uuid) to postgres;
+alter function vortex_platform.publish_change_notice(
+  uuid, uuid, uuid, uuid, bigint, text, bigint, bigint, uuid
+) owner to postgres;

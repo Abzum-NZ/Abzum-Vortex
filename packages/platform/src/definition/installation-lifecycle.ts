@@ -68,7 +68,7 @@ const bindingsIncomplete = (): DefinitionError<ApplicationInstallationLifecycleE
 
 /**
  * The one installation step that gives every record type of the activated release its lifecycle
- * policy. A record type without a stored policy gets the platform default (see
+ * policy. A record type without a stored policy gets the explicit organisation setup policy (see
  * `vortex_record.ensure_application_lifecycle_policies`); a stored policy is never changed. First
  * install and upgrade both reach it here, inside the activation transaction and after the binding
  * locks, so the executable-policy gate that follows always reads a complete set.
@@ -93,7 +93,12 @@ const ensureLifecyclePolicies = async (
     ) as stored_policies
   `;
   const stored = rows[0]?.stored_policies;
-  if (rows.length !== 1 || typeof stored !== "number" || !Number.isSafeInteger(stored) || stored < 0)
+  if (
+    rows.length !== 1 ||
+    typeof stored !== "number" ||
+    !Number.isSafeInteger(stored) ||
+    stored < 0
+  )
     throw unexpectedDefinitionFailure(
       "APPLICATION_INSTALLATION_CHANGE_FAILED",
       new Error(`lifecycle policy step returned ${rows.length} rows`),

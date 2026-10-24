@@ -1,5 +1,5 @@
 import type { Resolution } from "./resolution";
-import { asObject, type JsonObject, leafPaths, type Path, pathKey, valueAtPath } from "./shared";
+import { asObject, type JsonObject, leafPaths, type Path, valueAtPath } from "./shared";
 import {
   isOpaqueDataPath,
   type SourceContractPositions,
@@ -80,40 +80,39 @@ export function explicitSourceTargets(
     resolution,
   );
   if (recordScopeTargets) return recordScopeTargets;
-  const conditionTargets = conditionSourceTargets(source, sourcePath);
-  if (conditionTargets) {
-    if (
-      source.kind === "module" &&
-      sourcePath[0] === "body" &&
-      sourcePath[1] === "record_types" &&
-      typeof sourcePath[2] === "number" &&
-      sourcePath[3] === "fields" &&
-      typeof sourcePath[4] === "number" &&
-      sourcePath[5] === "settings" &&
-      sourcePath[6] === "expression" &&
-      sourcePath[7] === "condition" &&
-      sourcePath.at(-1) === "field"
-    ) {
-      const fieldTarget = conditionTargets.find((target) => target.at(-1) === "fieldId");
-      const dependencyPath: Path = [
-        "content",
-        "recordTypes",
-        sourcePath[2],
-        "fields",
-        sourcePath[4],
-        "settings",
-        "dependencyFieldIds",
-      ];
+  // Calculation formulas retain their tree; only local field references resolve to identities.
+  if (
+    source.kind === "module" &&
+    sourcePath[0] === "body" &&
+    sourcePath[1] === "record_types" &&
+    typeof sourcePath[2] === "number" &&
+    sourcePath[3] === "fields" &&
+    typeof sourcePath[4] === "number" &&
+    sourcePath[5] === "settings" &&
+    sourcePath[6] === "expression"
+  ) {
+    // Literal JSON stays inert, even when its keys resemble formula references.
+    if (isOpaqueDataPath(positions, sourcePath)) return undefined;
+    const base: Path = [
+      "content",
+      "recordTypes",
+      sourcePath[2],
+      "fields",
+      sourcePath[4],
+      "settings",
+    ];
+    const target: Path = [...base, "expression", ...sourcePath.slice(7)];
+    if (sourcePath.at(-1) === "field" && sourcePath.at(-2) === "reference") {
+      target[target.length - 1] = "fieldId";
+      const dependencyPath: Path = [...base, "dependencyFieldIds"];
       const dependencies = valueAtPath(canonical, dependencyPath) as unknown[];
-      const dependencyIndex = fieldTarget
-        ? dependencies.indexOf(valueAtPath(canonical, fieldTarget))
-        : -1;
-      return dependencyIndex >= 0
-        ? [...conditionTargets, [...dependencyPath, dependencyIndex]]
-        : conditionTargets;
+      const index = dependencies.indexOf(valueAtPath(canonical, target));
+      return index < 0 ? [target] : [target, [...dependencyPath, index]];
     }
-    return conditionTargets;
+    return [target];
   }
+  const conditionTargets = conditionSourceTargets(source, sourcePath);
+  if (conditionTargets) return conditionTargets;
   if (isOpaqueDataPath(positions, sourcePath)) return undefined;
   const roleTargets = applicationRolePermissionTargets(source, canonical, sourcePath);
   if (roleTargets) return roleTargets;
@@ -352,103 +351,6 @@ export function explicitSourceTargets(
       sourcePath[6] === "decimal_places"
     )
       return [[...base, "fields", sourcePath[4], "settings", "decimalPlaces"]];
-    if (
-      sourcePath[3] === "fields" &&
-      typeof sourcePath[4] === "number" &&
-      sourcePath[5] === "settings" &&
-      sourcePath[6] === "expression"
-    ) {
-      const fieldBase: Path = [...base, "fields", sourcePath[4], "settings"];
-      const expressionBase: Path = [...fieldBase, "expression"];
-      if (sourcePath.length === 8 && sourcePath[7] === "operation")
-        return [[...expressionBase, "kind"]];
-      if (sourcePath.length === 8 && sourcePath[7] === "numeric_operation")
-        return [[...expressionBase, "operation"]];
-      if (
-        sourcePath[7] === "fields" &&
-        typeof sourcePath[8] === "number" &&
-        sourcePath.length === 9
-      )
-        return [
-          [...expressionBase, "fieldIds", sourcePath[8]],
-          [...fieldBase, "dependencyFieldIds", sourcePath[8]],
-        ];
-      const dependencyByKey: Readonly<Record<string, number>> = {
-        amount_field: 0,
-        percentage_field: 1,
-        date_field: 0,
-        due_field: 0,
-        status_field: 1,
-      };
-      if (sourcePath.length === 8 && typeof sourcePath[7] === "string") {
-        const expressionKeyBySource: Readonly<Record<string, string>> = {
-          amount_field: "amountFieldId",
-          percentage_field: "percentageFieldId",
-          date_field: "dateFieldId",
-          due_field: "dueFieldId",
-          status_field: "statusFieldId",
-        };
-        const expressionKey = expressionKeyBySource[sourcePath[7]];
-        const dependencyIndex = dependencyByKey[sourcePath[7]];
-        if (expressionKey !== undefined && dependencyIndex !== undefined)
-          return [
-            [...expressionBase, expressionKey],
-            [...fieldBase, "dependencyFieldIds", dependencyIndex],
-          ];
-      }
-      // A numeric operand may itself be a numeric operation over nested operands; the nesting keeps
-      // its shape and only the operation and field keys are renamed.
-      let leafIndex = 9;
-      while (sourcePath[leafIndex] === "operands" && typeof sourcePath[leafIndex + 1] === "number")
-        leafIndex += 2;
-      const leaf = sourcePath[leafIndex];
-      if (
-        sourcePath[7] === "operands" &&
-        typeof sourcePath[8] === "number" &&
-        typeof leaf === "string"
-      ) {
-        const operandBase: Path = [...expressionBase, ...sourcePath.slice(7, leafIndex)];
-        if (leaf === "numeric_operation") return [[...operandBase, "operation"]];
-        if (leaf === "field") {
-          const expression = asObject(
-            valueAtPath(source, [
-              "body",
-              "record_types",
-              sourcePath[2],
-              "fields",
-              sourcePath[4],
-              "settings",
-              "expression",
-            ]),
-          );
-          // Field dependencies are collected depth first, in operand order, as the compiler does.
-          const fieldOperandPaths: string[] = [];
-          const collect = (operands: JsonObject[], prefix: Path) =>
-            operands.forEach((operand, index) => {
-              if (operand.source === "field") fieldOperandPaths.push(pathKey([...prefix, index]));
-              else if (operand.source === "numeric")
-                collect(operand.operands as JsonObject[], [...prefix, index, "operands"]);
-            });
-          collect(expression.operands as JsonObject[], ["operands"]);
-          const dependencyIndex = fieldOperandPaths.indexOf(
-            pathKey(sourcePath.slice(7, leafIndex)),
-          );
-          return [
-            [...operandBase, "fieldId"],
-            [...fieldBase, "dependencyFieldIds", dependencyIndex],
-          ];
-        }
-        return [[...operandBase, leaf]];
-      }
-      if (sourcePath[7] === "amount" && typeof sourcePath[8] === "string") {
-        if (sourcePath[8] === "field")
-          return [
-            [...expressionBase, "amount", "fieldId"],
-            [...fieldBase, "dependencyFieldIds", 1],
-          ];
-        return [[...expressionBase, "amount", sourcePath[8]]];
-      }
-    }
   }
   if (
     (source.kind === "module" || source.kind === "application") &&

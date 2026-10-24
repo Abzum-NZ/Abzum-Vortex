@@ -308,8 +308,8 @@ export const starterModuleFieldSettings = (
     case "link": return { ...(start.recordTypes[0] === undefined ? {} : { target: start.recordTypes[0] }),
       reverse_name: "Related records", on_parent_delete: "empty_optional" };
     case "link_to_one_of_several": return { targets: start.recordTypes.slice(0, 2), on_parent_delete: "empty_optional" };
-    case "calculation": return { result_type: "text", evaluation: "stored", expression: { operation: "join_text",
-      fields: start.joinField === undefined ? [] : [start.joinField], separator: " " } };
+    case "calculation": return { result_type: "text", evaluation: "stored", expression: { op: "join",
+      parts: start.joinField === undefined ? [] : [{ op: "reference", reference: { source: "trigger_record", field: start.joinField } }], separator: " " } };
     case "total": return { ...(start.relationships[0] === undefined ? {} : { relationship: start.relationships[0] }),
       operation: "count", result_type: "whole_number" };
     case "attachment": return { allowed_kinds: ["document", "image"], max_file_size_mb: 10, multiple: false };

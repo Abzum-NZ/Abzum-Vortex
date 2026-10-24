@@ -182,8 +182,8 @@ const recordName = (context: GridFeatureContext, line: number): string => {
 const invalidClasses = ["ring-2", "ring-inset", "ring-destructive"];
 
 /**
- * The one request a batch is and the notice that tells its outcome. `commit` posts the rows and, on
- * a refusal, marks every offending cell (aria-invalid, a ring and a sentence beside the grid; the
+ * The one request a batch is and the notice that tells its outcome. A paste or fill posts the rows
+ * and, on a refusal, marks every offending cell (aria-invalid, a ring and a sentence beside the grid; the
  * sentence is what carries the meaning) and writes nothing locally; on success it asks the page for
  * its one bounded refresh.
  */
@@ -193,7 +193,7 @@ export function useBatchEdit(
 ): Readonly<{
   busy: boolean;
   run: (
-    action: "commit" | "undo" | "redo",
+    action: RecordsTableBatchEditRequest["operation"],
     rows?: BatchRows,
   ) => Promise<DisplayBatchEditAnswer | undefined>;
   refuse: (title: string, problems: readonly BatchProblem[]) => void;
@@ -231,7 +231,7 @@ export function useBatchEdit(
 
   const run = useCallback(
     async (
-      action: "commit" | "undo" | "redo",
+      action: RecordsTableBatchEditRequest["operation"],
       rows?: BatchRows,
     ): Promise<DisplayBatchEditAnswer | undefined> => {
       if (handler === undefined || working.current) return undefined;

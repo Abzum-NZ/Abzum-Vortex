@@ -2,7 +2,7 @@
 
 Vortex builds business applications from versioned definitions: modules, record types, fields, relationships, pages, permissions, actions, flows, connections and themes. It serves multiple organisations through one application, with access enforced by the platform and the database. Generic engines and the existing Next.js application render and execute those definitions.
 
-The project is under active development. The current priority is a usable definition-led application before the visual App Designer. A specification or contract does not mean the feature is implemented; the [GitHub roadmap](https://github.com/orgs/Abzum-NZ/projects/2/views/3) records delivery status.
+The project is under active development. The current priority is definition-led applications with the Studio and data grid. A specification or contract does not mean the feature is implemented; the [GitHub roadmap](https://github.com/orgs/Abzum-NZ/projects/2/views/3) records delivery status.
 
 ## Start here
 
@@ -117,6 +117,7 @@ An interrupted `pnpm setup:local` run resumes from the identifiers recorded in `
 
 | Variable | Local value | Purpose |
 | --- | --- | --- |
+| `VORTEX_EVENT_DELIVERY_MODE` | `in_process` | Required explicit event delivery trigger; hosted deployments use `external` with `VORTEX_EVENT_DISPATCHER_CREDENTIAL_SHA256` and the protected dispatch route. |
 | `VORTEX_ENVIRONMENT` | `local` | Selects local behaviour. The local site URL must then be `http` on loopback; the development setup refuses any other value. |
 | `VORTEX_SITE_URL` | `http://127.0.0.1:3000` | The configured site URL. Use this exact host for browser requests and redirects. The local server binds to `127.0.0.1`. |
 | `VORTEX_SUPABASE_URL` | `http://127.0.0.1:54321` | The local Supabase API and Auth endpoint. |

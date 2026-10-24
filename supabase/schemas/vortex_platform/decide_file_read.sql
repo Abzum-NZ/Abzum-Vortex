@@ -33,7 +33,7 @@ begin
     return pg_catalog.jsonb_build_object('outcome', 'refused');
   end if;
 
-  projection := vortex_record.read_record(stored_record_type_id, stored_record_id);
+  projection := (vortex_record.read_record(stored_record_type_id, stored_record_id)) -> 'record';
   if projection ->> 'outcome' is distinct from 'allowed' then
     return pg_catalog.jsonb_build_object('outcome', 'refused');
   end if;

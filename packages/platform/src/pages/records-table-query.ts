@@ -50,8 +50,8 @@ import {
   type ProjectedTableValues,
   type RecordLinkResolver,
   type RecordsTableNarrowing,
-  type LinkFieldType,
 } from "./component-data-projection";
+import type { LinkFieldType } from "./cell-projection";
 import {
   conditionalFormattingFieldIds,
   personalFormattingRules,

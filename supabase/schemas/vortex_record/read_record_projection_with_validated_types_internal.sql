@@ -194,8 +194,8 @@ begin
         select dependency.value
         from pg_catalog.jsonb_array_elements(loaded #> '{recordTypeMeta,fields}') as field(value)
         cross join lateral (values
-          (field.value #> '{settings,expression,dueFieldId}'),
-          (field.value #> '{settings,expression,statusFieldId}')
+          (field.value #> '{settings,expression,due,reference,fieldId}'),
+          (field.value #> '{settings,expression,status,reference,fieldId}')
         ) as dependency(value)
         where projected_field_ids ? pg_catalog.lower(field.value ->> 'fieldId')
           and field.value ->> 'type' = 'calculation' and dependency.value is not null
@@ -237,7 +237,7 @@ begin
     where pg_catalog.lower(record_type.value ->> 'recordTypeId') = pg_catalog.lower(p_record_type_id::text)
       and field.value ->> 'type' = 'calculation'
       and (field.value #>> '{settings,evaluation}' = 'read_time'
-        or field.value #>> '{settings,expression,kind}' = 'deadline_passed');
+        or field.value #>> '{settings,expression,op}' = 'deadline_passed');
   end if;
   if read_time_fields <> '{}'::jsonb then
     read_time_clock := case when compact and p_page ? 'readTimeClock' then p_page -> 'readTimeClock'
@@ -263,11 +263,11 @@ begin
       read_time_expression := read_time_fields -> pg_catalog.lower(field_id) #> '{settings,expression}';
       -- Only the deadline-passed form is defined; another read-time form is
       -- withheld rather than disclosed from a stored column.
-      if read_time_expression ->> 'kind' is distinct from 'deadline_passed' then
+      if read_time_expression ->> 'op' is distinct from 'deadline_passed' then
         continue;
       end if;
-      due_key := pg_catalog.lower(read_time_expression ->> 'dueFieldId');
-      status_key := pg_catalog.lower(read_time_expression ->> 'statusFieldId');
+      due_key := pg_catalog.lower(read_time_expression #>> '{due,reference,fieldId}');
+      status_key := pg_catalog.lower(read_time_expression #>> '{status,reference,fieldId}');
       due_value := field_values -> due_key;
       status_value := case when status_key is null then null else field_values -> status_key end;
       if status_value is not null and status_value <> 'null'::jsonb and exists (

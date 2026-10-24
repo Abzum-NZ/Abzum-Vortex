@@ -111,9 +111,7 @@ const humanRestoreDefinitionDraftCommandSchema = z
       });
   });
 
-type HumanRestoreDefinitionDraftCommand = z.infer<
-  typeof humanRestoreDefinitionDraftCommandSchema
->;
+type HumanRestoreDefinitionDraftCommand = z.infer<typeof humanRestoreDefinitionDraftCommandSchema>;
 
 const restoreEvidenceSchema = storedConsumerReleaseEvidenceSchema
   .extend({
@@ -205,8 +203,8 @@ const selectRestoreContract = (candidate: unknown): void => {
       selectStoredApplicationSourceContract(sourceContractVersion, intrinsicSourceContractVersion);
       selectApplicationContractPair(sourceContractVersion, validationContractVersion);
     } else assertModuleContractPair(sourceContractVersion, validationContractVersion);
-  } catch {
-    throw new DefinitionError("DEFINITION_RELEASE_INTEGRITY_FAILED");
+  } catch (cause) {
+    throw new DefinitionError("DEFINITION_RELEASE_INTEGRITY_FAILED", { cause });
   }
 };
 
@@ -226,8 +224,8 @@ const selectStoredDraftContract = (candidate: unknown): void => {
         throw new TypeError("Stored source version mismatch");
       assertModuleContractPair(sourceContractVersion, sourceContractVersion);
     }
-  } catch {
-    throw new DefinitionError("INVALID_DEFINITION_HISTORY_RESULT");
+  } catch (cause) {
+    throw new DefinitionError("INVALID_DEFINITION_HISTORY_RESULT", { cause });
   }
 };
 
@@ -435,8 +433,8 @@ const verifyRestoreEvidence = async (
       catalogue,
       release.validationContractVersion,
     );
-  } catch {
-    throw new DefinitionError("DEFINITION_RESTORE_FAILED");
+  } catch (cause) {
+    throw new DefinitionError("DEFINITION_RESTORE_FAILED", { cause });
   }
   if (catalogueResult !== "valid") throw new DefinitionError("DEFINITION_RELEASE_INTEGRITY_FAILED");
 

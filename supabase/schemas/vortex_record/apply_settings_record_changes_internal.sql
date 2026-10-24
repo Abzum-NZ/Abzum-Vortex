@@ -263,7 +263,7 @@ begin
       );
     end if;
     if receipt_claim ->> 'status' = 'completed' then
-      projection := vortex_record.read_record(p_record_type_id, p_record_id);
+      projection := (vortex_record.read_record(p_record_type_id, p_record_id)) -> 'record';
       if projection ->> 'outcome' <> 'allowed' then
         return pg_catalog.jsonb_build_object(
           'outcome', 'refused', 'reasonCode', 'record_unavailable',
@@ -346,7 +346,7 @@ begin
     (access_result ->> 'concurrencyNumber')::bigint,
     'Organization settings record save receipt is stale'
   );
-  projection := vortex_record.read_record(p_record_type_id, p_record_id);
+  projection := (vortex_record.read_record(p_record_type_id, p_record_id)) -> 'record';
   if projection ->> 'outcome' <> 'allowed' then
     raise exception using errcode = '55000',
       message = 'Saved organisation settings projection is unavailable';
