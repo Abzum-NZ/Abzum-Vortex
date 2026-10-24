@@ -1,3 +1,4 @@
+import { flowFormulaSchema, flowFormulaUsesNow } from "../workflows/flow-values";
 import { z } from "zod";
 import { recordTitleFieldEligible } from "./record-title-field";
 import { moduleQueryExposureSchema } from "./module-query-exposure";
@@ -8,14 +9,7 @@ import {
   searchPrioritySchema,
   sharingParameterValueTypeSchema,
 } from "../catalogue/catalogues";
-import {
-  calculationMaximumNestingDepth,
-  calculationMaximumOperandCount,
-  calculationResultTypesByOperation,
-  jsonValueSchema,
-  labelSchema,
-  safeHttpsUrlSchema,
-} from "../catalogue/common";
+import { jsonValueSchema, labelSchema, safeHttpsUrlSchema } from "../catalogue/common";
 import { moduleDefinitionEnvelopeSchema, recordTypeReferenceSchema } from "./definitions";
 import { parseExactDecimal } from "../records/exact-decimal";
 import {
@@ -292,97 +286,6 @@ const multiLinkSettingsSchema = z
     onParentDelete: z.enum(["refuse", "empty_optional", "soft_delete_dependent"]),
   })
   .strict();
-/** A named field or one exact decimal literal. A date offset takes only these. */
-const calculationNumberOperandSchema = z.discriminatedUnion("source", [
-  z.object({ source: z.literal("field"), fieldId: fieldIdSchema }).strict(),
-  z.object({ source: z.literal("literal"), value: exactDecimalTextSchema }).strict(),
-]);
-const calculationNumberOperationSchema = z.enum(["add", "subtract", "multiply", "divide"]);
-type CalculationNumberOperation = z.infer<typeof calculationNumberOperationSchema>;
-/**
- * One value of a numeric calculation: a named field, an exact decimal literal, or a further
- * numeric operation over further values. A nested operation is the same closed form the
- * calculation itself uses, so a new formula needs no new expression kind and no engine change.
- */
-type CalculationNumberValue =
-  | z.infer<typeof calculationNumberOperandSchema>
-  | {
-      source: "numeric";
-      operation: CalculationNumberOperation;
-      operands: CalculationNumberValue[];
-    };
-const inspectCalculationNumberValue = (
-  value: CalculationNumberValue,
-  depth = 1,
-): { depth: number; values: number } => {
-  if (value.source !== "numeric") return { depth, values: 1 };
-  const inspected = value.operands.map((operand) =>
-    inspectCalculationNumberValue(operand, depth + 1),
-  );
-  return {
-    depth: Math.max(depth, ...inspected.map((operand) => operand.depth)),
-    values: 1 + inspected.reduce((total, operand) => total + operand.values, 0),
-  };
-};
-const calculationNumberValueSchema: z.ZodType<CalculationNumberValue> = z.lazy(() =>
-  z
-    .discriminatedUnion("source", [
-      ...calculationNumberOperandSchema.options,
-      z
-        .object({
-          source: z.literal("numeric"),
-          operation: calculationNumberOperationSchema,
-          operands: z.array(calculationNumberValueSchema).min(2).max(20),
-        })
-        .strict(),
-    ])
-    .superRefine((value, context) => {
-      const inspected = inspectCalculationNumberValue(value);
-      if (inspected.depth > calculationMaximumNestingDepth)
-        context.addIssue({
-          code: "custom",
-          message: `Numeric nesting cannot exceed ${calculationMaximumNestingDepth} levels`,
-        });
-      if (inspected.values > calculationMaximumOperandCount)
-        context.addIssue({
-          code: "custom",
-          message: `A numeric calculation cannot exceed ${calculationMaximumOperandCount} values`,
-        });
-    }),
-);
-const calculationExpressionSchema = z.discriminatedUnion("kind", [
-  z
-    .object({
-      kind: z.literal("join_text"),
-      fieldIds: z.array(fieldIdSchema).min(1).max(20),
-      separator: z.string().max(20),
-    })
-    .strict(),
-  z
-    .object({
-      kind: z.literal("numeric"),
-      operation: calculationNumberOperationSchema,
-      operands: z.array(calculationNumberValueSchema).min(2).max(20),
-    })
-    .strict(),
-  z.object({ kind: z.literal("condition"), condition: conditionNodeSchema }).strict(),
-  z
-    .object({
-      kind: z.literal("date_offset"),
-      dateFieldId: fieldIdSchema,
-      amount: calculationNumberOperandSchema,
-      unit: z.enum(["days", "weeks", "months", "years"]),
-    })
-    .strict(),
-  z
-    .object({
-      kind: z.literal("deadline_passed"),
-      dueFieldId: fieldIdSchema,
-      statusFieldId: fieldIdSchema.optional(),
-      terminalStatusValues: z.array(jsonValueSchema).max(20),
-    })
-    .strict(),
-]);
 /**
  * Whether a calculated field is worked out when the record is read (`read_time`) or stored and
  * refreshed by the owning save (`stored`). The deadline-passed form uses the current time and is
@@ -404,36 +307,16 @@ const calculationSettingsSchema = z
     ]),
     evaluation: moduleCalculationEvaluationSchema.optional(),
     decimalPlaces: z.number().int().min(0).max(12).optional(),
-    expression: calculationExpressionSchema,
+    expression: flowFormulaSchema,
     dependencyFieldIds: z.array(fieldIdSchema).min(1),
   })
   .strict()
   .superRefine((value, context) => {
-    if (value.evaluation === "stored" && value.expression.kind === "deadline_passed")
+    if (value.evaluation === "stored" && flowFormulaUsesNow(value.expression))
       context.addIssue({
         code: "custom",
         path: ["evaluation"],
         message: "A deadline-passed calculation uses the current time and is read-time",
-      });
-    const resultTypes: readonly string[] = calculationResultTypesByOperation[value.expression.kind];
-    const valid = resultTypes.includes(value.resultType);
-    if (
-      value.expression.kind === "numeric" &&
-      value.expression.operands.reduce(
-        (total, operand) => total + inspectCalculationNumberValue(operand).values,
-        0,
-      ) > calculationMaximumOperandCount
-    )
-      context.addIssue({
-        code: "custom",
-        path: ["expression", "operands"],
-        message: `A numeric calculation cannot exceed ${calculationMaximumOperandCount} values`,
-      });
-    if (!valid)
-      context.addIssue({
-        code: "custom",
-        path: ["resultType"],
-        message: "Calculation result type must match its closed expression kind",
       });
     if (
       value.decimalPlaces !== undefined &&

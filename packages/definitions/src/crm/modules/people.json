@@ -80,8 +80,23 @@
           "settings": {
             "result_type": "text",
             "expression": {
-              "operation": "join_text",
-              "fields": ["first_name", "last_name"],
+              "op": "join",
+              "parts": [
+                {
+                  "op": "reference",
+                  "reference": {
+                    "source": "trigger_record",
+                    "field": "first_name"
+                  }
+                },
+                {
+                  "op": "reference",
+                  "reference": {
+                    "source": "trigger_record",
+                    "field": "last_name"
+                  }
+                }
+              ],
               "separator": " "
             }
           }

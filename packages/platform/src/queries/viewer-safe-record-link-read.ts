@@ -21,16 +21,6 @@ const unavailable = { outcome: "unavailable" } as const;
 const contractError = (code: string, cause?: unknown): Error =>
   Object.assign(new Error(code, { cause }), { code });
 
-const viewerSafeRecordLinkReadCommandSchema = z
-  .object({
-    identity: viewerSafeRecordLinkIdentitySchema,
-    /** The exact Application revision already checked by App's installed-context loader. */
-    applicationReleaseRevision: revisionSchema,
-    /** Read only the title field selected from the exact installed Module release. */
-    titleFieldId: fieldIdSchema,
-  })
-  .strict();
-
 const viewerSafeRecordLinkReadFieldsCommandSchema = z
   .object({
     identity: viewerSafeRecordLinkIdentitySchema,
@@ -90,15 +80,6 @@ const viewerSafeRecordLinkFieldValuesSchema = z
       });
   });
 
-export const viewerSafeRecordLinkTitleReadResultSchema = z.discriminatedUnion("outcome", [
-  z.object({ outcome: z.literal("read"), title: viewerSafeRecordLinkTitleSchema }).strict(),
-  z.object({ outcome: z.literal("unavailable") }).strict(),
-]);
-
-export type ViewerSafeRecordLinkTitleReadResult = z.infer<
-  typeof viewerSafeRecordLinkTitleReadResultSchema
->;
-
 export const viewerSafeRecordLinkFieldsReadResultSchema = z.discriminatedUnion("outcome", [
   z
     .object({
@@ -138,7 +119,7 @@ const currentInstallationMatches = (
   );
 };
 
-/** Run both protected Record reads behind the same exact current-installation gate. */
+/** Run the exact Record read behind the current-installation gate. */
 const readProtectedRecord = (
   transaction: RequestDatabaseTransaction,
   identity: ViewerSafeRecordLinkIdentity,
@@ -164,87 +145,21 @@ const readProtectedRecord = (
             ${identity.moduleReleaseRevision}::bigint
           and binding.value ->> 'state' = 'active'
       )
+  ), current_record as materialized (
+    select vortex_record.read_record(
+      ${identity.recordTypeId}::uuid,
+      ${identity.recordId}::uuid
+    ) as value
+    from verified_installation
   )
   select
     active_installation.value as active_installation,
-    coalesce(
-      (
-        select vortex_record.read_record(
-          ${identity.recordTypeId}::uuid,
-          ${identity.recordId}::uuid
-        )
-        from verified_installation
-      ),
-      pg_catalog.jsonb_build_object('outcome', 'refused')
-    ) as result,
-    (
-      select vortex_record.read_record_capabilities(
-        ${identity.recordTypeId}::uuid,
-        ${identity.recordId}::uuid
-      )
-      from verified_installation
-    ) as capabilities
+    coalesce(current_record.value -> 'record',
+      pg_catalog.jsonb_build_object('outcome', 'refused')) as result,
+    current_record.value -> 'capabilities' as capabilities
   from active_installation
+  left join current_record on true
 `;
-
-/**
- * Reads only the configured title through the existing protected Record projection. App supplies
- * the exact installed-context selection in the same Access-resolved request transaction; the
- * tuple is checked against that transaction's live installation and never acts as authority.
- */
-const read = async (
-  transaction: RequestDatabaseTransaction,
-  scopeCandidate: unknown,
-  commandCandidate: unknown,
-): Promise<ViewerSafeRecordLinkTitleReadResult> => {
-  const scope = selectedOrganizationScopeSchema.safeParse(scopeCandidate);
-  const command = viewerSafeRecordLinkReadCommandSchema.safeParse(commandCandidate);
-  if (!scope.success || !command.success) return unavailable;
-  if (
-    scope.data.applicationRootId === undefined ||
-    !sameId(scope.data.organizationId, command.data.identity.organizationId) ||
-    !sameId(scope.data.applicationRootId, command.data.identity.applicationRootId)
-  )
-    return unavailable;
-
-  // The installation predicate gates both protected reads in one statement. The Record
-  // functions make the current row and field decision; they expose no direct table data.
-  const rows = await readProtectedRecord(
-    transaction,
-    command.data.identity,
-    command.data.applicationReleaseRevision,
-  );
-  if (rows.length !== 1 || rows[0] === undefined)
-    throw contractError("RECORD_LINK_READ_ROW_INVALID", rows.length);
-
-  const row = rows[0];
-  if (
-    !currentInstallationMatches(
-      row.active_installation,
-      scope.data,
-      command.data.identity,
-      command.data.applicationReleaseRevision,
-    )
-  )
-    return unavailable;
-
-  if (refusedRecordSchema.safeParse(row.result).success) return unavailable;
-  const record = readableRecordSchema.safeParse(row.result);
-  const capabilities = protectedQueryRowCapabilitiesSchema.safeParse(row.capabilities);
-  if (!record.success) throw contractError("RECORD_LINK_READ_RESULT_INVALID", record.error);
-  if (!capabilities.success)
-    throw contractError("RECORD_LINK_READ_CAPABILITIES_INVALID", capabilities.error);
-  if (!sameId(record.data.recordId, command.data.identity.recordId))
-    throw contractError("RECORD_LINK_READ_IDENTITY_INVALID");
-
-  const titleEntries = Object.entries(record.data.values).filter(([fieldId]) =>
-    sameId(fieldId, command.data.titleFieldId),
-  );
-  if (titleEntries.length !== 1) return unavailable;
-  const title = viewerSafeRecordLinkTitleSchema.safeParse(titleEntries[0]?.[1]);
-  if (!title.success) throw contractError("RECORD_LINK_READ_TITLE_INVALID", title.error);
-  return { outcome: "read", title: title.data };
-};
 
 const viewerSafeRecordValuesReadCommandSchema = z
   .object({
@@ -534,7 +449,7 @@ const readTitles = async (
 
 /** One uncached protected Query reader for a target record's title, selected fields or readable values. */
 export const createViewerSafeRecordLinkReadService = () =>
-  Object.freeze({ read, readFields, readValues, readTitles });
+  Object.freeze({ readFields, readValues, readTitles });
 
 export type ViewerSafeRecordLinkReadService = ReturnType<
   typeof createViewerSafeRecordLinkReadService

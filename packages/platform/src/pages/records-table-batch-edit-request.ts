@@ -50,6 +50,8 @@ export const recordsTableBatchEditRequestSchema = z
     pageKey: z.string().min(1).max(200),
     placementId: z.string().min(1).max(200),
     commandId: platformIdSchema,
+    /** The gesture to authorize against the installed placement's own feature switch. */
+    operation: z.enum(["paste", "fill", "undo", "redo"]),
     rows: z
       .array(
         z

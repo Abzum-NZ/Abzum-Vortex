@@ -1,4 +1,5 @@
 import { Suspense, type ReactNode } from "react";
+import { withPageReadAttribution } from "../../../_lib/page-read-attribution";
 import { DEFAULT_PLATFORM_THEME_RELEASE } from "@vortex/platform/server";
 import { BrandLoader } from "@vortex/ui";
 import { createLoaderThemeVariables } from "@vortex/ui/theme";
@@ -22,7 +23,11 @@ type Props = Readonly<{ children: ReactNode; params: Promise<Route> }>;
  * platform theme, and the frame that replaces the loader puts the application's whole theme back
  * on the root.
  */
-async function ApplicationStartLoader({ route }: { route: Route }) {
+function ApplicationStartLoader(props: { route: Route }) {
+  return withPageReadAttribution(() => readApplicationStartLoader(props));
+}
+
+async function readApplicationStartLoader({ route }: { route: Route }) {
   const theme = await loadApplicationStartTheme(
     route.tenantShortName,
     route.organizationShortName,
@@ -41,7 +46,17 @@ async function ApplicationStartLoader({ route }: { route: Route }) {
   );
 }
 
-async function CurrentApplicationFrame({ route, children }: { route: Route; children: ReactNode }) {
+function CurrentApplicationFrame(props: { route: Route; children: ReactNode }) {
+  return withPageReadAttribution(() => readCurrentApplicationFrame(props));
+}
+
+async function readCurrentApplicationFrame({
+  route,
+  children,
+}: {
+  route: Route;
+  children: ReactNode;
+}) {
   const frame = await loadApplicationFrame(
     route.tenantShortName,
     route.organizationShortName,

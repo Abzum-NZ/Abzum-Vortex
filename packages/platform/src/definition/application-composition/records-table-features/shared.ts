@@ -196,6 +196,8 @@ export type RecordsTableRelatedQueryFacts = Readonly<{
   inputs: readonly QueryBindingInput[];
   /** The query groups or totals its rows, so its rows are not records that open. */
   grouped: boolean;
+  /** The maximum page size accepted by this query. */
+  maximumPageSize: number;
 }>;
 
 /**

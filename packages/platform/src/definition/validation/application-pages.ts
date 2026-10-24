@@ -106,6 +106,7 @@ export function applicationPageRules(scope: ApplicationScope): void {
             .map((field) => ({ field: String(field.fieldId), label: String(field.label) })),
           inputs: compiledQueryInputs(query),
           grouped: array(query.groupByFieldIds).length > 0 || array(query.aggregates).length > 0,
+          maximumPageSize: Number(query.pageSize),
         };
       }),
       rowFields: compiledRecordBindingFields(
