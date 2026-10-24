@@ -567,6 +567,11 @@ export function validateFlow(
         }
         return "text";
       }
+      case "deadline_passed":
+        if (!where.nowAllowed) add(path, "vortex.definition.workflow_node_values", "invalid_value", "A deadline uses the current time");
+        expect(child(formula.due, "due"), (type) => type === "date_time", [...path, "due"], "a date-time deadline");
+        if (formula.status !== undefined) expect(child(formula.status, "status"), (type) => type === "text" || type === "choice", [...path, "status"], "a status");
+        return "yes_no";
       case "now":
         if (!where.nowAllowed)
           add(

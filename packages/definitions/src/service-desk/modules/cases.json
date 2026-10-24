@@ -283,10 +283,10 @@
           "settings": {
             "result_type": "yes_no",
             "expression": {
-              "operation": "deadline_passed",
-              "due_field": "resolution_due_at",
-              "status_field": "status",
-              "terminal_status_values": ["resolved", "closed"]
+              "op": "deadline_passed",
+              "due": { "op": "reference", "reference": { "source": "trigger_record", "field": "resolution_due_at" } },
+              "status": { "op": "reference", "reference": { "source": "trigger_record", "field": "status" } },
+              "terminalStatusValues": ["resolved", "closed"]
             }
           }
         },

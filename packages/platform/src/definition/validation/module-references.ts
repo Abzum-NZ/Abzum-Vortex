@@ -1,3 +1,5 @@
+import { calculationFormulaType, calculationReadTimeSupported } from "../module-calculation-formula";
+import { flowFormulaSchema, flowFormulaUsesNow } from "../../workflows/flow-values";
 import type { DefinitionRuleFailure, FlowDefinition, ModuleField } from "../../schema";
 import { fingerprintCanonicalValue, compareCanonicalStrings } from "../canonical-json-definition";
 import {
@@ -11,9 +13,7 @@ import { readFieldsTypeMapsValid, permissionRecordScopesValid } from "./permissi
 import {
   calculationDependencyFieldIds,
   typedFieldValueType,
-  numericExpressionValid,
   typedConditionTypesValid,
-  exactIntegerLiteral,
   fieldValueMatches,
   fieldDeclaredResultType,
   typedSemanticFieldType,
@@ -202,7 +202,7 @@ export function moduleReferenceRule(context: PreparedValidationContext): Definit
       const expression = object(settings.expression);
       const nextVisiting = new Set(visiting).add(fieldId);
       const readTime =
-        expression.kind === "deadline_passed" ||
+        flowFormulaUsesNow(flowFormulaSchema.parse(expression)) ||
         settings.evaluation === "read_time" ||
         array(settings.dependencyFieldIds).some((dependency) =>
           isReadTime(String(dependency), nextVisiting),
@@ -418,49 +418,11 @@ export function moduleReferenceRule(context: PreparedValidationContext): Definit
               : settings.decimalPlaces === undefined);
           if (settings.evaluation === "stored" && readTimeFieldIds.has(String(field.fieldId)))
             valid = false;
-          if (expression.kind === "join_text")
-            valid =
-              valid &&
-              (expression.fieldIds as string[]).every((id) =>
-                ["text", "choice"].includes(typedFieldValueType(fieldMap.get(id)) ?? ""),
-              );
-          if (expression.kind === "numeric")
-            valid =
-              valid && numericExpressionValid(expression, String(settings.resultType), fieldMap);
-          if (expression.kind === "condition")
-            valid = valid && typedConditionTypesValid(expression.condition, fieldMap);
-          if (expression.kind === "date_offset") {
-            const amount = object(expression.amount);
-            valid =
-              valid &&
-              ["date", "date_time"].includes(
-                typedFieldValueType(fieldMap.get(String(expression.dateFieldId))) ?? "",
-              ) &&
-              typedFieldValueType(fieldMap.get(String(expression.dateFieldId))) ===
-                settings.resultType &&
-              ((amount.source === "literal" && exactIntegerLiteral(amount.value)) ||
-                (amount.source === "field" &&
-                  typedFieldValueType(fieldMap.get(String(amount.fieldId))) === "whole_number"));
-          }
-          if (expression.kind === "deadline_passed") {
-            const statusField =
-              expression.statusFieldId === undefined
-                ? undefined
-                : fieldMap.get(String(expression.statusFieldId));
-            valid =
-              valid &&
-              ["date", "date_time"].includes(
-                typedFieldValueType(fieldMap.get(String(expression.dueFieldId))) ?? "",
-              ) &&
-              (expression.statusFieldId === undefined ||
-                ["text", "choice"].includes(typedFieldValueType(statusField) ?? "")) &&
-              (expression.statusFieldId !== undefined ||
-                array(expression.terminalStatusValues).length === 0) &&
-              (statusField === undefined ||
-                array(expression.terminalStatusValues).every((value) =>
-                  fieldValueMatches(value, statusField, "canonical"),
-                ));
-          }
+          if (readTimeFieldIds.has(String(field.fieldId)) && !calculationReadTimeSupported(flowFormulaSchema.parse(expression))) valid = false;
+          const actualType = calculationFormulaType(flowFormulaSchema.parse(expression), (id) => typedFieldValueType(fieldMap.get(id)), "canonical");
+          valid = valid && actualType !== undefined && (actualType === settings.resultType ||
+            ["whole_number", "decimal_number"].includes(actualType) && ["whole_number", "decimal_number"].includes(String(settings.resultType)));
+
         }
         if (field.type === "total") {
           const aggregateRelationship = [...records.values()]

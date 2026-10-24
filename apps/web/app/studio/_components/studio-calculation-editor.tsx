@@ -2,687 +2,496 @@
 import { useMemo } from "react";
 import {
   calculationForcedReadTime,
-  calculationNumberOperationLabels,
-  calculationOperationLabels,
   calculationResultChoices,
   calculationResultTypeLabels,
-  dateAccepts,
-  describeCalculation,
-  joinTextAccepts,
-  numberAccepts,
   settledCalculation,
-  starterCalculationExpression,
   typedDecimalPlaces,
-  wholeNumberAccepts,
-  type CalculationExpression,
-  type CalculationNumber,
-  type CalculationNumberOperation,
-  type CalculationOperation,
   type CalculationSettings,
+  type FlowFormula,
   type FormulaField,
   type ModuleField,
+  type FlowLiteral,
+  type FlowDateUnit,
+  type FlowRoundingMode,
 } from "@vortex/platform/schema";
-import {
-  StudioEntryList,
-  useStudioEntryKeys,
-  StudioOptionControl,
-  StudioReferencePicker,
-  StudioHelp,
-} from "@vortex/ui/studio";
-import { Icon } from "@vortex/ui";
-import { Button } from "@vortex/ui/components/button";
-import { Checkbox } from "@vortex/ui/components/checkbox";
+import { StudioOptionControl, StudioReferencePicker } from "@vortex/ui/studio";
 import { Input } from "@vortex/ui/components/input";
 import { Label } from "@vortex/ui/components/label";
-import { StudioField } from "./studio-field";
-import { StudioFormulaCondition } from "./studio-formula-condition";
+import { Button } from "@vortex/ui/components/button";
 
-type Numeric = Extract<CalculationNumber, { source: "numeric" }>;
-type Expression<K extends CalculationOperation> = Extract<CalculationExpression, { operation: K }>;
+const labels = {
+  reference: "A field",
+  literal: "A fixed value",
+  add: "Add",
+  subtract: "Subtract",
+  multiply: "Multiply",
+  divide: "Divide",
+  round: "Round",
+  eq: "Equals",
+  neq: "Does not equal",
+  lt: "Less than",
+  lte: "At most",
+  gt: "Greater than",
+  gte: "At least",
+  contains: "Contains",
+  starts_with: "Starts with",
+  ends_with: "Ends with",
+  is_empty: "Is empty",
+  is_not_empty: "Is filled in",
+  in: "Is one of",
+  and: "All conditions",
+  or: "Any condition",
+  not: "Not",
+  if: "Choose by a condition",
+  join: "Join text",
+  date_add: "Move a date",
+  date_diff: "Difference between dates",
+  deadline_passed: "Whether a deadline has passed",
+} as const;
+type Operator = keyof typeof labels;
+const fixed = (): FlowFormula => ({ op: "literal", type: "decimal_number", value: "1" });
+const starter = (op: Operator, fields: readonly FormulaField[]): FlowFormula => {
+  const reference: FlowFormula = {
+    op: "reference",
+    reference: { source: "trigger_record", field: fields[0]?.key ?? "" },
+  };
+  const yes: FlowFormula = { op: "literal", type: "yes_no", value: true };
+  switch (op) {
+    case "reference":
+      return reference;
+    case "literal":
+      return fixed();
+    case "add":
+    case "multiply":
+    case "subtract":
+    case "divide":
+      return { op, args: [reference, fixed()], scale: 2, rounding: "half_even" };
+    case "round":
+      return { op, arg: reference, scale: 2, rounding: "half_even" };
+    case "is_empty":
+    case "is_not_empty":
+      return { op, arg: reference };
+    case "not":
+      return { op, arg: yes };
+    case "and":
+    case "or":
+      return { op, args: [yes, yes] };
+    case "in":
+      return { op, value: reference, options: [{ op: "literal", type: "text", value: "" }] };
+    case "if":
+      return { op, condition: yes, then: reference, else: fixed() };
+    case "join":
+      return { op, parts: [reference], separator: " " };
+    case "date_add":
+      return {
+        op,
+        date: reference,
+        amount: { op: "literal", type: "whole_number", value: 7 },
+        unit: "days",
+      };
+    case "date_diff":
+      return { op, from: reference, to: reference, unit: "days" };
+    case "deadline_passed":
+      return { op, due: reference, terminalStatusValues: [] };
+    default:
+      return { op, left: reference, right: { op: "literal", type: "text", value: "" } };
+  }
+};
 
-const operationOptions = (Object.keys(calculationOperationLabels) as CalculationOperation[]).map(
-  (value) => ({ value, label: calculationOperationLabels[value] }),
-);
-const numberOperationOptions = (
-  Object.keys(calculationNumberOperationLabels) as CalculationNumberOperation[]
-).map((value) => ({ value, label: calculationNumberOperationLabels[value] }));
-const units = [
-  { value: "days", label: "Days" },
-  { value: "weeks", label: "Weeks" },
-  { value: "months", label: "Months" },
-  { value: "years", label: "Years" },
-];
-const sources = [
-  { value: "field", label: "A field" },
-  { value: "literal", label: "A fixed number" },
-  { value: "numeric", label: "A part in brackets" },
-];
-
-/** One value of a number in the formula: a field, a fixed number, or a part in brackets with its own values. */
-function NumberValue({
+/** Edits the actual FlowFormula tree; no intermediate calculation expression exists. */
+function Formula({
   id,
   value,
   fields,
-  depth,
   disabled,
   onChange,
+  depth = 1,
 }: Readonly<{
   id: string;
-  value: CalculationNumber;
+  value: FlowFormula;
   fields: readonly FormulaField[];
-  depth: number;
   disabled: boolean;
-  onChange: (value: CalculationNumber) => void;
+  onChange: (value: FlowFormula) => void;
+  depth?: number;
 }>) {
-  const numeric = fields
-    .filter(numberAccepts)
-    .map((field) => ({ value: field.key, label: field.label }));
-  const changeSource = (source: string) => {
-    if (source === value.source) return;
-    if (source === "field") onChange({ source: "field", field: numeric[0]?.value ?? "" });
-    else if (source === "literal") onChange({ source: "literal", value: "1" });
-    else
-      onChange({
-        source: "numeric",
-        numeric_operation: "add",
-        operands: [
-          value.source === "numeric" ? { source: "literal", value: "1" } : value,
-          { source: "literal", value: "1" },
-        ],
-      });
-  };
-  return (
-    <div className="space-y-2">
-      <Label className="sr-only" htmlFor={`${id}-source`}>
-        Value comes from
-      </Label>
-      <StudioOptionControl
-        id={`${id}-source`}
-        value={value.source}
+  const part = (
+    key: string,
+    label: string,
+    node: FlowFormula,
+    change: (next: FlowFormula) => FlowFormula,
+  ) => (
+    <fieldset key={key} className="space-y-2 border-l pl-3">
+      <legend className="text-sm font-medium">{label}</legend>
+      <Formula
+        id={`${id}-${key}`}
+        value={node}
+        fields={fields}
         disabled={disabled}
-        options={depth >= 8 ? sources.slice(0, 2) : sources}
-        onChange={changeSource}
+        depth={depth + 1}
+        onChange={(next) => onChange(change(next))}
       />
-      {value.source === "field" ? (
-        <>
-          <Label className="sr-only" htmlFor={`${id}-field`}>
-            Field
-          </Label>
+    </fieldset>
+  );
+  const list = (
+    key: "args" | "parts" | "options",
+    entries: FlowFormula[],
+    minimum: number,
+    maximum: number,
+  ) => {
+    const change = (next: FlowFormula[]) => ({ ...value, [key]: next }) as FlowFormula;
+    return (
+      <div className="space-y-3">
+        {entries.map((entry, index) => (
+          <div key={index} className="space-y-1">
+            {part(`${key}-${index}`, `Value ${index + 1}`, entry, (next) =>
+              change(entries.map((item, at) => (at === index ? next : item))),
+            )}
+            {entries.length > minimum && (
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={disabled}
+                onClick={() => onChange(change(entries.filter((_, at) => at !== index)))}
+              >
+                Remove value {index + 1}
+              </Button>
+            )}
+          </div>
+        ))}
+        {entries.length < maximum && (
+          <Button
+            type="button"
+            variant="outline"
+            disabled={disabled}
+            onClick={() => onChange(change([...entries, fixed()]))}
+          >
+            Add a value
+          </Button>
+        )}
+      </div>
+    );
+  };
+  const body = (() => {
+    switch (value.op) {
+      case "reference":
+        return (
           <StudioReferencePicker
             id={`${id}-field`}
-            value={value.field}
-            unset="Choose a field…"
+            value={value.reference.source === "trigger_record" ? value.reference.field : ""}
+            unset="Choose a field"
             disabled={disabled}
-            options={numeric}
-            onChange={(field) => onChange({ source: "field", field })}
+            options={fields.map((field) => ({ value: field.key, label: field.label }))}
+            onChange={(field) =>
+              onChange({ op: "reference", reference: { source: "trigger_record", field } })
+            }
           />
-        </>
-      ) : value.source === "literal" ? (
+        );
+      case "literal":
+        return (
+          <div className="space-y-2">
+            <Label htmlFor={`${id}-type`}>Value type</Label>
+            <StudioOptionControl
+              id={`${id}-type`}
+              disabled={disabled}
+              value={value.type}
+              options={Object.entries(calculationResultTypeLabels).map(([type, label]) => ({
+                value: type,
+                label,
+              }))}
+              onChange={(type) =>
+                onChange({
+                  op: "literal",
+                  type: type as FlowLiteral["type"],
+                  value:
+                    type === "yes_no"
+                      ? false
+                      : type === "whole_number"
+                        ? 0
+                        : type === "decimal_number" || type === "money"
+                          ? "0"
+                          : "",
+                })
+              }
+            />
+            <Label htmlFor={`${id}-value`}>Fixed value</Label>
+            {value.type === "yes_no" ? (
+              <StudioOptionControl
+                id={`${id}-value`}
+                disabled={disabled}
+                value={String(value.value)}
+                options={[
+                  { value: "true", label: "Yes" },
+                  { value: "false", label: "No" },
+                ]}
+                onChange={(next) => onChange({ ...value, value: next === "true" })}
+              />
+            ) : (
+              <Input
+                id={`${id}-value`}
+                disabled={disabled}
+                value={String(value.value ?? "")}
+                onChange={(event) =>
+                  onChange({
+                    ...value,
+                    value:
+                      value.type === "whole_number"
+                        ? Number(event.target.value)
+                        : event.target.value,
+                  })
+                }
+              />
+            )}
+          </div>
+        );
+      case "now":
+        return (
+          <p className="text-sm text-muted-foreground">Worked out each time the record is read.</p>
+        );
+      case "join":
+        return (
+          <>
+            {list("parts", value.parts, 1, 20)}
+            <Label htmlFor={`${id}-separator`}>Between parts</Label>
+            <Input
+              id={`${id}-separator`}
+              disabled={disabled}
+              value={value.separator ?? ""}
+              maxLength={20}
+              onChange={(event) => onChange({ ...value, separator: event.target.value })}
+            />
+          </>
+        );
+      case "add":
+      case "multiply":
+      case "subtract":
+      case "divide":
+        return list("args", value.args, 2, value.op === "add" || value.op === "multiply" ? 10 : 2);
+      case "and":
+      case "or":
+        return list("args", value.args, 2, 20);
+      case "round":
+      case "not":
+      case "is_empty":
+      case "is_not_empty":
+      case "record_id":
+        return part("arg", "Value", value.arg, (arg) => ({ ...value, arg }));
+      case "in":
+        return (
+          <>
+            {part("value", "This value", value.value, (next) => ({ ...value, value: next }))}
+            {list("options", value.options, 1, 50)}
+          </>
+        );
+      case "if":
+        return (
+          <>
+            {part("condition", "When", value.condition, (condition) => ({ ...value, condition }))}
+            {part("then", "Use when yes", value.then, (then) => ({ ...value, then }))}
+            {part("else", "Use when no", value.else, (otherwise) => ({
+              ...value,
+              else: otherwise,
+            }))}
+          </>
+        );
+      case "date_add":
+        return (
+          <>
+            {part("date", "Starting date", value.date, (date) => ({ ...value, date }))}
+            {part("amount", "Add this many", value.amount, (amount) => ({ ...value, amount }))}
+          </>
+        );
+      case "date_diff":
+        return (
+          <>
+            {part("from", "From", value.from, (from) => ({ ...value, from }))}
+            {part("to", "To", value.to, (to) => ({ ...value, to }))}
+          </>
+        );
+      case "deadline_passed":
+        return (
+          <>
+            {part("due", "Deadline", value.due, (due) => ({ ...value, due }))}
+            <Label htmlFor={`${id}-status`}>Status field (optional)</Label>
+            <StudioReferencePicker
+              id={`${id}-status`}
+              disabled={disabled}
+              value={
+                value.status?.op === "reference" &&
+                value.status.reference.source === "trigger_record"
+                  ? value.status.reference.field
+                  : ""
+              }
+              unset="No status field"
+              options={fields.map((field) => ({ value: field.key, label: field.label }))}
+              onChange={(field) => {
+                const { status: previous, ...rest } = value;
+                void previous;
+                onChange(
+                  field === ""
+                    ? { ...rest, terminalStatusValues: [] }
+                    : {
+                        ...rest,
+                        status: { op: "reference", reference: { source: "trigger_record", field } },
+                      },
+                );
+              }}
+            />
+            {value.status !== undefined && (
+              <>
+                <Label htmlFor={`${id}-terminal`}>Finished status values (one per line)</Label>
+                <textarea
+                  id={`${id}-terminal`}
+                  className="flex min-h-20 w-full rounded-md border bg-transparent px-3 py-2 text-sm"
+                  disabled={disabled}
+                  value={value.terminalStatusValues.join("\n")}
+                  onChange={(event) =>
+                    onChange({
+                      ...value,
+                      terminalStatusValues: event.target.value
+                        .split("\n")
+                        .filter((entry) => entry !== ""),
+                    })
+                  }
+                />
+              </>
+            )}
+          </>
+        );
+      default:
+        return (
+          <>
+            {part("left", "This value", value.left, (left) => ({ ...value, left }))}
+            {part("right", "Compared with", value.right, (right) => ({ ...value, right }))}
+          </>
+        );
+    }
+  })();
+  return (
+    <div className="space-y-2">
+      <Label htmlFor={`${id}-operation`}>Formula</Label>
+      <StudioOptionControl
+        id={`${id}-operation`}
+        value={value.op}
+        disabled={disabled}
+        options={Object.entries(labels)
+          .filter(([op]) => depth < 10 || op === "literal" || op === "reference" || op === "now")
+          .map(([op, label]) => ({ value: op, label }))}
+        onChange={(op) => onChange(starter(op as Operator, fields))}
+      />
+      {body}
+      {"scale" in value && (
         <>
-          <Label className="sr-only" htmlFor={`${id}-literal`}>
-            Fixed number
-          </Label>
+          <Label htmlFor={`${id}-scale`}>Operation decimal places</Label>
           <Input
-            id={`${id}-literal`}
-            inputMode="decimal"
-            maxLength={60}
-            value={value.value}
+            id={`${id}-scale`}
+            type="number"
+            min={0}
+            max={18}
             disabled={disabled}
-            onChange={(event) => onChange({ source: "literal", value: event.target.value.trim() })}
+            value={value.scale}
+            onChange={(event) => onChange({ ...value, scale: Number(event.target.value) })}
+          />
+          <Label htmlFor={`${id}-rounding`}>Rounding</Label>
+          <StudioOptionControl
+            id={`${id}-rounding`}
+            disabled={disabled}
+            value={value.rounding}
+            options={["half_even", "half_up", "half_down", "up", "down", "ceiling", "floor"].map(
+              (mode) => ({ value: mode, label: mode.replaceAll("_", " ") }),
+            )}
+            onChange={(rounding) => onChange({ ...value, rounding: rounding as FlowRoundingMode })}
           />
         </>
-      ) : (
-        <NumberPart
-          id={id}
-          part={value}
-          fields={fields}
-          depth={depth + 1}
-          disabled={disabled}
-          onChange={onChange}
-        />
+      )}
+      {"unit" in value && (
+        <>
+          <Label htmlFor={`${id}-unit`}>Time unit</Label>
+          <StudioOptionControl
+            id={`${id}-unit`}
+            disabled={disabled}
+            value={value.unit}
+            options={["minutes", "hours", "days", "weeks", "months", "years"].map((unit) => ({
+              value: unit,
+              label: unit,
+            }))}
+            onChange={(unit) => onChange({ ...value, unit: unit as FlowDateUnit })}
+          />
+        </>
       )}
     </div>
   );
 }
 
-/** One value of a number in words, for its row in the list of values. */
-const numberTitle = (value: CalculationNumber, fields: readonly FormulaField[]): string =>
-  value.source === "field"
-    ? (fields.find((field) => field.key === value.field)?.label ?? "Choose a field")
-    : value.source === "literal"
-      ? value.value === ""
-        ? "A fixed number"
-        : value.value
-      : `${calculationNumberOperationLabels[value.numeric_operation]} of ${value.operands.length} values`;
-
-/** A part of the formula: an operation over two or more values, worked out left to right. */
-function NumberPart({
-  id,
-  part,
-  fields,
-  depth,
-  disabled,
-  onChange,
-}: Readonly<{
-  id: string;
-  part: Numeric;
-  fields: readonly FormulaField[];
-  depth: number;
-  disabled: boolean;
-  onChange: (part: Numeric) => void;
-}>) {
-  const { keys, newKey } = useStudioEntryKeys(part.operands.length);
-  const setOperand = (index: number, next: CalculationNumber) =>
-    onChange({
-      ...part,
-      operands: part.operands.map((operand, at) => (at === index ? next : operand)),
-    });
-  return (
-    <div className="space-y-2">
-      <Label className="text-sm" htmlFor={`${id}-operation`}>
-        Operation
-      </Label>
-      <StudioOptionControl
-        id={`${id}-operation`}
-        value={part.numeric_operation}
-        disabled={disabled}
-        options={numberOperationOptions}
-        onChange={(operation) =>
-          onChange({ ...part, numeric_operation: operation as CalculationNumberOperation })
-        }
-      />
-      <StudioEntryList
-        label="Values, worked out in this order"
-        itemName="value"
-        disabled={disabled}
-        items={part.operands.map((operand, index) => ({
-          key: keys.current[index]!,
-          title: numberTitle(operand, fields),
-          content: (
-            <NumberValue
-              id={`${id}-${keys.current[index]}`}
-              value={operand}
-              fields={fields}
-              depth={depth}
-              disabled={disabled}
-              onChange={(next) => setOperand(index, next)}
-            />
-          ),
-        }))}
-        onMove={(from, to) => {
-          const operands = [...part.operands];
-          const [moved] = operands.splice(from, 1);
-          if (moved === undefined) return;
-          operands.splice(to, 0, moved);
-          const [movedKey] = keys.current.splice(from, 1);
-          keys.current.splice(to, 0, movedKey!);
-          onChange({ ...part, operands });
-        }}
-        onRemove={
-          part.operands.length <= 2
-            ? undefined
-            : (index) => {
-                keys.current.splice(index, 1);
-                onChange({ ...part, operands: part.operands.filter((_, at) => at !== index) });
-              }
-        }
-      >
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          disabled={disabled || part.operands.length >= 20}
-          onClick={() => {
-            keys.current.push(newKey());
-            onChange({ ...part, operands: [...part.operands, { source: "literal", value: "1" }] });
-          }}
-        >
-          <Icon name="plus" />
-          Add a value
-        </Button>
-      </StudioEntryList>
-    </div>
-  );
-}
-
-/**
- * The formula editor of a calculation field: what it works out (joined text, a number from
- * fields and fixed numbers with parts in brackets, a yes-or-no condition, a moved date, or whether
- * a deadline has passed), its result, and when it is worked out. The formula reads back as one line.
- */
 export function StudioCalculationEditor({
   idPrefix,
   settings,
   fields,
-  compiled,
   disabled,
   onChange,
 }: Readonly<{
   idPrefix: string;
   settings: CalculationSettings;
-  /** The other fields of the record type, which the formula can name. */
   fields: readonly FormulaField[];
-  /** The saved draft's compiled fields of the record type, which a condition's controls need. */
   compiled: readonly ModuleField[] | undefined;
   disabled: boolean;
-  /** The changed settings, and whether a condition in them is complete. */
   onChange: (settings: CalculationSettings, conditionValid: boolean) => void;
 }>) {
   const byKey = useMemo(() => new Map(fields.map((field) => [field.key, field])), [fields]);
-  const conditionKeys = useMemo(() => new Set(fields.map((field) => field.key)), [fields]);
-  const labelOf = (key: string) => byKey.get(key)?.label ?? key;
-  const expression = settings.expression;
-  const set = (next: Partial<CalculationSettings>, conditionValid = true) =>
-    onChange(
-      settledCalculation({ ...settings, ...next } as CalculationSettings, byKey),
-      conditionValid,
-    );
-  const setExpression = (next: CalculationExpression, conditionValid = true) =>
-    set({ expression: next }, conditionValid);
-  const choicesOf = (accepts: (field: FormulaField) => boolean) =>
-    fields.filter(accepts).map((field) => ({ value: field.key, label: field.label }));
-  const results = calculationResultChoices(expression, byKey);
-  const precise = settings.result_type === "decimal_number" || settings.result_type === "money";
-  const id = (part: string) => `${idPrefix}-${part}`;
-
-  const body = (() => {
-    switch (expression.operation) {
-      case "join_text": {
-        const joined = expression as Expression<"join_text">;
-        const offered = choicesOf(joinTextAccepts).filter(
-          (option) => !joined.fields.includes(option.value),
-        );
-        return (
-          <>
-            <StudioEntryList
-              label="Joined fields"
-              itemName="field"
-              disabled={disabled}
-              empty="No field is joined yet."
-              items={joined.fields.map((key) => ({ key, title: labelOf(key) }))}
-              onMove={(from, to) => {
-                const next = [...joined.fields];
-                next.splice(to, 0, next.splice(from, 1)[0]!);
-                setExpression({ ...joined, fields: next });
-              }}
-              onRemove={(index) =>
-                setExpression({
-                  ...joined,
-                  fields: joined.fields.filter((_, at) => at !== index),
-                })
-              }
-            />
-            {offered.length === 0 ? null : (
-              <StudioField label="Add a field to joined text">
-                {(control) => (
-                  <StudioReferencePicker
-                    id={control.id}
-                    value=""
-                    unset="Choose a field…"
-                    disabled={disabled || joined.fields.length >= 20}
-                    options={offered}
-                    onChange={(key) => {
-                      if (key !== "") setExpression({ ...joined, fields: [...joined.fields, key] });
-                    }}
-                  />
-                )}
-              </StudioField>
-            )}
-            <StudioField
-              label="Between the values"
-              hint="For example a space, or a comma and a space."
-            >
-              {(control) => (
-                <Input
-                  {...control}
-                  maxLength={20}
-                  value={joined.separator}
-                  disabled={disabled}
-                  onChange={(event) => setExpression({ ...joined, separator: event.target.value })}
-                />
-              )}
-            </StudioField>
-          </>
-        );
-      }
-      case "numeric": {
-        const root: Numeric = {
-          source: "numeric",
-          numeric_operation: expression.numeric_operation,
-          operands: expression.operands,
-        };
-        return (
-          <NumberPart
-            id={id("number")}
-            part={root}
-            fields={fields}
-            depth={1}
-            disabled={disabled}
-            onChange={(part) =>
-              setExpression({
-                operation: "numeric",
-                numeric_operation: part.numeric_operation,
-                operands: part.operands,
-              })
-            }
-          />
-        );
-      }
-      case "condition":
-        return (
-          <StudioFormulaCondition
-            label="Yes when"
-            condition={(expression as { condition?: unknown }).condition}
-            compiled={compiled}
-            fieldKeys={conditionKeys}
-            disabled={disabled}
-            onChange={(condition, valid) =>
-              setExpression(
-                {
-                  operation: "condition",
-                  ...(condition === undefined ? {} : { condition }),
-                } as CalculationExpression,
-                valid,
-              )
-            }
-          />
-        );
-      case "date_offset": {
-        const moved = expression as Expression<"date_offset">;
-        return (
-          <>
-            <StudioField label="Date">
-              {(control) => (
-                <StudioReferencePicker
-                  id={control.id}
-                  value={moved.date_field}
-                  unset="Choose a date field…"
-                  disabled={disabled}
-                  options={choicesOf(dateAccepts)}
-                  onChange={(date_field) => setExpression({ ...moved, date_field })}
-                />
-              )}
-            </StudioField>
-            <StudioField label="By how much comes from">
-              {(control) => (
-                <StudioOptionControl
-                  id={control.id}
-                  value={moved.amount.source}
-                  disabled={disabled}
-                  options={sources
-                    .slice(0, 2)
-                    .map((option) =>
-                      option.value === "literal"
-                        ? { ...option, label: "A fixed whole number" }
-                        : option,
-                    )}
-                  onChange={(source) =>
-                    setExpression({
-                      ...moved,
-                      amount:
-                        source === "field"
-                          ? {
-                              source: "field",
-                              field: choicesOf(wholeNumberAccepts)[0]?.value ?? "",
-                            }
-                          : { source: "literal", value: "7" },
-                    })
-                  }
-                />
-              )}
-            </StudioField>
-            {moved.amount.source === "field" ? (
-              <StudioField label="Whole-number field">
-                {(control) => (
-                  <StudioReferencePicker
-                    id={control.id}
-                    value={moved.amount.source === "field" ? moved.amount.field : ""}
-                    unset="Choose a field…"
-                    disabled={disabled}
-                    options={choicesOf(wholeNumberAccepts)}
-                    onChange={(field) =>
-                      setExpression({ ...moved, amount: { source: "field", field } })
-                    }
-                  />
-                )}
-              </StudioField>
-            ) : (
-              <StudioField
-                label="By how much"
-                hint="A whole number; a negative number moves the date earlier."
-              >
-                {(control) => (
-                  <Input
-                    {...control}
-                    inputMode="numeric"
-                    maxLength={20}
-                    disabled={disabled}
-                    value={moved.amount.source === "literal" ? moved.amount.value : ""}
-                    onChange={(event) =>
-                      setExpression({
-                        ...moved,
-                        amount: { source: "literal", value: event.target.value.trim() },
-                      })
-                    }
-                  />
-                )}
-              </StudioField>
-            )}
-            <StudioField label="Unit">
-              {(control) => (
-                <StudioOptionControl
-                  id={control.id}
-                  value={moved.unit}
-                  disabled={disabled}
-                  options={units}
-                  onChange={(unit) =>
-                    setExpression({ ...moved, unit: unit as Expression<"date_offset">["unit"] })
-                  }
-                />
-              )}
-            </StudioField>
-          </>
-        );
-      }
-      case "deadline_passed": {
-        const deadline = expression as Expression<"deadline_passed">;
-        const status =
-          deadline.status_field === undefined ? undefined : byKey.get(deadline.status_field);
-        const statusOptions =
-          (status?.settings as { options?: { value: string; label: string }[] } | undefined)
-            ?.options ?? [];
-        const finished = new Set(deadline.terminal_status_values.map(String));
-        return (
-          <>
-            <StudioField label="Due">
-              {(control) => (
-                <StudioReferencePicker
-                  id={control.id}
-                  value={deadline.due_field}
-                  unset="Choose a date field…"
-                  disabled={disabled}
-                  options={choicesOf(dateAccepts)}
-                  onChange={(due_field) => setExpression({ ...deadline, due_field })}
-                />
-              )}
-            </StudioField>
-            <StudioField
-              label="Status"
-              optional
-              hint=" A record in a finished status never counts as past its deadline."
-            >
-              {(control) => (
-                <StudioReferencePicker
-                  id={control.id}
-                  value={deadline.status_field ?? ""}
-                  unset="No status"
-                  disabled={disabled}
-                  options={choicesOf(joinTextAccepts)}
-                  onChange={(key) => {
-                    const rest: Partial<Expression<"deadline_passed">> = { ...deadline };
-                    delete rest.status_field;
-                    setExpression({
-                      ...rest,
-                      ...(key === "" ? {} : { status_field: key }),
-                      terminal_status_values: [],
-                    } as Expression<"deadline_passed">);
-                  }}
-                />
-              )}
-            </StudioField>
-            {status === undefined ? null : statusOptions.length > 0 ? (
-              <fieldset className="space-y-1">
-                <legend className="text-sm">Finished statuses</legend>
-                {statusOptions.map((option) => (
-                  <div key={option.value} className="flex items-center gap-2">
-                    <Checkbox
-                      id={id(`finished-${option.value}`)}
-                      checked={finished.has(option.value)}
-                      disabled={disabled}
-                      onCheckedChange={(checked) =>
-                        setExpression({
-                          ...deadline,
-                          terminal_status_values:
-                            checked === true
-                              ? [...deadline.terminal_status_values, option.value]
-                              : deadline.terminal_status_values.filter(
-                                  (value) => value !== option.value,
-                                ),
-                        })
-                      }
-                    />
-                    <Label htmlFor={id(`finished-${option.value}`)} className="font-normal">
-                      {option.label}
-                    </Label>
-                  </div>
-                ))}
-              </fieldset>
-            ) : (
-              <StudioField
-                label="Finished statuses"
-                hint="The status values that end the deadline, separated by commas."
-              >
-                {(control) => (
-                  <Input
-                    {...control}
-                    maxLength={600}
-                    disabled={disabled}
-                    value={deadline.terminal_status_values.map(String).join(", ")}
-                    onChange={(event) =>
-                      setExpression({
-                        ...deadline,
-                        terminal_status_values: event.target.value
-                          .split(",")
-                          .map((value) => value.trim())
-                          .filter((value) => value !== "")
-                          .slice(0, 20),
-                      })
-                    }
-                  />
-                )}
-              </StudioField>
-            )}
-          </>
-        );
-      }
-    }
-  })();
-
+  const set = (next: Partial<CalculationSettings>) =>
+    onChange(settledCalculation({ ...settings, ...next }, byKey), true);
+  const results = calculationResultChoices(settings.expression, byKey);
+  const forced = calculationForcedReadTime(settings.expression, byKey);
   return (
     <div className="space-y-4">
-      <StudioField label="What it works out">
-        {(control) => (
-          <StudioOptionControl
-            id={control.id}
-            value={expression.operation}
+      <Formula
+        id={idPrefix}
+        value={settings.expression}
+        fields={fields}
+        disabled={disabled}
+        onChange={(expression) => set({ expression })}
+      />
+      <div className="space-y-2">
+        <Label htmlFor={`${idPrefix}-result`}>{"Result"}</Label>
+        <StudioOptionControl
+          id={`${idPrefix}-result`}
+          disabled={disabled}
+          value={settings.result_type}
+          options={(results.length ? results : [settings.result_type]).map((type) => ({
+            value: type,
+            label: calculationResultTypeLabels[type],
+          }))}
+          onChange={(result_type) =>
+            set({ result_type: result_type as CalculationSettings["result_type"] })
+          }
+        />
+      </div>
+      {["decimal_number", "money"].includes(settings.result_type) && (
+        <div className="space-y-2">
+          <Label htmlFor={`${idPrefix}-places`}>{"Result decimal places"}</Label>
+          <Input
+            id={`${idPrefix}-places`}
             disabled={disabled}
-            options={operationOptions}
-            onChange={(operation) => {
-              if (operation === expression.operation) return;
-              const next = starterCalculationExpression(operation as CalculationOperation, fields);
-              set({
-                expression: next,
-                result_type: calculationResultChoices(next, byKey)[0] ?? settings.result_type,
-              });
-            }}
+            type="number"
+            min={0}
+            max={12}
+            value={settings.decimal_places ?? ""}
+            onChange={(event) => set({ decimal_places: typedDecimalPlaces(event.target.value) })}
           />
-        )}
-      </StudioField>
-      <section className="space-y-2" aria-label="Formula">
-        {body}
-      </section>
-      <p className="break-words text-sm text-muted-foreground" aria-label="The formula reads">
-        <span className="font-medium text-foreground">
-          {calculationResultTypeLabels[settings.result_type]} =
-        </span>{" "}
-        {describeCalculation(expression, labelOf)}
-      </p>
-      {results.length > 1 || (results.length === 1 && !results.includes(settings.result_type)) ? (
-        <StudioField label="Result">
-          {(control) => (
-            <StudioOptionControl
-              id={control.id}
-              value={settings.result_type}
-              disabled={disabled}
-              options={results.map((value) => ({
-                value,
-                label: calculationResultTypeLabels[value],
-              }))}
-              onChange={(result_type) =>
-                set({ result_type: result_type as CalculationSettings["result_type"] })
-              }
-            />
-          )}
-        </StudioField>
-      ) : (
-        <p className="text-sm text-muted-foreground">
-          {results.length === 1
-            ? `The result is ${calculationResultTypeLabels[results[0]!].toLowerCase()}.`
-            : "The result is worked out from the formula once it is complete."}
-        </p>
+        </div>
       )}
-      {precise && (
-        <StudioField
-          label="Decimal places"
-          hint="How many decimal places the result keeps, from 0 to 12."
-        >
-          {(control) => (
-            <Input
-              {...control}
-              type="number"
-              min={0}
-              max={12}
-              step={1}
-              disabled={disabled}
-              value={settings.decimal_places ?? ""}
-              onChange={(event) => set({ decimal_places: typedDecimalPlaces(event.target.value) })}
-            />
-          )}
-        </StudioField>
-      )}
-      {expression.operation === "deadline_passed" ? (
-        <StudioHelp hint="It depends on the current time, so it is worked out each time it is read." />
-      ) : calculationForcedReadTime(expression, byKey) ? (
-        <StudioHelp hint="It reads a field worked out each time it is read, so it is worked out each time it is read too." />
-      ) : (
-        <StudioField
-          label="When it is worked out"
-          hint="A saved result is kept with the record; a read-time result is worked out afresh each time."
-        >
-          {(control) => (
-            <StudioOptionControl
-              id={control.id}
-              value={settings.evaluation ?? ""}
-              disabled={disabled}
-              options={[
-                { value: "stored", label: "When the record is saved" },
-                { value: "read_time", label: "Each time it is read" },
-              ]}
-              onChange={(evaluation) => set({ evaluation: evaluation as "read_time" | "stored" })}
-            />
-          )}
-        </StudioField>
-      )}
+      <div className="space-y-2">
+        <Label htmlFor={`${idPrefix}-evaluation`}>{"When it is worked out"}</Label>
+        <StudioOptionControl
+          id={`${idPrefix}-evaluation`}
+          disabled={disabled || forced}
+          value={settings.evaluation ?? "stored"}
+          options={[
+            { value: "stored", label: "When saved" },
+            { value: "read_time", label: "Each time it is read" },
+          ]}
+          onChange={(evaluation) => set({ evaluation: evaluation as "stored" | "read_time" })}
+        />
+      </div>
     </div>
   );
 }

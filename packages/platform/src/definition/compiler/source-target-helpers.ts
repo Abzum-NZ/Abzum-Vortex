@@ -106,10 +106,6 @@ function conditionRootPaths(
     ] as Path;
     fixedRoots.push(
       { sourceRoot: [...base, "filter"], canonicalRoot: [...canonicalBase, "filter"] },
-      {
-        sourceRoot: [...base, "expression", "condition"],
-        canonicalRoot: [...canonicalBase, "expression", "condition"],
-      },
     );
   }
   if (collection === "pages") {

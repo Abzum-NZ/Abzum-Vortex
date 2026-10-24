@@ -80,40 +80,23 @@ export function explicitSourceTargets(
     resolution,
   );
   if (recordScopeTargets) return recordScopeTargets;
-  const conditionTargets = conditionSourceTargets(source, sourcePath);
-  if (conditionTargets) {
-    if (
-      source.kind === "module" &&
-      sourcePath[0] === "body" &&
-      sourcePath[1] === "record_types" &&
-      typeof sourcePath[2] === "number" &&
-      sourcePath[3] === "fields" &&
-      typeof sourcePath[4] === "number" &&
-      sourcePath[5] === "settings" &&
-      sourcePath[6] === "expression" &&
-      sourcePath[7] === "condition" &&
-      sourcePath.at(-1) === "field"
-    ) {
-      const fieldTarget = conditionTargets.find((target) => target.at(-1) === "fieldId");
-      const dependencyPath: Path = [
-        "content",
-        "recordTypes",
-        sourcePath[2],
-        "fields",
-        sourcePath[4],
-        "settings",
-        "dependencyFieldIds",
-      ];
+  // Calculation formulas retain their tree; only local field references resolve to identities.
+  if (source.kind === "module" && sourcePath[0] === "body" && sourcePath[1] === "record_types" &&
+      typeof sourcePath[2] === "number" && sourcePath[3] === "fields" && typeof sourcePath[4] === "number" &&
+      sourcePath[5] === "settings" && sourcePath[6] === "expression") {
+    const base: Path = ["content", "recordTypes", sourcePath[2], "fields", sourcePath[4], "settings"];
+    const target: Path = [...base, "expression", ...sourcePath.slice(7)];
+    if (sourcePath.at(-1) === "field" && sourcePath.at(-2) === "reference") {
+      target[target.length - 1] = "fieldId";
+      const dependencyPath: Path = [...base, "dependencyFieldIds"];
       const dependencies = valueAtPath(canonical, dependencyPath) as unknown[];
-      const dependencyIndex = fieldTarget
-        ? dependencies.indexOf(valueAtPath(canonical, fieldTarget))
-        : -1;
-      return dependencyIndex >= 0
-        ? [...conditionTargets, [...dependencyPath, dependencyIndex]]
-        : conditionTargets;
+      const index = dependencies.indexOf(valueAtPath(canonical, target));
+      return index < 0 ? [target] : [target, [...dependencyPath, index]];
     }
-    return conditionTargets;
+    return [target];
   }
+  const conditionTargets = conditionSourceTargets(source, sourcePath);
+  if (conditionTargets) return conditionTargets;
   if (isOpaqueDataPath(positions, sourcePath)) return undefined;
   const roleTargets = applicationRolePermissionTargets(source, canonical, sourcePath);
   if (roleTargets) return roleTargets;

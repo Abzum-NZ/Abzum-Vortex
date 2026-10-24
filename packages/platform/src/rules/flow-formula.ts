@@ -29,6 +29,7 @@ export type FlowRuntimeValue = Readonly<{ type: string; value: JsonValue }>;
 /** What a formula may read. `undefined` from `reference` means the reference cannot be resolved. */
 export type FlowFormulaScope = Readonly<{
   now: string;
+  organizationLocalDate?: string | undefined;
   reference: (reference: FlowReference) => FlowRuntimeValue | undefined;
 }>;
 
@@ -614,6 +615,23 @@ export const evaluateFlowFormula = (
         if (texts.some((text) => text === undefined)) return undefined;
         const result = (texts as string[]).join(node.separator ?? "");
         return result.length > maximumTextCharacters ? undefined : value("text", result);
+      }
+      case "deadline_passed": {
+        if (node.status !== undefined) {
+          const status = evaluate(node.status);
+          if (status === undefined || !isTextType(status.type)) return undefined;
+          if (node.terminalStatusValues.some((candidate) => flowJsonValuesEqual(candidate, status.value)))
+            return yesNo(false);
+        }
+        const due = evaluate(node.due);
+        if (due === undefined || due.value === null) return undefined;
+        if (due.type === "date") {
+          if (typeof due.value !== "string" || scope.organizationLocalDate === undefined) return undefined;
+          return yesNo(due.value < scope.organizationLocalDate);
+        }
+        if (due.type !== "date_time") return undefined;
+        const order = compare(due, value("date_time", scope.now));
+        return typeof order === "number" ? yesNo(order <= 0) : undefined;
       }
       case "date_add": {
         const date = evaluate(node.date);

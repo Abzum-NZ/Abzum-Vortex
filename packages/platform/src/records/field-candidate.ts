@@ -153,9 +153,9 @@ export const calculateAndFinalize = ({
   const needsOrganizationLocalDate = recordType.fields.some((field) => {
     if (field.type !== "calculation") return false;
     const expression = field.settings.expression;
-    if (expression.kind !== "deadline_passed") return false;
+    if (expression.op !== "deadline_passed") return false;
     const dueField = recordType.fields.find(
-      (candidate) => candidate.fieldId === expression.dueFieldId,
+      (candidate) => candidate.fieldId === (expression.due.op === "reference" && expression.due.reference.source === "module_field" ? expression.due.reference.fieldId : ""),
     );
     return dueField !== undefined && isDateDeadlineDueField(dueField);
   });
@@ -208,9 +208,9 @@ export const operationClock = (
     recordType.fields.some((field) => {
       if (field.type !== "calculation") return false;
       const expression = field.settings.expression;
-      if (expression.kind !== "deadline_passed") return false;
+      if (expression.op !== "deadline_passed") return false;
       const dueField = recordType.fields.find(
-        (candidate) => candidate.fieldId === expression.dueFieldId,
+        (candidate) => candidate.fieldId === (expression.due.op === "reference" && expression.due.reference.source === "module_field" ? expression.due.reference.fieldId : ""),
       );
       return dueField !== undefined && isDateDeadlineDueField(dueField);
     }),

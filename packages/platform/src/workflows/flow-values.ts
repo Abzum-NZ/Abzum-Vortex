@@ -172,6 +172,7 @@ export type FlowFormula =
   | { op: "literal"; type: FlowLiteral["type"]; value: JsonValue }
   | { op: "reference"; reference: FlowReference }
   | { op: "now" }
+  | { op: "deadline_passed"; due: FlowFormula; status?: FlowFormula | undefined; terminalStatusValues: JsonValue[] }
   | { op: "record_id"; arg: FlowFormula }
   | ({ op: "add" | "multiply"; args: FlowFormula[] } & ArithmeticPrecision)
   | ({ op: "subtract" | "divide"; args: [FlowFormula, FlowFormula] } & ArithmeticPrecision)
@@ -212,6 +213,12 @@ const flowFormulaTreeSchema: z.ZodType<FlowFormula> = z.lazy(() =>
       }),
     z.object({ op: z.literal("reference"), reference: flowReferenceSchema }).strict(),
     z.object({ op: z.literal("now") }).strict(),
+    z.object({ op: z.literal("deadline_passed"), due: flowFormulaTreeSchema,
+      status: flowFormulaTreeSchema.optional(), terminalStatusValues: z.array(jsonValueSchema).max(20),
+    }).strict().superRefine((value, context) => {
+      if (value.status === undefined && value.terminalStatusValues.length > 0)
+        context.addIssue({ code: "custom", path: ["status"], message: "Terminal statuses require a status operand" });
+    }),
     z.object({ op: z.literal("record_id"), arg: flowFormulaTreeSchema }).strict(),
     z
       .object({
@@ -299,7 +306,7 @@ const flowFormulaTreeSchema: z.ZodType<FlowFormula> = z.lazy(() =>
   ]),
 );
 
-const formulaChildren = (formula: FlowFormula): readonly FlowFormula[] => {
+export const flowFormulaChildren = (formula: FlowFormula): readonly FlowFormula[] => {
   switch (formula.op) {
     case "literal":
     case "reference":
@@ -324,6 +331,8 @@ const formulaChildren = (formula: FlowFormula): readonly FlowFormula[] => {
       return [formula.condition, formula.then, formula.else];
     case "join":
       return formula.parts;
+    case "deadline_passed":
+      return [formula.due, ...(formula.status === undefined ? [] : [formula.status])];
     case "date_add":
       return [formula.date, formula.amount];
     case "date_diff":
@@ -337,11 +346,11 @@ const inspectFormula = (
   formula: FlowFormula,
   depth = 1,
 ): { depth: number; nodes: number; usesNow: boolean } => {
-  const inspected = formulaChildren(formula).map((child) => inspectFormula(child, depth + 1));
+  const inspected = flowFormulaChildren(formula).map((child) => inspectFormula(child, depth + 1));
   return {
     depth: Math.max(depth, ...inspected.map((child) => child.depth)),
     nodes: 1 + inspected.reduce((total, child) => total + child.nodes, 0),
-    usesNow: formula.op === "now" || inspected.some((child) => child.usesNow),
+    usesNow: formula.op === "now" || formula.op === "deadline_passed" || inspected.some((child) => child.usesNow),
   };
 };
 

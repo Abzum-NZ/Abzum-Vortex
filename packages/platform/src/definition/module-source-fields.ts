@@ -1,3 +1,4 @@
+import { flowFormulaSchema, flowFormulaUsesNow } from "../workflows/flow-values";
 import { z } from "zod";
 import {
   personalDataClassSchema,
@@ -10,9 +11,6 @@ import {
   sourceQualifiedRecordTypeSchema,
 } from "../catalogue/identifiers";
 import {
-  calculationMaximumNestingDepth,
-  calculationMaximumOperandCount,
-  calculationResultTypesByOperation,
   jsonValueSchema,
   labelSchema,
   safeHttpsUrlSchema,
@@ -345,133 +343,7 @@ const sourceMultiLinkSettingsSchema = z
     ),
   })
   .strict();
-/** Closed safety limits for one nested numeric expression are declared in ./common. */
-const sourceCalculationNumberOperationSchema = z.enum(["add", "subtract", "multiply", "divide"]);
-const sourceCalculationNumberOperandSchema = z.discriminatedUnion("source", [
-  z
-    .object({
-      source: sourceProvenanceUnchanged(z.literal("field")),
-      field: sourceProvenanceTarget(builderKeySchema, [
-        "fieldId",
-        "fieldIds/#",
-        "dependencyFieldIds/#",
-      ]),
-    })
-    .strict(),
-  z
-    .object({
-      source: sourceProvenanceUnchanged(z.literal("literal")),
-      value: sourceProvenanceTarget(sourceExactDecimalTextSchema, ["value"]),
-    })
-    .strict(),
-]);
-/**
- * One value of a numeric calculation as authored: a named field, an exact decimal literal, or a
- * further numeric operation over further values. A nested operation is the same closed form the
- * calculation itself uses, so a new formula needs no new expression and no engine change.
- */
-type SourceCalculationNumberValue =
-  | z.infer<typeof sourceCalculationNumberOperandSchema>
-  | {
-      source: "numeric";
-      numeric_operation: z.infer<typeof sourceCalculationNumberOperationSchema>;
-      operands: SourceCalculationNumberValue[];
-    };
-const inspectSourceCalculationNumberValue = (
-  value: SourceCalculationNumberValue,
-  depth = 1,
-): { depth: number; values: number; fields: number } => {
-  if (value.source !== "numeric")
-    return { depth, values: 1, fields: value.source === "field" ? 1 : 0 };
-  const inspected = value.operands.map((operand) =>
-    inspectSourceCalculationNumberValue(operand, depth + 1),
-  );
-  return {
-    depth: Math.max(depth, ...inspected.map((operand) => operand.depth)),
-    values: 1 + inspected.reduce((total, operand) => total + operand.values, 0),
-    fields: inspected.reduce((total, operand) => total + operand.fields, 0),
-  };
-};
-const sourceCalculationNumberValueSchema: z.ZodType<SourceCalculationNumberValue> = z.lazy(() =>
-  z
-    .discriminatedUnion("source", [
-      ...sourceCalculationNumberOperandSchema.options,
-      z
-        .object({
-          source: sourceProvenanceUnchanged(z.literal("numeric")),
-          numeric_operation: sourceProvenanceTarget(sourceCalculationNumberOperationSchema, [
-            "operation",
-          ]),
-          operands: sourceProvenanceUnchanged(
-            z.array(sourceCalculationNumberValueSchema).min(2).max(20),
-          ),
-        })
-        .strict(),
-    ])
-    .superRefine((value, context) => {
-      const inspected = inspectSourceCalculationNumberValue(value);
-      if (inspected.depth > calculationMaximumNestingDepth)
-        context.addIssue({
-          code: "custom",
-          message: `Numeric nesting cannot exceed ${calculationMaximumNestingDepth} levels`,
-        });
-      if (inspected.values > calculationMaximumOperandCount)
-        context.addIssue({
-          code: "custom",
-          message: `A numeric calculation cannot exceed ${calculationMaximumOperandCount} values`,
-        });
-    }),
-);
-const sourceCalculationExpressionSchema = z.discriminatedUnion("operation", [
-  z
-    .object({
-      operation: sourceProvenanceTarget(z.literal("join_text"), ["kind"]),
-      fields: sourceProvenanceUnchanged(
-        z
-          .array(sourceProvenanceTarget(builderKeySchema, ["fieldIds/#", "dependencyFieldIds/#"]))
-          .min(1)
-          .max(20),
-      ),
-      separator: sourceProvenanceUnchanged(z.string().max(20)),
-    })
-    .strict(),
-  z
-    .object({
-      operation: sourceProvenanceTarget(z.literal("numeric"), ["kind"]),
-      numeric_operation: sourceProvenanceTarget(sourceCalculationNumberOperationSchema, [
-        "operation",
-      ]),
-      operands: sourceProvenanceUnchanged(
-        z.array(sourceCalculationNumberValueSchema).min(2).max(20),
-      ),
-    })
-    .strict(),
-  z
-    .object({
-      operation: sourceProvenanceTarget(z.literal("condition"), ["kind"]),
-      condition: sourceProvenanceUnchanged(sourceConditionSchema),
-    })
-    .strict(),
-  z
-    .object({
-      operation: sourceProvenanceTarget(z.literal("date_offset"), ["kind"]),
-      date_field: sourceProvenanceTarget(builderKeySchema, ["dateFieldId", "dependencyFieldIds/#"]),
-      amount: sourceProvenanceUnchanged(sourceCalculationNumberOperandSchema),
-      unit: sourceProvenanceUnchanged(z.enum(["days", "weeks", "months", "years"])),
-    })
-    .strict(),
-  z
-    .object({
-      operation: sourceProvenanceTarget(z.literal("deadline_passed"), ["kind"]),
-      due_field: sourceProvenanceTarget(builderKeySchema, ["dueFieldId", "dependencyFieldIds/#"]),
-      status_field: sourceProvenanceTarget(builderKeySchema.optional(), [
-        "statusFieldId",
-        "dependencyFieldIds/#",
-      ]),
-      terminal_status_values: sourceProvenanceUnchanged(z.array(jsonValueSchema).max(20)),
-    })
-    .strict(),
-]);
+/** Calculation expressions share the FlowFormula contract. */
 const sourceCalculationSettingsSchema = z
   .object({
     result_type: sourceProvenanceUnchanged(
@@ -481,47 +353,12 @@ const sourceCalculationSettingsSchema = z
     decimal_places: sourceProvenanceTarget(z.number().int().min(0).max(12).optional(), [
       "decimalPlaces",
     ]),
-    expression: sourceProvenanceUnchanged(sourceCalculationExpressionSchema),
+    expression: sourceProvenanceTarget(flowFormulaSchema, ["expression/**", "dependencyFieldIds/#"], true),
   })
   .strict()
   .superRefine((value, context) => {
-    const operation = value.expression.operation;
-    const validResultTypes: readonly string[] = calculationResultTypesByOperation[operation];
-    if (!validResultTypes.includes(value.result_type))
-      context.addIssue({
-        code: "custom",
-        path: ["result_type"],
-        message: "Calculation result type must match its operation",
-      });
-    if (
-      value.expression.operation === "numeric" &&
-      value.expression.operands.reduce(
-        (total, operand) => total + inspectSourceCalculationNumberValue(operand).values,
-        0,
-      ) > calculationMaximumOperandCount
-    )
-      context.addIssue({
-        code: "custom",
-        path: ["expression", "operands"],
-        message: `A numeric calculation cannot exceed ${calculationMaximumOperandCount} values`,
-      });
-    if (
-      value.expression.operation === "numeric" &&
-      value.expression.operands.every(
-        (operand) => inspectSourceCalculationNumberValue(operand).fields === 0,
-      )
-    )
-      context.addIssue({
-        code: "custom",
-        path: ["expression", "operands"],
-        message: "A numeric calculation reads at least one field",
-      });
-    if (value.evaluation === "stored" && operation === "deadline_passed")
-      context.addIssue({
-        code: "custom",
-        path: ["evaluation"],
-        message: "A deadline-passed calculation uses the current time and is read-time",
-      });
+    if (value.evaluation === "stored" && flowFormulaUsesNow(value.expression))
+      context.addIssue({ code: "custom", path: ["evaluation"], message: "A formula using the current time is read-time" });
     if (
       value.decimal_places !== undefined &&
       value.result_type !== "decimal_number" &&

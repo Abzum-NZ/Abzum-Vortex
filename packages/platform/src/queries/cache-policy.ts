@@ -1,3 +1,4 @@
+import { flowFormulaSchema, flowFormulaUsesNow } from "../workflows/flow-values";
 import "server-only";
 
 import { createHash } from "node:crypto";
@@ -112,8 +113,8 @@ const isReadTimeCalculation = (field: QueryCachePublishedField): boolean => {
   if (!isPublishedSettings(field.settings)) return true;
   if (field.settings.evaluation === "read_time") return true;
   const expression = field.settings.expression;
-  if (!isPublishedSettings(expression) || typeof expression.kind !== "string") return true;
-  return expression.kind === "deadline_passed";
+  const parsed = flowFormulaSchema.safeParse(expression);
+  return !parsed.success || flowFormulaUsesNow(parsed.data);
 };
 
 /**
