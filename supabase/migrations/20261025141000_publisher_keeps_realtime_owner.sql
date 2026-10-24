@@ -3,9 +3,16 @@
 -- supabase_realtime_admin owns: postgres may insert there but holds no grant option, so the
 -- privilege cannot follow the publisher to vortex_owner (such a grant only warns). Like the other
 -- integration functions, the publisher keeps postgres ownership; vortex_owner gains nothing in
--- realtime.
+-- realtime. postgres does not inherit vortex_owner's privileges, so it cannot take the function
+-- over: its owner drops it and postgres creates it again. No object depends on it.
 set local role vortex_owner;
-create or replace function vortex_platform.publish_change_notice(
+drop function vortex_platform.publish_change_notice(
+  uuid, uuid, uuid, uuid, bigint, text, bigint, bigint, uuid
+);
+reset role;
+
+-- guard-allow: migration-owner-role realtime.messages privileges cannot be granted onward, so the publisher is created by their postgres holder.
+create function vortex_platform.publish_change_notice(
   p_organization_id uuid,
   p_application_root_id uuid,
   p_record_type_id uuid,
@@ -119,12 +126,5 @@ comment on function vortex_platform.publish_change_notice(
   uuid, uuid, uuid, uuid, bigint, text, bigint, bigint, uuid
 ) is
   'Protected post-commit broadcast of the bounded content-free invalidation envelope on the private topic for one organisation and application.';
-
-reset role;
-
--- guard-allow: migration-owner-role realtime.messages privileges cannot be granted onward, so its postgres owner must take the publisher back.
-alter function vortex_platform.publish_change_notice(
-  uuid, uuid, uuid, uuid, bigint, text, bigint, bigint, uuid
-) owner to postgres;
 
 reset role;
