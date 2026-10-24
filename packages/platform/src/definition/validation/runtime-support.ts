@@ -5,9 +5,8 @@ import { array, failure, object } from "./helpers";
 export const runtimeSupportRuleCodes = [
   "vortex.definition.public_page_not_supported",
   "vortex.definition.public_address_not_supported",
-  "vortex.definition.token_authentication_not_supported",
+  "vortex.definition.interface_operation_not_supported",
   "vortex.definition.incoming_message_not_supported",
-  "vortex.definition.rate_limit_not_supported",
 ] as const;
 
 /** Publication promises only behaviour that the platform can serve and enforce. */
@@ -43,51 +42,29 @@ export function runtimeSupportRule(
         );
     }
     if (output.kind !== "application") continue;
+    // Each refused declaration requires its own per-minute limit, so refusing the declaration
+    // also refuses the limit that nothing would enforce.
     for (const page of array(content.pages)) {
-      const component = { kind: "page" as const, key: String(page.key) };
       if (page.type === "public")
         refuse(
           "vortex.definition.public_page_not_supported",
-          component,
+          { kind: "page", key: String(page.key) },
           "Pages cannot yet open without sign-in. Remove the public page or use a signed-in page before publishing.",
         );
-      if (page.rateLimitPerMinute !== undefined)
-        refuse(
-          "vortex.definition.rate_limit_not_supported",
-          component,
-          "Request limits per minute are not yet enforced. Remove the page's rate limit declaration before publishing.",
-        );
     }
-    for (const address of array(content.publicAddresses)) {
-      const component = { kind: "setting" as const, key: "public_addresses" };
+    if (array(content.publicAddresses).length > 0)
       refuse(
         "vortex.definition.public_address_not_supported",
-        component,
-        "Public web addresses are not yet served. Remove the public address before publishing.",
+        { kind: "setting", key: "public_addresses" },
+        "Public web addresses are not yet served. Remove the public addresses before publishing.",
       );
-      if (address.rateLimitPerMinute !== undefined)
-        refuse(
-          "vortex.definition.rate_limit_not_supported",
-          component,
-          "Request limits per minute are not yet enforced. Remove the public address's rate limit declaration before publishing.",
-        );
-    }
     for (const definition of array(content.interfaces)) {
-      for (const operation of array(definition.operations)) {
-        const component = { kind: "interface" as const, key: String(operation.key) };
-        if (["organization_token", "partner_token"].includes(String(operation.authentication)))
-          refuse(
-            "vortex.definition.token_authentication_not_supported",
-            component,
-            "Interface operations cannot yet authenticate with organization or partner tokens. Remove the token-authenticated operation before publishing.",
-          );
-        if (operation.rateLimitPerMinute !== undefined)
-          refuse(
-            "vortex.definition.rate_limit_not_supported",
-            component,
-            "Request limits per minute are not yet enforced. Remove the interface operation's rate limit declaration before publishing.",
-          );
-      }
+      for (const operation of array(definition.operations))
+        refuse(
+          "vortex.definition.interface_operation_not_supported",
+          { kind: "interface", key: String(operation.key) },
+          "Interface operations cannot yet be called from outside Vortex. Remove the interface operation before publishing.",
+        );
     }
   }
   return failures;
