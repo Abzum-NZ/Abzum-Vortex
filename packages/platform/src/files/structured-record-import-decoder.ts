@@ -232,7 +232,7 @@ class BoundedJsonScanner {
         this.offset += 1;
         try {
           return JSON.parse(this.text.slice(start, this.offset)) as string;
-        // guard-allow: silent-catch malformed uploaded JSON escapes become an invalid-JSON refusal
+          // guard-allow: silent-catch malformed uploaded JSON escapes become an invalid-JSON refusal
         } catch {
           this.fail("invalid_json");
         }
@@ -424,7 +424,7 @@ const decodeParsedDocument = (candidate: unknown): StructuredRecordImportDecodeR
       let safeCell: unknown;
       try {
         safeCell = cloneJsonSafely(cell);
-      // guard-allow: silent-catch malformed uploaded JSON structures become an invalid-document refusal
+        // guard-allow: silent-catch malformed uploaded JSON structures become an invalid-document refusal
       } catch {
         return refused("invalid_document", { rowNumber, columnNumber: columnIndex + 1 });
       }
@@ -458,7 +458,7 @@ export const decodeStructuredRecordImport = (
   try {
     const ownedBytes = Buffer.from(source);
     text = new TextDecoder("utf-8", { fatal: true }).decode(ownedBytes);
-  // guard-allow: silent-catch invalid uploaded UTF-8 becomes a specific encoding refusal
+    // guard-allow: silent-catch invalid uploaded UTF-8 becomes a specific encoding refusal
   } catch {
     return refused("invalid_encoding");
   }
@@ -476,7 +476,7 @@ export const decodeStructuredRecordImport = (
   let parsed: unknown;
   try {
     parsed = JSON.parse(text) as unknown;
-  // guard-allow: silent-catch malformed uploaded JSON becomes a specific invalid-JSON refusal
+    // guard-allow: silent-catch malformed uploaded JSON becomes a specific invalid-JSON refusal
   } catch {
     return refused("invalid_json");
   }
