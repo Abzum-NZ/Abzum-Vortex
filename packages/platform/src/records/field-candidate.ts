@@ -129,7 +129,9 @@ export const calculateAndFinalize = ({
   // A new record has no related records yet, so its totals start as totals over none; a
   // record's own save never changes its totals, so an update keeps the stored ones.
   const authoritativeValues: Readonly<Record<string, JsonValue>> =
-    operation === "create" ? { ...ruleCandidateValues, ...emptyRecordTotals(recordType) } : ruleCandidateValues;
+    operation === "create"
+      ? { ...ruleCandidateValues, ...emptyRecordTotals(recordType) }
+      : ruleCandidateValues;
 
   const calculationFieldIds = recordType.fields
     .filter((field) => field.type === "calculation")
@@ -153,9 +155,13 @@ export const calculateAndFinalize = ({
   const needsOrganizationLocalDate = recordType.fields.some((field) => {
     if (field.type !== "calculation") return false;
     const expression = field.settings.expression;
-    if (expression.kind !== "deadline_passed") return false;
+    if (expression.op !== "deadline_passed") return false;
     const dueField = recordType.fields.find(
-      (candidate) => candidate.fieldId === expression.dueFieldId,
+      (candidate) =>
+        candidate.fieldId ===
+        (expression.due.op === "reference" && expression.due.reference.source === "module_field"
+          ? expression.due.reference.fieldId
+          : ""),
     );
     return dueField !== undefined && isDateDeadlineDueField(dueField);
   });
@@ -208,9 +214,13 @@ export const operationClock = (
     recordType.fields.some((field) => {
       if (field.type !== "calculation") return false;
       const expression = field.settings.expression;
-      if (expression.kind !== "deadline_passed") return false;
+      if (expression.op !== "deadline_passed") return false;
       const dueField = recordType.fields.find(
-        (candidate) => candidate.fieldId === expression.dueFieldId,
+        (candidate) =>
+          candidate.fieldId ===
+          (expression.due.op === "reference" && expression.due.reference.source === "module_field"
+            ? expression.due.reference.fieldId
+            : ""),
       );
       return dueField !== undefined && isDateDeadlineDueField(dueField);
     }),

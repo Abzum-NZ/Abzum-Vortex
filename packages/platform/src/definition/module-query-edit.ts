@@ -78,7 +78,7 @@ export const queryDistinctFieldAccepts = (field: Field, readTime: ReadonlySet<st
   field.filterable &&
   field.type !== "total" &&
   (field.type !== "calculation" ||
-    (field.settings.expression.operation === "numeric" &&
+    (["add", "subtract", "multiply", "divide", "round"].includes(field.settings.expression.op) &&
       !readTime.has(field.key) &&
       (field.settings.result_type === "whole_number" ||
         field.settings.result_type === "decimal_number")));

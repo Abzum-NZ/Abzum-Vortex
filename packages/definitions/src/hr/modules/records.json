@@ -386,18 +386,25 @@
           "settings": {
             "result_type": "whole_number",
             "expression": {
-              "operation": "numeric",
-              "numeric_operation": "subtract",
-              "operands": [
+              "op": "subtract",
+              "args": [
                 {
-                  "source": "field",
-                  "field": "days"
+                  "op": "reference",
+                  "reference": {
+                    "source": "trigger_record",
+                    "field": "days"
+                  }
                 },
                 {
-                  "source": "field",
-                  "field": "approved_days_taken"
+                  "op": "reference",
+                  "reference": {
+                    "source": "trigger_record",
+                    "field": "approved_days_taken"
+                  }
                 }
-              ]
+              ],
+              "scale": 18,
+              "rounding": "half_even"
             }
           }
         }

@@ -206,14 +206,14 @@ export type DisplaySemanticEvent =
       signal: AbortSignal;
     }>
   /**
-   * A batch of cell changes on the shown page (`commit`), the inverse of the last committed batch
-   * (`undo`), that inverse undone again (`redo`), or just the stack depths (`state`). The handler
-   * resolves to a `DisplayBatchEditAnswer`.
+   * A batch of cell changes on the shown page (`paste` or `fill`), the inverse of the last committed
+   * batch (`undo`), that inverse undone again (`redo`), or just the stack depths (`state`). The
+   * handler resolves to a `DisplayBatchEditAnswer`.
    */
   | Readonly<{
       event: "batch_edit_requested";
-      action: "commit" | "undo" | "redo" | "state";
-      /** The rows of a `commit`: record, displayed revision and the cells it changes. */
+      action: RecordsTableBatchEditRequest["operation"] | "state";
+      /** The rows of a paste or fill: record, displayed revision and the cells it changes. */
       rows?: RecordsTableBatchEditRequest["rows"];
     }>
   | Readonly<{
