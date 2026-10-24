@@ -252,7 +252,13 @@ Named-action writers:
 
 Lifecycle and ownership entry points:
 
-- `prepare_protected_record_delete`, `finalize_protected_record_delete`.
+- Delete enters `apply_record_changes` through `apply_lifecycle_record_changes`
+  twice in one request transaction: null mutations claim the receipt and apply
+  the permission-checked cascade; calculated parent mutations finalise totals,
+  Activity, Events and the receipt. Every non-final outcome rolls back the whole
+  transaction. The writer publishes one notice per deleted application-contained
+  record after finalisation; preparation and replay publish none.
+  `prepare_protected_record_delete` and `soft_delete_record_internal` are removed.
 - `prepare_protected_record_restore`, `finalize_protected_record_restore`.
 - `transfer_record_ownership`, `transfer_record_ownership_for_offboarding_internal`, `transfer_offboarding_owned_record`, `transfer_offboarding_active_owned_record`.
 
@@ -263,8 +269,7 @@ Receipt ledgers and helpers:
 
 The engine keeps and builds on the private primitives `create_record_internal`,
 `change_record`, `change_record_relationship_internal`,
-`write_relationship_value_internal`, `soft_delete_record_internal`,
-`soft_delete_record_recursive_internal` and `restore_record_internal`.
+`write_relationship_value_internal`, `soft_delete_record_recursive_internal` and `restore_record_internal`.
 `vortex_record.record_lifecycle_command_effects`, the identity-only journal of
 what a delete or restore traversal changed, is the only trusted source of a
 command's deleted set; it moves under the one receipt rather than being
