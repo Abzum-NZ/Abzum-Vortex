@@ -290,7 +290,10 @@ const parseRegisteredRun = (
   return parsed.data;
 };
 
-/** Task types no protected callback can run; they refuse with `task_unavailable`. */
+/**
+ * Task types no protected callback can run; they refuse with `task_unavailable`. Of the record
+ * tasks, only `record.set_fields` runs durably, as the initiating person.
+ */
 const unavailableTaskTypes: ReadonlySet<string> = new Set([
   "connection.call",
   "message.acknowledge",
@@ -303,7 +306,8 @@ const unavailableTaskTypes: ReadonlySet<string> = new Set([
 ]);
 
 const isUnavailableTaskType = (taskType: string): boolean =>
-  taskType.startsWith("record.") || unavailableTaskTypes.has(taskType);
+  (taskType.startsWith("record.") && taskType !== "record.set_fields") ||
+  unavailableTaskTypes.has(taskType);
 
 /** Task properties use the closed FlowValue literal wrapper for fixed values. */
 const literalValue = (candidate: unknown): unknown => {
@@ -550,7 +554,7 @@ export const createProtectedNodeExecution = (dependencies: ProtectedNodeExecutio
       if (binding === undefined || binding.operationKey !== context.purpose.operationKey)
         return { outcome: "permanent_refusal", safeCode: "callback_refused" };
 
-      if (isUnavailableTaskType(binding.taskType) && binding.taskType !== "record.set_fields") {
+      if (isUnavailableTaskType(binding.taskType)) {
         console.warn(
           `[workflow] protected callback refused: no callback runner for task type ${binding.taskType}`,
         );
@@ -631,7 +635,8 @@ export const createProtectedNodeExecution = (dependencies: ProtectedNodeExecutio
       }
       if (run.data.authority.state !== "running" && prior.kind !== "completed")
         return { outcome: "permanent_refusal", safeCode: "callback_refused" };
-      if (context.purpose.attempt > maximumCallbackAttempts)
+      // A completed record update is replayed after the access recheck, whatever the attempt.
+      if (prior.kind !== "completed" && context.purpose.attempt > maximumCallbackAttempts)
         return { outcome: "permanent_refusal", safeCode: "attempt_limit" };
       const execution = await dependencies.operations.executeDurableActor({
         ...target,
