@@ -2,7 +2,7 @@
 
 Vortex builds business applications from versioned definitions: modules, record types, fields, relationships, pages, permissions, actions, flows, connections and themes. It serves multiple organisations through one application, with access enforced by the platform and the database. Generic engines and the existing Next.js application render and execute those definitions.
 
-The project is under active development. The current priority is a usable definition-led application before the visual App Designer. A specification or contract does not mean the feature is implemented; the [GitHub roadmap](https://github.com/orgs/Abzum-NZ/projects/2/views/3) records delivery status.
+The project is under active development. The current priority is definition-led applications with the Studio and data grid. A specification or contract does not mean the feature is implemented; the [GitHub roadmap](https://github.com/orgs/Abzum-NZ/projects/2/views/3) records delivery status.
 
 ## Start here
 
