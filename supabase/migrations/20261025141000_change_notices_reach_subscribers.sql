@@ -127,4 +127,14 @@ comment on function vortex_platform.publish_change_notice(
 ) is
   'Protected post-commit broadcast of the bounded content-free invalidation envelope on the private topic for one organisation and application.';
 
+-- The baseline squash also lost the receiving side: without this policy Realtime refuses every
+-- private join, so no subscriber received a notice. postgres may create policies there.
+drop policy if exists vortex_private_invalidation_member_read on realtime.messages;
+
+create policy vortex_private_invalidation_member_read
+on realtime.messages
+for select
+to authenticated
+using (vortex_platform.may_receive_topic(realtime.topic()));
+
 reset role;
