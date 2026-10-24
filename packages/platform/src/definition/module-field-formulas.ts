@@ -1,4 +1,4 @@
-import { flowFormulaSchema, flowFormulaUsesNow, type FlowFormula } from "../workflows/flow-values";
+import { flowFormulaSchema, flowFormulaUsesNow } from "../workflows/flow-values";
 import {
   calculationFormulaDependencies,
   calculationFormulaType,
@@ -20,7 +20,6 @@ type RecordType = InlineModule["record_types"][number];
 type SourceField = RecordType["fields"][number];
 export type CalculationSettings = Extract<SourceField, { type: "calculation" }>["settings"];
 export type CalculationExpression = CalculationSettings["expression"];
-export type CalculationOperation = CalculationExpression["op"];
 export type CalculationResultType = CalculationSettings["result_type"];
 export type TotalSettings = Extract<SourceField, { type: "total" }>["settings"];
 export type TotalOperation = TotalSettings["operation"];
@@ -53,14 +52,6 @@ const valueType = (field: FormulaField | undefined): string | undefined =>
 /** Fields a joined text can take: text and choice values, including text calculations. */
 export const joinTextAccepts = (field: FormulaField): boolean =>
   ["text", "choice"].includes(valueType(field) ?? "");
-/** Fields a number in a formula can be: whole and decimal numbers and money, including numeric results. */
-export const numberAccepts = (field: FormulaField): boolean =>
-  ["whole_number", "decimal_number", "money"].includes(valueType(field) ?? "");
-export const dateAccepts = (field: FormulaField): boolean =>
-  ["date", "date_time"].includes(valueType(field) ?? "");
-export const wholeNumberAccepts = (field: FormulaField): boolean =>
-  valueType(field) === "whole_number";
-
 /** The keys of the fields an authored condition compares, in its compact or its operand form. */
 export const conditionFieldKeys = (condition: unknown): string[] => {
   if (condition === null || typeof condition !== "object") return [];
@@ -188,8 +179,13 @@ export const calculationProblems = (
   const choices = calculationResultChoices(parsed.data, fields);
   if (!choices.includes(settings.result_type))
     problems.push("Formula: choose compatible fields and operands for its result type.");
-  if ((settings.evaluation === "read_time" || calculationForcedReadTime(parsed.data, fields)) && !calculationReadTimeSupported(parsed.data))
-    problems.push("Formula: only a deadline over local fields can currently be worked out at read time.");
+  if (
+    (settings.evaluation === "read_time" || calculationForcedReadTime(parsed.data, fields)) &&
+    !calculationReadTimeSupported(parsed.data)
+  )
+    problems.push(
+      "Formula: only a deadline over local fields can currently be worked out at read time.",
+    );
   const dependencies = calculationDependencies(parsed.data);
   if (dependencies.length === 0)
     problems.push("Formula: read at least one field of this record type.");
@@ -223,29 +219,12 @@ export const calculationProblems = (
   return problems;
 };
 
-export const describeCalculation = (
-  expression: FlowFormula,
-  labelOf: (key: string) => string,
-): string => {
-  if (expression.op === "reference")
-    return expression.reference.source === "trigger_record"
-      ? labelOf(expression.reference.field)
-      : "Field";
-  if (expression.op === "literal") return String(expression.value);
-  return expression.op.replaceAll("_", " ");
-};
-
 /** The type of value a total takes of a field: a calculation's or a total's result, otherwise the field's own type. */
 const totalledType = (field: FormulaField): string =>
-  field.type === "calculation" || field.type === "total"
-    ? String((field.settings as { result_type?: unknown }).result_type)
-    : field.type;
+  field.type === "calculation" || field.type === "total" ? String((field.settings as { result_type?: unknown }).result_type) : field.type;
 
 /** The result a total produces from its operation and field: one rule, so the editor never asks for it. */
-export const totalResultType = (
-  operation: TotalOperation,
-  field: FormulaField | undefined,
-): CalculationResultType | undefined => {
+export const totalResultType = (operation: TotalOperation, field: FormulaField | undefined): CalculationResultType | undefined => {
   if (operation === "count") return "whole_number";
   if (field === undefined) return undefined;
   if (operation === "average") return totalledType(field) === "money" ? "money" : "decimal_number";
@@ -258,144 +237,70 @@ export const totalResultType = (
  * read, which a total can't take.
  */
 export type TotalRelationship = Readonly<{
-  reference: string;
-  label: string;
-  recordName: string;
-  fields: readonly FormulaField[];
-  readTime: ReadonlySet<string>;
+  reference: string; label: string; recordName: string; fields: readonly FormulaField[]; readTime: ReadonlySet<string>;
 }>;
 
 /** Whether a total's operation can be taken of a field of its related records: the query totals' rule, on the value it holds. */
-export const totalFieldAccepts = (
-  operation: TotalOperation,
-  field: FormulaField,
-  relationship: TotalRelationship,
-): boolean =>
-  operation !== "count" &&
-  !relationship.readTime.has(field.key) &&
-  queryTotalAccepts(operation, totalledType(field));
+export const totalFieldAccepts = (operation: TotalOperation, field: FormulaField, relationship: TotalRelationship): boolean =>
+  operation !== "count" && !relationship.readTime.has(field.key) && queryTotalAccepts(operation, totalledType(field));
 
 /** The fields of the related records a total's filter may compare: those people can filter by, and not worked out when read. */
 export const totalFilterKeys = (relationship: TotalRelationship): ReadonlySet<string> =>
-  new Set(
-    relationship.fields
-      .filter((field) => field.filterable === true && !relationship.readTime.has(field.key))
-      .map((field) => field.key),
-  );
+  new Set(relationship.fields.filter((field) => field.filterable === true && !relationship.readTime.has(field.key)).map((field) => field.key));
 
 /**
  * The links of the module's own record types that point at one record type, as totals name them.
  * A link from another module's record type is never offered: that module already depends on this
  * one through the link, so a total over it would make the two modules depend on each other.
  */
-export const totalRelationships = (
-  source: ApplicationSourceDocument,
-  moduleKey: string,
-  recordKey: string,
-): readonly TotalRelationship[] => {
-  const reaches = (reference: string | undefined) =>
-    reference === recordKey || reference === `${moduleKey}:${recordKey}`;
+export const totalRelationships = (source: ApplicationSourceDocument, moduleKey: string, recordKey: string): readonly TotalRelationship[] => {
+  const reaches = (reference: string | undefined) => reference === recordKey || reference === `${moduleKey}:${recordKey}`;
   const module = source.body.modules.find((item) => item.key === moduleKey);
-  return (module?.record_types ?? []).flatMap((record) =>
-    record.relationships
-      .filter(
-        (relationship) =>
-          reaches(relationship.to_record_type) ||
-          (relationship.to_record_types ?? []).some(reaches),
-      )
-      .map((relationship) => {
-        const from = record.fields.find((field) => field.key === relationship.from_field);
-        const fields = record.fields.map(({ key, label, type, settings, filterable }) => ({
-          key,
-          label,
-          type,
-          settings,
-          filterable,
-        }));
-        return {
-          reference: `${moduleKey}:${record.key}.${relationship.key}`,
-          label: `${record.plural_name} by ${from?.label ?? relationship.key}`,
-          recordName: record.plural_name,
-          fields,
-          readTime: readTimeCalculations(new Map(fields.map((field) => [field.key, field]))),
-        };
-      }),
-  );
+  return (module?.record_types ?? []).flatMap((record) => record.relationships
+    .filter((relationship) => reaches(relationship.to_record_type) || (relationship.to_record_types ?? []).some(reaches))
+    .map((relationship) => {
+      const from = record.fields.find((field) => field.key === relationship.from_field);
+      const fields = record.fields.map(({ key, label, type, settings, filterable }) => ({ key, label, type, settings, filterable }));
+      return { reference: `${moduleKey}:${record.key}.${relationship.key}`, label: `${record.plural_name} by ${from?.label ?? relationship.key}`,
+        recordName: record.plural_name, fields, readTime: readTimeCalculations(new Map(fields.map((field) => [field.key, field]))) };
+    }));
 };
 
 /** Why a total's settings can't be applied, in the words of the total editor. */
-export const totalProblems = (
-  settings: TotalSettings,
-  relationship: TotalRelationship | undefined,
-): string[] => {
+export const totalProblems = (settings: TotalSettings, relationship: TotalRelationship | undefined): string[] => {
   if (relationship === undefined)
-    return [
-      (settings.relationship as string | undefined) === undefined
-        ? "Related records: choose the link whose records are totalled."
-        : `Related records: ${settings.relationship} is not a link to this record type from its own module.`,
-    ];
+    return [(settings.relationship as string | undefined) === undefined ? "Related records: choose the link whose records are totalled."
+      : `Related records: ${settings.relationship} is not a link to this record type from its own module.`];
   const problems: string[] = [];
-  const field =
-    settings.field === undefined
-      ? undefined
-      : relationship.fields.find((item) => item.key === settings.field);
+  const field = settings.field === undefined ? undefined : relationship.fields.find((item) => item.key === settings.field);
   if (settings.operation === "count") {
-    if (settings.field !== undefined)
-      problems.push("Field: a number of records counts records, not a field.");
-  } else if (settings.field === undefined)
-    problems.push(
-      `Field: choose the field of ${relationship.recordName} to take the ${queryTotalOperationLabels[settings.operation].toLowerCase()} of.`,
-    );
-  else if (field === undefined)
-    problems.push(
-      `Field: ${settings.field} is not a field of ${relationship.recordName} any more.`,
-    );
+    if (settings.field !== undefined) problems.push("Field: a number of records counts records, not a field.");
+  } else if (settings.field === undefined) problems.push(`Field: choose the field of ${relationship.recordName} to take the ${queryTotalOperationLabels[settings.operation].toLowerCase()} of.`);
+  else if (field === undefined) problems.push(`Field: ${settings.field} is not a field of ${relationship.recordName} any more.`);
   else if (relationship.readTime.has(field.key))
-    problems.push(
-      `Field: ${field.label} is worked out each time it is read, so a total can't take it.`,
-    );
+    problems.push(`Field: ${field.label} is worked out each time it is read, so a total can't take it.`);
   else if (!totalFieldAccepts(settings.operation, field, relationship))
-    problems.push(
-      `Field: the ${queryTotalOperationLabels[settings.operation].toLowerCase()} can't be taken of ${field.label}.`,
-    );
-  if (
-    settings.currency !== undefined &&
-    (settings.operation !== "sum" || field === undefined || totalledType(field) !== "money")
-  )
+    problems.push(`Field: the ${queryTotalOperationLabels[settings.operation].toLowerCase()} can't be taken of ${field.label}.`);
+  if (settings.currency !== undefined && (settings.operation !== "sum" || field === undefined || totalledType(field) !== "money"))
     problems.push("Currency: only a sum of money has a currency.");
   if (settings.operation === "average" && settings.decimal_places === undefined)
     problems.push("Decimal places: enter how many decimal places the average keeps.");
-  if (!decimalPlacesValid(settings.decimal_places))
-    problems.push("Decimal places: enter a whole number from 0 to 12.");
+  if (!decimalPlacesValid(settings.decimal_places)) problems.push("Decimal places: enter a whole number from 0 to 12.");
   const filterable = totalFilterKeys(relationship);
   for (const key of new Set(conditionFieldKeys(settings.filter))) {
     if (filterable.has(key)) continue;
     const label = relationship.fields.find((item) => item.key === key)?.label ?? key;
-    problems.push(
-      relationship.readTime.has(key)
-        ? `Filter: ${label} is worked out each time it is read, so a total can't filter by it.`
-        : `Filter: people can't filter by ${label}. Tick "People can filter by it" on that field first.`,
-    );
+    problems.push(relationship.readTime.has(key) ? `Filter: ${label} is worked out each time it is read, so a total can't filter by it.`
+      : `Filter: people can't filter by ${label}. Tick "People can filter by it" on that field first.`);
   }
   return problems;
 };
 
 /** A total as one line a person reads, for example "Number of Record tags" or "Sum of Amount of Line items". */
-export const describeTotal = (
-  settings: TotalSettings,
-  relationship: TotalRelationship | undefined,
-): string => {
-  const records =
-    relationship?.recordName ??
-    (settings.relationship as string | undefined) ??
-    "the related records";
-  const field =
-    settings.field === undefined
-      ? undefined
-      : (relationship?.fields.find((item) => item.key === settings.field)?.label ?? settings.field);
-  const what =
-    settings.operation === "count"
-      ? `${queryTotalOperationLabels.count} of ${records}`
-      : `${queryTotalOperationLabels[settings.operation]} of ${field ?? "a field"} of ${records}`;
+export const describeTotal = (settings: TotalSettings, relationship: TotalRelationship | undefined): string => {
+  const records = relationship?.recordName ?? (settings.relationship as string | undefined) ?? "the related records";
+  const field = settings.field === undefined ? undefined : relationship?.fields.find((item) => item.key === settings.field)?.label ?? settings.field;
+  const what = settings.operation === "count" ? `${queryTotalOperationLabels.count} of ${records}`
+    : `${queryTotalOperationLabels[settings.operation]} of ${field ?? "a field"} of ${records}`;
   return settings.filter === undefined ? what : `${what}, of those that match its filter`;
 };

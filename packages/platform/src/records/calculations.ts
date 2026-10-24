@@ -278,9 +278,7 @@ export const evaluateRecordCalculations = (
     };
     const evaluated = evaluateFlowFormula(formula, scope, { preserveExactArithmetic: true });
     const exactWhole =
-      field.settings.resultType === "whole_number" &&
-      evaluated !== undefined &&
-      ["add", "subtract", "multiply", "divide", "round"].includes(formula.op)
+      field.settings.resultType === "whole_number" && evaluated !== undefined
         ? evaluateFlowFormula(formula, scope, {
             preserveExactArithmetic: true,
             requireExactInteger: true,
@@ -293,7 +291,7 @@ export const evaluateRecordCalculations = (
         evaluationIssue = "money_dimension_mismatch";
       else if (exactWhole === undefined) evaluationIssue = "non_integral_whole_number";
       else if (field.settings.resultType === "whole_number") {
-        const exact = parseExactDecimal(evaluated.value);
+        const exact = parseExactDecimal(String(evaluated.value));
         if (exact === undefined || exact.scale !== 0) evaluationIssue = "non_integral_whole_number";
         else if (
           exact.coefficient < BigInt(Number.MIN_SAFE_INTEGER) ||

@@ -10,11 +10,7 @@ import {
   namespacedKeySchema,
   sourceQualifiedRecordTypeSchema,
 } from "../catalogue/identifiers";
-import {
-  jsonValueSchema,
-  labelSchema,
-  safeHttpsUrlSchema,
-} from "../catalogue/common";
+import { jsonValueSchema, labelSchema, safeHttpsUrlSchema } from "../catalogue/common";
 import {
   sourceAliasSchema,
   sourceConditionSchema,
@@ -353,12 +349,20 @@ const sourceCalculationSettingsSchema = z
     decimal_places: sourceProvenanceTarget(z.number().int().min(0).max(12).optional(), [
       "decimalPlaces",
     ]),
-    expression: sourceProvenanceTarget(flowFormulaSchema, ["expression/**", "dependencyFieldIds/#"], true),
+    expression: sourceProvenanceTarget(
+      flowFormulaSchema,
+      ["expression/**", "dependencyFieldIds/#"],
+      true,
+    ),
   })
   .strict()
   .superRefine((value, context) => {
     if (value.evaluation === "stored" && flowFormulaUsesNow(value.expression))
-      context.addIssue({ code: "custom", path: ["evaluation"], message: "A formula using the current time is read-time" });
+      context.addIssue({
+        code: "custom",
+        path: ["evaluation"],
+        message: "A formula using the current time is read-time",
+      });
     if (
       value.decimal_places !== undefined &&
       value.result_type !== "decimal_number" &&

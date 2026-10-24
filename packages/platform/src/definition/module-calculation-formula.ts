@@ -133,5 +133,6 @@ const compatible = (left: string | undefined, right: string | undefined): boolea
 
 /** Current read-time storage support is the deadline operator over local fields. */
 export const calculationReadTimeSupported = (formula: FlowFormula): boolean =>
-  formula.op === "deadline_passed" && formula.due.op === "reference" &&
+  formula.op === "deadline_passed" &&
+  formula.due.op === "reference" &&
   (formula.status === undefined || formula.status.op === "reference");

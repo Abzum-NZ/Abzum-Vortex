@@ -40,7 +40,8 @@ export type FlowFormulaScope = Readonly<{
 const maximumDecimalDigits = 100;
 const maximumTextCharacters = 65_536;
 
-const isNumericType = (type: string): boolean => ["whole_number", "decimal_number", "money"].includes(type);
+const isNumericType = (type: string): boolean =>
+  ["whole_number", "decimal_number", "money"].includes(type);
 const isTextType = (type: string): boolean => ["text", "choice", "formatted_text"].includes(type);
 
 const value = (type: string, content: JsonValue): FlowRuntimeValue => ({ type, value: content });
@@ -213,7 +214,8 @@ const arithmetic = (
         combined === undefined ||
         absolute(combined.numerator).toString().length > 512 ||
         combined.denominator.toString().length > 512
-      ) return undefined;
+      )
+        return undefined;
       exact = combined;
     }
     const scaled = roundedQuotient(exact.numerator * powerOfTen(scale), exact.denominator, mode);
@@ -289,9 +291,7 @@ const exactInstantOf = (candidate: FlowRuntimeValue): ExactInstant | undefined =
       : microseconds / 1_000_000n;
   const fractionalMicros = microseconds - epochSecond * 1_000_000n;
   const fraction =
-    fractionalMicros === 0n
-      ? ""
-      : fractionalMicros.toString().padStart(6, "0").replace(/0+$/, "");
+    fractionalMicros === 0n ? "" : fractionalMicros.toString().padStart(6, "0").replace(/0+$/, "");
   return { epochSecond, fraction };
 };
 
@@ -350,7 +350,10 @@ const dateAdd = (
     return value("date", iso.slice(0, 10));
   }
   const fraction = /\.(\d+)(?=Z|[+-]\d{2}:\d{2}$)/.exec(String(date.value))?.[1] ?? "";
-  return value("date_time", iso.replace(/\.\d{3}Z$/, (fraction === "" ? "" : "." + fraction) + "Z"));
+  return value(
+    "date_time",
+    iso.replace(/\.\d{3}Z$/, (fraction === "" ? "" : "." + fraction) + "Z"),
+  );
 };
 
 const dateDiff = (
@@ -412,8 +415,7 @@ export const flowJsonValuesEqual = (left: JsonValue, right: JsonValue): boolean 
   return (
     leftKeys.length === rightKeys.length &&
     leftKeys.every(
-      (key, index) =>
-        key === rightKeys[index] && flowJsonValuesEqual(left[key]!, right[key]!),
+      (key, index) => key === rightKeys[index] && flowJsonValuesEqual(left[key]!, right[key]!),
     )
   );
 };
@@ -432,8 +434,7 @@ const compare = (
       const leftCurrency = currencyOf(left);
       const rightCurrency = currencyOf(right);
       if (leftCurrency === undefined || rightCurrency === undefined) {
-        if (typeof left.value !== "string" || typeof right.value !== "string")
-          return undefined;
+        if (typeof left.value !== "string" || typeof right.value !== "string") return undefined;
       }
       if (leftCurrency !== rightCurrency) return "equal_only_different";
     }
@@ -452,9 +453,7 @@ const compare = (
   if (left.type !== right.type) return undefined;
   if (left.type === "yes_no" && typeof left.value === "boolean" && typeof right.value === "boolean")
     return left.value === right.value ? "equal_only_same" : "equal_only_different";
-  return flowJsonValuesEqual(left.value, right.value)
-    ? "equal_only_same"
-    : "equal_only_different";
+  return flowJsonValuesEqual(left.value, right.value) ? "equal_only_same" : "equal_only_different";
 };
 
 const joined = (candidate: FlowRuntimeValue): string | undefined => {
@@ -620,13 +619,18 @@ export const evaluateFlowFormula = (
         if (node.status !== undefined) {
           const status = evaluate(node.status);
           if (status === undefined || !isTextType(status.type)) return undefined;
-          if (node.terminalStatusValues.some((candidate) => flowJsonValuesEqual(candidate, status.value)))
+          if (
+            node.terminalStatusValues.some((candidate) =>
+              flowJsonValuesEqual(candidate, status.value),
+            )
+          )
             return yesNo(false);
         }
         const due = evaluate(node.due);
         if (due === undefined || due.value === null) return undefined;
         if (due.type === "date") {
-          if (typeof due.value !== "string" || scope.organizationLocalDate === undefined) return undefined;
+          if (typeof due.value !== "string" || scope.organizationLocalDate === undefined)
+            return undefined;
           return yesNo(due.value < scope.organizationLocalDate);
         }
         if (due.type !== "date_time") return undefined;
@@ -651,7 +655,9 @@ export const evaluateFlowFormula = (
   if (result === undefined) return undefined;
   if (options.requireExactInteger) {
     const exact = exactValues.get(result);
-    if (exact === undefined || exact.numerator % exact.denominator !== 0n) return undefined;
+    if (exact !== undefined) {
+      if (exact.numerator % exact.denominator !== 0n) return undefined;
+    } else if (decimalOf(result)?.scale !== 0) return undefined;
   }
   return result;
 };

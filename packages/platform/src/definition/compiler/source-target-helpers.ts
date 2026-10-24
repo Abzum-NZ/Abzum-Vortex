@@ -104,9 +104,10 @@ function conditionRootPaths(
       sourcePath[4],
       "settings",
     ] as Path;
-    fixedRoots.push(
-      { sourceRoot: [...base, "filter"], canonicalRoot: [...canonicalBase, "filter"] },
-    );
+    fixedRoots.push({
+      sourceRoot: [...base, "filter"],
+      canonicalRoot: [...canonicalBase, "filter"],
+    });
   }
   if (collection === "pages") {
     if (sourcePath[3] === "blocks" && typeof sourcePath[4] === "number")

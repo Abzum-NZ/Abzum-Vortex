@@ -135,7 +135,7 @@ export const guardRules = {
     owner: "lead",
     reviewBy: "2027-01-15",
     reviewNote:
-      "Drafts, preview plans and publication share compilation and source rules: one Records table release with its declared data contract is registered, and row-action bindings require matching commands; offline validation enforces the same dependency rules.",
+      "Drafts, preview plans and publication share compilation and source rules: one Records table release with its declared data contract is registered, and row-action bindings require matching commands; calculation fields share the FlowFormula schema and offline validation enforces the same dependency rules.",
     description:
       "A shipped definition source that publication would refuse (offline compile and validation)",
   },

@@ -1,4 +1,7 @@
-import { calculationFormulaType, calculationReadTimeSupported } from "../module-calculation-formula";
+import {
+  calculationFormulaType,
+  calculationReadTimeSupported,
+} from "../module-calculation-formula";
 import { flowFormulaSchema, flowFormulaUsesNow } from "../../workflows/flow-values";
 import type { DefinitionRuleFailure, FlowDefinition, ModuleField } from "../../schema";
 import { fingerprintCanonicalValue, compareCanonicalStrings } from "../canonical-json-definition";
@@ -14,7 +17,6 @@ import {
   calculationDependencyFieldIds,
   typedFieldValueType,
   typedConditionTypesValid,
-  fieldValueMatches,
   fieldDeclaredResultType,
   typedSemanticFieldType,
   storedNumericSummaryResultType,
@@ -418,11 +420,22 @@ export function moduleReferenceRule(context: PreparedValidationContext): Definit
               : settings.decimalPlaces === undefined);
           if (settings.evaluation === "stored" && readTimeFieldIds.has(String(field.fieldId)))
             valid = false;
-          if (readTimeFieldIds.has(String(field.fieldId)) && !calculationReadTimeSupported(flowFormulaSchema.parse(expression))) valid = false;
-          const actualType = calculationFormulaType(flowFormulaSchema.parse(expression), (id) => typedFieldValueType(fieldMap.get(id)), "canonical");
-          valid = valid && actualType !== undefined && (actualType === settings.resultType ||
-            ["whole_number", "decimal_number"].includes(actualType) && ["whole_number", "decimal_number"].includes(String(settings.resultType)));
-
+          if (
+            readTimeFieldIds.has(String(field.fieldId)) &&
+            !calculationReadTimeSupported(flowFormulaSchema.parse(expression))
+          )
+            valid = false;
+          const actualType = calculationFormulaType(
+            flowFormulaSchema.parse(expression),
+            (id) => typedFieldValueType(fieldMap.get(id)),
+            "canonical",
+          );
+          valid =
+            valid &&
+            actualType !== undefined &&
+            (actualType === settings.resultType ||
+              (["whole_number", "decimal_number"].includes(actualType) &&
+                ["whole_number", "decimal_number"].includes(String(settings.resultType))));
         }
         if (field.type === "total") {
           const aggregateRelationship = [...records.values()]

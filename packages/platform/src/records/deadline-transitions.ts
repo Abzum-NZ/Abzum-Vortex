@@ -130,8 +130,12 @@ export const deriveEarliestPendingDeadlineTransition = (
     if (input.finalAuthoritativeFieldValues[field.fieldId] !== false) continue;
 
     const expression = field.settings.expression;
-    const statusId = expression.status?.op === "reference" && expression.status.reference.source === "module_field" ? expression.status.reference.fieldId : undefined;
-    const status = statusId === undefined ? undefined : input.finalAuthoritativeFieldValues[statusId];
+    const statusId =
+      expression.status?.op === "reference" && expression.status.reference.source === "module_field"
+        ? expression.status.reference.fieldId
+        : undefined;
+    const status =
+      statusId === undefined ? undefined : input.finalAuthoritativeFieldValues[statusId];
     const parsedStatus = jsonValueSchema.safeParse(status);
     if (
       status !== undefined &&
@@ -140,7 +144,8 @@ export const deriveEarliestPendingDeadlineTransition = (
     )
       continue;
 
-    if (expression.due.op !== "reference" || expression.due.reference.source !== "module_field") continue;
+    if (expression.due.op !== "reference" || expression.due.reference.source !== "module_field")
+      continue;
     const dueId = expression.due.reference.fieldId;
     const dueField = fields.get(dueId);
     const dueValue = input.finalAuthoritativeFieldValues[dueId];

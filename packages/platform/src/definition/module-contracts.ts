@@ -9,11 +9,7 @@ import {
   searchPrioritySchema,
   sharingParameterValueTypeSchema,
 } from "../catalogue/catalogues";
-import {
-  jsonValueSchema,
-  labelSchema,
-  safeHttpsUrlSchema,
-} from "../catalogue/common";
+import { jsonValueSchema, labelSchema, safeHttpsUrlSchema } from "../catalogue/common";
 import { moduleDefinitionEnvelopeSchema, recordTypeReferenceSchema } from "./definitions";
 import { parseExactDecimal } from "../records/exact-decimal";
 import {

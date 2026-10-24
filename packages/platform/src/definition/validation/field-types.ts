@@ -8,11 +8,7 @@ import {
   operatorAcceptsOperands,
   type OperandInfo,
 } from "../../rules/condition-types";
-import {
-  parseExactDecimal,
-  jsonValueSchema,
-  type JsonValue,
-} from "../../schema";
+import { jsonValueSchema, type JsonValue } from "../../schema";
 import type { JsonObject } from "./context";
 import { object, array } from "./helpers";
 
@@ -29,7 +25,12 @@ export function fieldDeclaredResultType(field: JsonObject | undefined): string |
 export function storedNumericSummaryResultType(field: JsonObject | undefined): string | undefined {
   if (!field || field.type !== "calculation") return undefined;
   const settings = object(field.settings);
-  if (!["add", "subtract", "multiply", "divide", "round"].includes(String(object(settings.expression).op)) || settings.evaluation !== "stored")
+  if (
+    !["add", "subtract", "multiply", "divide", "round"].includes(
+      String(object(settings.expression).op),
+    ) ||
+    settings.evaluation !== "stored"
+  )
     return undefined;
   const resultType = fieldDeclaredResultType(field);
   return resultType === "whole_number" || resultType === "decimal_number" ? resultType : undefined;
@@ -49,19 +50,6 @@ export {
   fieldValueMatches,
   fieldRecordTypeIds,
 } from "../../rules/condition-types";
-
-export type NumericDimension = "dimensionless" | "money";
-
-const numericDimension = (field: JsonObject | undefined): NumericDimension | undefined => {
-  const type = typedFieldValueType(field);
-  if (type === "whole_number" || type === "decimal_number") return "dimensionless";
-  return type === "money" ? "money" : undefined;
-};
-
-export const exactIntegerLiteral = (value: unknown): boolean => {
-  const parsed = parseExactDecimal(value);
-  return parsed !== undefined && parsed.scale === 0;
-};
 
 export const calculationDependencyFieldIds = (expression: JsonObject): string[] =>
   calculationFormulaDependencies(flowFormulaSchema.parse(expression));

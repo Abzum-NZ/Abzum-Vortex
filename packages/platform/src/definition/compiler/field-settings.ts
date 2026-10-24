@@ -1,9 +1,9 @@
 import { flowFormulaSchema, flowFormulaUsesNow } from "../../workflows/flow-values";
 import { calculationFormulaDependencies } from "../module-calculation-formula";
-import {
-  type ModuleCompilationOutput,
-  type DefinitionCompilationOutput,
-  type DefinitionValidationLocation,
+import type {
+  ModuleCompilationOutput,
+  DefinitionCompilationOutput,
+  DefinitionValidationLocation,
 } from "../../schema";
 import { fingerprintCanonicalValue } from "../canonical-json-definition";
 import { DefinitionCompilationError } from "../compilation-error";
@@ -274,14 +274,21 @@ export function fieldSettings(
         if (node.op === "literal") return node;
         if (node.op === "reference") {
           const reference = asObject(node.reference);
-          if (reference.source !== "trigger_record") fail("vortex.definition.invalid_object", "invalid_value");
-          return { op: "reference", reference: { source: "module_field", fieldId: localField(String(reference.field)) } };
+          if (reference.source !== "trigger_record")
+            fail("vortex.definition.invalid_object", "invalid_value");
+          return {
+            op: "reference",
+            reference: { source: "module_field", fieldId: localField(String(reference.field)) },
+          };
         }
-        return Object.fromEntries(Object.entries(node).map(([key, child]) => [key, resolve(child)]));
+        return Object.fromEntries(
+          Object.entries(node).map(([key, child]) => [key, resolve(child)]),
+        );
       };
       const compiled = flowFormulaSchema.parse(resolve(authored));
       const dependencies = calculationFormulaDependencies(compiled);
-      const evaluation = settings.evaluation ?? (flowFormulaUsesNow(compiled) ? "read_time" : "stored");
+      const evaluation =
+        settings.evaluation ?? (flowFormulaUsesNow(compiled) ? "read_time" : "stored");
       return {
         resultType: settings.result_type,
         evaluation,
