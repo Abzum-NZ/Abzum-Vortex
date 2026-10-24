@@ -57,6 +57,7 @@ const loadAddressedApplicationAtAddress = cache(
     tenantShortName: string,
     organizationShortName: string,
     applicationKey: string,
+    addressedPageKey?: string,
   ): Promise<AddressedApplicationBundleRead> => {
     let authorityId;
     try {
@@ -76,6 +77,7 @@ const loadAddressedApplicationAtAddress = cache(
       organizationShortName,
       authorityId,
       applicationKey,
+      addressedPageKey,
     );
   },
 );
@@ -87,6 +89,8 @@ export const resolveApplicationAddress = cache(
     organizationShortName: string,
     applicationKey?: string,
     pageKey?: string,
+    // Placement refreshes return no navigation or experience, so decide only their page/home.
+    pageProjection: "application" | "addressed" = "application",
   ): Promise<ApplicationAddressResult> => {
     if (isReservedTenantSegment(tenantShortName)) return { kind: "unavailable" };
 
@@ -107,6 +111,7 @@ export const resolveApplicationAddress = cache(
             tenantShortName,
             organizationShortName,
             applicationKey,
+            pageProjection === "addressed" ? pageKey : undefined,
           );
     const read = addressed.read;
     if (read.kind !== "available") return read;

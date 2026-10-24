@@ -484,6 +484,7 @@ const projectPermittedApplication = async (
   candidate: ApplicationCandidate,
   remember?: (application: PermittedApplication | null, validUntil: string | undefined) => void,
   refused?: (reasonCodes: readonly string[]) => void,
+  addressedPageKey?: string,
 ): Promise<Readonly<{
   application: PermittedApplication;
   experiences: ApplicationExperience[];
@@ -510,26 +511,68 @@ const projectPermittedApplication = async (
   if (new Set(candidate.pages.map((page) => page.key)).size !== candidate.pages.length)
     throw new Error("APPLICATION_PAGE_ADDRESS_UNAVAILABLE");
 
-  // Pages that require the same permission share one decision, so every distinct requirement of
-  // the application is decided by one access query.
-  const requirementKeys = [...new Set(candidate.pages.map((page) => page.accessPermissionKey))];
-  const decisions = await decideOrganizationAccessBatch(
-    transaction,
-    scope,
-    requirementKeys.map((requirementKey) =>
-      pageDiscoveryDeclaration(
-        permissions,
-        candidate,
-        candidate.pages.find(
-          (page) => page.accessPermissionKey === requirementKey,
-        ) as ApplicationCandidate["pages"][number],
+  const addressedPage =
+    addressedPageKey === undefined
+      ? undefined
+      : candidate.pages.find((page) => page.key === addressedPageKey);
+  if (addressedPageKey !== undefined && addressedPage === undefined) return null;
+
+  // A placement refresh needs its page and an open application home, not the navigation's full
+  // page list. Shared permission requirements still take only one decision in this request.
+  const decisions = new Map<
+    string,
+    Awaited<ReturnType<typeof decideOrganizationAccessBatch>>[number]
+  >();
+  const decidePages = async (pages: readonly ApplicationCandidate["pages"][number][]) => {
+    const requirements = new Map(
+      pages
+        .filter((page) => !decisions.has(page.accessPermissionKey))
+        .map((page) => [page.accessPermissionKey, page]),
+    );
+    if (requirements.size === 0) return;
+    const results = await decideOrganizationAccessBatch(
+      transaction,
+      scope,
+      [...requirements.values()].map((page) =>
+        pageDiscoveryDeclaration(permissions, candidate, page),
       ),
-    ),
+    );
+    [...requirements.keys()].forEach((key, index) => {
+      decisions.set(key, results[index]!);
+    });
+  };
+  await decidePages(
+    addressedPage === undefined
+      ? candidate.pages
+      : candidate.pages.filter(
+          (page) => page.key === addressedPage.key || page.key === candidate.homePageKey,
+        ),
   );
+  const roleHomes = [...candidate.roles]
+    .sort((left, right) => (left.key < right.key ? -1 : left.key > right.key ? 1 : 0))
+    .filter((role) => activeRoleIds.has(role.roleId.toLowerCase()))
+    .map((role) => candidate.pages.find((page) => sameId(page.pageId, role.homePageId)))
+    .filter((page) => page !== undefined);
+  const pageAllowed = (page: ApplicationCandidate["pages"][number]) =>
+    decisions.get(page.accessPermissionKey)?.allowed === true;
+  if (addressedPage !== undefined) {
+    if (!pageAllowed(addressedPage)) {
+      const reasonCode = decisions.get(addressedPage.accessPermissionKey)?.reasonCode;
+      refused?.(reasonCode === undefined ? [] : [reasonCode]);
+      return null;
+    }
+    if (!candidate.pages.some((page) => page.key === candidate.homePageKey && pageAllowed(page))) {
+      // Preserve the existing role-home order when the release home is refused. Decide another
+      // home only as needed; a current role's already-allowed addressed page needs no extra read.
+      for (const page of roleHomes) {
+        await decidePages([page]);
+        if (pageAllowed(page)) break;
+      }
+    }
+  }
   const allowedRequirementKeys = new Set<string>();
   let validUntil: string | undefined;
-  requirementKeys.forEach((requirementKey, index) => {
-    const decision = decisions[index];
+  decisions.forEach((decision, requirementKey) => {
     if (decision?.allowed !== true) return;
     allowedRequirementKeys.add(requirementKey);
     if (
@@ -544,28 +587,28 @@ const projectPermittedApplication = async (
 
   // The release home wins if authorised. Otherwise use the lowest source
   // role key among current application roles with an open home.
-  const roleHome = [...candidate.roles]
-    .sort((left, right) => (left.key < right.key ? -1 : left.key > right.key ? 1 : 0))
-    .filter((role) => activeRoleIds.has(role.roleId.toLowerCase()))
-    .map((role) => candidate.pages.find((page) => sameId(page.pageId, role.homePageId)))
-    .find((page) => page !== undefined && allowedPageKeys.has(page.key));
+  const roleHome = roleHomes.find((page) => allowedPageKeys.has(page.key));
   const homePageKey = allowedPageKeys.has(candidate.homePageKey)
     ? candidate.homePageKey
     : roleHome?.key;
   // A home chosen from current role assignments depends on time-bound assignments, memberships and
   // activations that the page decisions' expiry does not cover, so only a projection that does not
   // depend on them is remembered.
-  const rememberable = allowedPageKeys.has(candidate.homePageKey) || allowedPageKeys.size === 0;
+  const rememberable =
+    addressedPageKey === undefined &&
+    (allowedPageKeys.has(candidate.homePageKey) || allowedPageKeys.size === 0);
   if (homePageKey === undefined) {
     if (rememberable) remember?.(null, validUntil);
-    refused?.([...new Set(decisions.flatMap((decision) => decision.reasonCode ?? []))].sort());
+    refused?.(
+      [...new Set([...decisions.values()].flatMap((decision) => decision.reasonCode ?? []))].sort(),
+    );
     return null;
   }
 
   // An experience page is offered only when the viewer may open that page itself and it is
   // presentation-only, so it can never show gated, conditional or data-bound content.
   const shells = candidate.shells ?? [];
-  const experiences = (candidate.experiences ?? [])
+  const experiences = (addressedPageKey === undefined ? (candidate.experiences ?? []) : [])
     .filter(
       (experience) =>
         allowedPageKeys.has(experience.page.key) &&
@@ -682,7 +725,11 @@ export const readAddressedApplicationAtAddress = (
     applicationKeyCandidate,
   );
 
-/** Resolves one addressed App from the current HUMAN installed bundle and page authority. */
+/**
+ * Resolves one addressed App from the current HUMAN installed bundle and page authority.
+ * A page key limits authority to a placement refresh: its page and the application home only.
+ * That projection must not feed a full page, navigation, launcher or experience render.
+ */
 export const readAddressedApplicationFromInstalledBundleAtAddress = async (
   permissions: PlatformPermissionSource,
   sessionCandidate: IdentitySession,
@@ -690,6 +737,7 @@ export const readAddressedApplicationFromInstalledBundleAtAddress = async (
   organizationShortNameCandidate: string,
   identityAuthorityIdCandidate: IdentityAuthorityId,
   applicationKeyCandidate: string,
+  addressedPageKeyCandidate?: string,
 ): Promise<AddressedApplicationBundleRead> => {
   const unavailable = (): AddressedApplicationBundleRead => ({
     read: { kind: "unavailable" },
@@ -705,6 +753,11 @@ export const readAddressedApplicationFromInstalledBundleAtAddress = async (
   const session = identitySessionSchema.safeParse(sessionCandidate);
   const identityAuthorityId = identityAuthorityIdSchema.safeParse(identityAuthorityIdCandidate);
   if (!session.success || !identityAuthorityId.success) return unavailable();
+  if (
+    addressedPageKeyCandidate !== undefined &&
+    !builderKeySchema.safeParse(addressedPageKeyCandidate).success
+  )
+    return unavailable();
 
   const addressedIdentity = await readAddressedApplicationIdentityAtAddress(
     session.data,
@@ -773,6 +826,7 @@ export const readAddressedApplicationFromInstalledBundleAtAddress = async (
           applicationCandidateFromInstalledContext(context),
           undefined,
           (reasonCodes) => logApplicationRefusal(application.definitionKey, reasonCodes),
+          addressedPageKeyCandidate,
         );
         return permitted === null ? undefined : { context, permitted };
       },
