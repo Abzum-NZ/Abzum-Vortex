@@ -155,7 +155,9 @@ export const createWebPrivateInvalidationResponse = (request: Request): Response
 
   const track = (operation: Promise<void>): void => {
     const observed = operation.catch((cause: unknown) => {
-      logRefusal("private-invalidation", "observe operation", "operation_failed", cause);
+      // A rejection caused by this stream's own stop (abort, fenced transport) is not a failure.
+      if (!stopping)
+        logRefusal("private-invalidation", "observe operation", "operation_failed", cause);
       finish("unavailable");
     });
     operations.add(observed);
@@ -398,7 +400,8 @@ export const createWebPrivateInvalidationResponse = (request: Request): Response
         if (!emit(framesForNotices(batch))) return;
       }
     } catch (cause) {
-      logRefusal("private-invalidation", "deliver notices", "notice_delivery_failed", cause);
+      if (!stopping)
+        logRefusal("private-invalidation", "deliver notices", "notice_delivery_failed", cause);
       finish("unavailable");
     } finally {
       pumping = false;
@@ -534,12 +537,13 @@ export const createWebPrivateInvalidationResponse = (request: Request): Response
           track(pump());
         }, limits.joinMilliseconds);
     } catch (cause) {
-      logRefusal(
-        "private-invalidation",
-        "initialize stream",
-        "stream_initialization_failed",
-        cause,
-      );
+      if (!stopping)
+        logRefusal(
+          "private-invalidation",
+          "initialize stream",
+          "stream_initialization_failed",
+          cause,
+        );
       finish("unavailable");
     }
   };
