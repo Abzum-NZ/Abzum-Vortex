@@ -55,16 +55,11 @@ export const readLauncher = async (
   const displayFields = ["key", nameKey, iconKey].map((key) =>
     targetRecordType.fields.find((field) => field.key === key),
   );
-  const requestedFieldIds = [
-    ...new Set(
-      displayFields.flatMap((field) =>
-        field !== undefined && selectedFieldIds.has(String(field.fieldId).toLowerCase())
-          ? [field.fieldId]
-          : [],
-      ),
-    ),
-  ];
-  if (displayFields.some((field) => field === undefined) || requestedFieldIds.length !== 3) {
+  const requestedFieldIds = [...new Set(displayFields.flatMap((field) => field?.fieldId ?? []))];
+  if (
+    displayFields.some((field) => field === undefined) ||
+    requestedFieldIds.some((fieldId) => !selectedFieldIds.has(String(fieldId).toLowerCase()))
+  ) {
     logPlacementFailure(address, placementId, "launcher_query_invalid");
     data[placementId] = { status: "error" };
     return;
