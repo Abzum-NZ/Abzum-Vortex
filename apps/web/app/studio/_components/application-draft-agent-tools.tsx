@@ -28,6 +28,11 @@ import { z } from "zod";
 import { WebMcpAdapter, type WebMcpToolDescriptor } from "../../_components/webmcp-adapter";
 import { applyStudioItemLabels } from "@vortex/ui/studio";
 import { previewStudioApplication } from "../preview-actions";
+import { runStudioApplicationLifecycle } from "../application-lifecycle-actions";
+import {
+  applicationLifecycleTools,
+  type ApplicationLifecycleToolName,
+} from "../_lib/application-lifecycle-tools";
 import { previewProblem, unavailableMessage } from "./studio-refusal-messages";
 import type { StudioDraft } from "./use-studio-draft";
 
@@ -40,6 +45,7 @@ export type SavedDraftContext = Readonly<{
 }>;
 
 type ToolName =
+  | ApplicationLifecycleToolName
   | "read_application_draft"
   | "rename_application_item"
   | "add_placement"
@@ -64,12 +70,15 @@ const inputSchema = (schema: z.ZodType) => {
   const variants = (json.oneOf ?? json.anyOf ?? []).filter(
     (variant) => typeof variant === "object",
   );
+  // A recursive input (a JSON value) is advertised through references; its definitions travel with it.
+  const definitions = json.$defs === undefined ? {} : { $defs: json.$defs };
   if (json.properties !== undefined || variants.length === 0)
     return {
       type: "object",
       properties: json.properties ?? {},
       required: json.required ?? [],
       additionalProperties: false,
+      ...definitions,
     };
   // A discriminated union has no top-level properties: advertise the union of its variants' properties, the
   // discriminator as an enum, and as required only what every variant requires (zod still validates each variant).
@@ -88,7 +97,7 @@ const inputSchema = (schema: z.ZodType) => {
   const required = Object.keys(properties).filter((key) =>
     variants.every((variant) => variant.required?.includes(key)),
   );
-  return { type: "object", properties, required, additionalProperties: false };
+  return { type: "object", properties, required, additionalProperties: false, ...definitions };
 };
 const tool = (
   name: ToolName,
@@ -104,6 +113,14 @@ const tool = (
 });
 
 const applicationTools: readonly StudioApplicationTool[] = [
+  ...Object.entries(applicationLifecycleTools).map(([name, definition]) =>
+    tool(
+      name as ApplicationLifecycleToolName,
+      definition.description,
+      definition.input,
+      definition.readOnly,
+    ),
+  ),
   tool(
     "read_application_draft",
     "Read the Application draft as it is in the workspace now: revision, whether an edit is still being saved, the outline of pages, placements, flows and navigation, for each page the places a new block can go with the blocks each admits, the queries a data block can read, and for each placement its declared settings. Call it first and after any refusal.",
@@ -549,6 +566,13 @@ export function ApplicationDraftAgentTools({
             };
         }
         if (found.name === "read_application_draft") return { outcome: "read", ...describeNow() };
+        if (Object.hasOwn(applicationLifecycleTools, found.name)) {
+          return await runStudioApplicationLifecycle(organizationId, {
+            rootId: history.getState().rootId,
+            tool: found.name,
+            input: parsed.data,
+          });
+        }
         const blocked = blockedReason();
         if (blocked !== undefined) return { outcome: "blocked", message: blocked };
         if (found.name === "preview_saved_application") {
