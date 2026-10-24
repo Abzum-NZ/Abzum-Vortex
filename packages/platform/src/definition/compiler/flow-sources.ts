@@ -146,10 +146,12 @@ function compileOwnedFlowSources(
       for (const item of sourcePageItems(page.composition))
         if (
           item.props.vortex.block.block_id === FORM_CONTAINER_BLOCK_RELEASE.blockId &&
-          item.props.vortex.block.release_version === FORM_CONTAINER_BLOCK_RELEASE.releaseVersion &&
-          typeof item.props.title === "string"
+          item.props.vortex.block.release_version === FORM_CONTAINER_BLOCK_RELEASE.releaseVersion
         )
-          formTitles.set(item.props.id, item.props.title);
+          formTitles.set(
+            item.props.id,
+            typeof item.props.title === "string" ? item.props.title : "",
+          );
   return compileFlowSources({
     formTitle: source.kind === "application" ? (reference) => formTitles.get(reference) : undefined,
     flows: parsed.data,

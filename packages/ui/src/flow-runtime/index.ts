@@ -5,7 +5,6 @@ export {
   type BrowserFlowResult,
 } from "./browser-flow-runner";
 export { useFlowIntentHost, type FlowIntentHostOptions } from "./flow-intent-host";
-export { FlowSurfaceContext } from "./flow-surface-context";
 export {
   createFormBlockRuntime,
   type FormBlockRuntime,

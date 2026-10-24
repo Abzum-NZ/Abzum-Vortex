@@ -75,7 +75,10 @@ export type FlowValidationIssue = Readonly<{
 export type FlowSetValidationIssue = FlowValidationIssue & Readonly<{ flowId: string }>;
 
 export type FlowValidationOptions = Readonly<{
-  /** The authored title of a form named by a Show form step, when validating an application. */
+  /**
+   * The authored title of a form named by a Show form step, when validating an application: an
+   * empty string for a form without one, undefined when no form has that reference.
+   */
   formTitle?: ((reference: string) => string | undefined) | undefined;
   /**
    * Finds a flow compiled together with this one, in either shape, from the reference a `run_flow`
@@ -870,8 +873,7 @@ export function validateFlow(
       value.kind === "literal" &&
       value.literal.type === "text" &&
       typeof value.literal.value === "string" &&
-      options.formTitle !== undefined &&
-      !options.formTitle(value.literal.value)?.trim()
+      options.formTitle?.(value.literal.value)?.trim() === ""
     )
       add(
         path,
