@@ -405,6 +405,11 @@ export const checkRecordsTableFeature = (
         `Turn ${other} off to group the records.`,
       );
   }
+  if (key === "pivot" && state.enabled && features.tree.enabled)
+    return featureNotPossible(
+      "definition_records_table_pivot",
+      "Turn Tree off to pivot the records.",
+    );
   // A board draws cards, not table rows, so a feature the board view does not implement is
   // refused rather than silently ignored. Grouping and tree carry their own sentences above.
   if (
@@ -459,6 +464,29 @@ export const checkRecordsTableFeature = (
       "definition_records_table_tree",
       `A tree table shows at most ${RECORDS_TABLE_TREE_MAXIMUM_PAGE_SIZE} rows at once: its ${tablePageSize} records a page and ${childPageSize} child records at a time do not fit. Lower one of them.`,
     );
+  // Opening a pivot cell filters the table through Column filters, so both dimensions must be
+  // among this table's enabled Column filters fields, not merely among its displayed columns.
+  if (key === "pivot" && state.enabled && check.kind !== "not_possible") {
+    const pivot = state as Extract<RecordsTableFeatures["pivot"], { enabled: true }>;
+    const filterable = features.columnFilters.enabled ? features.columnFilters.fields : [];
+    for (const [part, field] of [
+      ["rows", pivot.rowField],
+      ["columns", pivot.columnField],
+    ] as const) {
+      if (
+        field === undefined ||
+        filterable.some((candidate) => candidate.toLowerCase() === field.toLowerCase())
+      )
+        continue;
+      const label =
+        facts.fields.find((candidate) => candidate.field.toLowerCase() === field.toLowerCase())
+          ?.label ?? field;
+      return featureNotPossible(
+        "definition_records_table_pivot",
+        `Add ${label} to Column filters so people can drill into pivot ${part}.`,
+      );
+    }
+  }
   return check;
 };
 
