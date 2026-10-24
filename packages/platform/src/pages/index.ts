@@ -89,11 +89,9 @@ export {
   collectRecordLinkValues,
   recordLinkPlainText,
   type ComponentDataProjectionInput,
-  type LinkFieldType,
   type ProjectedCellValue,
   type ProjectedComponentData,
   type ProjectedRecordDetailValues,
-  type ProjectedRecordLink,
   type ProjectedRecordLinks,
   type RecordLinkResolver,
   type TableFieldColumn,
@@ -102,6 +100,7 @@ export {
   type ProjectedTableRow,
   type ProjectedTableValues,
 } from "./component-data-projection";
+export type { LinkFieldType, ProjectedRecordLink } from "./cell-projection";
 export {
   buildRecordsTableQueryCommand,
   createRecordsTableQueryResolver,
