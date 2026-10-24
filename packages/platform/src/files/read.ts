@@ -521,6 +521,7 @@ export const createDefaultUpstreamStorageReader = (
     });
     const expectedStatus = range === undefined ? 200 : 206;
     if (response.status !== expectedStatus || response.body === null) {
+      // Cancellation is best-effort cleanup; the upstream refusal remains the reported failure.
       await response.body?.cancel().catch(() => undefined);
       throw new Error("FILE_UPSTREAM_READ_REFUSED");
     }
@@ -1044,6 +1045,7 @@ export const createFileReadCoordinator = (
         upstream.contentRange !== undefined &&
         upstream.contentRange.trim() !== expectedContentRange)
     ) {
+      // Cancellation may find an already closed stream; the length/range refusal is reported below.
       await upstream.stream.cancel().catch(() => undefined);
       return refusal("storage_unavailable", "upstream_length_or_range_mismatch");
     }
@@ -1062,6 +1064,7 @@ export const createFileReadCoordinator = (
           maximumOutputBytes: maximumPreviewOutputBytes,
         });
       } catch (error) {
+        // The renderer may have closed its source already; preserve the rendering failure below.
         await original.cancel().catch(() => undefined);
         return refusal("preview_unavailable", "preview_render_failed", error);
       }
@@ -1073,6 +1076,7 @@ export const createFileReadCoordinator = (
             rendition.sizeBytes < 0 ||
             rendition.sizeBytes > maximumPreviewOutputBytes))
       ) {
+        // Discarding an invalid rendition may cancel an already closed stream; report its refusal below.
         await rendition.stream?.cancel().catch(() => undefined);
         return refusal("preview_unavailable", "preview_rendition_invalid");
       }

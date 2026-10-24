@@ -1,6 +1,23 @@
 import "server-only";
 
-import { definitionCompilationOutputSchema, definitionConsumerReadDependencyManifestSchema, definitionConsumerReadResultSchema, definitionResolutionSnapshotSchema, fingerprintSchema, moduleRootIdSchema, organizationIdSchema, platformIdSchema, revisionSchema, assertModuleContractPair, selectApplicationContractPair, semanticVersionSchema, stableDefinitionReleaseVersionSchema, type DefinitionConsumerReadResult, type ExactDefinitionDependency, type SessionContext } from "../schema";
+import {
+  definitionCompilationOutputSchema,
+  definitionConsumerReadDependencyManifestSchema,
+  definitionConsumerReadResultSchema,
+  definitionResolutionSnapshotSchema,
+  fingerprintSchema,
+  moduleRootIdSchema,
+  organizationIdSchema,
+  platformIdSchema,
+  revisionSchema,
+  assertModuleContractPair,
+  selectApplicationContractPair,
+  semanticVersionSchema,
+  stableDefinitionReleaseVersionSchema,
+  type DefinitionConsumerReadResult,
+  type ExactDefinitionDependency,
+  type SessionContext,
+} from "../schema";
 import { z } from "zod";
 import type { DefinitionPublicationCatalogue } from "./definition-publication-contracts";
 import {
@@ -58,8 +75,8 @@ const selectReleaseContract = (candidate: unknown): void => {
     if (record.kind === "application")
       selectApplicationContractPair(record.sourceContractVersion, record.validationContractVersion);
     else assertModuleContractPair(record.sourceContractVersion, record.validationContractVersion);
-  } catch {
-    throw new DefinitionError("DEFINITION_RELEASE_INTEGRITY_FAILED");
+  } catch (cause) {
+    throw new DefinitionError("DEFINITION_RELEASE_INTEGRITY_FAILED", { cause });
   }
 };
 
@@ -267,8 +284,8 @@ export const projectStoredConsumerRelease = async (
       catalogue,
       release.validationContractVersion,
     );
-  } catch {
-    throw new DefinitionError("DEFINITION_READ_FAILED");
+  } catch (cause) {
+    throw new DefinitionError("DEFINITION_READ_FAILED", { cause });
   }
   if (catalogueVerification === "unavailable")
     throw new DefinitionError("DEFINITION_DEPENDENCY_UNAVAILABLE");
