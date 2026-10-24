@@ -556,7 +556,7 @@ begin
         return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
       end if;
       if aggregate_original_field_type = 'calculation' then
-        if (fields_by_id -> aggregate_field_id) #>> '{settings,expression,kind}' is distinct from 'numeric'
+        if coalesce((fields_by_id -> aggregate_field_id) #>> '{settings,expression,op}', '') not in ('add', 'subtract', 'multiply', 'divide', 'round')
           or (fields_by_id -> aggregate_field_id) #>> '{settings,evaluation}' is distinct from 'stored'
           or coalesce((fields_by_id -> aggregate_field_id) #>> '{settings,resultType}', '')
             not in ('whole_number', 'decimal_number') then
@@ -765,7 +765,7 @@ begin
       aggregate_original_field_type := coalesce(fields_by_id -> aggregate_field_id ->> 'type', '');
       aggregate_field_type := aggregate_original_field_type;
       if aggregate_original_field_type = 'calculation' then
-        if (fields_by_id -> aggregate_field_id) #>> '{settings,expression,kind}' is distinct from 'numeric'
+        if coalesce((fields_by_id -> aggregate_field_id) #>> '{settings,expression,op}', '') not in ('add', 'subtract', 'multiply', 'divide', 'round')
           or (fields_by_id -> aggregate_field_id) #>> '{settings,evaluation}' is distinct from 'stored'
           or coalesce((fields_by_id -> aggregate_field_id) #>> '{settings,resultType}', '')
             not in ('whole_number', 'decimal_number') then
