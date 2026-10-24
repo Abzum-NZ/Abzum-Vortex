@@ -36,8 +36,6 @@ declare
   application_scope uuid;
   saved_record_id uuid;
   saved_concurrency_number bigint;
-  preview_installation jsonb;
-  notice_sequence bigint;
 begin
   meta := vortex_record.resolve_record_action_context_internal(p_record_type_id, 'delete');
   context_value := meta -> 'context';
@@ -235,26 +233,7 @@ begin
   );
   application_scope := case when meta ->> 'storageScope' = 'application_contained'
     then (context_value ->> 'applicationRootId')::uuid else null end;
-  preview_installation :=
-    vortex_record.read_current_preview_installation_internal();
-  if preview_installation is null
-    and meta ->> 'storageScope' = 'application_contained' then
-    begin
-      notice_sequence := pg_catalog.nextval(
-        'vortex_record.record_invalidation_sequence'::pg_catalog.regclass
-      );
-      perform vortex_platform.publish_change_notice(
-        (context_value ->> 'organizationId')::uuid,
-        application_scope, p_record_type_id,
-        saved_record_id, saved_concurrency_number, 'deleted',
-        notice_sequence, notice_sequence,
-        (context_value ->> 'correlationId')::uuid
-      );
-    exception when others then
-      -- Invalidation is advisory; the protected delete remains transactional.
-      null;
-    end;
-  else
+  if meta ->> 'storageScope' <> 'application_contained' then
     perform vortex_record.bump_record_data_version_internal(
       (context_value ->> 'organizationId')::uuid,
       (meta ->> 'storageContractId')::uuid, application_scope
