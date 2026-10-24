@@ -469,8 +469,8 @@ export function createThemeRootProps(
   theme: ApplicationTheme | undefined,
   platformThemeTokens: PlatformThemeTokens,
 ): ThemeRootProps {
-  // The theme's own loader cycle replaces the platform's 5s token; a theme without one keeps it.
-  const loaderCycle = theme?.loaderMark?.cycleSeconds;
+  // The theme's loader cycle replaces the platform's 5s token; a mark without one keeps it.
+  const loaderCycle = theme?.loaderMark.cycleSeconds;
   const style: CSSProperties & ThemeCssVariables = {
     ...generateThemeCssVariables(platformThemeTokens, theme?.tokens),
     ...(loaderCycle !== undefined && Number.isFinite(loaderCycle) && loaderCycle > 0

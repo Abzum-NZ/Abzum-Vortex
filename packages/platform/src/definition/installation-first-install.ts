@@ -60,10 +60,7 @@ export type ApplicationLatestRelease = Readonly<{
 }>;
 
 export type FirstInstallRegistrationState =
-  | "unprepared"
-  | "registration_aligned_partial"
-  | "provisioned_inactive"
-  | "active_exact";
+  "unprepared" | "registration_aligned_partial" | "provisioned_inactive" | "active_exact";
 
 const sameContent = (left: unknown, right: unknown): boolean =>
   canonicalJson(left) === canonicalJson(right);
@@ -84,12 +81,17 @@ export const sameFirstInstallRelease = (
 const moduleSetFingerprint = (releaseSet: SystemApplicationBoundReleaseSetResult): string =>
   `sha256:${createHash("sha256")
     .update(
-      JSON.stringify(["application-first-install-module-set-v1", releaseSetModuleTuples(releaseSet)]),
+      JSON.stringify([
+        "application-first-install-module-set-v1",
+        releaseSetModuleTuples(releaseSet),
+      ]),
       "utf8",
     )
     .digest("hex")}`;
 
-export const firstInstallSelectedIdentity = (releaseSet: SystemApplicationBoundReleaseSetResult) => ({
+export const firstInstallSelectedIdentity = (
+  releaseSet: SystemApplicationBoundReleaseSetResult,
+) => ({
   definitionKey: releaseSet.application.definitionKey,
   releaseRevision: releaseSet.application.releaseRevision,
   releaseVersion: releaseSet.application.releaseVersion,
@@ -112,8 +114,7 @@ export const firstInstallState = (
     bindings.moduleBindings.some(
       (binding) =>
         !sameId(binding.organizationId, selector.organizationId) ||
-        !sameId(binding.applicationRootId, selector.rootId) ||
-        binding.state === "draining",
+        !sameId(binding.applicationRootId, selector.rootId),
     )
   )
     firstInstallUnavailable("installation_incomplete");
@@ -190,7 +191,8 @@ export const readApplicationLatestRelease = async (
     if (classifyDatabaseError(error) === "refused") return refuseInstallationAuthority(error);
     throw error;
   }
-  if (rows.length !== 1) return installationProblem("latest_release_unreadable", "temporarily_unavailable");
+  if (rows.length !== 1)
+    return installationProblem("latest_release_unreadable", "temporarily_unavailable");
   if (rows[0]?.latest === null) return firstInstallUnavailable("release_not_published");
   const parsed = latestReleaseSchema.safeParse(rows[0]?.latest);
   if (!parsed.success)
@@ -240,7 +242,10 @@ export const readFirstInstallReleaseSet = async (
       );
     if (error.code === "DEFINITION_RELEASE_NOT_FOUND")
       firstInstallUnavailable("release_not_published");
-    if (error.code === "DEFINITION_CONTEXT_REFUSED" || error.code === "DEFINITION_RELEASE_INTEGRITY_FAILED")
+    if (
+      error.code === "DEFINITION_CONTEXT_REFUSED" ||
+      error.code === "DEFINITION_RELEASE_INTEGRITY_FAILED"
+    )
       installationProblem("first_install_release_set_refused", "refused", undefined, {
         cause: error,
       });

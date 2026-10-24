@@ -1,7 +1,18 @@
 {
-  "PLATFORM_THEME_RELEASE_3_0_0": {
+  "PLATFORM_THEME_RELEASE_3_1_0": {
     "catalogueThemeId": "3f0a2b14-9c6d-4e58-8a71-6d2e5f4b1c09",
-    "releaseVersion": "3.0.0",
+    "releaseVersion": "3.1.0",
+    "loaderMark": {
+      "segments": [
+        [12, 101.569, 60, 18.431],
+        [60, 18.431, 108, 101.569],
+        [108, 101.569, 12, 101.569],
+        [12, 101.569, 84, 60],
+        [84, 60, 36, 60],
+        [36, 60, 48, 80.784]
+      ],
+      "cycleSeconds": 5
+    },
     "tokens": {
       "background": {
         "kind": "color_pair",

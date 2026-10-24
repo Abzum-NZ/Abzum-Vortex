@@ -19,8 +19,7 @@ begin
     or p_application_root_id = '00000000-0000-0000-0000-000000000000'::uuid
     or p_action is null
     or p_action not in (
-      'activate_application_installation', 'withdraw_application_installation',
-      'drain_application_installation'
+      'activate_application_installation', 'withdraw_application_installation'
     ) then
     raise exception using errcode = '22023',
       message = 'Application installation Activity input is invalid';
@@ -46,9 +45,6 @@ begin
   end if;
 end
 $function$;
-
-alter function vortex_definition.append_application_installation_activity_internal(uuid, uuid, text)
-  owner to postgres;
 
 revoke all on function vortex_definition.append_application_installation_activity_internal(
   uuid, uuid, text

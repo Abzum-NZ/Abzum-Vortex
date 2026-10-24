@@ -72,6 +72,11 @@ import type { DurableActorRequestScope } from "../access/index";
 import type { RequestDatabaseTransaction } from "../db/index";
 import type { ApplicationStoreService } from "./installation-application-store";
 import { z } from "zod";
+import {
+  durableRecordUpdateSchema, prepareDurableRecordUpdate, executeDurableRecordUpdate,
+  type DurableRecordUpdate, type DurableRecordSave,
+} from "./durable-record-update";
+import { effectCommandId } from "./flow-orchestrator-support";
 
 /**
  * One server executor for the registered platform-service protected operations. The caller (the
@@ -124,10 +129,12 @@ type ProtectedOperationExecutionRequest =
 
 /** A durable callback names a published operation and its verified run context, never a session. */
 type DurableProtectedOperationExecutionRequest = Readonly<{
-  operation: ProtectedOperationIdentity;
   actorContext: unknown;
   inputs: Readonly<Record<string, unknown>>;
-}>;
+}> & (
+  | Readonly<{ operation: ProtectedOperationIdentity; recordUpdate?: never }>
+  | Readonly<{ operation?: never; recordUpdate: DurableRecordUpdate }>
+);
 
 /** A value a descriptor can declare for an input or output of a registered operation. */
 type ProtectedOperationValue = JsonValue;
@@ -203,6 +210,8 @@ type TenantGovernanceRequestScope = Readonly<{
 }>;
 
 type ProtectedOperationServices = Readonly<{
+  /** Ordinary record saves bound to the durable actor's already resolved transaction. */
+  records?: DurableRecordSave;
   accessAdministration: Pick<
     ReturnType<typeof createOrganizationAccessAdministrationService>,
     | "createGroup"
@@ -1278,7 +1287,7 @@ export const createProtectedOperationExecutor = (
     execute,
 
     /**
-     * Runs a registered platform-service operation from one verified durable actor context. The
+     * Runs a registered operation or published record update from a verified durable actor context. The
      * context is re-resolved through Access before the operation, and a durable callback never gets
      * to provide an IdentitySession or an organisation selection. Platform-service operations
      * remain person-owned; a system actor is refused rather than converted into a person.
@@ -1299,33 +1308,50 @@ export const createProtectedOperationExecutor = (
         const durableActorRequest = dependencies.durableActorRequest;
         const durableOperations = dependencies.durableOperations;
         const context = durableActorOperationContextSchema.safeParse(request.actorContext);
-        const identity = protectedOperationIdentitySchema.safeParse(request.operation);
         if (!durableActorRequest || !durableOperations)
           return refuse("durable_execution_not_configured");
         if (!context.success) return refuse("actor_context_invalid", context.error);
-        if (!identity.success) return refuse("operation_identity_invalid", identity.error);
-        const operationCallKey =
-          flowTaskRegistry["operation.call"].protectedOperationKey ??
-          "workflow.task.operation.call";
-        if (context.data.purpose.operationKey !== operationCallKey)
-          return refuse("actor_purpose_not_operation_call");
-
-        const registered = findPlatformServiceOperation(
-          identity.data.serviceId,
-          identity.data.operationId,
-          identity.data.releaseVersion,
-        );
-        if (registered === undefined) return refuse("operation_not_registered");
-        const registeredOperation = operations[registered.key as PlatformServiceOperationKey];
-        if (
-          registeredOperation === undefined ||
-          registeredOperation.authorityKind !== registered.descriptor.requiredAuthority.kind
-        )
-          return refuse("operation_authority_mismatch");
+        const recordUpdate =
+          request.recordUpdate === undefined
+            ? undefined
+            : durableRecordUpdateSchema.safeParse(request.recordUpdate);
+        if (recordUpdate !== undefined && !recordUpdate.success)
+          return refuse("record_update_invalid", recordUpdate.error);
+        const identity =
+          request.operation === undefined
+            ? undefined
+            : protectedOperationIdentitySchema.safeParse(request.operation);
+        if (recordUpdate === undefined && !identity?.success)
+          return refuse("operation_identity_invalid");
+        const expectedKey =
+          recordUpdate === undefined
+            ? (flowTaskRegistry["operation.call"].protectedOperationKey ??
+              "workflow.task.operation.call")
+            : flowTaskRegistry["record.set_fields"].protectedOperationKey;
+        if (context.data.purpose.operationKey !== expectedKey)
+          return refuse("actor_purpose_mismatch");
+        const registered = identity?.success
+          ? findPlatformServiceOperation(
+              identity.data.serviceId,
+              identity.data.operationId,
+              identity.data.releaseVersion,
+            )
+          : undefined;
+        if (recordUpdate === undefined) {
+          if (registered === undefined) return refuse("operation_not_registered");
+          const registeredOperation = operations[registered.key as PlatformServiceOperationKey];
+          if (
+            registeredOperation === undefined ||
+            registeredOperation.authorityKind !== registered.descriptor.requiredAuthority.kind
+          )
+            return refuse("operation_authority_mismatch");
+        }
 
         const actorResolution = await durableActorRequest.run(
           context.data,
-          registered.descriptor.effect === "read" ? "shared" : "access_change",
+          recordUpdate !== undefined || registered?.descriptor.effect === "read"
+            ? "shared"
+            : "access_change",
           async (transaction, scope) => {
             const policy = context.data.policy;
             if (policy.kind !== "initiating_person" ||
@@ -1344,25 +1370,58 @@ export const createProtectedOperationExecutor = (
               organizationId: scope.organizationId,
               applicationRootId: scope.applicationRootId,
             });
-            let called = false;
-            return request.effect(transaction, async (): Promise<DurableProtectedOperationExecution> => {
-              if (called) throw new Error("DURABLE_OPERATION_REPEATED");
-              called = true;
-              const result = await executeWith(durableOperations(transaction, scope), {
-                operation: identity.data,
-                session,
-                selection,
-                inputs: request.inputs,
-                effectKey: {
-                  runId: context.data.purpose.runId,
-                  taskPath: context.data.purpose.nodeId,
-                  iteration: context.data.purpose.duplicateProtectionKey,
-                },
+            // Recheck the current write and field permissions even before a completed effect
+            // is replayed. Stored callback outputs never stand in for current actor authority.
+            const preparedRecord = recordUpdate?.success
+              ? await prepareDurableRecordUpdate(
+                  transaction,
+                  effectCommandId(
+                    context.data.purpose.runId,
+                    context.data.purpose.nodeId,
+                    context.data.purpose.duplicateProtectionKey,
+                  ),
+                  recordUpdate.data,
+                )
+              : undefined;
+            if (preparedRecord !== undefined && preparedRecord.outcome !== "prepared")
+              throw Object.assign(new Error("DURABLE_RECORD_UPDATE_NOT_AUTHORIZED"), {
+                code: "42501",
               });
-              // The durable workflow effect ledger records successful reads as completed steps.
-              if ("outputs" in result) return { outcome: "committed", outputs: result.outputs };
-              return result;
-            });
+            let called = false;
+            return request.effect(
+              transaction,
+              async (): Promise<DurableProtectedOperationExecution> => {
+                if (called) throw new Error("DURABLE_OPERATION_REPEATED");
+                called = true;
+                const services = durableOperations(transaction, scope);
+                if (preparedRecord?.outcome === "prepared") {
+                  if (services.records === undefined)
+                    throw new Error("DURABLE_RECORD_SAVE_UNAVAILABLE");
+                  return executeDurableRecordUpdate(
+                    transaction,
+                    services.records,
+                    session,
+                    selection,
+                    preparedRecord.command,
+                  );
+                }
+                if (!identity?.success) throw new Error("DURABLE_OPERATION_IDENTITY_MISSING");
+                const result = await executeWith(services, {
+                  operation: identity.data,
+                  session,
+                  selection,
+                  inputs: request.inputs,
+                  effectKey: {
+                    runId: context.data.purpose.runId,
+                    taskPath: context.data.purpose.nodeId,
+                    iteration: context.data.purpose.duplicateProtectionKey,
+                  },
+                });
+                // The durable workflow effect ledger records successful reads as completed steps.
+                if ("outputs" in result) return { outcome: "committed", outputs: result.outputs };
+                return result;
+              },
+            );
           },
         );
         if (actorResolution.kind === "unavailable") return refuse("actor_resolution_unavailable");

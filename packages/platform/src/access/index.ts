@@ -58,6 +58,7 @@ export {
 export {
   readCurrentOrganizationDefaultApplicationAfterAuthorization,
   readCurrentOrganizationRuntimeSettingsAfterAuthorization,
+  readCurrentOrganizationAppStoreAddressAfterAuthorization,
 } from "./organization-runtime-settings-administration";
 export {
   createOrganizationLocalAdministrationService,

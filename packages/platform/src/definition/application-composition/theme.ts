@@ -126,7 +126,7 @@ export const sourceExactPlatformThemeDependencySchema = z
 /** Identity pinned by shipped definitions for the platform's default theme release. */
 export const DEFAULT_PLATFORM_THEME_RELEASE_IDENTITY = Object.freeze({
   catalogueThemeId: platformIdSchema.parse("3f0a2b14-9c6d-4e58-8a71-6d2e5f4b1c09"),
-  releaseVersion: semanticVersionSchema.parse("3.0.0"),
+  releaseVersion: semanticVersionSchema.parse("3.1.0"),
 });
 
 /**
@@ -298,15 +298,14 @@ const sourceApplicationThemeLoaderMarkSchema = z
 /**
  * Canonical  themes contain the complete resolved application token set plus the catalogue
  * selection they were materialised from. Every theme records its selection, including the icon
- * library, so a theme without one cannot be represented. A theme may also carry the mark its
- * loader draws; without one the platform mark is drawn.
+ * library, and the loader mark resolved from its platform theme release.
  */
 export const applicationThemeSchema = z
   .object({
     base: sourceProvenanceUnchanged(exactPlatformThemeDependencySchema),
     selection: sourceProvenanceUnchanged(applicationThemeSelectionSchema),
     tokens: sourceProvenanceUnchanged(z.record(builderKeySchema, themeTokenValueSchema)),
-    loaderMark: sourceProvenanceUnchanged(applicationThemeLoaderMarkSchema.optional(), true),
+    loaderMark: sourceProvenanceUnchanged(applicationThemeLoaderMarkSchema, true),
   })
   .strict();
 
@@ -330,6 +329,7 @@ export const platformThemeReleaseSchema = z
     releaseVersion: sourceProvenanceUnchanged(semanticVersionSchema),
     contentFingerprint: sourceProvenanceUnchanged(fingerprintSchema),
     tokens: sourceProvenanceUnchanged(z.record(builderKeySchema, themeTokenValueSchema)),
+    loaderMark: sourceProvenanceUnchanged(applicationThemeLoaderMarkSchema),
   })
   .strict();
 

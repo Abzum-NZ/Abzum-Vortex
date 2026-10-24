@@ -26,4 +26,5 @@ export const STUDIO_THEME_ROOT = applicationThemeSchema.parse({
   },
   selection: resolution.resolved.selection,
   tokens: resolution.resolved.tokens,
+  loaderMark: DEFAULT_PLATFORM_THEME_RELEASE.loaderMark,
 });

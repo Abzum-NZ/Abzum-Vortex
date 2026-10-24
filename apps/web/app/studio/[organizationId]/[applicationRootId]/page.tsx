@@ -10,11 +10,11 @@ import {
 } from "../../_components/application-draft-workspace";
 import { studioViewRequest } from "../../_lib/studio-view-request";
 import { loadStudioOrganizationHome } from "../../../_lib/studio-organization-home";
+import { readCurrentOrganizationAppStoreAddressAfterAuthorization } from "@vortex/platform/server";
+import { organizationSelectionCandidateSchema } from "@vortex/platform/schema";
+import { humanOrganizationRequests } from "../../../_lib/server-composition";
 
 export const dynamic = "force-dynamic";
-
-/** The App Store, the one place an organisation installs and upgrades its applications. */
-const appStoreKey = "vortex.app.app_store";
 
 /**
  * The organisation's name and addresses: the running application, for the breadcrumb and Back to app,
@@ -23,10 +23,13 @@ const appStoreKey = "vortex.app.app_store";
 const loadWorkspacePlace = async (
   organizationId: string,
   applicationKey: string,
-): Promise<StudioWorkspacePlace> => {
+): Promise<
+  | { kind: "available"; place: StudioWorkspacePlace }
+  | { kind: "refused" | "temporarily_unavailable"; reason: string }
+> => {
   const resolved = await resolveIdentitySession();
-  const launcher =
-    resolved.kind === "active" ? await loadOrganizationLauncher(resolved.session) : undefined;
+  if (resolved.kind !== "active") return { kind: "refused", reason: "Sign in to open Studio." };
+  const launcher = await loadOrganizationLauncher(resolved.session);
   const entry =
     launcher?.kind === "available"
       ? launcher.entries.find((candidate) => candidate.organizationId === organizationId)
@@ -35,20 +38,55 @@ const loadWorkspacePlace = async (
     console.error(
       `[studio] workspace place unavailable: session ${resolved.kind}, launcher ${launcher?.kind ?? "not read"}`,
     );
+    return { kind: "refused", reason: "This organisation is not available to your account." };
+  }
+  // The organisation's settings name the App Store; Studio never assumes one.
+  const settings = await humanOrganizationRequests().run(
+    resolved.session,
+    organizationSelectionCandidateSchema.parse({ organizationId }),
+    (transaction) => readCurrentOrganizationAppStoreAddressAfterAuthorization(transaction),
+  );
+  if (settings.kind === "temporarily_unavailable") {
+    console.error(
+      `[studio] App Store address read unavailable: ${settings.databaseCode ?? settings.cause ?? "unknown"}`,
+    );
     return {
-      organizationName: "Organisation",
-      applicationHref: undefined,
-      appStoreHref: undefined,
+      kind: "temporarily_unavailable",
+      reason: "The organisation's App Store address could not be read. Try again shortly.",
     };
   }
+  if (settings.kind !== "available") {
+    console.error(
+      `[studio] App Store address read refused: ${settings.code ?? settings.cause ?? "no cause"}`,
+    );
+    return {
+      kind: "refused",
+      reason: "You do not have access to this organisation's App Store address.",
+    };
+  }
+  if (settings.value === null)
+    return {
+      kind: "refused",
+      reason:
+        "This organisation has no App Store address. An organisation administrator sets it in Organisation Administration, Settings.",
+    };
+  if (settings.value === "invalid")
+    return {
+      kind: "refused",
+      reason:
+        "This organisation's App Store address is not an application address. An organisation administrator corrects it in Organisation Administration, Settings.",
+    };
   const organizationPath = organizationAddressPath(
     entry.tenantShortName,
     entry.organizationShortName,
   );
   return {
-    organizationName: entry.organizationDisplayName,
-    applicationHref: `${organizationPath}/${encodeURIComponent(applicationKey)}`,
-    appStoreHref: `${organizationPath}/${encodeURIComponent(appStoreKey)}`,
+    kind: "available",
+    place: {
+      organizationName: entry.organizationDisplayName,
+      applicationHref: `${organizationPath}/${encodeURIComponent(applicationKey)}`,
+      appStoreHref: `${organizationPath}/${encodeURIComponent(settings.value)}`,
+    },
   };
 };
 
@@ -86,6 +124,13 @@ export default async function StudioApplicationPage({
     loadWorkspacePlace(result.organizationId, result.draft.key),
     loadStudioOrganizationHome(result.organizationId),
   ]);
+  if (place.kind !== "available")
+    return (
+      <StudioUnavailable
+        subject="App Store address"
+        result={{ kind: place.kind, reason: place.reason }}
+      />
+    );
   // The owner of a used Module is named and linked from this list; without it the key is shown.
   if (home.kind !== "available")
     console.error(`[studio] application list for module owners unavailable: ${home.kind}`);
@@ -99,7 +144,7 @@ export default async function StudioApplicationPage({
       mode="existing"
       organizationId={result.organizationId}
       draft={result.draft}
-      place={place}
+      place={place.place}
       initialTab={tab}
       initialSection={section}
       initialModule={module}

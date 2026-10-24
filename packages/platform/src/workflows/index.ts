@@ -106,7 +106,6 @@ export {
   type ProtectedNodeExecutionDependencies,
   type ProtectedNodeOperationExecutor,
   type ProtectedNodeOperationIdentity,
-  type ProtectedNodeOperationResult,
   type ProtectedNodeRunRecord,
   type ProtectedNodeRunStatus,
   type ProtectedNodeRunStore,
