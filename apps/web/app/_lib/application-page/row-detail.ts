@@ -84,12 +84,13 @@ export const loadApplicationRowDetail = async (
   if (pageDefinition === undefined) return { kind: "unavailable" };
 
   const subjectId = first(parameters[pageSubjectParameter]);
-  const { projectedPageRead, navigationRead } = readPageProjections(
+  const { projectedPageRead } = readPageProjections(
     session,
     context,
     pageDefinition.pageId,
     subjectId,
     undefined,
+    false,
   );
   try {
     const projectedPage = await projectedPageRead;
@@ -198,6 +199,6 @@ export const loadApplicationRowDetail = async (
     });
     return { kind: "available", detail };
   } finally {
-    await Promise.allSettled([projectedPageRead, navigationRead]);
+    await Promise.allSettled([projectedPageRead]);
   }
 };

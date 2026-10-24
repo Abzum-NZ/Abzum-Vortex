@@ -26,11 +26,18 @@ import {
 } from "../grid-view-state";
 import { addressedGridView, gridViewPlacement } from "../grid-views";
 import type { RecordsTableGroupRead } from "../records-table-features/grouping";
+import { decideRecordTypeExport } from "../records-table-features/record-type-access";
+import {
+  projectRowActionAvailability,
+  rowActionInstallationOf,
+} from "../records-table-features/row-actions";
+import type { RecordsTableReadDecider, RecordsTableReadDecisions } from "../records-table-query";
 import {
   conditionalFormattingRelativeDates,
   conditionalFormattingUsesRelativeDates,
   personalFormattingAllowed,
   personalFormattingRules,
+  recordsTableRowActionsProjection,
   type ConditionalFormattingContext,
 } from "../records-table-features";
 import {
@@ -393,12 +400,52 @@ export const readRecordsTable = async (
           required: queryGrouped,
         }
       : undefined;
-  // Export is projected only for a viewer whose export permission reaches every record; the
-  // permission is decided in this read and again by the export route on every request.
-  const exportAllowed =
-    contract.features.export.enabled && recordType.state === "resolved"
-      ? await read.services.exportAllowed(read.context, String(recordType.recordTypeId))
-      : undefined;
+  // Export is projected only for a viewer whose export permission reaches every record, and a row
+  // action only where the viewer may run it on that row. Both are decided inside the table read's
+  // own request, from the rows it returned; the export route decides export again on every
+  // request.
+  const wantsExport = contract.features.export.enabled && recordType.state === "resolved";
+  const wantsRowActions =
+    contract.features.rowActions.enabled && contract.rowBehaviours.rowActions.length > 0;
+  if (wantsRowActions && recordType.state !== "resolved")
+    throw new Error("ROW_ACTION_RECORD_TYPE_UNRESOLVED");
+  const resolvedRecordTypeId =
+    recordType.state === "resolved" ? String(recordType.recordTypeId) : undefined;
+  // A draft preview offers no export.
+  const previewing = read.selection.previewInstallationId !== undefined;
+  const decide: RecordsTableReadDecider | undefined =
+    !wantsExport && !wantsRowActions
+      ? undefined
+      : async (transaction, scope, issuedAt, rows) => {
+          const decisions: {
+            exportAllowed?: boolean;
+            rowActions?: NonNullable<RecordsTableReadDecisions["rowActions"]>;
+          } = {};
+          if (wantsExport && resolvedRecordTypeId !== undefined)
+            decisions.exportAllowed = previewing
+              ? false
+              : (
+                  await decideRecordTypeExport(
+                    transaction,
+                    scope,
+                    read.context,
+                    resolvedRecordTypeId,
+                  )
+                ).kind === "permitted";
+          const implied = wantsRowActions
+            ? recordsTableRowActionsProjection(contract, rows)
+            : undefined;
+          if (implied !== undefined && resolvedRecordTypeId !== undefined)
+            decisions.rowActions = await projectRowActionAvailability(
+              transaction,
+              rowActionInstallationOf(read.context),
+              placementId,
+              resolvedRecordTypeId,
+              implied,
+              issuedAt,
+            );
+          return decisions;
+        };
   const effectiveState = selectedQuery ?? addressed.state;
   const continuation = read.tableContinuation;
   const explicitRequest =
@@ -420,7 +467,7 @@ export const readRecordsTable = async (
       ...(contract.features.inlineEdit.enabled || contract.features.rowEdit.enabled
         ? { fieldEditors: fieldEditorsOf(bound.module, read.context.releaseSet.modules) }
         : {}),
-      ...(exportAllowed === undefined ? {} : { exportAllowed }),
+      ...(decide === undefined ? {} : { decide }),
       ...(timeZone === undefined ? {} : { timeZone }),
       resolveRecordLinks: read.services.resolveRecordLinks,
       state: { ...effectiveState, page },
@@ -488,18 +535,7 @@ export const readRecordsTable = async (
     };
   } else if (resolved.display.status === "empty") data[placementId] = { status: "empty" };
   else {
-    let values = resolved.display.values;
-    if (values.features?.rowActions !== undefined) {
-      if (bound.query.recordType.state !== "resolved")
-        throw new Error("ROW_ACTION_RECORD_TYPE_UNRESOLVED");
-      const rowActions = await read.services.tables.projectRowActions(
-        read.context,
-        placementId,
-        String(bound.query.recordType.recordTypeId),
-        values.features.rowActions,
-      );
-      values = { ...values, features: { ...values.features, rowActions } };
-    }
+    const values = resolved.display.values;
     // Bulk actions may run over every matching record, an export over the shown rows, and the
     // status bar totals the shown rows: the read seals what it matched (release, resolved inputs
     // and query state minus the page) for this viewer, with no extra read.

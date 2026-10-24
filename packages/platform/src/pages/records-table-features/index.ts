@@ -119,6 +119,41 @@ export const recordsTableBulkActions = (
   contract.features.bulkActions.enabled ? contract.features.bulkActions.actions : [];
 
 /**
+ * The row actions a table offers and, per row, whether the capabilities its read decided make each
+ * eligible; absent when the feature is off or the table declares none. Named-action eligibility is
+ * decided afterwards, in the read's own request, by `projectRowActionAvailability`.
+ */
+export const recordsTableRowActionsProjection = (
+  contract: RecordsTableContract,
+  rows: readonly ProtectedQueryRow[],
+): RecordsTableFeatureProjection["rowActions"] =>
+  contract.features.rowActions.enabled && contract.rowBehaviours.rowActions.length > 0
+    ? {
+        actions: contract.rowBehaviours.rowActions,
+        availability: rows.flatMap((row) =>
+          row.revision === undefined
+            ? []
+            : [
+                {
+                  recordId: row.recordId,
+                  revision: row.revision,
+                  actions: contract.rowBehaviours.rowActions.map((action) =>
+                    action.capability === undefined ||
+                    row.capabilities?.actions.includes(action.capability) === true
+                      ? { action: action.eventId, eligible: true as const }
+                      : {
+                          action: action.eventId,
+                          eligible: false as const,
+                          reason: "not_permitted" as const,
+                        },
+                  ),
+                },
+              ],
+        ),
+      }
+    : undefined;
+
+/**
  * Projects the enabled features for the viewer of one read. `bounds` is the viewer's current field
  * bound from the same read, carried even when no row was returned, so it decides filters, search
  * and saved views for an empty page and for hidden columns alike; nothing is inferred from which
@@ -219,6 +254,7 @@ export const projectRecordsTableFeatures = (
     (pasteUsable || fillUsable) &&
     features.spreadsheet.enabled &&
     features.spreadsheet.undo === true;
+  const rowActions = recordsTableRowActionsProjection(contract, rows);
   const projection: RecordsTableFeatureProjection = {
     ...(exportSettings.enabled &&
     exportAllowed === true &&
@@ -257,33 +293,7 @@ export const projectRecordsTableFeatures = (
           },
         }
       : {}),
-    ...(features.rowActions.enabled && contract.rowBehaviours.rowActions.length > 0
-      ? {
-          rowActions: {
-            actions: contract.rowBehaviours.rowActions,
-            availability: rows.flatMap((row) =>
-              row.revision === undefined
-                ? []
-                : [
-                    {
-                      recordId: row.recordId,
-                      revision: row.revision,
-                      actions: contract.rowBehaviours.rowActions.map((action) =>
-                        action.capability === undefined ||
-                        row.capabilities?.actions.includes(action.capability) === true
-                          ? { action: action.eventId, eligible: true as const }
-                          : {
-                              action: action.eventId,
-                              eligible: false as const,
-                              reason: "not_permitted" as const,
-                            },
-                      ),
-                    },
-                  ],
-            ),
-          },
-        }
-      : {}),
+    ...(rowActions === undefined ? {} : { rowActions }),
     ...(features.pinning.enabled ? { pinning: true as const } : {}),
     ...(search ? { search: true as const } : {}),
     ...(columnFilters.length === 0 ? {} : { columnFilters }),
@@ -310,6 +320,20 @@ export const projectRecordsTableFeatures = (
   };
   return Object.keys(projection).length === 0 ? undefined : projection;
 };
+
+/**
+ * The part of the narrowing decision the table's own declaration settles before any row is read:
+ * a filter on a field the installed definition gives no filter control. Whether the viewer may
+ * search or filter by a field depends on their field bound, which only the read returns; that part
+ * is `recordsTableNarrowingRefusal`.
+ */
+export const recordsTableNarrowingContractRefusal = (
+  filterFields: Readonly<Record<string, unknown>>,
+  narrowing: Readonly<{ filters: readonly Readonly<{ fieldId: string }>[] }>,
+): RecordsTableRequestRefusal | undefined =>
+  narrowing.filters.some((filter) => filterFields[filter.fieldId.toLowerCase()] === undefined)
+    ? recordsTableRequestRefusal("filter", "field_not_offered")
+    : undefined;
 
 /**
  * Whether a read's own search and filters are ones its feature projection offers the viewer. The

@@ -33,11 +33,26 @@ import { refuseInvalidCommand } from "./protected-query-helpers";
 import { summariseCommand, boardSummaryCommand } from "./protected-query-summary";
 import { runCommand } from "./protected-query-table";
 import type { ProtectedQueryServiceDependencies, QueryCache } from "./protected-query-types";
+import type { ProtectedQueryRow } from "./protected-query-contracts";
+import type { RequestDatabaseTransaction } from "../db";
+import type { SelectedOrganizationScope } from "../schema";
 
 export type {
   ProtectedQueryCacheContext,
   ProtectedQueryServiceDependencies,
 } from "./protected-query-types";
+
+/**
+ * A decision the caller takes inside the read's own request transaction, after a completed read
+ * and from the rows it returned (none for a summary): one protected request carries the read and
+ * every viewer decision the page shows beside it. The caller keeps what it decides.
+ */
+export type ProtectedReadDecider = (
+  transaction: RequestDatabaseTransaction,
+  scope: SelectedOrganizationScope,
+  issuedAt: string,
+  rows: readonly ProtectedQueryRow[],
+) => Promise<void>;
 
 /**
  * Protected Query execution for one published Module query. The verified
@@ -104,10 +119,16 @@ export const createProtectedQueryService = (dependencies: ProtectedQueryServiceD
       caller: IdentitySession | ExecutionAuthorityContext,
       selection: OrganizationSelectionCandidate,
       commandCandidate: unknown,
+      decide?: ProtectedReadDecider,
     ): Promise<HumanOrganizationRequestResult<ProtectedQueryResult>> {
       const prepared = prepareRead(caller, selection, commandCandidate);
       if (prepared.kind === "final") return prepared.result;
-      return requests.run(prepared.person, selection, prepared.read);
+      return requests.run(prepared.person, selection, async (transaction, scope, issuedAt) => {
+        const result = await prepared.read(transaction, scope);
+        if (decide !== undefined && result.outcome === "completed")
+          await decide(transaction, scope, issuedAt, result.rows);
+        return result;
+      });
     },
     /** Validates a protected read for a caller that runs it inside its own request transaction. */
     prepareRead,
@@ -150,6 +171,7 @@ export const createProtectedQueryService = (dependencies: ProtectedQueryServiceD
       caller: IdentitySession | ExecutionAuthorityContext,
       selection: OrganizationSelectionCandidate,
       commandCandidate: unknown,
+      decide?: ProtectedReadDecider,
     ): Promise<HumanOrganizationRequestResult<ProtectedQueryGroupedMembersResult>> {
       if (caller !== null && typeof caller === "object" && "kind" in caller)
         return { kind: "unavailable" };
@@ -158,14 +180,24 @@ export const createProtectedQueryService = (dependencies: ProtectedQueryServiceD
       if (!command.success)
         return { kind: "available", value: refuseInvalidCommand(command.error) };
       if (selection.applicationRootId === undefined) return { kind: "unavailable" };
-      return requests.run(personCaller, selection, (transaction, scope) =>
-        groupedMembersCommand(transaction, scope, personCaller, command.data, continuationKey),
-      );
+      return requests.run(personCaller, selection, async (transaction, scope, issuedAt) => {
+        const result = await groupedMembersCommand(
+          transaction,
+          scope,
+          personCaller,
+          command.data,
+          continuationKey,
+        );
+        if (decide !== undefined && result.outcome === "completed")
+          await decide(transaction, scope, issuedAt, result.rows);
+        return result;
+      });
     },
     async treeLevel(
       caller: IdentitySession | ExecutionAuthorityContext,
       selection: OrganizationSelectionCandidate,
       commandCandidate: unknown,
+      decide?: ProtectedReadDecider,
     ): Promise<HumanOrganizationRequestResult<ProtectedQueryTreeLevelResult>> {
       if (caller !== null && typeof caller === "object" && "kind" in caller)
         return { kind: "unavailable" };
@@ -174,14 +206,24 @@ export const createProtectedQueryService = (dependencies: ProtectedQueryServiceD
       if (!command.success)
         return { kind: "available", value: refuseInvalidCommand(command.error) };
       if (selection.applicationRootId === undefined) return { kind: "unavailable" };
-      return requests.run(personCaller, selection, (transaction, scope) =>
-        treeLevelCommand(transaction, scope, personCaller, command.data, continuationKey),
-      );
+      return requests.run(personCaller, selection, async (transaction, scope, issuedAt) => {
+        const result = await treeLevelCommand(
+          transaction,
+          scope,
+          personCaller,
+          command.data,
+          continuationKey,
+        );
+        if (decide !== undefined && result.outcome === "completed")
+          await decide(transaction, scope, issuedAt, result.rows);
+        return result;
+      });
     },
     async summarise(
       caller: IdentitySession | ExecutionAuthorityContext,
       selection: OrganizationSelectionCandidate,
       commandCandidate: unknown,
+      decide?: ProtectedReadDecider,
     ): Promise<HumanOrganizationRequestResult<ProtectedQuerySummaryResult>> {
       if (caller !== null && typeof caller === "object" && "kind" in caller)
         return { kind: "unavailable" };
@@ -189,9 +231,12 @@ export const createProtectedQueryService = (dependencies: ProtectedQueryServiceD
       if (!command.success)
         return { kind: "available", value: refuseInvalidCommand(command.error) };
       if (selection.applicationRootId === undefined) return { kind: "unavailable" };
-      return requests.run(caller, selection, (transaction, scope) =>
-        summariseCommand(transaction, scope, command.data),
-      );
+      return requests.run(caller, selection, async (transaction, scope, issuedAt) => {
+        const result = await summariseCommand(transaction, scope, command.data);
+        if (decide !== undefined && result.outcome === "completed")
+          await decide(transaction, scope, issuedAt, []);
+        return result;
+      });
     },
     async boardSummary(
       caller: IdentitySession | ExecutionAuthorityContext,

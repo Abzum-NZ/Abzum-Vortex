@@ -62,8 +62,11 @@ export const linkTitleCellKey = (recordId: string, field: string): string =>
 /** A listing page holds up to 200 records; a title read follows at most this many pages. */
 const pagesPerRead = 5;
 const pageSize = 200;
-/** A dependent link is read once per distinct parent in the paste, up to this many parents. */
+/** A dependent link's titles are read for every distinct parent in the paste, up to this many. */
 const parentsPerField = 20;
+
+/** A record whose title matched a pasted title, and the parent it points at for a dependent link. */
+type TitleMatch = Readonly<{ recordId: string; parentId?: string }>;
 
 type Reference = Readonly<{ recordTypeId: string; recordId: string }>;
 
@@ -201,23 +204,30 @@ export const resolveLinkTitles = async (
       }) as const;
     /**
      * One set-based read of the given titles, narrowed for a dependent link to the records whose
-     * filter link points at one parent (the link picker's own narrowing): title -> record ids.
+     * filter link points at one of the given parents (the link picker's own narrowing). Each
+     * match carries the parent its record points at, so the caller buckets them without another
+     * read: title -> matches.
      */
     const read = async (
       titles: readonly string[],
-      parent: Reference | undefined,
-    ): Promise<Map<string, string[]> | "too_many" | "unavailable"> => {
-      const byTitle = new Map<string, string[]>();
+      parents: readonly Reference[] | undefined,
+    ): Promise<Map<string, TitleMatch[]> | "too_many" | "unavailable"> => {
+      const byTitle = new Map<string, TitleMatch[]>();
       const wanted = titles.filter((title) => !numeric || Number.isFinite(Number(title)));
-      const narrowed = parent !== undefined && filterFieldId !== undefined;
+      const narrowed = parents !== undefined && filterFieldId !== undefined;
+      // The page budget is the one a read per parent had, so one read for them all is no tighter.
+      const pageBudget = pagesPerRead * Math.max(1, parents?.length ?? 1);
       let token: string | undefined;
       for (let page = 0; wanted.length > 0; page += 1) {
-        if (page === pagesPerRead) return "too_many";
+        if (page === pageBudget) return "too_many";
         const command = {
           moduleRootId: moduleRootIdSchema.parse(String(targetModule.rootId)),
           queryId: queryIdSchema.parse(String(targetType.recordTypeId)),
           inputValues: {},
-          requestedFieldIds: [fieldIdSchema.parse(titleFieldId)],
+          requestedFieldIds: [
+            fieldIdSchema.parse(titleFieldId),
+            ...(narrowed ? [fieldIdSchema.parse(filterFieldId)] : []),
+          ],
           requestedSystemFieldKeys: [],
           sort: [],
           sortableFieldIds: [],
@@ -237,12 +247,10 @@ export const resolveLinkTitles = async (
                     left: { source: "field", fieldId: fieldIdSchema.parse(filterFieldId) },
                     right: {
                       source: "value",
-                      value: [
-                        {
-                          recordTypeId: parent.recordTypeId.toLowerCase(),
-                          recordId: parent.recordId,
-                        },
-                      ],
+                      value: parents.map((parent) => ({
+                        recordTypeId: parent.recordTypeId.toLowerCase(),
+                        recordId: parent.recordId,
+                      })),
                     },
                   },
                 ],
@@ -265,7 +273,14 @@ export const resolveLinkTitles = async (
         }
         for (const row of result.value.rows) {
           const title = titleText(valueOf(row.values, titleFieldId) as JsonValue | undefined);
-          byTitle.set(title, [...(byTitle.get(title) ?? []), row.recordId]);
+          const parent = narrowed ? referenceOf(valueOf(row.values, filterFieldId)) : undefined;
+          byTitle.set(title, [
+            ...(byTitle.get(title) ?? []),
+            {
+              recordId: row.recordId,
+              ...(parent === undefined ? {} : { parentId: parent.recordId }),
+            },
+          ]);
         }
         token = result.value.nextContinuationToken;
         if (token === undefined) break;
@@ -309,8 +324,9 @@ export const resolveLinkTitles = async (
     }
     if (pending.length === 0) continue;
 
-    // One read per field; a dependent link reads once per distinct parent (bounded) plus once
-    // unnarrowed, which tells a title under another parent from a title nobody may read.
+    // One read per field: a dependent link reads every distinct parent's titles together
+    // (bounded) and buckets the matches by parent, plus once unnarrowed, which tells a title under
+    // another parent from a title nobody may read.
     const groups = new Map<string, { parent: Reference | undefined; cells: PastedTitleCell[] }>();
     for (const { cell, parent } of pending) {
       const key = parent === undefined ? "" : parent.recordId.toLowerCase();
@@ -323,15 +339,23 @@ export const resolveLinkTitles = async (
       continue;
     }
     const unmatched: PastedTitleCell[] = [];
+    const parents = [...groups.values()].flatMap(({ parent }) =>
+      parent === undefined ? [] : [parent],
+    );
+    const byTitle = await read(
+      [...new Set(pending.map(({ cell }) => cell.title))],
+      parentField === undefined ? undefined : parents,
+    );
+    if (byTitle === "unavailable") return { references, problems, unavailable: true };
     for (const { parent, cells: groupCells } of groups.values()) {
-      const byTitle = await read([...new Set(groupCells.map((cell) => cell.title))], parent);
-      if (byTitle === "unavailable") return { references, problems, unavailable: true };
       for (const cell of groupCells) {
         if (byTitle === "too_many") {
           tooMany(cell);
           continue;
         }
-        const candidates = byTitle.get(cell.title) ?? [];
+        const candidates = (byTitle.get(cell.title) ?? [])
+          .filter((match) => parent === undefined || sameId(match.parentId ?? "", parent.recordId))
+          .map((match) => match.recordId);
         if (candidates.length === 1)
           references.set(linkTitleCellKey(cell.recordId, field), {
             recordTypeId: String(targetType.recordTypeId),

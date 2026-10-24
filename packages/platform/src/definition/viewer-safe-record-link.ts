@@ -17,6 +17,7 @@ import {
   type PageDefinition,
   type PermissionDeclaration,
   type SelectedOrganizationScope,
+  type ViewerSafeRecordLinkIdentity,
   type ViewerSafeRecordLinkResult,
   type ViewerSafeRecordPinAcquisitionResult,
 } from "../schema";
@@ -572,61 +573,114 @@ export const createViewerSafeRecordLinkService = (
         return labelsUnavailable;
       }
     },
-    async read(
+    /**
+     * Reads every target a tile set names: one request transaction per target application, in
+     * which the installed context is loaded once and each exact record is checked and titled. The
+     * results keep the order of the candidates.
+     */
+    async readMany(
       session: IdentitySession,
-      identityCandidate: unknown,
-    ): Promise<ViewerSafeRecordLinkResult> {
-      const identity = viewerSafeRecordLinkIdentitySchema.safeParse(identityCandidate);
-      if (!identity.success) return unavailable;
-
-      const selection: OrganizationSelectionCandidate = {
-        organizationId: identity.data.organizationId,
-        applicationRootId: identity.data.applicationRootId,
-      };
-      try {
-        const request = await requests.run(
-          session,
-          selection,
-          async (transaction, scope): Promise<ViewerSafeRecordLinkResult> => {
-            if (
-              !sameId(scope.organizationId, identity.data.organizationId) ||
-              scope.applicationRootId === undefined ||
-              !sameId(scope.applicationRootId, identity.data.applicationRootId)
-            )
-              return unavailable;
-
-            const context = requireInstalledRuntimeContext(
-              await dependencies.createInstalledContextLoader(transaction, scope).load(),
-            );
-            if (!currentContextMatches(context, identity.data)) return unavailable;
-            const recordType = matchingRecordType(context, identity.data);
-            const page = matchingDetailPage(context, identity.data);
-            if (recordType === undefined || page === undefined) return unavailable;
-            if (
-              !(await canOpenDetailPage(
-                dependencies.permissions,
-                transaction,
-                scope,
-                context,
-                page,
-              ))
-            )
-              return unavailable;
-
-            const titleRead = await records.read(transaction, scope, {
-              identity: identity.data,
-              applicationReleaseRevision: context.applicationReleaseRevision,
-              titleFieldId: recordType.titleFieldId,
-            });
-            return completeRead(context, identity.data, page, titleRead);
+      identityCandidates: readonly unknown[],
+    ): Promise<readonly ViewerSafeRecordLinkResult[]> {
+      const results = new Array<ViewerSafeRecordLinkResult>(identityCandidates.length).fill(
+        unavailable,
+      );
+      const byApplication = new Map<
+        string,
+        {
+          selection: OrganizationSelectionCandidate;
+          entries: { index: number; identity: ViewerSafeRecordLinkIdentity }[];
+        }
+      >();
+      for (const [index, candidate] of identityCandidates.entries()) {
+        const identity = viewerSafeRecordLinkIdentitySchema.safeParse(candidate);
+        if (!identity.success) continue;
+        const key =
+          `${identity.data.organizationId}:${identity.data.applicationRootId}`.toLowerCase();
+        const group = byApplication.get(key) ?? {
+          selection: {
+            organizationId: identity.data.organizationId,
+            applicationRootId: identity.data.applicationRootId,
           },
-        );
-        return request.kind === "available"
-          ? viewerSafeRecordLinkResultSchema.parse(request.value)
-          : unavailable;
-      } catch {
-        return unavailable;
+          entries: [],
+        };
+        group.entries.push({ index, identity: identity.data });
+        byApplication.set(key, group);
       }
+      await Promise.all(
+        [...byApplication.values()].map(async ({ selection, entries }) => {
+          try {
+            const request = await requests.run(
+              session,
+              selection,
+              async (transaction, scope): Promise<ViewerSafeRecordLinkResult[]> => {
+                const first = entries[0]!.identity;
+                if (
+                  !sameId(scope.organizationId, first.organizationId) ||
+                  scope.applicationRootId === undefined ||
+                  !sameId(scope.applicationRootId, first.applicationRootId)
+                )
+                  return entries.map(() => unavailable);
+                const context = requireInstalledRuntimeContext(
+                  await dependencies.createInstalledContextLoader(transaction, scope).load(),
+                );
+                const openable = new Map<string, boolean>();
+                const read: ViewerSafeRecordLinkResult[] = [];
+                for (const { identity } of entries) {
+                  if (!currentContextMatches(context, identity)) {
+                    read.push(unavailable);
+                    continue;
+                  }
+                  const recordType = matchingRecordType(context, identity);
+                  const page = matchingDetailPage(context, identity);
+                  if (recordType === undefined || page === undefined) {
+                    read.push(unavailable);
+                    continue;
+                  }
+                  // The detail page's own access requirement is decided once per page.
+                  const pageKey = String(page.pageId).toLowerCase();
+                  let mayOpen = openable.get(pageKey);
+                  if (mayOpen === undefined) {
+                    mayOpen = await canOpenDetailPage(
+                      dependencies.permissions,
+                      transaction,
+                      scope,
+                      context,
+                      page,
+                    );
+                    openable.set(pageKey, mayOpen);
+                  }
+                  if (!mayOpen) {
+                    read.push(unavailable);
+                    continue;
+                  }
+                  const titleRead = await records.read(transaction, scope, {
+                    identity,
+                    applicationReleaseRevision: context.applicationReleaseRevision,
+                    titleFieldId: recordType.titleFieldId,
+                  });
+                  read.push(completeRead(context, identity, page, titleRead));
+                }
+                return read;
+              },
+            );
+            if (request.kind !== "available") {
+              console.error(
+                `[page] record link targets unavailable: RECORD_LINK_TARGETS_${request.kind.toUpperCase()}`,
+              );
+              return;
+            }
+            for (const [position, { index }] of entries.entries())
+              results[index] = viewerSafeRecordLinkResultSchema.parse(request.value[position]);
+          } catch (error) {
+            // The group's targets stay unavailable: a tile never shows a target it could not prove.
+            console.error(
+              `[page] record link targets unavailable: RECORD_LINK_TARGETS_READ_FAILED ${describeFailure(error)}`,
+            );
+          }
+        }),
+      );
+      return Object.freeze(results);
     },
   });
 };
