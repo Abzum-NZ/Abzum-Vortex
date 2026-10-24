@@ -375,15 +375,26 @@ export const planChoiceOptionGates = (
 
 /**
  * The gated options the person may use now: for each distinct record-type permission the page
- * names, the one database decision the form save asks as well.
+ * names, the one database decision the form save asks as well. A permission on the page subject's
+ * record type is decided for that record; any other for a new record.
  */
 export const decideChoiceOptionGates = async (
   transaction: RequestDatabaseTransaction,
   plan: ChoiceOptionPlan,
+  subject: Readonly<{ recordTypeId: string; recordId: string }> | undefined,
 ): Promise<ReadonlySet<string>> => {
   const allowed = new Set<string>();
   for (const [key, { recordTypeId, permissionId }] of plan.permissions)
-    if (await decideChoiceOptionPermission(transaction, recordTypeId, permissionId))
+    if (
+      await decideChoiceOptionPermission(
+        transaction,
+        recordTypeId,
+        permissionId,
+        subject !== undefined && sameId(subject.recordTypeId, recordTypeId)
+          ? subject.recordId
+          : undefined,
+      )
+    )
       allowed.add(key);
   return allowed;
 };

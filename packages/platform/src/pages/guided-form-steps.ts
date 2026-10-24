@@ -666,6 +666,7 @@ const createAuthorityAdapter = (
             transaction,
             String(recordType.recordTypeId),
             String(permissionId),
+            undefined,
           );
           permissionDecisions.set(permissionKey, allowed);
         }

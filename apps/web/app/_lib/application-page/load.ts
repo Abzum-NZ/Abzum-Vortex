@@ -392,6 +392,12 @@ const loadApplicationPageJoined = async (
   const choicePlan = planChoiceOptionGates(allPlacements, context);
   if (choicePlan === undefined) return { kind: "temporarily_unavailable" };
 
+  // The page subject: the one record the page's own address names, of the page's declared record
+  // type, read once through the record read path under the viewer's own authority. Nothing here
+  // comes from the browser except the id.
+  const subjectType = pageSubjectType(pageDefinition);
+  const subjectId = recordIdSchema.safeParse(first(parameters[pageSubjectParameter]));
+
   let dateTimeZones: DateTimeZones = {};
   let allowedPermissions: ReadonlySet<string> = new Set();
   if (needsDateTimeZones || choicePlan.permissions.size > 0) {
@@ -401,6 +407,10 @@ const loadApplicationPageJoined = async (
       selection,
       needsDateTimeZones,
       choicePlan,
+      choiceSubject:
+        subjectType !== undefined && subjectId.success
+          ? { recordTypeId: String(subjectType.recordTypeId), recordId: subjectId.data }
+          : undefined,
     });
     if (authorized.kind !== "available") return authorized;
     if (page.accessVersion !== authorized.value.accessVersion)
@@ -422,11 +432,6 @@ const loadApplicationPageJoined = async (
   });
   const { referenceChoices, subjects, readConcurrently } = services;
 
-  // The page subject: the one record the page's own address names, of the page's declared record
-  // type, read once through the record read path under the viewer's own authority. Nothing here
-  // comes from the browser except the id.
-  const subjectType = pageSubjectType(pageDefinition);
-  const subjectId = recordIdSchema.safeParse(first(parameters[pageSubjectParameter]));
   if (
     pageDefinition.type === "guided_form" &&
     first(parameters[pageSubjectParameter]) !== undefined &&

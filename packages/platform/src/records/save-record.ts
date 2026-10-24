@@ -798,7 +798,7 @@ const finalizeCalculatedValues = async (
     });
   }
 
-  // A gated option is stored only when the person holds its permission now (the decision that
+  // A gated option is stored only when the person may use it on this record now (the decision that
   // offered it). An option the record already holds is not chosen again, so it is not re-checked.
   const choiceDecisions = new Map<string, boolean>();
   const refusedChoices: RecordFieldValuePendingCheck[] = [];
@@ -815,6 +815,7 @@ const finalizeCalculatedValues = async (
           transaction,
           prepared.recordType.recordTypeId,
           check.permissionId,
+          command.operation === "update" ? command.recordId : undefined,
         );
         choiceDecisions.set(decisionKey, allowed);
       }

@@ -24,6 +24,8 @@ export const readFieldAccess = (
     selection: OrganizationSelectionCandidate;
     needsDateTimeZones: boolean;
     choicePlan: ChoiceOptionPlan;
+    /** The record the page addresses, whose own access decides its gated options. */
+    choiceSubject: Readonly<{ recordTypeId: string; recordId: string }> | undefined;
   }>,
 ) =>
   humanOrganizationRequests(input.dependencies.identityAuthorityId).run(
@@ -48,7 +50,11 @@ export const readFieldAccess = (
         if (organizationSettings !== undefined)
           zones.organizationTimeZone = organizationSettings.timeZone;
       }
-      const allowed = await decideChoiceOptionGates(transaction, input.choicePlan);
+      const allowed = await decideChoiceOptionGates(
+        transaction,
+        input.choicePlan,
+        input.choiceSubject,
+      );
       return { zones, allowed, accessVersion: scope.accessVersion };
     },
   );
