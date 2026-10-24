@@ -1,4 +1,5 @@
 "use server";
+import { withPageReadAttribution } from "../../../../_lib/page-read-attribution";
 
 import {
   boardColumnReadRequestSchema,
@@ -100,6 +101,26 @@ const searchParametersOf = (
 
 /** Re-reads only named placements after resolving the viewer's current page authority. */
 export async function rereadApplicationPlacements(
+  addressInput: unknown,
+  placementIdsInput: unknown,
+  boardReadsInput?: unknown,
+  tableContinuationInput?: unknown,
+  includeContentInput?: unknown,
+): Promise<ApplicationPagePlacementReadResult> {
+  return withPageReadAttribution(
+    () =>
+      readApplicationPlacements(
+        addressInput,
+        placementIdsInput,
+        boardReadsInput,
+        tableContinuationInput,
+        includeContentInput,
+      ),
+    "placements",
+  );
+}
+
+async function readApplicationPlacements(
   addressInput: unknown,
   placementIdsInput: unknown,
   boardReadsInput?: unknown,
