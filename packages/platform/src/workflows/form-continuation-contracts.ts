@@ -172,8 +172,8 @@ export const formContinuationUnavailableNoticeSchema = z
   .object({
     taskId: builderKeySchema,
     taskType: z.string().min(1).max(200),
-    code: z.literal("not_yet_available"),
-    requires: z.string().min(1).max(500),
+    code: z.literal("capability_unavailable"),
+    message: z.string().min(1).max(500),
   })
   .strict();
 

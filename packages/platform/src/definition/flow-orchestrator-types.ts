@@ -376,13 +376,12 @@ export type FlowRunExpectation = Readonly<{
   receipt?: Readonly<{ runId: string; committedEffects: number }>;
 }>;
 
-/** Why a task did not run: the located, fail-closed "not yet available" outcome. */
+/** Why a task did not run: the located, fail-closed capability outcome. */
 export type FlowUnavailableNotice = Readonly<{
   taskId: string;
   taskType: string;
-  code: "not_yet_available";
-  /** The work that makes the task available. */
-  requires: string;
+  code: "capability_unavailable";
+  message: string;
 }>;
 
 export type SafeIntent = Readonly<{

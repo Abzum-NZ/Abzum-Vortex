@@ -369,7 +369,7 @@ export const createFileRemovalCoordinator = (
     typeof dependencies?.eligibilityService?.decideFileRemovalEligibility !==
     "function"
   )
-    throw new Error("File removal requires the #657 eligibility service");
+    throw new Error("File removal requires an eligibility service");
   if (typeof dependencies?.repository?.begin !== "function")
     throw new Error("File removal requires a durable repository");
   if (

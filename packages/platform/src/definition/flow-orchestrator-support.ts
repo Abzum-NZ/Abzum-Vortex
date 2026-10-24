@@ -68,23 +68,21 @@ export const refusalOutcome = (code: string): FlowTaskOutcome =>
 export const requestOutcome = (kind: "unavailable" | "temporarily_unavailable"): FlowTaskOutcome =>
   kind === "unavailable" ? "refused" : "failed";
 
-/** Tasks the platform cannot run on the server yet, and what each waits for. */
-export const notYetAvailable: Readonly<Record<string, string>> = Object.freeze({
-  // A named action's record tasks run in its transaction flow through the record port; an
-  // interactive flow runs only Save record, through the record save port.
-  "record.save": "the interactive record task port",
-  "record.create": "the interactive record task port",
-  "record.set_fields": "the interactive record task port",
-  "record.link": "the interactive record task port",
-  "record.delete": "the interactive record task port",
-  "record.restore": "the interactive record task port",
-  "record.changes": "the interactive record task port",
-  "record.query": "the interactive record task port",
-  "flow.run_background": "#666 committed start intents",
-  "event.announce": "the server event writer task",
-  "message.acknowledge": "the message trigger (#1133)",
-  "file.export": "the server file export task",
-  "connection.call": "the durable Kestra runner",
+/** Tasks the platform cannot run here yet, and the user-facing capability they need. */
+export const unavailableTaskMessages: Readonly<Record<string, string>> = Object.freeze({
+  "record.save": "This workflow can't save records.",
+  "record.create": "This workflow can't create records.",
+  "record.set_fields": "This workflow can't update records.",
+  "record.link": "This workflow can't link records.",
+  "record.delete": "This workflow can't delete records.",
+  "record.restore": "This workflow can't restore records.",
+  "record.changes": "This workflow can't read record history.",
+  "record.query": "This workflow can't search records.",
+  "flow.run_background": "This workflow can't start a background workflow.",
+  "event.announce": "This workflow can't send events.",
+  "message.acknowledge": "This workflow can't handle messages.",
+  "file.export": "This workflow can't export files.",
+  "connection.call": "This workflow can't use connected services.",
 });
 
 export const withinPayload = (candidate: unknown): boolean => {
