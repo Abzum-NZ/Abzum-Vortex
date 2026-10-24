@@ -25,7 +25,8 @@ const launcherCellKey = (
 
 /**
  * A query-bound application launcher: one bounded keyset page of its query, intersected with the
- * applications the viewer may open. It projects only the key, name, and icon fields it displays.
+ * applications the viewer may open. It projects only the key, name, icon and optional description
+ * fields it displays.
  */
 export const readLauncher = async (
   read: PlacementReadInput,
@@ -64,6 +65,14 @@ export const readLauncher = async (
     data[placementId] = { status: "error" };
     return;
   }
+  // The launcher also shows the optional fixed `description` cell when the query selects it.
+  const descriptionField = targetRecordType.fields.find((field) => field.key === "description");
+  if (
+    descriptionField !== undefined &&
+    selectedFieldIds.has(String(descriptionField.fieldId).toLowerCase()) &&
+    !requestedFieldIds.includes(descriptionField.fieldId)
+  )
+    requestedFieldIds.push(descriptionField.fieldId);
   const command = protectedQueryCommandSchema.safeParse({
     moduleRootId: bound.module.rootId,
     queryId: bound.query.queryId,
