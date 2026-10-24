@@ -2,6 +2,7 @@ import type { PlatformPermissionSource } from "../access/platform-permissions";
 import "server-only";
 
 import {
+  canonicalJson,
   describeFailure,
   recordIdSchema,
   sameId,
@@ -23,6 +24,7 @@ import {
 } from "../schema";
 import {
   createHumanOrganizationRequestService,
+  decideOrganizationAccessBatch,
   runOrganizationAccessOperation,
   type HumanOrganizationRequestDependencies,
 } from "../access/index";
@@ -199,14 +201,12 @@ const permissionAction = (permission: PermissionDeclaration) => ({
   ...(permission.namedAction === undefined ? {} : { namedAction: permission.namedAction }),
 });
 
-/** Check the detail page's own required permission under this viewer's resolved request. */
-const canOpenDetailPage = async (
+/** The detail page's own required permission from the trusted installed registration. */
+const detailPageDeclaration = (
   permissions: PlatformPermissionSource,
-  transaction: RequestDatabaseTransaction,
-  scope: SelectedOrganizationScope,
   context: InstalledRuntimeContext,
   page: PageDefinition,
-): Promise<boolean> => {
+): OrganizationAccessDeclaration | undefined => {
   const platform = permissions.forKey(page.accessPermissionKey);
   let declaration: OrganizationAccessDeclaration;
   if (platform !== undefined) {
@@ -226,7 +226,7 @@ const canOpenDetailPage = async (
     const entries = context.permissionRegistration.entries.filter(
       (entry) => entry.permission.key === page.accessPermissionKey,
     );
-    if (entries.length !== 1 || entries[0] === undefined) return false;
+    if (entries.length !== 1 || entries[0] === undefined) return undefined;
     const entry = entries[0];
     declaration = {
       operationKey: "application.page.discover",
@@ -242,6 +242,19 @@ const canOpenDetailPage = async (
       authority: { kind: "permission" },
     };
   }
+  return declaration;
+};
+
+/** Check the detail page's own required permission under this viewer's resolved request. */
+const canOpenDetailPage = async (
+  permissions: PlatformPermissionSource,
+  transaction: RequestDatabaseTransaction,
+  scope: SelectedOrganizationScope,
+  context: InstalledRuntimeContext,
+  page: PageDefinition,
+): Promise<boolean> => {
+  const declaration = detailPageDeclaration(permissions, context, page);
+  if (declaration === undefined) return false;
   const result = await runOrganizationAccessOperation(
     transaction,
     scope,
@@ -434,9 +447,11 @@ export const createViewerSafeRecordLinkService = (
               readonly protectedGroups: boolean;
               readonly titleIsGroupName: boolean;
               readonly page: PageDefinition | undefined;
-              readonly openable: boolean;
+              readonly permissionIndex: number | undefined;
             };
             const typeReads: LinkTypeRead[] = [];
+            const declarations: OrganizationAccessDeclaration[] = [];
+            const permissionIndexes = new Map<string, number>();
             for (const [typeKey, ids] of byType) {
               const target = locateLinkTarget(context, typeKey);
               if (target === undefined) {
@@ -451,15 +466,20 @@ export const createViewerSafeRecordLinkService = (
               const recordIds = [...ids.values()];
               const identity = linkTargetIdentity(context, module, recordType);
               const page = matchingDetailPage(context, { ...identity, recordId: recordIds[0]! });
-              const openable =
-                page !== undefined &&
-                (await canOpenDetailPage(
-                  dependencies.permissions,
-                  transaction,
-                  scope,
-                  context,
-                  page,
-                ));
+              const declaration =
+                page === undefined
+                  ? undefined
+                  : detailPageDeclaration(dependencies.permissions, context, page);
+              let permissionIndex: number | undefined;
+              if (declaration !== undefined) {
+                const key = canonicalJson(declaration);
+                permissionIndex = permissionIndexes.get(key);
+                if (permissionIndex === undefined) {
+                  permissionIndex = declarations.length;
+                  declarations.push(declaration);
+                  permissionIndexes.set(key, permissionIndex);
+                }
+              }
               typeReads.push({
                 typeKey,
                 identity,
@@ -471,9 +491,17 @@ export const createViewerSafeRecordLinkService = (
                     sameId(field.fieldId, recordType.titleFieldId) && field.key === "label",
                 ),
                 page,
-                openable,
+                permissionIndex,
               });
             }
+
+            // Detail pages may share a permission across target types. Decide each exact
+            // declaration once, in one live batch owned only by this labels transaction.
+            const permissions = await decideOrganizationAccessBatch(
+              transaction,
+              scope,
+              declarations,
+            );
 
             // The titles of every target type are read together: one database call (one access
             // plan resolution) per set of at most the database's type and record limits.
@@ -545,7 +573,9 @@ export const createViewerSafeRecordLinkService = (
                     : {
                         outcome: "available",
                         label,
-                        ...(typeRead.openable && page !== undefined
+                        ...(typeRead.permissionIndex !== undefined &&
+                        permissions[typeRead.permissionIndex]?.allowed === true &&
+                        page !== undefined
                           ? {
                               detail: {
                                 applicationKey: context.releaseSet.application.definitionKey,
