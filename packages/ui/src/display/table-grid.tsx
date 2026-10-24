@@ -1103,6 +1103,7 @@ export function RecordsGrid({
                 onMove={(offset) => moveColumnBy(slot.id, offset)}
                 grid={() => gridRef.current}
                 onAutoSize={(width) => autoSize(slot.id, width)}
+                onResize={(direction) => resizeBy(slot.id, direction * RESIZE_STEP)}
                 featureItems={renderers.columnMenuItems?.(column)}
               />
             )}

@@ -613,6 +613,37 @@
       }
     },
     {
+      "id": "perm_opportunity_read_team",
+      "key": "vortex.crm.opportunities.opportunity.read_team",
+      "label": "Read team and shared opportunities",
+      "description": "Allows reading the opportunities the person's group owns and those shared with them, without their amounts.",
+      "record_type": "opportunity",
+      "action_kind": "read",
+      "administrative": false,
+      "record_scope": {
+        "routes": [
+          {
+            "kind": "ownership"
+          },
+          {
+            "kind": "direct_share"
+          }
+        ]
+      },
+      "field_policy": {
+        "readable_fields": [
+          "opportunity_number",
+          "name",
+          "company",
+          "primary_contact",
+          "probability",
+          "stage",
+          "expected_close_date"
+        ],
+        "changeable_fields": []
+      }
+    },
+    {
       "id": "perm_opportunity_update",
       "key": "vortex.crm.opportunities.opportunity.update",
       "label": "Update opportunity",

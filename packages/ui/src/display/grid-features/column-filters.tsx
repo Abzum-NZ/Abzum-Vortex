@@ -619,7 +619,7 @@ function ColumnFilterButton({ context, column }: GridFeatureColumnProps): ReactE
               />
             }
           >
-            <Icon name="sliders-horizontal" aria-hidden="true" />
+            <Icon name="filter" aria-hidden="true" />
           </TooltipTrigger>
           <TooltipContent>Filter by {field.label}</TooltipContent>
         </Tooltip>
@@ -676,7 +676,7 @@ export function FiltersToolbar({
     >
       <Popover>
         <PopoverTrigger render={<Button variant="outline" size="sm" />}>
-          <Icon name="sliders-horizontal" aria-hidden="true" />
+          <Icon name="filter" data-icon="inline-start" aria-hidden="true" />
           Filter
         </PopoverTrigger>
         <PopoverContent className="w-72" align="start">

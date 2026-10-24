@@ -13,6 +13,7 @@ import {
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from "../../components/dropdown-menu";
 import { Icon } from "../../icons/icon";
@@ -43,6 +44,8 @@ export type ColumnMenuProps = Readonly<{
   /** The grid whose mounted cells auto-size measures. */
   grid: () => HTMLElement | null;
   onAutoSize: (width: number) => void;
+  /** Widens (1) or narrows (-1) the column by one step, as Alt+Right or Alt+Left on its heading do. */
+  onResize: (direction: 1 | -1) => void;
   /** The items the projected grid features add for this column (filter, group, pin...). */
   featureItems: ReactNode;
 }>;
@@ -68,6 +71,7 @@ export function ColumnMenu({
   onMove,
   grid,
   onAutoSize,
+  onResize,
   featureItems,
 }: ColumnMenuProps): ReactElement {
   const keys = sort?.keys ?? [];
@@ -147,6 +151,17 @@ export function ColumnMenu({
               <AutoSizeItem column={column} grid={grid} onSize={onAutoSize} />
             </Suspense>
           )}
+          {/* The pointer drags the heading's edge; these are the same widths without a pointer. */}
+          <DropdownMenuItem closeOnClick={false} onClick={() => onResize(1)}>
+            <Icon name="plus" aria-hidden="true" />
+            Widen column
+            <DropdownMenuShortcut>Alt+Right</DropdownMenuShortcut>
+          </DropdownMenuItem>
+          <DropdownMenuItem closeOnClick={false} onClick={() => onResize(-1)}>
+            <Icon name="minus" aria-hidden="true" />
+            Narrow column
+            <DropdownMenuShortcut>Alt+Left</DropdownMenuShortcut>
+          </DropdownMenuItem>
           <DropdownMenuItem disabled={position <= 1} onClick={() => onMove(-1)}>
             <Icon name="chevron-left" aria-hidden="true" />
             Move left

@@ -18,7 +18,9 @@ import { Button } from "../../components/button";
 import { Label } from "../../components/label";
 import { Popover, PopoverContent, PopoverTrigger } from "../../components/popover";
 import { useUnsavedWorkRegistry } from "../../controls/unsaved-work";
-import { Pencil } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../../components/tooltip";
+import { Icon } from "../../icons/icon";
+import { rowName } from "../context";
 import { useDateFormatOptions } from "../date-format-context";
 import { fail, requireRecord, type DisplayEventHandlers, type DisplayRow } from "../projected-data";
 import type { RowLine } from "../sub-rows";
@@ -463,19 +465,26 @@ function RowCommands({ context, row }: GridFeatureCommandProps): ReactElement | 
   )
     return null;
   return (
-    <Button
-      type="button"
-      variant="ghost"
-      size="icon-sm"
-      aria-label="Edit row"
-      disabled={editing.draft !== undefined || editing.saving}
-      onClick={(event) => {
-        event.stopPropagation();
-        editing.start(row);
-      }}
-    >
-      <Pencil aria-hidden="true" />
-    </Button>
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label={`Edit row: ${rowName(row, context.columns[0]?.key)}`}
+            disabled={editing.draft !== undefined || editing.saving}
+            onClick={(event) => {
+              event.stopPropagation();
+              editing.start(row);
+            }}
+          />
+        }
+      >
+        <Icon name="pencil" aria-hidden="true" />
+      </TooltipTrigger>
+      <TooltipContent>Edit row</TooltipContent>
+    </Tooltip>
   );
 }
 
