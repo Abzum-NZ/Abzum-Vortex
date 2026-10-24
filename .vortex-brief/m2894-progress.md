@@ -20,3 +20,11 @@
 ## Exact next step
 1. Read the Studio components above to learn selectors; write the segment A Playwright script in %TEMP%/m2894/ (6 modules, 11 record types, fields of all 21 types, relationships, calculations, total, privacy, extension declarations), recording time/PASS/GAP/screenshot per step. Selectors are best verified against a running Studio, so build first (heavy-take.sh), then dry-run the script's first steps on the lane before starting the 20-minute timer.
 2. heavy-take.sh m2894, build production, lane-take.sh m2894, lane-apply.sh, demo:setup, lane-setup-done.sh, run segment A, file gaps (milestone 21), update this file.
+
+## Session m2894r3 (24 Oct, late) - Segment A PARTIAL
+- Built prod main, lane 5, demo:setup 4m24s, server :3398. The BOM on line 1 of .env.development.local drops VORTEX_ENVIRONMENT when sourced: strip it before `next start`.
+- Playwright: node + C:/Users/vijay/AppData/Local/Temp/1037g-browser/node_modules/playwright-core. Sign-in = email+password form, password = VORTEX_DEMO_OWNER_PASSWORD.
+- Done via Studio only: empty app app.crm_rebuild, 6 modules, 11 record types (persist after reload). Data URL: /studio/<tenant>/<app>?tab=data.
+- Selectors: Module dialog (button 'Module' exact, dialog input, 'Add module'); Record type dialog (inputs 0/1 singular/plural, label 'Title field', 'Only this application', native select Owner, combobox 'Module', 'Add record type'). Fields: pick the record type in the tree, '+ Field' opens an INSPECTOR form (Label, Type select, Required, Format), not a dialog.
+- Candidate gaps (not filed): extra default module "CRM Rebuild data"; Owner select lacks an organisation-account option (activity/lead use organization_account); inherited ownership needs the relationship first.
+- NOT done: 73 fields, relationships, calculations, total, privacy, extensions; segments B, C, D.
