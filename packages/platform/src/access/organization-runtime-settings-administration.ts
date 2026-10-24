@@ -6,6 +6,7 @@ import {
   applicationRootIdSchema,
   organizationRuntimeSettingsSchema,
   namespacedKeySchema,
+  type NamespacedKey,
   type ApplicationRootId,
   type OrganizationRuntimeSettings,
 } from "../schema";
@@ -48,10 +49,13 @@ export const readCurrentOrganizationRuntimeSettingsAfterAuthorization = async (
   return settings.data;
 };
 
-/** Reads the App Store definition address from the current organisation's settings extension. */
+/**
+ * Reads the App Store address an administrator entered in the current organisation's settings:
+ * `null` when none is set, `invalid` when the entry is not an application address.
+ */
 export const readCurrentOrganizationAppStoreAddressAfterAuthorization = async (
   transaction: RequestDatabaseTransaction,
-): Promise<string | null> => {
+): Promise<NamespacedKey | null | "invalid"> => {
   const rows = await transaction.query<{ app_store_address: unknown }>`
     select vortex_access.read_current_organization_app_store_address_for_application()
       as app_store_address
@@ -59,7 +63,8 @@ export const readCurrentOrganizationAppStoreAddressAfterAuthorization = async (
   if (rows.length !== 1 || rows[0] === undefined)
     throw unavailableError("ORGANIZATION_APP_STORE_ADDRESS_UNAVAILABLE");
   if (rows[0].app_store_address === null) return null;
-  return namespacedKeySchema.parse(rows[0].app_store_address);
+  const address = namespacedKeySchema.safeParse(rows[0].app_store_address);
+  return address.success ? address.data : "invalid";
 };
 
 /** The request context fixes the organisation; the application still needs its own Access check. */

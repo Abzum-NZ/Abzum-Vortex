@@ -10,7 +10,8 @@ declare
   address_value text;
 begin
   context_value := vortex_access.validated_human_request_context();
-  select settings.extension_values ->> 'app_store_address'
+  -- A cleared address is stored as an empty value; it is as absent as one never set.
+  select nullif(pg_catalog.btrim(settings.extension_values ->> 'app_store_address'), '')
   into address_value
   from vortex_identity.organization_runtime_settings as settings
   where settings.organization_id = (context_value ->> 'organizationId')::uuid;

@@ -194,21 +194,20 @@ const parsePreparation = (candidate: unknown): PreparationOutcome => {
   );
   if (readableFieldIds.some((fieldId) => !fieldId.success))
     throw contractError("RECORD_SAVE_PREPARATION_INVALID", "invalid readableFieldIds");
-  let existingValues = value.existingValues as Readonly<Record<string, unknown>>;
-  if (recordType.data.systemProjection === undefined) {
-    // Unset optional SQL columns are absent from the ordinary field candidate.
-    const ordinaryValues = { ...existingValues };
-    for (const field of recordType.data.fields) {
-      if (
-        !field.required &&
-        field.type !== "reference_number" &&
-        field.type !== "calculation" &&
-        field.type !== "total" &&
-        ordinaryValues[field.fieldId] === null
-      )
-        delete ordinaryValues[field.fieldId];
-    }
-    existingValues = ordinaryValues;
+  // An unset optional value is absent from the field candidate, whether it is an ordinary SQL
+  // column or a value a system projection (organisation settings) has not stored yet.
+  const existingValues: Record<string, unknown> = {
+    ...(value.existingValues as Readonly<Record<string, unknown>>),
+  };
+  for (const field of recordType.data.fields) {
+    if (
+      !field.required &&
+      field.type !== "reference_number" &&
+      field.type !== "calculation" &&
+      field.type !== "total" &&
+      existingValues[field.fieldId] === null
+    )
+      delete existingValues[field.fieldId];
   }
   return {
     outcome: "prepared",

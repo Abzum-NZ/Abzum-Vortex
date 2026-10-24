@@ -56,6 +56,34 @@ const log = (message: string): void => {
 const landingZoneApplicationKey = "vortex.app.landing_zone";
 const organisationAdministrationApplicationKey = "vortex.app.organisation_administration";
 
+/** The installed Organisation Administration settings record type, the one writer of organisation settings. */
+const readInstalledOrganizationSettings = async (facts: InstallFacts) => {
+  const administrationRelease = facts.releases.get(organisationAdministrationApplicationKey);
+  if (administrationRelease === undefined)
+    throw new Error(
+      `No published release recorded for ${organisationAdministrationApplicationKey}`,
+    );
+  const definitionContext = mintSystemContext(facts.system);
+  const releaseSet = await inSystemTransaction(definitionContext, (transaction) =>
+    createDatabaseSystemApplicationBoundReleaseSetService(
+      developmentPublicationCatalogue,
+      transaction,
+    ).read(definitionContext, {
+      applicationRootId: applicationRootIdSchema.parse(administrationRelease.rootId),
+      applicationReleaseRevision: administrationRelease.releaseRevision,
+    }),
+  );
+  const settingsRecordType = releaseSet.modules
+    .find((module) => module.definitionKey === "vortex.organisation_administration")
+    ?.content.recordTypes.find((recordType) => recordType.key === "organization_settings");
+  if (
+    settingsRecordType?.systemProjection?.protectedView !== "organization_runtime_settings" ||
+    !settingsRecordType.standardActions.includes("update")
+  )
+    throw new Error("The installed Organisation Administration settings definition is unavailable");
+  return { administrationRootId: administrationRelease.rootId, settingsRecordType };
+};
+
 const initializeLandingZoneDefault = async (
   facts: InstallFacts,
   applicationRootId: string,
@@ -81,11 +109,7 @@ const initializeLandingZoneDefault = async (
       before.revision !== after.revision
     )
       return undefined;
-    return {
-      defaultApplicationRootId,
-      appStoreAddress: await readCurrentOrganizationAppStoreAddressAfterAuthorization(transaction),
-      revision: after.revision,
-    };
+    return { defaultApplicationRootId, revision: after.revision };
   });
 
   if (observed.kind !== "available" || observed.value === undefined) {
@@ -138,40 +162,16 @@ const initializeLandingZoneDefault = async (
     return;
   }
 
-  const administrationRelease = facts.releases.get(organisationAdministrationApplicationKey);
-  if (administrationRelease === undefined)
-    throw new Error(
-      `No published release recorded for ${organisationAdministrationApplicationKey}`,
-    );
-  const definitionContext = mintSystemContext(facts.system);
-  const releaseSet = await inSystemTransaction(definitionContext, (transaction) =>
-    createDatabaseSystemApplicationBoundReleaseSetService(
-      developmentPublicationCatalogue,
-      transaction,
-    ).read(definitionContext, {
-      applicationRootId: applicationRootIdSchema.parse(administrationRelease.rootId),
-      applicationReleaseRevision: administrationRelease.releaseRevision,
-    }),
-  );
-  const settingsRecordType = releaseSet.modules
-    .find((module) => module.definitionKey === "vortex.organisation_administration")
-    ?.content.recordTypes.find((recordType) => recordType.key === "organization_settings");
+  const { administrationRootId, settingsRecordType } =
+    await readInstalledOrganizationSettings(facts);
   const defaultApplicationField = settingsRecordType?.fields.find(
     (field) => field.key === "default_application_root_id",
   );
-  const appStoreAddressField = settingsRecordType?.fields.find(
-    (field) => field.key === "app_store_address",
-  );
-  if (
-    settingsRecordType?.systemProjection?.protectedView !== "organization_runtime_settings" ||
-    !settingsRecordType.standardActions.includes("update") ||
-    defaultApplicationField === undefined ||
-    appStoreAddressField === undefined
-  )
+  if (defaultApplicationField === undefined)
     throw new Error("The installed Organisation Administration settings definition is unavailable");
   const saveSelection = organizationSelectionCandidateSchema.parse({
     organizationId,
-    applicationRootId: administrationRelease.rootId,
+    applicationRootId: administrationRootId,
   });
   // Persist the observed revision before the protected write so a rerun can reconcile the outcome.
   state.defaultApplicationInitializationAttempted = true;
@@ -188,10 +188,7 @@ const initializeLandingZoneDefault = async (
       recordTypeId: settingsRecordType.recordTypeId,
       recordId: organizationId,
       expectedConcurrencyNumber: observed.value.revision,
-      submittedValues: {
-        [defaultApplicationField.fieldId]: defaultApplicationRootId,
-        [appStoreAddressField.fieldId]: observed.value.appStoreAddress ?? "vortex.app.app_store",
-      },
+      submittedValues: { [defaultApplicationField.fieldId]: defaultApplicationRootId },
     },
   );
   const savedDefaultApplicationRootId =
@@ -229,7 +226,7 @@ const initializeLandingZoneDefault = async (
 };
 
 const initializeAppStoreAddress = async (facts: InstallFacts): Promise<void> => {
-  const { identityAuthorityId, stewardIdentityId, state } = facts;
+  const { identityAuthorityId, stewardIdentityId } = facts;
   const { organizationId } = facts.system;
   const appStoreAddress = "vortex.app.app_store";
   const session = nominatedOwnerSession(stewardIdentityId);
@@ -252,36 +249,16 @@ const initializeAppStoreAddress = async (facts: InstallFacts): Promise<void> => 
     return;
   }
 
-  const administrationRelease = facts.releases.get(organisationAdministrationApplicationKey);
-  if (administrationRelease === undefined)
-    throw new Error(
-      `No published release recorded for ${organisationAdministrationApplicationKey}`,
-    );
-  const definitionContext = mintSystemContext(facts.system);
-  const releaseSet = await inSystemTransaction(definitionContext, (transaction) =>
-    createDatabaseSystemApplicationBoundReleaseSetService(
-      developmentPublicationCatalogue,
-      transaction,
-    ).read(definitionContext, {
-      applicationRootId: applicationRootIdSchema.parse(administrationRelease.rootId),
-      applicationReleaseRevision: administrationRelease.releaseRevision,
-    }),
-  );
-  const settingsRecordType = releaseSet.modules
-    .find((module) => module.definitionKey === "vortex.organisation_administration")
-    ?.content.recordTypes.find((recordType) => recordType.key === "organization_settings");
+  const { administrationRootId, settingsRecordType } =
+    await readInstalledOrganizationSettings(facts);
   const appStoreAddressField = settingsRecordType?.fields.find(
     (field) => field.key === "app_store_address",
   );
-  if (
-    settingsRecordType?.systemProjection?.protectedView !== "organization_runtime_settings" ||
-    !settingsRecordType.standardActions.includes("update") ||
-    appStoreAddressField === undefined
-  )
+  if (appStoreAddressField === undefined)
     throw new Error("The installed Organisation Administration App Store setting is unavailable");
   const administrationSelection = organizationSelectionCandidateSchema.parse({
     organizationId,
-    applicationRootId: administrationRelease.rootId,
+    applicationRootId: administrationRootId,
   });
 
   const saved = await createRecordSaveService({ identityAuthorityId }).save(

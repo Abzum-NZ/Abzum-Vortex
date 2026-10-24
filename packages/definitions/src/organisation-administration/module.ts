@@ -469,7 +469,7 @@ export const organisationAdministrationModule: SourceApplicationModule =
             personal_data: "none",
             public_display: "refused",
             type: "text",
-            settings: { max_length: 36 },
+            settings: { max_length: 120 },
           },
           {
             id: "fld_permission_label",
