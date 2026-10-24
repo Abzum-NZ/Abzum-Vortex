@@ -264,7 +264,7 @@ const refuseCalculation = (
   });
 };
 
-// Neither lifecycle operation submits values: every closure record is
+// Delete submits no values: every closure record is
 // recalculated from its locked current values and live related records.
 const unchangedSubmission: Pick<SaveRecordCommand, "operation" | "submittedValues"> = {
   operation: "update",
@@ -312,9 +312,10 @@ const calculateGeneratedValues = (
 
 /**
  * The protected recoverable delete inside a request transaction the caller
- * already owns: database preflight, runtime total recalculation and terminal
- * writer. Every non-final outcome throws `RecordLifecycleRollback` so the whole
- * transaction is discarded, because the preflight has already deleted rows
+ * already owns: the one record writer prepares the delete, the runtime
+ * recalculates totals, and the same writer finalises the command. Every
+ * non-final outcome throws `RecordLifecycleRollback` so the whole transaction
+ * is discarded, because the preparation has already deleted rows
  * behind a pending receipt. The named-action `record.delete` task runs
  * this same function, so there is no second delete path.
  */
@@ -328,11 +329,13 @@ export const performProtectedRecordDelete = async (
   const prepared = parseDatabaseOutcome(
     one(
       await transaction.query<Row>`
-        select vortex_record.prepare_protected_record_delete(
+        select vortex_record.apply_lifecycle_record_changes(
           ${command.commandId}::uuid,
+          'delete'::text,
           ${command.recordTypeId}::uuid,
           ${command.recordId}::uuid,
           ${command.expectedConcurrencyNumber}::bigint,
+          null::jsonb,
           ${activityId}::uuid,
           ${occurrenceId}::uuid
         ) as result
