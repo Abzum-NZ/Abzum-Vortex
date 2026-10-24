@@ -5,6 +5,7 @@ import {
   canonicalJson,
   compiledItemSettings,
   isRecord,
+  PLATFORM_BLOCK_RELEASE_IDENTITIES,
   recordsTableContractOrLog,
   plainSourceSettingValue,
   typedSourceSettings,
@@ -303,14 +304,21 @@ export function useStudioCanvasGridEvents(
   release: PlatformBlockRelease | undefined,
 ): DisplayEventHandlers | undefined {
   const { report, interactive } = useContext(StudioCanvasGridContext);
+  // Every canvas block calls this hook; only a table owns grid settings and held state.
+  const tableRelease =
+    release?.rendererKey === PLATFORM_BLOCK_RELEASE_IDENTITIES.TABLE_BLOCK_RELEASE.rendererKey
+      ? release
+      : undefined;
   const setup =
-    report === undefined || compiled === undefined || release === undefined
+    report === undefined || compiled === undefined || tableRelease === undefined
       ? undefined
-      : gridSetup(props, compiled, release);
+      : gridSetup(props, compiled, tableRelease);
   // Source settings invalidate held reads before the next compilation/row response arrives; a
   // draft whose settings do not read (the inspector names why) holds no canvas state at all.
   const key =
-    release === undefined ? undefined : (gridSource(props, release)?.key ?? UNREADABLE_GRID_KEY);
+    tableRelease === undefined
+      ? undefined
+      : (gridSource(props, tableRelease)?.key ?? UNREADABLE_GRID_KEY);
   const alias = String(props.id);
   // The held state follows the settings the grid has now.
   useEffect(() => {
