@@ -41,11 +41,8 @@ import {
   resolveSelectedGridView,
 } from "../grid-view-state";
 import { addressedGridView, readGridViews } from "../grid-views";
-import {
-  collectRecordLinkValues,
-  type ProjectedRecordLink,
-  type RecordLinkResolver,
-} from "../component-data-projection";
+import { collectRecordLinkValues, type RecordLinkResolver } from "../component-data-projection";
+import type { ProjectedRecordLink } from "../cell-projection";
 import {
   fieldChoiceLabelsOf,
   fieldDateTypesOf,

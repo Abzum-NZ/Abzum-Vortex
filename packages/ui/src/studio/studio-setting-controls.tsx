@@ -239,7 +239,22 @@ export const studioSettingProblems = (
     // The shared binding check validates binding fields' scope and type in Studio and publication.
     for (const property of properties) visit(property, values[property.key], [property.key]);
   }
-  problems.push(...recordsTableColumnProblems(values["columns"]).map((problem) => problem.reason));
+  // Only Records table columns declare field references and default visibility. A Table data
+  // field also has a columns list, but its entries declare typed stored values instead.
+  const columns = properties.find((property) => property.key === "columns");
+  if (
+    columns?.kind === "list" &&
+    columns.item.kind === "group" &&
+    columns.item.properties.some(
+      (property) => property.key === "field" && property.kind === "field_reference",
+    ) &&
+    columns.item.properties.some(
+      (property) => property.key === "visible" && property.kind === "boolean",
+    )
+  )
+    problems.push(
+      ...recordsTableColumnProblems(values["columns"]).map((problem) => problem.reason),
+    );
   return [...new Set(problems)];
 };
 
