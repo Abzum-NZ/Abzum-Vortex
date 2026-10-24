@@ -108,6 +108,11 @@ export const recordsTableMasterDetailFeature: RecordsTableFeatureDefinition<Reco
           code,
           `${query.label} does not read ${link.childRecordTypeLabel}.`,
         );
+      if (state.childPageSize !== undefined && state.childPageSize > query.maximumPageSize)
+        return featureNotPossible(
+          code,
+          `${query.label} allows at most ${query.maximumPageSize} related records at a time.`,
+        );
       if (state.childColumns.length === 0)
         return featureNotPossible(
           code,

@@ -1,3 +1,4 @@
+import { calculationFormulaDependencies as calculationDependencies } from "../definition/module-calculation-formula";
 import {
   formatExactDecimal,
   jsonValueSchema,
@@ -10,17 +11,10 @@ import {
   type ModuleField,
   type RecordTypeDefinition,
 } from "../schema";
-import { evaluateFlowFormula, evaluateTypedCondition, type FlowFormulaScope } from "../rules/index";
+import { evaluateFlowFormula, type FlowFormulaScope } from "../rules/index";
 import { persistedRecordFieldValueMatches } from "./field-values";
 
 type CalculationField = Extract<ModuleField, { type: "calculation" }>;
-type CalculationExpression = CalculationField["settings"]["expression"];
-type CalculationNumberValue = Extract<
-  CalculationExpression,
-  { kind: "numeric" }
->["operands"][number];
-type DateOffsetAmount = Extract<CalculationExpression, { kind: "date_offset" }>["amount"];
-
 export type RecordCalculationClock = Readonly<{
   instant: string;
   organizationLocalDate: string;
@@ -79,46 +73,6 @@ const validCalendarDate = (candidate: string): boolean => {
   );
 };
 
-const calculationDependencies = (expression: CalculationExpression): string[] => {
-  const dependencies: string[] = [];
-  const add = (fieldId: string | undefined) => {
-    if (fieldId !== undefined && !dependencies.includes(fieldId)) dependencies.push(fieldId);
-  };
-  const visitCondition = (candidate: unknown): void => {
-    if (candidate === null || typeof candidate !== "object") return;
-    if (!Array.isArray(candidate)) {
-      const entry = candidate as Readonly<Record<string, unknown>>;
-      if (entry.source === "field" && typeof entry.fieldId === "string") add(entry.fieldId);
-    }
-    for (const child of Array.isArray(candidate) ? candidate : Object.values(candidate))
-      visitCondition(child);
-  };
-  const visitNumber = (candidate: CalculationNumberValue): void => {
-    if (candidate.source === "numeric") candidate.operands.forEach(visitNumber);
-    else if (candidate.source === "field") add(candidate.fieldId);
-  };
-  switch (expression.kind) {
-    case "join_text":
-      expression.fieldIds.forEach(add);
-      break;
-    case "numeric":
-      expression.operands.forEach(visitNumber);
-      break;
-    case "condition":
-      visitCondition(expression.condition);
-      break;
-    case "date_offset":
-      add(expression.dateFieldId);
-      if (expression.amount.source === "field") add(expression.amount.fieldId);
-      break;
-    case "deadline_passed":
-      add(expression.dueFieldId);
-      add(expression.statusFieldId);
-      break;
-  }
-  return dependencies;
-};
-
 const resultTypeOf = (field: ModuleField): string =>
   field.type === "calculation" || field.type === "total" ? field.settings.resultType : field.type;
 
@@ -142,150 +96,6 @@ const formulaTypeOf = (field: ModuleField): string => {
     default:
       return type;
   }
-};
-
-const literal = (type: string, value: JsonValue): FlowFormula =>
-  ({ op: "literal", type, value }) as unknown as FlowFormula;
-
-const fieldFormula = (
-  fieldId: string,
-  fields: ReadonlyMap<string, ModuleField>,
-): FlowFormula | undefined => {
-  const field = fields.get(fieldId);
-  if (field === undefined) return undefined;
-  return { op: "reference", reference: { source: "module_field", fieldId: field.fieldId } };
-};
-
-const numericOperation = (
-  operation: "add" | "subtract" | "multiply" | "divide",
-  operands: readonly FlowFormula[],
-  scale = 18,
-): FlowFormula => {
-  if (operation === "add" || operation === "multiply") {
-    if (operands.length <= 10)
-      return { op: operation, args: [...operands], scale, rounding: "half_even" };
-    const groups: FlowFormula[] = [];
-    for (let index = 0; index < operands.length; index += 10) {
-      const group = operands.slice(index, index + 10);
-      groups.push(group.length === 1 ? group[0]! : numericOperation(operation, group));
-    }
-    return { op: operation, args: groups, scale, rounding: "half_even" };
-  }
-  return operands.slice(1).reduce<FlowFormula>(
-    (current, next, index) => ({
-      op: operation,
-      args: [current, next],
-      scale: index === operands.length - 2 ? scale : 18,
-      rounding: "half_even",
-    }),
-    operands[0]!,
-  );
-};
-
-const numberFormula = (
-  operand: CalculationNumberValue,
-  fields: ReadonlyMap<string, ModuleField>,
-): FlowFormula | undefined => {
-  if (operand.source === "literal") return literal("decimal_number", operand.value);
-  if (operand.source === "field") return fieldFormula(operand.fieldId, fields);
-  const children = operand.operands.map((child) => numberFormula(child, fields));
-  if (children.some((child) => child === undefined)) return undefined;
-  return numericOperation(operand.operation, children as FlowFormula[]);
-};
-
-const dateAmountFormula = (
-  amount: DateOffsetAmount,
-  fields: ReadonlyMap<string, ModuleField>,
-  values: ReadonlyMap<string, JsonValue>,
-): FlowFormula | undefined => {
-  if (amount.source === "literal") {
-    const whole = Number(amount.value);
-    return Number.isSafeInteger(whole)
-      ? literal("whole_number", whole)
-      : literal("whole_number", null);
-  }
-  const field = fields.get(amount.fieldId);
-  if (!field) return undefined;
-  const candidate = values.get(amount.fieldId);
-  if (candidate === undefined || candidate === null) return literal("whole_number", null);
-  if (formulaTypeOf(field) === "money") return literal("money", candidate);
-  const whole = typeof candidate === "number" ? candidate : Number(candidate);
-  return Number.isSafeInteger(whole)
-    ? literal("whole_number", whole)
-    : literal("whole_number", null);
-};
-
-const deadlineFormula = (
-  field: CalculationField,
-  fields: ReadonlyMap<string, ModuleField>,
-): FlowFormula | undefined => {
-  const expression = field.settings.expression;
-  if (expression.kind !== "deadline_passed") return undefined;
-  const dueField = fields.get(expression.dueFieldId);
-  const due = fieldFormula(expression.dueFieldId, fields);
-  if (!dueField || !due) return undefined;
-  const dueType = formulaTypeOf(dueField);
-  const passed =
-    dueType === "date"
-      ? {
-          op: "lte" as const,
-          left: {
-            op: "date_add" as const,
-            date: due,
-            amount: literal("whole_number", 1),
-            unit: "days" as const,
-          },
-          right: { op: "now" as const },
-        }
-      : { op: "lte" as const, left: due, right: { op: "now" as const } };
-  if (!expression.statusFieldId || expression.terminalStatusValues.length === 0) return passed;
-  const statusField = fields.get(expression.statusFieldId);
-  const status = fieldFormula(expression.statusFieldId, fields);
-  if (!statusField || !status) return undefined;
-  const statusType = formulaTypeOf(statusField);
-  const terminal = {
-    op: "in" as const,
-    value: status,
-    options: expression.terminalStatusValues.map((value) => literal(statusType, value)),
-  };
-  return {
-    op: "if",
-    condition: terminal,
-    then: literal("yes_no", false),
-    else: passed,
-  };
-};
-
-const calculationFormula = (
-  field: CalculationField,
-  fields: ReadonlyMap<string, ModuleField>,
-  values: ReadonlyMap<string, JsonValue>,
-): FlowFormula | undefined => {
-  const expression = field.settings.expression;
-  if (expression.kind === "join_text") {
-    const parts = expression.fieldIds.map((fieldId) => fieldFormula(fieldId, fields));
-    if (parts.some((part) => part === undefined)) return undefined;
-    return {
-      op: "join",
-      parts: parts as FlowFormula[],
-      separator: expression.separator,
-    };
-  }
-  if (expression.kind === "numeric") {
-    const operands = expression.operands.map((operand) => numberFormula(operand, fields));
-    if (operands.some((operand) => operand === undefined)) return undefined;
-    const precision =
-      field.settings.resultType === "whole_number" ? 18 : (field.settings.decimalPlaces ?? 12);
-    return numericOperation(expression.operation, operands as FlowFormula[], precision);
-  }
-  if (expression.kind === "date_offset") {
-    const date = fieldFormula(expression.dateFieldId, fields);
-    const amount = dateAmountFormula(expression.amount, fields, values);
-    if (!date || !amount) return undefined;
-    return { op: "date_add", date, amount, unit: expression.unit };
-  }
-  if (expression.kind === "deadline_passed") return deadlineFormula(field, fields);
-  return undefined;
 };
 
 const issue = (
@@ -347,45 +157,6 @@ const formulaFailure = (
     if (amount?.type === "money") return "money_dimension_mismatch";
   }
   return undefined;
-};
-
-const calculationInputsPresent = (
-  field: CalculationField,
-  values: ReadonlyMap<string, JsonValue>,
-): boolean => {
-  const expression = field.settings.expression;
-  const requiredIds =
-    expression.kind === "deadline_passed"
-      ? [expression.dueFieldId]
-      : calculationDependencies(expression);
-  return requiredIds.every((fieldId) => {
-    const value = values.get(fieldId);
-    return value !== undefined && value !== null;
-  });
-};
-
-const evaluateCondition = (
-  field: CalculationField,
-  recordType: RecordTypeDefinition,
-  values: ReadonlyMap<string, JsonValue>,
-): boolean | undefined => {
-  const expression = field.settings.expression;
-  if (expression.kind !== "condition") return undefined;
-  const dependencies = calculationDependencies(expression);
-  try {
-    return evaluateTypedCondition({
-      condition: expression.condition,
-      sourceRecordFields: recordType.fields,
-      declaredFieldIds: dependencies,
-      parameterDeclarations: [],
-      fieldValues: Object.fromEntries(
-        dependencies.map((fieldId) => [fieldId, values.get(fieldId) ?? null]),
-      ),
-      parameterValues: {},
-    });
-  } catch {
-    return undefined;
-  }
 };
 
 /**
@@ -489,71 +260,61 @@ export const evaluateRecordCalculations = (
   for (const field of order) {
     let calculated: JsonValue | undefined;
     let evaluationIssue: RecordCalculationIssueCode | undefined;
-    if (field.settings.expression.kind === "condition") {
-      const result = evaluateCondition(field, recordType, values);
-      if (result !== undefined) calculated = result;
-      else if (dependencies.get(field.fieldId)!.every((fieldId) => values.has(fieldId)))
-        evaluationIssue = "condition_refused";
-    } else {
-      const formula = calculationFormula(field, fields, values);
-      if (formula === undefined) {
-        evaluationIssue = "execution_ineligible";
-      } else {
-        const dueField =
-          field.settings.expression.kind === "deadline_passed"
-            ? fields.get(field.settings.expression.dueFieldId)
-            : undefined;
-        const now =
-          dueField !== undefined && formulaTypeOf(dueField) === "date"
-            ? input.clock.organizationLocalDate + "T00:00:00.000Z"
-            : input.clock.instant;
-        const declaredDependencies = new Set(field.settings.dependencyFieldIds);
-        const scope: FlowFormulaScope = {
-          now,
-          reference: (reference) => {
-            if (reference.source !== "module_field" || !declaredDependencies.has(reference.fieldId))
-              return undefined;
-            const dependency = fields.get(reference.fieldId);
-            if (dependency === undefined) return undefined;
-            return {
-              type: formulaTypeOf(dependency),
-              value: values.get(reference.fieldId) ?? null,
-            };
-          },
+    const formula = field.settings.expression;
+    const declaredDependencies = new Set(field.settings.dependencyFieldIds);
+    const scope: FlowFormulaScope = {
+      now: input.clock.instant,
+      organizationLocalDate: input.clock.organizationLocalDate,
+      reference: (reference) => {
+        if (reference.source !== "module_field" || !declaredDependencies.has(reference.fieldId))
+          return undefined;
+        const dependency = fields.get(reference.fieldId);
+        if (dependency === undefined) return undefined;
+        return {
+          type: formulaTypeOf(dependency),
+          value: values.get(reference.fieldId) ?? null,
         };
-        const evaluated = evaluateFlowFormula(formula, scope, { preserveExactArithmetic: true });
-        const exactWhole =
-          field.settings.resultType === "whole_number" && evaluated !== undefined
-            ? evaluateFlowFormula(formula, scope, {
-                preserveExactArithmetic: true,
-                requireExactInteger: true,
-              })
-            : evaluated;
-        if (evaluated !== undefined) {
-          if (field.settings.resultType === "money" && evaluated.type !== "money")
-            evaluationIssue = "money_dimension_mismatch";
-          else if (field.settings.resultType !== "money" && evaluated.type === "money")
-            evaluationIssue = "money_dimension_mismatch";
-          else if (exactWhole === undefined) evaluationIssue = "non_integral_whole_number";
-          else if (field.settings.resultType === "whole_number") {
-            const exact = parseExactDecimal(evaluated.value);
-            if (exact === undefined || exact.scale !== 0)
-              evaluationIssue = "non_integral_whole_number";
-            else if (
-              exact.coefficient < BigInt(Number.MIN_SAFE_INTEGER) ||
-              exact.coefficient > BigInt(Number.MAX_SAFE_INTEGER)
-            )
-              evaluationIssue = "result_overflow";
-            else calculated = Number(exact.coefficient);
-          } else if (field.settings.resultType === "decimal_number") {
-            const exact = parseExactDecimal(String(evaluated.value));
-            if (exact === undefined) evaluationIssue = "invalid_result";
-            else calculated = formatExactDecimal(exact);
-          } else calculated = evaluated.value;
-        } else if (calculationInputsPresent(field, values)) {
-          evaluationIssue = formulaFailure(formula, scope) ?? "invalid_result";
-        }
-      }
+      },
+    };
+    const evaluated = evaluateFlowFormula(formula, scope, {
+      preserveExactArithmetic: true,
+      ...(field.settings.decimalPlaces === undefined
+        ? {}
+        : { resultScale: field.settings.decimalPlaces }),
+    });
+    const exactWhole =
+      field.settings.resultType === "whole_number" && evaluated !== undefined
+        ? evaluateFlowFormula(formula, scope, {
+            preserveExactArithmetic: true,
+            requireExactInteger: true,
+          })
+        : evaluated;
+    if (evaluated !== undefined) {
+      if (field.settings.resultType === "money" && evaluated.type !== "money")
+        evaluationIssue = "money_dimension_mismatch";
+      else if (field.settings.resultType !== "money" && evaluated.type === "money")
+        evaluationIssue = "money_dimension_mismatch";
+      else if (exactWhole === undefined) evaluationIssue = "non_integral_whole_number";
+      else if (field.settings.resultType === "whole_number") {
+        const exact = parseExactDecimal(String(evaluated.value));
+        if (exact === undefined || exact.scale !== 0) evaluationIssue = "non_integral_whole_number";
+        else if (
+          exact.coefficient < BigInt(Number.MIN_SAFE_INTEGER) ||
+          exact.coefficient > BigInt(Number.MAX_SAFE_INTEGER)
+        )
+          evaluationIssue = "result_overflow";
+        else calculated = Number(exact.coefficient);
+      } else if (field.settings.resultType === "decimal_number") {
+        const exact = parseExactDecimal(String(evaluated.value));
+        if (exact === undefined) evaluationIssue = "invalid_result";
+        else calculated = formatExactDecimal(exact);
+      } else calculated = evaluated.value;
+    } else if (
+      calculationDependencies(formula).every(
+        (id) => values.get(id) !== undefined && values.get(id) !== null,
+      )
+    ) {
+      evaluationIssue = formulaFailure(formula, scope) ?? "invalid_result";
     }
 
     if (evaluationIssue !== undefined) {

@@ -103,12 +103,11 @@ export {
 
 export {
   createViewerSafeRecordLinkReadService,
-  viewerSafeRecordLinkTitleReadResultSchema,
   viewerSafeRecordLinkFieldsReadResultSchema,
   type ViewerSafeRecordLinkReadService,
-  type ViewerSafeRecordLinkTitleReadResult,
   type ViewerSafeRecordLinkFieldsReadResult,
   type ViewerSafeRecordLinkTitlesReadResult,
+  viewerSafeRecordLinkTitleKey,
   viewerSafeRecordLinkTitleRecordLimit,
   viewerSafeRecordLinkTitleTypeLimit,
 } from "./viewer-safe-record-link-read";

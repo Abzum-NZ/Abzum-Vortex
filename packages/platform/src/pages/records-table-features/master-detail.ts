@@ -186,8 +186,11 @@ export const readRecordsTableRowDetail = async (
   const result = await request.queries.run(request.session, request.selection, command.data);
   if (result.kind === "temporarily_unavailable") return fail("query_unavailable");
   if (result.kind !== "available") return refuse("query_refused");
-  if (result.value.outcome === "refused")
+  if (result.value.outcome === "refused") {
+    if (["page_size_invalid", "descriptor_invalid"].includes(result.value.reasonCode))
+      return fail(`query_refused code=${result.value.reasonCode}`);
     return refuse(`query_refused code=${result.value.reasonCode}`);
+  }
   const rows = result.value.rows;
   if (rows.length === 0 && request.continuationToken === undefined) return { status: "empty" };
 

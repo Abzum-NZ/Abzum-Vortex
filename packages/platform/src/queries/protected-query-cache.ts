@@ -250,8 +250,8 @@ const readableRecordSchema = z.object({
 
 /**
  * The current-Access recheck for a hit. Every stored row goes back through
- * vortex_record.read_record and vortex_record.read_record_capabilities, the
- * same per-row projection and capabilities the ordinary query applies: the row
+ * vortex_record.read_record, which returns the same per-row projection and
+ * capabilities the ordinary query applies: the row
  * must still be readable, every filtered or sorted field must still be readable
  * on it, its values must be exactly the requested fields readable now, with
  * their current values, and its revision and capabilities must be exactly the
@@ -269,15 +269,16 @@ export const recheckHit = async (
   const checked = await isolated(
     transaction,
     () => transaction.query<RecheckRow>`
-      select
-        vortex_record.read_record(${plan.recordTypeId}::uuid, item.record_id::uuid) as result,
-        vortex_record.read_record_capabilities(
-          ${plan.recordTypeId}::uuid, item.record_id::uuid
-        ) as capabilities
-      from pg_catalog.jsonb_array_elements_text(
-        ${JSON.stringify(stored.rows.map((row) => row.recordId))}::text::jsonb
-      ) with ordinality as item(record_id, position)
-      order by item.position
+      with current_records as materialized (
+        select item.position,
+          vortex_record.read_record(${plan.recordTypeId}::uuid, item.record_id::uuid) as value
+        from pg_catalog.jsonb_array_elements_text(
+          ${JSON.stringify(stored.rows.map((row) => row.recordId))}::text::jsonb
+        ) with ordinality as item(record_id, position)
+      )
+      select value -> 'record' as result, value -> 'capabilities' as capabilities
+      from current_records
+      order by position
     `,
   );
   if (checked === undefined || checked.length !== stored.rows.length) return false;

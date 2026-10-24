@@ -89,7 +89,8 @@ const referencePatterns = {
 export const parseFlowReference = (text: string): FlowReference | undefined => {
   let match: RegExpExecArray | null;
   let reference: FlowReference | undefined;
-  if ((match = referencePatterns.input.exec(text))) reference = { source: "input", name: match[1]! };
+  if ((match = referencePatterns.input.exec(text)))
+    reference = { source: "input", name: match[1]! };
   else if ((match = referencePatterns.variable.exec(text)))
     reference = { source: "variable", name: match[1]! };
   else if ((match = referencePatterns.triggerRecord.exec(text)))
@@ -107,8 +108,7 @@ export const parseFlowReference = (text: string): FlowReference | undefined => {
       key: match[2]!,
       ...(path === undefined ? {} : { path }),
     };
-  } else if (referencePatterns.executionActor.test(text))
-    reference = { source: "execution_actor" };
+  } else if (referencePatterns.executionActor.test(text)) reference = { source: "execution_actor" };
   else if (referencePatterns.executionNow.test(text)) reference = { source: "execution_now" };
   return reference !== undefined && flowReferenceObjectSchema.safeParse(reference).success
     ? reference
@@ -172,6 +172,12 @@ export type FlowFormula =
   | { op: "literal"; type: FlowLiteral["type"]; value: JsonValue }
   | { op: "reference"; reference: FlowReference }
   | { op: "now" }
+  | {
+      op: "deadline_passed";
+      due: FlowFormula;
+      status?: FlowFormula | undefined;
+      terminalStatusValues: JsonValue[];
+    }
   | { op: "record_id"; arg: FlowFormula }
   | ({ op: "add" | "multiply"; args: FlowFormula[] } & ArithmeticPrecision)
   | ({ op: "subtract" | "divide"; args: [FlowFormula, FlowFormula] } & ArithmeticPrecision)
@@ -212,6 +218,22 @@ const flowFormulaTreeSchema: z.ZodType<FlowFormula> = z.lazy(() =>
       }),
     z.object({ op: z.literal("reference"), reference: flowReferenceSchema }).strict(),
     z.object({ op: z.literal("now") }).strict(),
+    z
+      .object({
+        op: z.literal("deadline_passed"),
+        due: flowFormulaTreeSchema,
+        status: flowFormulaTreeSchema.optional(),
+        terminalStatusValues: z.array(jsonValueSchema).max(20),
+      })
+      .strict()
+      .superRefine((value, context) => {
+        if (value.status === undefined && value.terminalStatusValues.length > 0)
+          context.addIssue({
+            code: "custom",
+            path: ["status"],
+            message: "Terminal statuses require a status operand",
+          });
+      }),
     z.object({ op: z.literal("record_id"), arg: flowFormulaTreeSchema }).strict(),
     z
       .object({
@@ -261,9 +283,7 @@ const flowFormulaTreeSchema: z.ZodType<FlowFormula> = z.lazy(() =>
     z
       .object({ op: z.literal("and"), args: z.array(flowFormulaTreeSchema).min(2).max(20) })
       .strict(),
-    z
-      .object({ op: z.literal("or"), args: z.array(flowFormulaTreeSchema).min(2).max(20) })
-      .strict(),
+    z.object({ op: z.literal("or"), args: z.array(flowFormulaTreeSchema).min(2).max(20) }).strict(),
     z.object({ op: z.literal("not"), arg: flowFormulaTreeSchema }).strict(),
     z
       .object({
@@ -299,7 +319,7 @@ const flowFormulaTreeSchema: z.ZodType<FlowFormula> = z.lazy(() =>
   ]),
 );
 
-const formulaChildren = (formula: FlowFormula): readonly FlowFormula[] => {
+export const flowFormulaChildren = (formula: FlowFormula): readonly FlowFormula[] => {
   switch (formula.op) {
     case "literal":
     case "reference":
@@ -324,6 +344,8 @@ const formulaChildren = (formula: FlowFormula): readonly FlowFormula[] => {
       return [formula.condition, formula.then, formula.else];
     case "join":
       return formula.parts;
+    case "deadline_passed":
+      return [formula.due, ...(formula.status === undefined ? [] : [formula.status])];
     case "date_add":
       return [formula.date, formula.amount];
     case "date_diff":
@@ -337,11 +359,14 @@ const inspectFormula = (
   formula: FlowFormula,
   depth = 1,
 ): { depth: number; nodes: number; usesNow: boolean } => {
-  const inspected = formulaChildren(formula).map((child) => inspectFormula(child, depth + 1));
+  const inspected = flowFormulaChildren(formula).map((child) => inspectFormula(child, depth + 1));
   return {
     depth: Math.max(depth, ...inspected.map((child) => child.depth)),
     nodes: 1 + inspected.reduce((total, child) => total + child.nodes, 0),
-    usesNow: formula.op === "now" || inspected.some((child) => child.usesNow),
+    usesNow:
+      formula.op === "now" ||
+      formula.op === "deadline_passed" ||
+      inspected.some((child) => child.usesNow),
   };
 };
 
@@ -405,16 +430,12 @@ export type FlowValueObject =
 export type FlowValue = FlowValueObject;
 
 /** Count every enclosing map or array once, including the root constructor. */
-const flowCompositeValuesWithinDepth = (
-  values: readonly FlowValue[],
-  depth: number,
-): boolean =>
+const flowCompositeValuesWithinDepth = (values: readonly FlowValue[], depth: number): boolean =>
   depth <= flowMaximumMapDepth &&
-  values.every(
-    (entry) =>
-      entry.kind === "map"
-        ? flowCompositeValuesWithinDepth(Object.values(entry.entries), depth + 1)
-        : entry.kind !== "array" || flowCompositeValuesWithinDepth(entry.items, depth + 1),
+  values.every((entry) =>
+    entry.kind === "map"
+      ? flowCompositeValuesWithinDepth(Object.values(entry.entries), depth + 1)
+      : entry.kind !== "array" || flowCompositeValuesWithinDepth(entry.items, depth + 1),
   );
 
 /**
@@ -476,7 +497,7 @@ export const shorthandReferenceValueSchema = z.string().transform((text, context
     context.addIssue({
       code: "custom",
       message:
-        "A bare text value must be exactly one closed reference; write a literal as { kind: \"literal\", literal: { type, value } }",
+        'A bare text value must be exactly one closed reference; write a literal as { kind: "literal", literal: { type, value } }',
     });
     return z.NEVER;
   }
@@ -489,4 +510,3 @@ export const shorthandReferenceValueSchema = z.string().transform((text, context
  * object kinds are exactly `FlowValue`; map entries and array items recurse through this schema.
  */
 export const flowValueSchema = z.union([shorthandReferenceValueSchema, flowValueObjectSchema]);
-
