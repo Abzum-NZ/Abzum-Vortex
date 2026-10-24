@@ -16,6 +16,8 @@ import {
 } from "./display-events";
 import {
   jsonValueSchema,
+  recordsTableTotalsSchema,
+  type RecordsTableTotal,
   type JsonValue,
   builderKeySchema,
   moduleFieldValueSchemas,
@@ -192,6 +194,7 @@ export type TablePayload = Readonly<{
    * group's members only, so a closed table carries none.
    */
   groups?: TableGroups;
+  totals?: readonly RecordsTableTotal[];
   /**
    * The grid features the server projected for this viewer and read; absent when every feature is
    * off. The table draws a feature only from this projection, never from its settings alone.
@@ -1010,6 +1013,7 @@ export const parseTablePayload = (
       "layout",
       "rows",
       "groups",
+      "totals",
       "features",
       "selectedRecordIds",
       "sort",
@@ -1140,6 +1144,16 @@ export const parseTablePayload = (
     layout: layout.data,
     rows,
     ...(groups === undefined ? {} : { groups }),
+    ...(record.totals === undefined
+      ? {}
+      : {
+          totals: parseProjectedPart(
+            recordsTableTotalsSchema,
+            record.totals,
+            "Projected grid totals are invalid",
+            location,
+          ),
+        }),
     ...(features === undefined ? {} : { features }),
     ...selectionParts,
     ...(selection === undefined ? {} : { selectedRecordIds: selection }),

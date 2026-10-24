@@ -71,6 +71,7 @@ export const studioGridFeatureEditors: Readonly<
   // Only the links from a record type to itself can name a record's parent.
   tree: { kind: "settings", offers: (field) => field.parentLink === true },
   // Only choice (and stage), link and date fields people can filter by can be grouped; the check names the rest.
+  totals: { kind: "settings" },
   grouping: {
     kind: "settings",
     offers: (field) =>
@@ -94,6 +95,7 @@ export const studioGridFeatureStartSettings: Readonly<
     Record<RecordsTableFeatureKey, Readonly<Record<string, SourceBlockPropertyValueContract>>>
   >
 > = {
+  totals: { measures: { kind: "list", items: [] } },
   row_edit: { trigger: { kind: "choice", value: "button" }, fields: { kind: "list", items: [] } },
   spreadsheet: {
     range_select: { kind: "boolean", value: true },

@@ -708,6 +708,9 @@
                           "vortex.crm.organisations:company.region",
                           "vortex.crm.organisations:company.city"
                         ]
+                      },
+                      "totals": {
+                        "enabled": false
                       }
                     }
                   }
@@ -841,6 +844,9 @@
                         "enabled": false
                       },
                       "spreadsheet": {
+                        "enabled": false
+                      },
+                      "totals": {
                         "enabled": false
                       }
                     }
@@ -983,6 +989,9 @@
                         "enabled": false
                       },
                       "spreadsheet": {
+                        "enabled": false
+                      },
+                      "totals": {
                         "enabled": false
                       }
                     }
@@ -1293,6 +1302,9 @@
                           "vortex.crm.opportunities:opportunity.expected_close_date",
                           "vortex.crm.opportunities:opportunity.probability"
                         ]
+                      },
+                      "totals": {
+                        "enabled": false
                       }
                     },
                     "row_click": {
@@ -1556,6 +1568,9 @@
                           "vortex.crm.activities:activity.activity_type",
                           "vortex.crm.activities:activity.outcome"
                         ]
+                      },
+                      "totals": {
+                        "enabled": false
                       }
                     }
                   }
@@ -3547,6 +3562,9 @@
                       },
                       "spreadsheet": {
                         "enabled": false
+                      },
+                      "totals": {
+                        "enabled": false
                       }
                     }
                   }
@@ -4915,6 +4933,9 @@
                       },
                       "row_actions": {
                         "enabled": true
+                      },
+                      "totals": {
+                        "enabled": false
                       }
                     },
                     "empty_message": "No opportunities in this stage.",

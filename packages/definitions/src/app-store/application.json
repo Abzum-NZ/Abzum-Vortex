@@ -359,6 +359,9 @@
                       },
                       "row_actions": {
                         "enabled": true
+                      },
+                      "totals": {
+                        "enabled": false
                       }
                     }
                   }

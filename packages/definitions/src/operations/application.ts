@@ -266,7 +266,11 @@ const pages = [
         TABLE_BLOCK_RELEASE,
         {
           title: "Open incidents",
-          features: { pinning: { enabled: true }, spreadsheet: { enabled: false } },
+          features: {
+            pinning: { enabled: true },
+            spreadsheet: { enabled: false },
+            totals: { enabled: false },
+          },
           columns: incidentColumns.map(([field, label], index) => ({
             field: `${incidentRecordType}.${field}`,
             label,
