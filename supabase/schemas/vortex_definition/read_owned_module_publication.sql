@@ -112,7 +112,7 @@ begin
     select binding.module_root_id, binding.module_release_revision
     from vortex_definition.installation_bindings as binding
     where binding.organization_id = (checked_context ->> 'organizationId')::uuid
-      and binding.state in ('provisioned', 'active', 'draining')
+      and binding.state in ('provisioned', 'active')
   ), uses as (
     select distinct point.module_key, point.point_key,
       contribution.value ->> 'kind' as kind,

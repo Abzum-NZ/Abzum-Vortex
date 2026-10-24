@@ -47,11 +47,8 @@ begin
       'operationKey', 'platform.organization.applications.install',
       'action', pg_catalog.jsonb_build_object('actionKind', 'manage'),
       'target', pg_catalog.jsonb_build_object('kind', 'organization'),
-      'requiredPermission', pg_catalog.jsonb_build_object(
-        'ownerKind', 'platform',
-        'ownerId', 'cabe121e-0baf-4084-9471-cce915d460a8',
-        'permissionId', '7ecd3304-f16c-47d4-94db-0964980091ba'
-      ),
+      'requiredPermission',
+        vortex_access.required_platform_permission('platform.organization.applications.manage'),
       'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
       'authority', pg_catalog.jsonb_build_object('kind', 'permission')
     )
@@ -66,11 +63,8 @@ begin
       'operationKey', 'platform.organization.applications.install_scope',
       'action', pg_catalog.jsonb_build_object('actionKind', 'manage'),
       'target', pg_catalog.jsonb_build_object('kind', 'organization'),
-      'requiredPermission', pg_catalog.jsonb_build_object(
-        'ownerKind', 'platform',
-        'ownerId', 'cabe121e-0baf-4084-9471-cce915d460a8',
-        'permissionId', '7ecd3304-f16c-47d4-94db-0964980091ba'
-      ),
+      'requiredPermission',
+        vortex_access.required_platform_permission('platform.organization.applications.manage'),
       'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
       'authority', pg_catalog.jsonb_build_object(
         'kind', 'delegated_management',
@@ -140,7 +134,7 @@ begin
   binding_exists := found;
 
   if binding_exists then
-    if stored_binding.state in ('active', 'draining')
+    if stored_binding.state = 'active'
       or (
         p_expected_binding_revision is null
         and (

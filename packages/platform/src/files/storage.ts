@@ -176,7 +176,7 @@ export const moduleInstallationBindingEvidenceSchema = z
     bindingRevision: revisionSchema,
     applicationReleaseRevision: revisionSchema,
     moduleReleaseRevision: revisionSchema,
-    state: z.enum(["provisioned", "active", "draining", "detached"]),
+    state: z.enum(["provisioned", "active", "detached"]),
   })
   .strict();
 

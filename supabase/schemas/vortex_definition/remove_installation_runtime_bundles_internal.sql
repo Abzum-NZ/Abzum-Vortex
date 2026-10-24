@@ -46,10 +46,10 @@ begin
     from vortex_definition.installation_bindings as binding
     where binding.organization_id = authority.organization_id
       and binding.application_root_id = p_application_root_id
-      and binding.state in ('active', 'draining')
+      and binding.state = 'active'
   ) then
     raise exception using errcode = '40001',
-      message = 'Runtime bundles cannot be removed before installation drain completes';
+      message = 'Runtime bundles cannot be removed while the installation is active';
   end if;
 
   delete from vortex_definition.installation_runtime_bundle_parts as part
