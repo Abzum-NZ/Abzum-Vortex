@@ -89,7 +89,7 @@ export const firstFieldDependencyRefusal = async (
     let rows: readonly { record: unknown }[];
     try {
       rows = await transaction.query<{ record: unknown }>`
-        select vortex_record.read_record(${child.recordTypeId}::uuid, ${child.recordId}::uuid) as record
+        select vortex_record.read_record(${child.recordTypeId}::uuid, ${child.recordId}::uuid) -> 'record' as record
       `;
     } finally {
       await transaction.query`set local role vortex_runtime`;

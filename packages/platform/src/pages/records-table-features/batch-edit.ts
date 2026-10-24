@@ -174,10 +174,13 @@ export const createRecordsTableBatchEditService = (
         address.selection,
         async (transaction) =>
           transaction.query<{ record_id: string; record: unknown; capabilities: unknown }>`
-          select target.value::uuid as record_id,
-            vortex_record.read_record(${recordTypeId}::uuid, target.value::uuid) as record,
-            vortex_record.read_record_capabilities(${recordTypeId}::uuid, target.value::uuid) as capabilities
-          from pg_catalog.jsonb_array_elements_text(${JSON.stringify(recordIds)}::text::jsonb) as target(value)
+          with current_records as materialized (
+            select target.value::uuid as record_id,
+              vortex_record.read_record(${recordTypeId}::uuid, target.value::uuid) as value
+            from pg_catalog.jsonb_array_elements_text(${JSON.stringify(recordIds)}::text::jsonb) as target(value)
+          )
+          select record_id, value -> 'record' as record, value -> 'capabilities' as capabilities
+          from current_records
         `,
       );
       if (read.kind !== "available") return { kind: "unavailable" };
