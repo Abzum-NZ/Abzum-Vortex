@@ -1,5 +1,6 @@
 import {
   containedComponentIdSchema,
+  logRefusal,
   mountedRecordPinAssociationSchema,
   mountedRecordPinElementProperty,
   mountedRecordPinFrameSchema,
@@ -86,6 +87,7 @@ export const readMountedRecordPinMemberships = (
       let candidate: unknown;
       try {
         candidate = Reflect.get(element, mountedRecordPinElementProperty);
+        // guard-allow: silent-catch Untrusted DOM accessors may throw; discard the routing hint without inspecting them.
       } catch {
         return [];
       }
@@ -224,8 +226,9 @@ export const createMountedRecordPinWatchClient = (
     flushing = true;
     try {
       if (current()) await options.refreshPlacements(ids);
-    } catch {
-      /* The protected caller owns neutral read failures; transport values never replace data. */
+    } catch (error) {
+      if (current())
+        logRefusal("mounted-record-pin-watch", "refresh placements", "refresh_failed", error);
     } finally {
       flushing = false;
       for (const group of terminalGroups) close(group);
@@ -290,11 +293,22 @@ export const createMountedRecordPinWatchClient = (
               }),
             );
           group.subscriber.start();
-        } catch {
+        } catch (error) {
+          if (current() && !group.closed && !group.terminal)
+            logRefusal(
+              "mounted-record-pin-watch",
+              "start subscriber",
+              "subscriber_start_failed",
+              error,
+            );
           terminal(group);
         }
       })
-      .catch(() => terminal(group));
+      .catch((error: unknown) => {
+        if (current() && !group.closed && !group.terminal && !group.abort.signal.aborted)
+          logRefusal("mounted-record-pin-watch", "open source", "source_open_failed", error);
+        terminal(group);
+      });
   };
   function reconcile(): void {
     if (!current()) return;
@@ -313,7 +327,9 @@ export const createMountedRecordPinWatchClient = (
     let members: readonly MountedRecordPinMembership[];
     try {
       members = options.readMemberships();
-    } catch {
+    } catch (error) {
+      if (current())
+        logRefusal("mounted-record-pin-watch", "read memberships", "membership_read_failed", error);
       members = [];
     }
     const desired = new Map<string, Map<string, MountedRecordPinMembership>>();

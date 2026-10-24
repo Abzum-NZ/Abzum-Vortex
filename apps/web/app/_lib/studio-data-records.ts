@@ -50,6 +50,7 @@ const groupPageTrail = (token: string): readonly string[] | undefined => {
   try {
     const trail = groupPageTrailSchema.safeParse(JSON.parse(token.slice(2)));
     return trail.success ? trail.data : undefined;
+    // guard-allow: silent-catch Malformed browser continuation JSON maps to continuation_invalid without logging its contents.
   } catch {
     return undefined;
   }

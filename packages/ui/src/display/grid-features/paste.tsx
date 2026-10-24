@@ -194,7 +194,7 @@ export default function Paste({ context, surface }: GridFeatureInteractionProps)
         current.refuse(rows, []);
         return;
       }
-      void current.run("commit", rows).then((answer) => {
+      void current.run("paste", rows).then((answer) => {
         if (answer?.result?.kind === "saved")
           current.tell(`Pasted into ${rows.length} ${rows.length === 1 ? "record" : "records"}.`);
       });
