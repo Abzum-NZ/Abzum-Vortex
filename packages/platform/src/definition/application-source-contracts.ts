@@ -10,7 +10,7 @@ import {
   semanticVersionSchema,
   sourceQualifiedRecordTypeSchema,
 } from "../catalogue/identifiers";
-import { labelSchema } from "../catalogue/common";
+import { labelSchema, safeHttpsUrlSchema } from "../catalogue/common";
 import { versionRequirementSchema } from "./definitions";
 import {
   sourceAliasSchema,
@@ -189,11 +189,11 @@ const sourceNavigationSchema: z.ZodType<SourceNavigation> = z.lazy(() =>
       .strict(),
     z
       .object({
-        id: sourceProvenanceUnchanged(sourceAliasSchema),
+        id: sourceProvenanceTarget(sourceAliasSchema, ["id"]),
         type: sourceProvenanceUnchanged(z.literal("external")),
         label: sourceProvenanceUnchanged(labelSchema),
         icon: sourceProvenanceUnchanged(vortexIconNameSchema),
-        address: sourceProvenanceUnchanged(z.string().url().startsWith("https://")),
+        address: sourceProvenanceUnchanged(safeHttpsUrlSchema),
         permission: sourceProvenanceTarget(namespacedKeySchema, ["permissionKey"]),
       })
       .strict(),
