@@ -16,6 +16,7 @@ import { getIdentityAuthorityConfiguration } from "../auth/_lib/authority-config
 import type { IdentitySession } from "@vortex/platform/schema";
 import { platformPermissionSource } from "./platform-permission-source";
 import { mapWebError } from "./web-error-mapper";
+import { attributePageReadScope } from "./page-read-attribution";
 
 type ApplicationAddressResult =
   | Readonly<{
@@ -129,6 +130,7 @@ export const resolveApplicationAddress = cache(
       };
     }
     if (resolved.application === null) return { kind: "organization_launcher", read };
+    attributePageReadScope(read.organizationId, resolved.application.applicationRootId);
     return {
       kind: "application_page",
       read,

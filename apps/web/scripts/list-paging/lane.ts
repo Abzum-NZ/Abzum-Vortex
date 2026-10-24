@@ -2,6 +2,7 @@ import { createRequire } from "node:module";
 import { join } from "node:path";
 import { findRepositoryRoot, loadCurrentSetupState } from "../development-setup/state";
 import { loadLocalWebEnvironment } from "../demo-setup/local-environment";
+import { DevelopmentSetupRefusal } from "../development-setup/guards";
 
 /**
  * What the list-paging scripts share: a guarded connection to one database lane and the facts of
@@ -53,7 +54,10 @@ export const openLane = (): LaneFacts => {
       `VORTEX_RUNTIME_DATABASE_URL uses port ${runtimePort}, not lane ${lane} (${databasePort}). Run lane.mjs env ${lane}.`,
     );
   const state = loadCurrentSetupState();
-  if (!state.setupCompleted) throw new Error("Run pnpm demo:setup on this lane first.");
+  if (!state.setupCompleted)
+    throw new DevelopmentSetupRefusal(
+      "No completed local setup state. Verify lane ownership and retained-data disposition with the coordinator; use non-reset provisioning (pnpm demo:owner, then pnpm setup:local -- --local-development --first-owner-identity-id <uuid>, without --seed-demo). Never reset or run demo:setup to repair this state.",
+    );
   const identityAuthorityId = process.env.VORTEX_IDENTITY_AUTHORITY_ID;
   if (identityAuthorityId === undefined)
     throw new Error("VORTEX_IDENTITY_AUTHORITY_ID is not set.");
