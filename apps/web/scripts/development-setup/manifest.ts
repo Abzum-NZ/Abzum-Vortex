@@ -1,5 +1,6 @@
 import {
   actorIdSchema,
+  initialRecordLifecyclePolicySchema,
   administrationDuplicateKeySchema,
   clusterIdSchema,
   roleAssignmentIdSchema,
@@ -54,6 +55,7 @@ export const developmentSetupManifestSchema = z
         currency: z.string(),
       })
       .strict(),
+    initialLifecyclePolicy: initialRecordLifecyclePolicySchema,
     applicationKeys: z.array(z.enum(shippedApplicationKeys)).min(1),
     /**
      * The custom role the steward creates and assigns to themselves so they can install
@@ -97,6 +99,14 @@ export const developmentSetupManifestFor = (
   const defaultOrganization = tenantShortName === "abzum" && organizationShortName === "abzum";
   return developmentSetupManifestSchema.parse({
     manifestVersion: "1.0.0",
+    initialLifecyclePolicy: {
+      action: "delete",
+      maxAgeDays: null,
+      maxCount: null,
+      allowUnlimitedAge: true,
+      allowUnlimitedCount: true,
+      recoveryWindowDays: 30,
+    },
     operator: {
       clusterId: "6d1f0c52-3b7a-4c4e-8a51-0e1a7b0c9d01",
       systemActorId: "6d1f0c52-3b7a-4c4e-8a51-0e1a7b0c9d02",

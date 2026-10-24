@@ -24,12 +24,12 @@ begin
     or not p_limits ?& array[
       'organizationId', 'settingsRevision', 'maxRetentionDays', 'maxRecordCount',
       'allowUnlimitedRetentionDays', 'allowUnlimitedRecordCount', 'allowedActions',
-      'allowedArchiveDestinations'
+      'allowedArchiveDestinations', 'initialPolicy'
     ]
     or p_limits - array[
       'organizationId', 'settingsRevision', 'maxRetentionDays', 'maxRecordCount',
       'allowUnlimitedRetentionDays', 'allowUnlimitedRecordCount', 'allowedActions',
-      'allowedArchiveDestinations'
+      'allowedArchiveDestinations', 'initialPolicy'
     ] <> '{}'::jsonb
     or not vortex_platform.is_non_nil_uuid(p_limits ->> 'organizationId')
     or pg_catalog.lower(p_limits ->> 'organizationId')
@@ -103,6 +103,36 @@ begin
       message = 'Organisation lifecycle limits setup is invalid';
   end if;
 
+  -- Identity fields are supplied by installation, never by the setup template.
+  if pg_catalog.jsonb_typeof(p_limits -> 'initialPolicy') is distinct from 'object'
+    or (p_limits -> 'initialPolicy') ?| array[
+      'policyId', 'organizationId', 'storageContractId', 'applicationRootId', 'policyRevision'
+    ]
+    or (p_limits #>> '{initialPolicy,action}') is distinct from 'delete'
+    or not (p_limits -> 'initialPolicy') ? 'recoveryWindowDays'
+    or not vortex_record.is_record_type_lifecycle_policy(
+      (p_limits -> 'initialPolicy') || pg_catalog.jsonb_build_object(
+        'policyId', p_organization_id, 'organizationId', p_organization_id,
+        'storageContractId', p_organization_id, 'applicationRootId', null, 'policyRevision', 1
+      )
+    ) then
+    raise exception using errcode = '22023',
+      message = 'Initial record lifecycle policy setup is invalid';
+  end if;
+
+  if (p_limits #>> '{initialPolicy,action}') <> all (allowed_actions_value)
+    or ((p_limits #> '{initialPolicy,allowUnlimitedAge}') = 'true'::jsonb
+      and not allow_unlimited_retention_value)
+    or ((p_limits #> '{initialPolicy,allowUnlimitedCount}') = 'true'::jsonb
+      and not allow_unlimited_count_value)
+    or (max_retention_value is not null
+      and (p_limits #>> '{initialPolicy,maxAgeDays}')::numeric > max_retention_value)
+    or (max_count_value is not null
+      and (p_limits #>> '{initialPolicy,maxCount}')::numeric > max_count_value) then
+    raise exception using errcode = '23514',
+      message = 'Initial record lifecycle policy exceeds organisation limits';
+  end if;
+
   -- Serialize the absent-row case as well as retries against an existing row.
   -- Locking only the settings row cannot coordinate two concurrent first calls.
   perform pg_catalog.pg_advisory_xact_lock(
@@ -120,7 +150,8 @@ begin
   for update;
 
   if found then
-    if existing.settings_revision <> 1
+    if existing.initial_policy is distinct from p_limits -> 'initialPolicy'
+      or existing.settings_revision <> 1
       or existing.max_retention_days is distinct from max_retention_value
       or existing.max_record_count is distinct from max_count_value
       or existing.allow_unlimited_retention_days is distinct from allow_unlimited_retention_value
@@ -135,11 +166,11 @@ begin
       insert into vortex_record.organization_lifecycle_limits (
         organization_id, settings_revision, max_retention_days, max_record_count,
         allow_unlimited_retention_days, allow_unlimited_record_count,
-        allowed_actions, allowed_archive_destinations
+        allowed_actions, allowed_archive_destinations, initial_policy
       ) values (
         p_organization_id, 1, max_retention_value, max_count_value,
         allow_unlimited_retention_value, allow_unlimited_count_value,
-        allowed_actions_value, allowed_destinations_value
+        allowed_actions_value, allowed_destinations_value, p_limits -> 'initialPolicy'
       ) returning * into existing;
     exception when unique_violation then
       raise exception using errcode = '40001',
