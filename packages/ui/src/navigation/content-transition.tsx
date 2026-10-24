@@ -91,8 +91,8 @@ export function ContentTransition({
 }: Readonly<{
   transitionKey: string;
   busy?: boolean;
-  /** The theme's loader mark; without one the platform mark is drawn. */
-  loaderMark?: LoaderMark | undefined;
+  /** The theme release's resolved loader mark. */
+  loaderMark: LoaderMark;
   children: ReactNode;
 }>): ReactElement {
   const reducedMotion = useReducedMotion();
@@ -173,7 +173,7 @@ export function ContentTransition({
             exit={{ opacity: 0 }}
             transition={swapOut ?? NO_MOTION}
           >
-            <BrandLoader overlay {...(loaderMark === undefined ? {} : { mark: loaderMark })} />
+            <BrandLoader overlay mark={loaderMark} />
           </motion.div>
         ) : null}
       </AnimatePresence>

@@ -19,7 +19,7 @@ const deepFreeze = <Value>(value: Value): Value => {
  * error, so the registered release always maps every role, including every shadcn role.
  */
 const currentTokens: Record<PlatformThemeTokenRoleKey, unknown> =
-  source.PLATFORM_THEME_RELEASE_3_0_0.tokens;
+  source.PLATFORM_THEME_RELEASE_3_1_0.tokens;
 
 /**
  * One registered platform theme release: a source definition plus its canonical-JSON content hash,
@@ -29,6 +29,7 @@ const release = (definition: {
   catalogueThemeId: string;
   releaseVersion: string;
   tokens: unknown;
+  loaderMark: unknown;
 }): PlatformThemeRelease =>
   deepFreeze(
     platformThemeReleaseSchema.parse({
@@ -36,18 +37,20 @@ const release = (definition: {
       releaseVersion: definition.releaseVersion,
       ...platformThemeReleaseContentHash(definition),
       tokens: definition.tokens,
+      loaderMark: definition.loaderMark,
     }),
   );
 
 /**
- * The 3.0.0 release maps every role in the shared vocabulary, including every shadcn role, to the
+ * The 3.1.0 release maps every role in the shared vocabulary, including every shadcn role, to the
  * shadcn base-nova neutral values. Its colour pairs declare their foreground/background roles so
  * readability is judged by declared role rather than by token name.
  */
-export const PLATFORM_THEME_RELEASE_3_0_0: PlatformThemeRelease = release({
-  catalogueThemeId: source.PLATFORM_THEME_RELEASE_3_0_0.catalogueThemeId,
-  releaseVersion: source.PLATFORM_THEME_RELEASE_3_0_0.releaseVersion,
+export const PLATFORM_THEME_RELEASE_3_1_0: PlatformThemeRelease = release({
+  catalogueThemeId: source.PLATFORM_THEME_RELEASE_3_1_0.catalogueThemeId,
+  releaseVersion: source.PLATFORM_THEME_RELEASE_3_1_0.releaseVersion,
   tokens: currentTokens,
+  loaderMark: source.PLATFORM_THEME_RELEASE_3_1_0.loaderMark,
 });
 
 /**
@@ -55,4 +58,4 @@ export const PLATFORM_THEME_RELEASE_3_0_0: PlatformThemeRelease = release({
  * authored definitions and for the renderer. Shipped definitions pin this release, so moving it
  * moves every shipped theme pin together.
  */
-export const DEFAULT_PLATFORM_THEME_RELEASE: PlatformThemeRelease = PLATFORM_THEME_RELEASE_3_0_0;
+export const DEFAULT_PLATFORM_THEME_RELEASE: PlatformThemeRelease = PLATFORM_THEME_RELEASE_3_1_0;
