@@ -57,12 +57,6 @@ node tooling/supabase/lane.mjs reset <n> .  # mirror this worktree's migrations 
 VORTEX_SUPABASE_WORKDIR=<lane directory> pnpm demo:setup
 ```
 
-Studio preview work may continue an idle background fill after satisfying visible reader demand.
-This follows the owner's paging rule: serve the requested visible page first, then fill remaining
-work while idle; do not add speculative prefetch before visible demand. This behavior is recorded
-in [#3079](https://github.com/Abzum-NZ/Abzum-Vortex/issues/3079) and its implementation
-[#3249](https://github.com/Abzum-NZ/Abzum-Vortex/pull/3249).
-
 `env` prints `VORTEX_SUPABASE_URL`, `VORTEX_SUPABASE_PUBLISHABLE_KEY`,
 `VORTEX_RUNTIME_DATABASE_URL`, `VORTEX_DEV_SERVICE_ROLE_KEY` and `VORTEX_SUPABASE_WORKDIR`; put them
 in the worktree's ignored `apps/web/.env.development.local`, never in a tracked file or a log. With
@@ -88,6 +82,10 @@ The [target architecture](docs/build-plan/target-architecture.md) is binding: re
 - Packages use each other's public interfaces only; nothing depends upward.
 - One renderer: pages are Puck data rendered with the one Puck config built on shadcn/ui. No other
   code path draws a block.
+- Reads serve the visible page first. Studio preview may continue an idle background fill after
+  visible reader demand is satisfied; never prefetch speculatively before it
+  ([#3079](https://github.com/Abzum-NZ/Abzum-Vortex/issues/3079),
+  [#3249](https://github.com/Abzum-NZ/Abzum-Vortex/pull/3249)).
 - No absent-setting behaviour: defaults live in definitions (Puck `defaultProps`), not in renderers.
 - One current version of every contract: no `V2`/`V3` copies.
 - One record write path (`apply_record_changes`), one activity append, one idempotency table.
