@@ -159,7 +159,7 @@ export async function runStudioApplicationLifecycle(organizationId: string, cand
         code === "recent_authentication_required"
           ? "Sign in again before managing this application."
           : code === "application_not_installed"
-            ? "This application is not installed in this organisation. Install it before upgrading or changing its roles."
+            ? "This application is not installed in this organisation, so there is nothing to upgrade or remove. Install it first if it is needed here."
             : code === "application_not_newer"
               ? "There is no newer application release to install. Review the latest published release before trying again."
               : code === "applications_manage_required"

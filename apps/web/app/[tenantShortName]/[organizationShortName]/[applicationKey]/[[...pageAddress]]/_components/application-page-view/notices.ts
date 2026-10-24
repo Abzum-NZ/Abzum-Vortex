@@ -79,7 +79,7 @@ export const refusalNotices: Readonly<
   },
   application_not_installed: {
     tone: "problem",
-    text: "This application is not installed in this organisation. Install it before upgrading or changing its roles.",
+    text: "This application is not installed in this organisation, so there is nothing to upgrade or remove. Install it first if it is needed here.",
   },
   application_not_newer: {
     tone: "problem",

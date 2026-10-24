@@ -65,9 +65,13 @@ export const readApplicationRemoval = async (
         await readInstallationOrdinaryRoot(transaction, rootId);
         const bindings = await readInstallationBindings(transaction, rootId);
         const revision = bindings.registeredReleaseRevision;
+        // Never installed, or every module already detached: there is nothing here to remove.
         if (
           revision === null ||
-          bindings.moduleBindings.length === 0 ||
+          bindings.moduleBindings.every((binding) => binding.state === "detached")
+        )
+          installationProblem("removal_not_installed", "refused", "not_installed");
+        if (
           bindings.moduleBindings.some(
             (binding) =>
               binding.state !== "detached" &&
@@ -75,8 +79,6 @@ export const readApplicationRemoval = async (
           )
         )
           installationProblem("removal_not_active", "conflict");
-        const active = bindings.moduleBindings.filter((binding) => binding.state === "active");
-        if (active.length === 0) installationProblem("removal_not_active", "conflict");
         const releaseSet = await readFirstInstallReleaseSet(
           transaction,
           environment.catalogue,
