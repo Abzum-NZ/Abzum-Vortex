@@ -1,5 +1,7 @@
 import "server-only";
 
+import { logRefusal } from "@vortex/platform/schema";
+
 import { AsyncResource } from "node:async_hooks";
 import { ADDRCONFIG, ALL, V4MAPPED, lookup as nativeLookup } from "node:dns";
 import type { LookupAddress, LookupOptions } from "node:dns";
@@ -107,7 +109,8 @@ function refuseAdditionalLookup(
   let all = false;
   try {
     all = options?.all === true;
-  } catch {
+  } catch (cause) {
+    logRefusal("network-lookup", "read additional lookup options", "lookup_options_failed", cause);
     // The fixed refusal owns neither this selector exception nor its options.
   }
   let callbackFailed = false;
@@ -116,7 +119,8 @@ function refuseAdditionalLookup(
       lookupError(cell.stopped ? "ERR_VORTEX_LOOKUP_STOPPED" : "ERR_VORTEX_LOOKUP_ALREADY_USED"),
       all ? [] : "",
     );
-  } catch {
+  } catch (cause) {
+    logRefusal("network-lookup", "additional lookup callback", "lookup_callback_failed", cause);
     callbackFailed = true;
     cell.outcome = "callback_failed";
   } finally {
@@ -141,9 +145,9 @@ function deliverLookup(
   cell.invocationCount += 1;
   try {
     callback(error, address ?? (cell.all ? [] : ""), family);
-  } catch {
-    // The internal Node callback is synchronous. Its throw is a safe terminal
-    // failure, never a retained exception or an unowned queued error turn.
+  } catch (cause) {
+    // The synchronous callback failure is terminal and retains no exception or queued error turn.
+    logRefusal("network-lookup", "deliver lookup callback", "lookup_callback_failed", cause);
     cell.stopped = true;
     cell.outcome = "callback_failed";
   } finally {
@@ -165,8 +169,7 @@ function stopLookup(cell: NeutralLookupCell): boolean {
 }
 
 function completeNativeLookup(cell: NeutralLookupCell): boolean {
-  if (cell.nativeState !== "pending" && cell.nativeState !== "dispatch_unconfirmed")
-    return false;
+  if (cell.nativeState !== "pending" && cell.nativeState !== "dispatch_unconfirmed") return false;
   cell.nativeState = "completed";
   const counter = cell.counter;
   cell.counter = undefined;
@@ -241,7 +244,8 @@ function createLookupOwner(dispatch: (cell: NeutralLookupCell) => void): OwnedNe
     let copied: Readonly<LookupOptions> | undefined;
     try {
       copied = copyLookupOptions(options, cell);
-    } catch {
+    } catch (cause) {
+      logRefusal("network-lookup", "copy lookup options", "lookup_options_failed", cause);
       // Getter failures are known to precede native dispatch and retain no job.
     }
     if (cell.stopped || cell.delivery === undefined) return;
@@ -260,7 +264,8 @@ function createLookupOwner(dispatch: (cell: NeutralLookupCell) => void): OwnedNe
     cell.options = copied;
     try {
       dispatch(cell);
-    } catch {
+    } catch (cause) {
+      logRefusal("network-lookup", "dispatch native lookup", "lookup_dispatch_failed", cause);
       // An exception before reservation proves no dispatch. Once native lookup
       // was entered, its public void API cannot prove that no job was created.
       // Keep that bounded neutral slot until an actual callback, possibly forever.
@@ -296,10 +301,7 @@ function createLookupOwner(dispatch: (cell: NeutralLookupCell) => void): OwnedNe
  * establishes that the captured context predates Web request dispatch.
  */
 export function registerCleanNetworkStartup(): void {
-  if (
-    process.env.NEXT_RUNTIME !== "nodejs" ||
-    process.env.NEXT_PHASE === "phase-production-build"
-  )
+  if (process.env.NEXT_RUNTIME !== "nodejs" || process.env.NEXT_PHASE === "phase-production-build")
     throw new Error("Clean network startup is unavailable.");
   const existing = Object.getOwnPropertyDescriptor(globalThis, cleanNetworkLookupRegistryKey);
   if (existing !== undefined) {

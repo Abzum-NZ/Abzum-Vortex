@@ -1,21 +1,14 @@
 import "server-only";
 
+import { logRefusal } from "@vortex/platform/schema";
+
 import type { LookupFunction } from "node:net";
 
 export type NativeLookupState =
-  | "not_started"
-  | "not_dispatched"
-  | "pending"
-  | "dispatch_unconfirmed"
-  | "completed";
+  "not_started" | "not_dispatched" | "pending" | "dispatch_unconfirmed" | "completed";
 
 export type LookupDeliveryOutcome =
-  | "open"
-  | "completed"
-  | "lookup_failed"
-  | "stopped"
-  | "refused"
-  | "callback_failed";
+  "open" | "completed" | "lookup_failed" | "stopped" | "refused" | "callback_failed";
 
 /**
  * One trusted socket construction owns one lookup. Stop joins synchronous delivery,
@@ -84,7 +77,8 @@ export function readCleanNetworkLookupCapability(): CleanNetworkLookupCapability
       return undefined;
     const value: unknown = slot.value;
     return isLookupCapability(value) ? value : undefined;
-  } catch {
+  } catch (cause) {
+    logRefusal("network-lookup", "read startup capability", "startup_capability_failed", cause);
     // A malformed existing slot is unavailable, never a replacement-root path.
     return undefined;
   }
@@ -103,7 +97,13 @@ function createUnavailableLookup(): OwnedNetworkLookup {
     let all = false;
     try {
       all = options?.all === true;
-    } catch {
+    } catch (cause) {
+      logRefusal(
+        "network-lookup",
+        "read unavailable lookup options",
+        "lookup_options_failed",
+        cause,
+      );
       // Refusal does not execute a selector getter again or retain its exception.
     }
     const code = stopped
@@ -117,7 +117,8 @@ function createUnavailableLookup(): OwnedNetworkLookup {
     error.code = code;
     try {
       callback(error, all ? [] : "");
-    } catch {
+    } catch (cause) {
+      logRefusal("network-lookup", "unavailable lookup callback", "lookup_callback_failed", cause);
       stopped = true;
       outcome = "callback_failed";
     } finally {
@@ -149,10 +150,7 @@ function createUnavailableLookup(): OwnedNetworkLookup {
  * Missing startup refuses; calling this function can never create a clean root.
  */
 export function createOwnedNetworkLookup(): OwnedNetworkLookup {
-  if (
-    process.env.NEXT_RUNTIME !== "nodejs" ||
-    process.env.NEXT_PHASE === "phase-production-build"
-  )
+  if (process.env.NEXT_RUNTIME !== "nodejs" || process.env.NEXT_PHASE === "phase-production-build")
     return createUnavailableLookup();
   return readCleanNetworkLookupCapability()?.createOwnedLookup() ?? createUnavailableLookup();
 }
