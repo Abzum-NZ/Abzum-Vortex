@@ -1378,16 +1378,6 @@ begin
               when pg_catalog.jsonb_typeof(shared_first_keys[board_column_index]) = 'array'
               then array(select item.value from pg_catalog.jsonb_array_elements_text(
                 shared_first_keys[board_column_index]) as item(value)) end;
-            if row_count = p_page_size then
-              shared_more[board_column_index] := true;
-              if pg_catalog.array_position(shared_more, false) is null then
-                more_rows := true;
-                exit;
-              end if;
-              last_examined_sort_key := scan_record.sort_key;
-              last_examined_record_id := scan_record.record_id;
-              continue;
-            end if;
           elsif board_member_mode then
             if board_column_kind = 'option' then
               board_member_matches := (readable_values ? board_choice_field_id)
@@ -1462,6 +1452,18 @@ begin
             continue;
           end if;
           if row_count = p_page_size then
+            -- A shared scan's column with its page and a matching card after it has more cards;
+            -- the scan ends only when every column has.
+            if board_shared_scan then
+              shared_more[board_column_index] := true;
+              if pg_catalog.array_position(shared_more, false) is null then
+                more_rows := true;
+                exit;
+              end if;
+              last_examined_sort_key := scan_record.sort_key;
+              last_examined_record_id := scan_record.record_id;
+              continue;
+            end if;
             more_rows := true;
             exit;
           end if;
@@ -1525,8 +1527,11 @@ begin
   exit when more_rows or budget_exhausted;
   end loop;
   end if;
-  -- The shared scan has read every column: this column's page state is the one its rows left.
+  -- The shared scan has read every column: this column's page state is the one its rows left,
+  -- and its continuations are its own, never an earlier column's.
   if board_shared_scan then
+    next_value := null;
+    opposite_value := null;
     rows_value := shared_rows[board_column_position];
     capability_rows := array(select item.value from pg_catalog.jsonb_array_elements(
       shared_capabilities[board_column_position]) as item(value));
