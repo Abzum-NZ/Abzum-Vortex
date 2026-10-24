@@ -7,7 +7,7 @@ enforced by the platform and the database.
 
 ## One way only
 
-Vortex is a fresh project with no backward compatibility. Every concern has exactly one format, one contract and one code path. Replace contracts and formats in place, convert shipped definitions in the same change, and reset data with demo:setup. Do not add converters, upgraders, dual readers, compatibility branches, legacy mirrors, or a second way of doing something that already has one. When you find two ways, remove one.
+Vortex is a fresh project with no backward compatibility. Every concern has exactly one format, one contract and one code path. Replace contracts and formats in place, convert shipped definitions in the same change, and rebuild existing data with a forward migration. Destructive reset/demo:setup is permitted only when the authoritative slot record explicitly identifies the data as ABANDONED by its responsible owner, or retained data has an explicit owner disposition AND verified recoverability (export plus tested restore), or the user approved abandonment. Owning or acquiring a lane alone does not authorize resetting retained data. Do not add converters, upgraders, dual readers, compatibility branches, legacy mirrors, or a second way of doing something that already has one. When you find two ways, remove one.
 
 ## Layout
 
@@ -49,14 +49,12 @@ number through `lane-take.sh <tag> <N>`; do not choose or take a different lane.
 the exact lane and its data disposition. The worker holds its own `.claude/orchestrator/db<N>.lock`
 while using the lane, then releases it by removing that lock and telling the coordinator the data
 disposition: `ABANDON`, `EXPORTED+VERIFIED`, or `RETAIN`. Lane data survives lock and process
-release. Reset, `demo:setup`, cleanup, or regrant of a lane holding retained data requires the prior
-owner's explicit disposition and verified recoverability (export plus tested restore), or the
-user's approved abandonment. Silence and “reset unless KEEP” are not consent. When `main` moves,
-forward migrate and rebuild the lane rather than resetting it. `pnpm demo:setup` always resets its
-target database (see `apps/web/scripts/demo-setup/demo-setup.ts`), so it is a reset. To set up
-without a reset, use `local-demo-owner.ts` followed by `pnpm setup:local -- --local-development
---first-owner-identity-id <uuid>` without `--seed-demo`. The fresh-reset walkthrough requirement
-applies only to a lane you own and may reset, never a retained lane.
+release. Destructive reset/demo:setup is permitted only when the authoritative slot record explicitly identifies the data as ABANDONED by its responsible owner, or retained data has an explicit owner disposition AND verified recoverability (export plus tested restore), or the user approved abandonment. Owning or acquiring a lane alone does not authorize resetting retained data. The same applies to cleanup or regrant of a lane
+holding retained data. Silence and “reset unless KEEP” are not consent. When `main` moves, forward
+migrate and rebuild the lane rather than resetting it. `pnpm demo:setup` always resets its target
+database (see `apps/web/scripts/demo-setup/demo-setup.ts`), so it is a reset. To set up without a
+reset, run `pnpm --filter @vortex/web demo:owner` and then `pnpm setup:local -- --local-development
+--first-owner-identity-id <uuid>` with the printed identity and without `--seed-demo`.
 
 ```
 node tooling/supabase/lane.mjs init <n>     # once: generate the lane config
@@ -102,8 +100,9 @@ The [target architecture](docs/build-plan/target-architecture.md) is binding: re
 - Fail loudly on platform-produced data: never turn a parse failure or database error into a silent
   `null`/"unavailable"; log the cause.
 - No layers without two implementations; no source file over 1,500 lines (TypeScript and canonical `supabase/schemas/` files; migrations are exempt because they carry full function bodies, one per PR).
-- Every behaviour change is walked through in the running app on a freshly reset local database
-  before merge; visible changes include screenshots in the pull request.
+- Every behaviour change is walked through in the running app on a local database before merge. A
+  fresh reset for that walk follows the lane rule: Destructive reset/demo:setup is permitted only when the authoritative slot record explicitly identifies the data as ABANDONED by its responsible owner, or retained data has an explicit owner disposition AND verified recoverability (export plus tested restore), or the user approved abandonment. Owning or acquiring a lane alone does not authorize resetting retained data.
+  Visible changes include screenshots in the pull request.
 
 ## Guardrails
 
