@@ -80,7 +80,13 @@ export const studioGridFeatureEditors: Readonly<
   conditional_formatting: { kind: "custom" },
   // The catalogue restricts the row and column pickers to choice, link and date fields and the measure
   // picker to number and money fields, so Studio offers only fields a pivot can use.
-  pivot: { kind: "settings" },
+  pivot: {
+    kind: "settings",
+    offers: (field) =>
+      (["choice", "link", "date", "date_time"] as readonly string[]).includes(field.type)
+        ? field.filterable
+        : (["whole_number", "decimal_number", "money"] as readonly string[]).includes(field.type),
+  },
   board: { kind: "custom" },
   export: { kind: "custom" },
 };
@@ -256,6 +262,7 @@ export const studioRecordsTableQueryFacts = (
           type: queryInputValueType(input),
         })),
         grouped: candidate.grouped,
+        maximumPageSize: candidate.pageSize,
       })),
       rowFields: related.rowFields,
       page: related.page,

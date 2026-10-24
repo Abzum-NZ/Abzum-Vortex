@@ -806,9 +806,9 @@ begin
         );
       end if;
     else
-      projection := vortex_record.read_record(
+      projection := (vortex_record.read_record(
         p_record_type_id, (receipt_claim ->> 'recordId')::uuid
-      );
+      )) -> 'record';
       if projection ->> 'outcome' <> 'allowed' then
         return pg_catalog.jsonb_build_object(
           'outcome', 'refused', 'reasonCode', 'record_unavailable'
@@ -1349,7 +1349,7 @@ begin
     end if;
     subject_written := true;
   else
-    projection := vortex_record.read_record(p_record_type_id, saved_record_id);
+    projection := (vortex_record.read_record(p_record_type_id, saved_record_id)) -> 'record';
     if projection ->> 'outcome' <> 'allowed' then
       raise exception using errcode = '55000',
         message = 'Saved Record projection is unavailable';

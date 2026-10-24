@@ -386,9 +386,9 @@ begin
       end if;
       -- A replay reprojects from current access and intentionally never returns
       -- owner metadata (including the prior target).
-      loaded := vortex_record.read_record(
+      loaded := (vortex_record.read_record(
         p_record_type_id, (receipt_claim ->> 'recordId')::uuid
-      );
+      )) -> 'record';
       if loaded ->> 'outcome' <> 'allowed' then
         return pg_catalog.jsonb_build_object(
           'outcome', 'refused', 'reasonCode', 'record_unavailable',
