@@ -5,6 +5,7 @@ import {
   databaseRevision,
   applicationRootIdSchema,
   organizationRuntimeSettingsSchema,
+  namespacedKeySchema,
   type ApplicationRootId,
   type OrganizationRuntimeSettings,
 } from "../schema";
@@ -45,6 +46,20 @@ export const readCurrentOrganizationRuntimeSettingsAfterAuthorization = async (
   });
   if (!settings.success) throw unavailableError(unavailableCode, "42501");
   return settings.data;
+};
+
+/** Reads the App Store definition address from the current organisation's settings extension. */
+export const readCurrentOrganizationAppStoreAddressAfterAuthorization = async (
+  transaction: RequestDatabaseTransaction,
+): Promise<string | null> => {
+  const rows = await transaction.query<{ app_store_address: unknown }>`
+    select vortex_access.read_current_organization_app_store_address_for_application()
+      as app_store_address
+  `;
+  if (rows.length !== 1 || rows[0] === undefined)
+    throw unavailableError("ORGANIZATION_APP_STORE_ADDRESS_UNAVAILABLE");
+  if (rows[0].app_store_address === null) return null;
+  return namespacedKeySchema.parse(rows[0].app_store_address);
 };
 
 /** The request context fixes the organisation; the application still needs its own Access check. */

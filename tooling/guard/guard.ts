@@ -122,6 +122,9 @@ const systemApplicationFiles = new Set(
   ),
 );
 const names = new Set<string>();
+// The App Store is a platform system application, but engines still must resolve its address from
+// organisation configuration instead of embedding its definition key.
+names.add("vortex.app.app_store");
 for (const file of files.filter(
   (file) =>
     file.startsWith(paths.applicationSources) &&

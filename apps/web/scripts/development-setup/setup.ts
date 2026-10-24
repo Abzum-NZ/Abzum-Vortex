@@ -3,6 +3,7 @@ import { developmentSetupManifestFor } from "./manifest";
 import {
   createHumanOrganizationRequestService,
   readCurrentOrganizationDefaultApplicationAfterAuthorization,
+  readCurrentOrganizationAppStoreAddressAfterAuthorization,
   readCurrentOrganizationRuntimeSettingsAfterAuthorization,
 } from "@vortex/platform/server";
 import {
@@ -80,7 +81,11 @@ const initializeLandingZoneDefault = async (
       before.revision !== after.revision
     )
       return undefined;
-    return { defaultApplicationRootId, revision: after.revision };
+    return {
+      defaultApplicationRootId,
+      appStoreAddress: await readCurrentOrganizationAppStoreAddressAfterAuthorization(transaction),
+      revision: after.revision,
+    };
   });
 
   if (observed.kind !== "available" || observed.value === undefined) {
@@ -154,10 +159,14 @@ const initializeLandingZoneDefault = async (
   const defaultApplicationField = settingsRecordType?.fields.find(
     (field) => field.key === "default_application_root_id",
   );
+  const appStoreAddressField = settingsRecordType?.fields.find(
+    (field) => field.key === "app_store_address",
+  );
   if (
     settingsRecordType?.systemProjection?.protectedView !== "organization_runtime_settings" ||
     !settingsRecordType.standardActions.includes("update") ||
-    defaultApplicationField === undefined
+    defaultApplicationField === undefined ||
+    appStoreAddressField === undefined
   )
     throw new Error("The installed Organisation Administration settings definition is unavailable");
   const saveSelection = organizationSelectionCandidateSchema.parse({
@@ -179,7 +188,10 @@ const initializeLandingZoneDefault = async (
       recordTypeId: settingsRecordType.recordTypeId,
       recordId: organizationId,
       expectedConcurrencyNumber: observed.value.revision,
-      submittedValues: { [defaultApplicationField.fieldId]: defaultApplicationRootId },
+      submittedValues: {
+        [defaultApplicationField.fieldId]: defaultApplicationRootId,
+        [appStoreAddressField.fieldId]: observed.value.appStoreAddress ?? "vortex.app.app_store",
+      },
     },
   );
   const savedDefaultApplicationRootId =
@@ -214,6 +226,87 @@ const initializeLandingZoneDefault = async (
     );
     throw new Error(`Landing Zone default initialization failed: ${details}`);
   }
+};
+
+const initializeAppStoreAddress = async (facts: InstallFacts): Promise<void> => {
+  const { identityAuthorityId, stewardIdentityId, state } = facts;
+  const { organizationId } = facts.system;
+  const appStoreAddress = "vortex.app.app_store";
+  const session = nominatedOwnerSession(stewardIdentityId);
+  const selection = organizationSelectionCandidateSchema.parse({ organizationId });
+  const requests = createHumanOrganizationRequestService({ identityAuthorityId });
+  const observed = await requests.run(session, selection, (transaction) =>
+    readCurrentOrganizationRuntimeSettingsAfterAuthorization(transaction).then(async (settings) => {
+      if (settings === undefined) return undefined;
+      return {
+        revision: settings.revision,
+        appStoreAddress:
+          await readCurrentOrganizationAppStoreAddressAfterAuthorization(transaction),
+      };
+    }),
+  );
+  if (observed.kind !== "available" || observed.value === undefined)
+    throw new Error("The organisation App Store address could not be read from its settings");
+  if (observed.value.appStoreAddress !== null) {
+    log("preserved the organisation's configured App Store address");
+    return;
+  }
+
+  const administrationRelease = facts.releases.get(organisationAdministrationApplicationKey);
+  if (administrationRelease === undefined)
+    throw new Error(
+      `No published release recorded for ${organisationAdministrationApplicationKey}`,
+    );
+  const definitionContext = mintSystemContext(facts.system);
+  const releaseSet = await inSystemTransaction(definitionContext, (transaction) =>
+    createDatabaseSystemApplicationBoundReleaseSetService(
+      developmentPublicationCatalogue,
+      transaction,
+    ).read(definitionContext, {
+      applicationRootId: applicationRootIdSchema.parse(administrationRelease.rootId),
+      applicationReleaseRevision: administrationRelease.releaseRevision,
+    }),
+  );
+  const settingsRecordType = releaseSet.modules
+    .find((module) => module.definitionKey === "vortex.organisation_administration")
+    ?.content.recordTypes.find((recordType) => recordType.key === "organization_settings");
+  const appStoreAddressField = settingsRecordType?.fields.find(
+    (field) => field.key === "app_store_address",
+  );
+  if (
+    settingsRecordType?.systemProjection?.protectedView !== "organization_runtime_settings" ||
+    !settingsRecordType.standardActions.includes("update") ||
+    appStoreAddressField === undefined
+  )
+    throw new Error("The installed Organisation Administration App Store setting is unavailable");
+  const administrationSelection = organizationSelectionCandidateSchema.parse({
+    organizationId,
+    applicationRootId: administrationRelease.rootId,
+  });
+
+  const saved = await createRecordSaveService({ identityAuthorityId }).save(
+    session,
+    administrationSelection,
+    {
+      contractVersion: "2.0.0",
+      commandId: randomUUID(),
+      operation: "update",
+      recordTypeId: settingsRecordType.recordTypeId,
+      recordId: organizationId,
+      expectedConcurrencyNumber: observed.value.revision,
+      submittedValues: { [appStoreAddressField.fieldId]: appStoreAddress },
+    },
+  );
+  if (
+    saved.kind !== "available" ||
+    saved.value.outcome !== "saved" ||
+    saved.value.concurrencyNumber !== observed.value.revision + 1 ||
+    saved.value.readableValues[appStoreAddressField.fieldId] !== appStoreAddress
+  )
+    throw new Error("The organisation App Store address could not be saved through its settings");
+  log(
+    `initialized the organisation App Store address at settings revision ${saved.value.concurrencyNumber}`,
+  );
 };
 
 export const runDevelopmentSetup = async (
@@ -364,6 +457,7 @@ export const runDevelopmentSetup = async (
   if (landingZoneRelease === undefined)
     throw new Error(`No published release recorded for ${landingZoneApplicationKey}`);
   await initializeLandingZoneDefault(installFacts(releases), landingZoneRelease.rootId);
+  await initializeAppStoreAddress(installFacts(releases));
   if (args.seedDemo)
     await seedDemoRecords({
       identityAuthorityId,
