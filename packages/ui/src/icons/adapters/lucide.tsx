@@ -49,6 +49,10 @@ import {
   EyeOffIcon,
   Maximize2Icon,
   Minimize2Icon,
+  FunnelIcon,
+  PencilIcon,
+  ChevronsLeftIcon,
+  ChevronsRightIcon,
 } from "lucide-react";
 
 import type { VortexIconAdapter } from "../icon-names";
@@ -87,6 +91,10 @@ export const icons: VortexIconAdapter = {
   "contact-round": ContactRoundIcon,
   users: UsersIcon,
   "sliders-horizontal": SlidersHorizontalIcon,
+  filter: FunnelIcon,
+  pencil: PencilIcon,
+  "chevrons-left": ChevronsLeftIcon,
+  "chevrons-right": ChevronsRightIcon,
   "life-buoy": LifeBuoyIcon,
   "building-2": Building2Icon,
   sitemap: NetworkIcon,

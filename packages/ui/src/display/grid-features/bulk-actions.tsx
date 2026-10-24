@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, type ReactElement } from "react";
-import { TriangleAlertIcon } from "lucide-react";
 import type {
   RecordsTableBulkActionContract,
   RecordsTableBulkRefusalReason,
@@ -26,6 +25,7 @@ import {
 } from "../../components/dropdown-menu";
 import { Progress } from "../../components/progress";
 import { Spinner } from "../../components/spinner";
+import { Icon } from "../../icons/icon";
 import type { TableBulkRun, TableSelectionScope } from "../projected-grid-features";
 import type { GridFeatureContext, GridFeatureModule, GridFeaturePointProps } from "./registry";
 
@@ -239,7 +239,7 @@ function RunSummary({ run }: Readonly<{ run: Extract<TableBulkRun, { status: "fi
       {summary.limited ? " More records matched than the action's limit." : ""}
       {summary.warnings.map(({ message, count }) => (
         <span key={message} className="mt-1 flex items-start gap-1.5 text-muted-foreground">
-          <TriangleAlertIcon className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+          <Icon name="triangle-alert" className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
           <span className="min-w-0 break-words">
             Warning on {records(count)}: {message}
           </span>
