@@ -3,15 +3,11 @@ import "server-only";
 import { createHash, randomUUID } from "node:crypto";
 import {
   describeFailure,
-  actionDefinitionSchema,
   activityIdSchema,
   eventOccurrenceIdSchema,
   executeNamedActionCommandSchema,
   executeNamedActionResultSchema,
-  moduleValidationContractVersion,
-  permissionIdSchema,
   recordLinkValueSchema,
-  recordTypeDefinitionSchema,
   saveRecordCommandSchema,
   type ExecuteNamedActionCommand,
   type ExecuteNamedActionResult,
@@ -24,14 +20,13 @@ import {
   type HumanOrganizationRequestDependencies,
   type HumanOrganizationRequestResult,
 } from "../access/index";
-import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
+import type { RequestDatabaseTransaction } from "../db/index";
 import type { ActionFlowRunner, BeforeSaveRuleWarning } from "../rules/index";
 import {
   actionFlowSeed,
   composeFlowEffects,
   normalizeActionInputs,
   type NamedActionComposition,
-  type NamedActionCreateTarget,
   type NamedActionCreation,
   type PreparedNamedAction,
 } from "./action-flow-effects";
@@ -55,31 +50,20 @@ import type { RecordFieldValuePendingCheck } from "./field-values";
 import {
   parseRelationshipTotalPreparation,
   readOrganizationRuntimeSettings,
-  revision,
   type RelationshipTotalPreparationOutcome,
 } from "./save-record";
 import { calculateAndFinalize, operationClock } from "./field-candidate";
 import { firstFieldDependencyRefusal } from "./link-dependencies";
+import {
+  completedResult,
+  one,
+  parsePreparation,
+  type ActionPreparation,
+  type PreparedAction,
+  type ResultRow,
+} from "./action-record-preparation";
 
-type ResultRow = DatabaseRow & { readonly value: unknown };
 type RuleReason = Readonly<{ code: string; message: string }>;
-
-type PreparedAction = PreparedNamedAction &
-  Readonly<{
-    outcome: "prepared" | "previewed";
-    readableFieldIds: ReadonlySet<string>;
-    changeableFieldIds: ReadonlySet<string>;
-    eventDescriptorCount: number;
-    correlationId: string;
-    singleRequiredPermissionId?: string;
-    /** The exact release's compiled before-save rules for the subject, unparsed. */
-    beforeSaveFlows?: unknown;
-    copyTargets: readonly Readonly<{
-      recordId: string;
-      existingValues: Readonly<Record<string, unknown>>;
-      submittedValues: Readonly<Record<string, unknown>>;
-    }>[];
-  }>;
 
 /**
  * The named-action result plus any before-save rule warnings of a completed
@@ -88,22 +72,8 @@ type PreparedAction = PreparedNamedAction &
 export type NamedActionServiceResult = HumanOrganizationRequestResult<ExecuteNamedActionResult> &
   Readonly<{ warnings?: readonly BeforeSaveRuleWarning[] }>;
 
-type ActionPreparation =
-  | PreparedAction
-  | Readonly<{ outcome: "completed"; result: ExecuteNamedActionResult }>
-  | Readonly<{
-      outcome: "conflict" | "permission_refused" | "refused" | "refused_recorded" | "unsupported";
-      correlationId?: string;
-      reasonCode?: string;
-    }>;
-
 const restart = Symbol("restartNamedAction");
 const recordedRefusal = Symbol("recordedNamedActionRefusal");
-
-const one = <Row>(rows: readonly Row[]): Row => {
-  if (rows.length !== 1 || rows[0] === undefined) throw new Error("NAMED_ACTION_RESULT_INVALID");
-  return rows[0];
-};
 
 /** The refusal the person sees is a closed safe code; the server log keeps the real reason. */
 const safeRefusal = (
@@ -164,193 +134,6 @@ const preconditionReason = (prepared: PreparedNamedAction): RuleReason => {
       ? `${prepared.action.label} can't be used on this record as it is now.`
       : `${prepared.action.label} needs ${field.label} to be ${option.label}.`;
   return { code: "action_precondition", message: message.slice(0, 300) };
-};
-
-const completedResult = (candidate: Record<string, unknown>) => {
-  const parsedRevision = revision(candidate.concurrencyNumber);
-  if (parsedRevision === undefined) return undefined;
-  const result = executeNamedActionResultSchema.safeParse({
-    contractVersion: "2.0.0",
-    outcome: "completed",
-    recordId: candidate.recordId,
-    concurrencyNumber: parsedRevision,
-    readableValues: candidate.values,
-    correlationId: candidate.correlationId,
-    backgroundDelivery: candidate.backgroundDelivery,
-  });
-  return result.success ? result.data : undefined;
-};
-
-const parseCreateTargets = (candidate: unknown): readonly NamedActionCreateTarget[] | undefined => {
-  if (!Array.isArray(candidate)) return undefined;
-  const targets: NamedActionCreateTarget[] = [];
-  for (const entry of candidate) {
-    if (typeof entry !== "object" || entry === null) return undefined;
-    const value = entry as Record<string, unknown>;
-    const recordType = recordTypeDefinitionSchema.safeParse(value.recordType);
-    if (
-      !recordType.success ||
-      recordType.data.systemProjection !== undefined ||
-      typeof value.ordinal !== "number" ||
-      !Number.isSafeInteger(value.ordinal) ||
-      value.ordinal < 0 ||
-      typeof value.recordTypeId !== "string" ||
-      value.recordTypeId.toLowerCase() !== recordType.data.recordTypeId.toLowerCase()
-    )
-      return undefined;
-    targets.push({
-      ordinal: value.ordinal,
-      recordTypeId: recordType.data.recordTypeId,
-      recordType: recordType.data,
-      beforeSaveFlows: value.beforeSaveFlows,
-    });
-  }
-  return targets.every(
-    (target, index) => index === 0 || target.ordinal > targets[index - 1]!.ordinal,
-  )
-    ? targets
-    : undefined;
-};
-
-const parseCopyTargets = (candidate: unknown, recordType: PreparedNamedAction["recordType"]) => {
-  if (!Array.isArray(candidate)) return undefined;
-  const targets: Array<{
-    recordId: string;
-    existingValues: Record<string, unknown>;
-    submittedValues: Record<string, unknown>;
-  }> = [];
-  const fieldIds = new Set(recordType.fields.map((field) => field.fieldId.toLowerCase()));
-  for (const entry of candidate) {
-    if (typeof entry !== "object" || entry === null) return undefined;
-    const value = entry as Record<string, unknown>;
-    if (
-      typeof value.recordId !== "string" ||
-      typeof value.existingValues !== "object" ||
-      value.existingValues === null ||
-      Array.isArray(value.existingValues) ||
-      typeof value.submittedValues !== "object" ||
-      value.submittedValues === null ||
-      Array.isArray(value.submittedValues)
-    )
-      return undefined;
-    const recordId = value.recordId;
-    const existingValues = { ...(value.existingValues as Record<string, unknown>) };
-    const submittedValues = value.submittedValues as Record<string, unknown>;
-    if (
-      Object.keys(submittedValues).length === 0 ||
-      Object.keys(submittedValues).some((fieldId) => !fieldIds.has(fieldId.toLowerCase())) ||
-      targets.some((target) => target.recordId.toLowerCase() === recordId.toLowerCase())
-    )
-      return undefined;
-    for (const field of recordType.fields) {
-      if (
-        !field.required &&
-        field.type !== "reference_number" &&
-        field.type !== "calculation" &&
-        field.type !== "total" &&
-        existingValues[field.fieldId] === null
-      )
-        delete existingValues[field.fieldId];
-    }
-    targets.push({ recordId, existingValues, submittedValues });
-  }
-  return targets;
-};
-
-const parsePreparation = (candidate: unknown): ActionPreparation => {
-  if (typeof candidate !== "object" || candidate === null) return { outcome: "refused" };
-  const value = candidate as Record<string, unknown>;
-  const correlationId = typeof value.correlationId === "string" ? value.correlationId : undefined;
-  if (value.outcome === "completed") {
-    const result = completedResult(value);
-    return result === undefined
-      ? { outcome: "refused", ...(correlationId ? { correlationId } : {}) }
-      : { outcome: "completed", result };
-  }
-  if (
-    value.outcome === "conflict" ||
-    value.outcome === "permission_refused" ||
-    value.outcome === "refused" ||
-    value.outcome === "refused_recorded" ||
-    value.outcome === "unsupported"
-  )
-    return {
-      outcome: value.outcome,
-      ...(correlationId ? { correlationId } : {}),
-      ...(typeof value.reasonCode === "string" ? { reasonCode: value.reasonCode } : {}),
-    };
-  if (value.outcome !== "prepared" && value.outcome !== "previewed")
-    return { outcome: "refused", ...(correlationId ? { correlationId } : {}) };
-  const singleRequiredPermissionId =
-    value.singleRequiredPermissionId === null || value.singleRequiredPermissionId === undefined
-      ? undefined
-      : permissionIdSchema.safeParse(value.singleRequiredPermissionId);
-  if (singleRequiredPermissionId !== undefined && !singleRequiredPermissionId.success)
-    return { outcome: "refused", ...(correlationId ? { correlationId } : {}) };
-  const action = actionDefinitionSchema.safeParse(value.action);
-  const recordType = recordTypeDefinitionSchema.safeParse(value.recordType);
-  const createTargets = parseCreateTargets(value.createTargets);
-  const copyTargets = recordType.success
-    ? parseCopyTargets(value.copyTargets, recordType.data)
-    : undefined;
-  // An action that targets a registered protected operation, and every action of a system
-  // projection record type, runs through that operation's owning service, never through ordered
-  // record tasks.
-  if (
-    !action.success ||
-    action.data.protectedOperation !== undefined ||
-    !recordType.success ||
-    recordType.data.systemProjection !== undefined ||
-    createTargets === undefined ||
-    copyTargets === undefined ||
-    value.validationContractVersion !== moduleValidationContractVersion ||
-    typeof value.recordId !== "string" ||
-    typeof value.existingValues !== "object" ||
-    value.existingValues === null ||
-    Array.isArray(value.existingValues) ||
-    typeof value.actorOrganizationAccountId !== "string" ||
-    !Array.isArray(value.readableFieldIds) ||
-    !Array.isArray(value.changeableFieldIds) ||
-    !Array.isArray(value.eventDescriptors) ||
-    correlationId === undefined
-  )
-    return { outcome: "refused", ...(correlationId ? { correlationId } : {}) };
-  // Ordinary storage reads represent unset optional columns as null. The field
-  // candidate treats absence as unset, as the base save preparation does.
-  const existingValues = { ...(value.existingValues as Record<string, unknown>) };
-  for (const field of recordType.data.fields) {
-    if (
-      !field.required &&
-      field.type !== "reference_number" &&
-      field.type !== "calculation" &&
-      field.type !== "total" &&
-      existingValues[field.fieldId] === null
-    )
-      delete existingValues[field.fieldId];
-  }
-  return {
-    outcome: value.outcome,
-    validationContractVersion: moduleValidationContractVersion,
-    action: action.data,
-    recordType: recordType.data,
-    recordId: value.recordId,
-    existingValues,
-    actorOrganizationAccountId: value.actorOrganizationAccountId,
-    createTargets,
-    copyTargets,
-    readableFieldIds: new Set(
-      value.readableFieldIds.filter((item): item is string => typeof item === "string"),
-    ),
-    changeableFieldIds: new Set(
-      value.changeableFieldIds.filter((item): item is string => typeof item === "string"),
-    ),
-    eventDescriptorCount: value.eventDescriptors.length,
-    correlationId,
-    ...(singleRequiredPermissionId === undefined
-      ? {}
-      : { singleRequiredPermissionId: singleRequiredPermissionId.data }),
-    ...(value.beforeSaveFlows === undefined ? {} : { beforeSaveFlows: value.beforeSaveFlows }),
-  };
 };
 
 const pendingCheckIsAuthorized = (
@@ -1605,137 +1388,4 @@ export const createNamedActionRecordPort = (dependencies: NamedActionRecordPortD
       };
     },
   });
-};
-
-/** Whether a named action can run on one record for the viewer, as a page asks before it shows a control. */
-export type NamedActionAvailability =
-  | Readonly<{ kind: "available" }>
-  | Readonly<{ kind: "refused"; cause: "precondition" | "permission" }>
-  /** The preview cannot decide without the inputs the person has yet to supply; submit decides. */
-  | Readonly<{ kind: "undecided"; reason: string }>;
-
-const availabilityFromPreview = (
-  preview: ActionPreparation,
-  issuedAt: string,
-  run: ActionFlowRunner,
-): NamedActionAvailability => {
-  if (preview.outcome === "permission_refused") return { kind: "refused", cause: "permission" };
-  if (preview.outcome !== "previewed") {
-    const reasonCode = "reasonCode" in preview ? preview.reasonCode : undefined;
-    return {
-      kind: "undecided",
-      reason: `the preview was ${preview.outcome}, not previewed (${reasonCode ?? "no reason code"})`,
-    };
-  }
-  const outcome = run(actionFlowSeed(preview, {}, issuedAt));
-  if (outcome.kind === "refused") return { kind: "refused", cause: "precondition" };
-  return outcome.kind === "collected"
-    ? { kind: "available" }
-    : { kind: "undecided", reason: outcome.reason };
-};
-
-/** Whether a named action can run on one selected record now, as a bulk run decides it. */
-export type NamedActionEligibility =
-  | "eligible"
-  /** The same command already completed on the record: running it again replays that change. */
-  | "replayed"
-  | "not_applicable"
-  | "not_permitted"
-  | "changed"
-  | "refused";
-
-/** Decides one record's eligibility from its action preview (no inputs), writing nothing. */
-export const namedActionPreviewEligibility = (
-  previewCandidate: unknown,
-  issuedAt: string,
-  run: ActionFlowRunner,
-): NamedActionEligibility => {
-  const preview = parsePreparation(previewCandidate);
-  if (preview.outcome === "completed") return "replayed";
-  if (preview.outcome === "permission_refused") return "not_permitted";
-  if (preview.outcome === "conflict") return "changed";
-  if (preview.outcome !== "previewed") return "refused";
-  const outcome = run(actionFlowSeed(preview, {}, issuedAt));
-  return outcome.kind === "collected"
-    ? "eligible"
-    : outcome.kind === "refused"
-      ? "not_applicable"
-      : "refused";
-};
-
-/** A page subject read together with the availability of every named action bound to it. */
-export type SubjectWithNamedActionAvailability = Readonly<{
-  /** The subject projection and capabilities, as `vortex_record.read_record_with_capabilities` returns them. */
-  record: unknown;
-  capabilities: unknown;
-  /** Keyed by lower-case action id; empty when the subject is not readable. */
-  availability: ReadonlyMap<string, NamedActionAvailability>;
-}>;
-
-/**
- * Reads a page subject and previews every named action its placements are bound to in one fixed
- * adapter call: one read decision for the record, and each action's own preview for the record's
- * current concurrency number with no inputs, inside a transaction the caller already verified.
- * Nothing is written. A subject the viewer
- * cannot read previews nothing.
- */
-export const readSubjectWithNamedActionAvailability = async (
-  transaction: RequestDatabaseTransaction,
-  subject: Readonly<{
-    recordTypeId: string;
-    recordId: string;
-    requestedFieldIds: readonly string[] | null;
-  }>,
-  actions: readonly ExecuteNamedActionCommand["action"][],
-  issuedAt: string,
-  runFor: (action: ExecuteNamedActionCommand["action"]) => ActionFlowRunner,
-): Promise<SubjectWithNamedActionAvailability> => {
-  const requests = actions.map((action) => ({
-    commandId: randomUUID(),
-    activityId: randomUUID(),
-    ownerKind: action.ownerKind,
-    ownerId: action.ownerId,
-    releaseRevision: action.releaseRevision,
-    actionId: action.actionId,
-  }));
-  let rows: readonly ResultRow[];
-  await transaction.query`set local role vortex_runtime`;
-  try {
-    rows = await transaction.query<ResultRow>`
-      select vortex_record.read_record_with_action_previews(
-        ${subject.recordTypeId}::uuid, ${subject.recordId}::uuid,
-        ${JSON.stringify(requests)}::text::jsonb,
-        ${subject.requestedFieldIds === null ? null : JSON.stringify(subject.requestedFieldIds)}::text::jsonb
-      ) as value
-    `;
-  } finally {
-    await transaction.query`set local role vortex_request`;
-  }
-  const value = one(rows).value;
-  if (typeof value !== "object" || value === null)
-    throw new Error("NAMED_ACTION_PREVIEWS_RESULT_INVALID");
-  const read = value as Record<string, unknown>;
-  const previews = Array.isArray(read.previews) ? (read.previews as unknown[]) : undefined;
-  if (previews === undefined) throw new Error("NAMED_ACTION_PREVIEWS_RESULT_INVALID");
-  const availability = new Map<string, NamedActionAvailability>();
-  for (const action of actions) {
-    const key = action.actionId.toLowerCase();
-    if (availability.has(key)) continue;
-    const entry = previews.find(
-      (item) =>
-        typeof item === "object" &&
-        item !== null &&
-        String((item as Record<string, unknown>).actionId).toLowerCase() === key,
-    ) as Record<string, unknown> | undefined;
-    if (entry === undefined) {
-      if ((read.record as Record<string, unknown> | null)?.outcome === "allowed")
-        throw new Error("NAMED_ACTION_PREVIEW_MISSING");
-      continue;
-    }
-    availability.set(
-      key,
-      availabilityFromPreview(parsePreparation(entry.preview), issuedAt, runFor(action)),
-    );
-  }
-  return { record: read.record, capabilities: read.capabilities, availability };
 };
