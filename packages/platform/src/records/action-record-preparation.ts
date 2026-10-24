@@ -3,13 +3,47 @@ import "server-only";
 import {
   actionDefinitionSchema,
   executeNamedActionResultSchema,
+  type ExecuteNamedActionResult,
   moduleValidationContractVersion,
   permissionIdSchema,
   recordTypeDefinitionSchema,
 } from "../schema";
 import { revision } from "./save-record";
 import type { NamedActionCreateTarget, PreparedNamedAction } from "./action-flow-effects";
-import type { ActionPreparation } from "./action-record-port";
+import type { DatabaseRow } from "../db/index";
+
+export type ResultRow = DatabaseRow & { readonly value: unknown };
+
+export type PreparedAction = PreparedNamedAction &
+  Readonly<{
+    outcome: "prepared" | "previewed";
+    readableFieldIds: ReadonlySet<string>;
+    changeableFieldIds: ReadonlySet<string>;
+    eventDescriptorCount: number;
+    correlationId: string;
+    singleRequiredPermissionId?: string;
+    /** The exact release's compiled before-save rules for the subject, unparsed. */
+    beforeSaveFlows?: unknown;
+    copyTargets: readonly Readonly<{
+      recordId: string;
+      existingValues: Readonly<Record<string, unknown>>;
+      submittedValues: Readonly<Record<string, unknown>>;
+    }>[];
+  }>;
+
+export type ActionPreparation =
+  | PreparedAction
+  | Readonly<{ outcome: "completed"; result: ExecuteNamedActionResult }>
+  | Readonly<{
+      outcome: "conflict" | "permission_refused" | "refused" | "refused_recorded" | "unsupported";
+      correlationId?: string;
+      reasonCode?: string;
+    }>;
+
+export const one = <Row>(rows: readonly Row[]): Row => {
+  if (rows.length !== 1 || rows[0] === undefined) throw new Error("NAMED_ACTION_RESULT_INVALID");
+  return rows[0];
+};
 
 export const completedResult = (candidate: Record<string, unknown>) => {
   const parsedRevision = revision(candidate.concurrencyNumber);

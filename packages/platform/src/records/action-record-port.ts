@@ -20,14 +20,13 @@ import {
   type HumanOrganizationRequestDependencies,
   type HumanOrganizationRequestResult,
 } from "../access/index";
-import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
+import type { RequestDatabaseTransaction } from "../db/index";
 import type { ActionFlowRunner, BeforeSaveRuleWarning } from "../rules/index";
 import {
   actionFlowSeed,
   composeFlowEffects,
   normalizeActionInputs,
   type NamedActionComposition,
-  type NamedActionCreateTarget,
   type NamedActionCreation,
   type PreparedNamedAction,
 } from "./action-flow-effects";
@@ -55,27 +54,16 @@ import {
 } from "./save-record";
 import { calculateAndFinalize, operationClock } from "./field-candidate";
 import { firstFieldDependencyRefusal } from "./link-dependencies";
-import { completedResult, parsePreparation } from "./action-record-preparation";
+import {
+  completedResult,
+  one,
+  parsePreparation,
+  type ActionPreparation,
+  type PreparedAction,
+  type ResultRow,
+} from "./action-record-preparation";
 
-export type ResultRow = DatabaseRow & { readonly value: unknown };
 type RuleReason = Readonly<{ code: string; message: string }>;
-
-type PreparedAction = PreparedNamedAction &
-  Readonly<{
-    outcome: "prepared" | "previewed";
-    readableFieldIds: ReadonlySet<string>;
-    changeableFieldIds: ReadonlySet<string>;
-    eventDescriptorCount: number;
-    correlationId: string;
-    singleRequiredPermissionId?: string;
-    /** The exact release's compiled before-save rules for the subject, unparsed. */
-    beforeSaveFlows?: unknown;
-    copyTargets: readonly Readonly<{
-      recordId: string;
-      existingValues: Readonly<Record<string, unknown>>;
-      submittedValues: Readonly<Record<string, unknown>>;
-    }>[];
-  }>;
 
 /**
  * The named-action result plus any before-save rule warnings of a completed
@@ -84,22 +72,8 @@ type PreparedAction = PreparedNamedAction &
 export type NamedActionServiceResult = HumanOrganizationRequestResult<ExecuteNamedActionResult> &
   Readonly<{ warnings?: readonly BeforeSaveRuleWarning[] }>;
 
-export type ActionPreparation =
-  | PreparedAction
-  | Readonly<{ outcome: "completed"; result: ExecuteNamedActionResult }>
-  | Readonly<{
-      outcome: "conflict" | "permission_refused" | "refused" | "refused_recorded" | "unsupported";
-      correlationId?: string;
-      reasonCode?: string;
-    }>;
-
 const restart = Symbol("restartNamedAction");
 const recordedRefusal = Symbol("recordedNamedActionRefusal");
-
-export const one = <Row>(rows: readonly Row[]): Row => {
-  if (rows.length !== 1 || rows[0] === undefined) throw new Error("NAMED_ACTION_RESULT_INVALID");
-  return rows[0];
-};
 
 /** The refusal the person sees is a closed safe code; the server log keeps the real reason. */
 const safeRefusal = (
