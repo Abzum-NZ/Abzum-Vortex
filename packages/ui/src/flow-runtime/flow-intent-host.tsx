@@ -32,6 +32,7 @@ import type {
   FlowMessageIntent,
 } from "./intents";
 import { surfaceCancellationError } from "./intents";
+import { FlowSurfaceContext } from "./flow-surface-context";
 
 type Surface =
   | Readonly<{ id: number; kind: "message"; message: FlowMessageIntent; settle: () => void }>
@@ -51,7 +52,7 @@ type Surface =
 export type FlowIntentHostOptions = Readonly<{
   /**
    * Renders the form a Show form task names. Forms are Application data the shell resolves, so the
-   * shell supplies the body and calls `submit` with the typed values or `cancel` when dismissed.
+   * shell supplies its title and body and calls `submit` with the typed values or `cancel` when dismissed.
    */
   renderForm: (
     form: FlowFormIntent,
@@ -62,7 +63,7 @@ export type FlowIntentHostOptions = Readonly<{
       ) => void;
       cancel: () => void;
     }>,
-  ) => ReactNode;
+  ) => Readonly<{ title: string; body: ReactNode }>;
   navigation: LinkNavigationEnvironment;
   refresh?: FlowIntentHost["refresh"];
   setPanel?: FlowIntentHost["setPanel"];
@@ -107,7 +108,9 @@ function FlowDialog({
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
-        <div>{children}</div>
+        <FlowSurfaceContext.Provider value={true}>
+          <div>{children}</div>
+        </FlowSurfaceContext.Provider>
         {actions === undefined ? null : <DialogFooter>{actions}</DialogFooter>}
       </DialogContent>
     </Dialog>
@@ -277,17 +280,22 @@ export function useFlowIntentHost(
     );
   } else if (current?.kind === "form") {
     const { form, settle } = current;
+    const rendered = options.renderForm(form, {
+      submit: (values, choiceEvidence) =>
+        settle({
+          kind: "submit",
+          values,
+          ...(choiceEvidence === undefined ? {} : { choiceEvidence }),
+        }),
+      cancel: () => settle({ kind: "cancel" }),
+    });
     element = (
-      <FlowDialog key={current.id} title="Form" onDismiss={() => settle({ kind: "cancel" })}>
-        {options.renderForm(form, {
-          submit: (values, choiceEvidence) =>
-            settle({
-              kind: "submit",
-              values,
-              ...(choiceEvidence === undefined ? {} : { choiceEvidence }),
-            }),
-          cancel: () => settle({ kind: "cancel" }),
-        })}
+      <FlowDialog
+        key={current.id}
+        title={rendered.title}
+        onDismiss={() => settle({ kind: "cancel" })}
+      >
+        {rendered.body}
       </FlowDialog>
     );
   }

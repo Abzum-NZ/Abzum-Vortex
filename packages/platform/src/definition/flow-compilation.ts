@@ -119,6 +119,7 @@ export type FlowCompilationInput = Readonly<{
   declaredDefinitionKeys: readonly string[];
   /** The declared inputs of each operation a Call protected operation task may name, by its key. */
   operationInputs: NonNullable<FlowValidationOptions["operationInputs"]>;
+  formTitle?: FlowValidationOptions["formTitle"];
 }>;
 
 type Refusal = ConstructorParameters<typeof DefinitionCompilationError>[1];
@@ -688,6 +689,7 @@ export function compileFlowSources(input: FlowCompilationInput): CompiledFlowSet
     const recordTypes = flowRecordTypes(source);
     const invalid = validateFlow(source, {
       targetFlow,
+      formTitle: input.formTitle,
       operationInputs: input.operationInputs,
       triggerRecordFieldExists: (field) =>
         recordTypes.every((recordType) => {

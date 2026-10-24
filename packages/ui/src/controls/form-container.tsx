@@ -2,6 +2,7 @@
 
 import {
   useCallback,
+  useContext,
   useEffect,
   useId,
   useMemo,
@@ -13,6 +14,7 @@ import {
 } from "react";
 import type { FlowFieldCorrection, FlowRefusalFeedback } from "@vortex/platform/schema";
 import { DefinitionRenderError } from "../definition-error";
+import { FlowSurfaceContext } from "../flow-runtime/flow-surface-context";
 import { resolveControlContext, type ControlRenderProps } from "./control-context";
 import {
   applicableDraftFeedback,
@@ -154,6 +156,7 @@ export function FormContainer(props: FormContainerProps): ReactElement {
     );
 
   const titleId = useId();
+  const inFlowSurface = useContext(FlowSurfaceContext);
   const feedbackId = useId();
   const formId = props.placementId;
   const formRef = useRef<HTMLFormElement>(null);
@@ -357,6 +360,113 @@ export function FormContainer(props: FormContainerProps): ReactElement {
   const refusal = context.unavailable ? undefined : context.disabledReason;
   const flowFeedback =
     props.flowFeedback === undefined ? undefined : formFlowFeedbackPresentation(props.flowFeedback);
+  const content = (
+    <>
+      {refusal === undefined ? null : (
+        <Alert role="alert" className="mb-4" data-vortex-form-refusal="">
+          <AlertDescription>{refusal}</AlertDescription>
+        </Alert>
+      )}
+      <form
+        ref={formRef}
+        noValidate
+        onSubmit={onSubmit}
+        onReset={onReset}
+        onKeyDown={onKeyDown}
+        aria-busy={pending}
+        {...(inFlowSurface || title === undefined ? {} : { "aria-labelledby": titleId })}
+        data-vortex-control="form-container"
+        data-vortex-placement-id={props.placementId}
+        className="flex flex-col gap-4"
+      >
+        {ownerGroups === undefined ? null : ownerGroups.length === 0 ? (
+          <p role="alert" className="text-sm text-muted-foreground">
+            You need current membership in an active Group before you can create this record.
+          </p>
+        ) : (
+          <Field>
+            {ownerGroups.length === 1 ? (
+              <p className="text-sm">
+                <span className="font-medium">Owner Group: </span>
+                {ownerGroups[0]?.label}
+              </p>
+            ) : (
+              <>
+                <FieldLabel htmlFor={`${feedbackId}-owner-group`}>Owner Group</FieldLabel>
+                <Select
+                  items={[
+                    { value: null, label: "Select a Group" },
+                    ...ownerGroups.map((group) => ({ value: group.groupId, label: group.label })),
+                  ]}
+                  value={selectedOwnerGroupId ?? null}
+                  disabled={fieldsDisabled}
+                  onValueChange={(next) => {
+                    const groupId = next ?? undefined;
+                    setOwnerGroupChoice(groupId);
+                    setOwnerGroupError(false);
+                    const baseline = baselineRef.current;
+                    if (baseline !== undefined)
+                      unsavedWorkRegistry?.setDirty(
+                        formId,
+                        groupId !== undefined || !equalFormValue(registry.values(), baseline),
+                      );
+                  }}
+                >
+                  <SelectTrigger
+                    id={`${feedbackId}-owner-group`}
+                    aria-invalid={ownerGroupError}
+                    className="w-full"
+                  >
+                    <SelectValue placeholder="Select a Group" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={null}>Select a Group</SelectItem>
+                    {ownerGroups.map((group) => (
+                      <SelectItem key={group.groupId} value={group.groupId}>
+                        {group.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </>
+            )}
+            {ownerGroupError ? <FieldError role="alert">Select an owner Group.</FieldError> : null}
+          </Field>
+        )}
+        <FormScopeContext.Provider value={scope}>
+          <fieldset
+            key={generation}
+            disabled={fieldsDisabled}
+            className="vortex-form-content flex min-w-0 flex-col gap-4 border-0 p-0"
+          >
+            {props.slots.content ?? null}
+          </fieldset>
+        </FormScopeContext.Provider>
+        <FormDraftFeedbackRegion id={feedbackId} summary={summary} />
+        {flowFeedback === undefined ? null : (
+          <Alert
+            variant={flowFeedback.tone === "problem" ? "destructive" : "default"}
+            role={flowFeedback.tone === "problem" ? "alert" : "status"}
+            aria-live="polite"
+            data-vortex-form-feedback={flowFeedback.tone}
+          >
+            <AlertDescription>{flowFeedback.text}</AlertDescription>
+          </Alert>
+        )}
+      </form>
+    </>
+  );
+  if (inFlowSurface)
+    return (
+      <>
+        {context.unavailable ? (
+          <p className="mb-4 text-sm text-muted-foreground" data-vortex-field-note="">
+            Unavailable
+          </p>
+        ) : null}
+        {content}
+      </>
+    );
   return (
     <Card>
       {title === undefined && !context.unavailable ? null : (
@@ -371,102 +481,7 @@ export function FormContainer(props: FormContainerProps): ReactElement {
           ) : null}
         </CardHeader>
       )}
-      <CardContent>
-        {refusal === undefined ? null : (
-          <Alert role="alert" className="mb-4" data-vortex-form-refusal="">
-            <AlertDescription>{refusal}</AlertDescription>
-          </Alert>
-        )}
-        <form
-          ref={formRef}
-          noValidate
-          onSubmit={onSubmit}
-          onReset={onReset}
-          onKeyDown={onKeyDown}
-          aria-busy={pending}
-          {...(title === undefined ? {} : { "aria-labelledby": titleId })}
-          data-vortex-control="form-container"
-          data-vortex-placement-id={props.placementId}
-          className="flex flex-col gap-4"
-        >
-          {ownerGroups === undefined ? null : ownerGroups.length === 0 ? (
-            <p role="alert" className="text-sm text-muted-foreground">
-              You need current membership in an active Group before you can create this record.
-            </p>
-          ) : (
-            <Field>
-              {ownerGroups.length === 1 ? (
-                <p className="text-sm">
-                  <span className="font-medium">Owner Group: </span>
-                  {ownerGroups[0]?.label}
-                </p>
-              ) : (
-                <>
-                  <FieldLabel htmlFor={`${feedbackId}-owner-group`}>Owner Group</FieldLabel>
-                  <Select
-                    items={[
-                      { value: null, label: "Select a Group" },
-                      ...ownerGroups.map((group) => ({ value: group.groupId, label: group.label })),
-                    ]}
-                    value={selectedOwnerGroupId ?? null}
-                    disabled={fieldsDisabled}
-                    onValueChange={(next) => {
-                      const groupId = next ?? undefined;
-                      setOwnerGroupChoice(groupId);
-                      setOwnerGroupError(false);
-                      const baseline = baselineRef.current;
-                      if (baseline !== undefined)
-                        unsavedWorkRegistry?.setDirty(
-                          formId,
-                          groupId !== undefined || !equalFormValue(registry.values(), baseline),
-                        );
-                    }}
-                  >
-                    <SelectTrigger
-                      id={`${feedbackId}-owner-group`}
-                      aria-invalid={ownerGroupError}
-                      className="w-full"
-                    >
-                      <SelectValue placeholder="Select a Group" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={null}>Select a Group</SelectItem>
-                      {ownerGroups.map((group) => (
-                        <SelectItem key={group.groupId} value={group.groupId}>
-                          {group.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </>
-              )}
-              {ownerGroupError ? (
-                <FieldError role="alert">Select an owner Group.</FieldError>
-              ) : null}
-            </Field>
-          )}
-          <FormScopeContext.Provider value={scope}>
-            <fieldset
-              key={generation}
-              disabled={fieldsDisabled}
-              className="vortex-form-content flex min-w-0 flex-col gap-4 border-0 p-0"
-            >
-              {props.slots.content ?? null}
-            </fieldset>
-          </FormScopeContext.Provider>
-          <FormDraftFeedbackRegion id={feedbackId} summary={summary} />
-          {flowFeedback === undefined ? null : (
-            <Alert
-              variant={flowFeedback.tone === "problem" ? "destructive" : "default"}
-              role={flowFeedback.tone === "problem" ? "alert" : "status"}
-              aria-live="polite"
-              data-vortex-form-feedback={flowFeedback.tone}
-            >
-              <AlertDescription>{flowFeedback.text}</AlertDescription>
-            </Alert>
-          )}
-        </form>
-      </CardContent>
+      <CardContent>{content}</CardContent>
     </Card>
   );
 }
