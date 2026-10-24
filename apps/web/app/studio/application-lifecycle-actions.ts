@@ -33,6 +33,23 @@ const journeys = {
   uninstall_application: "remove",
 } as const;
 
+const changeRefused =
+  "The application change was refused. Its state may have moved on since the review, or your access does not allow it: call the matching review again and pass its expected unchanged; if it is still refused, ask an administrator for permission to manage applications and any roles you accept.";
+
+/**
+ * A refusal the catalogue does not name: a state that no longer allows the journey and missing
+ * authority look the same here, so each message names both and the next step; the log keeps the cause.
+ */
+const uncodedRefusals: Readonly<Record<ApplicationLifecycleToolName, string>> = {
+  review_application_installation:
+    "You cannot review this application with your current access. Ask an administrator for permission to manage applications.",
+  review_application_removal:
+    "Nothing can be reviewed for removal: the application may not be installed here, or your access does not allow managing applications. Call review_application_installation to see its current state.",
+  install_application: changeRefused,
+  upgrade_application: changeRefused,
+  uninstall_application: changeRefused,
+};
+
 /** What a completed journey tells the agent, including which tool confirms a review. */
 const completedMessage = (tool: ApplicationLifecycleToolName, change: unknown): string => {
   switch (tool) {
@@ -146,10 +163,7 @@ export async function runStudioApplicationLifecycle(organizationId: string, cand
               ? "This release cannot use the organisation's current record storage. Choose a compatible release."
               : result.kind === "temporarily_unavailable"
                 ? "The request did not complete. Review the application's current state before retrying."
-                : tool === "review_application_installation" ||
-                    tool === "review_application_removal"
-                  ? "You cannot review this application change with your current access. Ask an administrator for permission to manage applications."
-                  : "The application change was refused. Pass the expected state from the matching review unchanged; if you did, ask an administrator for permission to manage applications and any roles you accept.",
+                : uncodedRefusals[tool],
     };
   } catch (error) {
     return mapWebError(error, {
