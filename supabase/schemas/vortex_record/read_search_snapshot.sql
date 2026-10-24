@@ -61,6 +61,14 @@ begin
   from pg_catalog.jsonb_array_elements(release_content -> 'recordTypes') as item(value)
   where pg_catalog.lower(item.value ->> 'recordTypeId') = pg_catalog.lower(p_record_type_id::text);
 
+  -- A system projection has no stored row: its rows are read only through
+  -- the registered bounded reader, so the caller receives the definition
+  -- alone and indexes nothing.
+  if (target_meta ->> 'isSystemProjection')::boolean is distinct from false then
+    return pg_catalog.jsonb_build_object(
+      'outcome', 'record_unavailable', 'recordType', record_type_definition, 'record', null);
+  end if;
+
   -- The row is read whatever its lifecycle state, so a soft-deleted record
   -- yields the state its deletion marker is stored under.
   execute pg_catalog.format(
@@ -78,8 +86,6 @@ begin
   into record_fact
   using context_organization_id, p_record_id;
 
-  -- A record type that is a system projection has no stored row to read; the
-  -- caller still receives its definition to see that nothing is searchable.
   return pg_catalog.jsonb_build_object(
     'outcome', case when record_fact is null then 'record_unavailable' else 'loaded' end,
     'recordType', record_type_definition,

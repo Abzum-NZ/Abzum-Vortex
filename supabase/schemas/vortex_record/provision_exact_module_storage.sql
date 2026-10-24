@@ -52,11 +52,6 @@ declare
   any_change boolean := false;
   is_projection boolean;
   protected_view_key text;
-  reader_schema_value text;
-  reader_function_value text;
-  reader_sort_key_value text;
-  field_columns_sql text;
-  projection_view_sql text;
 begin
   if not vortex_platform.is_non_nil_uuid(p_module_root_id::text)
     or p_module_release_revision not between 1 and 9007199254740991 then
@@ -154,8 +149,10 @@ begin
       or pg_catalog.jsonb_typeof(record_type -> 'relationships') <> 'array' then
       raise exception using errcode = '42501', message = 'Module record storage definition is invalid';
     end if;
-    -- The eight-sortable-field limit is a publish rule; an older release may declare more and
-    -- simply gets an index per sortable field.
+    if (select pg_catalog.count(*) from pg_catalog.jsonb_array_elements(record_type -> 'fields') as field(value)
+      where field.value -> 'sortable' = 'true'::jsonb) > 8 then
+      raise exception using errcode = '23514', message = 'A record type may declare at most eight sortable fields';
+    end if;
     -- The record-type loop is ordered by storage identity, so overlapping
     -- provisions acquire absent and existing lineage locks deterministically.
     perform pg_catalog.pg_advisory_xact_lock(
@@ -169,134 +166,21 @@ begin
       else 'organisation_id, application_root_id'
     end;
 
-    -- A system projection record type has no generated storage. It is read
-    -- through one registered protected view, created here as an ordinary
-    -- record_data relation so the fixed read adapters resolve it unchanged,
-    -- while the projection itself keeps every row-visibility rule inside the
-    -- registered function. The view exposes exactly the record type's declared
-    -- fields as record-data columns, plus the protected row identity and
-    -- revision, and is read-only: the projection has no ordinary write path.
-    -- Every projection value is reset per record type, so a generated record
-    -- type provisioned after a projection never inherits its protected key.
+    -- System projections keep definition and field mappings only. Every row
+    -- is supplied by the registered bounded reader, never a record_data view.
     is_projection := record_type ? 'systemProjection';
     protected_view_key := null;
-    reader_schema_value := null;
-    reader_function_value := null;
-    reader_sort_key_value := null;
-    projection_view_sql := null;
     if is_projection then
       protected_view_key := record_type #>> '{systemProjection,protectedView}';
-      -- The view exhausts bounded pages in the reader's first registered cursor
-      -- order. Filters on the view must see every candidate, not just page one.
-      select registered.reader_schema, registered.reader_function,
-        registered.cursor_sort_keys[1]
-      into reader_schema_value, reader_function_value, reader_sort_key_value
-      from vortex_record.protected_read_model_views as registered
+      perform 1 from vortex_record.protected_read_model_views as registered
       where registered.protected_read_model_key = protected_view_key;
       if not found then
-        raise exception using errcode = '42501',
-          message = 'Protected projection view is unavailable';
+        raise exception using errcode = '42501', message = 'Protected projection reader is unavailable';
       end if;
       if storage_scope_value <> 'organization_shared' then
         raise exception using errcode = '42501',
           message = 'Protected projection storage must be organisation shared';
       end if;
-      field_columns_sql := '';
-      for field_value in
-        select item.value
-        from pg_catalog.jsonb_array_elements(record_type -> 'fields') as item(value)
-        order by item.value ->> 'fieldId'
-      loop
-        begin
-          field_id_value := (field_value ->> 'fieldId')::uuid;
-        exception when invalid_text_representation then
-          raise exception using errcode = '42501',
-            message = 'Record field storage identity is invalid';
-        end;
-        column_token := 'f_' || pg_catalog.replace(pg_catalog.lower(field_id_value::text), '-', '');
-        database_type := vortex_record.database_value_type(field_value);
-        if database_type is null then
-          raise exception using errcode = '23514',
-            message = 'Record field storage type is unsupported';
-        end if;
-        sql_type := vortex_record.sql_value_type(database_type);
-        if field_value ->> 'fieldId' = record_type #>> '{systemProjection,organizationFieldId}' then
-          field_columns_sql := field_columns_sql
-            || pg_catalog.format('projection.organization_id::text as %I, ', column_token);
-        elsif field_value ->> 'fieldId' = record_type #>> '{systemProjection,revisionFieldId}' then
-          field_columns_sql := field_columns_sql
-            || pg_catalog.format('projection.revision::%s as %I, ', sql_type, column_token);
-        elsif database_type = 'json' then
-          field_columns_sql := field_columns_sql
-            || pg_catalog.format(
-              '(projection.attribute_values -> %L) as %I, ', field_value ->> 'key', column_token
-            );
-        else
-          field_columns_sql := field_columns_sql
-            || pg_catalog.format(
-              '(projection.attribute_values ->> %L)::%s as %I, ',
-              field_value ->> 'key', sql_type, column_token
-            );
-        end if;
-      end loop;
-      field_columns_sql := pg_catalog.left(
-        field_columns_sql, pg_catalog.length(field_columns_sql) - 2
-      );
-      projection_view_sql := pg_catalog.format(
-        'create view record_data.%I as
-         with recursive projection_pages(rows) as (
-           values (null::jsonb)
-           union all
-           select page.rows
-           from projection_pages as previous
-           cross join lateral (
-             select coalesce(pg_catalog.jsonb_agg(
-               pg_catalog.to_jsonb(projected) - ''ordinality'' order by projected.ordinality
-             ), ''[]''::jsonb) as rows
-             from %I.%I(null::uuid[], %L, ''ascending'',
-               case when previous.rows is null then null else
-                 pg_catalog.jsonb_build_object(
-                   ''recordId'', previous.rows -> -1 ->> ''record_id'',
-                   ''sortKey'', case when %L = ''record_id'' then ''[]''::jsonb
-                     else pg_catalog.jsonb_build_array(
-                       previous.rows -> -1 -> ''attribute_values'' -> %L
-                     ) end
-                 ) end, 40, null::jsonb
-             ) with ordinality as projected(
-               organization_id, record_id, revision, attribute_values, ordinality
-             )
-           ) as page
-           where previous.rows is null or pg_catalog.jsonb_array_length(previous.rows) = 40
-         )
-         select
-           projection.organization_id as organisation_id,
-           %L::uuid as module_root_id,
-           %L::uuid as record_type_id,
-           %L::uuid as storage_contract_id,
-           projection.record_id,
-           null::uuid as application_root_id,
-           %L::bigint as definition_revision,
-           null::uuid as owner_organisation_account_id,
-           null::uuid as owner_group_id,
-           ''active''::text as lifecycle_state,
-           projection.revision as concurrency_number,
-           null::timestamptz as created_at,
-           null::uuid as created_by,
-           null::timestamptz as updated_at,
-           null::uuid as updated_by,
-           null::timestamptz as deleted_at,
-           null::uuid as deleted_by,
-           null::timestamptz as removal_due_at,
-           %s
-         from projection_pages as page
-         cross join lateral pg_catalog.jsonb_to_recordset(page.rows) as projection(
-           organization_id uuid, record_id uuid, revision bigint, attribute_values jsonb
-         )',
-        table_token, reader_schema_value, reader_function_value, reader_sort_key_value,
-        reader_sort_key_value, reader_sort_key_value,
-        p_module_root_id, record_type_id_value, storage_id,
-        p_module_release_revision, field_columns_sql
-      );
     end if;
 
     select catalogue.* into stored_catalogue
@@ -305,12 +189,7 @@ begin
     for update;
 
     if not found then
-      if is_projection then
-        execute projection_view_sql;
-        execute pg_catalog.format(
-          'grant select on record_data.%I to vortex_record_adapter', table_token
-        );
-      else
+      if not is_projection then
         perform vortex_record.create_record_storage_table_internal(
           storage_id, p_module_root_id, record_type_id_value,
           storage_scope_value, ownership_mode_value, true
@@ -344,8 +223,7 @@ begin
           or stored_catalogue.state <> 'active'
           or stored_catalogue.physical_schema_token <> 'system_projection'
           or stored_catalogue.protected_read_model_key is distinct from protected_view_key
-          or stored_catalogue.physical_table_token <> table_token
-          or pg_catalog.to_regclass(pg_catalog.format('%I.%I', 'record_data', table_token)) is null then
+          or stored_catalogue.physical_table_token <> table_token then
           raise exception using errcode = '55000', message = 'Record storage lineage is incompatible';
         end if;
         if pg_catalog.jsonb_typeof(stored_catalogue.record_type_definition) is distinct from 'object'
@@ -358,7 +236,7 @@ begin
         -- The catalogue keeps the newest compatible exact definition. Compare
         -- only shared field identities so an older subset and newer additions
         -- retain their existing release-order behavior. These descriptors
-        -- mirror the source expressions assembled above, including the
+        -- describe the bounded reader values, including the
         -- protected attribute key, JSON/text extraction, and cast.
         for projection_expression_pair in
           select requested_item.value as requested_field,
@@ -443,21 +321,6 @@ begin
             raise exception using errcode = '55000', message = 'Existing record field storage is incompatible';
           end if;
         end loop;
-
-        -- The view always carries the newest compatible release's shape, as a
-        -- generated table keeps every column a newer release added. Provisioning
-        -- the newest release also refreshes its reader expression; an older
-        -- release, which the field checks above prove is a compatible subset,
-        -- leaves the newer view alone. The projection has no indexes or
-        -- dependent objects.
-        if p_module_release_revision >= stored_catalogue.last_compatible_release_revision then
-          execute pg_catalog.format('drop view record_data.%I', table_token);
-          execute projection_view_sql;
-          execute pg_catalog.format(
-            'grant select on record_data.%I to vortex_record_adapter', table_token
-          );
-          any_change := true;
-        end if;
       else
         if stored_catalogue.module_root_id <> p_module_root_id
           or stored_catalogue.record_type_id <> record_type_id_value
@@ -533,7 +396,7 @@ begin
           or stored_field.database_value_type <> database_type
           or stored_field.state <> 'active'
           or stored_field_meaning is distinct from requested_field_meaning
-          or not exists (
+          or (not is_projection and not exists (
             select 1
             from pg_catalog.pg_attribute as attribute
             where attribute.attrelid = pg_catalog.to_regclass(
@@ -542,7 +405,7 @@ begin
               and attribute.attname = column_token
               and attribute.attnum > 0
               and not attribute.attisdropped
-          ) then
+          )) then
           raise exception using errcode = '55000', message = 'Existing record field storage is incompatible';
         end if;
         if field_value ->> 'type' in ('choice', 'several_choices')
@@ -572,9 +435,8 @@ begin
           storage_id, field_id_value, column_token, database_type, field_value,
           p_module_root_id, p_module_release_revision, 'active'
         );
-        -- A projection field lives in the protected view, which carries no
-        -- indexes; the projection's own protected function applies visibility,
-        -- ordering and filtering, so no generated index is provisioned.
+        -- A projection field has no generated column or index. Its protected
+        -- reader applies visibility, ordering and filtering.
         if is_projection then
           null;
         elsif (field_value ->> 'unique')::boolean then
@@ -724,4 +586,4 @@ revoke all on function vortex_record.provision_exact_module_storage(uuid, bigint
 grant execute on function vortex_record.provision_exact_module_storage(uuid, bigint)
   to vortex_owner;
 comment on function vortex_record.provision_exact_module_storage(uuid, bigint) is
-  'Private exact-release Module storage provisioner: creates or evolves the generated record_data storage, or the read-only record_data view over one registered protected projection reader for a system projection record type, for one published Module release and records its immutable provision evidence.';
+  'Private exact-release Module storage provisioner: creates or evolves generated record_data storage, or registers definition and field mappings for a system projection read only through its bounded protected reader, for one published Module release.';
