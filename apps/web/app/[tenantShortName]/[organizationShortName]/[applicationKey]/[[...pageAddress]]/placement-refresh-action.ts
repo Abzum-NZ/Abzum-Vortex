@@ -173,6 +173,7 @@ async function readApplicationPlacements(
     address.data.organizationShortName,
     address.data.applicationKey,
     address.data.pageKey,
+    "addressed",
   );
   if (resolved.kind === "temporarily_unavailable") return { kind: "temporarily_unavailable" };
   if (resolved.kind !== "application_page") return { kind: "unavailable" };
