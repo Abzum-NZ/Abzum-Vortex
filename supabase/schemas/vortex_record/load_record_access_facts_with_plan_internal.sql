@@ -274,8 +274,8 @@ begin
       select dependency.value #>> '{}'
       from pg_catalog.jsonb_array_elements(target_meta -> 'fields') as field(value)
       cross join lateral (values
-        (field.value #> '{settings,expression,dueFieldId}'),
-        (field.value #> '{settings,expression,statusFieldId}')
+        (field.value #> '{settings,expression,due,reference,fieldId}'),
+        (field.value #> '{settings,expression,status,reference,fieldId}')
       ) as dependency(value)
       where p_requested_field_ids ? pg_catalog.lower(field.value ->> 'fieldId')
         and field.value ->> 'type' = 'calculation'

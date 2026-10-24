@@ -76,6 +76,7 @@ export const definitionValidationErrorCodes = [
   "definition_records_table_board",
   "definition_records_table_export",
   "definition_query_binding",
+  "definition_runtime_not_supported",
   "definition_query_binding_choice",
   "definition_form_field_dependency",
   "definition_unknown_property",
@@ -266,6 +267,11 @@ const definitionValidationErrorCatalogueSource = {
     message: "A query input of a block has no valid source.",
     guidance:
       "Open the block's Query inputs and choose a source of the input's type for each input.",
+  },
+  definition_runtime_not_supported: {
+    order: 39,
+    message: "This declaration has no runtime support yet.",
+    guidance: "Remove the unsupported declaration before publishing.",
   },
   definition_query_binding_choice: {
     order: 39,

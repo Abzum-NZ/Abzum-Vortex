@@ -231,7 +231,7 @@ const metricValue = (
 
   const fieldType =
     field.type === "calculation"
-      ? field.settings.expression.kind === "numeric" &&
+      ? ["add", "subtract", "multiply", "divide", "round"].includes(field.settings.expression.op) &&
         field.settings.evaluation === "stored" &&
         (field.settings.resultType === "whole_number" ||
           field.settings.resultType === "decimal_number")

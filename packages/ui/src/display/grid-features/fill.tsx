@@ -94,7 +94,7 @@ export default function Fill({ context, surface }: GridFeatureInteractionProps):
         current.refuse(rows, []);
         return;
       }
-      void current.run("commit", rows).then((answer) => {
+      void current.run("fill", rows).then((answer) => {
         if (answer?.result?.kind === "saved")
           current.tell(`Filled ${rows.length} ${rows.length === 1 ? "record" : "records"}.`);
       });

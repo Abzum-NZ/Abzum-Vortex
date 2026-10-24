@@ -86,6 +86,18 @@ const DEFAULT_POOL_SIZE = 5;
 const DEFAULT_LOCAL_POOL_SIZE = 10;
 const MAXIMUM_POOL_SIZE = 20;
 
+const logDatabaseNotice = (notice: postgres.Notice): void => {
+  if (notice.severity === "NOTICE") return;
+  // Invalidation payloads contain identifiers only. Retain their failure cause without
+  // exposing arbitrary database notice text, which may contain record values.
+  const invalidationFailure =
+    typeof notice.message === "string" &&
+    /^(RECORD_INVALIDATION_FAILED|(?:Error|Warn)SendingBroadcastMessage)\b/.test(notice.message);
+  console.warn(
+    `[db] server ${String(notice.severity)} ${String(notice.code)}${invalidationFailure ? ` ${notice.message}` : ""}`,
+  );
+};
+
 const databaseError = (code: string): Error => {
   const error = new Error(code);
   error.name = "VortexDatabaseError";
@@ -531,10 +543,7 @@ class RequestOwnedPostgresDriver implements DatabaseDriver {
       ssl: false,
       socket: this.sockets.open,
       connection: { application_name: "vortex-runtime" },
-      onnotice: (notice: postgres.Notice) => {
-        if (notice.severity !== "NOTICE")
-          console.warn(`[db] server ${String(notice.severity)} ${String(notice.code)}`);
-      },
+      onnotice: logDatabaseNotice,
     } satisfies postgres.Options<{}> & { socket: RequestOwnedSocketFactory["open"] };
     owner.registerResource({ stop: () => this.stop(), settled: () => this.settled() });
     this.client = postgres(configuration.connectionString, options);
@@ -754,11 +763,8 @@ const createRuntimePostgresClient = (configuration: RuntimeDatabaseConfiguration
     connection: { application_name: "vortex-runtime" },
     // The driver would print every server message as an error-shaped object. Only NOTICE-level
     // messages (for example an idempotent "already exists, skipping") are dropped; a warning is
-    // reported by severity and code alone, and real errors still reject the query.
-    onnotice: (notice) => {
-      if (notice.severity !== "NOTICE")
-        console.warn(`[db] server ${String(notice.severity)} ${String(notice.code)}`);
-    },
+    // reported with its invalidation cause when available; real errors still reject the query.
+    onnotice: logDatabaseNotice,
   });
 
 const loadClient = (): Sql =>

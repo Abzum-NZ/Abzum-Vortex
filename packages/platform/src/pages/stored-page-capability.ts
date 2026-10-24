@@ -41,7 +41,7 @@ import {
 import {
   readSubjectWithNamedActionAvailability,
   type NamedActionAvailability,
-} from "../records/action-record-port";
+} from "../records/action-record-availability";
 import { installedNamedActions } from "../definition/installed-named-actions";
 import type { FlowNamedAction } from "../definition/flow-orchestrator-types";
 import {

@@ -638,7 +638,7 @@ begin
     -- stored column here.
     read_time_field := fields_by_id -> field_key ->> 'type' = 'calculation'
       and (fields_by_id -> field_key #>> '{settings,evaluation}' = 'read_time'
-        or fields_by_id -> field_key #>> '{settings,expression,kind}' = 'deadline_passed');
+        or fields_by_id -> field_key #>> '{settings,expression,op}' = 'deadline_passed');
     if read_time_field then
       read_time_clock := coalesce(read_time_clock, vortex_record.read_time_clock_internal());
       read_time_sql := vortex_record.read_time_deadline_expression_internal(

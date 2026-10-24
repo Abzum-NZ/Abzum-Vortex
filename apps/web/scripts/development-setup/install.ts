@@ -131,7 +131,10 @@ export const installApplications = async (
   facts: InstallFacts,
   log: (message: string) => void,
 ): Promise<void> => {
-  await initializeLifecycleLimits(facts.system.organizationId);
+  await initializeLifecycleLimits(
+    facts.system.organizationId,
+    facts.manifest.initialLifecyclePolicy,
+  );
   for (const key of facts.manifest.applicationKeys) await installOne(facts, key, log);
   facts.state.setupCompleted = true;
   facts.state.save();
