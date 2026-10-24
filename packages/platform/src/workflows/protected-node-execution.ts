@@ -300,10 +300,8 @@ const parseRegisteredRun = (
   return parsed.data;
 };
 
-const isUnavailableTaskType = (taskType: string): boolean =>
-  taskType.startsWith("record.") || unavailableTaskTypes.has(taskType);
-
-const unavailableTaskTypes = new Set([
+/** Task types no protected callback can run; they refuse with `task_unavailable`. */
+const unavailableTaskTypes: ReadonlySet<string> = new Set([
   "connection.call",
   "message.acknowledge",
   "file.export",
@@ -313,6 +311,9 @@ const unavailableTaskTypes = new Set([
   "interface.confirm",
   "workflow.human_task",
 ]);
+
+const isUnavailableTaskType = (taskType: string): boolean =>
+  taskType.startsWith("record.") || unavailableTaskTypes.has(taskType);
 
 /** Task properties use the closed FlowValue literal wrapper for fixed values. */
 const literalValue = (candidate: unknown): unknown => {
@@ -510,11 +511,12 @@ export const createProtectedNodeExecution = (dependencies: ProtectedNodeExecutio
       if (binding === undefined || binding.operationKey !== context.purpose.operationKey)
         return { outcome: "permanent_refusal", safeCode: "callback_refused" };
 
-      if (isUnavailableTaskType(binding.taskType))
-        return {
-          outcome: "permanent_refusal",
-          safeCode: "task_unavailable",
-        };
+      if (isUnavailableTaskType(binding.taskType)) {
+        console.warn(
+          `[workflow] protected callback refused: no callback runner for task type ${binding.taskType}`,
+        );
+        return { outcome: "permanent_refusal", safeCode: "task_unavailable" };
+      }
 
       if (binding.taskType === "workflow.evaluate") {
         if (run.data.authority.state !== "running")

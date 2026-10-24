@@ -148,8 +148,19 @@ export const createFlowTaskRunner = (
     }
   };
 
-  /** Records a task the platform cannot run here: it fails as not available, never as refused. */
-  const notAvailable = (run: Run, call: FlowProtectedTaskCall, message: string): TaskResult => {
+  /**
+   * Records a task the platform cannot run here: it fails as not available, never as refused.
+   * The person sees the message; the server log keeps the cause.
+   */
+  const notAvailable = (
+    run: Run,
+    call: FlowProtectedTaskCall,
+    message: string,
+    cause: string,
+  ): TaskResult => {
+    console.warn(
+      `[flows] flow ${run.flowId} task ${call.taskId} (${call.taskType}) not available: ${cause}`,
+    );
     run.unavailable.push({
       taskId: call.taskId,
       taskType: call.taskType,
@@ -184,11 +195,26 @@ export const createFlowTaskRunner = (
     asSave?: true,
   ): Readonly<{ plan: TaskPlan }> | TaskResult => {
     if (dependencies.actionRecords === undefined)
-      return notAvailable(run, call, "a registered protected operation");
+      return notAvailable(
+        run,
+        call,
+        "This workflow can't run app actions here.",
+        "a registered protected operation",
+      );
     if (state.subject === undefined)
-      return notAvailable(run, call, "the record the action runs on");
+      return notAvailable(
+        run,
+        call,
+        "This step needs the record you're working on.",
+        "the record the action runs on",
+      );
     if (dependencies.subjects === undefined)
-      return notAvailable(run, call, "a protected read of the page's record");
+      return notAvailable(
+        run,
+        call,
+        "This workflow can't read the record here.",
+        "a protected read of the page's record",
+      );
     const command = executeNamedActionCommandSchema.safeParse({
       contractVersion: "2.0.0",
       commandId,
@@ -229,13 +255,23 @@ export const createFlowTaskRunner = (
 
     if (call.taskType === "record.save") {
       if (dependencies.records === undefined)
-        return notAvailable(run, call, "the interactive record task port");
+        return notAvailable(
+          run,
+          call,
+          "This workflow can't save records here.",
+          "the interactive record task port",
+        );
       const recordTypeId = recordTypeIdSchema.safeParse(call.properties.record_type?.value);
       const recordType = recordTypeId.success
         ? run.release.recordTypes?.get(recordTypeId.data.toLowerCase())
         : undefined;
       if (!recordTypeId.success || recordType === undefined)
-        return notAvailable(run, call, "a record type of this release");
+        return notAvailable(
+          run,
+          call,
+          "This step names a record type this app doesn't have.",
+          "a record type of this release",
+        );
       // The values are named by the release's field keys or field identities; any other name is
       // refused as invalid, never dropped.
       const values = call.properties.values?.value;
@@ -294,9 +330,19 @@ export const createFlowTaskRunner = (
       // change cannot be checked against what the person was shown, so it does not run.
       const subject = state.subject;
       if (subject === undefined || subject.recordId.toLowerCase() !== recordId.data.toLowerCase())
-        return notAvailable(run, call, "the revision of the record the page shows");
+        return notAvailable(
+          run,
+          call,
+          "This step can only change the record you're working on.",
+          "the revision of the record the page shows",
+        );
       if (dependencies.subjects === undefined)
-        return notAvailable(run, call, "a protected read of the page's record");
+        return notAvailable(
+          run,
+          call,
+          "This workflow can't read the record here.",
+          "a protected read of the page's record",
+        );
       // A choice option that a named action sets is changed only by that action, run for this
       // record with the action's own inputs, permission, rules and refusals.
       const linkedActions = Object.entries(submittedValues).flatMap(([fieldId, value]) => {
@@ -337,6 +383,7 @@ export const createFlowTaskRunner = (
         run,
         call,
         unavailableTaskMessages[call.taskType] ?? "This action can't be completed in a workflow.",
+        "no server runner for this task type",
       );
 
     const operationKey = call.properties.operation?.value;
@@ -362,7 +409,13 @@ export const createFlowTaskRunner = (
     // subject record through the same path as its binding (`executeAction`).
     const named =
       typeof operationKey === "string" ? run.release.namedActions?.get(operationKey) : undefined;
-    if (named === undefined) return notAvailable(run, call, "a registered protected operation");
+    if (named === undefined)
+      return notAvailable(
+        run,
+        call,
+        "This workflow step names an action this app doesn't have.",
+        "a registered protected operation",
+      );
     return planNamedAction(run, state, call, commandId, named, inputs);
   };
 
@@ -374,12 +427,27 @@ export const createFlowTaskRunner = (
   ): Promise<TaskResult> => {
     const authority = run.authority;
     if (authority.kind !== "person")
-      return notAvailable(run, call, "the current initiator's selected-record read port");
+      return notAvailable(
+        run,
+        call,
+        "Only a signed-in person can read this record's fields.",
+        "the current initiator's selected-record read port",
+      );
     if (dependencies.selectedRecordReads === undefined)
-      return notAvailable(run, call, "a trusted selected-record read port");
+      return notAvailable(
+        run,
+        call,
+        "This workflow can't read record fields here.",
+        "a trusted selected-record read port",
+      );
     const projection = selectedRecordProjectionForTask(run.release, run.library, state, call);
     if (projection === undefined)
-      return notAvailable(run, call, "the exact release's selected-record projection");
+      return notAvailable(
+        run,
+        call,
+        "This step reads fields this app doesn't have.",
+        "the exact release's selected-record projection",
+      );
 
     const record = call.properties.record;
     const recordId =
@@ -613,7 +681,12 @@ export const createFlowTaskRunner = (
     // selects a later read; it contains no title/address and does not confer target authority.
     if (call.taskType === "record.pin_identity") {
       if (run.authority.kind !== "person" || dependencies.recordPins === undefined)
-        return notAvailable(run, call, "a trusted human record-pin acquisition port");
+        return notAvailable(
+          run,
+          call,
+          "Only a signed-in person can choose a record here.",
+          "a trusted human record-pin acquisition port",
+        );
       if (
         call.taskVersion !== "1.0.0" ||
         Object.keys(call.properties).length !== 3 ||
@@ -677,7 +750,12 @@ export const createFlowTaskRunner = (
         ? run.authority.selection.organizationId
         : run.authority.organizationId;
     if (run.authority.kind === "execution_authority")
-      return notAvailable(run, call, "This workflow can't check access for each task.");
+      return notAvailable(
+        run,
+        call,
+        "This step can't run in a background workflow.",
+        "per-task access grants are not resolved for execution authority runs",
+      );
     const planned = planTask(run, state, call);
     if (!("plan" in planned)) return planned;
 
