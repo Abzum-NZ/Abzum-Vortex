@@ -744,7 +744,16 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
           {!ready || values === undefined || pivotOpen || grouped !== undefined ? null : (
             <div className="mt-2 flex shrink-0 flex-wrap items-center justify-between gap-2">
               <p className="m-0 text-xs text-muted-foreground tabular-nums">
-                {values.page === undefined ? "" : `Page ${values.page} · `}
+                {/* A keyset table marks every later page as page 2 (it never counts rows), so only
+                    page one and a numbered list name their page; the end of a keyset list is the
+                    last page. */}
+                {values.page === undefined
+                  ? ""
+                  : values.pageCount !== undefined || values.page <= 1
+                    ? `Page ${values.page} · `
+                    : values.hasNextPage === true
+                      ? ""
+                      : "Last page · "}
                 {rows.length === 1 ? "1 row" : `${rows.length} rows`}
                 {values.scanLimited === true ? " · Still searching: more records may match" : ""}
               </p>
