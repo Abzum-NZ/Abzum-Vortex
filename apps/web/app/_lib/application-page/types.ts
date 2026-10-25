@@ -119,16 +119,6 @@ export type PlacementReadModel = Readonly<{
    * their record tasks and named actions; the protected record paths decide what it may do.
    */
   subject?: Readonly<{ recordId: string; revision: number }>;
-  /**
-   * The deliberate adoption offer, present only for a caller who may manage installations and
-   * only when the application root publishes a release newer than the installed one. Its presence
-   * is a rendering hint; the adoption action re-checks everything on the server.
-   */
-  adoption?: Readonly<{
-    offeredReleaseRevision: number;
-    offeredReleaseVersion: string;
-    installedReleaseRevision: number;
-  }>;
   invocation: Readonly<{
     tenantShortName: string;
     organizationShortName: string;

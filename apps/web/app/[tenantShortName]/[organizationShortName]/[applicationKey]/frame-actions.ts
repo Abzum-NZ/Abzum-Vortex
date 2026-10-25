@@ -4,8 +4,88 @@ import type { ApplicationSwitcherData } from "@vortex/ui";
 import { resolveIdentitySession } from "../../../auth/_lib/session-server";
 import { loadApplicationSearch } from "../../../_lib/application-search";
 import { loadPermittedApplicationsAtAddress } from "../../../_lib/organization-context";
+import { resolveApplicationAddress } from "../../../_lib/application-address";
+import { readApplicationReleaseAdoption } from "../../../_lib/application-release-adoption";
+import { runtimePreviewOf } from "@vortex/platform/server";
+import { mapWebError } from "../../../_lib/web-error-mapper";
 
 type ApplicationSearchView = Awaited<ReturnType<typeof loadApplicationSearch>>;
+
+/** Rechecks the session, addressed installation and adoption authority when the account menu opens. */
+export async function readReleaseAdoptionAction(
+  tenantShortName: string,
+  organizationShortName: string,
+  applicationKey: string,
+): Promise<
+  | Readonly<{
+      state: "available";
+      offer?: Readonly<{
+        version: string;
+        offeredReleaseRevision: number;
+        installedReleaseRevision: number;
+      }>;
+    }>
+  | Readonly<{ state: "unavailable" | "temporarily_unavailable" }>
+> {
+  if (
+    [tenantShortName, organizationShortName, applicationKey].some(
+      (value) => typeof value !== "string" || value.length === 0,
+    )
+  ) {
+    console.error("[application-frame] adoption read refused: malformed address");
+    return { state: "unavailable" };
+  }
+  try {
+    const resolution = await resolveIdentitySession();
+    if (resolution.kind !== "active") {
+      console.error(`[application-frame] adoption read refused: session ${resolution.kind}`);
+      return {
+        state:
+          resolution.kind === "temporarily_unavailable" ? "temporarily_unavailable" : "unavailable",
+      };
+    }
+    const addressed = await resolveApplicationAddress(
+      resolution.session,
+      tenantShortName,
+      organizationShortName,
+      applicationKey,
+    );
+    if (addressed.kind !== "application_page") {
+      console.error(`[application-frame] adoption read refused: address ${addressed.kind}`);
+      return {
+        state:
+          addressed.kind === "temporarily_unavailable" ? "temporarily_unavailable" : "unavailable",
+      };
+    }
+    const context = addressed.installedContext;
+    if (context === undefined) throw new Error("APPLICATION_RELEASE_ADOPTION_CONTEXT_MISSING");
+    if (runtimePreviewOf(context) !== undefined) return { state: "available" };
+    const target = await readApplicationReleaseAdoption(resolution.session, {
+      organizationId: context.organizationId,
+      applicationRootId: context.applicationRootId,
+    });
+    return {
+      state: "available",
+      ...(target === undefined ||
+      target.currentReleaseRevision <= context.applicationReleaseRevision
+        ? {}
+        : {
+            offer: {
+              version: target.currentReleaseVersion,
+              offeredReleaseRevision: target.currentReleaseRevision,
+              installedReleaseRevision: context.applicationReleaseRevision,
+            },
+          }),
+    };
+  } catch (error) {
+    return mapWebError(error, {
+      route: "application-frame",
+      operation: "read_release_adoption",
+      code: "APPLICATION_RELEASE_ADOPTION_READ_FAILED",
+      fallback: { state: "temporarily_unavailable" },
+    });
+  }
+}
 
 /** Reads the viewer's permitted applications only when the frame's switcher is opened. */
 export async function readApplicationSwitcherAction(
