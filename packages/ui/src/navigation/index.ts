@@ -25,6 +25,7 @@ export {
 export type {
   ApplicationShellRuntime,
   ApplicationSwitcherData,
+  ApplicationSwitcherSource,
   ApplicationWebMcpRuntime,
 } from "./application-shell";
 export { NAVIGATION_COMPONENT_REGISTRATIONS } from "./registrations";

@@ -25,7 +25,7 @@ import {
 import { Toaster } from "@vortex/ui/components/sonner";
 import type { ApplicationFrameModel } from "../../../../_lib/application-frame";
 import { signOut } from "../../../../auth/actions";
-import { searchApplicationAction } from "../frame-actions";
+import { readApplicationSwitcherAction, searchApplicationAction } from "../frame-actions";
 import {
   ApplicationFrameStateProvider,
   type ApplicationFramePageState,
@@ -300,7 +300,12 @@ export function ApplicationFrame({
             {...(shell === undefined ? {} : { shell })}
             theme={model.theme}
             applicationShellRuntime={applicationShellRuntime}
-            applicationSwitcher={model.applicationSwitcher}
+            applicationSwitcherSource={() =>
+              readApplicationSwitcherAction(
+                application.tenantShortName,
+                application.organizationShortName,
+              )
+            }
             applicationSearch={applicationSearch}
             applicationSearchPageSubject={applicationSearchPageSubject}
             projectedNavigation={pageState.navigation ?? model.navigation}
