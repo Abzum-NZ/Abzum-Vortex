@@ -9,6 +9,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "../components/tooltip";
 import { Icon } from "../icons/icon";
 import { cn } from "../lib/utils";
 import type { TableGroup } from "./projected-grid-features";
+import { TableTotals } from "./table-totals";
 import { memberKey, type GroupedTable } from "./table-groups-state";
 
 const groupLabelId = (placementId: string, key: string): string =>
@@ -26,6 +27,7 @@ export function GroupedBody({
   grouped,
   loading,
   members,
+  columns,
 }: Readonly<{
   placementId: string;
   accessibleName: string;
@@ -34,6 +36,7 @@ export function GroupedBody({
   loading: ReactNode;
   /** Draws a page of the open group's rows. */
   members: () => ReactNode;
+  columns: readonly Readonly<{ key: string; label: string }>[];
 }>): ReactElement {
   const { groups, expanded } = grouped;
   const state = grouped.members;
@@ -66,6 +69,7 @@ export function GroupedBody({
           key={group.key}
           id={groupLabelId(placementId, group.key)}
           group={group}
+          columns={columns}
           open={expanded === group.key}
           onToggle={() => grouped.toggle(group.key)}
         >
@@ -150,12 +154,14 @@ function GroupsPager({ grouped }: Readonly<{ grouped: GroupedTable }>): ReactEle
 function GroupSection({
   id,
   group,
+  columns,
   open,
   onToggle,
   children,
 }: Readonly<{
   id: string;
   group: TableGroup;
+  columns: readonly Readonly<{ key: string; label: string }>[];
   open: boolean;
   onToggle: () => void;
   children: ReactNode;
@@ -194,6 +200,9 @@ function GroupSection({
           {group.count}
         </Badge>
       </div>
+      {group.totals === undefined ? null : (
+        <TableTotals totals={group.totals} columns={columns} label={`${group.label}: subtotals`} />
+      )}
       <CollapsibleContent id={`${id}-members`} className="pt-2">
         {open ? children : null}
       </CollapsibleContent>

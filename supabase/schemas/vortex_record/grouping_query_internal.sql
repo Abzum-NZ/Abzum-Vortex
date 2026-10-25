@@ -18,7 +18,7 @@ declare
 begin
   -- Grid state chooses one selected dimension; query grouping/totals are defaults only.
   if pg_catalog.jsonb_typeof(p_grouping) is distinct from 'object' then return null; end if;
-  if p_grouping - array['fieldId', 'dateBucket', 'limit']::text[] <> '{}'::jsonb
+  if p_grouping - array['fieldId', 'dateBucket', 'limit', 'aggregates']::text[] <> '{}'::jsonb
     or pg_catalog.jsonb_typeof(p_grouping -> 'fieldId') is distinct from 'string'
     or pg_catalog.jsonb_typeof(p_grouping -> 'limit') is distinct from 'number' then
     return null;
@@ -61,7 +61,8 @@ begin
     end if;
   end if;
   return p_query || pg_catalog.jsonb_build_object(
-    'groupByFieldIds', pg_catalog.jsonb_build_array(p_field_id), 'aggregates', '[]'::jsonb
+    'groupByFieldIds', pg_catalog.jsonb_build_array(p_field_id),
+    'aggregates', coalesce(p_grouping -> 'aggregates', '[]'::jsonb)
   );
 end
 $function$;

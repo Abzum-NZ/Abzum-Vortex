@@ -6,12 +6,14 @@ import {
 } from "@vortex/platform/server";
 import {
   platformIdSchema,
+  sameId,
   type SessionContext,
   type StoredDefinitionSource,
 } from "@vortex/platform/schema";
 import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/platform/server";
 import {
   createDatabaseDefinitionPublicationService,
+  createDatabaseDefinitionPublicationRepository,
   createDefinitionStore,
   type ImmutableDefinitionPublicationCatalogueDefinition,
   type TrustedApplicationRootOriginKind,
@@ -126,6 +128,12 @@ export const verifyRecordedShippedApplicationRoots = async (
     for (const descriptor of descriptors) {
       const release = state.releases[descriptor.source.key];
       const draft = state.drafts[descriptor.source.key];
+      if (
+        release !== undefined &&
+        draft !== undefined &&
+        !sameId(recordedRootId(release), recordedRootId(draft))
+      )
+        refuseRecordedApplicationRoot();
       if (release !== undefined)
         await verifyApplicationRoot(transaction, descriptor, recordedRootId(release));
       if (draft !== undefined)
@@ -171,11 +179,9 @@ const applicationsInPublicationOrder = (
 };
 
 /**
- * Publishes one shipped Application as an initial release, or returns the release the state file
- * already records for it. Its inline Modules are released inside that one publication. The
- * created draft root is recorded before it is published, so an interrupted run resumes at
- * publication. A root that exists without any record is refused: the setup never guesses which
- * draft or release it belongs to.
+ * Authors the current shipped source on its recorded root and asks publication whether a release
+ * is needed. Only prepare's DEFINITION_NO_CHANGE means current. The live publication anchor also
+ * recovers a publication committed before an interrupted activation, without publishing it again.
  */
 const publishOne = async (
   facts: SystemContextFacts,
@@ -185,17 +191,22 @@ const publishOne = async (
 ): Promise<PublishedRelease> => {
   const source = descriptor.source;
   const recorded = state.releases[source.key];
-  if (recorded !== undefined) {
-    await inSystemTransaction(mintSystemContext(facts), (transaction) =>
-      verifyApplicationRoot(transaction, descriptor, recordedRootId(recorded)),
-    );
-    return recorded;
-  }
-
-  log(`publishing ${source.key}`);
+  log(`refreshing ${source.key}`);
   const authority = developmentBuilderAuthority(facts.organizationId);
   const context: SessionContext = mintSystemContext(facts);
   let draft = state.drafts[source.key];
+  const existingRoot = recorded ?? draft;
+  if (existingRoot !== undefined) {
+    const current = await inSystemTransaction(context, async (transaction) => {
+      const rootId = recordedRootId(existingRoot);
+      await verifyApplicationRoot(transaction, descriptor, rootId);
+      return createDatabaseDefinitionPublicationRepository(transaction).read(context, (reader) =>
+        reader.readDraftCandidate(rootId),
+      );
+    });
+    if (current === undefined) throw new Error(`Shipped draft is missing for ${source.key}`);
+    draft = { rootId: current.draft.rootId, draftRevision: current.draft.draftRevision };
+  }
   if (draft === undefined) {
     const created = await inSystemTransaction(context, async (transaction) => {
       const store = createDefinitionStore(transaction, authority, platformPermissionSource);
@@ -215,7 +226,7 @@ const publishOne = async (
     state.drafts[source.key] = draft;
     state.save();
   } else {
-    // A resumed run authors the current shipped source over the unpublished draft.
+    // Save on the observed live revision; a concurrent edit or publication must refuse.
     const saved = await inSystemTransaction(context, async (transaction) => {
       const rootId = recordedRootId(draft);
       await verifyApplicationRoot(transaction, descriptor, rootId);
@@ -237,7 +248,31 @@ const publishOne = async (
       transaction,
       authority,
     ).prepare(context, { rootId, expectedDraftRevision: draftRevision });
+  }).catch(async (error: unknown) => {
+    if (!(error instanceof DefinitionError) || error.code !== "DEFINITION_NO_CHANGE") throw error;
+    const current = await inSystemTransaction(context, async (transaction) => {
+      await verifyApplicationRoot(transaction, descriptor, rootId);
+      return createDatabaseDefinitionPublicationRepository(transaction).read(context, (reader) =>
+        reader.readCandidate(rootId),
+      );
+    });
+    const latest = current?.historyEvidence.latestRelease;
+    if (current?.draft.draftRevision !== draftRevision)
+      throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING");
+    if (latest === undefined || latest === null)
+      throw new Error(`Publication reported no change without a release for ${source.key}`, {
+        cause: error,
+      });
+    log(`current ${source.key}: DEFINITION_NO_CHANGE`);
+    return {
+      current: {
+        rootId,
+        releaseRevision: latest.publication.revision,
+        releaseVersion: latest.publication.releaseVersion,
+      },
+    };
   });
+  if ("current" in prepared) return prepared.current;
   const published = await inSystemTransaction(context, async (transaction) => {
     await verifyApplicationRoot(transaction, descriptor, rootId);
     return createDatabaseDefinitionPublicationService(
@@ -254,23 +289,32 @@ const publishOne = async (
     releaseRevision: published.releaseRevision,
     releaseVersion: published.releaseVersion,
   };
-  state.releases[source.key] = release;
-  state.save();
   log(`published ${source.key} ${release.releaseVersion} (revision ${release.releaseRevision})`);
   return release;
 };
 
-/** Publishes each selected Application, owners of used Modules first. */
+/** Refreshes and handles each root completely before the next root that uses its Modules. */
 export const publishShippedDefinitions = async (
   facts: SystemContextFacts,
   applicationKeys: readonly string[],
   state: SetupState,
   log: (message: string) => void,
+  handleRelease: (
+    descriptor: TrustedApplicationDescriptor,
+    release: PublishedRelease,
+  ) => Promise<void>,
 ): Promise<ReadonlyMap<string, PublishedRelease>> => {
   // Refuse every recorded selected Application before any state changes.
   await verifyRecordedShippedApplicationRoots(facts, applicationKeys, state);
   const published = new Map<string, PublishedRelease>();
-  for (const descriptor of applicationsInPublicationOrder(applicationKeys))
-    published.set(descriptor.source.key, await publishOne(facts, descriptor, state, log));
+  for (const descriptor of applicationsInPublicationOrder(applicationKeys)) {
+    const release = await publishOne(facts, descriptor, state, log);
+    await handleRelease(descriptor, release);
+    // A failed activation leaves the prior checkpoint intact. The root's live anchor recovers
+    // the already-published release on the next run. A deliberate adoption offer is handled too.
+    state.releases[descriptor.source.key] = release;
+    state.save();
+    published.set(descriptor.source.key, release);
+  }
   return published;
 };
