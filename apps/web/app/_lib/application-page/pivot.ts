@@ -14,6 +14,7 @@ import { getQueryContinuationKey } from "../query-continuation-key";
 import { loadInstalledContext, readPageProjections, requestDependencies } from "./load";
 import { first, pageSubjectParameter } from "./placement-helpers";
 import { createPlacementReadServices } from "./placement-services";
+import { pageGridLayoutRequest, readPageGridLayouts } from "./grid-layouts";
 import type { ApplicationPageLoaderAddress, SearchParameters } from "./types";
 
 export type PivotLoadResult =
@@ -86,6 +87,24 @@ export const loadApplicationPivot = async (
       console.error(`[pivot] refused: ${resolved.reason}`);
       return { kind: "unavailable" };
     }
+    if (resolved.recordTypeId === undefined) {
+      console.error("[pivot] refused: query_record_type_unresolved");
+      return { kind: "unavailable" };
+    }
+    const gridLayouts = await readPageGridLayouts(
+      session,
+      dependencies,
+      selection,
+      String(pageDefinition.pageId),
+      [
+        pageGridLayoutRequest(
+          pageDefinition,
+          resolved.placement.placementId,
+          resolved.recordTypeId,
+          parameters,
+        ),
+      ],
+    );
     const services = createPlacementReadServices({
       session,
       selection,
@@ -105,6 +124,8 @@ export const loadApplicationPivot = async (
       session,
       selection,
       placement: resolved.placement,
+      pageDefinition,
+      gridLayouts,
       addressEntries: Object.entries(parameters).flatMap(([name, value]) =>
         (typeof value === "string" ? [value] : (value ?? [])).map((text): [string, string] => [
           name,

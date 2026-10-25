@@ -36,6 +36,8 @@ import {
 } from "../component-data-projection";
 import { resolveQueryBindings, type QueryBindingContext } from "../query-binding-resolver";
 import { buildRecordsTableNarrowing } from "../records-table-query";
+import { resolveRecordsTableView } from "../placement-read/records-table-view";
+import type { PlacementReadInput } from "../placement-read/types";
 import { encodeRecordsTableFieldFilter, readRecordsTableQueryState } from "../records-table-state";
 import { formatDecimal, formatMoney } from "../value-format";
 import { openPivotCursor, sealPivotCursor, type PivotCursorBinding } from "./pivot-cursor";
@@ -112,6 +114,8 @@ export type PivotRequest = Readonly<{
   selection: OrganizationSelectionCandidate;
   /** The Records table placement of the viewer's current page projection. */
   placement: PlacementReadEntry;
+  pageDefinition: PlacementReadInput["pageDefinition"];
+  gridLayouts: PlacementReadInput["gridLayouts"];
   /** The page address, from which the table's own search and filters are read. */
   addressEntries: readonly (readonly [string, string])[];
   /** The sealed position of the first row of the page; absent reads the first rows. */
@@ -286,6 +290,16 @@ export const readRecordsTablePivot = async (request: PivotRequest): Promise<Pivo
 
   const addressed = readRecordsTableQueryState(placement.placementId, request.addressEntries);
   if (addressed.kind === "malformed") return refuse(`table_state_malformed ${addressed.part}`);
+  const view = resolveRecordsTableView({
+    contract,
+    placementId: placement.placementId,
+    bound,
+    pageDefinition: request.pageDefinition,
+    gridLayouts: request.gridLayouts,
+    addressEntries: request.addressEntries,
+    state: addressed.state,
+  });
+  if (view === undefined) return refuse("table_columns_withheld");
   const columnFilters = contract.features.columnFilters;
   const filterable = new Set(
     columnFilters.enabled ? columnFilters.fields.map((field) => field.toLowerCase()) : [],
@@ -293,7 +307,7 @@ export const readRecordsTablePivot = async (request: PivotRequest): Promise<Pivo
   const filterTargets = fieldFilterTargetsOf(bound.module);
   const usesDates =
     [row, column].some((field) => field.type === "date" || field.type === "date_time") ||
-    addressed.state.filters.some(
+    view.state.filters.some(
       (filter) => filterTargets[filter.fieldId.toLowerCase()]?.type === "date_time",
     );
   let timeZone: string | undefined;
@@ -306,7 +320,7 @@ export const readRecordsTablePivot = async (request: PivotRequest): Promise<Pivo
     if (timeZone === undefined) return fail("time_zone_unavailable");
   }
   const narrowing = buildRecordsTableNarrowing(contract, {
-    state: addressed.state,
+    state: view.state,
     filterTargets,
     ...(timeZone === undefined ? {} : { timeZone }),
   });
