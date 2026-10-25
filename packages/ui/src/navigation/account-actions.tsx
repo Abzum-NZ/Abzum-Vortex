@@ -1,6 +1,14 @@
 "use client";
 
-import { createContext, useContext, type ReactElement, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type ReactElement,
+  type ReactNode,
+} from "react";
 import { Avatar, AvatarFallback } from "../components/avatar";
 import { Button } from "../components/button";
 import {
@@ -15,11 +23,18 @@ import {
 /** The signed-in person as shown to them; an organisation account may have no display name. */
 export type ApplicationAccount = Readonly<{ email: string; displayName?: string }>;
 
+type ReleaseAdoptionData =
+  | Readonly<{
+      state: "available";
+      offer?: Readonly<{ version: string; adopt: () => void | Promise<void> }>;
+    }>
+  | Readonly<{ state: "unavailable" | "temporarily_unavailable" }>;
+
 /** Current account facts and platform actions, supplied by the signed-in route. */
 export type ApplicationAccountActions = Readonly<{
   account: ApplicationAccount;
   organizationName: string;
-  releaseAdoption?: Readonly<{ version: string; adopt: () => void | Promise<void> }>;
+  readReleaseAdoption?: () => Promise<ReleaseAdoptionData>;
   chooseOrganization: () => void | Promise<void>;
   signOut: () => void | Promise<void>;
   openApplication: (href: string) => void | Promise<void>;
@@ -47,10 +62,41 @@ export function ApplicationAccountMenu(): ReactElement {
   const account = actions?.account;
   const avatarSource = account?.displayName ?? account?.email ?? organizationName;
   const avatarInitial = avatarSource?.slice(0, 1).toUpperCase();
-  const releaseAdoption = actions?.releaseAdoption;
+  const source = actions?.readReleaseAdoption;
+  const [adoption, setAdoption] =
+    useState<Readonly<{ source: typeof source; data: ReleaseAdoptionData }>>();
+  const requestToken = useRef(0);
+  useEffect(
+    () => () => {
+      requestToken.current += 1;
+    },
+    [source],
+  );
+  const read = async () => {
+    if (source === undefined) return;
+    const token = ++requestToken.current;
+    setAdoption(undefined);
+    try {
+      const data = await source();
+      if (token === requestToken.current) setAdoption({ source, data });
+    } catch (error) {
+      console.error("[application-account] adoption read failed", error);
+      if (token === requestToken.current)
+        setAdoption({ source, data: { state: "temporarily_unavailable" } });
+    }
+  };
+  const releaseAdoption = adoption?.source === source ? adoption?.data : undefined;
 
   return (
-    <DropdownMenu>
+    <DropdownMenu
+      onOpenChange={(open) => {
+        if (open) void read();
+        else {
+          requestToken.current += 1;
+          setAdoption(undefined);
+        }
+      }}
+    >
       <DropdownMenuTrigger
         disabled={actions === null}
         aria-label="Account menu"
@@ -77,12 +123,30 @@ export function ApplicationAccountMenu(): ReactElement {
           </DropdownMenuLabel>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
-        {releaseAdoption === undefined ? null : (
-          <DropdownMenuItem onClick={() => void releaseAdoption.adopt()}>
-            Adopt release {releaseAdoption.version}
+        {source === undefined ? null : releaseAdoption === undefined ? (
+          <div role="status" aria-busy="true" className="px-2 py-1.5 text-sm text-muted-foreground">
+            Loading release adoption…
+          </div>
+        ) : releaseAdoption.state !== "available" ? (
+          <>
+            <div role="status" className="px-2 py-1.5 text-sm text-muted-foreground">
+              {releaseAdoption.state === "temporarily_unavailable"
+                ? "Release adoption temporarily unavailable"
+                : "Release adoption unavailable"}
+            </div>
+            <DropdownMenuItem closeOnClick={false} onClick={() => void read()}>
+              Retry
+            </DropdownMenuItem>
+          </>
+        ) : releaseAdoption.offer === undefined ? null : (
+          <DropdownMenuItem onClick={() => void releaseAdoption.offer?.adopt()}>
+            Adopt release {releaseAdoption.offer.version}
           </DropdownMenuItem>
         )}
-        <DropdownMenuItem disabled={actions === null} onClick={() => void actions?.chooseOrganization()}>
+        <DropdownMenuItem
+          disabled={actions === null}
+          onClick={() => void actions?.chooseOrganization()}
+        >
           Choose organisation
         </DropdownMenuItem>
         <DropdownMenuItem disabled={actions === null} onClick={() => void actions?.signOut()}>
