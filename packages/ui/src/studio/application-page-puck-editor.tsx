@@ -44,6 +44,10 @@ import {
 import { Icon } from "../icons";
 import { regions } from "./application-composition-regions";
 import {
+  studioFormChangeRefusal,
+  studioFormChangeRefusalSentence,
+} from "./application-composition-forms";
+import {
   studioPlacementReferenceSentence,
   studioPlacementRemovalReference,
 } from "./composition-references";
@@ -650,6 +654,20 @@ function ApplicationPageSlotPuckEditor({
       const removed = new Set(
         [...storedZoneAliases(targetSlot)].filter((alias) => !kept.has(alias)),
       );
+      // Deleting and dragging keep every form whole, by the same rule as Remove and Move.
+      const broken = studioFormChangeRefusal(
+        catalogue,
+        current,
+        targetSlot.items,
+        editedSlot.items,
+      );
+      if (broken !== undefined) {
+        setResync((generation) => generation + 1);
+        setMessage(
+          `${studioFormChangeRefusalSentence(broken, studioPlacementReferenceSentence)} The page stays as it was.`,
+        );
+        return;
+      }
       next.body.flow_bindings = withCopiedFlowBindings(next.body.flow_bindings, copies);
       removeFlowBindingsOf(next.body, removed);
       // A flow step that still names a removed block (the form it shows) keeps it on the page.
