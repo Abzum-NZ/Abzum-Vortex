@@ -180,18 +180,12 @@ const readCurrentInstallation = async (
     bindings.moduleBindings.some(
       (binding) => binding.state !== "active" && binding.state !== "detached",
     ) ||
-    !same(sortedBindingTuples(activeBindings), sortedBindingTuples(active.moduleBindings)) ||
-    bindings.registeredReleaseRevision !== active.applicationReleaseRevision
+    !same(sortedBindingTuples(activeBindings), sortedBindingTuples(active.moduleBindings))
   )
-    installationProblem(
-      bindings.registeredReleaseRevision !== active.applicationReleaseRevision
-        ? "registration_revision_misaligned"
-        : "bindings_active_set_misaligned",
-      "refused",
-      bindings.registeredReleaseRevision !== active.applicationReleaseRevision
-        ? "registration_misaligned"
-        : "installation_incomplete",
-    );
+    installationProblem("bindings_active_set_misaligned", "refused", "installation_incomplete");
+  // A prior failed upgrade may have left registration at another release. The supported
+  // upgrade repairs it in the same transaction as activation, after current authority and
+  // exact target evidence are checked; runtime readers still refuse the inconsistent state.
 
   return { active, bindings };
 };
@@ -261,10 +255,10 @@ const makeSnapshot = (
       "vortex.studio.install.module-set.v1",
       releaseSetModuleTuples(state.selectedReleaseSet),
     ),
-    bindingSetFingerprint: fingerprint(
-      "vortex.studio.install.binding-set.v1",
-      sortedBindingTuples(state.bindings.moduleBindings),
-    ),
+    bindingSetFingerprint: fingerprint("vortex.studio.install.binding-set.v1", {
+      registeredReleaseRevision: state.bindings.registeredReleaseRevision,
+      moduleBindings: sortedBindingTuples(state.bindings.moduleBindings),
+    }),
     validUntil,
     correlationId: context.correlationId,
   };
@@ -583,9 +577,14 @@ export const readUpgradeActiveObservation = async (
  */
 const humanDefinitionAccess = (
   environment: UpgradeEnvironment,
-  verified: readonly SystemApplicationBoundReleaseSetResult[],
+  consumptionVerified: readonly SystemApplicationBoundReleaseSetResult[],
+  replacementVerified: readonly SystemApplicationBoundReleaseSetResult[],
 ): HumanInstallationDefinitionAccess => ({
-  async readReleaseSet(session, target) {
+  async readReleaseSet(session, target, purpose) {
+    const verified =
+      purpose === "consume"
+        ? consumptionVerified
+        : [...consumptionVerified, ...replacementVerified];
     const known = verified.find(
       (releaseSet) =>
         sameId(releaseSet.application.organizationId, target.organizationId) &&
@@ -600,6 +599,7 @@ const humanDefinitionAccess = (
         createDatabaseApplicationReleaseAdoptionReleaseSetService(
           environment.catalogue,
           transaction,
+          purpose,
         ).read({
           applicationRootId: target.applicationRootId,
           applicationReleaseRevision: target.applicationReleaseRevision,
@@ -625,7 +625,6 @@ const currentInstallationStateForCoordinator = async (
   transaction: RequestDatabaseTransaction,
   selector: UpgradeSelector,
   baseline: UpgradeState,
-  step: number,
   context: InstallationHumanContext,
 ): Promise<void> => {
   const current = await readInstallationBindings(transaction, selector.rootId);
@@ -645,11 +644,7 @@ const currentInstallationStateForCoordinator = async (
     )
   )
     installationProblem("coordinator_bindings_changed", "conflict");
-  const allowedRegistrations =
-    step === 0
-      ? [baseline.active.applicationReleaseRevision]
-      : [baseline.active.applicationReleaseRevision, selector.releaseRevision];
-  if (!allowedRegistrations.includes(current.registeredReleaseRevision ?? -1))
+  if (current.registeredReleaseRevision !== baseline.bindings.registeredReleaseRevision)
     installationProblem("coordinator_registration_changed", "conflict");
   if (!sameId(context.organizationId, selector.organizationId))
     installationProblem("coordinator_organization_mismatch", "refused");
@@ -664,7 +659,7 @@ const coordinatorFor = (
     scope: SelectedOrganizationScope,
   ) => Promise<void>,
 ) => {
-  let step = 0;
+  let started = false;
   const runInstallerRequest = async <Result>(
     requestMode: "runAccessChange" | "runChange",
     session: IdentitySession,
@@ -675,12 +670,11 @@ const coordinatorFor = (
       issuedAt: string,
     ) => Promise<Result>,
   ): Promise<HumanOrganizationRequestResult<Result>> => {
-    const thisStep = step++;
-    // The existing coordinator can open a third, compensating Access transaction after a
-    // failed switch. The same baseline guard below permits only restoration of this request's
-    // exact prior registration; any further installer transaction is unexpected.
-    if (thisStep > 2)
+    // Registration and activation have exactly one commit boundary. No later switch or
+    // compensating transaction may act on the already-authorised baseline.
+    if (started || requestMode !== "runAccessChange")
       installationProblem("coordinator_unexpected_transaction", "temporarily_unavailable");
+    started = true;
     let callbackFailure: unknown;
     const result = await environment.requests[requestMode](
       session,
@@ -702,15 +696,8 @@ const coordinatorFor = (
             },
           );
           await readInstallationOrdinaryRoot(transaction, selector.rootId);
-          await currentInstallationStateForCoordinator(
-            transaction,
-            selector,
-            baseline,
-            thisStep,
-            context,
-          );
-          if (thisStep === 0 && beforeRegistration !== undefined)
-            await beforeRegistration(transaction, scope);
+          await currentInstallationStateForCoordinator(transaction, selector, baseline, context);
+          if (beforeRegistration !== undefined) await beforeRegistration(transaction, scope);
           return await operation(transaction, scope, issuedAt);
         } catch (error) {
           callbackFailure = error;
@@ -736,10 +723,11 @@ const coordinatorFor = (
         permissions: environment.permissions,
       }),
     containsCustomComponents: environment.containsCustomComponents,
-    humanDefinitionAccess: humanDefinitionAccess(environment, [
-      baseline.selectedReleaseSet,
-      baseline.activeReleaseSet,
-    ]),
+    humanDefinitionAccess: humanDefinitionAccess(
+      environment,
+      [baseline.selectedReleaseSet],
+      [baseline.activeReleaseSet],
+    ),
     preparedRuntimeSource: createPreparedInstallationRuntimeSourceReader(environment.catalogue, [
       baseline.selectedReleaseSet,
     ]),
