@@ -7,6 +7,7 @@ import {
 import type { DisplayBatchEditAnswer, DisplaySemanticEvent } from "@vortex/ui";
 import type { ApplicationPageModel } from "../../../../../../_lib/application-page";
 import { recordsTableAddress } from "./records-table-address";
+import type { PageAddress } from "./page-address";
 
 type Rows = RecordsTableBatchEditRequest["rows"];
 type Saved = Extract<RecordsTableBatchEditResult, { kind: "saved" }>;
@@ -53,14 +54,15 @@ const rebase = (stacks: Stacks, replaced: Rows, saved: Saved): void => {
 export function useBatchUndo({
   model,
   navigationKey,
-}: Readonly<{ model: ApplicationPageModel; navigationKey: string }>) {
+  address,
+}: Readonly<{ model: ApplicationPageModel; navigationKey: string; address: PageAddress }>) {
   const held = useRef<{ scope: string; stacks: Map<string, Stacks> }>({
     scope: "",
     stacks: new Map(),
   });
   const stacksOf = useCallback(
     (placementId: string): Stacks => {
-      const scope = `${navigationKey}|${window.location.search}`;
+      const scope = `${navigationKey}|${address.search()}`;
       if (held.current.scope !== scope) held.current = { scope, stacks: new Map() };
       let stacks = held.current.stacks.get(placementId);
       if (stacks === undefined) {
@@ -69,7 +71,7 @@ export function useBatchUndo({
       }
       return stacks;
     },
-    [navigationKey],
+    [address, navigationKey],
   );
 
   const post = useCallback(

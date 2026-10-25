@@ -69,7 +69,7 @@ export function usePlacementActions({
   currentSearch: string;
   router: ReturnType<typeof useRouter>;
   tableContinuationScopeRef: RefObject<{ scopeKey: string; inFlight: Set<string> }>;
-  commitTablePage: (placementId: string, request: RecordsTablePageRequest) => void;
+  commitTablePage: (placementId: string, request: RecordsTablePageRequest) => Promise<void>;
   tableQueryPending: (placementId: string) => boolean;
 }>) {
   /**
@@ -220,13 +220,12 @@ export function usePlacementActions({
           ...(continuationToken === undefined ? {} : { continuationToken }),
         };
         // One read of the requested page under the viewer's current access; no page is replayed.
-        commitTablePage(parsedId.data, request);
-        await refreshPlacements([parsedId.data], { placementId: parsedId.data, request });
+        await commitTablePage(parsedId.data, request);
       } finally {
         scope.inFlight.delete(requestKey);
       }
     },
-    [busy, commitTablePage, currentSearch, navigationKey, refreshPlacements, tableQueryPending],
+    [busy, commitTablePage, currentSearch, navigationKey, tableQueryPending],
   );
 
   return { runBinding, readBoardColumns, continueTablePage };

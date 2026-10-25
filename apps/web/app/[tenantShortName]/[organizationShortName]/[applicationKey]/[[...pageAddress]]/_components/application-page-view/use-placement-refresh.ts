@@ -26,6 +26,7 @@ import {
 } from "../../../../../../_lib/mounted-record-pin-watch-client";
 import type { RefreshedPlacementData, TableContinuationTarget, EditFormBaseline } from "./types";
 import { useProjectionRefresh } from "./use-projection-refresh";
+import type { PageAddress } from "./page-address";
 import { boardPayloadFor, loadedBoardColumns } from "./placement-helpers";
 
 const subscribeToNothing = (): (() => void) => () => undefined;
@@ -37,7 +38,7 @@ export function usePlacementRefresh({
   placementRequestsRef,
   navigationKey,
   application,
-  currentSearch,
+  address,
   router,
   model,
   choiceRequestIdsRef,
@@ -54,7 +55,8 @@ export function usePlacementRefresh({
   }>;
   navigationKey: string;
   application: ApplicationPageModel["invocation"];
-  currentSearch: string;
+  /** Every read names the page address as it is when the read starts. */
+  address: PageAddress;
   router: ReturnType<typeof useRouter>;
   model: ApplicationPageModel;
   choiceRequestIdsRef: RefObject<Record<string, number>>;
@@ -105,7 +107,7 @@ export function usePlacementRefresh({
               applicationKey: application.applicationKey,
               pageKey,
               installationRevision: application.installationRevision,
-              search: currentSearch,
+              search: address.search(),
             },
             [],
             undefined,
@@ -175,7 +177,7 @@ export function usePlacementRefresh({
               applicationKey: application.applicationKey,
               pageKey,
               installationRevision: application.installationRevision,
-              search: currentSearch,
+              search: address.search(),
             },
             batch.map(([, request]) => request.componentId),
             tableContinuation === undefined
@@ -329,9 +331,9 @@ export function usePlacementRefresh({
       });
     },
     [
+      address,
       application,
       currentPageKey,
-      currentSearch,
       model.data,
       model.editFormBaselines,
       navigationKey,

@@ -55,6 +55,7 @@ import { useApplyDispatch } from "./use-apply-dispatch";
 import { useGuidedFormSteps } from "./use-guided-form-steps";
 import { usePlacementActions } from "./use-placement-actions";
 import { useTablePageAddress } from "./use-table-page-address";
+import { usePageAddress } from "./page-address";
 import { useRuntimeInputs } from "./use-runtime-inputs";
 import { useGridLayout } from "./use-grid-layout";
 import { useRowDetail } from "./use-row-detail";
@@ -116,7 +117,8 @@ export function ApplicationPageViewContent({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const currentSearch = searchParams.toString();
+  // The page address owns every table's query state; the served address only starts it.
+  const { address, currentSearch } = usePageAddress({ model, served: searchParams.toString() });
   const [selection, setSelection] = useState<PageSelection>({});
   const [choicePages, setChoicePages] = useState<Readonly<Record<string, ChoiceInputPayload>>>({});
   const [dialogChoicePages, setDialogChoicePages] = useState<
@@ -242,7 +244,7 @@ export function ApplicationPageViewContent({
     placementRequestsRef,
     navigationKey,
     application,
-    currentSearch,
+    address,
     router,
     model,
     choiceRequestIdsRef,
@@ -302,12 +304,12 @@ export function ApplicationPageViewContent({
   /** A page-level address change (a guided form step) renders the page again on the server. */
   const setQuery = useCallback(
     (change: (parameters: URLSearchParams) => void) => {
-      const parameters = new URLSearchParams(searchParams.toString());
+      const parameters = new URLSearchParams(address.search());
       change(parameters);
       const query = parameters.toString();
       router.replace(query === "" ? pathname : `${pathname}?${query}`);
     },
-    [pathname, router, searchParams],
+    [address, pathname, router],
   );
 
   const { applyDispatch } = useApplyDispatch({
@@ -410,10 +412,11 @@ export function ApplicationPageViewContent({
     openTableView,
     selectTableViewInPlace,
     tableQueryPending,
+    rereadTables,
   } = useTablePageAddress({
     model,
+    address,
     currentData,
-    currentSearch,
     refreshPlacements,
     setSelection,
   });
@@ -445,6 +448,7 @@ export function ApplicationPageViewContent({
     openTableView,
     selectTableViewInPlace,
     refreshPlacements,
+    pageAddress: address,
   });
   const { readDetail: readRowDetail } = useRowDetail({
     application,
@@ -462,7 +466,7 @@ export function ApplicationPageViewContent({
   const { groupEventsFor } = useGroupMembers({
     application,
     currentPageKey,
-    currentSearch,
+    address,
     onReload: router.refresh,
     changeTableQuery,
   });
@@ -516,6 +520,8 @@ export function ApplicationPageViewContent({
     currentPageKey,
     currentBusyRef,
     currentSearch,
+    address,
+    rereadTables,
     router,
     requestChoicePage,
     runtimeInputsRef,

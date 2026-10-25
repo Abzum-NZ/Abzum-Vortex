@@ -6,6 +6,7 @@ import {
 import type { DisplaySemanticEvent } from "@vortex/ui";
 import type { RowDetailLoadResult } from "../../../../../../_lib/application-page/row-detail";
 import { readRowDetail } from "../../row-detail-action";
+import type { PageAddress } from "./page-address";
 
 /** The address without the open group: opening or closing a group changes nothing the read depends on. */
 const queryOf = (search: string, placementId: string): string => {
@@ -32,14 +33,14 @@ type Address = Readonly<{
 export function useGroupMembers({
   application,
   currentPageKey,
-  currentSearch,
+  address: pageAddress,
   onReload,
   changeTableQuery,
 }: Readonly<{
   application: Address;
   /** Undefined while the page is not one of the application's pages; nothing is read then. */
   currentPageKey: string | undefined;
-  currentSearch: string;
+  address: PageAddress;
   onReload: () => void;
   changeTableQuery: (
     placementId: string,
@@ -47,8 +48,8 @@ export function useGroupMembers({
   ) => void;
 }>) {
   const generations = useRef(new Map<string, number>());
-  const address = useRef({ application, currentPageKey, currentSearch, onReload });
-  address.current = { application, currentPageKey, currentSearch, onReload };
+  const address = useRef({ application, currentPageKey, pageAddress, onReload });
+  address.current = { application, currentPageKey, pageAddress, onReload };
 
   const readGroupPage = useCallback(
     async (placementId: string, event: DisplaySemanticEvent): Promise<unknown> => {
@@ -57,6 +58,7 @@ export function useGroupMembers({
       const generation = (generations.current.get(key) ?? 0) + 1;
       generations.current.set(key, generation);
       const current = address.current;
+      const search = current.pageAddress.search();
       if (current.currentPageKey === undefined) return { status: "error" };
       let result: RowDetailLoadResult;
       try {
@@ -66,7 +68,7 @@ export function useGroupMembers({
           applicationKey: current.application.applicationKey,
           pageKey: current.currentPageKey,
           installationRevision: current.application.installationRevision,
-          search: current.currentSearch,
+          search,
           placementId,
           groupKey: event.key,
           ...(event.direction === undefined ? {} : { direction: event.direction }),
@@ -82,8 +84,7 @@ export function useGroupMembers({
       if (
         generations.current.get(key) !== generation ||
         latest.currentPageKey !== current.currentPageKey ||
-        queryOf(latest.currentSearch, placementId) !==
-          queryOf(current.currentSearch, placementId) ||
+        queryOf(latest.pageAddress.search(), placementId) !== queryOf(search, placementId) ||
         latest.application.tenantShortName !== current.application.tenantShortName ||
         latest.application.organizationShortName !== current.application.organizationShortName ||
         latest.application.applicationKey !== current.application.applicationKey ||
@@ -111,17 +112,20 @@ export function useGroupMembers({
    * Keeps the open group (or none) in the address without a history entry and without reading the
    * table again. Closing a group also ends any member read still on its way.
    */
-  const commitGroupOpen = useCallback((placementId: string, groupKey: string | null) => {
-    if (groupKey === null)
-      generations.current.set(
-        placementId.toLowerCase(),
-        (generations.current.get(placementId.toLowerCase()) ?? 0) + 1,
+  const commitGroupOpen = useCallback(
+    (placementId: string, groupKey: string | null) => {
+      if (groupKey === null)
+        generations.current.set(
+          placementId.toLowerCase(),
+          (generations.current.get(placementId.toLowerCase()) ?? 0) + 1,
+        );
+      pageAddress.write(
+        (parameters) => applyRecordsTableGroupExpansion(parameters, placementId, groupKey),
+        "replace",
       );
-    const parameters = new URLSearchParams(window.location.search);
-    applyRecordsTableGroupExpansion(parameters, placementId, groupKey);
-    const query = parameters.toString();
-    window.history.replaceState(null, "", query === "" ? window.location.pathname : `?${query}`);
-  }, []);
+    },
+    [pageAddress],
+  );
 
   /**
    * The events a grouped table reports: grouping on or off, or another page of the groups (an
