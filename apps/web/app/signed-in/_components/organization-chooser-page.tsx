@@ -75,8 +75,6 @@ export function OrganizationChooserPage({
           applicationHref: "/signed-in",
           organizationName: page.name,
           pageName: page.name,
-          applicationSwitcherState: "available",
-          applications: [],
         }}
         runtimeInputs={
           values === undefined

@@ -79,8 +79,6 @@ export function OrganizationLauncherPage({
           applicationHref: launcherHref,
           organizationName,
           pageName: page.name,
-          applicationSwitcherState: "available",
-          applications: [],
         }}
         runtimeInputs={{
           [placementId]: {

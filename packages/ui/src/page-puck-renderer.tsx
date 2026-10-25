@@ -21,7 +21,11 @@ import {
   type PlatformThemeTokens,
 } from "./theme";
 import { IconLibraryProvider } from "./icons";
-import type { ApplicationShellRuntime } from "./navigation/application-shell";
+import {
+  ApplicationSwitcherContext,
+  type ApplicationShellRuntime,
+  type ApplicationSwitcherSource,
+} from "./navigation/application-shell";
 import { DateFormatProvider } from "./display/date-format-context";
 import { Button } from "./components/button";
 import { Item } from "./components/item";
@@ -182,8 +186,10 @@ export type PagePuckRendererProps = Readonly<{
   locale?: string | undefined;
   /** Organisation or viewer IANA time zone for timestamp presentation. */
   timeZone?: string | undefined;
-  /** Runtime labels and permitted application links for the application shell root. */
+  /** Runtime labels for the application shell root. */
   applicationShellRuntime?: ApplicationShellRuntime | undefined;
+  /** Reads the shell's permitted applications when its switcher is opened. */
+  applicationSwitcherSource?: ApplicationSwitcherSource | undefined;
   /** Protected search results for a search block placed in the application definition. */
   applicationSearch?: VortexPuckMetadata["applicationSearch"];
   /** Record subject preserved by a search form placed on a detail page. */
@@ -231,6 +237,7 @@ export function PagePuckRenderer({
   locale,
   timeZone,
   applicationShellRuntime,
+  applicationSwitcherSource,
   applicationSearch,
   applicationSearchPageSubject,
   componentBundleOrigin,
@@ -339,18 +346,21 @@ export function PagePuckRenderer({
         {overlay}
       </>
     );
-  const rendered =
-    outlet === undefined ? (
-      <Render config={baseConfig} data={data} metadata={metadata} />
-    ) : (
-      <ShellOutletProvider content={outlet.content}>
-        <Render
-          config={frameConfigFor(baseConfig)}
-          data={withShellOutlet(data, outlet.location)}
-          metadata={metadata}
-        />
-      </ShellOutletProvider>
-    );
+  const rendered = (
+    <ApplicationSwitcherContext.Provider value={applicationSwitcherSource}>
+      {outlet === undefined ? (
+        <Render config={baseConfig} data={data} metadata={metadata} />
+      ) : (
+        <ShellOutletProvider content={outlet.content}>
+          <Render
+            config={frameConfigFor(baseConfig)}
+            data={withShellOutlet(data, outlet.location)}
+            metadata={metadata}
+          />
+        </ShellOutletProvider>
+      )}
+    </ApplicationSwitcherContext.Provider>
+  );
   const screen = (
     <DateFormatProvider locale={locale} timeZone={timeZone}>
       {feedback == null ? null : <div data-vortex-page-feedback="">{feedback}</div>}

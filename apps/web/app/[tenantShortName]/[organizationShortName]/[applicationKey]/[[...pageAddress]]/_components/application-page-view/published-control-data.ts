@@ -1,4 +1,4 @@
-import { isRecord, walkPageComposition } from "@vortex/platform/schema";
+import { isRecord, recordIdSchema, walkPageComposition } from "@vortex/platform/schema";
 import type { RecordChoicePage } from "@vortex/ui";
 import type { ApplicationPageModel } from "../../../../../../_lib/application-page";
 
@@ -25,6 +25,13 @@ export function publishedControlData(
   search: URLSearchParams,
   titles: PublishedRecordTitles,
 ): Data | undefined {
+  // A drawer opened by a control is open exactly while the address holds a record id for it.
+  const drawerControl = model.pageParameters.drawers[id];
+  if (drawerControl !== undefined) {
+    const parameter = model.pageParameters.controls[drawerControl];
+    const open = parameter !== undefined && recordIdSchema.safeParse(search.get(parameter)).success;
+    return { status: "ready", values: { kind: "drawer", open } };
+  }
   const name = model.pageParameters.controls[id];
   if (name === undefined) return data;
   const kind = model.pageParameters.controlKinds[id];

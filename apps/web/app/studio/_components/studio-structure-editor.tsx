@@ -30,6 +30,7 @@ import type { StudioSemanticSelection } from "@vortex/ui/studio";
 import {
   studioStructureDefaultShell,
   studioStructureShellChoices,
+  studioRecordPageChoices,
   type StudioPageLayoutPlan,
   type StudioStructureCommand,
   type StudioStructureResult,
@@ -81,6 +82,8 @@ export function StudioStructureEditor({
   const [refusal, setRefusal] = useState<Refusal | null>(null);
   const [showReferences, setShowReferences] = useState(false);
   const [newName, setNewName] = useState("");
+  const [pageKind, setPageKind] = useState<"dashboard" | "form">("dashboard");
+  const [recordType, setRecordType] = useState("");
   const [shellChoice, setShellChoice] = useState("");
   const [addToMenu, setAddToMenu] = useState(true);
   const [layoutChange, setLayoutChange] = useState<{
@@ -130,6 +133,8 @@ export function StudioStructureEditor({
   };
   useEffect(() => {
     setNewName("");
+    setPageKind("dashboard");
+    setRecordType("");
     setRefusal(null);
     setShowReferences(false);
     setAddToMenu(true);
@@ -142,6 +147,7 @@ export function StudioStructureEditor({
       form === "page"
         ? run({
             kind: "add_page",
+            ...(pageKind === "form" ? { type: "form", recordType } : { type: "dashboard" }),
             name: newName,
             shellAlias: shellChoice === "" ? null : shellChoice,
             addToMenu,
@@ -210,6 +216,51 @@ export function StudioStructureEditor({
           </StudioField>
           {form === "page" && (
             <>
+              <StudioField label="Page kind">
+                {(control) => (
+                  <NativeSelect
+                    {...control}
+                    value={pageKind}
+                    disabled={disabled}
+                    onChange={(event) =>
+                      setPageKind(event.target.value === "form" ? "form" : "dashboard")
+                    }
+                  >
+                    <NativeSelectOption value="dashboard">Dashboard</NativeSelectOption>
+                    <NativeSelectOption value="form">Form</NativeSelectOption>
+                  </NativeSelect>
+                )}
+              </StudioField>
+              {pageKind === "form" && (
+                <>
+                  <StudioField
+                    label="Record context"
+                    hint="Required. Choose the record type this form works with. Add inputs and bind its Submit event to an operation flow in the page editor."
+                  >
+                    {(control) => (
+                      <NativeSelect
+                        {...control}
+                        value={recordType}
+                        required
+                        disabled={disabled}
+                        onChange={(event) => setRecordType(event.target.value)}
+                      >
+                        <NativeSelectOption value="">Choose a record type</NativeSelectOption>
+                        {studioRecordPageChoices(source).map((choice) => (
+                          <NativeSelectOption key={choice.recordType} value={choice.recordType}>
+                            {choice.label}
+                          </NativeSelectOption>
+                        ))}
+                      </NativeSelect>
+                    )}
+                  </StudioField>
+                  {source.body.modules.every((module) => module.record_types.length === 0) && (
+                    <p className="text-sm text-muted-foreground">
+                      Add a record type in Data before creating a form page.
+                    </p>
+                  )}
+                </>
+              )}
               <StudioField
                 label="Layout"
                 hint="The frame the page is drawn in. People who can open the home page can open the new page."
@@ -243,7 +294,15 @@ export function StudioStructureEditor({
             </>
           )}
           <div className="flex gap-2">
-            <Button type="submit" size="sm" disabled={disabled || newName.trim().length === 0}>
+            <Button
+              type="submit"
+              size="sm"
+              disabled={
+                disabled ||
+                newName.trim().length === 0 ||
+                (form === "page" && pageKind === "form" && recordType === "")
+              }
+            >
               {form === "page" ? "Add page" : "Add layout"}
             </Button>
             <Button type="button" size="sm" variant="ghost" onClick={() => setForm("none")}>

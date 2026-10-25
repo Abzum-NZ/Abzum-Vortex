@@ -330,6 +330,15 @@
       },
       {
         "kind": "text",
+        "key": "record_from",
+        "label": "Record from",
+        "help": "Show the record this control selects instead of the page's record",
+        "required": false,
+        "minLength": 1,
+        "maxLength": 200
+      },
+      {
+        "kind": "text",
         "key": "title",
         "presentation": true,
         "label": "Title",
@@ -1409,6 +1418,15 @@
         "label": "Initially open",
         "help": "Open when the page first renders, unless a projected open state is supplied",
         "required": false
+      },
+      {
+        "kind": "text",
+        "key": "open_with",
+        "label": "Open with",
+        "help": "Open while this control publishes a selected record; closing clears its selection",
+        "required": false,
+        "minLength": 1,
+        "maxLength": 200
       },
       {
         "kind": "choice",
@@ -5249,6 +5267,97 @@
                 }
               }
             ]
+          },
+          {
+            "kind": "group",
+            "key": "totals",
+            "label": "Totals",
+            "help": "Footer totals for all matching records and subtotals for each group, computed on the server",
+            "required": false,
+            "defaultValue": {
+              "kind": "group",
+              "properties": {
+                "enabled": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            },
+            "properties": [
+              {
+                "kind": "boolean",
+                "key": "enabled",
+                "label": "On",
+                "help": "Show whole-filter totals and group subtotals",
+                "required": false,
+                "defaultValue": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              },
+              {
+                "kind": "list",
+                "key": "measures",
+                "label": "Measures",
+                "help": "At most six measures; hidden columns are not totalled; withheld values withhold the total",
+                "required": false,
+                "minimumItems": 1,
+                "maximumItems": 6,
+                "item": {
+                  "kind": "group",
+                  "key": "measure",
+                  "label": "Measure",
+                  "help": "A column and its aggregate",
+                  "required": false,
+                  "properties": [
+                    {
+                      "kind": "choice",
+                      "key": "operation",
+                      "label": "Operation",
+                      "help": "Count counts non-null values; distinct count requires a filterable number or money field",
+                      "required": true,
+                      "defaultValue": {
+                        "kind": "choice",
+                        "value": "sum"
+                      },
+                      "options": [
+                        {
+                          "key": "count",
+                          "label": "Count"
+                        },
+                        {
+                          "key": "sum",
+                          "label": "Sum"
+                        },
+                        {
+                          "key": "average",
+                          "label": "Average"
+                        },
+                        {
+                          "key": "minimum",
+                          "label": "Minimum"
+                        },
+                        {
+                          "key": "maximum",
+                          "label": "Maximum"
+                        },
+                        {
+                          "key": "distinct_count",
+                          "label": "Distinct count"
+                        }
+                      ]
+                    },
+                    {
+                      "kind": "field_reference",
+                      "key": "field",
+                      "label": "Column",
+                      "help": "A selected visible column; all operations except count use number or money fields",
+                      "required": true
+                    }
+                  ]
+                }
+              }
+            ]
           }
         ],
         "defaultValue": {
@@ -5483,6 +5592,15 @@
               }
             },
             "row_actions": {
+              "kind": "group",
+              "properties": {
+                "enabled": {
+                  "kind": "boolean",
+                  "value": false
+                }
+              }
+            },
+            "totals": {
               "kind": "group",
               "properties": {
                 "enabled": {

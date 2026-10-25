@@ -18,6 +18,16 @@ const REFUSAL_MESSAGES: Readonly<Record<DisplayRefusalReason, string>> = Object.
     "There are too many records to summarise at once. Narrow them with search or filters.",
   grouping_unavailable:
     "This table groups its records by a field you cannot see, so it has nothing to show you.",
+  filter_field_not_filterable: "This table cannot be filtered by that field.",
+  filter_unavailable: "This table cannot be filtered.",
+  filter_field_repeated: "This table cannot filter by the same field twice.",
+  filter_value_invalid: "This filter value is not valid.",
+  filter_date_out_of_range: "This filter date falls outside the supported years 0001 to 9999.",
+  filter_value_mismatch: "This filter does not fit the type of its field.",
+  sort_field_not_sortable: "This table cannot be sorted by that field.",
+  search_unavailable: "This table cannot be searched.",
+  table_address_invalid:
+    "This table's search, filters or sort in the address are not valid. Open the page again without them.",
 });
 
 /**
@@ -136,11 +146,11 @@ export function DisplayStateContainer<Values>({
       >
         <EmptyHeader>
           <EmptyDescription>
-            {projectedData.reason === "value_out_of_range" ||
-            projectedData.reason === "dataset_limit_exceeded" ||
-            projectedData.reason === "grouping_unavailable"
-              ? REFUSAL_MESSAGES[projectedData.reason]
-              : (refusedMessage ?? REFUSAL_MESSAGES[projectedData.reason])}
+            {projectedData.reason === "not_permitted" ||
+            projectedData.reason === "access_ended" ||
+            projectedData.reason === "not_found"
+              ? (refusedMessage ?? REFUSAL_MESSAGES[projectedData.reason])
+              : REFUSAL_MESSAGES[projectedData.reason]}
           </EmptyDescription>
         </EmptyHeader>
       </Empty>

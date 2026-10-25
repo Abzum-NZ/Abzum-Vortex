@@ -5,7 +5,11 @@ import {
   type ImmutablePlatformBlockCatalogue,
   type SourceItem,
 } from "@vortex/platform/schema";
-import { syncStoredBlockDependencies } from "./stored-composition";
+import {
+  StoredCompositionRefusal,
+  syncStoredBlockDependencies,
+  validateStoredZone,
+} from "./stored-composition";
 import type { StudioPlacementDescriber } from "./semantic-outline";
 import type { StudioSemanticSelection } from "./semantic-selection";
 import { applyStudioMenuCommand } from "./application-menu-commands";
@@ -142,6 +146,49 @@ export const emptyPageData = (source: Source, shellAlias: string | null) => {
     },
     content: [] as SourceItem[],
   };
+};
+
+/** Puts the page's blocks in its frame's first content area, judged as stored data and by what the area admits. */
+export const pageData = (
+  context: StudioStructureContext,
+  source: Source,
+  shellAlias: string | null,
+  items: SourceItem[],
+  pageName: string,
+) => {
+  const data = emptyPageData(source, shellAlias);
+  const shell = source.body.shells.find((entry) => entry.id === shellAlias);
+  const area = shell?.content_slots[0];
+  if (shell !== undefined && area === undefined)
+    refuse(
+      `The layout ${quoted(shell.name)} has no content area, so the page has nowhere to go. Choose another layout.`,
+    );
+  for (const item of items) {
+    const group = context.catalogue.releases.find(
+      (entry) =>
+        String(entry.blockId) === item.props.vortex.block.block_id &&
+        String(entry.releaseVersion) === item.props.vortex.block.release_version,
+    )?.paletteGroup;
+    if (
+      area !== undefined &&
+      (group === undefined || !area.allowed_child_categories.includes(group))
+    )
+      refuse(
+        `The page ${quoted(pageName)} cannot use the layout ${quoted(shell!.name)}: its area ${quoted(area.label)} does not take ${group ?? "these"} blocks. Choose another layout.`,
+      );
+  }
+  try {
+    validateStoredZone(context.catalogue, { items });
+  } catch (error) {
+    // A refusal is the answer the preview shows, with its reason; anything else is a fault.
+    if (!(error instanceof StoredCompositionRefusal)) throw error;
+    refuse(
+      `The page ${quoted(pageName)} could not be built from the block catalogue (${error.reason}), so nothing was changed.`,
+    );
+  }
+  if (area === undefined) data.content = items;
+  else (data.root.props as Record<string, unknown>)[area.id] = items;
+  return data;
 };
 
 /** Words for where the schema refused the result, never a value. */

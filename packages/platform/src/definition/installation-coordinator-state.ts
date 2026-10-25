@@ -58,6 +58,7 @@ export const accessChangeSchema = z
     applicationRootId: applicationRootIdSchema,
     registrationState: z.enum(["active", "withdrawn"]),
     registrationRevision: revisionSchema,
+    accessVersion: revisionSchema,
   })
   .strict();
 

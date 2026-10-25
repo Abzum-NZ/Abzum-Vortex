@@ -53,6 +53,7 @@ const readSummary = async (
         search: command.search ?? null,
         searchableFieldIds: command.searchableFieldIds,
         ...(command.grouping === undefined ? {} : { grouping: command.grouping }),
+        ...(command.totals === undefined ? {} : { totals: command.totals }),
         ...(command.pivot === undefined ? {} : { pivot: command.pivot }),
         ...(command.groupLimit === undefined ? {} : { groupLimit: command.groupLimit }),
         ...(command.groupAfter === undefined ? {} : { groupAfter: command.groupAfter }),

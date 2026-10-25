@@ -70,6 +70,7 @@ import {
   recordsTableSummaryGroupKeys,
   type RecordsTableGroupRead,
 } from "./records-table-features/grouping";
+import { recordsTableTotalReads, projectRecordsTableTotals } from "./records-table-features/totals";
 import { CalendarEndpointError, calendarAddDays, calendarStartOfDay } from "./calendar-date";
 import { recordLinkLabelKey } from "../definition/app-index";
 
@@ -177,8 +178,24 @@ export type RecordsTableQueryRequest = Readonly<{
 }>;
 
 /**
+ * The business refusal of a filter or sort the table cannot apply. A cause that a withheld
+ * field can also produce (one the viewer cannot read, or one missing from their offered filters)
+ * is not one of these: it keeps the permission wording.
+ */
+type RecordsTableRefusalReason =
+  | "filter_field_not_filterable"
+  | "filter_unavailable"
+  | "filter_field_repeated"
+  | "filter_value_invalid"
+  | "filter_date_out_of_range"
+  | "filter_value_mismatch"
+  | "sort_field_not_sortable"
+  | "search_unavailable";
+
+/**
  * A refusal is never an empty page. The Query engine's closed reason code is retained only for
- * server-side diagnostics; the component receives the same neutral refusal for every cause.
+ * server-side diagnostics; the component receives the same neutral refusal for every cause, except
+ * a filter or sort the table cannot apply, which carries its own business refusal reason.
  * `unavailable` is a temporary failure the placement may retry.
  */
 export type RecordsTableQueryResolution =
@@ -193,7 +210,11 @@ export type RecordsTableQueryResolution =
       nextContinuationToken?: string;
       previousContinuationToken?: string;
     }>
-  | Readonly<{ kind: "refused"; reasonCode?: ProtectedQueryRefusalReasonCode }>
+  | Readonly<{
+      kind: "refused";
+      reasonCode?: ProtectedQueryRefusalReasonCode;
+      refusalReason?: RecordsTableRefusalReason;
+    }>
   | Readonly<{ kind: "unavailable" }>;
 
 /** What the viewer may do on this table, decided with its rows. Absent parts are not offered. */
@@ -210,11 +231,46 @@ export type RecordsTableReadDecider = (
 
 const refused = Object.freeze({ kind: "refused" as const });
 
-/** The refusal of a table read, with its part and cause logged; the client sees it neutral. */
-const refusedBecause = (part: RecordsTableRequestPart, reason: string) => {
-  logRecordsTableRequestRefusal(recordsTableRequestRefusal(part, reason), "table_read");
-  return refused;
+/** The business refusal a request refusal earns: only a filter or sort the table cannot apply. */
+const recordsTableRefusalReason = (
+  refusal: RecordsTableRequestRefusal,
+): RecordsTableRefusalReason | undefined => {
+  switch (`${refusal.part}/${refusal.reason}`) {
+    case "filter/field_not_filterable":
+      return "filter_field_not_filterable";
+    case "filter/feature_off":
+      return "filter_unavailable";
+    case "filter/field_filtered_twice":
+      return "filter_field_repeated";
+    case "filter/value_malformed":
+      return "filter_value_invalid";
+    case "filter/value_out_of_range":
+      return "filter_date_out_of_range";
+    case "filter/value_not_for_field":
+      return "filter_value_mismatch";
+    case "sort/sort_field_not_sortable":
+      return "sort_field_not_sortable";
+    // search/search_not_offered depends on the fields the viewer may read, so it stays neutral.
+    case "search/feature_off":
+      return "search_unavailable";
+    default:
+      return undefined;
+  }
 };
+
+/**
+ * Logs a refused table read with its part and cause. The client sees the business reason that
+ * cause earns, or the neutral refusal.
+ */
+const refusedFor = (refusal: RecordsTableRequestRefusal): RecordsTableQueryResolution => {
+  logRecordsTableRequestRefusal(refusal, "table_read");
+  const refusalReason = recordsTableRefusalReason(refusal);
+  return refusalReason === undefined ? refused : { kind: "refused", refusalReason };
+};
+
+/** The refusal of a table read, with its part and cause logged; the client sees it neutral. */
+const refusedBecause = (part: RecordsTableRequestPart, reason: string) =>
+  refusedFor(recordsTableRequestRefusal(part, reason));
 
 /** The rows with only the visible columns' values: a value read only for formatting never leaves. */
 const visibleRows = (
@@ -669,11 +725,15 @@ const readGrouped = async (
     ...(isDate ? { dateBucket: { unit: group.dateUnit, timeZone: group.timeZone } } : {}),
   };
   if (!group.membersOnly) {
+    const totals = recordsTableTotalReads(request.settings, built.fieldIds);
     const summaryCommand = protectedQuerySummaryCommandSchema.safeParse({
       moduleRootId: request.moduleRootId,
       queryId: request.queryId,
       inputValues: request.inputValues,
-      grouping,
+      grouping: {
+        ...grouping,
+        ...(totals.length === 0 ? {} : { aggregates: totals }),
+      },
       ...(group.after === null ? {} : { groupAfter: group.after }),
       ...(built.command.search === undefined ? {} : { search: built.command.search }),
       searchableFieldIds: built.command.searchableFieldIds,
@@ -793,18 +853,12 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
     request: RecordsTableQueryRequest,
   ): Promise<RecordsTableQueryResolution> {
     const built = buildRecordsTableQueryCommand(request);
-    if (built.kind === "refused") {
-      logRecordsTableRequestRefusal(built, "table_read");
-      return refused;
-    }
+    if (built.kind === "refused") return refusedFor(built);
     // A filter on a field the table does not describe a control for is not the viewer's to use:
     // refused before any row is read. What depends on the viewer's own field bound is decided
     // after the read below, because the bound comes only with it.
     const undescribed = recordsTableNarrowingContractRefusal(built.filterFields, built.narrowing);
-    if (undescribed !== undefined) {
-      logRecordsTableRequestRefusal(undescribed, "table_read");
-      return refused;
-    }
+    if (undescribed !== undefined) return refusedFor(undescribed);
     // The viewer decisions ride on the read's own request: the last decision taken wins, and a
     // table with several reads (a grouped one) decides on the read that carries its rows.
     let decisions: RecordsTableReadDecisions | undefined;
@@ -894,6 +948,44 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
               }
             : undefined;
       if (read === undefined) return refusedBecause("columns", "read_not_completed");
+      const totalReads =
+        request.group?.membersOnly === true || request.tree?.parentRecordId != null
+          ? []
+          : recordsTableTotalReads(request.settings, built.fieldIds);
+      let totalAggregates = grouped?.kind === "read" ? grouped.summary?.aggregates : undefined;
+      // Serve the visible row demand first. A flat page adds one bounded summary, independent of
+      // its page position; grouped pages already have the same full-filter summary. A fallback
+      // after a refused grouped summary never attempts another summary.
+      if (totalReads.length > 0 && request.group === undefined) {
+        const summary = await runner.summarise(
+          session,
+          selection,
+          protectedQuerySummaryCommandSchema.parse({
+            moduleRootId: request.moduleRootId,
+            queryId: request.queryId,
+            inputValues: request.inputValues,
+            totals: totalReads,
+            search: built.command.search,
+            searchableFieldIds: built.command.searchableFieldIds,
+            filter: built.command.filter,
+            filterableFieldIds: built.command.filterableFieldIds,
+          }),
+        );
+        if (summary.kind === "available" && summary.value.outcome === "completed")
+          totalAggregates = summary.value.aggregates;
+        else
+          logRecordsTableRequestRefusal(
+            recordsTableRequestRefusal(
+              "columns",
+              `totals_${summary.kind === "available" ? (summary.value.outcome === "refused" ? summary.value.reasonCode : "invalid") : summary.kind}`,
+            ),
+            "table_totals",
+          );
+      }
+      const totals =
+        totalReads.length === 0
+          ? undefined
+          : projectRecordsTableTotals(totalReads, totalAggregates);
       const projectedRows = visibleRows(read.rows, built.fieldIds);
       // The records a link filter names are titled in the same batched read as the page's links.
       const filterLinks = built.narrowing.filters.flatMap(({ fieldId, filter }) => {
@@ -925,6 +1017,7 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
                 options: request.fieldChoiceLabels?.[request.group.fieldId] ?? [],
               },
               recordLinks,
+              totalReads,
             );
       if (groupSummary !== undefined && groups === undefined)
         throw new Error("PROTECTED_QUERY_RESULT_INVALID");
@@ -967,6 +1060,7 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
             : { exportAllowed: decisions.exportAllowed }),
           ...(request.state.pivot === undefined ? {} : { pivotView: request.state.pivot }),
           ...(groups === undefined ? {} : { groups }),
+          ...(totals === undefined ? {} : { totals }),
         },
         read.rows,
         read.fieldBounds,
@@ -983,10 +1077,7 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
         projected.status === "ready" ? projected.values.features : undefined,
         built.narrowing,
       );
-      if (narrowingRefusal !== undefined) {
-        logRecordsTableRequestRefusal(narrowingRefusal, "table_read");
-        return refused;
-      }
+      if (narrowingRefusal !== undefined) return refusedFor(narrowingRefusal);
       const nextContinuationToken = read.nextContinuationToken;
       const previousContinuationToken = read.previousContinuationToken;
       const display: ProjectedComponentData<ProjectedTableValues> =

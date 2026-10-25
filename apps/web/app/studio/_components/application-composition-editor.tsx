@@ -29,6 +29,7 @@ import {
   studioSettingProblems,
   StudioQueryPicker,
   StudioQueryBindings,
+  StudioSelectionControlBinding,
   studioQueryBindingFacts,
   studioRecordBindingFields,
   StudioSettingFields,
@@ -464,6 +465,8 @@ export function ApplicationCompositionEditor(props: Props) {
                   property !== featuresProperty &&
                   property.key !== "query_parameters" &&
                   property.key !== "row_actions" &&
+                  property.key !== "open_with" &&
+                  property.key !== "record_from" &&
                   !studioOwnsSetting(property.key),
               )}
               values={settingsInputs.settings}
@@ -471,6 +474,27 @@ export function ApplicationCompositionEditor(props: Props) {
               disabled={props.disabled}
               onChange={(settings) => changeSettings({ ...settingsInputs, settings })}
             />
+            {(["open_with", "record_from"] as const)
+              .filter((key) => settingsModel.properties.some((property) => property.key === key))
+              .map((key) => (
+                <StudioSelectionControlBinding
+                  key={key}
+                  setting={key}
+                  value={settingsInputs.settings[key]}
+                  facts={studioQueryBindingFacts(
+                    props.context,
+                    settingsModel.placementAlias,
+                    props.choices.queries,
+                  )}
+                  disabled={props.disabled}
+                  onChange={(value) => {
+                    const next = { ...settingsInputs.settings };
+                    if (value === undefined) delete next[key];
+                    else next[key] = value;
+                    changeSettings({ ...settingsInputs, settings: next });
+                  }}
+                />
+              ))}
           </fieldset>
           <StudioHelp hint="A setting you leave unset uses its default." />
           {settings.problem !== "" && problemArea === "settings" && (
@@ -820,7 +844,7 @@ export function ApplicationCompositionEditor(props: Props) {
               : removalModel.kind === "invalid"
                 ? "This item could not be read. Reload Studio."
                 : removalModel.reason === "page_kind"
-                  ? "Items can only be removed from a layout or from the content of a list, detail or dashboard page."
+                  ? "Items can only be removed from a layout or from the content of a list, detail, form or dashboard page."
                   : removalModel.reason === "public_page"
                     ? "This page is published at a public address. Its items cannot be removed."
                     : removalModel.reason === "has_children"

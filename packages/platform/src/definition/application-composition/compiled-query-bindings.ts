@@ -1,6 +1,7 @@
 import {
   checkQueryBindings,
   pageBindingFacts,
+  selectionControlSettingKey,
   type QueryBindingField,
   type QueryBindingInput,
   type QueryBindingPageFacts,
@@ -119,6 +120,7 @@ export const compiledPageBindingFacts = <Entry extends Placement>(
     placements: placements.map(([placementId, placement]): QueryBindingPlacement => {
       const settings = object(placement.settings ?? {});
       const block = blockOf(placement);
+      const selectionKey = selectionControlSettingKey(block?.key);
       const field = fieldById.get(String(object(settings.field ?? {}).fieldId ?? "").toLowerCase());
       const rowClick = object(object(settings.row_click).properties);
       const query = object(queries.get(String(object(placement.vortex).queryId)));
@@ -129,6 +131,7 @@ export const compiledPageBindingFacts = <Entry extends Placement>(
         label: text(settings.label) ?? text(settings.title),
         blockName: block?.name ?? "This block",
         parameter: readPublishedParameter(settings as Settings),
+        selectionControl: selectionKey === undefined ? undefined : text(settings[selectionKey]),
         linkTargets: linkInputTypes(settings),
         fieldType: field === undefined ? undefined : fieldFacts(field).type,
         selectedRecordType:

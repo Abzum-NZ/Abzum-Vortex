@@ -1,19 +1,9 @@
 "use client";
 
-import {
-  createContext,
-  useContext,
-  useLayoutEffect,
-  useState,
-  type MouseEvent,
-} from "react";
+import { createContext, useContext, useLayoutEffect, useState, type MouseEvent } from "react";
 import { usePagePresence } from "@vortex/ui";
 import type { ProjectedApplicationFrame, ProjectedNavigation } from "@vortex/platform/schema";
-import type {
-  ApplicationWebMcpRuntime,
-  PagePuckRendererProps,
-  UnsavedWorkGuard,
-} from "@vortex/ui";
+import type { ApplicationWebMcpRuntime, PagePuckRendererProps, UnsavedWorkGuard } from "@vortex/ui";
 
 /** What the current page tells the frame around it. Each part is absent until the page sets it. */
 export type ApplicationFramePageState = Readonly<{
@@ -23,8 +13,11 @@ export type ApplicationFramePageState = Readonly<{
   webMcp?: ApplicationWebMcpRuntime;
   /** The page's unsaved-work guard, consulted before the frame leaves the page. */
   unsavedWork?: UnsavedWorkGuard;
-  /** The release the page offers to adopt, for the account menu. */
-  releaseAdoption?: Readonly<{ version: string; adopt: () => void | Promise<void> }>;
+  /** Executes the account menu's freshly read offer through this page's adoption action. */
+  adoptRelease?: (
+    offeredReleaseRevision: number,
+    installedReleaseRevision: number,
+  ) => Promise<void>;
   /** The frame projected with the page, which replaces the frame the layout projected. */
   frame?: ProjectedApplicationFrame;
   /** The viewer's menu projected with the page, which replaces the layout's. */

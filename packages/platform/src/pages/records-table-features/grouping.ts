@@ -19,6 +19,7 @@ import {
   recordsTableGroupKey,
   type RecordsTableGroupValue,
 } from "../records-table-state";
+import { projectRecordsTableTotals, type RecordsTableTotalRead } from "./totals";
 import { bucketFirstDay, bucketLabel } from "./dimension-values";
 
 /** The one group of links whose target the viewer cannot read: it carries no identity or title. */
@@ -63,7 +64,6 @@ export const recordsTableGroupSelector = (
   if (value === undefined) return undefined;
   // A key is only valid for the type of field the table is grouped by.
   if (typeof value === "object" && value !== null && fieldType !== "link") return undefined;
-  if (value === NOT_AVAILABLE && fieldType !== "link") return undefined;
   return { values: [{ fieldId, fieldType, value }] };
 };
 
@@ -128,6 +128,7 @@ export const projectRecordsTableGroups = (
   field: RecordsTableGroupRead &
     Readonly<{ options: readonly Readonly<{ value: string; label: string }>[] }>,
   recordLinks: ProjectedRecordLinks | undefined,
+  totals: readonly RecordsTableTotalRead[],
 ): ProjectedTableGroups | undefined => {
   const groups: ProjectedTableGroup[] = [];
   for (const group of summary.groups) {
@@ -139,6 +140,9 @@ export const projectRecordsTableGroups = (
       key,
       label: groupLabel(value, field, recordLinks),
       count: group.rowCount,
+      ...(totals.length === 0
+        ? {}
+        : { totals: projectRecordsTableTotals(totals, group.aggregates) }),
       ...(value === null ? { unassigned: true as const } : {}),
     });
   }

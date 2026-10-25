@@ -96,6 +96,7 @@ export const readApplicationRemoval = async (
             releaseRevision: revision,
           },
           context,
+          "replace_or_remove",
         );
         const operation = removalOperation(
           rootId,

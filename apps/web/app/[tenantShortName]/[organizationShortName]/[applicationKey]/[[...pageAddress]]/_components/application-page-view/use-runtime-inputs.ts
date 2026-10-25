@@ -39,6 +39,7 @@ import type {
   Notice,
   SubmittedForm,
   EventHandlers,
+  ControlReport,
 } from "./types";
 import { bindingFor, suppliedValues, bindingOfEvent, asComponentBinding } from "./event-values";
 import { cancelledMoveNotice, unavailableNotice } from "./notices";
@@ -127,7 +128,7 @@ export function useRuntimeInputs({
     gestureSubject?: Readonly<{ recordId: string; revision: number }>,
     afterAccepted?: () => Promise<Notice | undefined>,
     clickId?: string,
-    reportOnControl?: true,
+    reportOnControl?: ControlReport,
   ) => Promise<DispatchOutcome>;
   readBoardColumns: (
     placementId: string,
@@ -289,6 +290,7 @@ export function useRuntimeInputs({
       ...guidedActiveFormIds,
       ...model.linkInputPlacementIds,
       ...Object.keys(model.pageParameters.controls),
+      ...Object.keys(model.pageParameters.drawers),
     ]);
     if (guidedActivePlacementIds !== undefined)
       for (const placementId of placementIds)
@@ -351,7 +353,7 @@ export function useRuntimeInputs({
                     : undefined,
                   undefined,
                   undefined,
-                  tableData !== undefined && event.event === "row_action" ? true : undefined,
+                  tableData !== undefined && event.event === "row_action" ? "transient" : undefined,
                 );
             };
         // An inline edit commits one stored value through the bound flow at the revision the row
@@ -390,7 +392,7 @@ export function useRuntimeInputs({
                 { recordId: event.recordId, revision: event.revision },
                 undefined,
                 event.commandId,
-                true,
+                "in_place",
               );
               // A neutral refusal may mean the viewer's access to the field ended: the table is read once more
               // so a field no longer editable, or no longer readable, loses its editor and its draft.
@@ -678,6 +680,15 @@ export function useRuntimeInputs({
             subject?.recordId,
           );
         };
+      // A drawer opened by a control's selection closes by clearing that selection.
+      if (model.pageParameters.drawers[placementId] !== undefined && supportsEvent("action")) {
+        const action = events.action as ((event: ControlSemanticEvent) => void) | undefined;
+        events.action = (event: ControlSemanticEvent) => {
+          if (event.event === "action" && event.intent === "dismiss")
+            pageParameters.dismiss(placementId);
+          else return action?.(event);
+        };
+      }
       // A form container emits its one submission for a gesture; it runs the bound flow once
       // through the runtime, which resumes every pause with the server-issued continuation. The
       // handler returns that run, so the form shows busy from the press until the run settles.

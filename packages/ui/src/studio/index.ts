@@ -29,6 +29,7 @@ export {
 export * from "./condition-controls";
 export * from "./studio-query-filter";
 export * from "./application-composition-commands";
+export { describeStudioCompositionGate } from "./application-composition-gate";
 export * from "./field-placement";
 export * from "./application-flow-model";
 export * from "./application-flow-commands";
@@ -90,5 +91,5 @@ export {
   type StudioCanvasGridState,
 } from "./studio-canvas-grid";
 
-export { StudioQueryBindings } from "./studio-query-bindings";
+export { StudioQueryBindings, StudioSelectionControlBinding } from "./studio-query-bindings";
 export { studioQueryBindingFacts, studioRecordBindingFields } from "./query-binding-facts";

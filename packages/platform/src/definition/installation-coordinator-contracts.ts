@@ -144,9 +144,11 @@ export type InstallationReleaseTarget = Readonly<{
  * reader for every release read.
  */
 export type HumanInstallationDefinitionAccess = Readonly<{
+  /** Only old storage being replaced or removed may skip current-catalogue equality. */
   readReleaseSet(
     session: IdentitySession,
     target: InstallationReleaseTarget,
+    purpose: "consume" | "replace_or_remove",
   ): Promise<SystemApplicationBoundReleaseSetResult>;
   prepareRegistrationCandidate(
     target: InstallationReleaseTarget,

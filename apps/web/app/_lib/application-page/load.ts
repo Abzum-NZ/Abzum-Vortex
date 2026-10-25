@@ -1,6 +1,8 @@
 import { cache } from "react";
 import {
   placementBlockRelease,
+  placementSettings,
+  DRAWER_BLOCK_RELEASE,
   type InstalledRuntimeContext,
   type HumanOrganizationRequestDependencies,
   createHumanInstalledPageBundleContextLoader,
@@ -23,13 +25,13 @@ import {
   type OrganizationSelectionCandidate,
   recordIdSchema,
   sameId,
+  isRecord,
   compiledPageShellId,
   recordsTableParameterPlacement,
 } from "@vortex/platform/schema";
 import { createPlacementReadServices } from "./placement-services";
 import { prepareRuntimePreviewPage } from "../runtime-preview-demand";
 import { beginStudioPreviewRead } from "../studio-preview-work";
-import { readApplicationReleaseAdoption } from "../application-release-adoption";
 import { getQueryContinuationKey } from "../query-continuation-key";
 import { loadPermittedApplicationsAtAddress } from "../organization-context";
 import {} from "@vortex/platform/server";
@@ -62,6 +64,7 @@ import {
 import {
   isApplicationLauncherPlacement,
   logPlacementFailure,
+  controlSelectedRecordType,
   pageQueryBindingContext,
   placementParameterDependencies,
   resolvedQueryRecordTypeId,
@@ -301,24 +304,13 @@ const loadApplicationPageJoined = async (
   const continuationKey = initialContinuationKey ?? getQueryContinuationKey();
   const application = context.releaseSet.application;
 
-  // The offered release is read under the viewer's own application scope. A refusal or an absent
-  // target reads as "nothing to adopt"; publishing a release alone never changes this page.
-  const adoptionRead =
-    selectedPlacementIds === undefined && runtimePreviewOf(context) === undefined
-      ? readApplicationReleaseAdoption(session, {
-          organizationId: context.organizationId,
-          applicationRootId: context.applicationRootId,
-        })
-      : undefined;
-
   const pageDefinition = application.content.pages.find((page) => page.key === address.pageKey);
   if (pageDefinition === undefined) {
-    await adoptionRead;
     return { kind: "unavailable" };
   }
 
   const conditionSubjectId = first(parameters[pageSubjectParameter]);
-  // The adoption read, the page projection and the navigation projection are independent reads of
+  // The page projection and the navigation projection are independent reads of
   // the same installed context, each under its own HUMAN request; they run together and their
   // results are still consulted in the original order.
   const { projectedPageRead, navigationRead } = readPageProjections(
@@ -331,7 +323,6 @@ const loadApplicationPageJoined = async (
   );
   startedReads.push(projectedPageRead);
   if (navigationRead !== undefined) startedReads.push(navigationRead);
-  const adoptionTarget = await adoptionRead;
   const projectedPage = await projectedPageRead;
   if (projectedPage.kind !== "available") return projectedPage;
   // An undefined projection is the page refused for this viewer: never an empty page.
@@ -633,6 +624,24 @@ const loadApplicationPageJoined = async (
       ? permittedApplicationsRead.applications.map((application) => application.key)
       : undefined;
 
+  // Every query input of the page's blocks resolves from the same server-side facts: what the page
+  // declares, its address, the subject read above and the viewer. A relative date reads the
+  // organisation's time zone once, only when one asks for it.
+  const bindingContext = pageQueryBindingContext({
+    context,
+    pageDefinition,
+    parameters,
+    readSubject:
+      subjectType === undefined
+        ? undefined
+        : () =>
+            subjectId.success
+              ? readSubject(String(subjectType.recordTypeId), subjectId.data)
+              : Promise.resolve({ kind: "refused" }),
+    subjectRecordTypeId: subjectType === undefined ? undefined : String(subjectType.recordTypeId),
+    readViewerTeams: services.readViewerTeams,
+    readTimeZone: services.readTimeZone,
+  });
   const pageSubjectRecordTypeId =
     subjectType === undefined ? undefined : String(subjectType.recordTypeId);
   const { recordTypeByPlacement, dataPlacementsByRecordType, editFormDataPlacementIds } =
@@ -642,6 +651,7 @@ const loadApplicationPageJoined = async (
       pageSubjectRecordTypeId,
       context,
       editFormPlacementIds,
+      selectedRecordType: (control) => controlSelectedRecordType(bindingContext, control),
     });
 
   const { refreshPlacementsByBinding, selectedReadTypesByFlow } = projectFlowBindingTargets({
@@ -689,24 +699,6 @@ const loadApplicationPageJoined = async (
   };
   const resolveRecordLinks: RecordLinkResolver = services.recordLinkResolver(context);
   const gridLayouts = await gridLayoutsRead;
-  // Every query input of the page's blocks resolves from the same server-side facts: what the page
-  // declares, its address, the subject read above and the viewer. A relative date reads the
-  // organisation's time zone once, only when one asks for it.
-  const bindingContext = pageQueryBindingContext({
-    context,
-    pageDefinition,
-    parameters,
-    readSubject:
-      subjectType === undefined
-        ? undefined
-        : () =>
-            subjectId.success
-              ? readSubject(String(subjectType.recordTypeId), subjectId.data)
-              : Promise.resolve({ kind: "refused" }),
-    subjectRecordTypeId: subjectType === undefined ? undefined : String(subjectType.recordTypeId),
-    readViewerTeams: services.readViewerTeams,
-    readTimeZone: services.readTimeZone,
-  });
   const placementReaderInput: PlacementReaderInput = {
     context,
     session,
@@ -922,6 +914,19 @@ const loadApplicationPageJoined = async (
     refreshPlacementsByBinding,
     refreshWhileByPlacement,
     pageParameters: {
+      drawers: Object.fromEntries(
+        allPlacements.flatMap((placement) => {
+          const block = placement.vortex.block;
+          if (!isRecord(block) || !sameId(String(block.blockId), DRAWER_BLOCK_RELEASE.blockId))
+            return [];
+          const source = placementSettings(placement.props).open_with;
+          const control =
+            source?.kind === "text"
+              ? allPlacements.find((candidate) => sameId(candidate.placementId, source.value))
+              : undefined;
+          return control === undefined ? [] : [[placement.placementId, control.placementId]];
+        }),
+      ),
       tableIds: allPlacements.filter(isTablePlacement).map((placement) => placement.placementId),
       controlKinds: Object.fromEntries(
         allPlacements
@@ -947,16 +952,6 @@ const loadApplicationPageJoined = async (
       .filter((candidate) => permittedKeys.has(candidate.key))
       .map((candidate) => ({ pageId: candidate.pageId, key: candidate.key })),
     ...(subject === undefined ? {} : { subject }),
-    ...(adoptionTarget !== undefined &&
-    adoptionTarget.currentReleaseRevision > context.applicationReleaseRevision
-      ? {
-          adoption: {
-            offeredReleaseRevision: adoptionTarget.currentReleaseRevision,
-            offeredReleaseVersion: adoptionTarget.currentReleaseVersion,
-            installedReleaseRevision: context.applicationReleaseRevision,
-          },
-        }
-      : {}),
     invocation: {
       tenantShortName: address.tenantShortName,
       organizationShortName: address.organizationShortName,

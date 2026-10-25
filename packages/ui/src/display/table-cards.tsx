@@ -12,7 +12,8 @@ import { RowExpansionToggle } from "./row-expansion-toggle";
 import { SubRowNoticeView } from "./sub-row-notice";
 import { SUB_ROW_INDENT_REM, type RowLine, type SubRowsControls } from "./sub-rows";
 import type { GridColumn } from "./table-layout";
-import { CARD_SPACING } from "./table-geometry";
+import { BOUNDED_VIEWPORT_CLASS, CARD_SPACING } from "./table-geometry";
+import { isOwnClick } from "./table-interaction";
 
 const PRIORITY_ORDER: Readonly<Record<RecordsTableColumnContract["priority"], number>> = {
   essential: 0,
@@ -56,6 +57,7 @@ export function RecordsCards({
   expansion,
   subRows,
   fill,
+  bounded,
   density,
 }: Readonly<{
   accessibleName: string;
@@ -72,6 +74,8 @@ export function RecordsCards({
   /** Cards open to the cards beneath them; undefined when no feature contributes any. */
   subRows: SubRowsControls | undefined;
   fill: boolean;
+  /** The table's bounded viewport: the cards scroll inside it, as the grid's rows do. */
+  bounded: boolean;
   density: RecordsTableDensity;
 }>): ReactElement {
   const [heading, ...rest] = columns;
@@ -107,7 +111,9 @@ export function RecordsCards({
       aria-label={accessibleName}
       className={cn(
         "m-0 flex list-none flex-col gap-2 p-0",
-        fill && "min-h-0 flex-1 overflow-auto",
+        fill
+          ? "min-h-0 flex-1 overflow-auto"
+          : bounded && cn("overflow-auto", BOUNDED_VIEWPORT_CLASS),
       )}
     >
       {lines.map((line) => {
@@ -163,6 +169,7 @@ export function RecordsCards({
             )}
             onClick={(event: MouseEvent<HTMLLIElement>) => {
               const target = event.target;
+              if (!isOwnClick(event)) return;
               if (
                 target instanceof Element &&
                 (target.closest(INTERACTIVE_IN_CARD) !== null ||

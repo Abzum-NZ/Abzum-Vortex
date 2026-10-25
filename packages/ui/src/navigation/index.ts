@@ -22,7 +22,10 @@ export {
   settledValue,
   type PageHoldOutcome,
 } from "./page-hold";
-export type { ApplicationShellRuntime, ApplicationWebMcpRuntime } from "./application-shell";
-export {
-  NAVIGATION_COMPONENT_REGISTRATIONS,
-} from "./registrations";
+export type {
+  ApplicationShellRuntime,
+  ApplicationSwitcherData,
+  ApplicationSwitcherSource,
+  ApplicationWebMcpRuntime,
+} from "./application-shell";
+export { NAVIGATION_COMPONENT_REGISTRATIONS } from "./registrations";

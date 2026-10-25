@@ -185,10 +185,9 @@ export const projectRecordsTableFeatures = (
       })
     : [];
   const search = features.search.enabled && bounds.searchable;
-  // A view keeps a sort or a filter, so it is offered only when the viewer has one to keep.
-  const savedViews =
-    features.savedViews.enabled &&
-    (columnFilters.length > 0 || contract.sortableFields.some((field) => readable(field)));
+  // A view keeps the whole grid (columns, density, search, and any sort or filter), so it is
+  // offered wherever the table enables it.
+  const savedViews = features.savedViews.enabled;
   const bulkActions = recordsTableBulkActions(contract);
   const inlineEdit = features.inlineEdit;
   const editableFields = recordsTableEditableFields(contract, rows, bounds, editors);
@@ -294,6 +293,9 @@ export const projectRecordsTableFeatures = (
         }
       : {}),
     ...(rowActions === undefined ? {} : { rowActions }),
+    ...(features.totals.enabled && !features.board.enabled && !features.pivot.enabled
+      ? { totals: true as const }
+      : {}),
     ...(features.pinning.enabled ? { pinning: true as const } : {}),
     ...(search ? { search: true as const } : {}),
     ...(columnFilters.length === 0 ? {} : { columnFilters }),
