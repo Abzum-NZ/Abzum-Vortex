@@ -5,6 +5,7 @@ import {
   checkRecordsTableFeature,
   plainSourceSettingValue,
   readRecordsTableFeatures,
+  recordsTableConditionalFormattingFeature,
   recordsTableFeatureDescription,
   recordsTableFilterKindOf,
   recordsTableFeatureKeys,
@@ -399,7 +400,7 @@ export function StudioGridFeatures({
                 />
               ) : null}
               {enabled &&
-              key === "conditional_formatting" &&
+              key === recordsTableConditionalFormattingFeature.key &&
               features !== undefined &&
               !incomplete.has(key) ? (
                 <div className="pb-2">

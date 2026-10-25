@@ -182,7 +182,7 @@ export const projectRecordsTableFeatures = (
   const readable = (field: string): boolean =>
     bounds.readableFieldIds.some((fieldId) => sameField(fieldId, field));
   // Each feature that declares its projection decides its own part for this viewer.
-  const context = { readable, searchable: bounds.searchable, filterFields };
+  const context = { readable, searchable: bounds.searchable, filterFields, conditionalFormatting };
   const declared = Object.fromEntries(
     recordsTableFeatureKeys.flatMap((key) => {
       const definition = recordsTableFeatureDefinition(key);
@@ -315,9 +315,6 @@ export const projectRecordsTableFeatures = (
       ? { tree: { pageSize: tree.childPageSize } }
       : {}),
     ...(grouping === undefined || grouping.label === "" ? {} : { grouping }),
-    ...(conditionalFormatting === undefined || !features.conditionalFormatting.enabled
-      ? {}
-      : { conditionalFormatting }),
     ...(pivot === undefined ? {} : { pivot }),
   };
   return Object.keys(projection).length === 0 ? undefined : projection;
