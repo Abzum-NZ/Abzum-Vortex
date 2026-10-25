@@ -18,13 +18,14 @@ import {
   studioPlacementRemovalReference,
   type StudioCompositionRemovalReason,
 } from "./application-composition-commands";
-import type { StudioPlacementReference } from "./composition-references";
+import { sourceNames, type StudioPlacementReference } from "./composition-references";
 import type { StudioSemanticSelection } from "./semantic-selection";
 import { applyStudioItemLabels } from "./application-item-labels";
 import {
   blockItem,
   cleanName,
   emptyPageData,
+  pageData,
   judged,
   blockRelease,
   placeNewPage,
@@ -60,7 +61,8 @@ export {
 export type { StudioStructureContext, StudioStructureResult } from "./application-structure-common";
 
 export type StudioStructureCommand =
-  | Readonly<{ kind: "add_page"; name: string; shellAlias: string | null; addToMenu: boolean }>
+  | (Readonly<{ kind: "add_page"; name: string; shellAlias: string | null; addToMenu: boolean }> &
+      (Readonly<{ type: "dashboard" }> | Readonly<{ type: "form"; recordType: string }>))
   | StudioRecordPageCommand
   | Readonly<{ kind: "add_shell"; name: string }>
   | Readonly<{
@@ -182,17 +184,64 @@ const addPage = (
   command: Extract<StudioStructureCommand, { kind: "add_page" }>,
 ): StudioStructureResult => {
   const name = cleanName(command.name, "page");
-  const composition = emptyPageData(context.source, command.shellAlias);
+  let composition = emptyPageData(context.source, command.shellAlias);
   const home = candidate.body.pages.find((page) => page.key === candidate.body.home_page);
   if (home === undefined)
     refuse(
       "The application's home page is missing, so a new page has no access rule to start from.",
     );
-  // A valid empty Puck page: no blocks, in the chosen frame. Who can open it starts as who can open the home page.
+  if (command.type === "form") {
+    const recordExists = candidate.body.modules.some((module) =>
+      module.record_types.some((record) => `${module.key}:${record.key}` === command.recordType),
+    );
+    if (!recordExists)
+      refuse("Choose a record type from a module this application owns for the form's context.");
+    const form = blockRelease(
+      context.catalogue,
+      PLATFORM_BLOCK_RELEASE_IDENTITIES.FORM_CONTAINER_BLOCK_RELEASE,
+    );
+    const button = blockRelease(
+      context.catalogue,
+      PLATFORM_BLOCK_RELEASE_IDENTITIES.BUTTON_BLOCK_RELEASE,
+    );
+    if (form === undefined || button === undefined)
+      refuse("The block catalogue has no form or submit button, so no page was added.");
+    const taken = sourceNames(candidate);
+    const formAlias = uniqueKey(name, "form_", taken, 140);
+    const submitAlias = uniqueKey(`${formAlias}_submit`, "", taken, 160);
+    composition = pageData(
+      context,
+      candidate,
+      command.shellAlias,
+      [
+        blockItem(
+          form!,
+          formAlias,
+          { title: name },
+          {
+            content: [
+              blockItem(
+                button!,
+                submitAlias,
+                { label: "Submit", action_kind: "submit", variant: "primary" },
+                {},
+              ),
+            ],
+          },
+        ),
+      ],
+      name,
+    );
+  }
+  // Who can open a new page starts as who can open the home page. Its submit flow is authored separately.
   const placed = placeNewPage(
     candidate,
     name,
-    { type: "dashboard", permission: home!.permission },
+    {
+      type: command.type,
+      permission: home!.permission,
+      ...(command.type === "form" ? { record_type: command.recordType } : {}),
+    },
     composition,
     command.addToMenu,
   );
