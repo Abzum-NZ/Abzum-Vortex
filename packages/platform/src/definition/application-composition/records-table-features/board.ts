@@ -1,10 +1,4 @@
 import { queryTotalLabel, queryTotalOperationLabels } from "../../module-query-edit";
-import { recordsTableFilterKindOf } from "./column-filters";
-import {
-  conditionalFormatRuleIssue,
-  conditionalFormatRuleFields,
-  type RecordsTableConditionalFormattingSettings,
-} from "./conditional-formatting";
 import {
   featureAvailable,
   featureEnabled,
@@ -20,6 +14,8 @@ import {
   type RecordsTableFeatureCheck,
   type RecordsTableFeatureDefinition,
   type RecordsTableFeatureState,
+  type GridFeatureRefusal,
+  type GridFeatureSettingsDeclaration,
 } from "./shared";
 
 /** A card shows its title and at most this many more fields. */
@@ -53,13 +49,178 @@ export type RecordsTableBoardMode = Extract<
   { enabled: true }
 >;
 
-const code = "definition_records_table_board" as const;
 const refuse = (reason: string): Extract<RecordsTableFeatureCheck, { kind: "not_possible" }> =>
-  Object.freeze({ kind: "not_possible", code, reason });
+  featureNotPossible(featureRefusal, reason) as Extract<
+    RecordsTableFeatureCheck,
+    { kind: "not_possible" }
+  >;
 const same = (left: string, right: string): boolean => left.toLowerCase() === right.toLowerCase();
 
-export const recordsTableBoardFeature: RecordsTableFeatureDefinition<RecordsTableBoardSettings> = {
+/** The feature's setting group in the Table release, off by default. */
+const featureSettings = {
+  kind: "group",
   key: "board",
+  label: "Board",
+  help: "Show the records as cards in columns, one for each stage of a pipeline",
+  required: false,
+  defaultValue: {
+    kind: "group",
+    properties: {
+      enabled: {
+        kind: "boolean",
+        value: false,
+      },
+      card_fields: {
+        kind: "list",
+        items: [],
+      },
+      totals: {
+        kind: "list",
+        items: [],
+      },
+      quick_add: {
+        kind: "boolean",
+        value: false,
+      },
+    },
+  },
+  properties: [
+    {
+      kind: "boolean",
+      key: "enabled",
+      label: "On",
+      help: "Show the grid as a board",
+      required: false,
+      defaultValue: {
+        kind: "boolean",
+        value: false,
+      },
+    },
+    {
+      kind: "field_reference",
+      key: "column_field",
+      label: "Column field",
+      help: "The stage field of a pipeline: each of its stages is a column and moving a card changes its stage",
+      required: false,
+      fieldTypes: ["choice"],
+    },
+    {
+      kind: "field_reference",
+      key: "card_title_field",
+      label: "Card title",
+      help: "The field shown as each card's title",
+      required: false,
+    },
+    {
+      kind: "list",
+      key: "card_fields",
+      label: "Card fields",
+      help: "Up to three more fields shown on each card",
+      required: false,
+      minimumItems: 0,
+      maximumItems: 3,
+      item: {
+        kind: "field_reference",
+        key: "field",
+        label: "Field",
+        help: "Field of the bound query shown on each card",
+        required: true,
+      },
+      defaultValue: {
+        kind: "list",
+        items: [],
+      },
+    },
+    {
+      kind: "list",
+      key: "totals",
+      label: "Column totals",
+      help: "Totals of the bound query shown in every column header, computed on the server",
+      required: false,
+      minimumItems: 0,
+      maximumItems: 6,
+      item: {
+        kind: "group",
+        key: "total",
+        label: "Total",
+        help: "One total of the bound query and its label",
+        required: true,
+        properties: [
+          {
+            kind: "text",
+            key: "alias",
+            label: "Query total",
+            help: "Alias of a total declared by the bound query",
+            required: true,
+            minLength: 1,
+            maxLength: 80,
+          },
+          {
+            kind: "text",
+            key: "label",
+            presentation: true,
+            label: "Label",
+            help: "Label shown for this total",
+            required: true,
+            minLength: 1,
+            maxLength: 60,
+          },
+        ],
+      },
+      defaultValue: {
+        kind: "list",
+        items: [],
+      },
+    },
+    {
+      kind: "number",
+      key: "wip_limit",
+      label: "Cards per column",
+      help: "A column warns when it holds more cards than this",
+      required: false,
+      integer: true,
+      minimum: 1,
+      maximum: 1000,
+    },
+    {
+      kind: "boolean",
+      key: "quick_add",
+      label: "Add from a column",
+      help: "Each column offers adding a card there; the flow bound to a card being added opens the create form with the column's stage chosen",
+      required: false,
+      defaultValue: {
+        kind: "boolean",
+        value: false,
+      },
+    },
+  ],
+} as const satisfies GridFeatureSettingsDeclaration;
+
+/** The feature's refusals and their business sentences. */
+const featureRefusal: GridFeatureRefusal = {
+  code: "definition_records_table_board",
+  order: 39,
+  message: "Board needs a stage field.",
+  guidance:
+    "Choose a query grouped by a stage field of a pipeline, and the card title and card fields it selects, or turn Board off.",
+};
+const boardRowActionRefusal: GridFeatureRefusal = {
+  code: "definition_records_table_board_row_action",
+  order: 39,
+  message: "A board opens a card through one row action.",
+  guidance: "Keep one row action that opens the record, or turn Board off to offer more.",
+};
+
+export const recordsTableBoardFeature: RecordsTableFeatureDefinition<
+  RecordsTableBoardSettings,
+  "board"
+> = {
+  key: "board",
+  property: "board",
+  settings: featureSettings,
+  refusals: [featureRefusal, boardRowActionRefusal],
+  onBoard: "own",
+  events: { card_moved: {}, card_added: { offeredBy: "quick_add" } },
   label: "Board",
   description:
     "Show the records as cards in columns, one for each stage; move a card to change its stage",
@@ -88,6 +249,11 @@ export const recordsTableBoardFeature: RecordsTableFeatureDefinition<RecordsTabl
   },
   // A board's columns and moves come from the pipeline of its stage field, so the bound query must
   // be grouped by exactly that field. Every refusal names the part that does not fit.
+  // A card opens through one row action.
+  conflicts: (state, facts, { features }) =>
+    state.enabled && features.rowActions.enabled && facts.table.rowActions.length !== 1
+      ? featureNotPossible(boardRowActionRefusal)
+      : undefined,
   check: (state, facts) => {
     const board = facts.board;
     if (board === undefined) return featureAvailable;
@@ -95,7 +261,7 @@ export const recordsTableBoardFeature: RecordsTableFeatureDefinition<RecordsTabl
       return board.stageFields.length > 0
         ? featureAvailable
         : featureNotPossible(
-            code,
+            featureRefusal,
             `Board needs a stage field: add a pipeline to a choice field of ${facts.recordTypeLabel || "the record type"} in Data.`,
           );
     return boardProblem(state, board) ?? featureAvailable;
@@ -169,87 +335,6 @@ export const boardProblem = (
       state.wipLimit > RECORDS_TABLE_BOARD_MAXIMUM_WIP_LIMIT)
   )
     return refuse(`Limit a column to 1 to ${RECORDS_TABLE_BOARD_MAXIMUM_WIP_LIMIT} cards.`);
-  return undefined;
-};
-
-/**
- * Why the fields a board's Column filters chose cannot narrow its cards, as one business sentence,
- * or undefined when each can. A board filters over every field of its record type, not only the
- * ones its cards show; a filter on linked records needs a record picker the board does not draw.
- */
-export const boardFilterProblem = (
-  fields: readonly string[],
-  board: RecordsTableBoardFacts,
-): Extract<RecordsTableFeatureCheck, { kind: "not_possible" }> | undefined => {
-  const refuseFilters = (
-    reason: string,
-  ): Extract<RecordsTableFeatureCheck, { kind: "not_possible" }> =>
-    Object.freeze({
-      kind: "not_possible",
-      code: "definition_records_table_column_filters",
-      reason,
-    });
-  if (fields.length === 0)
-    return refuseFilters("Choose at least one field to filter the cards by.");
-  for (const field of fields) {
-    const held = board.fields.find((candidate) => same(candidate.field, field));
-    if (held === undefined)
-      return refuseFilters(`A chosen filter field is not a field of ${board.queryLabel}.`);
-    if (held.type === "calculation" || held.type === "total")
-      return refuseFilters(`${held.label} is a calculated field and cannot be filtered.`);
-    if (!held.filterable)
-      return refuseFilters(
-        `${held.label} cannot be filtered: its record type does not allow filtering by it.`,
-      );
-    const kind = recordsTableFilterKindOf(held.type);
-    if (kind === undefined)
-      return refuseFilters(`${held.label} cannot be filtered: no filter fits its type.`);
-    if (kind === "link")
-      return refuseFilters(
-        `${held.label} links to other records, and a board cannot filter by linked records yet.`,
-      );
-  }
-  return undefined;
-};
-
-/**
- * Why the formatting a board's cards would get cannot be applied, as one business sentence, or
- * undefined when it can. A card is one block, so a rule colours the whole card and a number format
- * (a bar or scale over a column of cells) has nothing to draw on; a rule reads any field of the
- * board's record type that the query selects, whether or not the card shows it.
- */
-export const boardFormattingProblem = (
-  settings: RecordsTableConditionalFormattingSettings,
-  board: RecordsTableBoardFacts,
-): Extract<RecordsTableFeatureCheck, { kind: "not_possible" }> | undefined => {
-  const refuse = (reason: string): Extract<RecordsTableFeatureCheck, { kind: "not_possible" }> =>
-    Object.freeze({
-      kind: "not_possible",
-      code: "definition_records_table_conditional_formatting",
-      reason,
-    });
-  if (settings.rules.length === 0 && settings.columnFormats.length === 0)
-    return refuse("Add a rule that colours the cards.");
-  if (settings.columnFormats.length > 0)
-    return refuse("Number formats need table columns: remove them to format the cards of a board.");
-  const ids = new Set<string>();
-  for (const rule of settings.rules) {
-    if (ids.has(rule.id)) return refuse("Each rule needs its own identity.");
-    ids.add(rule.id);
-    if (rule.target.kind !== "row")
-      return refuse("A board formats whole cards: choose the whole row for every rule.");
-    const issue = conditionalFormatRuleIssue(rule, board);
-    if (issue !== undefined) return refuse(issue.replace("the bound query", board.queryLabel));
-    if (rule.enabled)
-      for (const field of conditionalFormatRuleFields(rule))
-        if (!board.selected.some((candidate) => same(candidate, field))) {
-          const label =
-            board.fields.find((candidate) => same(candidate.field, field))?.label ?? field;
-          return refuse(
-            `${label} is not selected by ${board.queryLabel}. Add it to the query to format these cards.`,
-          );
-        }
-  }
   return undefined;
 };
 

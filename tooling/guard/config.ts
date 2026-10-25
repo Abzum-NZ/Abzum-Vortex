@@ -159,12 +159,14 @@ export const guardRules = {
     description:
       "The derived Definition identity in TypeScript and SQL drifting apart: the TypeScript derivation must reproduce the recorded SQL vectors, and the SQL function must be the one they were recorded from",
   },
-  "grid-feature-registry": {
+  "grid-feature-definition": {
     tier: "blocking",
-    owner: "lead",
-    reviewBy: "2027-01-15",
+    owner: "core-grid",
+    reviewBy: "2026-12-15",
+    reviewNote:
+      "Introduced with the grid feature definition contract (#3015 C3); review once the fan-out in docs/build-plan/grid-feature-fanout.md is done",
     description:
-      "A Records table grid feature missing from its contract/check, Studio editor, UI lazy chunk, projection mapping or extension points/whole-grid views (direct TypeScript entries only), a row-action binding without its compiler gate, an eager row-command renderer, or a feature chunk imported outside the UI registry",
+      "A Records table grid feature key spelled outside its definition file in the grid code, a feature setting group without a default that turns it off, a refusal code without exactly one declared sentence, a featureNotPossible that does not name its file's own refusal, a row-action binding without its compiler gate, an eager row-command renderer, or a feature chunk imported outside the UI registry",
   },
   "invalid-guard-allow": {
     tier: "blocking",
@@ -199,5 +201,5 @@ export const scannedRuleIds = new Set([
   "definition-validation",
   "derived-id-parity",
   "contract-version-parity",
-  "grid-feature-registry",
+  "grid-feature-definition",
 ]);

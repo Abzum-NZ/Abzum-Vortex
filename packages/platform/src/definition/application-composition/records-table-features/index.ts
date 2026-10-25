@@ -16,9 +16,8 @@ export {
   type RecordsTableStatusBarOperation,
 } from "./spreadsheet";
 import type { ComponentSettingValue } from "../block-property-schema";
+import { registerFeatureValidationEntries } from "../../../catalogue/validation-errors";
 import {
-  boardFilterProblem,
-  boardFormattingProblem,
   recordsTableBoardFeature,
   type RecordsTableBoardMode,
   type RecordsTableBoardSettings,
@@ -50,11 +49,7 @@ import {
   recordsTableMasterDetailFeature,
   type RecordsTableMasterDetailSettings,
 } from "./master-detail";
-import {
-  RECORDS_TABLE_TREE_MAXIMUM_PAGE_SIZE,
-  recordsTableTreeFeature,
-  type RecordsTableTreeSettings,
-} from "./tree";
+import { recordsTableTreeFeature, type RecordsTableTreeSettings } from "./tree";
 import {
   recordsTableConditionalFormattingFeature,
   type RecordsTableConditionalFormattingSettings,
@@ -63,11 +58,7 @@ import { recordsTableSavedViewsFeature, type RecordsTableSavedViewsSettings } fr
 import { recordsTableSearchFeature, type RecordsTableSearchSettings } from "./search";
 import { recordsTablePinningFeature, type RecordsTablePinningSettings } from "./pinning";
 import { recordsTablePivotFeature, type RecordsTablePivotSettings } from "./pivot";
-import {
-  recordsTableGroupedQueryRefusal,
-  recordsTableGroupingFeature,
-  type RecordsTableGroupingSettings,
-} from "./grouping";
+import { recordsTableGroupingFeature, type RecordsTableGroupingSettings } from "./grouping";
 import { recordsTableTotalsFeature, type RecordsTableTotalsSettings } from "./totals";
 export { recordsTableAggregateSupportsType } from "./totals";
 export type { RecordsTableTotalsSettings } from "./totals";
@@ -75,8 +66,8 @@ import { recordsTableExportFeature, type RecordsTableExportSettings } from "./ex
 import {
   featureAvailable,
   featureNotPossible,
+  type GridFeatureRefusal,
   type RecordsTableFeatureCheck,
-  type RecordsTableFeatureRefusalCode,
   type RecordsTableFeatureDefinition,
   type RecordsTableFeatureState,
   type RecordsTableQueryFacts,
@@ -115,7 +106,9 @@ export {
   type RecordsTableGroupingFacts,
   type RecordsTableGroupingFieldType,
 } from "./grouping";
-export { boardFilterProblem, boardProblem, recordsTableBoardFactsOf } from "./board";
+export { boardProblem, recordsTableBoardFactsOf } from "./board";
+export { boardFilterProblem } from "./column-filters";
+export { boardFormattingProblem } from "./conditional-formatting";
 export {
   conditionalColumnFormatFieldTypes,
   conditionalColumnFormatIssue,
@@ -179,63 +172,98 @@ export type RecordsTableFeatures = Readonly<{
   export: RecordsTableFeatureState<RecordsTableExportSettings>;
 }>;
 
-const registry = {
-  totals: { property: "totals", definition: recordsTableTotalsFeature },
-  spreadsheet: { property: "spreadsheet", definition: recordsTableSpreadsheetFeature },
-  pinning: { property: "pinning", definition: recordsTablePinningFeature },
-  search: { property: "search", definition: recordsTableSearchFeature },
-  column_filters: { property: "columnFilters", definition: recordsTableColumnFiltersFeature },
-  saved_views: { property: "savedViews", definition: recordsTableSavedViewsFeature },
-  bulk_actions: { property: "bulkActions", definition: recordsTableBulkActionsFeature },
-  inline_edit: { property: "inlineEdit", definition: recordsTableInlineEditFeature },
-  row_edit: { property: "rowEdit", definition: recordsTableRowEditFeature },
-  row_actions: { property: "rowActions", definition: recordsTableRowActionsFeature },
-  master_detail: { property: "masterDetail", definition: recordsTableMasterDetailFeature },
-  tree: { property: "tree", definition: recordsTableTreeFeature },
-  grouping: { property: "grouping", definition: recordsTableGroupingFeature },
-  conditional_formatting: {
-    property: "conditionalFormatting",
-    definition: recordsTableConditionalFormattingFeature,
-  },
-  pivot: { property: "pivot", definition: recordsTablePivotFeature },
-  board: { property: "board", definition: recordsTableBoardFeature },
-  export: { property: "export", definition: recordsTableExportFeature },
-} as const satisfies Record<
-  string,
-  Readonly<{
-    property: keyof RecordsTableFeatures;
-    definition: RecordsTableFeatureDefinition<object>;
-  }>
->;
+export {
+  recordsTableBoardFeature,
+  recordsTableBulkActionsFeature,
+  recordsTableColumnFiltersFeature,
+  recordsTableConditionalFormattingFeature,
+  recordsTableExportFeature,
+  recordsTableGroupingFeature,
+  recordsTableInlineEditFeature,
+  recordsTableMasterDetailFeature,
+  recordsTablePinningFeature,
+  recordsTablePivotFeature,
+  recordsTableRowActionsFeature,
+  recordsTableRowEditFeature,
+  recordsTableSavedViewsFeature,
+  recordsTableSearchFeature,
+  recordsTableSpreadsheetFeature,
+  recordsTableTotalsFeature,
+  recordsTableTreeFeature,
+};
+
+/**
+ * Every grid feature definition, in the order the Table release declares their setting groups.
+ * The registry, the feature keys, the release's `features` group and its defaults, the refusal
+ * catalogue and the events the features raise are all derived from these definitions.
+ */
+export const recordsTableFeatureDefinitions = [
+  recordsTableSearchFeature,
+  recordsTableColumnFiltersFeature,
+  recordsTableSavedViewsFeature,
+  recordsTableBulkActionsFeature,
+  recordsTableInlineEditFeature,
+  recordsTableRowEditFeature,
+  recordsTableConditionalFormattingFeature,
+  recordsTableMasterDetailFeature,
+  recordsTableTreeFeature,
+  recordsTableGroupingFeature,
+  recordsTablePinningFeature,
+  recordsTableBoardFeature,
+  recordsTablePivotFeature,
+  recordsTableExportFeature,
+  recordsTableSpreadsheetFeature,
+  recordsTableRowActionsFeature,
+  recordsTableTotalsFeature,
+] as const;
+
+type Definition = (typeof recordsTableFeatureDefinitions)[number];
+export type RecordsTableFeatureKey = Definition["key"];
+
+const registry = Object.fromEntries(
+  recordsTableFeatureDefinitions.map((definition) => [definition.key, definition]),
+) as Readonly<Record<RecordsTableFeatureKey, RecordsTableFeatureDefinition<object>>>;
 
 /** The feature keys in the order Studio lists them; each is a key of the `features` setting group. */
-export const recordsTableFeatureKeys = [
-  "spreadsheet",
-  "pinning",
-  "search",
-  "column_filters",
-  "saved_views",
-  "bulk_actions",
-  "inline_edit",
-  "row_edit",
-  "row_actions",
-  "master_detail",
-  "tree",
-  "grouping",
-  "totals",
-  "conditional_formatting",
-  "pivot",
-  "board",
-  "export",
-] as const satisfies readonly (keyof typeof registry)[];
-export type RecordsTableFeatureKey = (typeof recordsTableFeatureKeys)[number];
+export const recordsTableFeatureKeys: readonly RecordsTableFeatureKey[] = [
+  recordsTableSpreadsheetFeature,
+  recordsTablePinningFeature,
+  recordsTableSearchFeature,
+  recordsTableColumnFiltersFeature,
+  recordsTableSavedViewsFeature,
+  recordsTableBulkActionsFeature,
+  recordsTableInlineEditFeature,
+  recordsTableRowEditFeature,
+  recordsTableRowActionsFeature,
+  recordsTableMasterDetailFeature,
+  recordsTableTreeFeature,
+  recordsTableGroupingFeature,
+  recordsTableTotalsFeature,
+  recordsTableConditionalFormattingFeature,
+  recordsTablePivotFeature,
+  recordsTableBoardFeature,
+  recordsTableExportFeature,
+].map((definition) => definition.key);
+
+/** One feature's definition, for code that works through a feature by its key. */
+export const recordsTableFeatureDefinition = (
+  key: RecordsTableFeatureKey,
+): RecordsTableFeatureDefinition<object> => registry[key];
+
+/** The viewport's refusal: a page-scrolling table draws every row, so its page stays small. */
+const boundedScrollingRefusal: GridFeatureRefusal = {
+  code: "definition_records_table_bounded_scrolling",
+  order: 35,
+  message: "A Records table page of more than 100 rows needs bounded scrolling.",
+  guidance: "Set the table's Scrolling to Bounded, or choose a page size of 100 rows or fewer.",
+};
 
 /** A feature's business name and one-line description, for Studio's Features list. */
 export const recordsTableFeatureDescription = (
   key: RecordsTableFeatureKey,
 ): Readonly<{ label: string; description: string }> => ({
-  label: registry[key].definition.label,
-  description: registry[key].definition.description,
+  label: registry[key].label,
+  description: registry[key].description,
 });
 
 /** One feature's state in a read contract. */
@@ -264,7 +292,7 @@ export const readRecordsTableFeatures = (
       key: Key,
     ): RecordsTableFeatureState<object> => {
       const feature = requiredGroup(group[key], `features.${key}`);
-      return withSettingPath(`features.${key}`, () => registry[key].definition.read(feature));
+      return withSettingPath(`features.${key}`, () => registry[key].read(feature));
     };
     const states = Object.fromEntries(
       recordsTableFeatureKeys.map((key) => [registry[key].property, read(key)]),
@@ -291,18 +319,6 @@ export const recordsTableFeaturesOrLog = (
 };
 
 /**
- * The features a board view implements beside Board itself. A feature not listed is refused when
- * it is on together with Board: the board draws cards, not table rows, and never ignores a feature.
- * A card opens through Row actions, the cards narrow through Column filters, which a board
- * reads over every field of its record type, and Formatting colours whole cards.
- */
-const recordsTableBoardSupportedFeatures: readonly RecordsTableFeatureKey[] = [
-  "row_actions",
-  "column_filters",
-  "conditional_formatting",
-];
-
-/**
  * Whether the table must be grouped to read its query: a grouped query has no flat rows, so a
  * table that reads one (and is not a board, which reads it its own way) shows its records in
  * groups. Publication refuses such a table while Group by is off, even though the feature is off.
@@ -312,10 +328,20 @@ export const recordsTableGroupingRequired = (
   facts: RecordsTableQueryFacts,
 ): boolean => facts.grouped && !features.board.enabled;
 
+/** Every refusal of the grid features and the viewport, for the definition validation catalogue. */
+export const recordsTableFeatureRefusals: readonly GridFeatureRefusal[] = [
+  boundedScrollingRefusal,
+  ...recordsTableFeatureDefinitions.flatMap((definition) => definition.refusals),
+];
+
+registerFeatureValidationEntries(recordsTableFeatureRefusals);
+
 /**
  * The one capability check of one feature against the bound query's facts. Publication runs it on
  * the compiled release for every enabled feature and refuses with its sentence; Studio runs it on
- * the draft's facts beside each switch, so the two never disagree.
+ * the draft's facts beside each switch, so the two never disagree. Each definition decides its own
+ * rules; this only orders them: the feature's conflicts with the table and its other features, then
+ * the board (which refuses a feature it does not draw and judges one it borrows), then the query.
  */
 export const checkRecordsTableFeature = (
   key: RecordsTableFeatureKey | "viewport",
@@ -330,175 +356,26 @@ export const checkRecordsTableFeature = (
     return facts.table.viewport === "page" &&
       tablePageSize !== undefined &&
       tablePageSize > RECORDS_TABLE_UNVIRTUALIZED_ROW_LIMIT
-      ? featureNotPossible("definition_records_table_bounded_scrolling")
+      ? featureNotPossible(boundedScrollingRefusal)
       : featureAvailable;
-  if (
-    key === "board" &&
-    state.enabled &&
-    features.rowActions.enabled &&
-    facts.table.rowActions.length !== 1
-  )
-    return featureNotPossible("definition_records_table_board_row_action");
-  if (
-    key === "row_actions" &&
-    state.enabled &&
-    facts.table.rowActions.filter((action) => action.placement === "inline").length > 3
-  )
-    return featureNotPossible("definition_records_table_row_action_limit");
-  if (presentation === "cards" && key === "spreadsheet")
-    return featureNotPossible(
-      "definition_records_table_spreadsheet",
-      "Spreadsheet controls need the Table preset. Lists do not have a cell range.",
-    );
-  if (presentation === "cards" && key === "inline_edit")
-    return featureNotPossible(
-      "definition_records_table_inline_edit",
-      "Inline editing needs the Table preset. Open a record to edit it from a List.",
-    );
-  if (presentation === "cards" && key === "pinning")
-    return featureNotPossible(
-      "definition_records_table_pinning",
-      "Column pinning needs the Table preset. Lists have no scrolling columns.",
-    );
-  if (key === "tree" && state.enabled && features.board.enabled)
-    return featureNotPossible(
-      "definition_records_table_tree",
-      "Turn Board off to show records as a tree.",
-    );
-  if (key === "totals" && state.enabled && features.pivot.enabled)
-    return featureNotPossible(
-      "definition_records_table_totals",
-      "Turn Pivot off to show footer totals; a pivot has its own totals.",
-    );
-  // Paste and fill write through the table's inline edit, so they need it on with a field to change.
-  if (
-    key === "spreadsheet" &&
-    features.spreadsheet.enabled &&
-    (features.spreadsheet.paste || features.spreadsheet.fill) &&
-    (!features.inlineEdit.enabled || features.inlineEdit.fields.length === 0)
-  )
-    return featureNotPossible(
-      "definition_records_table_spreadsheet",
-      "Paste and fill need Inline editing and at least one editable field",
-    );
-  // A row opens one panel: its related records or the records beneath it, never both.
-  if (key === "tree" && state.enabled && features.masterDetail.enabled)
-    return featureNotPossible(
-      "definition_records_table_tree",
-      "A row shows either its related records or the records beneath it; turn Related records off to use a tree.",
-    );
-  // Personal rules are evaluated by the table's own formatting, so they need it on.
-  if (
-    key === "saved_views" &&
-    state.enabled &&
-    (state as Extract<RecordsTableFeatures["savedViews"], { enabled: true }>).personalFormatting &&
-    !features.conditionalFormatting.enabled
-  )
-    return featureNotPossible(
-      "definition_records_table_saved_views",
-      "People can only add their own formatting when Formatting is on for this table. Turn Formatting on, or turn personal formatting off.",
-    );
-  if (key === "grouping" && !state.enabled && recordsTableGroupingRequired(features, facts))
-    return recordsTableGroupedQueryRefusal(facts);
-  // Groups, a board's columns, a tree's levels and a pivot's cells each arrange the records
-  // their own way, so the table shows one of them at a time.
-  if (key === "grouping" && state.enabled) {
-    const other = features.board.enabled
-      ? "Board"
-      : features.tree.enabled
-        ? "Tree"
-        : features.pivot.enabled
-          ? "Pivot"
-          : undefined;
-    if (other !== undefined)
-      return featureNotPossible(
-        "definition_records_table_grouping",
-        `Turn ${other} off to group the records.`,
-      );
-  }
-  if (key === "pivot" && state.enabled && features.tree.enabled)
-    return featureNotPossible(
-      "definition_records_table_pivot",
-      "Turn Tree off to pivot the records.",
-    );
-  // A board draws cards, not table rows, so a feature the board view does not implement is
-  // refused rather than silently ignored. Grouping and tree carry their own sentences above.
-  if (
-    state.enabled &&
-    features.board.enabled &&
-    key !== "board" &&
-    key !== "grouping" &&
-    key !== "tree" &&
-    !recordsTableBoardSupportedFeatures.includes(key)
-  )
-    return featureNotPossible(
-      `definition_records_table_${key}` as RecordsTableFeatureRefusalCode,
-      `${registry[key].definition.label} is not available on a board yet: turn Board off to use it, or turn ${registry[key].definition.label} off.`,
-    );
+  const definition = registry[key];
+  const context = { features, presentation, tablePageSize };
+  const conflict = definition.conflicts?.(state, facts, context);
+  if (conflict !== undefined) return conflict;
+  if (features.board.enabled && definition.onBoard === "unsupported")
+    return state.enabled
+      ? featureNotPossible(
+          definition.refusals[0],
+          `${definition.label} is not available on a board yet: turn Board off to use it, or turn ${definition.label} off.`,
+        )
+      : definition.check(state, facts, context);
   // The board reads its own grouped query, which the board check judges; a table-row check of a
   // feature the board borrows would refuse that query.
-  if (
-    features.board.enabled &&
-    key !== "board" &&
-    recordsTableBoardSupportedFeatures.includes(key)
-  ) {
-    if (key === "column_filters" && state.enabled && facts.board !== undefined)
-      return (
-        boardFilterProblem(
-          (state as Extract<RecordsTableFeatures["columnFilters"], { enabled: true }>).fields,
-          facts.board,
-        ) ?? featureAvailable
-      );
-    if (key === "conditional_formatting" && state.enabled && facts.board !== undefined)
-      return (
-        boardFormattingProblem(
-          state as Extract<RecordsTableFeatures["conditionalFormatting"], { enabled: true }>,
-          facts.board,
-        ) ?? featureAvailable
-      );
-    return featureAvailable;
-  }
-  const check = (registry[key].definition as RecordsTableFeatureDefinition<object>).check(
-    state,
-    facts,
-  );
-  // The table's page and one page of child records must fit the rows a tree table holds at once.
-  const childPageSize = features.tree.enabled ? features.tree.childPageSize : undefined;
-  if (
-    key === "tree" &&
-    check.kind !== "not_possible" &&
-    childPageSize !== undefined &&
-    tablePageSize !== undefined &&
-    tablePageSize + childPageSize > RECORDS_TABLE_TREE_MAXIMUM_PAGE_SIZE
-  )
-    return featureNotPossible(
-      "definition_records_table_tree",
-      `A tree table shows at most ${RECORDS_TABLE_TREE_MAXIMUM_PAGE_SIZE} rows at once: its ${tablePageSize} records a page and ${childPageSize} child records at a time do not fit. Lower one of them.`,
-    );
-  // Opening a pivot cell filters the table through Column filters, so both dimensions must be
-  // among this table's enabled Column filters fields, not merely among its displayed columns.
-  if (key === "pivot" && state.enabled && check.kind !== "not_possible") {
-    const pivot = state as Extract<RecordsTableFeatures["pivot"], { enabled: true }>;
-    const filterable = features.columnFilters.enabled ? features.columnFilters.fields : [];
-    for (const [part, field] of [
-      ["rows", pivot.rowField],
-      ["columns", pivot.columnField],
-    ] as const) {
-      if (
-        field === undefined ||
-        filterable.some((candidate) => candidate.toLowerCase() === field.toLowerCase())
-      )
-        continue;
-      const label =
-        facts.fields.find((candidate) => candidate.field.toLowerCase() === field.toLowerCase())
-          ?.label ?? field;
-      return featureNotPossible(
-        "definition_records_table_pivot",
-        `Add ${label} to Column filters so people can drill into pivot ${part}.`,
-      );
-    }
-  }
-  return check;
+  if (features.board.enabled && definition.onBoard === "supported")
+    return facts.board === undefined
+      ? featureAvailable
+      : (definition.boardCheck?.(state, facts.board) ?? featureAvailable);
+  return definition.check(state, facts, context);
 };
 
 /** Every feature's state and check, in Studio's order. */
@@ -540,15 +417,14 @@ export const checkRecordsTableFeatures = (
  */
 const featureEvents: Readonly<
   Record<string, Readonly<{ feature: RecordsTableFeatureKey; offeredBy?: string }>>
-> = {
-  search_changed: { feature: "search" },
-  filter_changed: { feature: "column_filters" },
-  inline_edit: { feature: "inline_edit" },
-  row_edit: { feature: "row_edit" },
-  row_action: { feature: "row_actions" },
-  card_moved: { feature: "board" },
-  card_added: { feature: "board", offeredBy: "quick_add" },
-};
+> = Object.fromEntries(
+  recordsTableFeatureDefinitions.flatMap((definition) =>
+    Object.entries(definition.events ?? {}).map(([event, offer]) => [
+      event,
+      { feature: definition.key, ...offer },
+    ]),
+  ),
+);
 
 /** The feature whose controls raise this Records table event, for the events a feature owns. */
 export const recordsTableFeatureOfEvent = (event: string): RecordsTableFeatureKey | undefined =>

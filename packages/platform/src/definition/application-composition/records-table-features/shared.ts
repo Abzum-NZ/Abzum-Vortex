@@ -1,6 +1,5 @@
-import type { DefinitionValidationErrorCode } from "../../../catalogue/validation-errors";
-import { definitionValidationErrorCatalogue } from "../../../catalogue/validation-errors";
 import type { ComponentSettingValue } from "../block-property-schema";
+import type { RecordsTableFeatures } from "./index";
 import type {
   QueryBindingField,
   QueryBindingInput,
@@ -335,30 +334,45 @@ export const recordsTableFieldNotEditableReason = (
   }
 };
 
-/** A feature's codes: each is a validation catalogue entry whose message is the business sentence. */
-export type RecordsTableFeatureRefusalCode = Extract<
-  DefinitionValidationErrorCode,
-  | "definition_records_table_bounded_scrolling"
-  | "definition_records_table_row_action_limit"
-  | "definition_records_table_board_row_action"
-  | "definition_records_table_search"
-  | "definition_records_table_column_filters"
-  | "definition_records_table_saved_views"
-  | "definition_records_table_bulk_actions"
-  | "definition_records_table_inline_edit"
-  | "definition_records_table_row_edit"
-  | "definition_records_table_row_actions"
-  | "definition_records_table_master_detail"
-  | "definition_records_table_tree"
-  | "definition_records_table_grouping"
-  | "definition_records_table_totals"
-  | "definition_records_table_conditional_formatting"
-  | "definition_records_table_pinning"
-  | "definition_records_table_pivot"
-  | "definition_records_table_spreadsheet"
-  | "definition_records_table_board"
-  | "definition_records_table_export"
->;
+/**
+ * The refusal codes of the Records table's grid features. Each code belongs to exactly one feature
+ * definition (or, for the viewport, to the feature registry), which declares its business sentence;
+ * the definition validation catalogue lists them from there.
+ */
+export const recordsTableFeatureRefusalCodes = [
+  "definition_records_table_bounded_scrolling",
+  "definition_records_table_search",
+  "definition_records_table_column_filters",
+  "definition_records_table_saved_views",
+  "definition_records_table_bulk_actions",
+  "definition_records_table_inline_edit",
+  "definition_records_table_row_edit",
+  "definition_records_table_row_actions",
+  "definition_records_table_row_action_limit",
+  "definition_records_table_board_row_action",
+  "definition_records_table_master_detail",
+  "definition_records_table_tree",
+  "definition_records_table_grouping",
+  "definition_records_table_totals",
+  "definition_records_table_conditional_formatting",
+  "definition_records_table_pinning",
+  "definition_records_table_pivot",
+  "definition_records_table_spreadsheet",
+  "definition_records_table_board",
+  "definition_records_table_export",
+] as const;
+export type RecordsTableFeatureRefusalCode = (typeof recordsTableFeatureRefusalCodes)[number];
+
+/**
+ * One refusal a feature can give: its stable code, its place in the validation catalogue, and the
+ * business sentence and guidance publication and Studio show when no more specific sentence applies.
+ */
+export type GridFeatureRefusal = Readonly<{
+  code: RecordsTableFeatureRefusalCode;
+  order: number;
+  message: string;
+  guidance: string;
+}>;
 
 /** The outcome of one feature check: available, or not possible with its one business sentence. */
 export type RecordsTableFeatureCheck =
@@ -367,12 +381,12 @@ export type RecordsTableFeatureCheck =
 
 export const featureAvailable: RecordsTableFeatureCheck = Object.freeze({ kind: "available" });
 
-/** A feature that is not possible: the catalogue sentence, or one that names the field at fault. */
+/** A feature that is not possible: the refusal's own sentence, or one that names the part at fault. */
 export const featureNotPossible = (
-  code: RecordsTableFeatureRefusalCode,
+  refusal: GridFeatureRefusal,
   /** The sentence naming the part that does not fit, for a feature whose sentence is not fixed. */
-  reason: string = definitionValidationErrorCatalogue[code].message,
-): RecordsTableFeatureCheck => Object.freeze({ kind: "not_possible", code, reason });
+  reason: string = refusal.message,
+): RecordsTableFeatureCheck => Object.freeze({ kind: "not_possible", code: refusal.code, reason });
 
 /** The facts of a field the settings name, compared without regard to case. */
 export const factsOf = <Field extends Readonly<{ field: string }>>(
@@ -382,22 +396,100 @@ export const factsOf = <Field extends Readonly<{ field: string }>>(
   facts.fields.find((candidate) => candidate.field.toLowerCase() === field.toLowerCase());
 
 /**
- * One grid feature of the Records table: its key in the `features` setting group, its business
- * name, the reader of its typed settings and its one capability check. The check answers for an
- * enabled feature whether its settings fit the bound query, and for a feature that is off whether
- * it could be turned on at all, so Studio shows the same sentence beside the switch either way.
+ * A feature's setting group as the Table release declares it inside its `features` group: the
+ * catalogue entry of one feature, whose `defaultValue` turns the feature off. Puck `defaultProps`
+ * and every Studio draft take it from here, so a strict reader never meets a missing group. The
+ * release contract validates the declared properties when the catalogue loads.
  */
-export type RecordsTableFeatureDefinition<Settings extends object> = Readonly<{
+export type GridFeatureSettingsDeclaration = Readonly<{
+  kind: "group";
   key: string;
+  label: string;
+  help: string;
+  required: boolean;
+  defaultValue: Readonly<{
+    kind: "group";
+    properties: Readonly<{ enabled: Readonly<{ kind: "boolean"; value: false }> }> &
+      Readonly<Record<string, unknown>>;
+  }>;
+  properties: readonly object[];
+}>;
+
+/** What a feature check knows beside its own state: the table's other features and its shape. */
+export type GridFeatureCheckContext = Readonly<{
+  features: RecordsTableFeatures;
+  presentation: "grid" | "cards";
+  /** The table's own page size; a tree's opened levels share one row budget with it. */
+  tablePageSize: number | undefined;
+}>;
+
+/**
+ * What one viewer's read decides for a feature's part of the viewer's projection. Every part is
+ * narrowed to what this viewer may do now; the server rechecks every request it allows.
+ */
+export type GridFeatureProjectionContext = Readonly<{
+  /** The viewer is guaranteed to see the field on every record they may read. */
+  readable: (field: string) => boolean;
+  /** Some searchable field is among the fields the viewer is guaranteed to see. */
+  searchable: boolean;
+  /** The filter control of each filterable field, by lower-cased field identity. */
+  filterFields: Readonly<Record<string, object>> | undefined;
+}>;
+
+/**
+ * One grid feature of the Records table, declared once: its key in the `features` setting group,
+ * the property that names its state in the read contract and in the viewer's projection, its
+ * business name, its setting group with the defaults, its refusals with their sentences, the reader
+ * of its typed settings and its one capability check. Studio, publication and the runtime use this
+ * definition and nothing else, so they never disagree.
+ *
+ * The check answers for an enabled feature whether its settings fit the bound query and the other
+ * features, and for a feature that is off whether it could be turned on at all, so Studio shows the
+ * same sentence beside the switch either way. `conflicts` decides first (the table's shape and the
+ * other features); then a board refuses a feature it does not draw (`onBoard: "unsupported"`) or
+ * judges one it borrows with `boardCheck`; then `check` decides against the bound query.
+ */
+export type RecordsTableFeatureDefinition<
+  Settings extends object,
+  Key extends string = string,
+> = Readonly<{
+  key: Key;
+  property: keyof RecordsTableFeatures;
   label: string;
   /** One short line saying what the feature lets people do. */
   description: string;
+  settings: GridFeatureSettingsDeclaration;
+  /** Every refusal the feature gives; the first is the one a reader without context sees. */
+  refusals: readonly [GridFeatureRefusal, ...GridFeatureRefusal[]];
+  /** How a board treats the feature: draws it, refuses it, or the feature decides itself. */
+  onBoard: "supported" | "unsupported" | "own";
+  /** The Records table events the feature's controls raise, with the switch that offers each. */
+  events?: Readonly<Record<string, Readonly<{ offeredBy?: string }>>>;
   /** Reads the enabled feature's settings; a setting it cannot read throws `UnreadableSettingError`. */
   read(group: SettingsRecord): RecordsTableFeatureState<Settings>;
+  conflicts?(
+    state: RecordsTableFeatureState<Settings>,
+    facts: RecordsTableQueryFacts,
+    context: GridFeatureCheckContext,
+  ): RecordsTableFeatureCheck | undefined;
+  boardCheck?(
+    state: RecordsTableFeatureState<Settings>,
+    board: RecordsTableBoardFacts,
+  ): RecordsTableFeatureCheck | undefined;
   check(
     state: RecordsTableFeatureState<Settings>,
     facts: RecordsTableQueryFacts,
+    context: GridFeatureCheckContext,
   ): RecordsTableFeatureCheck;
+  /**
+   * The feature's part of one viewer's projection, under the feature's `property`, or undefined
+   * when the feature is off for this viewer. Publication has already refused any combination the
+   * feature does not support, so the projection never repeats a check.
+   */
+  project?(
+    state: RecordsTableFeatureState<Settings>,
+    context: GridFeatureProjectionContext,
+  ): unknown;
 }>;
 
 export const RECORDS_TABLE_UNVIRTUALIZED_ROW_LIMIT = 100;

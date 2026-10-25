@@ -10,6 +10,8 @@ import {
   requiredText,
   unreadable,
   type RecordsTableFeatureDefinition,
+  type GridFeatureRefusal,
+  type GridFeatureSettingsDeclaration,
 } from "./shared";
 
 /** The maximum authored action limit; explicit selections also have a 200-record page cap. */
@@ -59,57 +61,162 @@ const readBulkActions = (
 const sameKey = (left: string, right: string): boolean =>
   left.toLowerCase() === right.toLowerCase();
 
-export const recordsTableBulkActionsFeature: RecordsTableFeatureDefinition<RecordsTableBulkActionsSettings> =
-  {
-    key: "bulk_actions",
-    label: "Bulk actions",
-    description: "Select rows, or every matching record, and run a named action over them",
-    read: (group) =>
-      featureEnabled(group)
-        ? { enabled: true, actions: readBulkActions(group["actions"]) }
-        : { enabled: false },
-    // A selection of records needs rows that are records (a grouped or summarised query has none)
-    // and a named action of their record type that runs on several records, each on its own.
-    check: (state, facts) => {
-      const offered = facts.actions.filter((action) => action.acceptsSelection);
-      const needed = featureNotPossible(
-        "definition_records_table_bulk_actions",
-        `Bulk actions need a named action of ${facts.recordTypeLabel || "the record type"} that accepts several records`,
-      );
-      if (facts.grouped || (!state.enabled && offered.length === 0)) return needed;
-      if (!state.enabled) return featureAvailable;
-      if (state.actions.length === 0) return needed;
-      if (state.actions.length > 20)
+/** The feature's setting group in the Table release, off by default. */
+const featureSettings = {
+  kind: "group",
+  key: "bulk_actions",
+  label: "Bulk actions",
+  help: "Select rows, or every matching record, and run a named action over them",
+  required: false,
+  defaultValue: {
+    kind: "group",
+    properties: {
+      enabled: {
+        kind: "boolean",
+        value: false,
+      },
+      actions: {
+        kind: "list",
+        items: [],
+      },
+    },
+  },
+  properties: [
+    {
+      kind: "boolean",
+      key: "enabled",
+      label: "On",
+      help: "Let people select rows and run commands over them",
+      required: false,
+      defaultValue: {
+        kind: "boolean",
+        value: false,
+      },
+    },
+    {
+      kind: "list",
+      key: "actions",
+      label: "Bulk actions",
+      help: "Named actions of the record type people run over the selection",
+      required: false,
+      minimumItems: 0,
+      maximumItems: 20,
+      item: {
+        kind: "group",
+        key: "bulk_action",
+        label: "Bulk action",
+        help: "One named action over the selection",
+        required: true,
+        properties: [
+          {
+            kind: "action_reference",
+            key: "action",
+            label: "Named action",
+            help: "The named action of the record type that runs on each selected record",
+            required: true,
+          },
+          {
+            kind: "text",
+            key: "label",
+            presentation: true,
+            label: "Label",
+            help: "Text shown on the command",
+            required: true,
+            minLength: 1,
+            maxLength: 60,
+          },
+          {
+            kind: "boolean",
+            key: "confirm",
+            label: "Ask first",
+            help: "Ask people to confirm, with the exact number of records, before it runs",
+            required: true,
+            defaultValue: {
+              kind: "boolean",
+              value: true,
+            },
+          },
+          {
+            kind: "number",
+            key: "max_records",
+            integer: true,
+            label: "Most records",
+            help: "The most records one run over every matching record may change, up to 5,000",
+            required: true,
+            minimum: 1,
+            maximum: 5000,
+            defaultValue: {
+              kind: "number",
+              value: 5000,
+            },
+          },
+        ],
+      },
+      defaultValue: {
+        kind: "list",
+        items: [],
+      },
+    },
+  ],
+} as const satisfies GridFeatureSettingsDeclaration;
+
+/** The feature's refusals and their business sentences. */
+const featureRefusal: GridFeatureRefusal = {
+  code: "definition_records_table_bulk_actions",
+  order: 39,
+  message: "Bulk actions need a named action of the record type that accepts several records.",
+  guidance:
+    "Add a named action of the bound record type that needs no input typed for one record, with a limit of at most 5,000 records, or turn Bulk actions off.",
+};
+
+export const recordsTableBulkActionsFeature: RecordsTableFeatureDefinition<
+  RecordsTableBulkActionsSettings,
+  "bulk_actions"
+> = {
+  key: "bulk_actions",
+  property: "bulkActions",
+  settings: featureSettings,
+  refusals: [featureRefusal],
+  onBoard: "unsupported",
+  label: "Bulk actions",
+  description: "Select rows, or every matching record, and run a named action over them",
+  read: (group) =>
+    featureEnabled(group)
+      ? { enabled: true, actions: readBulkActions(group["actions"]) }
+      : { enabled: false },
+  // A selection of records needs rows that are records (a grouped or summarised query has none)
+  // and a named action of their record type that runs on several records, each on its own.
+  check: (state, facts) => {
+    const offered = facts.actions.filter((action) => action.acceptsSelection);
+    const needed = featureNotPossible(
+      featureRefusal,
+      `Bulk actions need a named action of ${facts.recordTypeLabel || "the record type"} that accepts several records`,
+    );
+    if (facts.grouped || (!state.enabled && offered.length === 0)) return needed;
+    if (!state.enabled) return featureAvailable;
+    if (state.actions.length === 0) return needed;
+    if (state.actions.length > 20)
+      return featureNotPossible(featureRefusal, "Choose at most 20 bulk actions");
+    if (
+      new Set(state.actions.map((action) => action.action.toLowerCase())).size !==
+      state.actions.length
+    )
+      return featureNotPossible(featureRefusal, "Choose each bulk action once");
+    for (const declared of state.actions) {
+      const action = facts.actions.find((candidate) => sameKey(candidate.key, declared.action));
+      if (action === undefined) return needed;
+      if (!action.acceptsSelection)
         return featureNotPossible(
-          "definition_records_table_bulk_actions",
-          "Choose at most 20 bulk actions",
+          featureRefusal,
+          `${action.label} changes one record at a time, so it cannot run on a selection`,
         );
       if (
-        new Set(state.actions.map((action) => action.action.toLowerCase())).size !==
-        state.actions.length
+        !Number.isInteger(declared.maxRecords) ||
+        declared.maxRecords < 1 ||
+        declared.maxRecords > recordsTableBulkActionRecordLimit
       )
-        return featureNotPossible(
-          "definition_records_table_bulk_actions",
-          "Choose each bulk action once",
-        );
-      for (const declared of state.actions) {
-        const action = facts.actions.find((candidate) => sameKey(candidate.key, declared.action));
-        if (action === undefined) return needed;
-        if (!action.acceptsSelection)
-          return featureNotPossible(
-            "definition_records_table_bulk_actions",
-            `${action.label} changes one record at a time, so it cannot run on a selection`,
-          );
-        if (
-          !Number.isInteger(declared.maxRecords) ||
-          declared.maxRecords < 1 ||
-          declared.maxRecords > recordsTableBulkActionRecordLimit
-        )
-          return featureNotPossible(
-            "definition_records_table_bulk_actions",
-            "Set a limit of at most 5,000 records",
-          );
-      }
-      return featureAvailable;
-    },
-  };
+        return featureNotPossible(featureRefusal, "Set a limit of at most 5,000 records");
+    }
+    return featureAvailable;
+  },
+};

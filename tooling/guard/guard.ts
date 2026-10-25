@@ -964,97 +964,227 @@ for (const file of files.filter(
   }
 }
 
-// A Records table grid feature exists in the platform contract (with its one capability check),
-// Studio's Features panel, the UI's lazy chunks and its extension points or whole-grid views.
-// All registries name the same features, including the server-projection mapping, and only the UI registry imports a feature's chunk, so there is no second gating path
-// (the core header menu and toolbar beside it are imported directly; auto-size is their own chunk).
+// A Records table grid feature is declared once, in its definition file: its key, its setting
+// group with a default that turns it off, and every refusal it gives with its sentence. Every other
+// layer (Studio, the UI registry, the server projection) reaches a feature through its definition
+// object, so a feature key spelled anywhere else in the grid code is a second declaration. Only the
+// UI registry imports a feature's chunk, so there is no second gating path (the core header menu and
+// toolbar beside it are imported directly; auto-size is their own chunk).
 {
-  const registries: Array<[string, string[], ("keys" | "values")?]> = [
-    [
-      "packages/platform/src/definition/application-composition/records-table-features/index.ts",
-      ["recordsTableFeatureKeys"],
-    ],
-    ["packages/ui/src/studio/grid-features/index.ts", ["studioGridFeatureEditors"]],
-    ["packages/ui/src/display/grid-features/registry.tsx", ["loaders", "viewLoaders"]],
-    ["packages/ui/src/display/grid-features/registry.tsx", ["featurePoints", "viewLoaders"]],
-    [
-      "packages/ui/src/display/grid-features/registry.tsx",
-      ["projectionKeys", "viewLoaders"],
-      "values",
-    ],
-  ];
-  const keySets = registries.map(([file, names, selection]): [string, string[]] => {
-    const source = ts.createSourceFile(file, read(file), ts.ScriptTarget.Latest, true);
-    const keys: string[] = [];
-    for (const name of names) {
-      let initializer: ts.Expression | undefined;
-      for (const statement of source.statements) {
-        if (!ts.isVariableStatement(statement)) continue;
-        for (const declaration of statement.declarationList.declarations)
-          if (ts.isIdentifier(declaration.name) && declaration.name.text === name)
-            initializer = declaration.initializer;
-      }
-      while (
-        initializer &&
-        (ts.isAsExpression(initializer) || ts.isSatisfiesExpression(initializer))
+  const featureDirectory =
+    "packages/platform/src/definition/application-composition/records-table-features/";
+  const unwrap = (node: ts.Expression | undefined): ts.Expression | undefined => {
+    let current = node;
+    while (current && (ts.isAsExpression(current) || ts.isSatisfiesExpression(current)))
+      current = current.expression;
+    return current;
+  };
+  const propertyOf = (
+    node: ts.ObjectLiteralExpression,
+    name: string,
+  ): ts.Expression | undefined => {
+    for (const property of node.properties)
+      if (
+        ts.isPropertyAssignment(property) &&
+        (ts.isIdentifier(property.name) || ts.isStringLiteral(property.name)) &&
+        property.name.text === name
       )
-        initializer = initializer.expression;
-      // Read only direct properties/elements: nested settings and comments are not feature keys.
-      const entries =
-        initializer && ts.isArrayLiteralExpression(initializer)
-          ? initializer.elements.map((element) =>
-              ts.isStringLiteral(element) ? element.text : undefined,
-            )
-          : initializer && ts.isObjectLiteralExpression(initializer)
-            ? initializer.properties.map((property) =>
-                !ts.isPropertyAssignment(property)
-                  ? undefined
-                  : selection === "values" && name === "projectionKeys"
-                    ? ts.isStringLiteral(property.initializer)
-                      ? property.initializer.text
-                      : undefined
-                    : ts.isIdentifier(property.name) || ts.isStringLiteral(property.name)
-                      ? property.name.text
-                      : undefined,
-              )
-            : undefined;
-      if (entries === undefined || entries.some((entry) => entry === undefined)) {
-        add("grid-feature-registry", file, 1, "the grid feature registry could not be read");
-        continue;
+        return unwrap(property.initializer);
+    return undefined;
+  };
+  const sourceOf = (file: string) =>
+    ts.createSourceFile(file, read(file), ts.ScriptTarget.Latest, true);
+  const walk = (node: ts.Node, visit: (node: ts.Node) => void): void => {
+    visit(node);
+    node.forEachChild((child) => walk(child, visit));
+  };
+  // The definitions: each `export const recordsTable…Feature` object and the key it declares.
+  const definitionFiles = new Map<string, string>();
+  const refusalCodes = new Map<string, Array<{ file: string; line: number }>>();
+  const featureFiles = codeFiles.filter(
+    (file) => file.startsWith(featureDirectory) && file.endsWith(".ts"),
+  );
+  for (const file of featureFiles) {
+    const source = sourceOf(file);
+    const content = read(file);
+    const refusalNames = new Set<string>();
+    let settings: ts.ObjectLiteralExpression | undefined;
+    let definitionKey: string | undefined;
+    for (const statement of source.statements) {
+      if (!ts.isVariableStatement(statement)) continue;
+      for (const declaration of statement.declarationList.declarations) {
+        if (!ts.isIdentifier(declaration.name)) continue;
+        const initializer = unwrap(declaration.initializer);
+        const name = declaration.name.text;
+        if (name === "featureSettings" && initializer && ts.isObjectLiteralExpression(initializer))
+          settings = initializer;
+        if (
+          declaration.type !== undefined &&
+          ts.isTypeReferenceNode(declaration.type) &&
+          declaration.type.typeName.getText(source) === "GridFeatureRefusal" &&
+          initializer &&
+          ts.isObjectLiteralExpression(initializer)
+        ) {
+          refusalNames.add(name);
+          const code = propertyOf(initializer, "code");
+          const line = lineAt(content, declaration.getStart(source));
+          for (const part of ["message", "guidance"]) {
+            const text = propertyOf(initializer, part);
+            if (!text || !ts.isStringLiteral(text) || text.text.trim() === "")
+              add("grid-feature-definition", file, line, `refusal ${name} has no ${part} sentence`);
+          }
+          if (code && ts.isStringLiteral(code))
+            refusalCodes.set(code.text, [...(refusalCodes.get(code.text) ?? []), { file, line }]);
+        }
+        if (
+          /^recordsTable\w+Feature$/.test(name) &&
+          initializer &&
+          ts.isObjectLiteralExpression(initializer)
+        ) {
+          const key = propertyOf(initializer, "key");
+          if (key && ts.isStringLiteral(key)) definitionKey = key.text;
+        }
       }
-      keys.push(...(entries as string[]));
     }
-    return [file, [...new Set(keys)].sort()];
+    if (definitionKey !== undefined) {
+      definitionFiles.set(definitionKey, file);
+      // Settings are always present: the feature's group carries a default that turns it off.
+      const defaultValue = settings && propertyOf(settings, "defaultValue");
+      const defaults =
+        defaultValue && ts.isObjectLiteralExpression(defaultValue)
+          ? propertyOf(defaultValue, "properties")
+          : undefined;
+      const enabled =
+        defaults && ts.isObjectLiteralExpression(defaults)
+          ? propertyOf(defaults, "enabled")
+          : undefined;
+      const value =
+        enabled && ts.isObjectLiteralExpression(enabled) ? propertyOf(enabled, "value") : undefined;
+      if (value === undefined || value.kind !== ts.SyntaxKind.FalseKeyword)
+        add(
+          "grid-feature-definition",
+          file,
+          1,
+          `${definitionKey} must declare featureSettings with a default that turns it off`,
+        );
+    }
+    // Every refusal a feature gives is one of its own declared refusals.
+    walk(source, (node) => {
+      if (
+        ts.isCallExpression(node) &&
+        ts.isIdentifier(node.expression) &&
+        node.expression.text === "featureNotPossible"
+      ) {
+        const refusal = node.arguments[0];
+        const named =
+          refusal !== undefined &&
+          ((ts.isIdentifier(refusal) && refusalNames.has(refusal.text)) ||
+            (file.endsWith("/index.ts") && refusal.getText(source) === "definition.refusals[0]"));
+        if (!named)
+          add(
+            "grid-feature-definition",
+            file,
+            lineAt(content, node.getStart(source)),
+            `featureNotPossible must name one of this file's declared refusals, not ${refusal?.getText(source) ?? "nothing"}`,
+          );
+      }
+    });
+  }
+  // Every refusal code has exactly one declared sentence.
+  const sharedFile = `${featureDirectory}shared.ts`;
+  let declaredCodes: string[] = [];
+  walk(sourceOf(sharedFile), (node) => {
+    if (
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.name.text === "recordsTableFeatureRefusalCodes"
+    ) {
+      const list = unwrap(node.initializer);
+      if (list && ts.isArrayLiteralExpression(list))
+        declaredCodes = list.elements.flatMap((element) =>
+          ts.isStringLiteral(element) ? [element.text] : [],
+        );
+    }
   });
-  const [platformFile, platformKeys] = keySets[0]!;
-  for (const [file, keys] of keySets.slice(1))
-    if (JSON.stringify(keys) !== JSON.stringify(platformKeys))
+  if (declaredCodes.length === 0)
+    add(
+      "grid-feature-definition",
+      sharedFile,
+      1,
+      "the grid feature refusal codes could not be read",
+    );
+  for (const code of declaredCodes) {
+    const declared = refusalCodes.get(code) ?? [];
+    if (declared.length !== 1)
       add(
-        "grid-feature-registry",
-        file,
+        "grid-feature-definition",
+        sharedFile,
         1,
-        `registers ${JSON.stringify(keys)}, ${platformFile} registers ${JSON.stringify(platformKeys)}`,
-      );
-  // A row-action feature that forgot its compiler event gate would retain runnable bindings while
-  // switched off. Keep this invariant with the registry and its one lazy command renderer.
-  if (platformKeys.includes("row_actions")) {
-    const platformRegistry = read(platformFile);
-    if (!/row_action:\s*\{\s*feature:\s*"row_actions"\s*\}/.test(platformRegistry))
-      add(
-        "grid-feature-registry",
-        platformFile,
-        1,
-        "row_action must compile only while row_actions is enabled",
-      );
-    const tableFile = "packages/ui/src/display/table.tsx";
-    if (/RowActionsMenu/.test(read(tableFile)))
-      add(
-        "grid-feature-registry",
-        tableFile,
-        1,
-        "row commands must render through the feature registry",
+        `${code} must have exactly one declared refusal sentence, found ${declared.length}`,
       );
   }
+  // Features are listed only through their definitions: an object or array literal in the grid code
+  // that names three or more feature keys is a second registry, which drifts from the definitions.
+  const keys = new Set(definitionFiles.keys());
+  if (keys.size === 0)
+    add("grid-feature-definition", featureDirectory, 1, "no grid feature definition could be read");
+  const gridFiles = codeFiles.filter(
+    (file) =>
+      /\.tsx?$/.test(file) &&
+      (file.startsWith(featureDirectory) ||
+        file.startsWith("packages/platform/src/pages/records-table-features/") ||
+        file === "packages/platform/src/pages/records-table-feature-projection.ts" ||
+        file.startsWith("packages/ui/src/display/grid-features/") ||
+        file.startsWith("packages/ui/src/studio/grid-features/") ||
+        file === "packages/ui/src/studio/studio-grid-features.tsx"),
+  );
+  for (const file of gridFiles) {
+    const source = sourceOf(file);
+    const content = read(file);
+    walk(source, (node) => {
+      const named = ts.isObjectLiteralExpression(node)
+        ? node.properties.flatMap((property) =>
+            ts.isPropertyAssignment(property) &&
+            (ts.isIdentifier(property.name) || ts.isStringLiteral(property.name)) &&
+            keys.has(property.name.text)
+              ? [property.name.text]
+              : [],
+          )
+        : ts.isArrayLiteralExpression(node)
+          ? node.elements.flatMap((element) =>
+              ts.isStringLiteral(element) && keys.has(element.text) ? [element.text] : [],
+            )
+          : [];
+      if (new Set(named).size < 3) return;
+      add(
+        "grid-feature-definition",
+        file,
+        lineAt(content, node.getStart(source)),
+        `lists the grid features ${[...new Set(named)].join(", ")} by key; derive the list from their definitions`,
+      );
+    });
+  }
+  // A row-action feature that forgot its compiler event gate would retain runnable bindings while
+  // switched off; its one lazy command renderer draws the commands.
+  const rowActions = definitionFiles.get("row_actions");
+  if (
+    rowActions !== undefined &&
+    !/events:\s*\{\s*"?row_action"?:\s*\{\s*\}\s*\}/.test(read(rowActions))
+  )
+    add(
+      "grid-feature-definition",
+      rowActions,
+      1,
+      "row_action must compile only while row_actions is enabled",
+    );
+  const tableFile = "packages/ui/src/display/table.tsx";
+  if (/RowActionsMenu/.test(read(tableFile)))
+    add(
+      "grid-feature-definition",
+      tableFile,
+      1,
+      "row commands must render through the feature registry",
+    );
   const chunkDirectory = "packages/ui/src/display/grid-features/";
   for (const file of codeFiles.filter((candidate) => candidate.startsWith("packages/ui/src/")))
     if (file !== `${chunkDirectory}registry.tsx` && !file.startsWith(chunkDirectory)) {
@@ -1066,7 +1196,7 @@ for (const file of files.filter(
         if (!(
           file.startsWith("packages/ui/src/studio/") && match[1]!.startsWith("./grid-features/")
         ))
-          add("grid-feature-registry", file, lineAt(content, match.index ?? 0), match[0]);
+          add("grid-feature-definition", file, lineAt(content, match.index ?? 0), match[0]);
     }
 }
 

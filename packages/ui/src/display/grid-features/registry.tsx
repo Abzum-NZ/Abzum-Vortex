@@ -13,12 +13,28 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
-import type {
-  GridLayout,
-  GridViewsState,
-  RecordsTableFeatureKey,
-  RecordsTableFeatureProjection,
-  RecordsTableSortState,
+import {
+  recordsTableBulkActionsFeature,
+  recordsTableColumnFiltersFeature,
+  recordsTableConditionalFormattingFeature,
+  recordsTableExportFeature,
+  recordsTableGroupingFeature,
+  recordsTableInlineEditFeature,
+  recordsTableMasterDetailFeature,
+  recordsTablePinningFeature,
+  recordsTablePivotFeature,
+  recordsTableRowActionsFeature,
+  recordsTableRowEditFeature,
+  recordsTableSavedViewsFeature,
+  recordsTableSearchFeature,
+  recordsTableSpreadsheetFeature,
+  recordsTableTotalsFeature,
+  recordsTableTreeFeature,
+  type GridLayout,
+  type GridViewsState,
+  type RecordsTableFeatureKey,
+  type RecordsTableFeatureProjection,
+  type RecordsTableSortState,
 } from "@vortex/platform/schema";
 import type { DisplayEventHandlers, DisplayRow, TableNarrowing } from "../projected-data";
 import type { RowExpansionKind } from "../row-expansion";
@@ -192,48 +208,116 @@ export type GridFeatureModule = Readonly<{
 type ComponentPoint = Exclude<keyof GridFeatureModule, "cellDecoration">;
 
 /**
- * One dynamic import per feature: its code is a chunk of its own, downloaded only when the
- * projection turns the feature on for this viewer. A table with every feature off loads none.
+ * One grid feature's view, keyed by the feature's own definition: its code, a dynamic import that
+ * is a chunk of its own downloaded only when the projection turns the feature on for this viewer
+ * (a table with every feature off loads none), the extension points it fills, and what a row opens
+ * to when the feature draws below rows.
  */
-const loaders: Readonly<
-  Record<GridExtensionKey, () => Promise<{ gridFeature: GridFeatureModule }>>
-> = {
-  pinning: () => import("./pinning"),
-  spreadsheet: () => import("./spreadsheet"),
-  search: () => import("./search"),
-  column_filters: () => import("./column-filters"),
-  saved_views: () => import("./saved-views"),
-  bulk_actions: () => import("./bulk-actions"),
-  inline_edit: () => import("./inline-edit"),
-  row_edit: () => import("./row-editor"),
-  row_actions: () => import("./row-actions"),
-  master_detail: () => import("./master-detail"),
-  tree: () => import("./tree"),
-  grouping: () => import("./grouping"),
-  totals: () => import("./totals"),
-  conditional_formatting: () => import("./conditional-format"),
-  pivot: () => import("./pivot"),
-  export: () => import("./export"),
-};
+type GridFeatureView = Readonly<{
+  definition: Readonly<{ key: GridExtensionKey; property: string }>;
+  load: () => Promise<{ gridFeature: GridFeatureModule }>;
+  points: readonly ComponentPoint[];
+  /** What a row opens to when the feature fills the row panel. */
+  expansion?: RowExpansionKind;
+  /** What a row opens to when the feature contributes the rows beneath it. */
+  subRows?: SubRowsKind;
+}>;
 
-const projectionKeys: Readonly<Record<keyof RecordsTableFeatureProjection, GridExtensionKey>> = {
-  pinning: "pinning",
-  spreadsheet: "spreadsheet",
-  search: "search",
-  columnFilters: "column_filters",
-  savedViews: "saved_views",
-  bulkActions: "bulk_actions",
-  inlineEdit: "inline_edit",
-  rowEdit: "row_edit",
-  rowActions: "row_actions",
-  masterDetail: "master_detail",
-  tree: "tree",
-  grouping: "grouping",
-  totals: "totals",
-  conditionalFormatting: "conditional_formatting",
-  pivot: "pivot",
-  export: "export",
-};
+const gridFeatureViews: readonly GridFeatureView[] = [
+  {
+    definition: recordsTablePinningFeature,
+    load: () => import("./pinning"),
+    points: ["ColumnMenuItems"],
+  },
+  {
+    definition: recordsTableSpreadsheetFeature,
+    load: () => import("./spreadsheet"),
+    points: ["GridInteraction"],
+  },
+  {
+    definition: recordsTableSearchFeature,
+    load: () => import("./search"),
+    points: ["ToolbarItems"],
+  },
+  {
+    definition: recordsTableColumnFiltersFeature,
+    load: () => import("./column-filters"),
+    points: ["ToolbarItems", "HeaderAdornment"],
+  },
+  {
+    definition: recordsTableSavedViewsFeature,
+    load: () => import("./saved-views"),
+    points: ["ToolbarItems"],
+  },
+  {
+    definition: recordsTableBulkActionsFeature,
+    load: () => import("./bulk-actions"),
+    points: ["SelectionBanner"],
+  },
+  {
+    definition: recordsTableInlineEditFeature,
+    load: () => import("./inline-edit"),
+    points: ["CellEditor"],
+  },
+  {
+    definition: recordsTableRowEditFeature,
+    load: () => import("./row-editor"),
+    points: ["Scope", "CellEditor", "RowCommands", "RowEditor", "ToolbarItems"],
+  },
+  {
+    definition: recordsTableRowActionsFeature,
+    load: () => import("./row-actions"),
+    points: ["RowCommands", "GridInteraction"],
+  },
+  {
+    definition: recordsTableMasterDetailFeature,
+    load: () => import("./master-detail"),
+    points: ["RowExpansion"],
+    // A row opens to its related records, at most three at a time.
+    expansion: { noun: "related records", maximum: 3, expandable: () => true },
+  },
+  {
+    definition: recordsTableTreeFeature,
+    load: () => import("./tree"),
+    points: ["SubRows"],
+    // The rows beneath a row share the feature's row budget, so any number of rows may be open, and
+    // only a row the server says has children offers the toggle.
+    subRows: { noun: "child records", expandable: (row) => row.hasChildren !== undefined },
+  },
+  {
+    definition: recordsTableGroupingFeature,
+    load: () => import("./grouping"),
+    points: ["ToolbarItems", "ColumnMenuItems"],
+  },
+  {
+    definition: recordsTableTotalsFeature,
+    load: () => import("./totals"),
+    points: ["ToolbarItems"],
+  },
+  {
+    definition: recordsTableConditionalFormattingFeature,
+    load: () => import("./conditional-format"),
+    points: ["CellAdornment", "HeaderAdornment"],
+  },
+  {
+    definition: recordsTablePivotFeature,
+    load: () => import("./pivot"),
+    points: ["ToolbarItems", "ViewBody"],
+  },
+  {
+    definition: recordsTableExportFeature,
+    load: () => import("./export"),
+    points: ["ToolbarItems", "SelectionBanner"],
+  },
+];
+
+const viewOf = new Map(gridFeatureViews.map((view) => [view.definition.key, view]));
+const loaders = Object.fromEntries(
+  gridFeatureViews.map((view) => [view.definition.key, view.load]),
+) as Readonly<Record<GridExtensionKey, GridFeatureView["load"]>>;
+const featurePoints = Object.fromEntries(
+  gridFeatureViews.map((view) => [view.definition.key, view.points]),
+) as Readonly<Record<GridExtensionKey, readonly ComponentPoint[]>>;
 
 /** The features a projection turns on, in the registry's order. */
 const projectedGridFeatures = (
@@ -241,13 +325,12 @@ const projectedGridFeatures = (
 ): readonly GridExtensionKey[] =>
   features === undefined
     ? []
-    : (Object.keys(loaders) as GridExtensionKey[]).filter((key) =>
-        Object.entries(projectionKeys).some(
-          ([property, feature]) =>
-            feature === key &&
-            features[property as keyof RecordsTableFeatureProjection] !== undefined,
-        ),
-      );
+    : gridFeatureViews
+        .filter(
+          (view) =>
+            features[view.definition.property as keyof RecordsTableFeatureProjection] !== undefined,
+        )
+        .map((view) => view.definition.key);
 
 const noDecorators: readonly NonNullable<GridFeatureModule["cellDecoration"]>[] = [];
 const Nothing = (): null => null;
@@ -291,53 +374,12 @@ const featurePoint = <Props,>(
   return component as unknown as ComponentType<Props>;
 };
 
-/** Which points each feature fills, so the table never draws a boundary for an empty point. */
-const featurePoints: Readonly<Record<GridExtensionKey, readonly ComponentPoint[]>> = {
-  pinning: ["ColumnMenuItems"],
-  spreadsheet: ["GridInteraction"],
-  search: ["ToolbarItems"],
-  column_filters: ["ToolbarItems", "HeaderAdornment"],
-  saved_views: ["ToolbarItems"],
-  bulk_actions: ["SelectionBanner"],
-  inline_edit: ["CellEditor"],
-  row_edit: ["Scope", "CellEditor", "RowCommands", "RowEditor", "ToolbarItems"],
-  row_actions: ["RowCommands", "GridInteraction"],
-  master_detail: ["RowExpansion"],
-  tree: ["SubRows"],
-  grouping: ["ToolbarItems", "ColumnMenuItems"],
-  totals: ["ToolbarItems"],
-  conditional_formatting: ["CellAdornment", "HeaderAdornment"],
-  pivot: ["ToolbarItems", "ViewBody"],
-  export: ["ToolbarItems", "SelectionBanner"],
-};
-
-/** What a row opens to for each feature that fills the row panel: its related records, at most three. */
-const expansionKinds: Readonly<Partial<Record<RecordsTableFeatureKey, RowExpansionKind>>> = {
-  master_detail: {
-    noun: "related records",
-    maximum: 3,
-    expandable: () => true,
-  },
-};
-
-/**
- * What a row opens to for each feature that contributes sub-rows. The rows beneath a row are
- * bounded by the feature's shared row budget, so any number of rows may be open, and only a row the
- * server says has children offers the toggle.
- */
-const subRowsKinds: Readonly<Partial<Record<RecordsTableFeatureKey, SubRowsKind>>> = {
-  tree: {
-    noun: "child records",
-    expandable: (row) => row.hasChildren !== undefined,
-  },
-};
-
 /** What the projected feature's sub-rows hold; undefined when no feature contributes any. */
 export const subRowsKindOf = (
   features: RecordsTableFeatureProjection | undefined,
 ): SubRowsKind | undefined =>
   projectedGridFeatures(features)
-    .map((key) => subRowsKinds[key])
+    .map((key) => viewOf.get(key)?.subRows)
     .find((kind) => kind !== undefined);
 
 const activeKeys = (signature: string): readonly GridExtensionKey[] =>
@@ -533,7 +575,9 @@ export function useGridFeatures(context: GridFeatureContext | undefined): Readon
               );
             }, children),
     expands: active.some((key) => featurePoints[key].includes("RowExpansion")),
-    expansionKind: active.map((key) => expansionKinds[key]).find((kind) => kind !== undefined),
+    expansionKind: active
+      .map((key) => viewOf.get(key)?.expansion)
+      .find((kind) => kind !== undefined),
     toolbarItems: () =>
       context === undefined ? null : drawPoint(active, "ToolbarItems", context, {}),
     selectionBanner: () =>
