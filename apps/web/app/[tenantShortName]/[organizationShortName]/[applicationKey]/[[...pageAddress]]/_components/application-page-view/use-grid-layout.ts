@@ -172,11 +172,8 @@ export function useGridLayout({
                     placementId,
                     queryId: event.queryId,
                     expectedRevision: event.expectedRevision,
-                    // A layout arranged while a view is open derives from that view.
-                    basedOnViewId:
-                      layoutOf(placementId)?.views?.selected?.scope === "default"
-                        ? null
-                        : (layoutOf(placementId)?.views?.selected?.viewId ?? null),
+                    // A layout arranged while a view (saved or default) is open derives from it.
+                    basedOnViewId: layoutOf(placementId)?.views?.selected?.viewId ?? null,
                     layout: event.layout,
                   },
             ).catch((error: unknown) => {
@@ -442,7 +439,7 @@ export function useGridLayout({
           if (layoutOnly) {
             await adoptOwnLayout(
               placementId,
-              selected.scope === "default" ? null : selected.viewId,
+              selected.viewId,
               selected.document,
             );
             selectTableViewInPlace(placementId, selected.viewId);

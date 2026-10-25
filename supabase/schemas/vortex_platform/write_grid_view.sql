@@ -4,6 +4,7 @@ create or replace function vortex_platform.write_grid_view(
   p_query_id uuid,
   p_expected_revision bigint,
   p_based_on_view_id uuid,
+  p_based_on_default_view_id uuid,
   p_layout jsonb
 )
 returns jsonb
@@ -25,6 +26,9 @@ begin
       and p_expected_revision not between 1 and 9007199254740990)
     or (p_based_on_view_id is not null
       and not vortex_platform.is_non_nil_uuid(p_based_on_view_id::text))
+    or (p_based_on_default_view_id is not null
+      and not vortex_platform.is_non_nil_uuid(p_based_on_default_view_id::text))
+    or (p_based_on_view_id is not null and p_based_on_default_view_id is not null)
     or not vortex_platform.grid_view_document_valid_internal(p_layout, 'current_layout') then
 
     raise exception using errcode = '22023', message = 'Grid layout write is invalid';
@@ -77,6 +81,7 @@ begin
       revision = pg_catalog.nextval('vortex_platform.grid_view_revision_seq'::regclass),
       release_revision = scope.release_revision,
       based_on_view_id = p_based_on_view_id,
+      based_on_default_view_id = p_based_on_default_view_id,
       document = p_layout,
       updated_at = written_at
     where held.view_id = stored.view_id
@@ -85,13 +90,14 @@ begin
     insert into vortex_platform.grid_views (
       view_id, tenant_id, organization_id, organization_account_id, application_root_id,
       page_id, placement_id, kind, query_id, revision, release_revision, based_on_view_id,
-      document, created_at, updated_at
+      based_on_default_view_id, document, created_at, updated_at
     ) values (
       pg_catalog.gen_random_uuid(), scope.tenant_id, scope.organization_id,
       scope.organization_account_id, scope.application_root_id, p_page_id, p_placement_id,
       'current_layout', p_query_id,
       pg_catalog.nextval('vortex_platform.grid_view_revision_seq'::regclass),
-      scope.release_revision, p_based_on_view_id, p_layout, written_at, written_at
+      scope.release_revision, p_based_on_view_id, p_based_on_default_view_id, p_layout,
+      written_at, written_at
     )
     returning * into stored;
   end if;
@@ -100,13 +106,13 @@ begin
 end
 $function$;
 
-revoke all on function vortex_platform.write_grid_view(uuid, uuid, uuid, bigint, uuid, jsonb)
+revoke all on function vortex_platform.write_grid_view(uuid, uuid, uuid, bigint, uuid, uuid, jsonb)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_record_adapter;
-grant execute on function vortex_platform.write_grid_view(uuid, uuid, uuid, bigint, uuid, jsonb)
+grant execute on function vortex_platform.write_grid_view(uuid, uuid, uuid, bigint, uuid, uuid, jsonb)
   to vortex_request;
 
-comment on function vortex_platform.write_grid_view(uuid, uuid, uuid, bigint, uuid, jsonb) is
-  'Writes the current person''s current layout of one grid placement at the expected revision (none for a first write), noting the view it derives from, or returns the stored layout as a conflict.';
+comment on function vortex_platform.write_grid_view(uuid, uuid, uuid, bigint, uuid, uuid, jsonb) is
+  'Writes the current person''s current layout of one grid placement at the expected revision (none for a first write), noting the saved view or the placement''s authored default view it derives from, or returns the stored layout as a conflict.';
 
-alter function vortex_platform.write_grid_view(uuid, uuid, uuid, bigint, uuid, jsonb)
+alter function vortex_platform.write_grid_view(uuid, uuid, uuid, bigint, uuid, uuid, jsonb)
   owner to vortex_owner;
