@@ -12,7 +12,8 @@ import { releaseFor, itemSlots } from "./application-composition-regions";
  * What a form needs from every edit of the content around it, whichever command makes the edit
  * (Inspector Remove and Move, canvas Delete and drag, Add, Wrap):
  * - forms never nest;
- * - an input, and a Submit or Reset button, keeps the form that encloses it;
+ * - an input, and a Submit or Reset button, keeps the form that encloses it; one outside any
+ *   form (just added at the page's top level) may join a form;
  * - a form that stays keeps its inputs for required fields, inputs marked Required, and inputs
  *   whose answers its submit binding maps by name into a flow.
  */
@@ -143,7 +144,7 @@ export const studioFormChangeRefusal = (
   for (const [alias, item] of was.blocks) {
     const form = was.enclosing.get(alias);
     if (now.blocks.has(alias)) {
-      if (belongsToForm(catalogue, item) && now.enclosing.get(alias) !== form)
+      if (form !== undefined && belongsToForm(catalogue, item) && now.enclosing.get(alias) !== form)
         return { reason: "form_context" };
       continue;
     }
