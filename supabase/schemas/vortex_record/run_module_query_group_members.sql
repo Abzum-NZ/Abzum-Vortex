@@ -57,13 +57,16 @@ begin
     end if;
     opened := opened || pg_catalog.jsonb_build_object('query', query_item);
   end if;
+  -- The selector names exactly the query's grouping fields, each with its own typed value.
+  if pg_catalog.jsonb_typeof(opened #> '{query,groupByFieldIds}') = 'array' then
+    group_by_ids := vortex_record.query_group_member_fields_internal(
+      opened -> 'query', opened -> 'fieldsById', p_group_selector -> 'values', group_member -> 'types');
+    if group_by_ids is null then
+      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
+    end if;
+  end if;
   bound := vortex_record.module_query_bind_internal(opened);
   if bound ->> 'outcome' <> 'bound' then return bound; end if;
-  group_by_ids := vortex_record.query_group_member_fields_internal(
-    bound -> 'query', bound -> 'fieldsById', p_group_selector -> 'values', group_member -> 'types');
-  if group_by_ids is null then
-    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
-  end if;
   member := pg_catalog.jsonb_build_object(
     'kind', 'group', 'groupByFieldIds', pg_catalog.to_jsonb(group_by_ids),
     'groupValues', group_selector_values, 'dateBucket', p_grouping -> 'dateBucket');

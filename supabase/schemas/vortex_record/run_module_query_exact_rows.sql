@@ -36,12 +36,12 @@ begin
     p_sort, p_search, p_sortable_field_ids, p_searchable_field_ids,
     pg_catalog.cardinality(p_record_ids), 'forward', p_record_ids);
   if opened ->> 'outcome' <> 'opened' then return opened; end if;
-  bound := vortex_record.module_query_bind_internal(opened);
-  if bound ->> 'outcome' <> 'bound' then return bound; end if;
-  if pg_catalog.jsonb_array_length(coalesce(bound #> '{query,groupByFieldIds}', '[]'::jsonb)) > 0
-    or pg_catalog.jsonb_array_length(coalesce(bound #> '{query,aggregates}', '[]'::jsonb)) > 0 then
+  -- Grouped and totalled shapes are not plain rows.
+  if vortex_record.module_query_grouped_internal(opened -> 'query') then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
   end if;
+  bound := vortex_record.module_query_bind_internal(opened);
+  if bound ->> 'outcome' <> 'bound' then return bound; end if;
   plan := vortex_record.module_query_scan_plan_internal(
     bound,
     case when pg_catalog.jsonb_array_length(bound -> 'sort') > 0 then bound -> 'sort' else bound #> '{query,sort}' end,

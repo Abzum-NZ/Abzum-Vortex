@@ -261,7 +261,7 @@ begin
   end loop;
   scan_record_id_direction := case when direction = 'forward' then record_id_direction
     when record_id_direction = 'ascending' then 'descending' else 'ascending' end;
-  scan_source_sql := pg_catalog.format('record_data.%I as stored', prepared_plan #>> '{storage,physicalTableToken}');
+  scan_source_sql := pg_catalog.format('record_data.%I as stored', storage_plan #>> '{storage,physicalTableToken}');
   projection_page_scan := p_projection_allowed and not preview_mode
     and record_type_item ? 'systemProjection'
     and pg_catalog.cardinality(sort_ids) = 1

@@ -522,7 +522,7 @@ begin
   end loop;
   scan_record_id_direction := case when direction = 'forward' then record_id_direction
     when record_id_direction = 'ascending' then 'descending' else 'ascending' end;
-  scan_source_sql := pg_catalog.format('record_data.%I as stored', prepared_plan #>> '{storage,physicalTableToken}');
+  scan_source_sql := pg_catalog.format('record_data.%I as stored', storage_plan #>> '{storage,physicalTableToken}');
   projection_page_scan := p_projection_allowed and not preview_mode
     and record_type_item ? 'systemProjection'
     and pg_catalog.cardinality(sort_ids) = 1
@@ -812,7 +812,7 @@ declare
   after_sort_key text[];
   after_record_id uuid := (p_plan ->> 'afterRecordId')::uuid;
   exact_record_ids uuid[];
-  access_owner_account_id uuid := nullif(p_plan #>> '{prepared,access,ownerAccountId}', '')::uuid;
+  access_owner_account_id uuid := nullif(p_plan #>> '{storagePlan,access,ownerAccountId}', '')::uuid;
   access_owner_group_ids uuid[];
   access_shared_record_ids uuid[];
   segment_predicates text[];
@@ -914,9 +914,9 @@ begin
     from pg_catalog.jsonb_array_elements_text(p_plan -> 'exactRecordIds') as item(value);
   end if;
   select coalesce(pg_catalog.array_agg(item.value::uuid), array[]::uuid[]) into access_owner_group_ids
-  from pg_catalog.jsonb_array_elements_text(p_plan #> '{prepared,access,ownerGroupIds}') as item(value);
+  from pg_catalog.jsonb_array_elements_text(p_plan #> '{storagePlan,access,ownerGroupIds}') as item(value);
   select coalesce(pg_catalog.array_agg(item.value::uuid), array[]::uuid[]) into access_shared_record_ids
-  from pg_catalog.jsonb_array_elements_text(p_plan #> '{prepared,access,sharedRecordIds}') as item(value);
+  from pg_catalog.jsonb_array_elements_text(p_plan #> '{storagePlan,access,sharedRecordIds}') as item(value);
   select pg_catalog.array_agg(item.value) into segment_predicates
   from pg_catalog.jsonb_array_elements_text(p_plan -> 'segmentPredicates') as item(value);
   select coalesce(pg_catalog.array_agg(item.value), array[]::text[]) into choice_option_values
@@ -999,9 +999,9 @@ begin
     p_plan ->> 'scanProjectionSql',
     coalesce(p_member ->> 'linkValueSql', 'null::jsonb'),
     p_plan ->> 'scanSourceSql',
-    case when p_plan #>> '{prepared,storage,storageScope}' = 'application_contained'
+    case when p_plan #>> '{storagePlan,storage,storageScope}' = 'application_contained'
       then 'stored.application_root_id = $2' else 'stored.application_root_id is null' end,
-    p_plan #>> '{prepared,access,predicate}',
+    p_plan #>> '{storagePlan,access,predicate}',
     p_plan ->> 'filterPredicate',
     coalesce(p_member ->> 'predicate', 'true'),
     segment_sql,
@@ -1014,7 +1014,7 @@ begin
     using context_organization_id, context_application_root_id, after_sort_key,
       after_record_id, scan_limit + 1, access_owner_account_id,
       access_owner_group_ids, access_shared_record_ids,
-      p_plan -> 'filterParameters', coalesce(p_plan #> '{prepared,access,parameters}', '[]'::jsonb),
+      p_plan -> 'filterParameters', coalesce(p_plan #> '{storagePlan,access,parameters}', '[]'::jsonb),
       projection_batch, exact_record_ids,
       p_member ->> 'columnValue', choice_option_values, group_selector_values, tree_parent_id,
       search_field_ids, user_search;
@@ -1446,6 +1446,29 @@ revoke all on function vortex_record.module_query_result_internal(jsonb)
 comment on function vortex_record.module_query_result_internal(jsonb) is
   'Adapter-only last step of every Module query page read: refuses a preview page whose builder authority changed while it was assembled, and otherwise returns the completed envelope with the resolved release and the reader''s current field bound (guaranteed-readable fields and whether any searchable field is among them).';
 
+create or replace function vortex_record.module_query_grouped_internal(
+  p_query jsonb
+)
+returns boolean
+language sql
+immutable
+security invoker
+set search_path = ''
+as $function$
+  -- Whether a resolved query groups or totals its records; a malformed shape is left to the bind
+  -- step, which refuses it.
+  select (pg_catalog.jsonb_typeof(p_query -> 'groupByFieldIds') = 'array'
+      and pg_catalog.jsonb_array_length(p_query -> 'groupByFieldIds') > 0)
+    or (pg_catalog.jsonb_typeof(p_query -> 'aggregates') = 'array'
+      and pg_catalog.jsonb_array_length(p_query -> 'aggregates') > 0)
+$function$;
+
+alter function vortex_record.module_query_grouped_internal(jsonb) owner to vortex_record_adapter;
+revoke all on function vortex_record.module_query_grouped_internal(jsonb)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+comment on function vortex_record.module_query_grouped_internal(jsonb) is
+  'Adapter-only test whether a resolved Module query groups or totals its records, so a plain row, exact or tree read refuses it before any storage or access is bound.';
+
 create or replace function vortex_record.module_query_board_member_internal(
   p_bound jsonb,
   p_selector jsonb
@@ -1607,13 +1630,12 @@ begin
     p_requested_field_ids, p_requested_system_field_keys, p_filter, p_filterable_field_ids,
     p_sort, p_search, p_sortable_field_ids, p_searchable_field_ids, p_page_size, p_direction, null);
   if opened ->> 'outcome' <> 'opened' then return opened; end if;
-  bound := vortex_record.module_query_bind_internal(opened);
-  if bound ->> 'outcome' <> 'bound' then return bound; end if;
   -- Grouped and totalled shapes are not plain rows.
-  if pg_catalog.jsonb_array_length(coalesce(bound #> '{query,groupByFieldIds}', '[]'::jsonb)) > 0
-    or pg_catalog.jsonb_array_length(coalesce(bound #> '{query,aggregates}', '[]'::jsonb)) > 0 then
+  if vortex_record.module_query_grouped_internal(opened -> 'query') then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
   end if;
+  bound := vortex_record.module_query_bind_internal(opened);
+  if bound ->> 'outcome' <> 'bound' then return bound; end if;
   -- The user's order replaces the published order only when it is non-empty.
   plan := vortex_record.module_query_scan_plan_internal(
     bound,
@@ -1674,12 +1696,12 @@ begin
     p_sort, p_search, p_sortable_field_ids, p_searchable_field_ids,
     pg_catalog.cardinality(p_record_ids), 'forward', p_record_ids);
   if opened ->> 'outcome' <> 'opened' then return opened; end if;
-  bound := vortex_record.module_query_bind_internal(opened);
-  if bound ->> 'outcome' <> 'bound' then return bound; end if;
-  if pg_catalog.jsonb_array_length(coalesce(bound #> '{query,groupByFieldIds}', '[]'::jsonb)) > 0
-    or pg_catalog.jsonb_array_length(coalesce(bound #> '{query,aggregates}', '[]'::jsonb)) > 0 then
+  -- Grouped and totalled shapes are not plain rows.
+  if vortex_record.module_query_grouped_internal(opened -> 'query') then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
   end if;
+  bound := vortex_record.module_query_bind_internal(opened);
+  if bound ->> 'outcome' <> 'bound' then return bound; end if;
   plan := vortex_record.module_query_scan_plan_internal(
     bound,
     case when pg_catalog.jsonb_array_length(bound -> 'sort') > 0 then bound -> 'sort' else bound #> '{query,sort}' end,
@@ -1741,6 +1763,11 @@ begin
     p_requested_field_ids, p_requested_system_field_keys, p_filter, p_filterable_field_ids,
     '[]'::jsonb, null, null, null, p_page_size, 'forward', null);
   if opened ->> 'outcome' <> 'opened' then return opened; end if;
+  -- A board reads members of its query's sole grouping key.
+  if pg_catalog.jsonb_typeof(opened #> '{query,groupByFieldIds}') = 'array'
+    and pg_catalog.jsonb_array_length(opened #> '{query,groupByFieldIds}') <> 1 then
+    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
+  end if;
   bound := vortex_record.module_query_bind_internal(opened);
   if bound ->> 'outcome' <> 'bound' then return bound; end if;
   member := vortex_record.module_query_board_member_internal(bound, selector);
@@ -1807,6 +1834,11 @@ begin
     p_requested_field_ids, p_requested_system_field_keys, p_filter, p_filterable_field_ids,
     '[]'::jsonb, null, null, null, p_page_size, 'forward', null);
   if opened ->> 'outcome' <> 'opened' then return opened; end if;
+  -- A board reads members of its query's sole grouping key.
+  if pg_catalog.jsonb_typeof(opened #> '{query,groupByFieldIds}') = 'array'
+    and pg_catalog.jsonb_array_length(opened #> '{query,groupByFieldIds}') <> 1 then
+    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
+  end if;
   bound := vortex_record.module_query_bind_internal(opened);
   if bound ->> 'outcome' <> 'bound' then return bound; end if;
   member := vortex_record.module_query_board_member_internal(bound, selector);
@@ -1915,13 +1947,16 @@ begin
     end if;
     opened := opened || pg_catalog.jsonb_build_object('query', query_item);
   end if;
+  -- The selector names exactly the query's grouping fields, each with its own typed value.
+  if pg_catalog.jsonb_typeof(opened #> '{query,groupByFieldIds}') = 'array' then
+    group_by_ids := vortex_record.query_group_member_fields_internal(
+      opened -> 'query', opened -> 'fieldsById', p_group_selector -> 'values', group_member -> 'types');
+    if group_by_ids is null then
+      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
+    end if;
+  end if;
   bound := vortex_record.module_query_bind_internal(opened);
   if bound ->> 'outcome' <> 'bound' then return bound; end if;
-  group_by_ids := vortex_record.query_group_member_fields_internal(
-    bound -> 'query', bound -> 'fieldsById', p_group_selector -> 'values', group_member -> 'types');
-  if group_by_ids is null then
-    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
-  end if;
   member := pg_catalog.jsonb_build_object(
     'kind', 'group', 'groupByFieldIds', pg_catalog.to_jsonb(group_by_ids),
     'groupValues', group_selector_values, 'dateBucket', p_grouping -> 'dateBucket');
@@ -2038,12 +2073,12 @@ begin
     p_requested_field_ids, p_requested_system_field_keys, p_filter, p_filterable_field_ids,
     p_sort, p_search, p_sortable_field_ids, p_searchable_field_ids, p_page_size, p_direction, null);
   if opened ->> 'outcome' <> 'opened' then return opened; end if;
-  bound := vortex_record.module_query_bind_internal(opened);
-  if bound ->> 'outcome' <> 'bound' then return bound; end if;
-  if pg_catalog.jsonb_array_length(coalesce(bound #> '{query,groupByFieldIds}', '[]'::jsonb)) > 0
-    or pg_catalog.jsonb_array_length(coalesce(bound #> '{query,aggregates}', '[]'::jsonb)) > 0 then
+  -- Grouped and totalled shapes are not plain rows.
+  if vortex_record.module_query_grouped_internal(opened -> 'query') then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
   end if;
+  bound := vortex_record.module_query_bind_internal(opened);
+  if bound ->> 'outcome' <> 'bound' then return bound; end if;
   -- The parent link is a one-record link of the record type to itself that the reader is
   -- guaranteed to see.
   tree_item := vortex_record.query_tree_selector_internal(

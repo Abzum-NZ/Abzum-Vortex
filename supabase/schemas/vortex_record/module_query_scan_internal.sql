@@ -35,7 +35,7 @@ declare
   after_sort_key text[];
   after_record_id uuid := (p_plan ->> 'afterRecordId')::uuid;
   exact_record_ids uuid[];
-  access_owner_account_id uuid := nullif(p_plan #>> '{prepared,access,ownerAccountId}', '')::uuid;
+  access_owner_account_id uuid := nullif(p_plan #>> '{storagePlan,access,ownerAccountId}', '')::uuid;
   access_owner_group_ids uuid[];
   access_shared_record_ids uuid[];
   segment_predicates text[];
@@ -137,9 +137,9 @@ begin
     from pg_catalog.jsonb_array_elements_text(p_plan -> 'exactRecordIds') as item(value);
   end if;
   select coalesce(pg_catalog.array_agg(item.value::uuid), array[]::uuid[]) into access_owner_group_ids
-  from pg_catalog.jsonb_array_elements_text(p_plan #> '{prepared,access,ownerGroupIds}') as item(value);
+  from pg_catalog.jsonb_array_elements_text(p_plan #> '{storagePlan,access,ownerGroupIds}') as item(value);
   select coalesce(pg_catalog.array_agg(item.value::uuid), array[]::uuid[]) into access_shared_record_ids
-  from pg_catalog.jsonb_array_elements_text(p_plan #> '{prepared,access,sharedRecordIds}') as item(value);
+  from pg_catalog.jsonb_array_elements_text(p_plan #> '{storagePlan,access,sharedRecordIds}') as item(value);
   select pg_catalog.array_agg(item.value) into segment_predicates
   from pg_catalog.jsonb_array_elements_text(p_plan -> 'segmentPredicates') as item(value);
   select coalesce(pg_catalog.array_agg(item.value), array[]::text[]) into choice_option_values
@@ -222,9 +222,9 @@ begin
     p_plan ->> 'scanProjectionSql',
     coalesce(p_member ->> 'linkValueSql', 'null::jsonb'),
     p_plan ->> 'scanSourceSql',
-    case when p_plan #>> '{prepared,storage,storageScope}' = 'application_contained'
+    case when p_plan #>> '{storagePlan,storage,storageScope}' = 'application_contained'
       then 'stored.application_root_id = $2' else 'stored.application_root_id is null' end,
-    p_plan #>> '{prepared,access,predicate}',
+    p_plan #>> '{storagePlan,access,predicate}',
     p_plan ->> 'filterPredicate',
     coalesce(p_member ->> 'predicate', 'true'),
     segment_sql,
@@ -237,7 +237,7 @@ begin
     using context_organization_id, context_application_root_id, after_sort_key,
       after_record_id, scan_limit + 1, access_owner_account_id,
       access_owner_group_ids, access_shared_record_ids,
-      p_plan -> 'filterParameters', coalesce(p_plan #> '{prepared,access,parameters}', '[]'::jsonb),
+      p_plan -> 'filterParameters', coalesce(p_plan #> '{storagePlan,access,parameters}', '[]'::jsonb),
       projection_batch, exact_record_ids,
       p_member ->> 'columnValue', choice_option_values, group_selector_values, tree_parent_id,
       search_field_ids, user_search;

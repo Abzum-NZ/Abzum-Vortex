@@ -38,6 +38,11 @@ begin
     p_requested_field_ids, p_requested_system_field_keys, p_filter, p_filterable_field_ids,
     '[]'::jsonb, null, null, null, p_page_size, 'forward', null);
   if opened ->> 'outcome' <> 'opened' then return opened; end if;
+  -- A board reads members of its query's sole grouping key.
+  if pg_catalog.jsonb_typeof(opened #> '{query,groupByFieldIds}') = 'array'
+    and pg_catalog.jsonb_array_length(opened #> '{query,groupByFieldIds}') <> 1 then
+    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
+  end if;
   bound := vortex_record.module_query_bind_internal(opened);
   if bound ->> 'outcome' <> 'bound' then return bound; end if;
   member := vortex_record.module_query_board_member_internal(bound, selector);

@@ -33,13 +33,12 @@ begin
     p_requested_field_ids, p_requested_system_field_keys, p_filter, p_filterable_field_ids,
     p_sort, p_search, p_sortable_field_ids, p_searchable_field_ids, p_page_size, p_direction, null);
   if opened ->> 'outcome' <> 'opened' then return opened; end if;
-  bound := vortex_record.module_query_bind_internal(opened);
-  if bound ->> 'outcome' <> 'bound' then return bound; end if;
   -- Grouped and totalled shapes are not plain rows.
-  if pg_catalog.jsonb_array_length(coalesce(bound #> '{query,groupByFieldIds}', '[]'::jsonb)) > 0
-    or pg_catalog.jsonb_array_length(coalesce(bound #> '{query,aggregates}', '[]'::jsonb)) > 0 then
+  if vortex_record.module_query_grouped_internal(opened -> 'query') then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
   end if;
+  bound := vortex_record.module_query_bind_internal(opened);
+  if bound ->> 'outcome' <> 'bound' then return bound; end if;
   -- The user's order replaces the published order only when it is non-empty.
   plan := vortex_record.module_query_scan_plan_internal(
     bound,

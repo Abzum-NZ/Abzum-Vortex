@@ -41,12 +41,12 @@ begin
     p_requested_field_ids, p_requested_system_field_keys, p_filter, p_filterable_field_ids,
     p_sort, p_search, p_sortable_field_ids, p_searchable_field_ids, p_page_size, p_direction, null);
   if opened ->> 'outcome' <> 'opened' then return opened; end if;
-  bound := vortex_record.module_query_bind_internal(opened);
-  if bound ->> 'outcome' <> 'bound' then return bound; end if;
-  if pg_catalog.jsonb_array_length(coalesce(bound #> '{query,groupByFieldIds}', '[]'::jsonb)) > 0
-    or pg_catalog.jsonb_array_length(coalesce(bound #> '{query,aggregates}', '[]'::jsonb)) > 0 then
+  -- Grouped and totalled shapes are not plain rows.
+  if vortex_record.module_query_grouped_internal(opened -> 'query') then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
   end if;
+  bound := vortex_record.module_query_bind_internal(opened);
+  if bound ->> 'outcome' <> 'bound' then return bound; end if;
   -- The parent link is a one-record link of the record type to itself that the reader is
   -- guaranteed to see.
   tree_item := vortex_record.query_tree_selector_internal(
