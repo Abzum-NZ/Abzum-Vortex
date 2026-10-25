@@ -19,6 +19,7 @@ declare
   access_plan jsonb;
   record_type_id uuid;
   visible_fields jsonb := '{}'::jsonb;
+  role_keys jsonb;
 begin
   if p_page_id is null or not vortex_platform.is_non_nil_uuid(p_page_id::text)
     or p_placement_ids is null
@@ -38,8 +39,15 @@ begin
   if pg_catalog.jsonb_array_length(p_default_views) > 10000 or exists (
     select 1 from pg_catalog.jsonb_array_elements(p_default_views) as supplied(value)
     where pg_catalog.jsonb_typeof(supplied.value) is distinct from 'object'
-      or supplied.value - array['viewId', 'queryId', 'document'] <> '{}'::jsonb
+      or supplied.value - array['viewId', 'placementId', 'role', 'isDefault', 'selectedViewId', 'queryId', 'document'] <> '{}'::jsonb
       or pg_catalog.jsonb_typeof(supplied.value -> 'viewId') is distinct from 'string'
+      or not vortex_platform.is_non_nil_uuid(supplied.value ->> 'placementId')
+      or not ((supplied.value ->> 'placementId')::uuid = any(p_placement_ids))
+      or pg_catalog.jsonb_typeof(supplied.value -> 'role') is distinct from 'string'
+      or pg_catalog.jsonb_typeof(supplied.value -> 'isDefault') is distinct from 'boolean'
+      or not (supplied.value ? 'selectedViewId')
+      or (supplied.value -> 'selectedViewId' <> 'null'::jsonb
+        and not vortex_platform.is_non_nil_uuid(supplied.value ->> 'selectedViewId'))
       or pg_catalog.jsonb_typeof(supplied.value -> 'queryId') is distinct from 'string'
       or not vortex_platform.is_non_nil_uuid(supplied.value ->> 'viewId')
       or not vortex_platform.is_non_nil_uuid(supplied.value ->> 'queryId')
@@ -62,6 +70,19 @@ begin
     shareable := p_placement_ids;
   end if;
 
+  select coalesce((
+      select pg_catalog.jsonb_agg(distinct template.key)
+      from vortex_access.organization_roles as role
+      join vortex_access.application_role_template_continuities as template
+        on template.organization_id = role.organization_id
+        and template.application_root_id = coalesce(role.application_root_id, role.derived_application_root_id)
+        and template.source_role_id = coalesce(role.source_role_id, role.derived_source_role_id)
+        and template.state = 'available'
+      where role.organization_id = scope.organization_id
+        and template.application_root_id = scope.application_root_id
+        and role.role_id = any(targets.role_ids)
+    ), '[]'::jsonb) into role_keys;
+
   installation := vortex_definition.read_current_active_installation();
   access_plan := vortex_record.resolve_installation_access_plan_internal(installation);
   -- One column decision per record type of this layout request, by access route, from the plan
@@ -74,8 +95,8 @@ begin
     );
   end loop;
 
-  -- The person's current layouts and every named view they may see, for all the page's grids, in
-  -- one bounded read. Only the views the address selected carry their document.
+  -- The visible grids need their layouts and selected/automatic view documents only. The picker
+  -- inventory is read separately when opened; unselected defaults are never narrowed here.
   return pg_catalog.jsonb_build_object(
     'visibleFields', visible_fields,
     'defaultDocuments', coalesce((
@@ -86,20 +107,33 @@ begin
           visible_fields
         )
       )
-      from pg_catalog.jsonb_array_elements(p_default_views) as supplied(value)
+      from pg_catalog.jsonb_array_elements(p_default_views) with ordinality as supplied(value, position)
+      where (supplied.value ->> 'role' = '*' or role_keys ? (supplied.value ->> 'role'))
+        and (
+          supplied.value ->> 'viewId' = supplied.value ->> 'selectedViewId'
+          or (supplied.value -> 'selectedViewId' = 'null'::jsonb
+            and (supplied.value ->> 'isDefault')::boolean
+            and not exists (
+              select 1 from vortex_platform.grid_views as current_layout
+              where current_layout.organization_id = scope.organization_id
+                and current_layout.organization_account_id = scope.organization_account_id
+                and current_layout.application_root_id = scope.application_root_id
+                and current_layout.page_id = p_page_id
+                and current_layout.placement_id = (supplied.value ->> 'placementId')::uuid
+                and current_layout.kind = 'current_layout'
+            )
+            and supplied.position = (
+              select candidate.position
+              from pg_catalog.jsonb_array_elements(p_default_views) with ordinality as candidate(value, position)
+              where candidate.value ->> 'placementId' = supplied.value ->> 'placementId'
+                and (candidate.value ->> 'role' = '*' or role_keys ? (candidate.value ->> 'role'))
+                and (candidate.value ->> 'isDefault')::boolean
+              order by (candidate.value ->> 'role' = '*'), candidate.position
+              limit 1
+            ))
+        )
     ), '[]'::jsonb),
-    'roleKeys', coalesce((
-      select pg_catalog.jsonb_agg(distinct template.key)
-      from vortex_access.organization_roles as role
-      join vortex_access.application_role_template_continuities as template
-        on template.organization_id = role.organization_id
-        and template.application_root_id = coalesce(role.application_root_id, role.derived_application_root_id)
-        and template.source_role_id = coalesce(role.source_role_id, role.derived_source_role_id)
-        and template.state = 'available'
-      where role.organization_id = scope.organization_id
-        and template.application_root_id = scope.application_root_id
-        and role.role_id = any(targets.role_ids)
-    ), '[]'::jsonb),
+    'roleKeys', role_keys,
     'shareablePlacementIds', pg_catalog.to_jsonb(shareable),
     'layouts', coalesce((
       select pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
@@ -129,29 +163,25 @@ begin
         'shareOrganization', listed.share_organization,
         'shareRoleIds', listed.share_role_ids,
         'shareGroupIds', listed.share_group_ids
-      ) || case when listed.view_id = any (p_selected_view_ids)
-        then vortex_platform.grid_view_document_for_viewer_internal(
+      ) || vortex_platform.grid_view_document_for_viewer_internal(
           listed.query_id, listed.document, installation, access_plan, visible_fields
-        ) else '{}'::jsonb end
+        )
         order by listed.placement_id, pg_catalog.lower(listed.name), listed.view_id)
       from (
-        select visible.*, pg_catalog.row_number() over (
-          partition by visible.placement_id
-          order by pg_catalog.lower(visible.name), visible.view_id
-        ) as position
+        select visible.*
         from vortex_platform.grid_views as visible
         where visible.organization_id = scope.organization_id
           and visible.application_root_id = scope.application_root_id
           and visible.page_id = p_page_id
           and visible.placement_id = any (p_placement_ids)
           and visible.kind = 'named_view'
+          and visible.view_id = any(p_selected_view_ids)
           and (visible.organization_account_id = scope.organization_account_id
             or (visible.scope = 'shared'
               and (visible.share_organization
                 or visible.share_role_ids && targets.role_ids
                 or visible.share_group_ids && targets.group_ids)))
       ) as listed
-      where listed.position <= 200
     ), '[]'::jsonb)
   );
 end
@@ -162,6 +192,6 @@ revoke all on function vortex_platform.read_grid_views(uuid, uuid[], uuid[], jso
 grant execute on function vortex_platform.read_grid_views(uuid, uuid[], uuid[], jsonb, uuid[]) to vortex_request;
 
 comment on function vortex_platform.read_grid_views(uuid, uuid[], uuid[], jsonb, uuid[]) is
-  'Reads the current person''s current layouts and visible named views, and decides the readable columns of the requested record types by access route, and narrows authored default documents through the same current field bounds, in one bounded call.';
+  'Reads current layouts, readable columns, role keys and only selected or automatic view documents for the visible page; the picker inventory is read on demand.';
 
 alter function vortex_platform.read_grid_views(uuid, uuid[], uuid[], jsonb, uuid[]) owner to vortex_owner;

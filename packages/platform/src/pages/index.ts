@@ -303,6 +303,7 @@ export {
   deleteGridView,
   gridViewPlacement,
   listGridViewShareTargets,
+  listGridViews,
   readGridViews,
   resetGridView,
   saveGridView,

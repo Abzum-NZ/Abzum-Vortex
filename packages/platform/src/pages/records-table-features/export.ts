@@ -288,6 +288,10 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
       savedViews.enabled
         ? savedViews.defaultViews.map((view) => ({
             viewId: view.viewId,
+            placementId,
+            role: view.role,
+            isDefault: view.isDefault,
+            selectedViewId: viewId ?? null,
             queryId,
             document: view.document,
           }))
@@ -310,6 +314,7 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
         savedViews.defaultViews,
         stored.roleKeys,
         stored.defaultDocuments,
+        { viewId, automatic: own === undefined },
       );
       const automatic =
         own === undefined && viewId === undefined

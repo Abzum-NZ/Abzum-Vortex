@@ -144,7 +144,7 @@ export const readRecordsTable = async (
     return;
   }
   const stored = gridLayouts.stored.layouts.get(placementId.toLowerCase());
-  // Saved views: the person's list, and the one the address selected re-evaluated under their
+  // Saved views: only the selected or automatic view, re-evaluated under the viewer's
   // access (a column or filter they cannot see is left out and counted).
   let views: GridViewsState | undefined;
   let selectedQuery: RecordsTableQueryState | undefined;
@@ -160,6 +160,10 @@ export const readRecordsTable = async (
       installedViews.defaultViews,
       gridLayouts.stored.roleKeys,
       gridLayouts.stored.defaultDocuments,
+      {
+        viewId: readRecordsTableView(placementId, addressEntries)?.viewId,
+        automatic: stored === undefined,
+      },
     );
     const addressedView = readRecordsTableView(placementId, addressEntries);
     const automatic =
@@ -186,16 +190,6 @@ export const readRecordsTable = async (
           );
     views = {
       canShare: gridLayouts.stored.shareable.has(placementId.toLowerCase()),
-      items: [
-        ...defaults.map((view) => view.item),
-        ...listed.map(({ viewId: id, name, scope, mine, revision }) => ({
-          viewId: id,
-          name,
-          scope,
-          mine,
-          revision,
-        })),
-      ],
       basedOnViewId: stored?.basedOnViewId ?? null,
       selected: resolvedView.selected,
       notice: resolvedView.notice,
