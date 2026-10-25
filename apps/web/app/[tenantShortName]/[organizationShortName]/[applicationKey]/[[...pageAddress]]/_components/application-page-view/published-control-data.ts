@@ -64,16 +64,32 @@ export function publishedControlData(
       },
     };
   if (kind === "field_input") {
+    if (value === null) return data;
     const payload = ready?.values;
-    if (
-      value === null ||
-      ready?.status !== "ready" ||
-      (payload?.kind !== "text_input" && payload?.kind !== "choice_input")
-    )
-      return data;
+    // A field with no default has no payload; the control it renders names its input kind.
+    let control: unknown;
+    if (data === undefined)
+      walkPageComposition(model.page.composition, ({ placementId, props }) => {
+        if (placementId === id) control = props.control;
+      });
+    const inputKind =
+      data === undefined
+        ? control === "choice"
+          ? "choice_input"
+          : control === "text"
+            ? "text_input"
+            : undefined
+        : ready?.status === "ready"
+          ? payload?.kind
+          : undefined;
+    if (inputKind !== "text_input" && inputKind !== "choice_input") return data;
     return {
       status: "ready",
-      values: { ...payload, value: payload.kind === "choice_input" ? choiceValue(payload) : value },
+      values: {
+        ...payload,
+        kind: inputKind,
+        value: inputKind === "choice_input" ? choiceValue(payload) : value,
+      },
     };
   }
   if (kind !== "link_input") return data;

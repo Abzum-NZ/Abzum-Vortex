@@ -43,11 +43,15 @@ export default function VirtualRows({
     },
     [activeRow, expandedRecordIds, lines],
   );
+  // Item-key identity is a measurement-cache dependency. Keep it stable while scrolling so
+  // moving the visible window does not rebuild the positions of every row in the loaded page.
+  const getItemKey = useCallback((index: number) => lines[index]?.id ?? index, [lines]);
+  const estimateSize = useCallback(() => rowHeight, [rowHeight]);
   const virtualizer = useVirtualizer({
     count: lines.length,
     getScrollElement: () => scrollRef.current,
-    estimateSize: () => rowHeight,
-    getItemKey: (index) => lines[index]?.id ?? index,
+    estimateSize,
+    getItemKey,
     overscan: 6,
     // The header row sits above the first row inside the same scroll area and stays over it.
     scrollMargin: rowHeight,

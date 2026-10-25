@@ -16,6 +16,12 @@ import {
   type ProtectedQuerySummaryAggregateResult,
 } from "../queries/index";
 import {
+  collectRecordLinkValues,
+  recordLinkPlainText,
+  type ProjectedRecordLinks,
+  type RecordLinkResolver,
+} from "./component-data-projection";
+import {
   conditionalFormattingFieldIds,
   evaluateConditionalFormatting,
   type ConditionalFormattingContext,
@@ -79,7 +85,11 @@ const recordTypeFor = (module: ModuleRelease, query: ModuleQuery): ModuleRecordT
 const installedFieldMap = (fields: readonly ModuleField[]): ReadonlyMap<string, ModuleField> =>
   new Map(fields.map((field) => [lower(String(field.fieldId)), field]));
 
-const displayFieldValue = (field: ModuleField, value: JsonValue): BoardCellValue | undefined => {
+const displayFieldValue = (
+  field: ModuleField,
+  value: JsonValue,
+  recordLinks: ProjectedRecordLinks | undefined,
+): BoardCellValue | undefined => {
   if (value === null) return { kind: "empty" };
   switch (field.type) {
     case "text":
@@ -128,6 +138,11 @@ const displayFieldValue = (field: ModuleField, value: JsonValue): BoardCellValue
         ? { kind: "text", text: labels.join(", ") }
         : undefined;
     }
+    case "link": {
+      // A card shows the linked record's label from the read the viewer may make, never its id.
+      const text = recordLinkPlainText(value, recordLinks);
+      return text === undefined ? undefined : { kind: "text", text };
+    }
     default:
       // Other structured and identity-bearing values have no matching closed display cell.
       return undefined;
@@ -139,6 +154,7 @@ const projectBoardRow = (
   requestedFieldIds: readonly string[],
   fieldsById: ReadonlyMap<string, ModuleField>,
   format: string | undefined,
+  recordLinks: ProjectedRecordLinks | undefined,
 ): BoardCardRow => {
   const declared = requestedFieldIds.map((fieldId) => ({ fieldId }));
   const valuesById = new Map(
@@ -148,7 +164,7 @@ const projectBoardRow = (
     const field = fieldsById.get(lower(fieldId));
     const stored = valuesById.get(lower(fieldId));
     if (field === undefined || stored === undefined) return [];
-    const value = displayFieldValue(field, stored);
+    const value = displayFieldValue(field, stored, recordLinks);
     if (value === undefined) return [];
     return [{ key: String(field.fieldId), label: field.label, value }];
   });
@@ -193,6 +209,7 @@ const projectPage = (
   cardFieldIds: readonly string[],
   fieldsById: ReadonlyMap<string, ModuleField>,
   formatting: BoardFormatting | undefined,
+  recordLinks: ProjectedRecordLinks | undefined,
 ): BoardPagePayload | null => {
   if (page === null) return null;
   const formats =
@@ -202,7 +219,7 @@ const projectPage = (
           ?.rows;
   return {
     rows: page.rows.map((row) =>
-      projectBoardRow(row, cardFieldIds, fieldsById, formats?.get(row.recordId)?.row),
+      projectBoardRow(row, cardFieldIds, fieldsById, formats?.get(row.recordId)?.row, recordLinks),
     ),
     ...(page.nextContinuationToken === undefined
       ? {}
@@ -411,6 +428,8 @@ export const projectBoardPlacement = async (
     queries: BoardQueries;
     /** The placement's Board feature, as the one Records table reader read it. */
     board: RecordsTableBoardMode;
+    /** Titles the linked records the cards show, in one batched read under the viewer's access. */
+    resolveRecordLinks: RecordLinkResolver;
     /** The board's Formatting with what its rules are evaluated with; supplied only when it is on. */
     formatting?: BoardFormatting;
     /**
@@ -551,6 +570,22 @@ export const projectBoardPlacement = async (
     )
       return unavailable("board_arrangement_mismatch");
 
+    // The linked records every card of this read shows are titled in one batched read.
+    const linkFieldIds = cardFieldIds.filter(
+      (fieldId) => fieldsById.get(lower(fieldId))?.type === "link",
+    );
+    const cardLinks = collectRecordLinkValues(
+      [...arranged.columns.map((column) => column.page), arranged.unassigned.page].flatMap((page) =>
+        (page?.rows ?? []).flatMap((row) =>
+          Object.entries(row.values).flatMap(([fieldId, value]) =>
+            linkFieldIds.some((linkFieldId) => sameId(linkFieldId, fieldId)) ? [value] : [],
+          ),
+        ),
+      ),
+    );
+    const recordLinks =
+      cardLinks.length === 0 ? undefined : await input.resolveRecordLinks(cardLinks);
+
     // Columns follow the pipeline's stage order; each carries its colour role, the stages a card
     // in it may move to, the named action that owns it, if one does, and whether a new record may
     // start there: a record with no stage moves as if from the start stage, never into a stage an
@@ -590,7 +625,7 @@ export const projectBoardPlacement = async (
             state: column.rowCount === null ? ("unread" as const) : ("read" as const),
             rowCount: column.rowCount,
             aggregates: bucketAggregates,
-            page: projectPage(column.page, cardFieldIds, fieldsById, input.formatting),
+            page: projectPage(column.page, cardFieldIds, fieldsById, input.formatting, recordLinks),
           },
         ];
       });
@@ -636,7 +671,13 @@ export const projectBoardPlacement = async (
           state: arranged.unassigned.rowCount === null ? "unread" : "read",
           rowCount: arranged.unassigned.rowCount,
           aggregates: unassignedAggregates,
-          page: projectPage(arranged.unassigned.page, cardFieldIds, fieldsById, input.formatting),
+          page: projectPage(
+            arranged.unassigned.page,
+            cardFieldIds,
+            fieldsById,
+            input.formatting,
+            recordLinks,
+          ),
         },
       },
     };
