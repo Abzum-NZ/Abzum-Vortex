@@ -1,5 +1,11 @@
+import type { RecordsTableActionContract } from "./row-actions";
 import type { ComponentSettingValue } from "../block-property-schema";
 import type { RecordsTableFeatures } from "./index";
+import type { ProtectedQueryRow } from "../../../queries/protected-query-contracts";
+import type {
+  RecordsTableInlineEditField,
+  RecordsTableInlineEditor,
+} from "../../../pages/records-table-feature-projection";
 import type {
   QueryBindingField,
   QueryBindingInput,
@@ -438,7 +444,38 @@ export type GridFeatureProjectionContext = Readonly<{
   fieldLabels: Readonly<Record<string, string>> | undefined;
   /** The page of pivot rows this read asked for, carried back with the projection. */
   pivotView: Readonly<{ cursor?: string | undefined }> | undefined;
+  features: RecordsTableFeatures;
+  columns: readonly Readonly<{ field: string }>[];
+  rowBehaviours: Readonly<{ rowActions: readonly RecordsTableActionContract[] }>;
+  rows: readonly ProtectedQueryRow[];
+  editors: Readonly<Record<string, RecordsTableInlineEditor>> | undefined;
 }>;
+
+/** Whether the read lets this viewer update this field on this row now. */
+export const rowMayChangeField = (
+  row: Pick<ProtectedQueryRow, "capabilities">,
+  field: string,
+): boolean =>
+  row.capabilities?.actions.includes("update") === true &&
+  row.capabilities.changeableFieldIds.some(
+    (fieldId) => fieldId.toLowerCase() === field.toLowerCase(),
+  );
+
+/** Editable fields share the same row, field-policy and installed-editor narrowing. */
+export const projectedEditableFields = (
+  feature: RecordsTableFeatures["inlineEdit"] | RecordsTableFeatures["rowEdit"],
+  { rows, readable, editors }: GridFeatureProjectionContext,
+): readonly RecordsTableInlineEditField[] => {
+  if (!feature.enabled || feature.eventId === undefined) return [];
+  return feature.fields.flatMap((field): RecordsTableInlineEditField[] => {
+    const editor = editors?.[field.toLowerCase()];
+    return editor !== undefined &&
+      readable(field) &&
+      rows.some((row) => rowMayChangeField(row, field))
+      ? [{ field, editor }]
+      : [];
+  });
+};
 
 /**
  * One grid feature of the Records table, declared once: its key in the `features` setting group,

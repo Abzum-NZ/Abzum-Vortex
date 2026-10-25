@@ -12,6 +12,7 @@ import {
 } from "react";
 import {
   projectInlineEditedCell,
+  recordsTableInlineEditEvent,
   type JsonValue,
   type RecordsDisplayFormat,
   type RecordsTableInlineEditor,
@@ -221,7 +222,7 @@ function EditableCell({
     try {
       result = asResult(
         await handler({
-          event: "inline_edit",
+          event: recordsTableInlineEditEvent,
           eventId,
           recordId: row.recordId,
           revision: row.revision,
@@ -483,7 +484,7 @@ function EditableCell({
  */
 function InlineEditor({ context, row, column, children }: GridFeatureCellProps): ReactElement {
   const inlineEdit = context.features.inlineEdit;
-  const onInlineEdit = context.events?.inline_edit;
+  const onInlineEdit = context.events?.[recordsTableInlineEditEvent];
   const same = (left: string, right: string): boolean => left.toLowerCase() === right.toLowerCase();
   const field = inlineEdit?.fields.find((candidate) => same(candidate.field, column.key));
   const storedKey =

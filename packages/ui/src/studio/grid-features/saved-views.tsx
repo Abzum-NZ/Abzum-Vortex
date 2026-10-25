@@ -2,6 +2,7 @@
 import { useState, type ReactElement } from "react";
 import {
   recordsTableSettingMaximumItems,
+  recordsTableSavedViewsFeature,
   type SourceBlockPropertyValueContract,
 } from "@vortex/platform/schema";
 import { Button } from "../../components/button";
@@ -250,7 +251,7 @@ export function StudioSavedViewsEditor({
           !role ||
           capture() === undefined ||
           views.length >=
-            recordsTableSettingMaximumItems("features", "saved_views", "default_views")
+            recordsTableSettingMaximumItems(recordsTableSavedViewsFeature.settings, "default_views")
         }
         onClick={() => {
           const state = capture();

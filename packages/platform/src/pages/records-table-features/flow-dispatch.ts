@@ -6,6 +6,8 @@ import {
   recordIdSchema,
   fieldIdSchema,
   sameId,
+  recordsTableInlineEditEvent,
+  recordsTableRowEditEvent,
 } from "../../schema";
 import type { ComponentFlowBinding } from "../../schema";
 import type { RequestDatabaseTransaction } from "../../db";
@@ -111,8 +113,8 @@ export const recordsTableBindingRefusal = async (
     event !== "row_action" &&
     event !== "row_clicked" &&
     event !== "bulk_action" &&
-    event !== "inline_edit" &&
-    event !== "row_edit"
+    event !== recordsTableInlineEditEvent &&
+    event !== recordsTableRowEditEvent
   )
     return undefined;
   const props = installedPlacementProps(installation.applicationContent, binding.controlId);
@@ -149,8 +151,9 @@ export const recordsTableBindingRefusal = async (
       !sameId(contract.rowBehaviours.rowClick.eventId, binding.eventId))
   )
     return recordsTableRequestRefusal(event, "command_not_declared");
-  const editing = event === "inline_edit" || event === "row_edit";
-  const inline = event === "row_edit" ? contract.features.rowEdit : contract.features.inlineEdit;
+  const editing = event === recordsTableInlineEditEvent || event === recordsTableRowEditEvent;
+  const inline =
+    event === recordsTableRowEditEvent ? contract.features.rowEdit : contract.features.inlineEdit;
   let editedFields: string[] = [];
   if (editing) {
     if (!inline.enabled) return recordsTableRequestRefusal(event, "feature_off");
@@ -158,7 +161,11 @@ export const recordsTableBindingRefusal = async (
       return recordsTableRequestRefusal(event, "binding_not_declared");
     const values = inputs.values;
     const names = isRecord(values) ? Object.keys(values) : [];
-    if ((event === "inline_edit" && names.length !== 1) || names.length === 0 || names.length > 50)
+    if (
+      (event === recordsTableInlineEditEvent && names.length !== 1) ||
+      names.length === 0 ||
+      names.length > 50
+    )
       return recordsTableRequestRefusal(event, "changed_fields_invalid");
     if (new Set(names.map((name) => name.toLowerCase())).size !== names.length)
       return recordsTableRequestRefusal(event, "changed_fields_duplicated");
@@ -279,7 +286,7 @@ export const recordsTableBindingRefusal = async (
         const module = installation.modules?.find((entry) => entry.content.queries.includes(query));
         if (module === undefined) return recordsTableRequestRefusal(event, "query_module_missing");
         const editors = fieldEditorsOf(module, installation.modules ?? []);
-        if (event === "row_edit") {
+        if (event === recordsTableRowEditEvent) {
           const projection = projectRecordsTableFeatures(
             contract,
             {

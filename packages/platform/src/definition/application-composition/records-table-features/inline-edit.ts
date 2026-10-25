@@ -4,6 +4,7 @@ import {
   featureEnabled,
   featureNotPossible,
   optionalText,
+  projectedEditableFields,
   recordsTableDependencyMissing,
   recordsTableFieldNotEditableReason,
   requiredFieldList,
@@ -130,6 +131,12 @@ export const recordsTableInlineEditFeature: RecordsTableFeatureDefinition<
       fields: requiredFieldList(group["fields"], "fields"),
     };
   },
+  project: (state, context) => {
+    const fields = projectedEditableFields(state, context);
+    return !state.enabled || state.eventId === undefined || fields.length === 0
+      ? undefined
+      : { eventId: state.eventId, fields };
+  },
   // Every chosen field must be a stored value people may change, and a change needs the action
   // that saves it; a grouped query has no records to change.
   conflicts: (_state, _facts, { presentation }) =>
@@ -165,3 +172,8 @@ export const recordsTableInlineEditFeature: RecordsTableFeatureDefinition<
     return featureAvailable;
   },
 };
+
+/** The control event declared by this feature. */
+export const recordsTableInlineEditEvent = Object.keys(
+  recordsTableInlineEditFeature.events!,
+)[0] as typeof recordsTableInlineEditFeature.key;

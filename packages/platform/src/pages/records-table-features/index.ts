@@ -1,10 +1,10 @@
+export { recordsTableRowActionsProjection } from "../../definition/application-composition/records-table-features/row-actions";
+export { rowMayChangeField } from "../../definition/application-composition/records-table-features/shared";
 import type {
   ConditionalFormattingProjection,
-  RecordsTableBulkActionContract,
   RecordsTableContract,
   RecordsTableFeatureProjection,
   RecordsTableFilterField,
-  RecordsTableInlineEditField,
   RecordsTableInlineEditor,
   RecordsTablePivotView,
 } from "../../schema";
@@ -77,87 +77,6 @@ export const logRecordsTableRequestRefusal = (
 const sameField = (left: string, right: string): boolean =>
   left.toLowerCase() === right.toLowerCase();
 
-/** Whether one row lets the viewer change this field now: the update action and the field's own policy. */
-export const rowMayChangeField = (
-  row: Pick<ProtectedQueryRow, "capabilities">,
-  field: string,
-): boolean =>
-  row.capabilities?.actions.includes("update") === true &&
-  row.capabilities.changeableFieldIds.some((fieldId) => sameField(fieldId, field));
-
-/**
- * The inline-edit fields some row lets the viewer change now, which the viewer may read and the
- * installed definition describes an editor for; none when inline editing is off. The authored
- * allowlist only narrows what the definition and the viewer's access already allow.
- */
-export const recordsTableEditableFields = (
-  contract: RecordsTableContract,
-  rows: readonly ProtectedQueryRow[],
-  bounds: ProtectedQueryFieldBounds,
-  editors: Readonly<Record<string, RecordsTableInlineEditor>> | undefined,
-): readonly RecordsTableInlineEditField[] => {
-  return projectedEditableFields(contract.features.inlineEdit, rows, bounds, editors);
-};
-
-const projectedEditableFields = (
-  feature:
-    RecordsTableContract["features"]["inlineEdit"] | RecordsTableContract["features"]["rowEdit"],
-  rows: readonly ProtectedQueryRow[],
-  bounds: ProtectedQueryFieldBounds,
-  editors: Readonly<Record<string, RecordsTableInlineEditor>> | undefined,
-): readonly RecordsTableInlineEditField[] => {
-  if (!feature.enabled || feature.eventId === undefined) return [];
-  return feature.fields.flatMap((field): RecordsTableInlineEditField[] => {
-    const editor = editors?.[field.toLowerCase()];
-    return editor !== undefined &&
-      bounds.readableFieldIds.some((fieldId) => sameField(fieldId, field)) &&
-      rows.some((row) => rowMayChangeField(row, field))
-      ? [{ field, editor }]
-      : [];
-  });
-};
-
-/** The one bulk-action projection; a disabled feature offers neither actions nor availability reads. */
-export const recordsTableBulkActions = (
-  contract: RecordsTableContract,
-): readonly RecordsTableBulkActionContract[] =>
-  contract.features.bulkActions.enabled ? contract.features.bulkActions.actions : [];
-
-/**
- * The row actions a table offers and, per row, whether the capabilities its read decided make each
- * eligible; absent when the feature is off or the table declares none. Named-action eligibility is
- * decided afterwards, in the read's own request, by `projectRowActionAvailability`.
- */
-export const recordsTableRowActionsProjection = (
-  contract: RecordsTableContract,
-  rows: readonly ProtectedQueryRow[],
-): RecordsTableFeatureProjection["rowActions"] =>
-  contract.features.rowActions.enabled && contract.rowBehaviours.rowActions.length > 0
-    ? {
-        actions: contract.rowBehaviours.rowActions,
-        availability: rows.flatMap((row) =>
-          row.revision === undefined
-            ? []
-            : [
-                {
-                  recordId: row.recordId,
-                  revision: row.revision,
-                  actions: contract.rowBehaviours.rowActions.map((action) =>
-                    action.capability === undefined ||
-                    row.capabilities?.actions.includes(action.capability) === true
-                      ? { action: action.eventId, eligible: true as const }
-                      : {
-                          action: action.eventId,
-                          eligible: false as const,
-                          reason: "not_permitted" as const,
-                        },
-                  ),
-                },
-              ],
-        ),
-      }
-    : undefined;
-
 /**
  * Projects the enabled features for the viewer of one read. `bounds` is the viewer's current field
  * bound from the same read, carried even when no row was returned, so it decides filters, search
@@ -188,6 +107,11 @@ export const projectRecordsTableFeatures = (
     filterFields,
     fieldLabels,
     pivotView,
+    features,
+    columns: contract.columns,
+    rows,
+    editors,
+    rowBehaviours: contract.rowBehaviours,
   };
   const declared = Object.fromEntries(
     recordsTableFeatureKeys.flatMap((key) => {
@@ -196,36 +120,7 @@ export const projectRecordsTableFeatures = (
       return part === undefined ? [] : [[definition.property, part]];
     }),
   ) as Partial<RecordsTableFeatureProjection>;
-  // A view keeps the whole grid (columns, density, search, and any sort or filter), so it is
-  // offered wherever the table enables it.
-  const savedViews = features.savedViews.enabled;
-  const bulkActions = recordsTableBulkActions(contract);
-  const inlineEdit = features.inlineEdit;
-  const editableFields = recordsTableEditableFields(contract, rows, bounds, editors);
-  const rowEdit = features.rowEdit;
-  const rowFields = projectedEditableFields(rowEdit, rows, bounds, editors);
   const exportSettings = features.export;
-  // A status bar total names only fields the table shows as columns; with none left it is omitted.
-  const statusBarFields = features.spreadsheet.enabled
-    ? features.spreadsheet.statusBarFields.filter((field) =>
-        contract.columns.some((column) => sameField(column.field, field)),
-      )
-    : [];
-  const batchEditable =
-    features.spreadsheet.enabled &&
-    features.spreadsheet.rangeSelect === true &&
-    editableFields.length > 0 &&
-    inlineEdit.enabled &&
-    inlineEdit.eventId !== undefined;
-  const pasteUsable =
-    batchEditable && features.spreadsheet.enabled && features.spreadsheet.paste === true;
-  const fillUsable =
-    batchEditable && features.spreadsheet.enabled && features.spreadsheet.fill === true;
-  const undoUsable =
-    (pasteUsable || fillUsable) &&
-    features.spreadsheet.enabled &&
-    features.spreadsheet.undo === true;
-  const rowActions = recordsTableRowActionsProjection(contract, rows);
   const projection: RecordsTableFeatureProjection = {
     ...(exportSettings.enabled &&
     exportAllowed === true &&
@@ -234,43 +129,7 @@ export const projectRecordsTableFeatures = (
     contract.columns.some((column) => readable(column.field))
       ? { export: { maxRows: exportSettings.maxRows, formats: exportSettings.formats } }
       : {}),
-    ...(rowEdit.enabled &&
-    rowEdit.eventId !== undefined &&
-    rowEdit.trigger === "button" &&
-    rowFields.length > 0
-      ? { rowEdit: { eventId: rowEdit.eventId, trigger: rowEdit.trigger, fields: rowFields } }
-      : {}),
-    ...(features.spreadsheet.enabled &&
-    typeof features.spreadsheet.rangeSelect === "boolean" &&
-    typeof features.spreadsheet.find === "boolean" &&
-    contract.columns.some((column) => readable(column.field))
-      ? {
-          spreadsheet: {
-            rangeSelect: features.spreadsheet.rangeSelect,
-            find: features.spreadsheet.find,
-            ...(pasteUsable ? { paste: true as const } : {}),
-            ...(fillUsable ? { fill: true as const } : {}),
-            ...(undoUsable ? { undo: true as const } : {}),
-            ...(features.spreadsheet.rangeSelect &&
-            statusBarFields.length > 0 &&
-            features.spreadsheet.statusBarOperations.length > 0
-              ? {
-                  statusBar: {
-                    fields: statusBarFields,
-                    operations: features.spreadsheet.statusBarOperations,
-                  },
-                }
-              : {}),
-          },
-        }
-      : {}),
-    ...(rowActions === undefined ? {} : { rowActions }),
     ...declared,
-    ...(savedViews ? { savedViews: true as const } : {}),
-    ...(bulkActions.length === 0 ? {} : { bulkActions }),
-    ...(editableFields.length === 0 || !inlineEdit.enabled || inlineEdit.eventId === undefined
-      ? {}
-      : { inlineEdit: { eventId: inlineEdit.eventId, fields: editableFields } }),
     ...(conditionalFormatting === undefined || !features.conditionalFormatting.enabled
       ? {}
       : { conditionalFormatting }),

@@ -450,3 +450,7 @@ export const authoredRecordsTableEventAvailable = (
   const group = feature as Record<string, unknown>;
   return group["enabled"] === true && (offeredBy === undefined || group[offeredBy] === true);
 };
+
+export { recordsTableInlineEditEvent } from "./inline-edit";
+
+export { recordsTableRowEditEvent } from "./row-edit";
