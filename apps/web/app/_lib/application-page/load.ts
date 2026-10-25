@@ -331,7 +331,8 @@ const loadApplicationPageJoined = async (
     pageDefinition.pageId,
     conditionSubjectId,
     selectedPlacementIds,
-    selectedPlacementIds === undefined,
+    // A document receives navigation from its frame, so its page read does not project it again.
+    selectedPlacementIds === undefined && options?.includeNavigation !== false,
   );
   startedReads.push(projectedPageRead);
   if (navigationRead !== undefined) startedReads.push(navigationRead);
@@ -988,7 +989,7 @@ const loadApplicationPageJoined = async (
       ].join(":"),
     },
   };
-  if (navigation === undefined)
+  if (selectedPlacementIds !== undefined)
     return {
       kind: "placements",
       model,
@@ -998,7 +999,7 @@ const loadApplicationPageJoined = async (
     kind: "available",
     model: {
       ...model,
-      ...(options?.includeNavigation === false ? {} : { navigation: navigation.value }),
+      ...(navigation === undefined ? {} : { navigation: navigation.value }),
       webMcpTools: projectPageWebMcpTools({
         page,
         ...(guidedForm === undefined ? {} : { activeStepId: guidedForm.activeStepId }),
