@@ -1,5 +1,5 @@
 "use client";
-import { plainSourceSettingValue } from "@vortex/platform/schema";
+import { plainSourceSettingValue, recordsTableBoardFeature } from "@vortex/platform/schema";
 import type { StudioCompiledFields } from "../_lib/studio-data-model";
 import {
   StudioField,
@@ -267,7 +267,7 @@ export function ApplicationCompositionEditor(props: Props) {
     const featureGroup = next.settings.features;
     const boardValue = featureGroup?.kind === "group" ? featureGroup.properties.board : undefined;
     const boardDeclaration = featuresProperty?.properties.find(
-      (property) => property.key === "board",
+      (property) => property.key === recordsTableBoardFeature.key,
     );
     // A pipeline selection writes its query in the same composition command. Check its real
     // record fields before that write, rather than the previous query's selected fields.

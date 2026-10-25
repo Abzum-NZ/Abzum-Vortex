@@ -105,6 +105,8 @@ export const projectRecordsTableFeatures = (
     readable,
     searchable: bounds.searchable,
     filterFields,
+    conditionalFormatting,
+    exportAllowed: exportAllowed === true,
     features,
     columns: contract.columns,
     rows,
@@ -157,15 +159,7 @@ export const projectRecordsTableFeatures = (
           opensGrouped: groupingSettings.opensGrouped,
         }
       : undefined;
-  const exportSettings = features.export;
   const projection: RecordsTableFeatureProjection = {
-    ...(exportSettings.enabled &&
-    exportAllowed === true &&
-    exportSettings.maxRows !== undefined &&
-    exportSettings.formats.length > 0 &&
-    contract.columns.some((column) => readable(column.field))
-      ? { export: { maxRows: exportSettings.maxRows, formats: exportSettings.formats } }
-      : {}),
     ...declared,
     ...(masterDetail.enabled && masterDetail.childPageSize !== undefined
       ? { masterDetail: { pageSize: masterDetail.childPageSize } }
@@ -178,9 +172,6 @@ export const projectRecordsTableFeatures = (
       ? { tree: { pageSize: tree.childPageSize } }
       : {}),
     ...(grouping === undefined || grouping.label === "" ? {} : { grouping }),
-    ...(conditionalFormatting === undefined || !features.conditionalFormatting.enabled
-      ? {}
-      : { conditionalFormatting }),
     ...(pivot === undefined ? {} : { pivot }),
   };
   return Object.keys(projection).length === 0 ? undefined : projection;

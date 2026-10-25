@@ -1,6 +1,6 @@
 "use client";
 
-import { recordsTableSettingMaximumItems } from "@vortex/platform/schema";
+import { recordsTableBoardFeature, recordsTableSettingMaximumItems } from "@vortex/platform/schema";
 import { useId, type ReactElement } from "react";
 import { Trash2 } from "lucide-react";
 import type {
@@ -135,7 +135,8 @@ function StudioBoardTotals({
           </Button>
         </div>
       ))}
-      {rows.length >= recordsTableSettingMaximumItems("features", "board", "totals") ? null : (
+      {rows.length >=
+      recordsTableSettingMaximumItems("features", recordsTableBoardFeature.key, "totals") ? null : (
         <StudioReferencePicker
           id={`${idPrefix}-add`}
           value=""
