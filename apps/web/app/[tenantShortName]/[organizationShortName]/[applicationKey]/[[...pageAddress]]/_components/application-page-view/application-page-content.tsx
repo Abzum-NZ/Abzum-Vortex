@@ -565,28 +565,21 @@ export function ApplicationPageViewContent({
     return [own, Object.keys(shell).length === 0 ? undefined : shell] as const;
   }, [contentPlacementIds, currentContentPlacementIds, runtimeInputs]);
   useFramePageState("runtimeInputs", frameRuntimeInputs);
-  const releaseAdoption = model.adoption;
-  const adoption = useMemo(
+  const adoptRelease = useMemo(
     () =>
-      releaseAdoption === undefined || adoptReleaseAction === undefined
+      adoptReleaseAction === undefined
         ? undefined
-        : {
-            version: releaseAdoption.offeredReleaseVersion,
-            adopt: async () => {
-              const formData = new FormData();
-              formData.set("applicationKey", application.applicationKey);
-              formData.set("pageKey", application.pageKey);
-              formData.set("targetReleaseRevision", String(releaseAdoption.offeredReleaseRevision));
-              formData.set(
-                "expectedActiveReleaseRevision",
-                String(releaseAdoption.installedReleaseRevision),
-              );
-              await adoptReleaseAction(formData);
-            },
+        : async (offeredReleaseRevision: number, installedReleaseRevision: number) => {
+            const formData = new FormData();
+            formData.set("applicationKey", application.applicationKey);
+            formData.set("pageKey", application.pageKey);
+            formData.set("targetReleaseRevision", String(offeredReleaseRevision));
+            formData.set("expectedActiveReleaseRevision", String(installedReleaseRevision));
+            await adoptReleaseAction(formData);
           },
-    [adoptReleaseAction, application.applicationKey, application.pageKey, releaseAdoption],
+    [adoptReleaseAction, application.applicationKey, application.pageKey],
   );
-  useFramePageState("releaseAdoption", adoption);
+  useFramePageState("adoptRelease", adoptRelease);
 
   return (
     <>

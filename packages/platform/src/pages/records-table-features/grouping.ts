@@ -64,7 +64,6 @@ export const recordsTableGroupSelector = (
   if (value === undefined) return undefined;
   // A key is only valid for the type of field the table is grouped by.
   if (typeof value === "object" && value !== null && fieldType !== "link") return undefined;
-  if (value === NOT_AVAILABLE && fieldType !== "link") return undefined;
   return { values: [{ fieldId, fieldType, value }] };
 };
 

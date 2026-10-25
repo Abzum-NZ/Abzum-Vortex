@@ -2,9 +2,10 @@
 
 import {
   createContext,
-  Suspense,
-  use,
   useContext,
+  useEffect,
+  useRef,
+  useState,
   type CSSProperties,
   type ReactElement,
   type ReactNode,
@@ -28,6 +29,7 @@ import {
   DropdownMenuTrigger,
 } from "../components/dropdown-menu";
 import { Button } from "../components/button";
+import { Skeleton } from "../components/skeleton";
 import { SidebarProvider, SidebarTrigger } from "../components/sidebar";
 import { FlowSurfaceContext } from "../flow-runtime/flow-surface-context";
 import { Icon } from "../icons/icon";
@@ -48,14 +50,12 @@ export type ApplicationSwitcherData = Readonly<{
   applications: readonly Readonly<{ key: string; name: string; href: string }>[];
 }>;
 
-/**
- * The application switcher's applications, resolved or as a server-started read that streams in.
- * It travels in a context, not in Puck metadata: Puck copies metadata, and a copied streamed read
- * is no longer a promise.
- */
-export const ApplicationSwitcherContext = createContext<
-  ApplicationSwitcherData | Promise<ApplicationSwitcherData> | undefined
->(undefined);
+export type ApplicationSwitcherSource = () => Promise<ApplicationSwitcherData>;
+
+/** The switcher's on-demand read travels outside Puck's copied metadata. */
+export const ApplicationSwitcherContext = createContext<ApplicationSwitcherSource | undefined>(
+  undefined,
+);
 
 export type ApplicationShellRuntime = Readonly<{
   applicationName: string;
@@ -214,58 +214,41 @@ function ApplicationSwitcher({
   runtime,
 }: Readonly<{ shellName: string; runtime: ApplicationShellRuntime | undefined }>): ReactElement {
   const applicationName = runtime?.applicationName ?? shellName;
-  return (
-    <Suspense
-      fallback={
-        <Button
-          variant="ghost"
-          size="sm"
-          disabled
-          aria-busy="true"
-          aria-label={`Loading applications: ${applicationName}`}
-          className="max-w-56 max-sm:min-h-11 max-sm:min-w-11 animate-pulse"
-        >
-          <SwitcherButton icon="grid" label={applicationName} />
-        </Button>
-      }
-    >
-      <ResolvedApplicationSwitcher applicationName={applicationName} />
-    </Suspense>
-  );
-}
-
-function ResolvedApplicationSwitcher({
-  applicationName,
-}: Readonly<{ applicationName: string }>): ReactElement {
   const actions = useApplicationAccountActions();
-  const read = useContext(ApplicationSwitcherContext);
-  const switcher = read !== undefined && "then" in read ? use(read) : read;
-  if (switcher?.state === "temporarily_unavailable")
-    return (
-      <span
-        role="status"
-        aria-live="polite"
-        className="inline-flex max-w-56 items-center gap-2 truncate text-sm text-muted-foreground"
-      >
-        <Icon name="grid" aria-hidden="true" />
-        <span className="truncate max-sm:sr-only">Applications temporarily unavailable</span>
-      </span>
-    );
-  if (switcher?.state === "unavailable")
-    return (
-      <span
-        role="status"
-        aria-live="polite"
-        className="inline-flex max-w-56 items-center gap-2 truncate text-sm text-muted-foreground"
-      >
-        <Icon name="grid" aria-hidden="true" />
-        <span className="truncate max-sm:sr-only">Applications unavailable</span>
-      </span>
-    );
+  const source = useContext(ApplicationSwitcherContext);
+  const [switcher, setSwitcher] = useState<ApplicationSwitcherData>();
+  const requestToken = useRef(0);
+  useEffect(
+    () => () => {
+      requestToken.current += 1;
+    },
+    [],
+  );
+  const read = async () => {
+    if (source === undefined || actions === null) return;
+    const token = ++requestToken.current;
+    setSwitcher(undefined);
+    try {
+      const result = await source();
+      if (token === requestToken.current) setSwitcher(result);
+    } catch (error) {
+      console.error("[application-shell] switcher read failed", error);
+      if (token === requestToken.current)
+        setSwitcher({ state: "temporarily_unavailable", applications: [] });
+    }
+  };
   return (
-    <DropdownMenu>
+    <DropdownMenu
+      onOpenChange={(open) => {
+        if (open) void read();
+        else {
+          requestToken.current += 1;
+          setSwitcher(undefined);
+        }
+      }}
+    >
       <DropdownMenuTrigger
-        disabled={switcher === undefined || switcher.applications.length === 0 || actions === null}
+        disabled={source === undefined || actions === null}
         aria-label={`Application: ${applicationName}`}
         render={
           <Button variant="ghost" size="sm" className="max-w-56 max-sm:min-h-11 max-sm:min-w-11" />
@@ -273,21 +256,43 @@ function ResolvedApplicationSwitcher({
       >
         <SwitcherButton icon="grid" label={applicationName} />
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="min-w-56">
+      <DropdownMenuContent align="end" className="min-w-56" aria-busy={switcher === undefined}>
         <DropdownMenuGroup>
           <DropdownMenuLabel>Applications</DropdownMenuLabel>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
-        {(switcher?.applications ?? []).map((application) => (
-          <DropdownMenuItem
-            key={application.key}
-            onClick={() => void actions?.openApplication(application.href)}
-            disabled={actions === null}
-            data-active={application.name === applicationName ? "true" : undefined}
-          >
-            {application.name}
-          </DropdownMenuItem>
-        ))}
+        {switcher === undefined ? (
+          <div role="status" aria-label="Loading applications" className="space-y-2 p-2">
+            <Skeleton className="h-5 w-full" />
+            <Skeleton className="h-5 w-3/4" />
+          </div>
+        ) : switcher.state !== "available" ? (
+          <>
+            <div role="status" className="px-2 py-1.5 text-sm text-muted-foreground">
+              {switcher.state === "temporarily_unavailable"
+                ? "Applications temporarily unavailable"
+                : "Applications unavailable"}
+            </div>
+            <DropdownMenuItem closeOnClick={false} onClick={() => void read()}>
+              Retry
+            </DropdownMenuItem>
+          </>
+        ) : switcher.applications.length === 0 ? (
+          <div role="status" className="px-2 py-1.5 text-sm text-muted-foreground">
+            No other applications
+          </div>
+        ) : (
+          switcher.applications.map((application) => (
+            <DropdownMenuItem
+              key={application.key}
+              onClick={() => void actions?.openApplication(application.href)}
+              disabled={actions === null}
+              data-active={application.name === applicationName ? "true" : undefined}
+            >
+              {application.name}
+            </DropdownMenuItem>
+          ))
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );

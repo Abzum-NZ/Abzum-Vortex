@@ -580,6 +580,7 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
           expansion={expansion}
           subRows={subRows}
           fill={fullScreen.active}
+          bounded={contract?.viewport === "bounded"}
           density={layout.density}
         />
       </Suspense>

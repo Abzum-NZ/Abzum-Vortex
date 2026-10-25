@@ -232,10 +232,10 @@ export function StudioCanvasBridge({
         onNavigatePage={ignoreNavigation}
         currentPageId={frame.pageId}
         // The switcher names only the application being designed.
-        applicationSwitcher={{
+        applicationSwitcherSource={async () => ({
           state: "available",
           applications: [{ key: frame.applicationName, name: frame.applicationName, href: "#" }],
-        }}
+        })}
         applicationShellRuntime={{
           applicationName: frame.applicationName,
           applicationHref: "#",
