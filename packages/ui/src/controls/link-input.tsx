@@ -248,8 +248,10 @@ export function LinkInput(props: LinkInputProps): ReactElement {
         itemToStringLabel={(item) => item.title}
         itemToStringValue={(item) => choiceKey(item)}
         isItemEqualToValue={(item, value) => choiceKey(item) === choiceKey(value)}
-        // The server already searched; every record it returned is offered.
-        filter={() => true}
+        // The server already searched: the list shows exactly the records it returned, as they
+        // arrive, without filtering them again.
+        filteredItems={items}
+        filter={null}
         name={fieldKey}
         required={required}
         disabled={inactive}
