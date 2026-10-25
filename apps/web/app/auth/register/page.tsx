@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { readPrivacyNotice } from "@vortex/platform/server";
+import { Checkbox } from "@vortex/ui/components/checkbox";
 import { Field, FieldDescription } from "@vortex/ui/components/field";
 import { Input } from "@vortex/ui/components/input";
 import { Label } from "@vortex/ui/components/label";
@@ -11,6 +13,7 @@ type RegisterPageProps = Readonly<{ searchParams: Promise<{ status?: string }> }
 
 export default async function RegisterPage({ searchParams }: RegisterPageProps) {
   const { status } = await searchParams;
+  const notice = await readPrivacyNotice().catch(() => undefined);
 
   return (
     <AuthShell
@@ -29,29 +32,42 @@ export default async function RegisterPage({ searchParams }: RegisterPageProps) 
         </p>
       }
     >
-      <StatusMessage status={status} />
-      <form className="flex flex-col gap-5" action={register}>
-        <Field>
-          <Label htmlFor="email">Email address</Label>
-          <Input id="email" name="email" type="email" autoComplete="email" required />
-        </Field>
-        <Field>
-          <Label htmlFor="password">Password</Label>
-          <Input
-            id="password"
-            name="password"
-            type="password"
-            autoComplete="new-password"
-            minLength={8}
-            pattern="(?=.*[A-Za-z])(?=.*\d).{8,1024}"
-            required
-          />
-          <FieldDescription>
-            Use at least 8 characters, including a letter and a number.
-          </FieldDescription>
-        </Field>
-        <SubmitButton pendingLabel="Creating account…">Create account</SubmitButton>
-      </form>
+      <StatusMessage status={notice === undefined ? "privacy_notice_unavailable" : status} />
+      {notice !== undefined && (
+        <form className="flex flex-col gap-5" action={register}>
+          <p className="text-sm text-muted-foreground">
+            {notice.content.collectionNotice}{" "}
+            <Link className="underline underline-offset-4" href={notice.locator}>
+              Privacy Policy
+            </Link>
+          </p>
+          <input type="hidden" name="notice_version_id" value={notice.id} />
+          <Field>
+            <Label htmlFor="email">Email address</Label>
+            <Input id="email" name="email" type="email" autoComplete="email" required />
+          </Field>
+          <Field>
+            <Label htmlFor="password">Password</Label>
+            <Input
+              id="password"
+              name="password"
+              type="password"
+              autoComplete="new-password"
+              minLength={8}
+              pattern="(?=.*[A-Za-z])(?=.*\d).{8,1024}"
+              required
+            />
+            <FieldDescription>
+              Use at least 8 characters, including a letter and a number.
+            </FieldDescription>
+          </Field>
+          <Field orientation="horizontal">
+            <Checkbox id="privacy-notice" name="privacy_notice_acknowledged" required />
+            <Label htmlFor="privacy-notice">I acknowledge the Privacy Policy.</Label>
+          </Field>
+          <SubmitButton pendingLabel="Creating account…">Create account</SubmitButton>
+        </form>
+      )}
     </AuthShell>
   );
 }
