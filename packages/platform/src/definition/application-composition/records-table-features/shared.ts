@@ -437,6 +437,10 @@ export type GridFeatureProjectionContext = Readonly<{
   filterFields: Readonly<Record<string, object>> | undefined;
   /** The formatting this read evaluated for the viewer's rows; undefined when no rule applies. */
   conditionalFormatting: ConditionalFormattingProjection | undefined;
+  /** The viewer holds an export permission that reaches every record, decided in this read. */
+  exportAllowed: boolean;
+  /** The fields the table shows as columns, as the table's settings spell them. */
+  columns: readonly string[];
 }>;
 
 /**

@@ -182,7 +182,14 @@ export const projectRecordsTableFeatures = (
   const readable = (field: string): boolean =>
     bounds.readableFieldIds.some((fieldId) => sameField(fieldId, field));
   // Each feature that declares its projection decides its own part for this viewer.
-  const context = { readable, searchable: bounds.searchable, filterFields, conditionalFormatting };
+  const context = {
+    readable,
+    searchable: bounds.searchable,
+    filterFields,
+    conditionalFormatting,
+    exportAllowed: exportAllowed === true,
+    columns: contract.columns.map((column) => column.field),
+  };
   const declared = Object.fromEntries(
     recordsTableFeatureKeys.flatMap((key) => {
       const definition = recordsTableFeatureDefinition(key);
@@ -237,7 +244,6 @@ export const projectRecordsTableFeatures = (
           opensGrouped: groupingSettings.opensGrouped,
         }
       : undefined;
-  const exportSettings = features.export;
   // A status bar total names only fields the table shows as columns; with none left it is omitted.
   const statusBarFields = features.spreadsheet.enabled
     ? features.spreadsheet.statusBarFields.filter((field) =>
@@ -260,13 +266,6 @@ export const projectRecordsTableFeatures = (
     features.spreadsheet.undo === true;
   const rowActions = recordsTableRowActionsProjection(contract, rows);
   const projection: RecordsTableFeatureProjection = {
-    ...(exportSettings.enabled &&
-    exportAllowed === true &&
-    exportSettings.maxRows !== undefined &&
-    exportSettings.formats.length > 0 &&
-    contract.columns.some((column) => readable(column.field))
-      ? { export: { maxRows: exportSettings.maxRows, formats: exportSettings.formats } }
-      : {}),
     ...(rowEdit.enabled &&
     rowEdit.eventId !== undefined &&
     rowEdit.trigger === "button" &&

@@ -2,14 +2,17 @@ import "server-only";
 
 import {
   organizationRecordAccessDeclarationSchema,
+  permissionActionKindSchema,
   sameId,
+  type PermissionActionKind,
   type SelectedOrganizationScope,
 } from "../../schema";
 import type { RequestDatabaseTransaction } from "../../db";
 import { evaluateOrganizationRecordPermissionAvailability } from "../../access/index";
 import type { InstalledRuntimeContext } from "../../definition/index";
 
-type AccessAction = "create" | "export";
+/** A standard record permission the decision reads; the feature keys are never permission actions. */
+type AccessAction = PermissionActionKind;
 
 /**
  * The standard permissions of one record type the viewer holds now, each decided on its own,
@@ -81,7 +84,13 @@ export const decideRecordTypeCreatableFieldIds = async (
   recordTypeId: string,
 ): Promise<ReadonlySet<string>> => {
   const fieldIds = new Set<string>();
-  for (const entry of await eligibleEntries(transaction, scope, context, recordTypeId, "create"))
+  for (const entry of await eligibleEntries(
+    transaction,
+    scope,
+    context,
+    recordTypeId,
+    permissionActionKindSchema.enum.create,
+  ))
     for (const fieldId of entry.permission.fieldPolicy?.changeableFieldIds ?? [])
       fieldIds.add(String(fieldId).toLowerCase());
   return fieldIds;
@@ -106,7 +115,13 @@ export const decideRecordTypeExport = async (
   | Readonly<{ kind: "permitted"; fieldIds: ReadonlySet<string> | undefined }>
   | Readonly<{ kind: "refused"; reason: RecordTypeExportRefusal }>
 > => {
-  const eligible = await eligibleEntries(transaction, scope, context, recordTypeId, "export");
+  const eligible = await eligibleEntries(
+    transaction,
+    scope,
+    context,
+    recordTypeId,
+    permissionActionKindSchema.enum.export,
+  );
   if (eligible.length === 0) return { kind: "refused", reason: "export_not_permitted" };
   const reaching = eligible.filter(
     (entry) =>

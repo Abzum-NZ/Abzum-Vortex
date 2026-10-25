@@ -6,6 +6,7 @@ import {
   plainSourceSettingValue,
   readRecordsTableFeatures,
   recordsTableConditionalFormattingFeature,
+  recordsTableExportFeature,
   recordsTableFeatureDescription,
   recordsTableFilterKindOf,
   recordsTableFeatureKeys,
@@ -435,7 +436,7 @@ export function StudioGridFeatures({
                   />
                 </div>
               ) : null}
-              {enabled && key === "export" ? (
+              {enabled && key === recordsTableExportFeature.key ? (
                 <StudioExportEditor
                   value={current}
                   disabled={disabled}

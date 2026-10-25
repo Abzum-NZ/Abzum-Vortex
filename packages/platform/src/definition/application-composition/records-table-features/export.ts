@@ -160,6 +160,15 @@ export const recordsTableExportFeature: RecordsTableFeatureDefinition<
       ...(maxRows === undefined ? {} : { maxRows }),
     };
   },
+  // Offered only to a viewer whose export permission reaches every record and who may read a column
+  // the table shows; the row limit is set, as the check requires, whenever the feature is on.
+  project: (state, { exportAllowed, columns, readable }) =>
+    state.enabled &&
+    exportAllowed &&
+    state.maxRows !== undefined &&
+    columns.some((field) => readable(field))
+      ? { maxRows: state.maxRows, formats: state.formats }
+      : undefined,
   // Export reads whole records, so the query must return records, and the record type must
   // declare the standard export action the viewer's permission is checked against.
   check: (state, facts) => {

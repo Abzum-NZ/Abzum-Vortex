@@ -528,8 +528,16 @@ export const prepareRecordsExport = async (
       throw exportError("columns_invalid");
     filename = exportFilename(request.name, request.format.extension);
     iterator = request.pages(abort.signal)[Symbol.asyncIterator]();
-    // Read AND validate the first page before the route can send successful download headers.
-    page = await iterator.next();
+    // Read AND validate the first page before the route can send successful download headers. The
+    // read races the abort signal, so a cancelled export returns without waiting for the database.
+    const cancelled = new Promise<never>((_, reject) =>
+      abort.signal.addEventListener(
+        "abort",
+        () => reject(new DOMException("Export cancelled", "AbortError")),
+        { once: true },
+      ),
+    );
+    page = await Promise.race([iterator.next(), cancelled]);
     throwIfAborted();
     if (!page.done) validatePage(page.value);
     header = request.format.header(request.labels);

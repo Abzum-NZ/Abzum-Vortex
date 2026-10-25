@@ -6,6 +6,7 @@ import {
   isRecord,
   sameId,
   recordsTableColumnWidth,
+  recordsTableExportFeature,
   type GridLayout,
   type IdentitySession,
   type JsonValue,
@@ -89,14 +90,14 @@ const recordsPerRead = 200;
 /** A failure the transport reports as the export's reason; the person only sees a neutral message. */
 const exportFailure = (reason: string, cause?: unknown): Error =>
   Object.assign(new Error("The export is incomplete. Please try again.", { cause }), {
-    part: "export",
+    part: recordsTableExportFeature.key,
     reason,
   });
 
 const failureReason = (cause: unknown): string =>
   cause instanceof Error &&
   "part" in cause &&
-  cause.part === "export" &&
+  cause.part === recordsTableExportFeature.key &&
   "reason" in cause &&
   typeof cause.reason === "string"
     ? cause.reason
