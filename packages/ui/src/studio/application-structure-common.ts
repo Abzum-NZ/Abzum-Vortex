@@ -3,6 +3,7 @@ import {
   type ApplicationSourceDocument,
   type ApplicationUsePlace,
   type ImmutablePlatformBlockCatalogue,
+  plainSettingValue,
   type SourceItem,
 } from "@vortex/platform/schema";
 import {
@@ -122,7 +123,9 @@ export const blockItem = (
       id,
       ...Object.fromEntries(
         release.properties.flatMap((property) =>
-          property.defaultValue === undefined ? [] : [[property.key, property.defaultValue]],
+          property.defaultValue === undefined
+            ? []
+            : [[property.key, plainSettingValue(property.defaultValue)]],
         ),
       ),
       ...settings,
