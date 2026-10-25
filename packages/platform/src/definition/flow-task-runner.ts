@@ -1,3 +1,4 @@
+import { z } from "zod";
 import {
   PLATFORM_SERVICE_OPERATIONS,
   describeFailure,
@@ -103,7 +104,7 @@ export const createFlowTaskRunner = (
   /** A saved record effect stores only the record identity, never readable or submitted values. */
   const isSavedRecordEffectOutput = (value: unknown): value is Readonly<{ record: string }> =>
     isRecord(value) &&
-    Object.keys(value).length === 1 &&
+    Object.keys(value).every((key) => key === "record" || key === "warnings") &&
     Object.hasOwn(value, "record") &&
     recordIdSchema.safeParse(value.record).success;
 
@@ -116,6 +117,14 @@ export const createFlowTaskRunner = (
     const parsed = flowRefusalFeedbackSchema.safeParse(value.diagnostic);
     return parsed.success ? parsed.data : undefined;
   };
+
+  const storedWarningsSchema = z.array(
+    z.object({ code: z.string(), message: z.string() }).strict(),
+  );
+  const replayWarnings = (
+    outputs: Readonly<Record<string, unknown>>,
+  ): readonly BeforeSaveRuleWarning[] =>
+    outputs.warnings === undefined ? [] : storedWarningsSchema.parse(outputs.warnings);
 
   /** The rule's authored refusal of a protected record path, when its safe error carries one. */
   const ruleRefusalResult = (
@@ -492,7 +501,11 @@ export const createFlowTaskRunner = (
     state: FlowRunState,
     call: FlowProtectedTaskCall,
     plan: TaskPlan,
-  ): Promise<{ result: TaskResult; stored: Record<string, JsonValue> }> => {
+  ): Promise<{
+    result: TaskResult;
+    stored: Record<string, JsonValue>;
+    warnings?: readonly BeforeSaveRuleWarning[] | undefined;
+  }> => {
     // Non-person execution contexts stay fail-closed until exact per-task grants are implemented.
     if (run.authority.kind !== "person") return { result: { outcome: "failed" }, stored: {} };
     const { session, selection } = run.authority;
@@ -521,9 +534,12 @@ export const createFlowTaskRunner = (
       if (value.outcome === "saved") {
         const recordId = recordIdSchema.safeParse(value.recordId);
         if (!recordId.success) return { result: { outcome: "refused" }, stored: {} };
-        appendWarnings(run, call, saved.warnings);
         const outputs = { record: recordId.data };
-        return { result: { outcome: "committed", outputs }, stored: outputs };
+        return {
+          result: { outcome: "committed", outputs },
+          stored: outputs,
+          warnings: saved.warnings,
+        };
       }
       if (value.outcome === "correction_required") {
         // Only the form field key, the correction code and a rule's authored message leave the save: never a value.
@@ -602,12 +618,15 @@ export const createFlowTaskRunner = (
         return { result: { outcome: requestOutcome(executed.kind) }, stored: {} };
       const value = executed.value;
       if (value.outcome === "completed") {
-        appendWarnings(run, call, executed.warnings);
         // Only the record's identity and revision are kept: its readable values stay with the port.
         const outputs = plan.asSave
           ? { record: value.recordId }
           : { result: { recordId: value.recordId, concurrencyNumber: value.concurrencyNumber } };
-        return { result: { outcome: "committed", outputs }, stored: outputs };
+        return {
+          result: { outcome: "committed", outputs },
+          stored: outputs,
+          warnings: executed.warnings,
+        };
       }
       // The action port logged this refusal with its reason; the run-ended line must not repeat it.
       run.refusalLoggedTaskIds.push(call.taskId);
@@ -795,6 +814,7 @@ export const createFlowTaskRunner = (
                 replayedOutputs.record.toLowerCase() !== ledgerOutputs.record.toLowerCase()
               )
                 return { outcome: "refused" };
+              appendWarnings(run, call, replayWarnings(ledgerOutputs));
             }
             return replayed.result;
           } catch (error) {
@@ -824,9 +844,14 @@ export const createFlowTaskRunner = (
           outcome: claim.outcome as "validation" | "refused",
           diagnostic: replayedDiagnostic,
         };
+      const outputs = { ...claim.outputs };
+      if (claim.outcome === "committed" && planned.plan.kind !== "operation") {
+        appendWarnings(run, call, replayWarnings(outputs));
+        delete outputs.warnings;
+      }
       return {
         outcome: claim.outcome as FlowTaskOutcome,
-        outputs: isRecord(claim.outputs) ? (claim.outputs as Record<string, JsonValue>) : {},
+        outputs: outputs as Record<string, JsonValue>,
       };
     }
     if (claim.kind === "in_progress") return { outcome: "uncertain" };
@@ -840,8 +865,15 @@ export const createFlowTaskRunner = (
       // Whether the effect committed is unknown; the open claim reports any repeat as uncertain.
       return { outcome: "uncertain" };
     }
+    appendWarnings(run, call, ran.warnings);
+    const stored = {
+      ...ran.stored,
+      ...(ran.warnings === undefined || ran.warnings.length === 0
+        ? {}
+        : { warnings: ran.warnings.map(({ code, message }) => ({ code, message })) }),
+    };
     try {
-      await dependencies.ledger.complete(key, ran.result.outcome, ran.stored);
+      await dependencies.ledger.complete(key, ran.result.outcome, stored);
     } catch (error) {
       reportUnexpectedFailure("effect ledger completion", error);
       // The effect ran. Leaving the claim open makes any repeat report it uncertain, never re-run it.
