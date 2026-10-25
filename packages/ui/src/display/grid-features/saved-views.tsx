@@ -369,7 +369,8 @@ function ViewSwitcher({
   const personal = shown.filter((view) => view.mine);
   const shared = shown.filter((view) => !view.mine && view.scope === "shared");
   const defaults = shown.filter((view) => view.scope === "default");
-  const canShare = typeof listing === "object" && listing.canShare;
+  // The page read already says whether the person may share; the fresh list refines it once it answers.
+  const canShare = typeof listing === "object" ? listing.canShare : views.canShare;
   const canChange =
     selected !== null && selected.scope !== "default" && (selected.mine || canShare);
   const unsaved = selected !== null && differsFrom(context, selected);
