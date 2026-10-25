@@ -9,7 +9,9 @@ export type ApplicationSearchEntry = SearchSource["record_types"][number];
 export type ApplicationSearchPriority = ApplicationSearchEntry["fields"][number]["priority"];
 
 /**
- * Field types the search index holds. Publication and runtime search check the recursive inputs
+ * Field types whose stored value carries searchable words, for Studio and the search index alike.
+ * Links to records or people and yes/no values carry none, and attachments are searched only
+ * through a separate file-search policy. Publication and runtime search check the recursive inputs
  * of calculated values and totals before disclosing them.
  */
 export const searchableFieldTypes: ReadonlySet<string> = new Set([
