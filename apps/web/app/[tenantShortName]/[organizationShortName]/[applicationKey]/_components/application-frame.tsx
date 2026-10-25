@@ -298,8 +298,10 @@ export function ApplicationFrame({
     ...(pageState.webMcp === undefined ? {} : { webMcp: pageState.webMcp }),
   };
 
+  const navigation = pageState.navigation ?? model.navigation;
   const frameState = useMemo<ApplicationFrameStateValue>(
     () => ({
+      navigation,
       setPageState,
       clearPageState,
       navigateToPage,
@@ -314,6 +316,7 @@ export function ApplicationFrame({
       navigateToPage,
       setPageState,
       startPageChange,
+      navigation,
     ],
   );
 
@@ -339,7 +342,7 @@ export function ApplicationFrame({
             }
             applicationSearch={applicationSearch}
             applicationSearchPageSubject={applicationSearchPageSubject}
-            projectedNavigation={pageState.navigation ?? model.navigation}
+            projectedNavigation={navigation}
             {...(frameRuntimeInputs === undefined ? {} : { runtimeInputs: frameRuntimeInputs })}
             resolvePageHref={resolvePageHref}
             onNavigatePage={navigateToPage}
