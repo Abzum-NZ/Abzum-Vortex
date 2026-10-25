@@ -188,7 +188,8 @@ type RecordsTableRefusalReason =
   | "filter_value_invalid"
   | "filter_date_out_of_range"
   | "filter_value_mismatch"
-  | "sort_field_not_sortable";
+  | "sort_field_not_sortable"
+  | "search_unavailable";
 
 /**
  * A refusal is never an empty page. The Query engine's closed reason code is retained only for
@@ -248,6 +249,9 @@ const recordsTableRefusalReason = (
       return "filter_value_mismatch";
     case "sort/sort_field_not_sortable":
       return "sort_field_not_sortable";
+    // search/search_not_offered depends on the fields the viewer may read, so it stays neutral.
+    case "search/feature_off":
+      return "search_unavailable";
     default:
       return undefined;
   }

@@ -125,7 +125,8 @@ export const readRecordsTable = async (
   );
   if (addressed.kind === "malformed") {
     logPlacementFailure(address, placementId, "table_state_malformed", addressed.part);
-    data[placementId] = { status: "refused", reason: "not_permitted" };
+    // The address itself cannot be read (it names no field the viewer may or may not see).
+    data[placementId] = { status: "refused", reason: "table_address_invalid" };
     return;
   }
   const queryId = String(bound.query.queryId).toLowerCase();

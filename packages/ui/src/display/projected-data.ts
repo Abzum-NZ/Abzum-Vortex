@@ -351,7 +351,9 @@ export type DisplayRefusalReason =
   | "filter_value_invalid"
   | "filter_date_out_of_range"
   | "filter_value_mismatch"
-  | "sort_field_not_sortable";
+  | "sort_field_not_sortable"
+  | "search_unavailable"
+  | "table_address_invalid";
 
 /**
  * Explicit, data-safe state for one placement, parameterised by that block's own ready values.
@@ -381,6 +383,8 @@ const DISPLAY_REFUSAL_REASONS: readonly DisplayRefusalReason[] = [
   "filter_date_out_of_range",
   "filter_value_mismatch",
   "sort_field_not_sortable",
+  "search_unavailable",
+  "table_address_invalid",
 ];
 
 // The data-free states carry no values, so one frozen instance serves every block's state type.

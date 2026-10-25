@@ -25,6 +25,9 @@ const REFUSAL_MESSAGES: Readonly<Record<DisplayRefusalReason, string>> = Object.
   filter_date_out_of_range: "This filter date falls outside the supported years 0001 to 9999.",
   filter_value_mismatch: "This filter does not fit the type of its field.",
   sort_field_not_sortable: "This table cannot be sorted by that field.",
+  search_unavailable: "This table cannot be searched.",
+  table_address_invalid:
+    "This table's search, filters or sort in the address are not valid. Open the page again without them.",
 });
 
 /**
