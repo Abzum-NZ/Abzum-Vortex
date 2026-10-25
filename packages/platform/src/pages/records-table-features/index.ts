@@ -1,3 +1,4 @@
+export { recordsTableRowActionsProjection } from "../../definition/application-composition/records-table-features/row-actions";
 export { rowMayChangeField } from "../../definition/application-composition/records-table-features/shared";
 import type {
   ConditionalFormattingProjection,
@@ -77,41 +78,6 @@ const sameField = (left: string, right: string): boolean =>
   left.toLowerCase() === right.toLowerCase();
 
 /**
- * The row actions a table offers and, per row, whether the capabilities its read decided make each
- * eligible; absent when the feature is off or the table declares none. Named-action eligibility is
- * decided afterwards, in the read's own request, by `projectRowActionAvailability`.
- */
-export const recordsTableRowActionsProjection = (
-  contract: RecordsTableContract,
-  rows: readonly ProtectedQueryRow[],
-): RecordsTableFeatureProjection["rowActions"] =>
-  contract.features.rowActions.enabled && contract.rowBehaviours.rowActions.length > 0
-    ? {
-        actions: contract.rowBehaviours.rowActions,
-        availability: rows.flatMap((row) =>
-          row.revision === undefined
-            ? []
-            : [
-                {
-                  recordId: row.recordId,
-                  revision: row.revision,
-                  actions: contract.rowBehaviours.rowActions.map((action) =>
-                    action.capability === undefined ||
-                    row.capabilities?.actions.includes(action.capability) === true
-                      ? { action: action.eventId, eligible: true as const }
-                      : {
-                          action: action.eventId,
-                          eligible: false as const,
-                          reason: "not_permitted" as const,
-                        },
-                  ),
-                },
-              ],
-        ),
-      }
-    : undefined;
-
-/**
  * Projects the enabled features for the viewer of one read. `bounds` is the viewer's current field
  * bound from the same read, carried even when no row was returned, so it decides filters, search
  * and saved views for an empty page and for hidden columns alike; nothing is inferred from which
@@ -135,7 +101,14 @@ export const projectRecordsTableFeatures = (
   const readable = (field: string): boolean =>
     bounds.readableFieldIds.some((fieldId) => sameField(fieldId, field));
   // Each feature that declares its projection decides its own part for this viewer.
-  const context = { readable, searchable: bounds.searchable, filterFields, rows, editors };
+  const context = {
+    readable,
+    searchable: bounds.searchable,
+    filterFields,
+    rows,
+    editors,
+    rowBehaviours: contract.rowBehaviours,
+  };
   const declared = Object.fromEntries(
     recordsTableFeatureKeys.flatMap((key) => {
       const definition = recordsTableFeatureDefinition(key);
@@ -205,7 +178,6 @@ export const projectRecordsTableFeatures = (
     (pasteUsable || fillUsable) &&
     features.spreadsheet.enabled &&
     features.spreadsheet.undo === true;
-  const rowActions = recordsTableRowActionsProjection(contract, rows);
   const projection: RecordsTableFeatureProjection = {
     ...(exportSettings.enabled &&
     exportAllowed === true &&
@@ -238,7 +210,6 @@ export const projectRecordsTableFeatures = (
           },
         }
       : {}),
-    ...(rowActions === undefined ? {} : { rowActions }),
     ...declared,
     ...(masterDetail.enabled && masterDetail.childPageSize !== undefined
       ? { masterDetail: { pageSize: masterDetail.childPageSize } }

@@ -1,3 +1,4 @@
+import type { RecordsTableActionContract } from "./row-actions";
 import type { ComponentSettingValue } from "../block-property-schema";
 import type { RecordsTableFeatures } from "./index";
 import type { ProtectedQueryRow } from "../../../queries/protected-query-contracts";
@@ -439,6 +440,7 @@ export type GridFeatureProjectionContext = Readonly<{
   searchable: boolean;
   /** The filter control of each filterable field, by lower-cased field identity. */
   filterFields: Readonly<Record<string, object>> | undefined;
+  rowBehaviours: Readonly<{ rowActions: readonly RecordsTableActionContract[] }>;
   rows: readonly ProtectedQueryRow[];
   editors: Readonly<Record<string, RecordsTableInlineEditor>> | undefined;
 }>;
