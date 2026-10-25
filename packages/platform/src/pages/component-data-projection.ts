@@ -174,6 +174,8 @@ export type ProjectedTableGroups =
 
 export type ProjectedTableValues = Readonly<{
   kind: "table";
+  /** Declared sort fields readable on every record under this read's field policy. */
+  sortableFields: readonly string[];
   columns: readonly Readonly<{ key: string; label: string }>[];
   /**
    * The declared columns the read did not request, in declared order: their headings only, never a
@@ -527,6 +529,9 @@ export const projectRecordsTableData = (
     status: "ready",
     values: {
       kind: "table",
+      sortableFields: contract.sortableFields.filter((field) =>
+        fieldBounds.readableFieldIds.some((readable) => sameField(readable, field)),
+      ),
       columns: columns.map(({ key, label }) => ({ key, label })),
       hiddenColumns,
       layout,
