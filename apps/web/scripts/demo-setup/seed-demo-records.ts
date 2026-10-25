@@ -20,6 +20,7 @@ import {
   nominatedOwnerSession,
   type SystemContextFacts,
 } from "../development-setup/development-authority";
+import { requireLocalDevelopmentEnvironment } from "../development-setup/guards";
 import { loadCurrentSetupState, type SetupState } from "../development-setup/state";
 import {
   additionalContacts,
@@ -894,6 +895,8 @@ const readFactsFromCurrentSetup = (argv: readonly string[]): DemoSeedFacts => {
 const main = async (): Promise<void> => {
   try {
     loadLocalWebEnvironment();
+    // Seeding writes records: only a local development database, as demo:setup and setup:local.
+    requireLocalDevelopmentEnvironment(process.env);
     const facts = readFactsFromCurrentSetup(process.argv.slice(2));
     await seedDemoRecords(facts);
   } catch (error) {

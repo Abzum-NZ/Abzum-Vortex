@@ -76,6 +76,29 @@ export const openLane = (): LaneFacts => {
   };
 };
 
+/**
+ * The lane's own Supabase API endpoint for admin Auth calls: VORTEX_SUPABASE_URL must be the
+ * loopback API port of the selected lane, so a stale value for the main stack or another lane is
+ * refused before any account is touched.
+ */
+export const laneAuthEndpoint = (lane: number): string => {
+  const configured = process.env.VORTEX_SUPABASE_URL;
+  if (configured === undefined)
+    throw new Error(`VORTEX_SUPABASE_URL is not set. Run lane.mjs env ${lane}.`);
+  const apiPort = 54321 + 1000 * (lane - 1);
+  let url: URL;
+  try {
+    url = new URL(configured);
+  } catch {
+    throw new Error("VORTEX_SUPABASE_URL is not a valid URL.");
+  }
+  if (!["127.0.0.1", "localhost"].includes(url.hostname) || Number(url.port) !== apiPort)
+    throw new Error(
+      `VORTEX_SUPABASE_URL uses ${url.host}, not lane ${lane} (127.0.0.1:${apiPort}). Run lane.mjs env ${lane}.`,
+    );
+  return configured;
+};
+
 export const personaEmails = {
   owner: () => process.env.VORTEX_DEMO_OWNER_EMAIL ?? "",
   member: () => (process.env.VORTEX_DEMO_OWNER_EMAIL ?? "").replace("@", "-agent@"),
