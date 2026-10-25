@@ -115,7 +115,7 @@ revoke all on function vortex_record.apply_action_record_changes(
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_record.apply_action_record_changes(
   uuid, jsonb, jsonb
-) to vortex_runtime;
+) to vortex_request;
 
 comment on function vortex_record.apply_action_record_changes(
   uuid, jsonb, jsonb

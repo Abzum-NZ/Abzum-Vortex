@@ -52,7 +52,7 @@ revoke all on function vortex_record.apply_settings_record_changes(
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_record.apply_settings_record_changes(
   uuid, uuid, uuid, bigint, jsonb, jsonb, uuid, uuid
-) to vortex_runtime;
+) to vortex_request;
 
 comment on function vortex_record.apply_settings_record_changes(
   uuid, uuid, uuid, bigint, jsonb, jsonb, uuid, uuid

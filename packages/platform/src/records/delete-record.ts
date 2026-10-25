@@ -327,7 +327,6 @@ export const performProtectedRecordDelete = async (
   command: ProtectedRecordDeleteCommand,
 ): Promise<RecordDeleteResult> => {
   const { activityId, occurrenceId } = command;
-  await transaction.query`set local role vortex_runtime`;
   const prepared = parseDatabaseOutcome(
     one(
       await transaction.query<Row>`

@@ -177,7 +177,6 @@ export const backfillDerivedFields = async (
   transaction: RequestDatabaseTransaction,
   issuedAt: string,
 ): Promise<number> => {
-  await transaction.query`set local role vortex_runtime`;
   const listed = one(
     await transaction.query<Row>`
     select vortex_record.read_derived_field_backfill(null::uuid, null::uuid) as backfill

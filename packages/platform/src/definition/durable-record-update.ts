@@ -80,14 +80,12 @@ export const prepareDurableRecordUpdate = async (
 };
 
 export const executeDurableRecordUpdate = async (
-  transaction: RequestDatabaseTransaction,
   records: DurableRecordSave,
   session: IdentitySession,
   selection: OrganizationSelectionCandidate,
   command: ReturnType<typeof saveRecordCommandSchema.parse>,
 ) => {
   const saved = await records.save(session, selection, command);
-  await transaction.query`set local role vortex_request`;
   if (saved.kind === "temporarily_unavailable") throw new Error("DURABLE_RECORD_SAVE_FAILED");
   if (saved.kind !== "available") return { outcome: "refused" as const };
   if (saved.value.outcome === "saved")

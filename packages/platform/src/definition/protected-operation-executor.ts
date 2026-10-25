@@ -1431,7 +1431,6 @@ export const createProtectedOperationExecutor = (
                   if (services.records === undefined)
                     throw new Error("DURABLE_RECORD_SAVE_UNAVAILABLE");
                   return executeDurableRecordUpdate(
-                    transaction,
                     services.records,
                     session,
                     selection,

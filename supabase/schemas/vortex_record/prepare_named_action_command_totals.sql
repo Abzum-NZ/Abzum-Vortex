@@ -487,7 +487,7 @@ revoke all on function vortex_record.prepare_named_action_command_totals(
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_record.prepare_named_action_command_totals(
   uuid, uuid, uuid, bigint, jsonb, jsonb, uuid, text, uuid, bigint, uuid
-) to vortex_runtime;
+) to vortex_request;
 comment on function vortex_record.prepare_named_action_command_totals(
   uuid, uuid, uuid, bigint, jsonb, jsonb, uuid, text, uuid, bigint, uuid
 ) is

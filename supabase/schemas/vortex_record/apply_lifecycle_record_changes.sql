@@ -59,7 +59,7 @@ revoke all on function vortex_record.apply_lifecycle_record_changes(
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_record.apply_lifecycle_record_changes(
   uuid, text, uuid, uuid, bigint, jsonb, uuid, uuid
-) to vortex_runtime;
+) to vortex_request;
 comment on function vortex_record.apply_lifecycle_record_changes(
   uuid, text, uuid, uuid, bigint, jsonb, uuid, uuid
 ) is

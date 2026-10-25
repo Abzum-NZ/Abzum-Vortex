@@ -122,6 +122,6 @@ alter function vortex_record.apply_derived_field_backfill(uuid, jsonb, boolean) 
 revoke all on function vortex_record.apply_derived_field_backfill(uuid, jsonb, boolean)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_record.apply_derived_field_backfill(uuid, jsonb, boolean)
-  to vortex_runtime;
+  to vortex_request;
 comment on function vortex_record.apply_derived_field_backfill(uuid, jsonb, boolean) is
   'Server-only derived-field backfill write: stores the totals and stored calculations the platform worked out for a page of existing records it read with read_derived_field_backfill, only for the fields the backfill provisions. With the last page of a preview''s record type, its seed ledger records that the type''s derived fields are worked out.';

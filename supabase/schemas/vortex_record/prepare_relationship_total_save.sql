@@ -337,7 +337,7 @@ revoke all on function vortex_record.prepare_relationship_total_save(
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_record.prepare_relationship_total_save(
   uuid, text, uuid, uuid, bigint, jsonb, uuid, uuid
-) to vortex_runtime;
+) to vortex_request;
 comment on function vortex_record.prepare_relationship_total_save(
   uuid, text, uuid, uuid, bigint, jsonb, uuid, uuid
 ) is
