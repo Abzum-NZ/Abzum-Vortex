@@ -428,7 +428,11 @@ export const readRecordsTable = async (
                   )
                 ).kind === "permitted";
           const implied = wantsRowActions
-            ? recordsTableRowActionsProjection(contract, rows)
+            ? recordsTableRowActionsProjection(
+                contract.features.rowActions,
+                contract.rowBehaviours,
+                rows,
+              )
             : undefined;
           if (implied !== undefined && resolvedRecordTypeId !== undefined)
             decisions.rowActions = await projectRowActionAvailability(

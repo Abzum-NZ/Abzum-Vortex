@@ -10,6 +10,7 @@ import {
   requiredText,
   unreadable,
   type RecordsTableFeatureDefinition,
+  type RecordsTableFeatureState,
   type GridFeatureRefusal,
   type GridFeatureSettingsDeclaration,
 } from "./shared";
@@ -37,6 +38,11 @@ export type RecordsTableBulkActionContract = Readonly<{
 export type RecordsTableBulkActionsSettings = Readonly<{
   actions: readonly RecordsTableBulkActionContract[];
 }>;
+
+/** The actions offered by this feature, shared by its projection and availability reads. */
+export const recordsTableBulkActions = (
+  state: RecordsTableFeatureState<RecordsTableBulkActionsSettings>,
+): readonly RecordsTableBulkActionContract[] => (state.enabled ? state.actions : []);
 
 const settingAction = (value: ComponentSettingValue | undefined, path: string): string => {
   if (value?.kind !== "action_reference") return unreadable(path);
@@ -186,6 +192,10 @@ export const recordsTableBulkActionsFeature: RecordsTableFeatureDefinition<
       : { enabled: false },
   // A selection of records needs rows that are records (a grouped or summarised query has none)
   // and a named action of their record type that runs on several records, each on its own.
+  project: (state) => {
+    const actions = recordsTableBulkActions(state);
+    return actions.length === 0 ? undefined : actions;
+  },
   check: (state, facts) => {
     const offered = facts.actions.filter((action) => action.acceptsSelection);
     const needed = featureNotPossible(

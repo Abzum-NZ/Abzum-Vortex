@@ -427,6 +427,8 @@ export const recordsTableSavedViewsFeature: RecordsTableFeatureDefinition<
           "People can only add their own formatting when Formatting is on for this table. Turn Formatting on, or turn personal formatting off.",
         )
       : undefined,
+  // A view keeps the whole grid, so it is offered wherever the table enables it.
+  project: (state) => (state.enabled ? true : undefined),
   check: (state, facts) => {
     if (!state.enabled) return featureAvailable;
     if (!facts.signedIn)

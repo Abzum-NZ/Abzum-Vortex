@@ -3,6 +3,7 @@ import {
   featureAvailable,
   featureEnabled,
   featureNotPossible,
+  projectedEditableFields,
   requiredBoolean,
   requiredChoice,
   requiredFieldList,
@@ -267,6 +268,29 @@ export const recordsTableSpreadsheetFeature: RecordsTableFeatureDefinition<
             ),
           ),
         },
+  project: (state, context) => {
+    const { columns, features, readable } = context;
+    if (!state.enabled || !columns.some((column) => readable(column.field))) return undefined;
+    // A status bar total names only fields the table shows as columns.
+    const statusBarFields = state.statusBarFields.filter((field) =>
+      columns.some((column) => column.field.toLowerCase() === field.toLowerCase()),
+    );
+    const batchEditable =
+      state.rangeSelect && projectedEditableFields(features.inlineEdit, context).length > 0;
+    const pasteUsable = batchEditable && state.paste;
+    const fillUsable = batchEditable && state.fill;
+    const undoUsable = (pasteUsable || fillUsable) && state.undo;
+    return {
+      rangeSelect: state.rangeSelect,
+      find: state.find,
+      ...(pasteUsable ? { paste: true as const } : {}),
+      ...(fillUsable ? { fill: true as const } : {}),
+      ...(undoUsable ? { undo: true as const } : {}),
+      ...(state.rangeSelect && statusBarFields.length > 0 && state.statusBarOperations.length > 0
+        ? { statusBar: { fields: statusBarFields, operations: state.statusBarOperations } }
+        : {}),
+    };
+  },
   conflicts: (_state, _facts, { features, presentation }) => {
     if (presentation === "cards")
       return featureNotPossible(

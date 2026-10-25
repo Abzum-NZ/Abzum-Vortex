@@ -10,17 +10,14 @@ import {
 } from "../../definition/application-composition-catalogue";
 import { createHumanInstalledPageBundleContextLoader } from "../../definition/installed-page-bundle-context";
 import { installedNamedActions } from "../../definition/installed-named-actions";
+import { recordsTableBulkActions } from "../../definition/application-composition/records-table-features/bulk-actions";
 import { collectActionFlowTasks, flowLibraryOf } from "../../rules/index";
 import type {
   NamedActionAvailability,
   NamedActionAvailabilityRequest,
   NamedActionAvailabilityResult,
 } from "../named-action-availability-schema";
-import {
-  logRecordsTableRequestRefusal,
-  recordsTableBulkActions,
-  recordsTableRequestRefusal,
-} from ".";
+import { logRecordsTableRequestRefusal, recordsTableRequestRefusal } from ".";
 import type { RecordsTableBulkAddress, RecordsTableBulkDependencies } from "./bulk-run";
 import { installedPlacementProps } from "./flow-dispatch";
 import {
@@ -110,7 +107,7 @@ export const readRecordsTableNamedActionAvailability = async (
         "named action availability",
       );
       if (contract === undefined) return refuse("contract_unreadable");
-      const declared = recordsTableBulkActions(contract);
+      const declared = recordsTableBulkActions(contract.features.bulkActions);
       if (declared.length === 0) return refuse("bulk_actions_not_offered");
       if (declared.length > 20) return refuse("too_many_declared_actions");
       const queries = installed.releaseSet.modules.flatMap((module) =>
