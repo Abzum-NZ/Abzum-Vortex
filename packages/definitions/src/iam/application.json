@@ -1141,9 +1141,6 @@
                       },
                       "row_actions": {
                         "enabled": true
-                      },
-                      "totals": {
-                        "enabled": false
                       }
                     }
                   }
@@ -1369,9 +1366,6 @@
                       },
                       "row_actions": {
                         "enabled": true
-                      },
-                      "totals": {
-                        "enabled": false
                       }
                     }
                   }
@@ -1463,9 +1457,6 @@
                       },
                       "row_actions": {
                         "enabled": true
-                      },
-                      "totals": {
-                        "enabled": false
                       }
                     }
                   }
@@ -1546,9 +1537,6 @@
                       },
                       "row_actions": {
                         "enabled": true
-                      },
-                      "totals": {
-                        "enabled": false
                       }
                     }
                   }
@@ -2305,9 +2293,6 @@
                       },
                       "row_actions": {
                         "enabled": true
-                      },
-                      "totals": {
-                        "enabled": false
                       }
                     }
                   }
@@ -2388,9 +2373,6 @@
                       },
                       "row_actions": {
                         "enabled": true
-                      },
-                      "totals": {
-                        "enabled": false
                       }
                     }
                   }
@@ -2851,9 +2833,6 @@
                       },
                       "row_actions": {
                         "enabled": true
-                      },
-                      "totals": {
-                        "enabled": false
                       }
                     }
                   }
@@ -2954,9 +2933,6 @@
                         "enabled": false
                       },
                       "spreadsheet": {
-                        "enabled": false
-                      },
-                      "totals": {
                         "enabled": false
                       }
                     }

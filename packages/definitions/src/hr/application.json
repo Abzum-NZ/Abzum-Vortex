@@ -539,9 +539,6 @@
                       },
                       "spreadsheet": {
                         "enabled": false
-                      },
-                      "totals": {
-                        "enabled": false
                       }
                     }
                   }
@@ -981,9 +978,6 @@
                         "enabled": false
                       },
                       "spreadsheet": {
-                        "enabled": false
-                      },
-                      "totals": {
                         "enabled": false
                       }
                     }
@@ -1494,9 +1488,6 @@
                         "enabled": false
                       },
                       "spreadsheet": {
-                        "enabled": false
-                      },
-                      "totals": {
                         "enabled": false
                       }
                     }
@@ -2167,9 +2158,6 @@
                         "enabled": false
                       },
                       "spreadsheet": {
-                        "enabled": false
-                      },
-                      "totals": {
                         "enabled": false
                       }
                     }
@@ -2889,9 +2877,6 @@
                       },
                       "spreadsheet": {
                         "enabled": false
-                      },
-                      "totals": {
-                        "enabled": false
                       }
                     }
                   }
@@ -3389,9 +3374,6 @@
                         "enabled": false
                       },
                       "spreadsheet": {
-                        "enabled": false
-                      },
-                      "totals": {
                         "enabled": false
                       }
                     }
