@@ -3,6 +3,7 @@ import {
   type ApplicationSourceDocument,
   type ApplicationUsePlace,
   type ImmutablePlatformBlockCatalogue,
+  plainSettingValue,
   type SourceItem,
 } from "@vortex/platform/schema";
 import {
@@ -104,7 +105,11 @@ export const blockRelease = (
 ) => catalogue.releases.find((release) => String(release.blockId) === identity.blockId);
 export type StructureRelease = NonNullable<ReturnType<typeof blockRelease>>;
 
-/** A new block item: its settings as given, every fixed slot present, the default desktop layout. */
+/**
+ * A new block item: every declared default the way a block inserted from the palette holds it (so a
+ * Records table's draft carries every grid feature's settings, off), its settings as given, every
+ * fixed slot present, the default desktop layout.
+ */
 export const blockItem = (
   release: StructureRelease,
   id: string,
@@ -116,6 +121,13 @@ export const blockItem = (
     type: String(release.rendererKey),
     props: {
       id,
+      ...Object.fromEntries(
+        release.properties.flatMap((property) =>
+          property.defaultValue === undefined
+            ? []
+            : [[property.key, plainSettingValue(property.defaultValue)]],
+        ),
+      ),
       ...settings,
       ...Object.fromEntries(release.slots.map((slot) => [slot.key, slots[slot.key] ?? []])),
       vortex: {

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { correlationIdSchema } from "./common";
 import { builderKeySchema, namespacedKeySchema } from "./identifiers";
+import { recordsTableFeatureRefusalCodes } from "../definition/application-composition/records-table-features/shared";
 
 export const definitionValidationCatalogueVersion = "1.4.0" as const;
 
@@ -51,31 +52,12 @@ export const definitionValidationLocationSchema = z
   .strict();
 
 export const definitionValidationErrorCodes = [
+  ...recordsTableFeatureRefusalCodes,
   "definition_required_value",
   "definition_invalid_value",
   "definition_unsupported_choice",
-  "definition_records_table_bounded_scrolling",
   "definition_records_table_visible_columns",
   "definition_records_table_auto_size",
-  "definition_records_table_search",
-  "definition_records_table_column_filters",
-  "definition_records_table_saved_views",
-  "definition_records_table_bulk_actions",
-  "definition_records_table_inline_edit",
-  "definition_records_table_row_edit",
-  "definition_records_table_row_actions",
-  "definition_records_table_row_action_limit",
-  "definition_records_table_board_row_action",
-  "definition_records_table_master_detail",
-  "definition_records_table_tree",
-  "definition_records_table_grouping",
-  "definition_records_table_totals",
-  "definition_records_table_conditional_formatting",
-  "definition_records_table_pinning",
-  "definition_records_table_pivot",
-  "definition_records_table_spreadsheet",
-  "definition_records_table_board",
-  "definition_records_table_export",
   "definition_query_binding",
   "definition_runtime_not_supported",
   "definition_query_binding_choice",
@@ -106,8 +88,23 @@ export const definitionValidationCatalogueEntrySchema = z
   })
   .strict();
 
+/** The platform's own codes: every code except the grid feature refusals, whose definitions hold them. */
+type PlatformDefinitionValidationErrorCode = Exclude<
+  DefinitionValidationErrorCode,
+  (typeof recordsTableFeatureRefusalCodes)[number]
+>;
+const platformDefinitionValidationErrorCodes = definitionValidationErrorCodes.filter(
+  (code): code is PlatformDefinitionValidationErrorCode =>
+    !(recordsTableFeatureRefusalCodes as readonly string[]).includes(code),
+);
+
 export const definitionValidationCatalogueSchema = z.record(
-  definitionValidationErrorCodeSchema,
+  z.enum(
+    platformDefinitionValidationErrorCodes as [
+      PlatformDefinitionValidationErrorCode,
+      ...PlatformDefinitionValidationErrorCode[],
+    ],
+  ),
   definitionValidationCatalogueEntrySchema,
 );
 
@@ -140,132 +137,6 @@ const definitionValidationErrorCatalogueSource = {
     order: 35,
     message: "Auto-size needs a field to measure. Choose a field for the column.",
     guidance: "Choose the column's field, or turn Auto-size off.",
-  },
-  definition_records_table_bounded_scrolling: {
-    order: 35,
-    message: "A Records table page of more than 100 rows needs bounded scrolling.",
-    guidance: "Set the table's Scrolling to Bounded, or choose a page size of 100 rows or fewer.",
-  },
-  // One business sentence per Records table feature: Studio shows the same sentence beside the
-  // feature's switch, from the same capability check publication runs.
-  definition_records_table_search: {
-    order: 36,
-    message: "Search needs a searchable text field in the bound query.",
-    guidance:
-      "Select a text field the record type marks searchable in the query, or turn Search off.",
-  },
-  definition_records_table_column_filters: {
-    order: 37,
-    message: "Column filters need a field the query can filter by.",
-    guidance:
-      "Choose stored fields the bound query selects and its record type allows filtering by, or turn Column filters off.",
-  },
-  definition_records_table_saved_views: {
-    order: 38,
-    message: "Saved views need a field the bound query can sort or filter by.",
-    guidance: "Select a sortable or filterable field in the bound query, or turn Saved views off.",
-  },
-  definition_records_table_bulk_actions: {
-    order: 39,
-    message: "Bulk actions need a named action of the record type that accepts several records.",
-    guidance:
-      "Add a named action of the bound record type that needs no input typed for one record, with a limit of at most 5,000 records, or turn Bulk actions off.",
-  },
-  definition_records_table_export: {
-    order: 39,
-    message: "Export needs the export action on the record type.",
-    guidance:
-      "Turn on the export action for the bound record type in Data and set a row limit of at most 100,000, or turn Export off.",
-  },
-  definition_records_table_row_edit: {
-    order: 39,
-    message: "Row editing needs at least one stored field that people may change.",
-    guidance:
-      "Choose editable columns and name the action that saves the row, or turn Row editing off.",
-  },
-  definition_records_table_row_action_limit: {
-    order: 39,
-    message: "At most three actions can sit beside the row; move the rest to the menu",
-    guidance: "Choose Row menu for the remaining actions.",
-  },
-  definition_records_table_board_row_action: {
-    order: 39,
-    message: "A board opens a card through one row action.",
-    guidance: "Keep one row action that opens the record, or turn Board off to offer more.",
-  },
-  definition_records_table_row_actions: {
-    order: 39,
-    message: "Row actions need a query that returns individual records",
-    guidance: "Choose a query that lists records rather than totals or groups.",
-  },
-  definition_records_table_inline_edit: {
-    order: 39,
-    message: "Inline editing needs at least one stored field that people may change.",
-    guidance:
-      "Choose stored fields shown as columns (calculated and system fields cannot be edited here) and add the workflow that saves a change, or turn Inline editing off.",
-  },
-  // Master/detail names its own part (the link, the query, a column or an input) in its sentence;
-  // the catalogue message is what a reader without that sentence sees.
-  definition_records_table_master_detail: {
-    order: 39,
-    message: "Related records need a link from another record type to this table's records.",
-    guidance:
-      "Choose a link to this record type, a query of the linked records with an input bound to This row, and its columns, or turn Related records off.",
-  },
-  // The tree names its own part (the link or the page size) in its sentence; the catalogue message
-  // is what a reader without that sentence sees.
-  definition_records_table_tree: {
-    order: 39,
-    message: "A tree needs a link from these records to themselves.",
-    guidance:
-      "Choose the link that points to each record's parent and how many child records to show at a time, or turn Tree off.",
-  },
-  // Grouping names its own part (the field, its choice count) in its sentence.
-  definition_records_table_totals: {
-    order: 39,
-    message: "Totals need up to six compatible measures over the table columns.",
-    guidance:
-      "Choose number or money columns, or count any stored column, and turn Board and Pivot off.",
-  },
-  definition_records_table_grouping: {
-    order: 39,
-    message: "Group by needs a choice, stage, link or date field in the bound query.",
-    guidance:
-      "Choose the choice, stage, link or date field the records are grouped by, or turn Group by off.",
-  },
-  definition_records_table_conditional_formatting: {
-    order: 39,
-    message: "Formatting needs rules over fields of the bound query.",
-    guidance:
-      "Build each rule's condition from fields of the bound query, give a status an icon or a label, or turn Formatting off.",
-  },
-  definition_records_table_spreadsheet: {
-    order: 39,
-    message:
-      "Spreadsheet controls need individual records with fields and at least one control enabled.",
-    guidance:
-      "Choose an ungrouped query and enable Range selection or Find on page, or turn Spreadsheet controls off.",
-  },
-  definition_records_table_pinning: {
-    order: 39,
-    message: "Column pinning needs a field from the bound query.",
-    guidance: "Choose a query with fields, then set each column's pin position in Columns.",
-  },
-  // Pivot names its own part (the rows, the columns or the measure) in its sentence; the catalogue
-  // message is what a reader without that sentence sees.
-  definition_records_table_pivot: {
-    order: 39,
-    message: "A pivot needs two choice, link or date fields and what each cell shows.",
-    guidance:
-      "Choose the field for the rows, the field for the columns (at most 50 values) and what to total, or turn Pivot off.",
-  },
-  // Board names its own part (the stage field, a card field, a total) in its sentence; the
-  // catalogue message is what a reader without that sentence sees.
-  definition_records_table_board: {
-    order: 39,
-    message: "Board needs a stage field.",
-    guidance:
-      "Choose a query grouped by a stage field of a pipeline, and the card title and card fields it selects, or turn Board off.",
   },
   // A query binding refusal carries its own sentence (the input, the source and the types); the
   // catalogue message is what a reader without that sentence sees.
@@ -362,7 +233,7 @@ const definitionValidationErrorCatalogueSource = {
     guidance: "Review the definition and use the correlation identifier if support is needed.",
   },
 } as const satisfies Record<
-  (typeof definitionValidationErrorCodes)[number],
+  PlatformDefinitionValidationErrorCode,
   DefinitionValidationCatalogueEntry
 >;
 
@@ -371,9 +242,47 @@ const parsedDefinitionValidationErrorCatalogue = definitionValidationCatalogueSc
 );
 for (const entry of Object.values(parsedDefinitionValidationErrorCatalogue)) Object.freeze(entry);
 
+/**
+ * The platform's own validation sentences. A grid feature's refusal sentence lives in the feature's
+ * definition; `definitionValidationMessage` reads either.
+ */
 export const definitionValidationErrorCatalogue: Readonly<
-  Record<DefinitionValidationErrorCode, Readonly<DefinitionValidationCatalogueEntry>>
+  Record<PlatformDefinitionValidationErrorCode, Readonly<DefinitionValidationCatalogueEntry>>
 > = Object.freeze(parsedDefinitionValidationErrorCatalogue);
+
+/**
+ * The grid feature refusals: each feature definition declares its own codes and sentences, and the
+ * feature registry hands them to this catalogue once, when it loads. The catalogue never imports the
+ * features (they use its codes), so neither module waits on the other while modules load.
+ */
+let featureValidationEntries: readonly Readonly<
+  { code: DefinitionValidationErrorCode } & DefinitionValidationCatalogueEntry
+>[] = [];
+export const registerFeatureValidationEntries = (
+  entries: readonly Readonly<
+    { code: DefinitionValidationErrorCode } & DefinitionValidationCatalogueEntry
+  >[],
+): void => {
+  featureValidationEntries = entries;
+};
+
+/**
+ * The catalogue entry of any definition validation code: the platform's own, or a grid feature's
+ * refusal as its feature definition declares it.
+ */
+export const definitionValidationEntry = (
+  code: DefinitionValidationErrorCode,
+): Readonly<DefinitionValidationCatalogueEntry> => {
+  if (Object.hasOwn(definitionValidationErrorCatalogue, code))
+    return definitionValidationErrorCatalogue[code as PlatformDefinitionValidationErrorCode];
+  const entry = featureValidationEntries.find((candidate) => candidate.code === code);
+  if (entry === undefined) throw new Error(`No validation sentence for ${code}`);
+  return entry;
+};
+
+/** The business sentence of any definition validation code. */
+export const definitionValidationMessage = (code: DefinitionValidationErrorCode): string =>
+  definitionValidationEntry(code).message;
 
 export const publicDefinitionValidationErrorSchema = z
   .object({
@@ -386,7 +295,7 @@ export const publicDefinitionValidationErrorSchema = z
   })
   .strict()
   .superRefine((value, context) => {
-    const catalogueEntry = definitionValidationErrorCatalogue[value.code];
+    const catalogueEntry = definitionValidationEntry(value.code);
     if (value.message !== catalogueEntry.message || value.guidance !== catalogueEntry.guidance) {
       context.addIssue({
         code: "custom",
@@ -574,7 +483,7 @@ function makePublicError(
   correlationId: z.infer<typeof correlationIdSchema>,
   location?: DefinitionValidationLocation,
 ): PublicDefinitionValidationError {
-  const entry = definitionValidationErrorCatalogue[code];
+  const entry = definitionValidationEntry(code);
   return {
     catalogueVersion: definitionValidationCatalogueVersion,
     code,
@@ -610,10 +519,7 @@ function finishResult(
     const rightLocation = locationSortKey(right.location);
     const locationOrder = leftLocation < rightLocation ? -1 : leftLocation > rightLocation ? 1 : 0;
     if (locationOrder !== 0) return locationOrder;
-    return (
-      definitionValidationErrorCatalogue[left.code].order -
-      definitionValidationErrorCatalogue[right.code].order
-    );
+    return definitionValidationEntry(left.code).order - definitionValidationEntry(right.code).order;
   });
   const truncated = alreadyTruncated || sorted.length > 200;
   return definitionValidationResultSchema.parse({

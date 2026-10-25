@@ -23,8 +23,8 @@ export const recordsTableTotalReads = (
   const contract = recordsTableContractOrLog(settings, "table totals");
   if (contract === undefined) throw new Error("GRID_TOTALS_CONTRACT_UNREADABLE");
   const feature = contract.features.totals;
-  if (!feature.enabled || contract.features.board.enabled || contract.features.pivot.enabled)
-    return [];
+  // Publication refuses totals beside a board or a pivot, so the feature alone decides.
+  if (!feature.enabled) return [];
   const shown = new Set(visible.map((field) => field.toLowerCase()));
   return feature.measures.flatMap((measure, index) =>
     !shown.has(measure.field.toLowerCase())

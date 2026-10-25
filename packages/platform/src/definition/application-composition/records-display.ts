@@ -4,7 +4,11 @@ import {
   readRecordsTableRowActions,
   type RecordsTableActionContract,
 } from "./records-table-features/row-actions";
-import { readRecordsTableFeatures, type RecordsTableFeatures } from "./records-table-features";
+import {
+  readRecordsTableFeatures,
+  recordsTableFeatureDefinitions,
+  type RecordsTableFeatures,
+} from "./records-table-features";
 import type { ComponentSettingValue } from "./block-property-schema";
 import {
   UnreadableSettingError,
@@ -389,6 +393,11 @@ export const recordsTableSettingMaximumItems = (...path: readonly string[]): num
       typeof property.maximumItems === "number"
     )
       return property.maximumItems;
+    // The `features` group holds each grid feature's setting group from its definition.
+    if (property !== undefined && "gridFeatures" in property) {
+      properties = recordsTableFeatureDefinitions.map((definition) => definition.settings);
+      continue;
+    }
     if (property?.kind !== "group" || property.properties === undefined) break;
     properties = property.properties as typeof properties;
   }

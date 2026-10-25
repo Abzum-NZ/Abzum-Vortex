@@ -44,7 +44,7 @@ import {
   DefinitionError,
   isVersionImpactRefusal,
 } from "../definition/definition-index";
-import { definitionValidationErrorCatalogue } from "../catalogue/validation-errors";
+import { definitionValidationMessage } from "../catalogue/validation-errors";
 
 /** `reason` is the stable code logged on the server and mapped to a message for the person. */
 type Failure = Readonly<{
@@ -205,7 +205,7 @@ const classifyFailure = (error: unknown): Failure => {
         ? { sentence: compilation.sentence }
         : compilation.code === undefined
           ? {}
-          : { sentence: definitionValidationErrorCatalogue[compilation.code].message }),
+          : { sentence: definitionValidationMessage(compilation.code) }),
     };
   }
   if (isVersionImpactRefusal(error)) return { kind: "refused", reason: "version_impact_refused" };

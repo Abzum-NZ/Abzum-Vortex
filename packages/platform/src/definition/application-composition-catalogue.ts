@@ -4,6 +4,7 @@ import type {
 } from "./application-composition/block-property-schema";
 import type { BlockPropertyValueContract } from "./application-composition/block-property-values";
 import { compiledItemSettings } from "./application-composition/page-composition";
+import { recordsTableFeatureDefinitions } from "./application-composition/records-table-features";
 import {
   type PlatformBlockRelease,
   platformBlockReleaseSchema,
@@ -22,6 +23,28 @@ import sharedProperties from "../catalogue/catalogue/application-composition-sha
  * related records bind their own query's inputs); each release holds the expanded property.
  */
 const expandShared = (property: object): object => {
+  if ("gridFeatures" in property) {
+    // The Records table's `features` group holds each grid feature's setting group exactly as its
+    // feature definition declares it, in the definitions' order, and defaults every feature off.
+    const group = Object.fromEntries(
+      Object.entries(property).filter(([key]) => key !== "gridFeatures"),
+    );
+    return {
+      ...group,
+      defaultValue: {
+        kind: "group",
+        properties: Object.fromEntries(
+          recordsTableFeatureDefinitions.map((definition) => [
+            definition.key,
+            definition.settings.defaultValue,
+          ]),
+        ),
+      },
+      properties: recordsTableFeatureDefinitions.map((definition) =>
+        expandShared(definition.settings),
+      ),
+    };
+  }
   if ("shared" in property) {
     const shared = sharedProperties[property.shared as keyof typeof sharedProperties];
     if (shared === undefined)

@@ -25,9 +25,12 @@ import {
   requiredItems,
   requiredText,
   unreadable,
+  type RecordsTableBoardFacts,
   type RecordsTableFeatureCheck,
   type RecordsTableFeatureDefinition,
   type RecordsTableFieldFacts,
+  type GridFeatureRefusal,
+  type GridFeatureSettingsDeclaration,
 } from "./shared";
 
 /** The semantic tokens a format may use; each is a theme colour every app theme preset defines. */
@@ -416,50 +419,585 @@ export const conditionalColumnFormatIssue = (
 };
 
 const notPossible = (reason: string): RecordsTableFeatureCheck =>
-  featureNotPossible("definition_records_table_conditional_formatting", reason);
+  featureNotPossible(featureRefusal, reason);
 
-export const recordsTableConditionalFormattingFeature: RecordsTableFeatureDefinition<RecordsTableConditionalFormattingSettings> =
-  {
-    key: "conditional_formatting",
-    label: "Formatting",
-    description: "Highlight rows and cells that match conditions",
-    read: (group) => {
-      if (!featureEnabled(group)) return { enabled: false };
-      return {
-        enabled: true,
-        rules: requiredItems(group["rules"], "rules").map((item, index) =>
-          readRule(item, `rules[${index}]`),
-        ),
-        columnFormats: requiredItems(group["column_formats"], "column_formats").map((item, index) =>
-          readColumnFormat(item, `column_formats[${index}]`),
-        ),
-      };
+/** The feature's setting group in the Table release, off by default. */
+const featureSettings = {
+  kind: "group",
+  key: "conditional_formatting",
+  label: "Formatting",
+  help: "Highlight rows and cells that match conditions, and show number columns as data bars or colour scales",
+  required: false,
+  defaultValue: {
+    kind: "group",
+    properties: {
+      enabled: {
+        kind: "boolean",
+        value: false,
+      },
+      rules: {
+        kind: "list",
+        items: [],
+      },
+      column_formats: {
+        kind: "list",
+        items: [],
+      },
     },
-    // Every rule and column format must read fields of the bound query with comparisons that fit
-    // their types, and a status shown by colour needs an icon or a label too. A feature that is off
-    // needs at least one field to build a rule from.
-    check: (state, facts) => {
-      if (facts.fields.length === 0)
-        return notPossible("Formatting needs at least one field in the bound query.");
-      if (!state.enabled) return featureAvailable;
-      if (state.rules.length === 0 && state.columnFormats.length === 0)
-        return notPossible("Add a rule or a column format.");
-      const ids = new Set<string>();
-      for (const rule of state.rules) {
-        if (ids.has(rule.id)) return notPossible("Each rule needs its own identity.");
-        ids.add(rule.id);
-        const issue = conditionalFormatRuleIssue(rule, facts);
-        if (issue !== undefined) return notPossible(issue);
-      }
-      const formattedFields = new Set<string>();
-      for (const format of state.columnFormats) {
-        const field = format.field.toLowerCase();
-        if (formattedFields.has(field))
-          return notPossible(`Choose one number format for ${fieldName(facts, format.field)}.`);
-        formattedFields.add(field);
-        const issue = conditionalColumnFormatIssue(format, facts);
-        if (issue !== undefined) return notPossible(issue);
-      }
-      return featureAvailable;
+  },
+  properties: [
+    {
+      kind: "boolean",
+      key: "enabled",
+      label: "On",
+      help: "Format rows and cells by rules",
+      required: false,
+      defaultValue: {
+        kind: "boolean",
+        value: false,
+      },
     },
-  };
+    {
+      kind: "list",
+      key: "rules",
+      label: "Rules",
+      help: "Ordered rules; for each row or cell the first matching rule wins",
+      required: false,
+      minimumItems: 0,
+      maximumItems: 20,
+      item: {
+        kind: "group",
+        key: "rule",
+        label: "Rule",
+        help: "One condition, what it formats and how",
+        required: true,
+        properties: [
+          {
+            kind: "text",
+            key: "rule_id",
+            label: "Rule identity",
+            help: "Stable identity of the rule within the table",
+            required: true,
+            minLength: 1,
+            maxLength: 40,
+          },
+          {
+            kind: "boolean",
+            key: "enabled",
+            label: "On",
+            help: "Apply this rule",
+            required: false,
+            defaultValue: {
+              kind: "boolean",
+              value: true,
+            },
+          },
+          {
+            kind: "condition",
+            key: "condition",
+            label: "Condition",
+            help: "When the rule applies, over fields of the bound query",
+            required: true,
+          },
+          {
+            kind: "choice",
+            key: "target",
+            label: "Formats",
+            help: "The whole row, or chosen cells",
+            required: false,
+            options: [
+              {
+                key: "row",
+                label: "Whole row",
+              },
+              {
+                key: "cells",
+                label: "Chosen cells",
+              },
+            ],
+            defaultValue: {
+              kind: "choice",
+              value: "row",
+            },
+          },
+          {
+            kind: "list",
+            key: "fields",
+            label: "Cells",
+            help: "The columns whose cells the rule formats",
+            required: false,
+            minimumItems: 0,
+            maximumItems: 50,
+            showWhen: {
+              property: "target",
+              values: ["cells"],
+            },
+            item: {
+              kind: "field_reference",
+              key: "field",
+              label: "Field",
+              help: "Column of the table",
+              required: true,
+            },
+          },
+          {
+            kind: "choice",
+            key: "token",
+            label: "Colour",
+            help: "The semantic colour of the format",
+            required: false,
+            options: [
+              {
+                key: "success",
+                label: "Success",
+              },
+              {
+                key: "warning",
+                label: "Warning",
+              },
+              {
+                key: "info",
+                label: "Information",
+              },
+              {
+                key: "destructive",
+                label: "Critical",
+              },
+              {
+                key: "muted",
+                label: "Muted",
+              },
+            ],
+            defaultValue: {
+              kind: "choice",
+              value: "info",
+            },
+          },
+          {
+            kind: "boolean",
+            key: "tint",
+            label: "Background tint",
+            help: "Tint the background in the colour",
+            required: false,
+            defaultValue: {
+              kind: "boolean",
+              value: true,
+            },
+          },
+          {
+            kind: "boolean",
+            key: "text_colour",
+            label: "Text colour",
+            help: "Show the text in the colour",
+            required: false,
+            defaultValue: {
+              kind: "boolean",
+              value: false,
+            },
+          },
+          {
+            kind: "boolean",
+            key: "bold",
+            label: "Bold",
+            help: "Show the text in bold",
+            required: false,
+            defaultValue: {
+              kind: "boolean",
+              value: false,
+            },
+          },
+          {
+            kind: "boolean",
+            key: "strike",
+            label: "Strike through",
+            help: "Strike the text through",
+            required: false,
+            defaultValue: {
+              kind: "boolean",
+              value: false,
+            },
+          },
+          {
+            kind: "choice",
+            key: "icon",
+            label: "Icon",
+            help: "An icon shown before the value, read out with it",
+            required: false,
+            options: [
+              {
+                key: "none",
+                label: "None",
+              },
+              {
+                key: "alert",
+                label: "Alert",
+              },
+              {
+                key: "check",
+                label: "Check",
+              },
+              {
+                key: "info",
+                label: "Information",
+              },
+              {
+                key: "clock",
+                label: "Clock",
+              },
+              {
+                key: "flag",
+                label: "Flag",
+              },
+              {
+                key: "star",
+                label: "Star",
+              },
+              {
+                key: "close",
+                label: "Cross",
+              },
+              {
+                key: "arrow_up",
+                label: "Arrow up",
+              },
+              {
+                key: "arrow_down",
+                label: "Arrow down",
+              },
+            ],
+            defaultValue: {
+              kind: "choice",
+              value: "none",
+            },
+          },
+          {
+            kind: "text",
+            key: "badge_label",
+            label: "Label",
+            help: "A short label shown as a badge and read out with the value",
+            required: false,
+            minLength: 1,
+            maxLength: 30,
+          },
+          {
+            kind: "boolean",
+            key: "stop_if_true",
+            label: "Stop if true",
+            help: "When this rule matches, later rules are not applied to the row",
+            required: false,
+            defaultValue: {
+              kind: "boolean",
+              value: false,
+            },
+          },
+        ],
+      },
+      defaultValue: {
+        kind: "list",
+        items: [],
+      },
+    },
+    {
+      kind: "list",
+      key: "column_formats",
+      label: "Number columns",
+      help: "Data bars or three-point colour scales, measured over the rows on the page",
+      required: false,
+      minimumItems: 0,
+      maximumItems: 10,
+      item: {
+        kind: "group",
+        key: "column_format",
+        label: "Column format",
+        help: "One number column drawn as a bar or a colour scale",
+        required: true,
+        properties: [
+          {
+            kind: "field_reference",
+            key: "field",
+            label: "Column",
+            help: "A number or money column of the table",
+            required: true,
+          },
+          {
+            kind: "choice",
+            key: "kind",
+            label: "Format",
+            help: "A data bar, or a colour scale from low to high",
+            required: false,
+            options: [
+              {
+                key: "data_bar",
+                label: "Data bar",
+              },
+              {
+                key: "colour_scale",
+                label: "Colour scale",
+              },
+            ],
+            defaultValue: {
+              kind: "choice",
+              value: "data_bar",
+            },
+          },
+          {
+            kind: "choice",
+            key: "token",
+            label: "Bar colour",
+            help: "The colour of the bar",
+            required: false,
+            options: [
+              {
+                key: "success",
+                label: "Success",
+              },
+              {
+                key: "warning",
+                label: "Warning",
+              },
+              {
+                key: "info",
+                label: "Information",
+              },
+              {
+                key: "destructive",
+                label: "Critical",
+              },
+              {
+                key: "muted",
+                label: "Muted",
+              },
+            ],
+            defaultValue: {
+              kind: "choice",
+              value: "info",
+            },
+            showWhen: {
+              property: "kind",
+              values: ["data_bar"],
+            },
+          },
+          {
+            kind: "choice",
+            key: "low_token",
+            label: "Low colour",
+            help: "The colour of the lowest value on the page",
+            required: false,
+            options: [
+              {
+                key: "success",
+                label: "Success",
+              },
+              {
+                key: "warning",
+                label: "Warning",
+              },
+              {
+                key: "info",
+                label: "Information",
+              },
+              {
+                key: "destructive",
+                label: "Critical",
+              },
+              {
+                key: "muted",
+                label: "Muted",
+              },
+            ],
+            defaultValue: {
+              kind: "choice",
+              value: "destructive",
+            },
+            showWhen: {
+              property: "kind",
+              values: ["colour_scale"],
+            },
+          },
+          {
+            kind: "choice",
+            key: "mid_token",
+            label: "Middle colour",
+            help: "The colour of the middle value on the page",
+            required: false,
+            options: [
+              {
+                key: "success",
+                label: "Success",
+              },
+              {
+                key: "warning",
+                label: "Warning",
+              },
+              {
+                key: "info",
+                label: "Information",
+              },
+              {
+                key: "destructive",
+                label: "Critical",
+              },
+              {
+                key: "muted",
+                label: "Muted",
+              },
+            ],
+            defaultValue: {
+              kind: "choice",
+              value: "warning",
+            },
+            showWhen: {
+              property: "kind",
+              values: ["colour_scale"],
+            },
+          },
+          {
+            kind: "choice",
+            key: "high_token",
+            label: "High colour",
+            help: "The colour of the highest value on the page",
+            required: false,
+            options: [
+              {
+                key: "success",
+                label: "Success",
+              },
+              {
+                key: "warning",
+                label: "Warning",
+              },
+              {
+                key: "info",
+                label: "Information",
+              },
+              {
+                key: "destructive",
+                label: "Critical",
+              },
+              {
+                key: "muted",
+                label: "Muted",
+              },
+            ],
+            defaultValue: {
+              kind: "choice",
+              value: "success",
+            },
+            showWhen: {
+              property: "kind",
+              values: ["colour_scale"],
+            },
+          },
+        ],
+      },
+      defaultValue: {
+        kind: "list",
+        items: [],
+      },
+    },
+  ],
+} as const satisfies GridFeatureSettingsDeclaration;
+
+/** The feature's refusals and their business sentences. */
+const featureRefusal: GridFeatureRefusal = {
+  code: "definition_records_table_conditional_formatting",
+  order: 39,
+  message: "Formatting needs rules over fields of the bound query.",
+  guidance:
+    "Build each rule's condition from fields of the bound query, give a status an icon or a label, or turn Formatting off.",
+};
+
+export const recordsTableConditionalFormattingFeature: RecordsTableFeatureDefinition<
+  RecordsTableConditionalFormattingSettings,
+  "conditional_formatting"
+> = {
+  key: "conditional_formatting",
+  property: "conditionalFormatting",
+  settings: featureSettings,
+  refusals: [featureRefusal],
+  onBoard: "supported",
+  label: "Formatting",
+  description: "Highlight rows and cells that match conditions",
+  read: (group) => {
+    if (!featureEnabled(group)) return { enabled: false };
+    return {
+      enabled: true,
+      rules: requiredItems(group["rules"], "rules").map((item, index) =>
+        readRule(item, `rules[${index}]`),
+      ),
+      columnFormats: requiredItems(group["column_formats"], "column_formats").map((item, index) =>
+        readColumnFormat(item, `column_formats[${index}]`),
+      ),
+    };
+  },
+  // Every rule and column format must read fields of the bound query with comparisons that fit
+  // their types, and a status shown by colour needs an icon or a label too. A feature that is off
+  // needs at least one field to build a rule from.
+  // On a board a rule colours whole cards.
+  boardCheck: (state, board) => (state.enabled ? boardFormattingProblem(state, board) : undefined),
+  check: (state, facts) => {
+    if (facts.fields.length === 0)
+      return notPossible("Formatting needs at least one field in the bound query.");
+    if (!state.enabled) return featureAvailable;
+    if (state.rules.length === 0 && state.columnFormats.length === 0)
+      return notPossible("Add a rule or a column format.");
+    const ids = new Set<string>();
+    for (const rule of state.rules) {
+      if (ids.has(rule.id)) return notPossible("Each rule needs its own identity.");
+      ids.add(rule.id);
+      const issue = conditionalFormatRuleIssue(rule, facts);
+      if (issue !== undefined) return notPossible(issue);
+    }
+    const formattedFields = new Set<string>();
+    for (const format of state.columnFormats) {
+      const field = format.field.toLowerCase();
+      if (formattedFields.has(field))
+        return notPossible(`Choose one number format for ${fieldName(facts, format.field)}.`);
+      formattedFields.add(field);
+      const issue = conditionalColumnFormatIssue(format, facts);
+      if (issue !== undefined) return notPossible(issue);
+    }
+    return featureAvailable;
+  },
+};
+
+/**
+ * Why the formatting a board's cards would get cannot be applied, as one business sentence, or
+ * undefined when it can. A card is one block, so a rule colours the whole card and a number format
+ * (a bar or scale over a column of cells) has nothing to draw on; a rule reads any field of the
+ * board's record type that the query selects, whether or not the card shows it.
+ */
+export const boardFormattingProblem = (
+  settings: RecordsTableConditionalFormattingSettings,
+  board: RecordsTableBoardFacts,
+): Extract<RecordsTableFeatureCheck, { kind: "not_possible" }> | undefined => {
+  const refuse = (reason: string): Extract<RecordsTableFeatureCheck, { kind: "not_possible" }> =>
+    featureNotPossible(featureRefusal, reason) as Extract<
+      RecordsTableFeatureCheck,
+      { kind: "not_possible" }
+    >;
+  const same = (left: string, right: string): boolean => left.toLowerCase() === right.toLowerCase();
+  if (settings.rules.length === 0 && settings.columnFormats.length === 0)
+    return refuse("Add a rule that colours the cards.");
+  if (settings.columnFormats.length > 0)
+    return refuse("Number formats need table columns: remove them to format the cards of a board.");
+  const ids = new Set<string>();
+  for (const rule of settings.rules) {
+    if (ids.has(rule.id)) return refuse("Each rule needs its own identity.");
+    ids.add(rule.id);
+    if (rule.target.kind !== "row")
+      return refuse("A board formats whole cards: choose the whole row for every rule.");
+    const issue = conditionalFormatRuleIssue(rule, board);
+    if (issue !== undefined) return refuse(issue.replace("the bound query", board.queryLabel));
+    if (rule.enabled)
+      for (const field of conditionalFormatRuleFields(rule))
+        if (!board.selected.some((candidate) => same(candidate, field))) {
+          const label =
+            board.fields.find((candidate) => same(candidate.field, field))?.label ?? field;
+          return refuse(
+            `${label} is not selected by ${board.queryLabel}. Add it to the query to format these cards.`,
+          );
+        }
+  }
+  return undefined;
+};

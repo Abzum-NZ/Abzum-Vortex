@@ -15,6 +15,8 @@ import {
   type RecordsTableFieldFacts,
   type RecordsTablePivotDateUnit,
   type RecordsTableQueryFacts,
+  type GridFeatureRefusal,
+  type GridFeatureSettingsDeclaration,
 } from "./shared";
 
 /** The most choices a grouping field may hold: every group is one summary row and one header. */
@@ -45,8 +47,6 @@ export type RecordsTableGroupingSettings = Readonly<{
   opensGrouped?: boolean;
 }>;
 
-const code = "definition_records_table_grouping" as const;
-
 /** Whether a field can be grouped by at all; a choice field is also bounded by its options. */
 const groupable = (field: RecordsTableFieldFacts): boolean =>
   (recordsTableGroupingFieldTypes as readonly string[]).includes(field.type) && field.filterable;
@@ -59,7 +59,7 @@ export const recordsTableGroupedQueryRefusal = (
   facts: Pick<RecordsTableQueryFacts, "queryLabel">,
 ): RecordsTableFeatureCheck =>
   featureNotPossible(
-    code,
+    featureRefusal,
     `A table that reads ${facts.queryLabel || "this query"} shows its records in groups: switch on Group by and Open grouped.`,
   );
 
@@ -98,31 +98,34 @@ export const checkRecordsTableGrouping = (
 ): RecordsTableFeatureCheck => {
   if (!facts.fields.some(groupable))
     return featureNotPossible(
-      code,
+      featureRefusal,
       "Group by needs a choice, stage, link or date field in the bound query",
     );
   if (!state.enabled) return featureAvailable;
   const recordType = facts.recordTypeLabel || "this record type";
   if (state.field === undefined)
-    return featureNotPossible(code, "Choose the choice, stage, link or date field to group by.");
+    return featureNotPossible(
+      featureRefusal,
+      "Choose the choice, stage, link or date field to group by.",
+    );
   const field = factsOf(facts, state.field);
   if (field === undefined) {
     const unselected = facts.unselectedFields?.find(
       (candidate) => candidate.field.toLowerCase() === state.field!.toLowerCase(),
     );
     return featureNotPossible(
-      code,
+      featureRefusal,
       `Grouping by ${unselected?.label ?? "the chosen field"} needs a choice, stage, link or date field of ${recordType} that the query reads`,
     );
   }
   if (!(recordsTableGroupingFieldTypes as readonly string[]).includes(field.type))
     return featureNotPossible(
-      code,
+      featureRefusal,
       `Grouping by ${field.label} needs a choice, stage, link or date field of ${recordType} that the query reads`,
     );
   if (!field.filterable)
     return featureNotPossible(
-      code,
+      featureRefusal,
       `${field.label} cannot be grouped by until it is filterable: make it filterable in Data.`,
     );
   if (
@@ -132,12 +135,12 @@ export const checkRecordsTableGrouping = (
       field.choiceCount > RECORDS_TABLE_GROUPING_MAXIMUM_CHOICES)
   )
     return featureNotPossible(
-      code,
+      featureRefusal,
       `${field.label} has more than ${RECORDS_TABLE_GROUPING_MAXIMUM_CHOICES} choices; group by a field with fewer`,
     );
   if ((field.type === "date" || field.type === "date_time") && state.dateUnit === undefined)
     return featureNotPossible(
-      code,
+      featureRefusal,
       `Choose how to group ${field.label}: by day, week, month, quarter or year`,
     );
   if (
@@ -147,42 +150,178 @@ export const checkRecordsTableGrouping = (
     state.groupPageSize > RECORDS_TABLE_GROUPING_MAXIMUM_PAGE_SIZE
   )
     return featureNotPossible(
-      code,
+      featureRefusal,
       `Set a group page of at most ${RECORDS_TABLE_GROUPING_MAXIMUM_PAGE_SIZE}`,
     );
   if (state.opensGrouped === undefined)
-    return featureNotPossible(code, "Choose whether the table opens grouped.");
+    return featureNotPossible(featureRefusal, "Choose whether the table opens grouped.");
   // A table that reads a grouped query has no flat rows, so it can only open grouped.
   if (facts.grouped && !state.opensGrouped) return recordsTableGroupedQueryRefusal(facts);
   if (state.unassignedLabel === undefined)
-    return featureNotPossible(code, "Name the group of records that have no value.");
+    return featureNotPossible(featureRefusal, "Name the group of records that have no value.");
   if (state.unassignedLabel.length > RECORDS_TABLE_GROUPING_MAXIMUM_LABEL_LENGTH)
     return featureNotPossible(
-      code,
+      featureRefusal,
       `Name the group of records with no value in at most ${RECORDS_TABLE_GROUPING_MAXIMUM_LABEL_LENGTH} characters.`,
     );
   return featureAvailable;
 };
 
-export const recordsTableGroupingFeature: RecordsTableFeatureDefinition<RecordsTableGroupingSettings> =
-  {
-    key: "grouping",
-    label: "Group by",
-    description: "Group the records by a choice, stage, link or date field, counted on the server",
-    read: (group) => {
-      if (!featureEnabled(group)) return { enabled: false };
-      const field = optionalField(group["field"], "field");
-      const unassignedLabel = optionalText(group["unassigned_label"], "unassigned_label");
-      const dateUnit = optionalChoice(group["date_unit"], recordsTablePivotDateUnits, "date_unit");
-      const groupPageSize = optionalNumber(group["group_page_size"], "group_page_size");
-      return {
-        enabled: true,
-        ...(field === undefined ? {} : { field }),
-        ...(dateUnit === undefined ? {} : { dateUnit }),
-        ...(groupPageSize === undefined ? {} : { groupPageSize }),
-        ...(unassignedLabel === undefined ? {} : { unassignedLabel }),
-        opensGrouped: requiredBoolean(group["opens_grouped"], "opens_grouped"),
-      };
+/** The feature's setting group in the Table release, off by default. */
+const featureSettings = {
+  kind: "group",
+  key: "grouping",
+  label: "Group by",
+  help: "Group the records by a choice, stage, link or date field, counted on the server",
+  required: false,
+  defaultValue: {
+    kind: "group",
+    properties: {
+      enabled: {
+        kind: "boolean",
+        value: false,
+      },
+      opens_grouped: {
+        kind: "boolean",
+        value: false,
+      },
     },
-    check: checkRecordsTableGrouping,
-  };
+  },
+  properties: [
+    {
+      kind: "boolean",
+      key: "enabled",
+      label: "On",
+      help: "Let people group the table by the chosen field",
+      required: false,
+      defaultValue: {
+        kind: "boolean",
+        value: false,
+      },
+    },
+    {
+      kind: "field_reference",
+      key: "field",
+      label: "Group by",
+      help: "A choice, stage, link or date field people can filter by; a choice field has at most 50 choices",
+      required: false,
+      fieldTypes: ["choice", "link", "date", "date_time"],
+    },
+    {
+      kind: "text",
+      key: "unassigned_label",
+      label: "Name for records with no value",
+      help: "Shown on the group of records that have no value, or whose value the viewer cannot see",
+      required: false,
+      minLength: 1,
+      maxLength: 40,
+    },
+    {
+      kind: "choice",
+      key: "date_unit",
+      label: "Group dates by",
+      help: "The calendar unit when the field is a date, counted in the organisation's time zone",
+      required: false,
+      options: [
+        {
+          key: "day",
+          label: "Day",
+        },
+        {
+          key: "week",
+          label: "Week",
+        },
+        {
+          key: "month",
+          label: "Month",
+        },
+        {
+          key: "quarter",
+          label: "Quarter",
+        },
+        {
+          key: "year",
+          label: "Year",
+        },
+      ],
+    },
+    {
+      kind: "number",
+      key: "group_page_size",
+      label: "Groups at a time",
+      help: "How many groups one page shows, at most 200; more groups continue on the next page",
+      required: false,
+      integer: true,
+      minimum: 1,
+      maximum: 200,
+    },
+    {
+      kind: "boolean",
+      key: "opens_grouped",
+      label: "Open grouped",
+      help: "Show the table in groups when it opens; people can still ungroup it. Off shows the records flat until someone groups them",
+      required: false,
+      defaultValue: {
+        kind: "boolean",
+        value: false,
+      },
+    },
+  ],
+} as const satisfies GridFeatureSettingsDeclaration;
+
+/** The feature's refusals and their business sentences. */
+const featureRefusal: GridFeatureRefusal = {
+  code: "definition_records_table_grouping",
+  order: 39,
+  message: "Group by needs a choice, stage, link or date field in the bound query.",
+  guidance:
+    "Choose the choice, stage, link or date field the records are grouped by, or turn Group by off.",
+};
+
+export const recordsTableGroupingFeature: RecordsTableFeatureDefinition<
+  RecordsTableGroupingSettings,
+  "grouping"
+> = {
+  key: "grouping",
+  property: "grouping",
+  settings: featureSettings,
+  refusals: [featureRefusal],
+  onBoard: "own",
+  label: "Group by",
+  description: "Group the records by a choice, stage, link or date field, counted on the server",
+  read: (group) => {
+    if (!featureEnabled(group)) return { enabled: false };
+    const field = optionalField(group["field"], "field");
+    const unassignedLabel = optionalText(group["unassigned_label"], "unassigned_label");
+    const dateUnit = optionalChoice(group["date_unit"], recordsTablePivotDateUnits, "date_unit");
+    const groupPageSize = optionalNumber(group["group_page_size"], "group_page_size");
+    return {
+      enabled: true,
+      ...(field === undefined ? {} : { field }),
+      ...(dateUnit === undefined ? {} : { dateUnit }),
+      ...(groupPageSize === undefined ? {} : { groupPageSize }),
+      ...(unassignedLabel === undefined ? {} : { unassignedLabel }),
+      opensGrouped: requiredBoolean(group["opens_grouped"], "opens_grouped"),
+    };
+  },
+  conflicts: (state, facts, { features }) => {
+    // A grouped query has no flat rows, so a table that reads one (and is not a board, which reads
+    // it its own way) shows its records in groups.
+    if (!state.enabled && facts.grouped && !features.board.enabled)
+      return recordsTableGroupedQueryRefusal(facts);
+    // Groups, a board's columns, a tree's levels and a pivot's cells each arrange the records
+    // their own way, so the table shows one of them at a time.
+    if (!state.enabled) return undefined;
+    const other = features.board.enabled
+      ? "Board"
+      : features.tree.enabled
+        ? "Tree"
+        : features.pivot.enabled
+          ? "Pivot"
+          : undefined;
+    return other === undefined
+      ? undefined
+      : featureNotPossible(featureRefusal, `Turn ${other} off to group the records.`);
+  },
+  check: checkRecordsTableGrouping,
+};

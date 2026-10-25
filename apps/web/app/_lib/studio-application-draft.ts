@@ -39,7 +39,7 @@ import {
   type PeopleDirectoryOwner,
   moduleQueryBorrowable,
   queryTotalLabel,
-  definitionValidationErrorCatalogue,
+  definitionValidationMessage,
 } from "@vortex/platform/schema";
 import type { DatabaseRow } from "@vortex/platform/server";
 import {
@@ -395,7 +395,7 @@ const studioCompileFailure = (error: unknown): StudioCompileFailure => {
           .map((segment) => segment.key),
         ...(current.code === undefined
           ? {}
-          : { sentence: definitionValidationErrorCatalogue[current.code].message }),
+          : { sentence: definitionValidationMessage(current.code) }),
         ...(block === undefined ? {} : { blockAlias: block.key }),
         ...(setting === undefined || setting.key === "theme" ? {} : { tokenKey: setting.key }),
         ...Object.fromEntries(Object.entries(located).filter(([, key]) => key !== undefined)),

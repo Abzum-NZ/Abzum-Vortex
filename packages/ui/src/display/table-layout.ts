@@ -121,6 +121,7 @@ export const useGridLayout = ({
   declared,
   stored,
   events,
+  pinning,
 }: Readonly<{
   contract: RecordsTableContract | undefined;
   /** The columns the page was read with, in declared order. */
@@ -129,6 +130,8 @@ export const useGridLayout = ({
   declared: readonly DisplayColumn[];
   stored: GridLayoutState | undefined;
   events: DisplayEventHandlers | undefined;
+  /** The viewer's projection turns column pinning on. */
+  pinning: boolean;
 }>): GridLayoutControls => {
   const fallback = useMemo((): GridLayoutState | undefined => {
     const authored = contract === undefined ? undefined : authoredGridLayout(contract);
@@ -229,7 +232,6 @@ export const useGridLayout = ({
       ),
     [pinSignature],
   );
-  const pinning = contract?.features.pinning.enabled === true;
   const order = useMemo(() => {
     const keys = shown.map((column) => column.key);
     if (!pinning) return keys;
