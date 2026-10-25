@@ -9,6 +9,14 @@ import { RangeStatusBar, type StatusBarRange } from "./range-status-bar";
 const Find = lazy(() => import("./find"));
 type Point = Readonly<{ row: number; column: number }>;
 type Range = Readonly<{ anchor: Point; end: Point }>;
+type PointerSelection = {
+  pointerId: number;
+  start: Point;
+  clientX: number;
+  clientY: number;
+  active: boolean;
+  suppressClick: boolean;
+};
 const selectionClasses = [
   "bg-accent",
   "text-accent-foreground",
@@ -25,7 +33,6 @@ function RangeSelection({ context, surface }: GridFeatureInteractionProps): Reac
   const range = useRef<Range | undefined>(undefined);
   // The settled rectangle as the status bar reads it; the ref above stays the painting authority.
   const [settled, setSettled] = useState<StatusBarRange | undefined>(undefined);
-  const dragging = useRef(false);
   // Replacing rows or columns invalidates a rectangle; it never follows a different query/page.
   const page = context.lines;
   const columns = context.columns;
@@ -35,7 +42,7 @@ function RangeSelection({ context, surface }: GridFeatureInteractionProps): Reac
     const previousMulti = root.getAttribute("aria-multiselectable");
     root.setAttribute("aria-multiselectable", "true");
     range.current = undefined;
-    dragging.current = false;
+    let pointer: PointerSelection | undefined;
     setAnnouncement("");
     setSettled(undefined);
     const publish = (): void => {
@@ -188,18 +195,41 @@ function RangeSelection({ context, surface }: GridFeatureInteractionProps): Reac
       }
     };
     const pointerdown = (event: PointerEvent): void => {
+      pointer = undefined;
       const point = pointOf(event.target);
       if (point === undefined || event.button !== 0 || event.pointerType === "touch") return;
       // Links, editors and action buttons retain their own pointer behaviour.
       if (isInteractiveGridTarget(event.target, root)) return;
       event.preventDefault();
       select(event.shiftKey ? (range.current?.anchor ?? point) : point, point);
-      dragging.current = true;
+      pointer = {
+        pointerId: event.pointerId,
+        start: point,
+        clientX: event.clientX,
+        clientY: event.clientY,
+        active: true,
+        suppressClick: event.shiftKey || event.ctrlKey || event.metaKey || event.altKey,
+      };
       latest.current.surface.focusCell(point.row, columnIds[point.column]!);
       announce();
     };
+    const trackPointer = (event: PointerEvent): void => {
+      if (pointer === undefined) return;
+      const point = pointOf(event.target);
+      // Keep the drag decision even if the pointer leaves the grid or returns to its start.
+      pointer.suppressClick ||=
+        Math.hypot(event.clientX - pointer.clientX, event.clientY - pointer.clientY) > 4 ||
+        (point !== undefined &&
+          (point.row !== pointer.start.row || point.column !== pointer.start.column)) ||
+        event.shiftKey ||
+        event.ctrlKey ||
+        event.metaKey ||
+        event.altKey;
+    };
     const pointermove = (event: PointerEvent): void => {
-      if (!dragging.current || range.current === undefined) return;
+      if (pointer?.active !== true || pointer.pointerId !== event.pointerId) return;
+      trackPointer(event);
+      if (range.current === undefined) return;
       const point = pointOf(event.target);
       if (
         point === undefined ||
@@ -209,17 +239,34 @@ function RangeSelection({ context, surface }: GridFeatureInteractionProps): Reac
       select(range.current.anchor, point);
       latest.current.surface.focusCell(point.row, columnIds[point.column]!);
     };
-    const pointerup = (): void => {
-      if (!dragging.current) return;
-      dragging.current = false;
+    const pointerup = (event: PointerEvent): void => {
+      if (pointer?.active !== true || pointer.pointerId !== event.pointerId) return;
+      trackPointer(event);
+      pointer.active = false;
+      announce();
+    };
+    const pointercancel = (event: PointerEvent): void => {
+      if (pointer?.pointerId !== event.pointerId) return;
+      pointer.active = false;
+      pointer.suppressClick = true;
       announce();
     };
     const click = (event: MouseEvent): void => {
-      // Selecting a range never invokes a row-click flow, including the click after a drag.
+      const selection = pointer;
+      pointer = undefined;
+      if (selection === undefined || isInteractiveGridTarget(event.target, root)) return;
+      const point = pointOf(event.target);
+      // A plain click selects one cell and reaches the row flow. Range gestures consume their
+      // click, even when a cross-cell drag makes the browser target the row instead of a cell.
       if (
-        range.current !== undefined &&
-        pointOf(event.target) !== undefined &&
-        !isInteractiveGridTarget(event.target, root)
+        selection.active ||
+        selection.suppressClick ||
+        point?.row !== selection.start.row ||
+        point?.column !== selection.start.column ||
+        event.shiftKey ||
+        event.ctrlKey ||
+        event.metaKey ||
+        event.altKey
       ) {
         event.preventDefault();
         event.stopPropagation();
@@ -236,11 +283,11 @@ function RangeSelection({ context, surface }: GridFeatureInteractionProps): Reac
     });
     root.addEventListener("keydown", keydown, true);
     root.addEventListener("pointerdown", pointerdown, true);
-    root.addEventListener("pointermove", pointermove);
+    window.addEventListener("pointermove", pointermove);
     root.addEventListener("click", click, true);
     root.addEventListener("copy", copy);
     window.addEventListener("pointerup", pointerup);
-    window.addEventListener("pointercancel", pointerup);
+    window.addEventListener("pointercancel", pointercancel);
     paint();
     return () => {
       observer.disconnect();
@@ -248,11 +295,11 @@ function RangeSelection({ context, surface }: GridFeatureInteractionProps): Reac
       else root.setAttribute("aria-multiselectable", previousMulti);
       root.removeEventListener("keydown", keydown, true);
       root.removeEventListener("pointerdown", pointerdown, true);
-      root.removeEventListener("pointermove", pointermove);
+      window.removeEventListener("pointermove", pointermove);
       root.removeEventListener("click", click, true);
       root.removeEventListener("copy", copy);
       window.removeEventListener("pointerup", pointerup);
-      window.removeEventListener("pointercancel", pointerup);
+      window.removeEventListener("pointercancel", pointercancel);
       range.current = undefined;
       for (const cell of root.querySelectorAll<HTMLElement>("[data-grid-cell][aria-selected]")) {
         if (cell.closest(GRID_ROOT) !== root) continue;

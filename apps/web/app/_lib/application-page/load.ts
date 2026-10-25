@@ -32,7 +32,6 @@ import {
 import { createPlacementReadServices } from "./placement-services";
 import { prepareRuntimePreviewPage } from "../runtime-preview-demand";
 import { beginStudioPreviewRead } from "../studio-preview-work";
-import { readApplicationReleaseAdoption } from "../application-release-adoption";
 import { getQueryContinuationKey } from "../query-continuation-key";
 import { loadPermittedApplicationsAtAddress } from "../organization-context";
 import {} from "@vortex/platform/server";
@@ -305,24 +304,13 @@ const loadApplicationPageJoined = async (
   const continuationKey = initialContinuationKey ?? getQueryContinuationKey();
   const application = context.releaseSet.application;
 
-  // The offered release is read under the viewer's own application scope. A refusal or an absent
-  // target reads as "nothing to adopt"; publishing a release alone never changes this page.
-  const adoptionRead =
-    selectedPlacementIds === undefined && runtimePreviewOf(context) === undefined
-      ? readApplicationReleaseAdoption(session, {
-          organizationId: context.organizationId,
-          applicationRootId: context.applicationRootId,
-        })
-      : undefined;
-
   const pageDefinition = application.content.pages.find((page) => page.key === address.pageKey);
   if (pageDefinition === undefined) {
-    await adoptionRead;
     return { kind: "unavailable" };
   }
 
   const conditionSubjectId = first(parameters[pageSubjectParameter]);
-  // The adoption read, the page projection and the navigation projection are independent reads of
+  // The page projection and the navigation projection are independent reads of
   // the same installed context, each under its own HUMAN request; they run together and their
   // results are still consulted in the original order.
   const { projectedPageRead, navigationRead } = readPageProjections(
@@ -335,7 +323,6 @@ const loadApplicationPageJoined = async (
   );
   startedReads.push(projectedPageRead);
   if (navigationRead !== undefined) startedReads.push(navigationRead);
-  const adoptionTarget = await adoptionRead;
   const projectedPage = await projectedPageRead;
   if (projectedPage.kind !== "available") return projectedPage;
   // An undefined projection is the page refused for this viewer: never an empty page.
@@ -965,16 +952,6 @@ const loadApplicationPageJoined = async (
       .filter((candidate) => permittedKeys.has(candidate.key))
       .map((candidate) => ({ pageId: candidate.pageId, key: candidate.key })),
     ...(subject === undefined ? {} : { subject }),
-    ...(adoptionTarget !== undefined &&
-    adoptionTarget.currentReleaseRevision > context.applicationReleaseRevision
-      ? {
-          adoption: {
-            offeredReleaseRevision: adoptionTarget.currentReleaseRevision,
-            offeredReleaseVersion: adoptionTarget.currentReleaseVersion,
-            installedReleaseRevision: context.applicationReleaseRevision,
-          },
-        }
-      : {}),
     invocation: {
       tenantShortName: address.tenantShortName,
       organizationShortName: address.organizationShortName,

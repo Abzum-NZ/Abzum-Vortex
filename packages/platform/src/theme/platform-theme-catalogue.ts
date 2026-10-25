@@ -21,6 +21,10 @@ const deepFreeze = <Value>(value: Value): Value => {
 const currentTokens: Record<PlatformThemeTokenRoleKey, unknown> =
   source.PLATFORM_THEME_RELEASE_3_1_0.tokens;
 
+// The one theme changes in place. Applications pinning older content must be republished.
+const DEFAULT_PLATFORM_THEME_CONTENT_FINGERPRINT =
+  "sha256:3ed9d794ff21179bf9939661d123fb0adc66853dc3817171ba925a44b8bfd1ab";
+
 /**
  * One registered platform theme release: a source definition plus its canonical-JSON content hash,
  * computed once as the catalogue loads. It is parsed through the release contract and deep-frozen.
@@ -59,3 +63,8 @@ export const PLATFORM_THEME_RELEASE_3_1_0: PlatformThemeRelease = release({
  * moves every shipped theme pin together.
  */
 export const DEFAULT_PLATFORM_THEME_RELEASE: PlatformThemeRelease = PLATFORM_THEME_RELEASE_3_1_0;
+
+if (
+  DEFAULT_PLATFORM_THEME_RELEASE.contentFingerprint !== DEFAULT_PLATFORM_THEME_CONTENT_FINGERPRINT
+)
+  throw new Error("Platform theme content fingerprint does not match its committed pin");

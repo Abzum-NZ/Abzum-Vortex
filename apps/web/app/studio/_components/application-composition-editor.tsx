@@ -844,7 +844,7 @@ export function ApplicationCompositionEditor(props: Props) {
               : removalModel.kind === "invalid"
                 ? "This item could not be read. Reload Studio."
                 : removalModel.reason === "page_kind"
-                  ? "Items can only be removed from a layout or from the content of a list, detail or dashboard page."
+                  ? "Items can only be removed from a layout or from the content of a list, detail, form or dashboard page."
                   : removalModel.reason === "public_page"
                     ? "This page is published at a public address. Its items cannot be removed."
                     : removalModel.reason === "has_children"
