@@ -148,6 +148,12 @@ const permittedApplicationSchema = z
   })
   .strict();
 
+/** Launcher links carry no page authority and cannot be used as an addressed projection. */
+const applicationLauncherEntrySchema = permittedApplicationSchema.omit({
+  pageKeys: true,
+  previewInstallationId: true,
+});
+
 /**
  * One application experience page the viewer may be shown in place of a page they cannot open:
  * the viewer may open that page itself, it is presentation-only, and it carries only the shell and
@@ -182,7 +188,26 @@ const permittedApplicationsReadSchema = z.discriminatedUnion("kind", [
 
 export type PermittedApplication = z.infer<typeof permittedApplicationSchema>;
 export type PermittedApplicationsRead = z.infer<typeof permittedApplicationsReadSchema>;
+const applicationLauncherReadSchema = z.discriminatedUnion("kind", [
+  permittedApplicationsReadSchema.options[0].extend({
+    applications: z.array(applicationLauncherEntrySchema).max(10_000),
+  }),
+  permittedApplicationsReadSchema.options[1],
+  permittedApplicationsReadSchema.options[2],
+  permittedApplicationsReadSchema.options[3],
+]);
+export type ApplicationLauncherEntry = z.infer<typeof applicationLauncherEntrySchema>;
+export type ApplicationLauncherRead = z.infer<typeof applicationLauncherReadSchema>;
 export type ApplicationExperience = z.infer<typeof applicationExperienceSchema>;
+
+const applicationLauncherEntry = (application: PermittedApplication): ApplicationLauncherEntry =>
+  applicationLauncherEntrySchema.parse({
+    applicationRootId: application.applicationRootId,
+    key: application.key,
+    name: application.name,
+    icon: application.icon,
+    homePageKey: application.homePageKey,
+  });
 
 type TemporarilyUnavailableApplicationRead = Readonly<{
   kind: "temporarily_unavailable";
@@ -427,7 +452,7 @@ const launcherProjectionTtlMs = 30_000;
 const launcherProjectionLimit = 512;
 const launcherProjections = new Map<
   string,
-  Readonly<{ application: PermittedApplication | null; expiresAtMs: number }>
+  Readonly<{ application: ApplicationLauncherEntry; expiresAtMs: number }>
 >();
 
 const launcherProjectionKey = (
@@ -446,7 +471,7 @@ const launcherProjectionKey = (
     .join("|")
     .toLowerCase();
 
-const recallLauncherProjection = (key: string): PermittedApplication | null | undefined => {
+const recallLauncherProjection = (key: string): ApplicationLauncherEntry | undefined => {
   const entry = launcherProjections.get(key);
   if (entry === undefined) return undefined;
   if (entry.expiresAtMs <= Date.now()) {
@@ -458,7 +483,7 @@ const recallLauncherProjection = (key: string): PermittedApplication | null | un
 
 const rememberLauncherProjection = (
   key: string,
-  application: PermittedApplication | null,
+  application: ApplicationLauncherEntry,
   validUntil: string | undefined,
 ): void => {
   const now = Date.now();
@@ -486,6 +511,7 @@ const projectPermittedApplication = async (
   remember?: (application: PermittedApplication | null, validUntil: string | undefined) => void,
   refused?: (reasonCodes: readonly string[]) => void,
   addressedPageKey?: string,
+  launcher = false,
 ): Promise<Readonly<{
   application: PermittedApplication;
   experiences: ApplicationExperience[];
@@ -537,11 +563,13 @@ const projectPermittedApplication = async (
     });
   };
   await decidePages(
-    addressedPage === undefined
-      ? candidate.pages
-      : candidate.pages.filter(
-          (page) => page.key === addressedPage.key || page.key === candidate.homePageKey,
-        ),
+    launcher
+      ? candidate.pages.filter((page) => page.key === candidate.homePageKey)
+      : addressedPage === undefined
+        ? candidate.pages
+        : candidate.pages.filter(
+            (page) => page.key === addressedPage.key || page.key === candidate.homePageKey,
+          ),
   );
   // Role homes need the current role IDs. They are read once, on first use, and both uses below
   // run only after the release home is refused, so an allowed release home never reads them.
@@ -565,8 +593,8 @@ const projectPermittedApplication = async (
   };
   const pageAllowed = (page: ApplicationCandidate["pages"][number]) =>
     decisions.get(page.accessPermissionKey)?.allowed === true;
-  if (addressedPage !== undefined) {
-    if (!pageAllowed(addressedPage)) {
+  if (addressedPage !== undefined || launcher) {
+    if (addressedPage !== undefined && !pageAllowed(addressedPage)) {
       const reasonCode = decisions.get(addressedPage.accessPermissionKey)?.reasonCode;
       refused?.(reasonCode === undefined ? [] : [reasonCode]);
       return null;
@@ -608,7 +636,7 @@ const projectPermittedApplication = async (
   // depend on them is remembered.
   const rememberable =
     addressedPageKey === undefined &&
-    (allowedPageKeys.has(candidate.homePageKey) || allowedPageKeys.size === 0);
+    (allowedPageKeys.has(candidate.homePageKey) || (!launcher && allowedPageKeys.size === 0));
   if (homePageKey === undefined) {
     if (rememberable) remember?.(null, validUntil);
     refused?.(
@@ -620,7 +648,9 @@ const projectPermittedApplication = async (
   // An experience page is offered only when the viewer may open that page itself and it is
   // presentation-only, so it can never show gated, conditional or data-bound content.
   const shells = candidate.shells ?? [];
-  const experiences = (addressedPageKey === undefined ? (candidate.experiences ?? []) : [])
+  const experiences = (
+    !launcher && addressedPageKey === undefined ? (candidate.experiences ?? []) : []
+  )
     .filter(
       (experience) =>
         allowedPageKeys.has(experience.page.key) &&
@@ -662,6 +692,7 @@ const permittedApplication = async (
     validUntil: string | undefined,
   ) => void,
   refused?: (reasonCodes: readonly string[]) => void,
+  launcher = false,
 ): Promise<
   | Readonly<{ application: PermittedApplication; experiences: ApplicationExperience[] }>
   | null
@@ -678,6 +709,8 @@ const permittedApplication = async (
         candidate,
         (application, validUntil) => remember?.(scope, application, validUntil),
         refused,
+        undefined,
+        launcher,
       ),
   );
   if (result.kind === "temporarily_unavailable")
@@ -696,15 +729,40 @@ const permittedApplication = async (
  * is evaluated, `applications` holds at most that one entry and `defaultApplicationRootId`
  * is null, so it must only resolve that address and never feed a launcher.
  */
-export const readPermittedApplicationsAtAddress = async (
+export function readPermittedApplicationsAtAddress(
+  permissions: PlatformPermissionSource,
+  session: IdentitySession,
+  tenantShortNameCandidate: string,
+  organizationShortNameCandidate: string,
+  identityAuthorityIdCandidate: IdentityAuthorityId,
+): Promise<ApplicationLauncherRead>;
+export function readPermittedApplicationsAtAddress(
+  permissions: PlatformPermissionSource,
+  session: IdentitySession,
+  tenantShortNameCandidate: string,
+  organizationShortNameCandidate: string,
+  identityAuthorityIdCandidate: IdentityAuthorityId,
+  applicationKeyCandidate: string,
+): Promise<PermittedApplicationsRead>;
+export async function readPermittedApplicationsAtAddress(
   permissions: PlatformPermissionSource,
   session: IdentitySession,
   tenantShortNameCandidate: string,
   organizationShortNameCandidate: string,
   identityAuthorityIdCandidate: IdentityAuthorityId,
   applicationKeyCandidate?: string,
-): Promise<PermittedApplicationsRead> =>
-  (
+): Promise<PermittedApplicationsRead | ApplicationLauncherRead> {
+  if (applicationKeyCandidate === undefined)
+    return readPermittedApplications(
+      permissions,
+      session,
+      tenantShortNameCandidate,
+      organizationShortNameCandidate,
+      identityAuthorityIdCandidate,
+      undefined,
+      () => {},
+    );
+  return (
     await readAtAddress(
       permissions,
       session,
@@ -714,6 +772,7 @@ export const readPermittedApplicationsAtAddress = async (
       applicationKeyCandidate,
     )
   ).read;
+}
 
 /**
  * The addressed page read with the addressed application's experience pages. They are returned
@@ -1056,7 +1115,7 @@ const readAtAddress = async (
   tenantShortNameCandidate: string,
   organizationShortNameCandidate: string,
   identityAuthorityIdCandidate: IdentityAuthorityId,
-  applicationKeyCandidate?: string,
+  applicationKeyCandidate: string,
 ): Promise<AddressedApplicationRead> => {
   let experiences: readonly ApplicationExperience[] = [];
   const read = await readPermittedApplications(
@@ -1073,7 +1132,25 @@ const readAtAddress = async (
   return { read, experiences: read.kind === "available" ? experiences : [] };
 };
 
-const readPermittedApplications = async (
+function readPermittedApplications(
+  permissions: PlatformPermissionSource,
+  session: IdentitySession,
+  tenantShortNameCandidate: string,
+  organizationShortNameCandidate: string,
+  identityAuthorityIdCandidate: IdentityAuthorityId,
+  applicationKeyCandidate: string,
+  receiveExperiences: (experiences: readonly ApplicationExperience[]) => void,
+): Promise<PermittedApplicationsRead>;
+function readPermittedApplications(
+  permissions: PlatformPermissionSource,
+  session: IdentitySession,
+  tenantShortNameCandidate: string,
+  organizationShortNameCandidate: string,
+  identityAuthorityIdCandidate: IdentityAuthorityId,
+  applicationKeyCandidate: undefined,
+  receiveExperiences: (experiences: readonly ApplicationExperience[]) => void,
+): Promise<ApplicationLauncherRead>;
+async function readPermittedApplications(
   permissions: PlatformPermissionSource,
   session: IdentitySession,
   tenantShortNameCandidate: string,
@@ -1081,7 +1158,7 @@ const readPermittedApplications = async (
   identityAuthorityIdCandidate: IdentityAuthorityId,
   applicationKeyCandidate: string | undefined,
   receiveExperiences: (experiences: readonly ApplicationExperience[]) => void,
-): Promise<PermittedApplicationsRead> => {
+): Promise<PermittedApplicationsRead | ApplicationLauncherRead> {
   const parsedSession = identitySessionSchema.safeParse(session);
   const tenantShortName = builderKeySchema.safeParse(tenantShortNameCandidate);
   const organizationShortName = builderKeySchema.safeParse(organizationShortNameCandidate);
@@ -1182,26 +1259,30 @@ const readPermittedApplications = async (
           read.organizationId,
           candidate,
           (scope, application, validUntil) =>
-            rememberLauncherProjection(
-              launcherProjectionKey(parsedSession.data.identityId, scope, candidate),
-              application,
-              validUntil,
-            ),
+            application === null
+              ? undefined
+              : rememberLauncherProjection(
+                  launcherProjectionKey(parsedSession.data.identityId, scope, candidate),
+                  applicationLauncherEntry(application),
+                  validUntil,
+                ),
+          undefined,
+          true,
         ),
     );
 
-    const applications: PermittedApplication[] = [];
+    const applications: ApplicationLauncherEntry[] = [];
     let decidedIndex = 0;
     for (const recall of recalled) {
       if (recall !== undefined) {
-        if (recall !== null) applications.push(recall);
+        applications.push(recall);
         continue;
       }
       const permitted = decided[decidedIndex++];
       if (permitted === undefined || permitted === null) continue;
       if (isTemporarilyUnavailableApplicationRead(permitted))
-        return permittedApplicationsReadSchema.parse(permitted);
-      applications.push(permitted.application);
+        return applicationLauncherReadSchema.parse(permitted);
+      applications.push(applicationLauncherEntry(permitted.application));
     }
     const configuredDefault = defaultRead.value.configuredDefault;
     const defaultApplicationRootId =
@@ -1209,7 +1290,7 @@ const readPermittedApplications = async (
       applications.some((entry) => sameId(entry.applicationRootId, configuredDefault))
         ? configuredDefault
         : null;
-    return permittedApplicationsReadSchema.parse({
+    return applicationLauncherReadSchema.parse({
       kind: "available",
       organizationId: read.organizationId,
       tenantShortName: read.tenantShortName,
@@ -1220,18 +1301,15 @@ const readPermittedApplications = async (
   } catch (error) {
     return { kind: "temporarily_unavailable", cause: describeApplicationAddressFailure(error) };
   }
-};
+}
 
 /** A browser address selects only from the currently permitted server projection. */
 export const resolvePermittedApplicationAddress = (
   read: PermittedApplicationsRead,
-  applicationKeyCandidate?: string,
+  applicationKeyCandidate: string,
   pageKeyCandidate?: string,
 ) => {
   if (read.kind !== "available") return read;
-  if (applicationKeyCandidate === undefined)
-    return { kind: "available" as const, read, application: null, pageKey: null };
-
   const applicationKey = namespacedKeySchema.safeParse(applicationKeyCandidate);
   if (!applicationKey.success) return { kind: "unavailable" as const };
   const application = read.applications.find((entry) => entry.key === applicationKey.data);

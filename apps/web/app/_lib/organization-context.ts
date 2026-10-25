@@ -2,7 +2,10 @@ import "server-only";
 
 import { cache } from "react";
 import type { IdentitySession, OrganizationLauncherResolution } from "@vortex/platform/schema";
-import { readPermittedApplicationsAtAddress, type PermittedApplicationsRead } from "@vortex/platform/server";
+import {
+  readPermittedApplicationsAtAddress,
+  type ApplicationLauncherRead,
+} from "@vortex/platform/server";
 import { createOrganizationLauncherService } from "@vortex/platform/server";
 import { getIdentityAuthorityConfiguration } from "../auth/_lib/authority-configuration";
 import { platformPermissionSource } from "./platform-permission-source";
@@ -30,7 +33,7 @@ export const loadPermittedApplicationsAtAddress = cache(
     session: IdentitySession,
     tenantShortName: string,
     organizationShortName: string,
-  ): Promise<PermittedApplicationsRead> => {
+  ): Promise<ApplicationLauncherRead> => {
     let authorityId;
     try {
       authorityId = getIdentityAuthorityConfiguration().authorityId;
