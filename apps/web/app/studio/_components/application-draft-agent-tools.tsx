@@ -687,6 +687,9 @@ export function ApplicationDraftAgentTools({
             rootId: context.rootId,
             draftRevision: context.draftRevision,
           });
+          // The preview runs the saved draft it was started for: read the workspace draft again, and
+          // never report it for a draft that moved while the request ran.
+          const current = actions.current.readSavedDraft();
           if (result.kind !== "provisioned") {
             const reason = result.kind === "refused" ? result.reason : undefined;
             console.error(
@@ -696,6 +699,18 @@ export function ApplicationDraftAgentTools({
               outcome: result.kind === "conflict" ? "conflict" : "unavailable",
               ...(reason === undefined ? {} : { reason }),
               message: previewProblem(result),
+            };
+          }
+          if (
+            current === null ||
+            current.rootId !== context.rootId ||
+            current.draftRevision !== context.draftRevision
+          ) {
+            console.error("[studio] agent preview refused: STUDIO_AGENT_PREVIEW_DRAFT_CHANGED");
+            return {
+              outcome: "conflict",
+              message:
+                "The workspace draft changed while the preview was being prepared, so the preview shows the earlier draft. Call read_application_draft and retry.",
             };
           }
           return {
