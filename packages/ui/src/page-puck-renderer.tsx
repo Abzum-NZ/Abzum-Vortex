@@ -24,7 +24,7 @@ import { IconLibraryProvider } from "./icons";
 import {
   ApplicationSwitcherContext,
   type ApplicationShellRuntime,
-  type ApplicationSwitcherData,
+  type ApplicationSwitcherSource,
 } from "./navigation/application-shell";
 import { DateFormatProvider } from "./display/date-format-context";
 import { Button } from "./components/button";
@@ -188,8 +188,8 @@ export type PagePuckRendererProps = Readonly<{
   timeZone?: string | undefined;
   /** Runtime labels for the application shell root. */
   applicationShellRuntime?: ApplicationShellRuntime | undefined;
-  /** The shell's application switcher: resolved, or a server-started read that streams in. */
-  applicationSwitcher?: ApplicationSwitcherData | Promise<ApplicationSwitcherData> | undefined;
+  /** Reads the shell's permitted applications when its switcher is opened. */
+  applicationSwitcherSource?: ApplicationSwitcherSource | undefined;
   /** Protected search results for a search block placed in the application definition. */
   applicationSearch?: VortexPuckMetadata["applicationSearch"];
   /** Record subject preserved by a search form placed on a detail page. */
@@ -237,7 +237,7 @@ export function PagePuckRenderer({
   locale,
   timeZone,
   applicationShellRuntime,
-  applicationSwitcher,
+  applicationSwitcherSource,
   applicationSearch,
   applicationSearchPageSubject,
   componentBundleOrigin,
@@ -347,7 +347,7 @@ export function PagePuckRenderer({
       </>
     );
   const rendered = (
-    <ApplicationSwitcherContext.Provider value={applicationSwitcher}>
+    <ApplicationSwitcherContext.Provider value={applicationSwitcherSource}>
       {outlet === undefined ? (
         <Render config={baseConfig} data={data} metadata={metadata} />
       ) : (
