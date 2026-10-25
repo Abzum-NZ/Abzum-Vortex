@@ -595,10 +595,13 @@ const projectPermittedApplication = async (
     if (allowedRequirementKeys.has(page.accessPermissionKey)) allowedPageKeys.add(page.key);
 
   // The release home wins if authorised. Otherwise use the lowest source
-  // role key among current application roles with an open home.
+  // role key among current application roles with an open home. With no page open, no role home
+  // can be chosen, so the role IDs are not read.
   const homePageKey = allowedPageKeys.has(candidate.homePageKey)
     ? candidate.homePageKey
-    : (await roleHomes()).find((page) => allowedPageKeys.has(page.key))?.key;
+    : allowedPageKeys.size === 0
+      ? undefined
+      : (await roleHomes()).find((page) => allowedPageKeys.has(page.key))?.key;
   // A home chosen from current role assignments depends on time-bound assignments, memberships and
   // activations that the page decisions' expiry does not cover, so only a projection that does not
   // depend on them is remembered.
