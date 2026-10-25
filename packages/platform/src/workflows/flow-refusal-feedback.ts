@@ -13,6 +13,7 @@ export const flowRefusalFeedbackCodeSchema = z.enum([
   "recent_authentication_required",
   "role_settings_change_required",
   "application_storage_incompatible",
+  "application_republish_required",
   "application_not_installed",
   "application_not_newer",
   "applications_manage_required",
@@ -27,6 +28,7 @@ type FlowRefusalFeedbackCode = z.infer<typeof flowRefusalFeedbackCodeSchema>;
  * replace: the run ends with the diagnostic so the person is told exactly what is missing.
  */
 const platformGuidanceCodes: ReadonlySet<string> = new Set<FlowRefusalFeedbackCode>([
+  "application_republish_required",
   "recent_authentication_required",
   "application_storage_incompatible",
   "application_not_installed",

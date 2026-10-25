@@ -57,6 +57,7 @@ const definitionHistoryErrorCodes = [
   "DEFINITION_CONTEXT_REFUSED",
   "DEFINITION_STORED_DATA_INVALID",
   "DEFINITION_RELEASE_INTEGRITY_FAILED",
+  "DEFINITION_DEPENDENCY_SUPERSEDED",
   "DEFINITION_HISTORY_FAILED",
   "DEFINITION_RESTORE_FAILED",
 ] as const;
@@ -436,6 +437,11 @@ const verifyRestoreEvidence = async (
   } catch (cause) {
     throw new DefinitionError("DEFINITION_RESTORE_FAILED", { cause });
   }
+  if (catalogueResult === "superseded")
+    throw new DefinitionError("DEFINITION_DEPENDENCY_SUPERSEDED", {
+      sentence:
+        "Republish required: this release uses superseded platform definitions. Publish the current draft instead of restoring this release.",
+    });
   if (catalogueResult !== "valid") throw new DefinitionError("DEFINITION_RELEASE_INTEGRITY_FAILED");
 
   return {

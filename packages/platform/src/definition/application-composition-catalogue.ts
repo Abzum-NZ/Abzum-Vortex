@@ -61,16 +61,16 @@ const sourcesByIdentity = new Map(
 );
 const catalogueReleaseIdentities = new Map(
   Object.values(PLATFORM_BLOCK_RELEASE_IDENTITIES).map(
-    ({ blockId, key, rendererKey, releaseVersion }) => [
+    ({ blockId, key, rendererKey, releaseVersion, contentFingerprint }) => [
       `${key}@${releaseVersion}`,
-      `${blockId}:${rendererKey}`,
+      `${blockId}:${rendererKey}:${contentFingerprint}`,
     ],
   ),
 );
 const sourceReleaseIdentities = new Map(
   Object.values(sources).map(({ blockId, key, rendererKey, releaseVersion }) => [
     `${key}@${releaseVersion}`,
-    `${blockId}:${rendererKey}`,
+    `${blockId}:${rendererKey}:${platformBlockReleaseContentHash(sourcesByIdentity.get(`${blockId}:${releaseVersion}`)!).contentFingerprint}`,
   ]),
 );
 if (
@@ -79,14 +79,18 @@ if (
     ([identity, release]) => sourceReleaseIdentities.get(identity) !== release,
   )
 )
-  throw new Error("Platform block release identities do not match their server catalogue data");
+  throw new Error(
+    "Platform block release identities or pinned content fingerprints do not match their server catalogue data",
+  );
 
 /**
  * The registered platform block releases: the one source of block metadata for server
  * validation and for the renderer registrations that pair each release with its component. Each
  * release's content lives in catalogue/application-composition-catalogue.source.json and is
  * parsed through the release contract at module load and deep-frozen. Its content hash is computed
- * once from that source when the catalogue loads.
+ * once from that source when the catalogue loads and checked against its committed pin. Each block
+ * has one release, changed in place; changed content supersedes compiled applications using it,
+ * which must be republished and upgraded. Platform block versions do not change for catalogue edits.
  */
 const release = (definition: { blockId: string; releaseVersion: string }): PlatformBlockRelease =>
   deepFreeze(

@@ -210,6 +210,7 @@ const readCurrentState = async (
     active.applicationReleaseRevision,
     selector.organizationId,
     context.correlationId,
+    "replace_or_remove",
   );
   const selectedReleaseSet = await readInstallationReleaseSet(
     transaction,

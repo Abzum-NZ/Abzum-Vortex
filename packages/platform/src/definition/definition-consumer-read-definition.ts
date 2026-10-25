@@ -114,7 +114,7 @@ export const definitionReleaseModuleTargetsMatch = (
   });
 };
 
-type DefinitionCatalogueVerification = "valid" | "unavailable" | "invalid";
+type DefinitionCatalogueVerification = "valid" | "unavailable" | "invalid" | "superseded";
 
 export const verifyDefinitionCatalogueDependencies = async (
   manifest: readonly ExactDefinitionDependency[],
@@ -132,10 +132,10 @@ export const verifyDefinitionCatalogueDependencies = async (
       if (
         release.key !== dependency.key ||
         release.rootId !== dependency.rootId ||
-        release.releaseVersion !== dependency.releaseVersion ||
-        release.contentFingerprint !== dependency.contentFingerprint
+        release.releaseVersion !== dependency.releaseVersion
       )
         return "invalid";
+      if (release.contentFingerprint !== dependency.contentFingerprint) return "superseded";
       continue;
     }
     if (dependency.kind === "platform_block") {
@@ -147,10 +147,10 @@ export const verifyDefinitionCatalogueDependencies = async (
       if (release === undefined) return "unavailable";
       if (
         release.blockId !== dependency.blockId ||
-        release.releaseVersion !== dependency.releaseVersion ||
-        release.contentFingerprint !== dependency.contentFingerprint
+        release.releaseVersion !== dependency.releaseVersion
       )
         return "invalid";
+      if (release.contentFingerprint !== dependency.contentFingerprint) return "superseded";
       continue;
     }
     if (
@@ -167,10 +167,10 @@ export const verifyDefinitionCatalogueDependencies = async (
       if (
         release.serviceId !== dependency.operation.owner.serviceId ||
         release.operationId !== dependency.operation.operationId ||
-        release.releaseVersion !== dependency.releaseVersion ||
-        release.contentFingerprint !== dependency.contentFingerprint
+        release.releaseVersion !== dependency.releaseVersion
       )
         return "invalid";
+      if (release.contentFingerprint !== dependency.contentFingerprint) return "superseded";
       continue;
     }
     // Application-owned flows and their contained targets, plus module-owned targets, are
@@ -199,10 +199,10 @@ export const verifyDefinitionCatalogueDependencies = async (
     if (release === undefined) return "unavailable";
     if (
       release.catalogueThemeId !== dependency.catalogueThemeId ||
-      release.releaseVersion !== dependency.releaseVersion ||
-      release.contentFingerprint !== dependency.contentFingerprint
+      release.releaseVersion !== dependency.releaseVersion
     )
       return "invalid";
+    if (release.contentFingerprint !== dependency.contentFingerprint) return "superseded";
   }
   return "valid";
 };
@@ -247,7 +247,7 @@ export const projectStoredConsumerRelease = async (
   release: StoredConsumerReleaseEvidence,
   expectation: StoredConsumerReleaseExpectation,
   correlationId: string,
-  catalogue: DefinitionPublicationCatalogue,
+  catalogue: DefinitionPublicationCatalogue | undefined,
 ): Promise<DefinitionConsumerReadResult> => {
   selectReleaseContract(release);
   const output = release.compilationOutput;
@@ -277,20 +277,28 @@ export const projectStoredConsumerRelease = async (
   )
     throw new DefinitionError("DEFINITION_RELEASE_INTEGRITY_FAILED");
 
-  let catalogueVerification: DefinitionCatalogueVerification;
-  try {
-    catalogueVerification = await verifyDefinitionCatalogueDependencies(
-      release.dependencyManifest,
-      catalogue,
-      release.validationContractVersion,
-    );
-  } catch (cause) {
-    throw new DefinitionError("DEFINITION_READ_FAILED", { cause });
+  // Replacement and removal authenticate stored evidence without rendering its stale content.
+  if (catalogue !== undefined) {
+    let catalogueVerification: DefinitionCatalogueVerification;
+    try {
+      catalogueVerification = await verifyDefinitionCatalogueDependencies(
+        release.dependencyManifest,
+        catalogue,
+        release.validationContractVersion,
+      );
+    } catch (cause) {
+      throw new DefinitionError("DEFINITION_READ_FAILED", { cause });
+    }
+    if (catalogueVerification === "unavailable")
+      throw new DefinitionError("DEFINITION_DEPENDENCY_UNAVAILABLE");
+    if (catalogueVerification === "invalid")
+      throw new DefinitionError("DEFINITION_RELEASE_INTEGRITY_FAILED");
+    if (catalogueVerification === "superseded")
+      throw new DefinitionError("DEFINITION_DEPENDENCY_SUPERSEDED", {
+        sentence:
+          "Republish required: this release uses superseded platform definitions. Republish the application, then install or upgrade to the new release.",
+      });
   }
-  if (catalogueVerification === "unavailable")
-    throw new DefinitionError("DEFINITION_DEPENDENCY_UNAVAILABLE");
-  if (catalogueVerification === "invalid")
-    throw new DefinitionError("DEFINITION_RELEASE_INTEGRITY_FAILED");
 
   const content =
     output.kind === "application"
