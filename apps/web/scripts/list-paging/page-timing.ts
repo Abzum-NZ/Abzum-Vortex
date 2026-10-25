@@ -5,7 +5,7 @@ import { resolve } from "node:path";
 import { performance } from "node:perf_hooks";
 import { pathToFileURL } from "node:url";
 import { createClient } from "@supabase/supabase-js";
-import { argumentValue, openLane, personaEmails, type LaneFacts } from "./lane";
+import { argumentValue, laneAuthEndpoint, openLane, personaEmails, type LaneFacts } from "./lane";
 
 /**
  * Measures PAGE server time, which the query-level baseline (`capture-baseline.ts`) does not: for
@@ -133,15 +133,19 @@ const launchBrowser = async (): Promise<Browser> => {
 };
 
 /** The owner's password is in the environment; the other personas get a fresh one on this lane. */
-const passwordFor = async (persona: PersonaName, email: string): Promise<string> => {
+const passwordFor = async (
+  facts: LaneFacts,
+  persona: PersonaName,
+  email: string,
+): Promise<string> => {
   if (persona === "owner") {
     const owned = process.env.VORTEX_DEMO_OWNER_PASSWORD;
     if (owned === undefined) throw new Error("VORTEX_DEMO_OWNER_PASSWORD is not set.");
     return owned;
   }
-  const url = process.env.VORTEX_SUPABASE_URL;
+  const url = laneAuthEndpoint(facts.lane);
   const key = process.env.VORTEX_DEV_SERVICE_ROLE_KEY;
-  if (url === undefined || key === undefined)
+  if (key === undefined)
     throw new Error("The lane Supabase URL and service key are not in the web environment.");
   const admin = createClient(url, key, {
     auth: { autoRefreshToken: false, persistSession: false },
@@ -285,14 +289,23 @@ const main = async (): Promise<void> => {
   if (chosen !== undefined && !personaNames.includes(chosen as PersonaName))
     throw new Error("--persona must be owner, member or viewer.");
   const facts = openLane();
-  const recordIds = await loadRecordIds(facts);
-  await facts.administration.end();
+  let recordIds: Awaited<ReturnType<typeof loadRecordIds>>;
+  try {
+    recordIds = await loadRecordIds(facts);
+  } finally {
+    await facts.administration.end();
+  }
   const browser = await launchBrowser();
   const results: Result[] = [];
   try {
     for (const persona of chosen === undefined ? personaNames : [chosen as PersonaName]) {
       const email = personaEmails[persona]();
-      const cookie = await signedInCookie(browser, base, email, await passwordFor(persona, email));
+      const cookie = await signedInCookie(
+        browser,
+        base,
+        email,
+        await passwordFor(facts, persona, email),
+      );
       results.push(...(await measure(facts, base, persona, cookie, runs, recordIds)));
     }
   } finally {
