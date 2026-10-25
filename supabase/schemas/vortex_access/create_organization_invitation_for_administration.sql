@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION vortex_access.create_organization_invitation_for_administration(p_duplicate_key uuid, p_invited_email text, p_token_fingerprint text, p_expires_at timestamp with time zone) RETURNS TABLE(outcome text, operation text, organization_id uuid, invitation_id uuid, revision bigint, correlation_id uuid, accepted_at timestamp with time zone, access_version bigint)
+CREATE OR REPLACE FUNCTION vortex_access.create_organization_invitation_for_administration(p_duplicate_key uuid, p_invited_email text, p_expires_at timestamp with time zone) RETURNS TABLE(outcome text, operation text, organization_id uuid, invitation_id uuid, revision bigint, correlation_id uuid, accepted_at timestamp with time zone, access_version bigint)
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO ''
     AS $_$
@@ -15,8 +15,6 @@ begin
     or p_invited_email <> pg_catalog.lower(pg_catalog.btrim(p_invited_email))
     or pg_catalog.char_length(p_invited_email) not between 3 and 320
     or p_invited_email !~ '^[^[:space:]@]+@[^[:space:]@]+$'
-    or p_token_fingerprint is null
-    or p_token_fingerprint !~ '^sha256:[0-9a-f]{64}$'
     or p_expires_at is null
     or p_expires_at in ('-infinity'::timestamptz, 'infinity'::timestamptz) then
     raise exception using errcode = '22023', message = 'Invitation creation command is invalid';
@@ -56,7 +54,7 @@ begin
   end if;
   select result.* into strict created
   from vortex_identity.create_organization_invitation(
-    p_invited_email, p_token_fingerprint, p_expires_at
+    p_invited_email, p_expires_at
   ) as result;
   if created.organization_id <> scope.organization_id or created.revision <> 1
     or created.invited_email <> p_invited_email or created.expires_at <> p_expires_at
@@ -84,11 +82,11 @@ begin
 end
 $_$;
 
-alter function vortex_access.create_organization_invitation_for_administration(p_duplicate_key uuid, p_invited_email text, p_token_fingerprint text, p_expires_at timestamp with time zone) owner to vortex_owner;
+alter function vortex_access.create_organization_invitation_for_administration(p_duplicate_key uuid, p_invited_email text, p_expires_at timestamp with time zone) owner to vortex_owner;
 
-COMMENT ON FUNCTION vortex_access.create_organization_invitation_for_administration(p_duplicate_key uuid, p_invited_email text, p_token_fingerprint text, p_expires_at timestamp with time zone) IS 'Protected no-intent invitation creation; replay returns receipt evidence and never secret material.';
+COMMENT ON FUNCTION vortex_access.create_organization_invitation_for_administration(p_duplicate_key uuid, p_invited_email text, p_expires_at timestamp with time zone) IS 'Protected no-intent invitation creation; replay returns receipt evidence. The invited person accepts it after signing in with that verified email.';
 
-REVOKE ALL ON FUNCTION vortex_access.create_organization_invitation_for_administration(p_duplicate_key uuid, p_invited_email text, p_token_fingerprint text, p_expires_at timestamp with time zone) FROM PUBLIC;
-GRANT ALL ON FUNCTION vortex_access.create_organization_invitation_for_administration(p_duplicate_key uuid, p_invited_email text, p_token_fingerprint text, p_expires_at timestamp with time zone) TO vortex_request;
+REVOKE ALL ON FUNCTION vortex_access.create_organization_invitation_for_administration(p_duplicate_key uuid, p_invited_email text, p_expires_at timestamp with time zone) FROM PUBLIC;
+GRANT ALL ON FUNCTION vortex_access.create_organization_invitation_for_administration(p_duplicate_key uuid, p_invited_email text, p_expires_at timestamp with time zone) TO vortex_request;
 
-grant execute on function vortex_access.create_organization_invitation_for_administration(p_duplicate_key uuid, p_invited_email text, p_token_fingerprint text, p_expires_at timestamp with time zone) to postgres;
+grant execute on function vortex_access.create_organization_invitation_for_administration(p_duplicate_key uuid, p_invited_email text, p_expires_at timestamp with time zone) to postgres;

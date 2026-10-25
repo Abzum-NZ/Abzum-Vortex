@@ -1198,13 +1198,8 @@
         "access_version": {
           "type": "whole_number",
           "required": true
-        },
-        "invitation_secret": {
-          "type": "text",
-          "required": false
         }
       },
-      "sensitiveOutputs": ["invitation_secret"],
       "effect": "change",
       "expectedRevision": "not_required",
       "confirmation": "required",

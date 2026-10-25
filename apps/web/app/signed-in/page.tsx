@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import type { OrganizationLauncherEntry } from "@vortex/platform/schema";
@@ -8,17 +9,25 @@ import {
   type LauncherRowsPayload,
 } from "@vortex/ui";
 import {
+  acceptOrganizationInvitation,
   APPLICATION_LAUNCHER_BLOCK_RELEASE,
   CONTAINER_BLOCK_RELEASE,
   DEFAULT_PLATFORM_THEME_RELEASE,
   FIELD_INPUT_CONTROL_RELEASES,
   HEADING_BLOCK_RELEASE,
+  listPendingInvitations,
   organizationChooserEmptyPage,
+  organizationChooserJoinEventId,
   organizationChooserPage,
   organizationChooserOpenEventId,
   organizationChooserPlacementId,
   organizationChooserShell,
+  organizationChooserWithInvitationsPage,
+  organizationInvitationsPage,
+  organizationInvitationsPlacementId,
+  type PendingInvitation,
 } from "@vortex/platform/server";
+import { correlationIdSchema, describeFailure } from "@vortex/platform/schema";
 import { Badge } from "@vortex/ui/components/badge";
 import { Button } from "@vortex/ui/components/button";
 import {
@@ -34,6 +43,7 @@ import { continueSessionOrEnd, redirectToSessionEnd } from "../auth/_lib/session
 import {
   resolveIdentitySession,
   resolveIdentitySessionWithEmail,
+  resolveVerifiedIdentity,
 } from "../auth/_lib/session-server";
 import { OrganizationChooserPage } from "./_components/organization-chooser-page";
 import { organizationAddressPath } from "../_lib/address-paths";
@@ -117,6 +127,85 @@ async function openOrganization(event: DisplaySemanticEvent): Promise<void> {
   redirect(organizationAddressPath(entry.tenantShortName, entry.organizationShortName));
 }
 
+const invitationExpiry = new Intl.DateTimeFormat("en-NZ", {
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+});
+
+/** Closed launcher projection of the invitations waiting for the person's verified email. */
+const invitationTileValues = (invitations: readonly PendingInvitation[]): LauncherRowsPayload => ({
+  kind: "launcher_rows",
+  headingKey: "name",
+  secondaryKey: "icon",
+  rows: invitations.map((invitation): DisplayRow => ({
+    recordId: invitation.invitationId,
+    cells: {
+      name: { kind: "text", text: invitation.organizationName },
+      description: {
+        kind: "text",
+        text: [
+          invitation.tenantName === invitation.organizationName ? undefined : invitation.tenantName,
+          "Invitation open until " + invitationExpiry.format(new Date(invitation.expiresAt)),
+        ]
+          .filter((part) => part !== undefined)
+          .join(" · "),
+      },
+      icon: { kind: "text", text: "mail" },
+    },
+  })),
+});
+
+/** The invitations waiting for the signed-in person, or undefined when they could not be read. */
+const readPendingInvitations = async (): Promise<readonly PendingInvitation[] | undefined> => {
+  const verified = await resolveVerifiedIdentity();
+  if (verified === undefined) return [];
+  try {
+    return await listPendingInvitations(verified);
+  } catch (error) {
+    console.error("[signed-in] pending invitations unavailable: " + describeFailure(error));
+    return undefined;
+  }
+};
+
+/**
+ * Joining is the invitation tile's declared `row_action`. The browser names only the invitation;
+ * this server action reads the signed-in person's verified identity again, accepts the invitation
+ * only while it is still waiting for that verified email, and opens the organisation it joined.
+ */
+async function joinOrganization(event: DisplaySemanticEvent): Promise<void> {
+  "use server";
+  if (event?.event !== "row_action" || typeof event.recordId !== "string") return;
+  if (event.eventId !== organizationChooserJoinEventId) {
+    console.error(
+      "[chooser] join refused: ROW_ACTION_EVENT_UNKNOWN eventId=" + String(event.eventId),
+    );
+    return;
+  }
+  const identity = await continueSessionOrEnd(await resolveIdentitySession());
+  if (identity.kind === "temporarily_unavailable") redirect("/signed-in");
+  const verified = await resolveVerifiedIdentity();
+  if (verified === undefined) redirect("/signed-in");
+  const pending = await listPendingInvitations(verified);
+  const invitation = pending.find((candidate) => candidate.invitationId === event.recordId);
+  if (invitation === undefined) redirect("/signed-in");
+  const accepted = await acceptOrganizationInvitation(verified, {
+    invitationId: invitation.invitationId,
+    correlationId: correlationIdSchema.parse(randomUUID()),
+  });
+  if (accepted.outcome !== "accepted" && accepted.outcome !== "already_accepted") {
+    console.error("[chooser] join refused: INVITATION_" + accepted.outcome.toUpperCase());
+    redirect("/signed-in");
+  }
+  const current = await loadOrganizationLauncher(identity.session);
+  const entry =
+    current.kind === "available"
+      ? current.entries.find((candidate) => candidate.organizationId === invitation.organizationId)
+      : undefined;
+  if (entry === undefined) redirect("/signed-in");
+  redirect(organizationAddressPath(entry.tenantShortName, entry.organizationShortName));
+}
+
 const organizationsUnavailable = (
   <main
     className="flex min-h-svh items-center justify-center p-4 bg-background text-foreground"
@@ -167,23 +256,49 @@ export default async function SignedInPage() {
   );
   if (launcher.kind === "temporarily_unavailable") return organizationsUnavailable;
   if (launcher.kind !== "available") return redirectToSessionEnd();
+  const invitations = await readPendingInvitations();
+  if (invitations === undefined) return organizationsUnavailable;
   const onlyEntry = launcher.entries[0];
-  if (launcher.entries.length === 1 && onlyEntry)
+  if (launcher.entries.length === 1 && onlyEntry && invitations.length === 0)
     redirect(organizationAddressPath(onlyEntry.tenantShortName, onlyEntry.organizationShortName));
 
   const { email } = await resolveIdentitySessionWithEmail();
   if (email === undefined) throw new Error("Active identity session resolved without an email");
-  const empty = launcher.entries.length === 0;
-  const page = empty ? organizationChooserEmptyPage : organizationChooserPage;
+  const hasOrganizations = launcher.entries.length > 0;
+  const hasInvitations = invitations.length > 0;
+  const page = hasOrganizations
+    ? hasInvitations
+      ? organizationChooserWithInvitationsPage
+      : organizationChooserPage
+    : hasInvitations
+      ? organizationInvitationsPage
+      : organizationChooserEmptyPage;
 
   return (
     <OrganizationChooserPage
       page={page}
       shell={organizationChooserShell}
-      placementId={organizationChooserPlacementId}
-      values={empty ? undefined : organizationTileValues(launcher.entries)}
+      launchers={[
+        ...(hasOrganizations
+          ? [
+              {
+                placementId: organizationChooserPlacementId,
+                values: organizationTileValues(launcher.entries),
+                onRowAction: openOrganization,
+              },
+            ]
+          : []),
+        ...(hasInvitations
+          ? [
+              {
+                placementId: organizationInvitationsPlacementId,
+                values: invitationTileValues(invitations),
+                onRowAction: joinOrganization,
+              },
+            ]
+          : []),
+      ]}
       account={{ email }}
-      openOrganization={openOrganization}
       platformBlockReleases={CHOOSER_BLOCK_RELEASES}
       fieldInputControlReleases={FIELD_INPUT_CONTROL_RELEASES}
       platformThemeTokens={DEFAULT_PLATFORM_THEME_RELEASE.tokens}

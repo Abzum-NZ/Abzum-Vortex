@@ -1,6 +1,6 @@
 import "server-only";
 
-import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { activityIdSchema } from "../catalogue/identifiers";
 import {
   describeFailure,
@@ -153,7 +153,7 @@ type OwnProfileRow = DatabaseRow & {
 };
 
 export type OrganizationLocalAdministrationDependencies = HumanOrganizationRequestDependencies &
-  Readonly<{ generateInvitationSecret?: () => string; activityId?: () => string }>;
+  Readonly<{ activityId?: () => string }>;
 
 const normalizeRevision = (value: unknown): unknown =>
   typeof value === "object" && value !== null
@@ -184,9 +184,6 @@ const requireOne = <Row>(rows: readonly Row[]): Row => {
   return rows[0];
 };
 
-const fingerprintSecret = (secret: string): string =>
-  `sha256:${createHash("sha256").update(secret, "utf8").digest("hex")}`;
-
 const matchesScope = (
   row: { organization_id: unknown; access_version: unknown },
   organizationId: string,
@@ -200,8 +197,6 @@ export const createOrganizationLocalAdministrationService = (
   dependencies: OrganizationLocalAdministrationDependencies,
 ) => {
   const requests = createHumanOrganizationRequestService(dependencies);
-  const generateInvitationSecret =
-    dependencies.generateInvitationSecret ?? (() => randomBytes(32).toString("base64url"));
   const newActivityId = dependencies.activityId ?? randomUUID;
 
   const accountChange = <Result>(
@@ -255,7 +250,6 @@ export const createOrganizationLocalAdministrationService = (
       revision: number;
     },
     schema: { parse(candidate: unknown): Result },
-    invitationSecret?: string,
   ): Result => {
     const result = schema.parse({
       outcome: row.outcome,
@@ -266,7 +260,6 @@ export const createOrganizationLocalAdministrationService = (
       correlationId: row.correlation_id,
       acceptedAt: databaseTimestamp(row.accepted_at),
       accessVersion: databaseRevision(row.access_version),
-      ...(row.outcome === "accepted" && invitationSecret !== undefined ? { invitationSecret } : {}),
     });
     const checked = result as {
       outcome: "accepted" | "replayed";
@@ -672,28 +665,34 @@ export const createOrganizationLocalAdministrationService = (
       const command =
         createOrganizationInvitationForAdministrationCommandSchema.safeParse(commandCandidate);
       if (!command.success) return { kind: "unavailable" };
-      return requests.runChange(session, selection, async (transaction, scope) => {
-        const invitationSecret = generateInvitationSecret();
-        if (Buffer.byteLength(invitationSecret, "utf8") < 32 || invitationSecret.length > 2_000)
-          throw unavailableError(unavailableCode);
-        const row = requireOne(
-          await transaction.query<InvitationChangeRow>`
-            select * from vortex_access.create_organization_invitation_for_administration(
-              ${command.data.duplicateKey}::uuid,
-              ${command.data.invitedEmail}::text,
-              ${fingerprintSecret(invitationSecret)}::text,
-              ${command.data.expiresAt}::timestamptz
-            )
-          `,
-        );
-        return invitationChange(
-          row,
-          scope,
-          { operation: "create_organization_invitation", revision: 1 },
-          createOrganizationInvitationForAdministrationResultSchema,
-          invitationSecret,
-        );
-      });
+      return requests.runChangeWithRefusal(
+        session,
+        selection,
+        async (transaction, scope) => {
+          const row = requireOne(
+            await transaction.query<InvitationChangeRow>`
+              select * from vortex_access.create_organization_invitation_for_administration(
+                ${command.data.duplicateKey}::uuid,
+                ${command.data.invitedEmail}::text,
+                ${command.data.expiresAt}::timestamptz
+              )
+            `,
+          );
+          return invitationChange(
+            row,
+            scope,
+            { operation: "create_organization_invitation", revision: 1 },
+            createOrganizationInvitationForAdministrationResultSchema,
+          );
+        },
+        (code) =>
+          code === "23505"
+            ? createOrganizationInvitationForAdministrationResultSchema.parse({
+                outcome: "already_pending",
+                operation: "create_organization_invitation",
+              })
+            : undefined,
+      );
     },
 
     async revokeOrganizationInvitation(

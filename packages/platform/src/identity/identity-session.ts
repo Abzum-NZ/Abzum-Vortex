@@ -122,9 +122,7 @@ export const createIdentitySessionService = (dependencies: IdentitySessionServic
 
   const resolveVerified = async (
     accessToken: string,
-  ): Promise<
-    Readonly<{ resolution: IdentitySessionResolution; verifiedPrimaryEmail?: string }>
-  > => {
+  ): Promise<Readonly<{ resolution: IdentitySessionResolution; identity?: VerifiedIdentity }>> => {
     const verified = await verify(accessToken);
     if (!verified.ok) return { resolution: verified.result };
     try {
@@ -133,7 +131,7 @@ export const createIdentitySessionService = (dependencies: IdentitySessionServic
       dependencies.checkpoint?.();
       const resolution = activeResult(verified.identity, projection, clock);
       return resolution.kind === "active"
-        ? { resolution, verifiedPrimaryEmail: verified.identity.verifiedPrimaryEmail }
+        ? { resolution, identity: verified.identity }
         : { resolution };
     } catch (error) {
       return { resolution: projectionFailure(error) };
@@ -163,7 +161,10 @@ export const createIdentitySessionService = (dependencies: IdentitySessionServic
       return (await resolveVerified(accessToken)).resolution;
     },
 
-    /** The resolution with the email of the very identity that was verified, for the account menu. */
+    /**
+     * The resolution with the very identity that was verified (its email for the account menu,
+     * the whole identity for actions taken before an organisation exists, such as joining one).
+     */
     resolveVerified,
   });
 };

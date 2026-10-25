@@ -29,7 +29,9 @@ export {
   AccessVersionError,
   accessVersionErrorCodes,
   createAccessVersionStore,
+  listPendingInvitations,
   type AccessVersionErrorCode,
+  type PendingInvitation,
 } from "./access-version";
 export {
   assertBeforeLiveDeadline,

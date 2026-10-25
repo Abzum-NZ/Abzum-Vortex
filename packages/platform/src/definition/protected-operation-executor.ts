@@ -1081,20 +1081,29 @@ const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Obj
       invitedEmail: inputs.invited_email,
       expiresAt: inputs.expires_at,
     }),
-    run: async (services, caller, command) =>
-      mapAvailable(
-        await services.accessAdministration.createOrganizationInvitation(
-          caller.session,
-          caller.selection,
-          command,
-        ),
-        (value) => ({
+    run: async (services, caller, command) => {
+      const result = await services.accessAdministration.createOrganizationInvitation(
+        caller.session,
+        caller.selection,
+        command,
+      );
+      if (result.kind !== "available") return result;
+      const value = result.value;
+      if (value.outcome === "already_pending")
+        return {
+          kind: "confirmed_failure",
+          outcome: "refused",
+          diagnostic: flowRefusalFeedbackSchema.parse({ code: "invitation_already_pending" }),
+        } as const;
+      return {
+        kind: "available",
+        value: {
           invitation_id: value.invitationId,
           revision: value.revision,
           access_version: value.accessVersion,
-          ...(value.outcome === "accepted" ? { invitation_secret: value.invitationSecret } : {}),
-        }),
-      ),
+        },
+      };
+    },
   }),
   revoke_organization_invitation: operation({
     schema: revokeOrganizationInvitationForAdministrationCommandSchema,
