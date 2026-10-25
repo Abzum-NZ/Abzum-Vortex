@@ -5,6 +5,7 @@ import {
   checkRecordsTableFeature,
   plainSourceSettingValue,
   readRecordsTableFeatures,
+  recordsTableBoardFeature,
   recordsTableConditionalFormattingFeature,
   recordsTableExportFeature,
   recordsTableFeatureDescription,
@@ -288,7 +289,7 @@ export function StudioGridFeatures({
           const check =
             features === undefined ||
             incomplete.has(key) ||
-            (features.board.enabled && key !== "board" && !enabled)
+            (features.board.enabled && key !== recordsTableBoardFeature.key && !enabled)
               ? undefined
               : checkRecordsTableFeature(
                   key,

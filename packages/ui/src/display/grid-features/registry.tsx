@@ -14,6 +14,7 @@ import {
   type RefObject,
 } from "react";
 import {
+  recordsTableBoardFeature,
   recordsTableBulkActionsFeature,
   recordsTableColumnFiltersFeature,
   recordsTableConditionalFormattingFeature,
@@ -166,11 +167,11 @@ type GridExtensionKey = Exclude<RecordsTableFeatureKey, "board">;
 
 /** Whole-grid views share the lazy registry but do not fill table extension points. */
 const viewLoaders = {
-  board: () => import("../board"),
-} satisfies Record<"board", () => Promise<unknown>>;
+  [recordsTableBoardFeature.key]: () => import("../board"),
+} satisfies Record<typeof recordsTableBoardFeature.key, () => Promise<unknown>>;
 
 export const GridBoardView = lazy(async () => ({
-  default: (await viewLoaders.board()).BoardView,
+  default: (await viewLoaders[recordsTableBoardFeature.key]()).BoardView,
 }));
 
 /**
