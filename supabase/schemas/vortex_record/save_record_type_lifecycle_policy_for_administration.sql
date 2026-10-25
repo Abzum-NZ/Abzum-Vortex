@@ -238,9 +238,7 @@ begin
     end;
   end if;
 
-  perform vortex_record.append_lifecycle_policy_activity_internal(
-    p_activity_id, next_policy_id
-  );
+  perform vortex_record.append_record_activity_internal(p_activity_id, 'manage_record_lifecycle_policy', array[next_policy_id]::uuid[], array[]::uuid[], 'completed');
 
   return full_policy;
 end

@@ -5,9 +5,9 @@ CREATE OR REPLACE FUNCTION vortex_record.transfer_offboarding_owned_record(p_com
 declare
   scope record;
 begin
-  -- Re-admit the current accounts.manage scope for every item. The nested
-  -- fixed transfer then reloads record facts, locks the target and requires the
-  -- caller's expected concurrency number before it can mutate anything.
+  -- Refuse early when the accounts.manage scope moved; the one record-change
+  -- operation rechecks it, reloads the record facts, locks the target and
+  -- requires the caller's expected concurrency number before it mutates anything.
   select authorized.* into strict scope
   from vortex_access.organization_accounts_offboarding_inventory_scope_internal() as authorized;
   if p_expected_access_version is null
@@ -16,16 +16,17 @@ begin
   end if;
 
   begin
-    return vortex_record.transfer_record_ownership_for_offboarding_internal(
-      p_command_id,
-      p_record_type_id,
-      p_record_id,
-      p_expected_concurrency_number,
-      p_target_kind,
-      p_target_id,
-      p_activity_id,
-      p_occurrence_id,
-      p_source_organization_account_id
+    return vortex_record.apply_record_changes(
+      p_command_id, 'transfer_ownership', p_record_type_id, p_record_id,
+      p_expected_concurrency_number, '{}'::jsonb, null,
+      pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+        'kind', 'offboarding_transfer',
+        'targetKind', p_target_kind,
+        'targetId', p_target_id,
+        'sourceOrganizationAccountId', p_source_organization_account_id,
+        'expectedAccessVersion', p_expected_access_version
+      )),
+      p_activity_id, p_occurrence_id
     );
   exception
     when serialization_failure or lock_not_available then

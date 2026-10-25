@@ -212,9 +212,7 @@ begin
       select coalesce(pg_catalog.array_agg(key::uuid order by key::uuid), array[]::uuid[])
       into changed_field_ids
       from pg_catalog.jsonb_object_keys(inserted_value -> 'values') as key;
-      perform vortex_record.append_named_action_activity_internal(
-        pg_catalog.gen_random_uuid(), created_record_id, changed_field_ids, 'completed'
-      );
+      perform vortex_record.append_record_activity_internal(pg_catalog.gen_random_uuid(), 'execute_named_action', array[created_record_id]::uuid[], changed_field_ids, 'completed');
       select (item.value #>> '{}')::uuid into occurrence_id_value
       from pg_catalog.jsonb_array_elements(action_creation_occurrence_ids)
         with ordinality item(value, ordinality)

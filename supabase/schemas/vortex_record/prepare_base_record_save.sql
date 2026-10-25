@@ -141,10 +141,7 @@ begin
     -- Do not execute application before-save rules for this projection until
     -- the platform settings-manage permission has passed its own current check.
     if not vortex_access.organization_runtime_settings_manage_is_current() then
-      perform vortex_record.append_base_save_activity_internal(
-        p_activity_id, 'update', organization_id_value,
-        array[]::uuid[], 'refused'
-      );
+      perform vortex_record.append_record_activity_internal(p_activity_id, 'update_record', array[organization_id_value]::uuid[], array[]::uuid[], 'refused');
       return pg_catalog.jsonb_build_object(
         'outcome', 'refused_recorded',
         'correlationId', correlation_id_value
@@ -171,10 +168,7 @@ begin
         loaded -> 'declaration', p_record_id, loaded -> 'facts'
       );
       if decision ->> 'outcome' <> 'allowed' then
-        perform vortex_record.append_base_save_activity_internal(
-          p_activity_id, 'update', organization_id_value,
-          array[]::uuid[], 'refused'
-        );
+        perform vortex_record.append_record_activity_internal(p_activity_id, 'update_record', array[organization_id_value]::uuid[], array[]::uuid[], 'refused');
         return pg_catalog.jsonb_build_object(
           'outcome', 'refused_recorded',
           'correlationId', correlation_id_value
@@ -233,10 +227,7 @@ begin
         loaded -> 'declaration', p_record_id, loaded -> 'facts'
       );
       if decision ->> 'outcome' <> 'allowed' then
-        perform vortex_record.append_base_save_activity_internal(
-          p_activity_id, 'update', organization_id_value,
-          array[]::uuid[], 'refused'
-        );
+        perform vortex_record.append_record_activity_internal(p_activity_id, 'update_record', array[organization_id_value]::uuid[], array[]::uuid[], 'refused');
         return pg_catalog.jsonb_build_object(
           'outcome', 'refused_recorded',
           'correlationId', correlation_id_value

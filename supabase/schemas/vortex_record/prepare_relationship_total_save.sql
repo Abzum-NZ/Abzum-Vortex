@@ -91,10 +91,7 @@ begin
       access_loaded -> 'declaration', p_record_id, access_loaded -> 'facts'
     );
     if access_decision ->> 'outcome' <> 'allowed' then
-      perform vortex_record.append_base_save_activity_internal(
-        p_activity_id, 'update', context_organization_id,
-        array[]::uuid[], 'refused'
-      );
+      perform vortex_record.append_record_activity_internal(p_activity_id, 'update_record', array[context_organization_id]::uuid[], array[]::uuid[], 'refused');
       return pg_catalog.jsonb_build_object('outcome', 'refused_recorded');
     end if;
     access_bounds := vortex_record.decide_record_field_bounds_internal(access_decision);

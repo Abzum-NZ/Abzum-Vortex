@@ -126,7 +126,7 @@ begin
     loaded -> 'declaration', p_record_id, evaluation_facts
   );
   if decision ->> 'outcome' = 'refused' then
-    perform vortex_record.append_ownership_transfer_activity_internal(p_activity_id,organization_id_value,'refused');
+    perform vortex_record.append_record_activity_internal(p_activity_id, 'transfer_record_ownership', array[organization_id_value]::uuid[], array[]::uuid[], 'refused');
     perform vortex_record.release_command_receipt_internal('record_save', p_command_id);
     return pg_catalog.jsonb_build_object('outcome','refused_recorded','reasonCode','record_unavailable','correlationId',context_value -> 'correlationId');
   elsif decision ->> 'outcome' is distinct from 'allowed' then
@@ -173,7 +173,7 @@ begin
         then application_root_id_value else null end
     );
   end if;
-  perform vortex_record.append_ownership_transfer_activity_internal(p_activity_id,p_record_id,'completed');
+  perform vortex_record.append_record_activity_internal(p_activity_id, 'transfer_record_ownership', array[p_record_id]::uuid[], array[]::uuid[], 'completed');
   if loaded ->> 'installationState' = 'detached' then
     event_result := vortex_platform.append_detached_offboarding_reassignment_internal(
       (type_fact ->> 'storageContractId')::uuid, p_record_id, p_record_type_id, p_occurrence_id

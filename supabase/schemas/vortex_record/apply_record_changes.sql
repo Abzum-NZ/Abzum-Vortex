@@ -102,6 +102,8 @@ declare
   event_result jsonb;
   classification_value jsonb;
   delete_effect record;
+  offboarding_scope record;
+  offboarding_transfer jsonb;
 begin
   preview_installation :=
     vortex_record.read_current_preview_installation_internal();
@@ -116,6 +118,38 @@ begin
       or p_operation in ('delete', 'restore', 'transfer_ownership', 'settings')) then
     return pg_catalog.jsonb_build_object(
       'outcome', 'refused', 'reasonCode', 'preview_effect_refused'
+    );
+  end if;
+
+  -- An account offboarding transfer of a retained row or of a detached installation's record has
+  -- its own facts and the accounts.manage authority of the offboarding inventory, rechecked here
+  -- for every record against the access version the inventory was disclosed at.
+  if p_operation = 'transfer_ownership'
+    and pg_catalog.jsonb_typeof(p_mutations) = 'array'
+    and pg_catalog.jsonb_array_length(p_mutations) = 1
+    and p_mutations -> 0 ->> 'kind' = 'offboarding_transfer' then
+    offboarding_transfer := p_mutations -> 0;
+    if p_action is not null
+      or p_selected_group_id is not null
+      or p_submitted_values is distinct from '{}'::jsonb
+      or pg_catalog.jsonb_typeof(offboarding_transfer -> 'expectedAccessVersion') is distinct from 'number'
+      or pg_catalog.jsonb_typeof(offboarding_transfer -> 'sourceOrganizationAccountId') is distinct from 'string'
+      or pg_catalog.jsonb_typeof(offboarding_transfer -> 'targetId') is distinct from 'string' then
+      return pg_catalog.jsonb_build_object(
+        'outcome', 'refused', 'reasonCode', 'command_invalid'
+      );
+    end if;
+    select authorized.* into strict offboarding_scope
+    from vortex_access.organization_accounts_offboarding_inventory_scope_internal() as authorized;
+    if offboarding_scope.access_version
+      is distinct from (offboarding_transfer ->> 'expectedAccessVersion')::bigint then
+      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'access_changed');
+    end if;
+    return vortex_record.transfer_record_ownership_for_offboarding_internal(
+      p_command_id, p_record_type_id, p_record_id, p_expected_concurrency_number,
+      offboarding_transfer ->> 'targetKind', (offboarding_transfer ->> 'targetId')::uuid,
+      p_activity_id, p_occurrence_id,
+      (offboarding_transfer ->> 'sourceOrganizationAccountId')::uuid
     );
   end if;
 
@@ -702,9 +736,7 @@ begin
       loaded -> 'declaration', p_record_id, loaded -> 'facts'
     );
     if decision ->> 'outcome' <> 'allowed' then
-      perform vortex_record.append_named_action_activity_internal(
-        p_activity_id, p_record_id, array[]::uuid[], 'refused'
-      );
+      perform vortex_record.append_record_activity_internal(p_activity_id, 'execute_named_action', array[p_record_id]::uuid[], array[]::uuid[], 'refused');
       return pg_catalog.jsonb_build_object('outcome', 'refused_recorded');
     end if;
     receipt_claim := vortex_record.claim_command_receipt_internal(
@@ -724,9 +756,7 @@ begin
         action_id_value, p_record_type_id, p_record_id
       );
     end if;
-    perform vortex_record.append_named_action_activity_internal(
-      p_activity_id, p_record_id, array[]::uuid[], 'completed'
-    );
+    perform vortex_record.append_record_activity_internal(p_activity_id, 'execute_named_action', array[p_record_id]::uuid[], array[]::uuid[], 'completed');
     event_result := vortex_record.append_declared_named_action_occurrences_internal(
       (action_context ->> 'storageContractId')::uuid, p_record_id,
       action_context -> 'eventDescriptors', action_declared_occurrence_ids,
@@ -914,14 +944,9 @@ begin
       );
       if decision ->> 'outcome' = 'refused' then
         if action_mode then
-          activity_time := vortex_record.append_named_action_activity_internal(
-            p_activity_id, p_record_id, array[]::uuid[], 'refused'
-          );
+          activity_time := vortex_record.append_record_activity_internal(p_activity_id, 'execute_named_action', array[p_record_id]::uuid[], array[]::uuid[], 'refused');
         else
-          activity_time := vortex_record.append_base_save_activity_internal(
-            p_activity_id, 'update', organization_id_value,
-            array[]::uuid[], 'refused'
-          );
+          activity_time := vortex_record.append_record_activity_internal(p_activity_id, 'update_record', array[organization_id_value]::uuid[], array[]::uuid[], 'refused');
         end if;
         perform vortex_record.release_command_receipt_internal(receipt_kind, effective_command_id);
         return pg_catalog.jsonb_build_object(
@@ -1133,14 +1158,9 @@ begin
       );
       if decision ->> 'outcome' <> 'allowed' then
         if action_mode then
-          activity_time := vortex_record.append_named_action_activity_internal(
-            p_activity_id, p_record_id, array[]::uuid[], 'refused'
-          );
+          activity_time := vortex_record.append_record_activity_internal(p_activity_id, 'execute_named_action', array[p_record_id]::uuid[], array[]::uuid[], 'refused');
         else
-          activity_time := vortex_record.append_base_save_activity_internal(
-            p_activity_id, 'update', organization_id_value,
-            array[]::uuid[], 'refused'
-          );
+          activity_time := vortex_record.append_record_activity_internal(p_activity_id, 'update_record', array[organization_id_value]::uuid[], array[]::uuid[], 'refused');
         end if;
         perform vortex_record.release_command_receipt_internal(receipt_kind, effective_command_id);
         return pg_catalog.jsonb_build_object(
@@ -1268,10 +1288,7 @@ begin
   if mutation ->> 'outcome' not in ('completed', 'allowed') then
     if preview_installation is null
       and p_operation = 'create' and mutation ->> 'reasonCode' = 'access_refused' then
-      activity_time := vortex_record.append_base_save_activity_internal(
-        p_activity_id, 'create', organization_id_value,
-        array[]::uuid[], 'refused'
-      );
+      activity_time := vortex_record.append_record_activity_internal(p_activity_id, 'create_record', array[organization_id_value]::uuid[], array[]::uuid[], 'refused');
       mutation := mutation || pg_catalog.jsonb_build_object(
         'outcome', 'refused_recorded'
       );
@@ -1290,14 +1307,9 @@ begin
   ) as key;
 
   if action_mode then
-    activity_time := vortex_record.append_named_action_activity_internal(
-      p_activity_id, saved_record_id, changed_field_ids, 'completed'
-    );
+    activity_time := vortex_record.append_record_activity_internal(p_activity_id, 'execute_named_action', array[saved_record_id]::uuid[], changed_field_ids, 'completed');
   elsif preview_installation is null then
-    activity_time := vortex_record.append_base_save_activity_internal(
-      p_activity_id, p_operation, saved_record_id,
-      changed_field_ids, 'completed'
-    );
+    activity_time := vortex_record.append_record_activity_internal(p_activity_id, case when p_operation = 'create' then 'create_record' else 'update_record' end, array[saved_record_id]::uuid[], changed_field_ids, 'completed');
   end if;
 
   if preview_installation is null then

@@ -114,9 +114,7 @@ begin
     on conflict on constraint record_type_lifecycle_policies_scope_unique do nothing;
     get diagnostics inserted_count = row_count;
     if inserted_count = 1 then
-      perform vortex_record.append_lifecycle_policy_activity_internal(
-        pg_catalog.gen_random_uuid(), next_policy_id
-      );
+      perform vortex_record.append_record_activity_internal(pg_catalog.gen_random_uuid(), 'manage_record_lifecycle_policy', array[next_policy_id]::uuid[], array[]::uuid[], 'completed');
       stored_count := stored_count + 1;
     end if;
   end loop;

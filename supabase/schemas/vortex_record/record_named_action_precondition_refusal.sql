@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_record.record_named_action_precondition_refusal(p_action_owner_kind text, p_action_owner_id uuid, p_action_release_revision bigint, p_action_id uuid, p_record_type_id uuid, p_record_id uuid, p_expected_concurrency_number bigint, p_activity_id uuid) RETURNS jsonb
+CREATE OR REPLACE FUNCTION vortex_record.record_named_action_precondition_refusal(p_action_owner_kind text, p_action_owner_id uuid, p_action_release_revision bigint, p_action_id uuid, p_record_type_id uuid, p_record_id uuid, p_expected_concurrency_number bigint, p_activity_id uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO ''
     AS $$
@@ -21,9 +21,7 @@ begin
   if decision ->> 'outcome' <> 'allowed' then
     return pg_catalog.jsonb_build_object('outcome', 'refused');
   end if;
-  perform vortex_record.append_named_action_activity_internal(
-    p_activity_id, p_record_id, array[]::uuid[], 'refused'
-  );
+  perform vortex_record.append_record_activity_internal(p_activity_id, 'execute_named_action', array[p_record_id]::uuid[], array[]::uuid[], 'refused');
   return pg_catalog.jsonb_build_object(
     'outcome', 'refused_recorded', 'correlationId', context_value -> 'correlationId'
   );

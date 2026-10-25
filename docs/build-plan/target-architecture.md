@@ -138,9 +138,15 @@ Tables are private. The application calls `security definer` functions with `set
 - **Every record write goes through `record.apply_record_changes`.** That covers create, update, relationships, named actions, lifecycle, restore, settings records and offboarding transfers.
 - **Within that path, three steps each happen once:**
   - save rules run inside its transaction;
-  - it appends activity through one `append_activity(kind, payload)`;
+  - it appends activity through one composer, `append_record_activity_internal`, over the one
+    insert `append_organization_activity_entry`;
   - it publishes one change notice at its end.
-- **There are no parallel writers.**
+- **There are no parallel writers.** Account offboarding transfers, including those of a retained
+  row or a detached installation's record, are `apply_record_changes` operations.
+- **One maintenance write.** `apply_derived_field_backfill` stores the totals and stored
+  calculations the platform works out for existing records when a definition adds a derived
+  field. It is not a change anyone made: it writes only those derived columns under the record's
+  revision check, moves the revision so an open form refreshes, and records no Activity or Event.
 
 ### Other database rules
 
