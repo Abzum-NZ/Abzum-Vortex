@@ -22,10 +22,9 @@ import { createDatabaseSystemApplicationBoundReleaseSetService } from "@vortex/p
 import { createRecordSaveService } from "@vortex/platform/server";
 import {
   developmentPublicationCatalogue,
-  publishShippedDefinitions,
   verifyRecordedShippedApplicationRoots,
 } from "./definitions";
-import { installApplications, type InstallFacts } from "./install";
+import { refreshShippedApplications, type InstallFacts } from "./install";
 import { grantStewardDefinitionRole, grantStewardInstallerRole } from "./installer-access";
 import { grantFirstOwnerApplicationRoles } from "./first-owner-application-roles";
 import {
@@ -44,9 +43,9 @@ import { createLocalEventDispatcher } from "../../app/_lib/local-event-dispatch"
  * the nominated steward through the same protected Access operations used by IAM.
  * `pnpm setup:local` runs this command.
  *
- * An interrupted run resumes: provisioning replays by its fixed duplicate key and the steps already
- * recorded in the setup state are skipped. Once every step has completed, a re-run is a no-op. A
- * different nominated account is refused by provisioning.
+ * An interrupted run resumes through the protected live draft and publication anchors. Every run
+ * refreshes shipped sources; publication alone decides whether a new release is needed. A different
+ * nominated account is refused by provisioning.
  */
 
 const log = (message: string): void => {
@@ -336,7 +335,7 @@ export const runDevelopmentSetup = async (
     );
   log(`organisation ${provisioned.rootOrganizationId} (${provisioned.outcome})`);
 
-  // 2. Publish the shipped releases into the organisation.
+  // 2. Refresh the shipped applications through publication and protected installation.
   const system = {
     tenantId: provisioned.tenantId,
     organizationId: provisioned.rootOrganizationId,
@@ -352,59 +351,35 @@ export const runDevelopmentSetup = async (
     stewardIdentityId,
     stewardOrganizationAccountId: provisioned.organizationAccountId,
   });
-  const installFacts = (
-    releases: InstallFacts["releases"],
-    applicationKeys: readonly (typeof manifest.applicationKeys)[number][] = manifest.applicationKeys,
-  ): InstallFacts => ({
+  const installFacts = (releases: InstallFacts["releases"]): InstallFacts => ({
     identityAuthorityId,
     system,
-    manifest: { ...manifest, applicationKeys: [...applicationKeys] },
+    manifest,
     stewardIdentityId,
     releases,
     state,
   });
 
-  let releases: InstallFacts["releases"];
-  if (state.setupCompleted) {
-    // Check existing roots before either completed reuse or marking an upgrade incomplete.
-    await verifyRecordedShippedApplicationRoots(system, manifest.applicationKeys, state);
-    const missingApplications = manifest.applicationKeys.filter(
-      (key) => state.releases[key] === undefined,
-    );
-    if (missingApplications.length === 0) {
-      log(
-        `the applications were already installed for account ${provisioned.organizationAccountId}`,
-      );
-      releases = new Map(Object.entries(state.releases));
-    } else {
-      log(
-        `publishing and installing newly configured applications: ${missingApplications.join(", ")}`,
-      );
-      // Mark an upgrade incomplete before recording new releases, so an interrupted installation
-      // replays the protected coordinator on the next setup run.
-      state.setupCompleted = false;
-      state.save();
-      releases = await publishShippedDefinitions(system, manifest.applicationKeys, state, log);
-      await installApplications(installFacts(releases, missingApplications), log);
-    }
-  } else {
-    releases = await publishShippedDefinitions(system, manifest.applicationKeys, state, log);
-
-    // 3. The steward creates the application-installation role through Access, then installs the
-    //    releases through the protected App installation coordinator.
-    await grantStewardInstallerRole(
-      {
-        identityAuthorityId,
-        organizationId: system.organizationId,
-        stewardIdentityId,
-        stewardOrganizationAccountId: provisioned.organizationAccountId,
-        manifest,
-        state,
-      },
-      log,
-    );
-    await installApplications(installFacts(releases), log);
-  }
+  // Verify provenance before changing any setup checkpoint or publishing a selected root.
+  await verifyRecordedShippedApplicationRoots(system, manifest.applicationKeys, state);
+  await grantStewardInstallerRole(
+    {
+      identityAuthorityId,
+      organizationId: system.organizationId,
+      stewardIdentityId,
+      stewardOrganizationAccountId: provisioned.organizationAccountId,
+      manifest,
+      state,
+    },
+    log,
+  );
+  // Publication and activation finish for each root before a consumer of its Modules starts.
+  // Hosted deployment needs the narrow platform-release authority from PR-H; local authority
+  // remains confined to this setup command.
+  const releases = await refreshShippedApplications(
+    { identityAuthorityId, system, manifest, stewardIdentityId, state },
+    log,
+  );
 
   // 4. Local development deliberately leaves the nominated first owner able to open the
   //    applications installed in this organisation, while all grants remain normal Access facts.

@@ -3,6 +3,7 @@ import "server-only";
 import { z } from "zod";
 import {
   boardColumnReadLimit,
+  recordsTableAggregateOperations,
   builderKeySchema,
   conditionNodeSchema,
   fieldIdSchema,
@@ -247,12 +248,33 @@ export const protectedQueryDateBucketSchema = z
   .strict();
 export type ProtectedQueryDateBucket = z.infer<typeof protectedQueryDateBucketSchema>;
 
+const protectedQueryTotalsSchema = z
+  .array(
+    z
+      .object({
+        fieldId: fieldIdSchema,
+        operation: z.enum(recordsTableAggregateOperations),
+        alias: builderKeySchema,
+      })
+      .strict(),
+  )
+  .min(1)
+  .max(6)
+  .refine(
+    (totals) =>
+      new Set(totals.map((total) => total.alias)).size === totals.length &&
+      new Set(totals.map((total) => `${total.fieldId.toLowerCase()}:${total.operation}`)).size ===
+        totals.length,
+    { message: "Each measure and alias is named once" },
+  );
+
 /** One authored grid dimension. Date fields require an explicit calendar unit and time zone. */
 export const protectedQueryGroupingSchema = z
   .object({
     fieldId: fieldIdSchema,
     limit: z.number().int().min(1).max(200),
     dateBucket: protectedQueryDateBucketSchema.optional(),
+    aggregates: protectedQueryTotalsSchema.optional(),
   })
   .strict();
 
@@ -556,6 +578,8 @@ export const protectedQuerySummaryCommandSchema = z
     moduleRootId: moduleRootIdSchema,
     queryId: queryIdSchema,
     inputValues: z.record(builderKeySchema, jsonValueSchema),
+    /** Visible authored grid columns, overriding query totals; absence retains query defaults. */
+    totals: protectedQueryTotalsSchema.optional(),
     /** A grid's authored dimension overrides query grouping/totals defaults. */
     grouping: protectedQueryGroupingSchema.optional(),
     /** A pivot crosses two dimensions with one measure; it replaces the query's grouping. */
@@ -585,6 +609,18 @@ export const protectedQuerySummaryCommandSchema = z
         code: "custom",
         path: ["groupLimit"],
         message: "A grid dimension or pivot carries its own page size",
+      });
+    if (command.totals !== undefined && command.pivot !== undefined)
+      context.addIssue({
+        code: "custom",
+        path: ["totals"],
+        message: "A pivot defines its own measure",
+      });
+    if (command.totals !== undefined && command.grouping !== undefined)
+      context.addIssue({
+        code: "custom",
+        path: ["totals"],
+        message: "Grouped totals belong to the grouping's measures",
       });
     if (command.grouping !== undefined && command.pivot !== undefined)
       context.addIssue({

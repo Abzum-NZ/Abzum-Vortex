@@ -12,6 +12,7 @@ import { applyStudioFlowCreate, type StudioFlowCreateCommand } from "./applicati
 import { STUDIO_ROW_ACTION_EVENT_SETTING, studioRowActionEventId } from "./contextual-palette";
 import {
   blockItem,
+  cleanName,
   pageData,
   judged,
   blockRelease,
@@ -49,6 +50,11 @@ export type StudioRecordPageCommand = Readonly<{
   type: StudioRecordPageKind;
   shellAlias: string | null;
   addToMenu: boolean;
+  /**
+   * A list page's own name; the record type's plural name when left out. A record type can have
+   * several lists, each its own page with its own name.
+   */
+  name?: string | undefined;
 }>;
 
 export const studioRecordPageKinds: readonly Readonly<{
@@ -648,6 +654,7 @@ const addList = (
   plan: Plan,
   resolved: Resolved,
   command: StudioRecordPageCommand,
+  listName: string | undefined,
 ) => {
   const { record, title } = resolved;
   const wanted = keyColumns(record, title, resolved.readable);
@@ -658,14 +665,14 @@ const addList = (
     release(context, PLATFORM_BLOCK_RELEASE_IDENTITIES.TABLE_BLOCK_RELEASE, "records table"),
     tableAlias,
     {
-      title: record.plural_name,
+      title: listName ?? record.plural_name,
       empty_message: `There are no ${record.plural_name.toLowerCase()} yet.`,
       columns: tableColumns((entry) => field(resolved, entry), columns, title.key),
     },
     {},
     { query: query.reference },
   );
-  const name = record.plural_name.slice(0, 60);
+  const name = listName ?? record.plural_name.slice(0, 60);
   const items = [table];
   const placedPage = placeNewPage(
     plan.source,
@@ -1387,9 +1394,23 @@ export const addRecordPage = (
       `${command.type === "detail" ? "A detail page" : "An edit form"} opens one ${lowerFirst(resolved.record.name)}, so it cannot be a menu entry. Add it without one.`,
     );
   const found = companions(candidate, resolved.qualified);
+  // A record type can have several lists; each further one needs a name of its own.
+  const listName =
+    command.type !== "list" || command.name === undefined || command.name.trim() === ""
+      ? undefined
+      : cleanName(command.name, "page");
+  if (command.type === "list" && found.list.length > 0 && listName === undefined)
+    refuse(
+      `${resolved.record.plural_name} already have a list: ${quoted(found.list[0]!.name)}. Give the new list its own name.`,
+    );
+  if (
+    listName !== undefined &&
+    candidate.body.pages.some((entry) => entry.name.toLowerCase() === listName.toLowerCase())
+  )
+    refuse(`A page is already named ${quoted(listName)}. Give the new list its own name.`);
   const existing =
     command.type === "list"
-      ? found.list[0]
+      ? undefined
       : command.type === "detail"
         ? found.detail
         : command.type === "form_create"
@@ -1409,7 +1430,7 @@ export const addRecordPage = (
   const plan: Plan = { source: candidate, details: [], taken: takenIds(candidate) };
   const page =
     command.type === "list"
-      ? addList(context, plan, resolved, command)
+      ? addList(context, plan, resolved, command, listName)
       : command.type === "detail"
         ? addDetail(context, plan, resolved, command)
         : command.type === "guided"
