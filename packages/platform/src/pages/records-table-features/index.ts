@@ -1,9 +1,10 @@
+import { projectedEditableFields } from "../../definition/application-composition/records-table-features/shared";
+export { rowMayChangeField } from "../../definition/application-composition/records-table-features/shared";
 import type {
   ConditionalFormattingProjection,
   RecordsTableContract,
   RecordsTableFeatureProjection,
   RecordsTableFilterField,
-  RecordsTableInlineEditField,
   RecordsTableInlineEditor,
   RecordsTablePivotView,
 } from "../../schema";
@@ -76,46 +77,6 @@ export const logRecordsTableRequestRefusal = (
 const sameField = (left: string, right: string): boolean =>
   left.toLowerCase() === right.toLowerCase();
 
-/** Whether one row lets the viewer change this field now: the update action and the field's own policy. */
-export const rowMayChangeField = (
-  row: Pick<ProtectedQueryRow, "capabilities">,
-  field: string,
-): boolean =>
-  row.capabilities?.actions.includes("update") === true &&
-  row.capabilities.changeableFieldIds.some((fieldId) => sameField(fieldId, field));
-
-/**
- * The inline-edit fields some row lets the viewer change now, which the viewer may read and the
- * installed definition describes an editor for; none when inline editing is off. The authored
- * allowlist only narrows what the definition and the viewer's access already allow.
- */
-export const recordsTableEditableFields = (
-  contract: RecordsTableContract,
-  rows: readonly ProtectedQueryRow[],
-  bounds: ProtectedQueryFieldBounds,
-  editors: Readonly<Record<string, RecordsTableInlineEditor>> | undefined,
-): readonly RecordsTableInlineEditField[] => {
-  return projectedEditableFields(contract.features.inlineEdit, rows, bounds, editors);
-};
-
-const projectedEditableFields = (
-  feature:
-    RecordsTableContract["features"]["inlineEdit"] | RecordsTableContract["features"]["rowEdit"],
-  rows: readonly ProtectedQueryRow[],
-  bounds: ProtectedQueryFieldBounds,
-  editors: Readonly<Record<string, RecordsTableInlineEditor>> | undefined,
-): readonly RecordsTableInlineEditField[] => {
-  if (!feature.enabled || feature.eventId === undefined) return [];
-  return feature.fields.flatMap((field): RecordsTableInlineEditField[] => {
-    const editor = editors?.[field.toLowerCase()];
-    return editor !== undefined &&
-      bounds.readableFieldIds.some((fieldId) => sameField(fieldId, field)) &&
-      rows.some((row) => rowMayChangeField(row, field))
-      ? [{ field, editor }]
-      : [];
-  });
-};
-
 /**
  * The row actions a table offers and, per row, whether the capabilities its read decided make each
  * eligible; absent when the feature is off or the table declares none. Named-action eligibility is
@@ -175,7 +136,7 @@ export const projectRecordsTableFeatures = (
   const readable = (field: string): boolean =>
     bounds.readableFieldIds.some((fieldId) => sameField(fieldId, field));
   // Each feature that declares its projection decides its own part for this viewer.
-  const context = { readable, searchable: bounds.searchable, filterFields };
+  const context = { readable, searchable: bounds.searchable, filterFields, rows, editors };
   const declared = Object.fromEntries(
     recordsTableFeatureKeys.flatMap((key) => {
       const definition = recordsTableFeatureDefinition(key);
@@ -184,9 +145,9 @@ export const projectRecordsTableFeatures = (
     }),
   ) as Partial<RecordsTableFeatureProjection>;
   const inlineEdit = features.inlineEdit;
-  const editableFields = recordsTableEditableFields(contract, rows, bounds, editors);
+  const editableFields = declared.inlineEdit?.fields ?? [];
   const rowEdit = features.rowEdit;
-  const rowFields = projectedEditableFields(rowEdit, rows, bounds, editors);
+  const rowFields = projectedEditableFields(rowEdit, context);
   // Every expanded row is read again under the viewer's current access: the projection only says
   // rows expand; a viewer who cannot read the related records sees the panel's neutral refusal.
   const masterDetail = features.masterDetail;
@@ -288,9 +249,6 @@ export const projectRecordsTableFeatures = (
       : {}),
     ...(rowActions === undefined ? {} : { rowActions }),
     ...declared,
-    ...(editableFields.length === 0 || !inlineEdit.enabled || inlineEdit.eventId === undefined
-      ? {}
-      : { inlineEdit: { eventId: inlineEdit.eventId, fields: editableFields } }),
     ...(masterDetail.enabled && masterDetail.childPageSize !== undefined
       ? { masterDetail: { pageSize: masterDetail.childPageSize } }
       : {}),

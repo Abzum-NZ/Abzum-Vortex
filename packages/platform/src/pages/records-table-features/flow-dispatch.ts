@@ -6,6 +6,7 @@ import {
   recordIdSchema,
   fieldIdSchema,
   sameId,
+  recordsTableInlineEditEvent,
 } from "../../schema";
 import type { ComponentFlowBinding } from "../../schema";
 import type { RequestDatabaseTransaction } from "../../db";
@@ -111,7 +112,7 @@ export const recordsTableBindingRefusal = async (
     event !== "row_action" &&
     event !== "row_clicked" &&
     event !== "bulk_action" &&
-    event !== "inline_edit" &&
+    event !== recordsTableInlineEditEvent &&
     event !== "row_edit"
   )
     return undefined;
@@ -149,7 +150,7 @@ export const recordsTableBindingRefusal = async (
       !sameId(contract.rowBehaviours.rowClick.eventId, binding.eventId))
   )
     return recordsTableRequestRefusal(event, "command_not_declared");
-  const editing = event === "inline_edit" || event === "row_edit";
+  const editing = event === recordsTableInlineEditEvent || event === "row_edit";
   const inline = event === "row_edit" ? contract.features.rowEdit : contract.features.inlineEdit;
   let editedFields: string[] = [];
   if (editing) {
@@ -158,7 +159,11 @@ export const recordsTableBindingRefusal = async (
       return recordsTableRequestRefusal(event, "binding_not_declared");
     const values = inputs.values;
     const names = isRecord(values) ? Object.keys(values) : [];
-    if ((event === "inline_edit" && names.length !== 1) || names.length === 0 || names.length > 50)
+    if (
+      (event === recordsTableInlineEditEvent && names.length !== 1) ||
+      names.length === 0 ||
+      names.length > 50
+    )
       return recordsTableRequestRefusal(event, "changed_fields_invalid");
     if (new Set(names.map((name) => name.toLowerCase())).size !== names.length)
       return recordsTableRequestRefusal(event, "changed_fields_duplicated");
