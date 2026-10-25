@@ -15,6 +15,7 @@ import {
   type ComponentSettingFailure,
   type SourceBlockPropertyValueContract,
 } from "@vortex/platform/schema";
+import { studioTotalMeasureProperty } from "./grid-features/totals";
 import { Button } from "../components/button";
 import { Checkbox } from "../components/checkbox";
 import { Switch } from "../components/switch";
@@ -1424,7 +1425,12 @@ function SettingFields({
                 <SettingControl
                   id={control.id}
                   descriptionId={control["aria-describedby"]}
-                  property={property}
+                  property={studioTotalMeasureProperty(
+                    property,
+                    properties,
+                    values,
+                    choices.fields,
+                  )}
                   value={value}
                   onChange={set}
                   choices={choices}

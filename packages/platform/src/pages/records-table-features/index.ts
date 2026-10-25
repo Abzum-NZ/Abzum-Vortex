@@ -293,6 +293,9 @@ export const projectRecordsTableFeatures = (
         }
       : {}),
     ...(rowActions === undefined ? {} : { rowActions }),
+    ...(features.totals.enabled && !features.board.enabled && !features.pivot.enabled
+      ? { totals: true as const }
+      : {}),
     ...(features.pinning.enabled ? { pinning: true as const } : {}),
     ...(search ? { search: true as const } : {}),
     ...(columnFilters.length === 0 ? {} : { columnFilters }),

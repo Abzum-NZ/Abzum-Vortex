@@ -33,6 +33,7 @@ import {
   RECORDS_TABLE_UNVIRTUALIZED_ROW_LIMIT,
   nextRecordsTableSort,
   type RecordsTableContract,
+  type RecordsTableTotal,
   type RecordsTableSortKey,
   type RecordsTableSortState,
 } from "@vortex/platform/schema";
@@ -58,6 +59,7 @@ import {
   virtualizesRows,
 } from "./table-geometry";
 import type { GridColumn, GridLayoutControls } from "./table-layout";
+import { TotalValues } from "./table-totals";
 import { isInteractiveGridTarget, isOwnClick } from "./table-interaction";
 import {
   ACTIONS_COLUMN,
@@ -73,6 +75,7 @@ const loadVirtualRows = () => import("./table-grid-virtual");
 const VirtualRows = lazy(loadVirtualRows);
 
 const RESIZE_STEP = 16;
+const TOTALS_ROW = "vortex-totals";
 
 /** An expanded row's panel of related records: its controls follow the row in the tab order. */
 const PANEL = "[data-grid-panel]";
@@ -113,6 +116,7 @@ export type RecordsGridProps = Readonly<{
   layout: GridLayoutControls;
   /** The rows of the page, which "select all" selects. */
   rows: readonly DisplayRow[];
+  totals?: readonly RecordsTableTotal[] | undefined;
   /** Every row drawn, in order: the page's rows and the sub-rows beneath the open ones. */
   lines: readonly RowLine[];
   sort: RecordsTableSortState | undefined;
@@ -368,6 +372,7 @@ export function RecordsGrid({
   subRows,
   rowName,
   fill,
+  totals,
 }: RecordsGridProps): ReactElement {
   const rowHeight = GRID_ROW_HEIGHT[layout.density];
   const virtual = virtualizesRows(lines.length);
@@ -566,8 +571,18 @@ export function RecordsGrid({
   const gridHasFocus = useRef(false);
   const gridRef = useRef<HTMLDivElement>(null);
 
+  const rowIdentity = (index: number): string | null =>
+    index < 0
+      ? null
+      : totals !== undefined && index === lines.length
+        ? TOTALS_ROW
+        : (lines[index]?.id ?? null);
   const rowIndexOf = (recordId: string | null): number =>
-    recordId === null ? -1 : lines.findIndex((line) => line.id === recordId);
+    recordId === TOTALS_ROW && totals !== undefined
+      ? lines.length
+      : recordId === null
+        ? -1
+        : lines.findIndex((line) => line.id === recordId);
   /** The record a line draws; a notice is not a record. */
   const recordAt = (index: number): DisplayRow | undefined => {
     const line = lines[index];
@@ -591,7 +606,7 @@ export function RecordsGrid({
     const row = lostRow ? Math.min(lastPosition.current.row, lines.length - 1) : activeRow;
     const column = Math.max(0, Math.min(lastPosition.current.column, visibleIds.length - 1));
     const next: ActiveCell = {
-      recordId: row < 0 ? null : (lines[row]?.id ?? null),
+      recordId: rowIdentity(row),
       columnId: visibleIds[column] ?? "",
     };
     setActive(next);
@@ -669,7 +684,7 @@ export function RecordsGrid({
   }, [lines]);
 
   const moveTo = (row: number, column: number, focus = true): void => {
-    const clampedRow = Math.max(-1, Math.min(row, lines.length - 1));
+    const clampedRow = Math.max(-1, Math.min(row, lines.length - (totals === undefined ? 1 : 0)));
     // A notice spans every column: it is reached at the first one.
     const clampedColumn =
       lines[clampedRow]?.kind === "notice"
@@ -677,7 +692,7 @@ export function RecordsGrid({
         : Math.max(0, Math.min(column, visibleIds.length - 1));
     setControlMode(false);
     setActive({
-      recordId: clampedRow < 0 ? null : (lines[clampedRow]?.id ?? null),
+      recordId: rowIdentity(clampedRow),
       columnId: visibleIds[clampedColumn] ?? "",
     });
     focusRequested.current = focus;
@@ -910,7 +925,10 @@ export function RecordsGrid({
         return;
       case "End":
         handled();
-        moveTo(control ? lines.length - 1 : row, visibleIds.length - 1);
+        moveTo(
+          control ? lines.length - (totals === undefined ? 1 : 0) : row,
+          visibleIds.length - 1,
+        );
         return;
       case "PageDown":
         handled();
@@ -970,7 +988,7 @@ export function RecordsGrid({
     gridHasFocus.current = true;
     const row = Number(cell.dataset.row);
     const columnId = cell.dataset.col ?? "";
-    const recordId = row < 0 ? null : (lines[row]?.id ?? null);
+    const recordId = rowIdentity(row);
     if (recordId !== active.recordId || columnId !== active.columnId)
       setActive({ recordId, columnId });
     setControlMode(target !== cell);
@@ -1282,7 +1300,7 @@ export function RecordsGrid({
           role={subRows === undefined ? "grid" : "treegrid"}
           aria-label={accessibleName}
           aria-describedby={instructionsId}
-          aria-rowcount={lines.length + 1}
+          aria-rowcount={lines.length + 1 + (totals === undefined ? 0 : 1)}
           aria-colcount={slots.length}
           {...(selection === "multiple" ? { "aria-multiselectable": true } : {})}
           className="text-sm"
@@ -1327,8 +1345,53 @@ export function RecordsGrid({
               {lines.map((line, index) => drawRow(line, index))}
             </div>
           )}
+          {totals === undefined ? null : (
+            <div role="rowgroup" aria-label="Totals for all matching records">
+              <div
+                role="row"
+                aria-label="Totals for all matching records"
+                aria-rowindex={lines.length + 2}
+                data-vortex-grid-footer=""
+                className="flex w-full border-t bg-muted/80"
+              >
+                {slots.map((slot, index) => (
+                  <div
+                    key={slot.id}
+                    role="gridcell"
+                    aria-colindex={index + 1}
+                    data-grid-cell=""
+                    data-row={lines.length}
+                    data-col={slot.id}
+                    tabIndex={activeRow === lines.length && active.columnId === slot.id ? 0 : -1}
+                    className={cn(
+                      "min-w-0 shrink-0 px-2 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
+                      cellAlignment(slot.column),
+                      slot.sticky && "bg-muted",
+                    )}
+                    style={slot.style}
+                  >
+                    {slot.column === undefined ? null : (
+                      <>
+                        <span className="sr-only">
+                          {slot.column.label}: totals for all matching records.{" "}
+                        </span>
+                        <TotalValues
+                          totals={totals.filter((total) => sameFieldKey(total.fieldId, slot.id))}
+                        />
+                      </>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </Card>
+      {totals === undefined ? null : (
+        <p className="m-0 text-xs text-muted-foreground">
+          Totals for all matching records, counted when the table was read
+        </p>
+      )}
     </>
   );
 }

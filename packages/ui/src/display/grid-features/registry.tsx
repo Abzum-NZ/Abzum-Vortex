@@ -151,7 +151,7 @@ type GridExtensionKey = Exclude<RecordsTableFeatureKey, "board">;
 /** Whole-grid views share the lazy registry but do not fill table extension points. */
 const viewLoaders = {
   board: () => import("../board"),
-} satisfies Record<Exclude<RecordsTableFeatureKey, GridExtensionKey>, () => Promise<unknown>>;
+} satisfies Record<"board", () => Promise<unknown>>;
 
 export const GridBoardView = lazy(async () => ({
   default: (await viewLoaders.board()).BoardView,
@@ -210,6 +210,7 @@ const loaders: Readonly<
   master_detail: () => import("./master-detail"),
   tree: () => import("./tree"),
   grouping: () => import("./grouping"),
+  totals: () => import("./totals"),
   conditional_formatting: () => import("./conditional-format"),
   pivot: () => import("./pivot"),
   export: () => import("./export"),
@@ -228,6 +229,7 @@ const projectionKeys: Readonly<Record<keyof RecordsTableFeatureProjection, GridE
   masterDetail: "master_detail",
   tree: "tree",
   grouping: "grouping",
+  totals: "totals",
   conditionalFormatting: "conditional_formatting",
   pivot: "pivot",
   export: "export",
@@ -303,6 +305,7 @@ const featurePoints: Readonly<Record<GridExtensionKey, readonly ComponentPoint[]
   master_detail: ["RowExpansion"],
   tree: ["SubRows"],
   grouping: ["ToolbarItems", "ColumnMenuItems"],
+  totals: ["ToolbarItems"],
   conditional_formatting: ["CellAdornment", "HeaderAdornment"],
   pivot: ["ToolbarItems", "ViewBody"],
   export: ["ToolbarItems", "SelectionBanner"],
