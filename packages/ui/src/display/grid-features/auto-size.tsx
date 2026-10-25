@@ -33,16 +33,16 @@ const contentWidth = (element: Element, style: CSSStyleDeclaration): number => {
 };
 
 /**
- * A child's natural width with its margins. A truncated text reports its full width as its scroll
- * width and an icon reports its own box; a growing wrapper (the conditional-format span) is as
- * wide as the cell, so its own content is measured instead.
+ * A child's natural width. A truncated text reports its full width as its scroll width and an icon
+ * reports its own box. A growing wrapper (the conditional-format span) is as wide as the cell, so
+ * its own content is measured instead, with its margins (it bleeds into the cell padding). Other
+ * margins are not counted: an auto margin resolves to the free space the column has now.
  */
 const naturalWidth = (element: Element): number => {
+  if (!(element instanceof HTMLElement)) return element.getBoundingClientRect().width;
   const style = getComputedStyle(element);
-  const margins = pixels(style.marginLeft) + pixels(style.marginRight);
-  if (!(element instanceof HTMLElement)) return element.getBoundingClientRect().width + margins;
-  const grows = pixels(style.flexGrow) > 0 && element.children.length > 0;
-  return (grows ? contentWidth(element, style) : element.scrollWidth) + margins;
+  if (pixels(style.flexGrow) === 0 || element.children.length === 0) return element.scrollWidth;
+  return contentWidth(element, style) + pixels(style.marginLeft) + pixels(style.marginRight);
 };
 
 /**
