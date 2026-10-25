@@ -1,5 +1,7 @@
 "use client";
 
+import { recordsTableRowActionsFeature } from "@vortex/platform/schema";
+
 import { useId, useState, type ReactElement } from "react";
 import {
   applicationSourceDocumentSchema,
@@ -78,10 +80,10 @@ export const applyStudioRowActionChange = (
       kind: "refused",
       reason: "The row actions changed. Reload the inspector and try again.",
     };
-  if (next.length > recordsTableSettingMaximumItems("row_actions"))
+  if (next.length > recordsTableSettingMaximumItems(recordsTableRowActionsFeature.key))
     return {
       kind: "refused",
-      reason: `A table can have at most ${recordsTableSettingMaximumItems("row_actions")} row actions`,
+      reason: `A table can have at most ${recordsTableSettingMaximumItems(recordsTableRowActionsFeature.key)} row actions`,
     };
   const candidate = structuredClone(source);
   const item = placementOf(candidate, alias);
@@ -341,7 +343,10 @@ export function StudioRowActionsEditor({
           value=""
           unset="Add a row action"
           options={choices}
-          disabled={disabled || actions.length >= recordsTableSettingMaximumItems("row_actions")}
+          disabled={
+            disabled ||
+            actions.length >= recordsTableSettingMaximumItems(recordsTableRowActionsFeature.key)
+          }
           onChange={(choice) => {
             if (choice === "") return;
             const result = onAdd(choice);

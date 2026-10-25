@@ -1,3 +1,6 @@
+import { recordsTableInlineEditEvent } from "./application-composition/records-table-features/inline-edit";
+import { recordsTableRowActionsFeature } from "./application-composition/records-table-features/row-actions";
+import { recordsTableRowEditEvent } from "./application-composition/records-table-features/row-edit";
 import {
   builderKeySchema,
   readRecordDetailContract,
@@ -374,7 +377,12 @@ export function validateApplicationSourceCatalogue(
           "record_reference",
         );
       for (const action of behaviours.rowActions)
-        checkRowBehaviour("row_actions", action.eventId, "row_action", "record_reference");
+        checkRowBehaviour(
+          recordsTableRowActionsFeature.key,
+          action.eventId,
+          "row_action",
+          "record_reference",
+        );
       const rowActionIds = new Set(behaviours.rowActions.map((action) => action.eventId));
       for (const binding of source.body.flow_bindings)
         if (
@@ -385,7 +393,7 @@ export function validateApplicationSourceCatalogue(
           report(
             "vortex.definition.application_block_references",
             "broken_reference",
-            at("row_actions"),
+            at(recordsTableRowActionsFeature.key),
           );
       // A bulk action runs a named action of the bound record type, never a flow binding, so no
       // flow binds the table's bulk action event.
@@ -401,7 +409,7 @@ export function validateApplicationSourceCatalogue(
           checkRowBehaviour(
             "features",
             features.inlineEdit.eventId,
-            "inline_edit",
+            recordsTableInlineEditEvent,
             "record_reference",
           );
         // An editable field must be one the bound query selects and one of the declared columns;
@@ -416,7 +424,12 @@ export function validateApplicationSourceCatalogue(
       }
       if (features.rowEdit.enabled) {
         if (features.rowEdit.eventId !== undefined)
-          checkRowBehaviour("features", features.rowEdit.eventId, "row_edit", "record_reference");
+          checkRowBehaviour(
+            "features",
+            features.rowEdit.eventId,
+            recordsTableRowEditEvent,
+            "record_reference",
+          );
         // An editable field must be one the bound query selects and one of the declared columns;
         // a field that is never shown could never be edited in place.
         const columnFields = new Set(table.columns.map((column) => column.field));

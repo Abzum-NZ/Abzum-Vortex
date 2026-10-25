@@ -1,7 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { RECORDS_TABLE_TREE_MAXIMUM_PAGE_SIZE } from "@vortex/platform/schema";
+import {
+  RECORDS_TABLE_TREE_MAXIMUM_PAGE_SIZE,
+  recordsTableTreeFeature,
+} from "@vortex/platform/schema";
 import { cellValueToText } from "../cell";
 import {
   fail,
@@ -31,7 +34,7 @@ type NodeState =
     }>
   | Readonly<{ kind: "empty" | "refused" | "error" | "budget" }>;
 
-const location = { propertyPath: ["tree"] };
+const location = { propertyPath: [recordsTableTreeFeature.property] };
 
 /**
  * One level as the host's read returned it: the table's own payload for the children of one row.

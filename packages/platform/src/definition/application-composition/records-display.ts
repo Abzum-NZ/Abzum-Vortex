@@ -1,3 +1,4 @@
+import { recordsTableRowActionsFeature } from "./records-table-features/row-actions";
 import { definitionValidationErrorCatalogue } from "../../catalogue/validation-errors";
 import catalogueSources from "../../catalogue/catalogue/application-composition-catalogue.source.json";
 import {
@@ -178,7 +179,7 @@ const displayMessages = (settings: SettingsRecord): RecordsDisplayMessages => {
  * binding; a row click that is declared but malformed refuses the table.
  */
 const readRowBehaviours = (settings: SettingsRecord): RecordsTableRowBehaviourContract => {
-  const rowActions = readRecordsTableRowActions(settings["row_actions"]);
+  const rowActions = readRecordsTableRowActions(settings[recordsTableRowActionsFeature.key]);
   const click =
     settings["row_click"] === undefined
       ? undefined

@@ -1,3 +1,5 @@
+import { recordsTableInlineEditEvent } from "./application-composition/records-table-features/inline-edit";
+import { recordsTableRowEditEvent } from "./application-composition/records-table-features/row-edit";
 import { z } from "zod";
 import { workflowValueTypeSchema } from "../catalogue/catalogues";
 import { sourceAliasSchema } from "./definition-source-common";
@@ -63,8 +65,8 @@ export const componentSemanticEventKindSchema = z.enum([
   "row_clicked",
   "row_action",
   "bulk_action",
-  "inline_edit",
-  "row_edit",
+  recordsTableInlineEditEvent,
+  recordsTableRowEditEvent,
   "card_moved",
   "card_added",
   "load",

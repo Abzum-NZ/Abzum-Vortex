@@ -1,3 +1,4 @@
+import { recordsTableInlineEditEvent, recordsTableRowEditEvent } from "@vortex/platform/schema";
 import type {
   FlowFieldCorrection,
   JsonValue,
@@ -25,8 +26,8 @@ export type DisplaySemanticEventName =
       | "columns_changed"
       | "page_changed"
       | "bulk_action"
-      | "inline_edit"
-      | "row_edit"
+      | typeof recordsTableInlineEditEvent
+      | typeof recordsTableRowEditEvent
       | "card_moved"
       | "card_added"
       | "row_expanded"
@@ -217,7 +218,7 @@ export type DisplaySemanticEvent =
       rows?: RecordsTableBatchEditRequest["rows"];
     }>
   | Readonly<{
-      event: "row_edit";
+      event: typeof recordsTableRowEditEvent;
       eventId: string;
       recordId: string;
       revision: number;
@@ -225,7 +226,7 @@ export type DisplaySemanticEvent =
       commandId: string;
     }>
   | Readonly<{
-      event: "inline_edit";
+      event: typeof recordsTableInlineEditEvent;
       eventId: string;
       recordId: string;
       /** The record revision the row was displayed at; the writer refuses a stale one. */
@@ -327,8 +328,8 @@ export const DISPLAY_EVENT_NAMES: readonly DisplaySemanticEventName[] = Object.f
   "export_cancelled",
   "range_summary_requested",
   "batch_edit_requested",
-  "inline_edit",
-  "row_edit",
+  recordsTableInlineEditEvent,
+  recordsTableRowEditEvent,
   "card_moved",
   "card_added",
   "row_expanded",

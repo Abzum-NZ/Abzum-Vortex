@@ -1,4 +1,9 @@
 import {
+  recordsTableInlineEditEvent,
+  recordsTableRowActionsFeature,
+  recordsTableRowEditEvent,
+} from "@vortex/platform/schema";
+import {
   applicationSourceDocumentSchema,
   authoredRecordsTableEventAvailable,
   builderKeySchema,
@@ -52,8 +57,8 @@ export type StudioFlowAuthoringEvent = Extract<
   | "form_submit"
   | "row_clicked"
   | "row_action"
-  | "inline_edit"
-  | "row_edit"
+  | typeof recordsTableInlineEditEvent
+  | typeof recordsTableRowEditEvent
 >;
 
 export const studioFlowEventLabels: Readonly<Record<StudioFlowAuthoringEvent, string>> = {
@@ -63,8 +68,8 @@ export const studioFlowEventLabels: Readonly<Record<StudioFlowAuthoringEvent, st
   form_submit: "When submitted",
   row_clicked: "When a row is clicked",
   row_action: "Row action",
-  inline_edit: "When a value is edited",
-  row_edit: "When a row is saved",
+  [recordsTableInlineEditEvent]: "When a value is edited",
+  [recordsTableRowEditEvent]: "When a row is saved",
 };
 
 /** Tables expose row actions through declared menu entries; other row surfaces use their own activation. */
@@ -89,8 +94,8 @@ const controlEventRecordType = (
   if (
     event === "row_clicked" ||
     event === "row_action" ||
-    event === "inline_edit" ||
-    event === "row_edit"
+    event === recordsTableInlineEditEvent ||
+    event === recordsTableRowEditEvent
   ) {
     const queryRef = item?.props.vortex.query;
     // A query-bound row belongs to that query, even on a page of another record type.
@@ -109,7 +114,10 @@ export const studioFlowCreateSavesChange = (
   event: StudioFlowAuthoringEvent,
   recordType: string | null,
 ): boolean =>
-  (event === "card_moved" || event === "inline_edit" || event === "row_edit") && recordType !== null;
+  (event === "card_moved" ||
+    event === recordsTableInlineEditEvent ||
+    event === recordsTableRowEditEvent) &&
+  recordType !== null;
 
 export type StudioFlowCreateStep =
   | Readonly<{ kind: "operation"; operation: string }>
@@ -231,7 +239,9 @@ export const projectStudioFlowCreateChoices = (
         (event === "action" && node.settings.action_kind === "submit") ||
         // The action that saves an inline edit belongs to the feature, so it is offered while on;
         // a card added from a column is offered while the board's quick add is on.
-        ((event === "inline_edit" || event === "row_edit" || event === "card_added") &&
+        ((event === recordsTableInlineEditEvent ||
+          event === recordsTableRowEditEvent ||
+          event === "card_added") &&
           (placed === undefined || !authoredRecordsTableEventAvailable(placed.props, event)))
       )
         continue;
@@ -414,7 +424,7 @@ const bindControl = (
   if (event === "row_clicked") {
     if (item !== undefined) item.props.row_click = { mode: "flow", event_id: eventId };
   }
-  if (event === "inline_edit" || event === "row_edit") {
+  if (event === recordsTableInlineEditEvent || event === recordsTableRowEditEvent) {
     if (item === undefined) return refuse("The table is no longer on the page.");
     // The table names the action that saves a change in its Inline editing feature.
     const props = item.props as Record<string, unknown>;
@@ -424,7 +434,7 @@ const bindControl = (
   }
   if (rowActionMenu && item !== undefined) {
     const features = isPlainRecord(item.props.features) ? item.props.features : {};
-    item.props.features = { ...features, row_actions: { enabled: true } };
+    item.props.features = { ...features, [recordsTableRowActionsFeature.key]: { enabled: true } };
     item.props.row_actions = [
       ...(Array.isArray(item.props.row_actions) ? item.props.row_actions : []),
       { event_id: eventId, label, icon: "workflow", placement: "menu" },
@@ -577,7 +587,8 @@ export const applyStudioFlowCreate = (
       return { kind: "refused", reason: "Choose the board's choice field first." };
     if (
       command.kind === "action" &&
-      (command.event === "inline_edit" || command.event === "row_edit") &&
+      (command.event === recordsTableInlineEditEvent ||
+        command.event === recordsTableRowEditEvent) &&
       command.recordType === null
     )
       return { kind: "refused", reason: "Choose the table's query first." };

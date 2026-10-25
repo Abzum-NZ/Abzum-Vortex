@@ -1,5 +1,15 @@
 "use client";
 
+import {
+  recordsTableInlineEditFeature,
+  recordsTableMasterDetailFeature,
+  recordsTableRowActionsFeature,
+  recordsTableRowEditFeature,
+  recordsTableSavedViewsFeature,
+  recordsTableSpreadsheetFeature,
+  recordsTableColumnFiltersFeature,
+} from "@vortex/platform/schema";
+
 import { useId, useState, type ReactElement } from "react";
 import {
   checkRecordsTableFeature,
@@ -188,6 +198,7 @@ export function StudioGridFeatures({
   };
   const authoredPageSize = tableSettings["page_size"];
   const tablePageSize = authoredPageSize?.kind === "number" ? authoredPageSize.value : undefined;
+  const rowActions = tableSettings[recordsTableRowActionsFeature.key];
   const facts = studioRecordsTableQueryFacts(
     query,
     signedIn,
@@ -197,8 +208,8 @@ export function StudioGridFeatures({
     tableColumnFields(tableSettings),
     {
       rowActions:
-        tableSettings["row_actions"]?.kind === "list"
-          ? tableSettings["row_actions"].items.flatMap((item) => {
+        rowActions?.kind === "list"
+          ? rowActions.items.flatMap((item) => {
               const placement = item.kind === "group" ? item.properties["placement"] : undefined;
               return placement?.kind === "choice" ? [{ placement: placement.value }] : [];
             })
@@ -374,7 +385,7 @@ export function StudioGridFeatures({
                     </p>
                   ))
                 : null}
-              {enabled && key === "spreadsheet" ? (
+              {enabled && key === recordsTableSpreadsheetFeature.key ? (
                 <StudioSpreadsheetEditor
                   value={current}
                   facts={facts}
@@ -383,7 +394,7 @@ export function StudioGridFeatures({
                   onChange={(next) => write(key, next)}
                 />
               ) : null}
-              {enabled && key === "row_edit" ? (
+              {enabled && key === recordsTableRowEditFeature.key ? (
                 <StudioRowEditEditor
                   value={current}
                   facts={facts}
@@ -392,7 +403,7 @@ export function StudioGridFeatures({
                   onChange={(next) => write(key, next)}
                 />
               ) : null}
-              {enabled && key === "inline_edit" ? (
+              {enabled && key === recordsTableInlineEditFeature.key ? (
                 <StudioInlineEditEditor
                   value={current}
                   facts={facts}
@@ -425,7 +436,7 @@ export function StudioGridFeatures({
                   />
                 </div>
               ) : null}
-              {enabled && key === "saved_views" ? (
+              {enabled && key === recordsTableSavedViewsFeature.key ? (
                 <div className="pb-2">
                   <StudioSavedViewsEditor
                     value={current}
@@ -459,7 +470,10 @@ export function StudioGridFeatures({
               {!enabled || settings.length === 0 || editor.kind !== "settings" ? null : (
                 <div className="space-y-3 pb-2">
                   {(() => {
-                    const own = key === "master_detail" ? relatedSettings(current) : undefined;
+                    const own =
+                      key === recordsTableMasterDetailFeature.key
+                        ? relatedSettings(current)
+                        : undefined;
                     const commit = (next: StudioSettingValues) =>
                       write(key, {
                         kind: "group",
@@ -483,7 +497,7 @@ export function StudioGridFeatures({
                                     // the few its grouped query selects; linked records need a
                                     // record picker a board does not draw.
                                     fields: (features?.board.enabled === true &&
-                                    key === "column_filters"
+                                    key === recordsTableColumnFiltersFeature.key
                                       ? boardChoices.fields.filter(
                                           (field) =>
                                             recordsTableFilterKindOf(field.type) !== "link",

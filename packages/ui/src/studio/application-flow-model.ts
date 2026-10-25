@@ -1,3 +1,4 @@
+import { recordsTableInlineEditEvent, recordsTableRowEditEvent } from "@vortex/platform/schema";
 import {
   applicationRootIdSchema,
   applicationSourceDocumentSchema,
@@ -438,8 +439,8 @@ const eventWords: Readonly<Record<string, string>> = {
   action: "is used",
   row_clicked: "row is clicked",
   row_action: "row action is used",
-  row_edit: "row is saved",
-  inline_edit: "value is edited",
+  [recordsTableRowEditEvent]: "row is saved",
+  [recordsTableInlineEditEvent]: "value is edited",
   card_moved: "card is moved",
   card_added: "card is added to a column",
   load: "loads",

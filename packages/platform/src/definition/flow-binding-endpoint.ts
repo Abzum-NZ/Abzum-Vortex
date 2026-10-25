@@ -1,3 +1,4 @@
+import { recordsTableRowEditEvent } from "./application-composition/records-table-features/row-edit";
 import "server-only";
 
 import { createHash } from "node:crypto";
@@ -414,11 +415,11 @@ const surfaceDiagnostic = (
     binding === undefined ||
     (binding.event !== "form_submit" &&
       binding.event !== "card_moved" &&
-      binding.event !== "row_edit") ||
+      binding.event !== recordsTableRowEditEvent) ||
     taskId === undefined ||
     !saveValuesComeFromForm(taskId, flowId, binding, installation)
       ? []
-      : binding.event === "card_moved" || binding.event === "row_edit"
+      : binding.event === "card_moved" || binding.event === recordsTableRowEditEvent
         ? parsed.data.corrections
         : parsed.data.corrections.filter((correction) =>
             hasVisibleOwningFormField(installation, binding.controlId, correction.field),

@@ -503,6 +503,8 @@ export type RecordsTableFeatureDefinition<
 > = Readonly<{
   key: Key;
   property: keyof RecordsTableFeatures;
+  /** The strict wire schema for this feature's viewer projection, absent for a separate payload. */
+  projectionSchema?: z.ZodType;
   label: string;
   /** One short line saying what the feature lets people do. */
   description: string;
@@ -534,8 +536,6 @@ export type RecordsTableFeatureDefinition<
    * when the feature is off for this viewer. Publication has already refused any combination the
    * feature does not support, so the projection never repeats a check.
    */
-  /** The strict wire schema for this feature's viewer projection, absent for a separate payload. */
-  projectionSchema?: z.ZodType;
   project?(
     state: RecordsTableFeatureState<Settings>,
     context: GridFeatureProjectionContext,
