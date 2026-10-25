@@ -303,7 +303,7 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
             selection: selectionParts,
             paged,
             narrowing,
-            sort: values?.sort,
+            sort: values?.requestedSort ?? values?.sort,
             arrangement: layout.arrangement,
             views: values?.layout.views,
             events,
@@ -324,6 +324,7 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
       selectionParts,
       paged,
       narrowing,
+      values?.requestedSort,
       values?.sort,
       values?.layout.views,
       events,
@@ -592,7 +593,7 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
         rows={rows}
         totals={grouped === undefined ? values?.totals : undefined}
         lines={lines}
-        sort={values?.sort}
+        sort={values?.requestedSort ?? values?.sort}
         selection={selectable ? "multiple" : undefined}
         selectedRecordIds={selectedRecordIds}
         showActions={showActions}

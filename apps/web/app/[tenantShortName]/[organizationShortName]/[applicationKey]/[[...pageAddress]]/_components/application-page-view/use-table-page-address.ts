@@ -350,8 +350,9 @@ export function useTablePageAddress({
   }, [address, currentData, model]);
 
   // While a table's read is on its way it still shows the rows read for its earlier state, but its
-  // sort control shows the order the address now asks for: a second sort gesture (Shift+click right
-  // after a click) builds on the first, and no copy of the sort lives in the grid.
+  // sort control shows the order the address now asks for (`requestedSort`): a second sort gesture
+  // (Shift+click right after a click) builds on the first, and no copy of the sort lives in the grid.
+  // `sort` keeps naming the order the shown rows were read in until the read lands.
   const tableData = useMemo(() => {
     const entries = entriesOf(currentSearch);
     let patched: Record<string, unknown> | undefined;
@@ -373,7 +374,7 @@ export function useTablePageAddress({
       patched ??= { ...currentData };
       patched[placementId] = {
         ...data,
-        values: { ...data.values, sort: { keys: state.state.sort, explicit: true } },
+        values: { ...data.values, requestedSort: { keys: state.state.sort, explicit: true } },
       };
     }
     return (patched ?? currentData) as ApplicationPageModel["data"];
