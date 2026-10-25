@@ -140,6 +140,35 @@ export function CalendarDisplay(props: DisplayRenderProps<CalendarPayload>): Rea
   if (state.status === "empty")
     return <RecordsEmptyState accessibleName={accessibleName} message={emptyMessage} />;
 
+  // A malformed or unsupported period must leave the definition's current period reachable.
+  if (values === undefined && searchParams.has(addressParameter("date", placementId)))
+    return (
+      <>
+        <DisplayStateContainer
+          accessibleName={accessibleName}
+          availability={availability}
+          projectedData={state}
+          emptyMessage={emptyMessage}
+          {...(refusedMessage === undefined ? {} : { refusedMessage })}
+          {...(errorMessage === undefined ? {} : { errorMessage })}
+        >
+          {null}
+        </DisplayStateContainer>
+        <Button
+          type="button"
+          variant="outline"
+          className="mt-2"
+          onClick={() =>
+            replaceParameters((parameters) =>
+              parameters.delete(addressParameter("date", placementId)),
+            )
+          }
+        >
+          Go to the current period
+        </Button>
+      </>
+    );
+
   return (
     <DisplayStateContainer
       accessibleName={accessibleName}
