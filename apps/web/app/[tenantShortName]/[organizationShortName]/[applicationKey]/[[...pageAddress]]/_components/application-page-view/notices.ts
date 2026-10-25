@@ -43,11 +43,23 @@ export const unavailableNotice: Notice = {
  */
 const notAvailableNotice: Notice = { tone: "problem", text: "This is not available yet." };
 
+/** A failed run that committed nothing: the person may simply try again. */
+const failedUnchangedNotice: Notice = {
+  tone: "problem",
+  text: "That did not work, and nothing was changed. Try again.",
+};
+
 /** The notice for a finished run: its safe outcome, unless a task was not available. */
-export const finishedNotice = (outcome: string | undefined, failureCode: unknown): Notice =>
+export const finishedNotice = (
+  outcome: string | undefined,
+  failureCode: unknown,
+  commit: string | undefined,
+): Notice =>
   failureCode === "task_not_available"
     ? notAvailableNotice
-    : (outcomeNotices[outcome ?? "failed"] ?? unavailableNotice);
+    : (outcome ?? "failed") === "failed" && commit === "none"
+      ? failedUnchangedNotice
+      : (outcomeNotices[outcome ?? "failed"] ?? unavailableNotice);
 
 const iamPeople = {
   link_label: "Open IAM People",
@@ -62,7 +74,7 @@ export const refusalNotices: Readonly<
   stale_revision: { tone: "problem", text: "This item changed. Refresh and try again." },
   recent_authentication_required: {
     tone: "problem",
-    text: "To protect your organisation, this change needs a sign-in within the last 15 minutes. Sign in again, then retry the change.",
+    text: "This action needs a sign-in within the last 15 minutes. Sign in again to continue.",
     link: { label: "Sign in again", href: "/auth/session-ended" },
   },
   role_acceptance_required: {
@@ -76,6 +88,10 @@ export const refusalNotices: Readonly<
   application_storage_incompatible: {
     tone: "problem",
     text: "This version changes stored fields in a way existing records cannot accept. Keep existing choice options unchanged when adding options, and preserve field types, storage and ownership settings.",
+  },
+  application_republish_required: {
+    tone: "problem",
+    text: "Republish required: this release uses superseded platform definitions. Republish the application, then install or upgrade to the new release.",
   },
   application_not_installed: {
     tone: "problem",

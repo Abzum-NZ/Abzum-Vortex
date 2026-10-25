@@ -532,9 +532,15 @@ function RuleEditor({
             context={context}
             {...(currentCondition === undefined ? {} : { value: currentCondition })}
             onChange={(next: ConditionNode | undefined, validation) => {
+              // A rule always has a condition: clearing it changes nothing, so the editor goes
+              // back to the saved one rather than showing an empty condition the rule still uses.
+              if (next === undefined) {
+                setConditionDraft(undefined);
+                return;
+              }
               // Keep unfinished typed input editable without saving an invalid rule.
               setConditionDraft({ saved: savedCondition, value: next });
-              if (next === undefined || !validation.isValid) return;
+              if (!validation.isValid) return;
               const written = writeStudioQueryFilter(next, referenceOf);
               if (written === undefined || written === null) return;
               onChange({ condition: { kind: "condition", condition: written as never } });

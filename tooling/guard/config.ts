@@ -27,6 +27,12 @@ export const packageAreas: Record<string, string> = {
  * review-by date the guard prints a notice; the lead then keeps, changes or removes the rule.
  */
 export const guardRules = {
+  "catalogue-release-superseded": {
+    tier: "warning",
+    owner: "lead",
+    reviewBy: "2027-01-25",
+    description: "Changed block and theme content pins supersede compiled releases using them",
+  },
   "query-input-name-matching": {
     tier: "blocking",
     owner: "lead",

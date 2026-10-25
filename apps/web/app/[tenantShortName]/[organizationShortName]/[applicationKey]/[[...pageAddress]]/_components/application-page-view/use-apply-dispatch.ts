@@ -8,7 +8,7 @@ import type {
 import type { ApplicationPageModel } from "../../../../../../_lib/application-page";
 import { applicationPageAddressPath } from "../../../../../../_lib/address-paths";
 import type { ComponentRequestGeneration } from "@vortex/platform/schema";
-import type { DispatchOutcome, Notice, TableContinuationTarget } from "./types";
+import type { ControlReport, DispatchOutcome, Notice, TableContinuationTarget } from "./types";
 import {
   unavailableNotice,
   finishedNotice,
@@ -64,8 +64,8 @@ export function useApplyDispatch({
       formPlacementId?: string,
       afterAccepted?: () => Promise<Notice | undefined>,
       sourceBindingId?: string,
-      /** The gesture is shown on its own control, so its outcome is returned and not put in the page notice. */
-      reportOnControl?: true,
+      /** The control reports its outcome; what must not vanish with it also stays on the page. */
+      reportOnControl?: ControlReport,
     ): Promise<DispatchOutcome> => {
       let outcome: DispatchOutcome = { notice: undefined, confirmed: false, changed: false };
       const isCurrentNavigation = (): boolean => placementRequestsRef.current.key === navigationKey;
@@ -83,7 +83,14 @@ export function useApplyDispatch({
         refusalFeedback?: Extract<FormFlowFeedback, { kind: "refusal" }>,
       ): void => {
         outcome = { ...outcome, notice: resultNotice };
-        if (reportOnControl) return;
+        // A control shows text only: a way forward, and a problem a transient control would lose,
+        // stay visible and actionable on the page.
+        if (
+          reportOnControl !== undefined &&
+          resultNotice.link === undefined &&
+          (reportOnControl === "in_place" || resultNotice.tone !== "problem")
+        )
+          return;
         // A refusal must remain visible after a flow's form dialog has closed.
         setNotice((current) => {
           // A client intent can refuse after the server has completed (for example, a page the
@@ -122,7 +129,11 @@ export function useApplyDispatch({
           return outcome;
         }
         if (server.kind === "finished") {
-          let resultNotice = finishedNotice(server.descriptor.outcome, server.failure?.code);
+          let resultNotice = finishedNotice(
+            server.descriptor.outcome,
+            server.failure?.code,
+            server.descriptor.commit,
+          );
           const diagnostic = server.failure?.diagnostic;
           const fieldLabel =
             diagnostic?.submittedField === undefined || formPlacementId === undefined
