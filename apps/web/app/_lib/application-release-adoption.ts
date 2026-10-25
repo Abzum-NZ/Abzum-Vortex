@@ -9,12 +9,11 @@ import {
   createApplicationInstallationCoordinator,
   type HumanInstallationDefinitionAccess,
 } from "@vortex/platform/server";
-import {
-  logRefusal,
-  type ApplicationRootId,
-  type IdentitySession,
-  type OrganizationId,
-  type SystemApplicationBoundReleaseSetResult,
+import type {
+  ApplicationRootId,
+  IdentitySession,
+  OrganizationId,
+  SystemApplicationBoundReleaseSetResult,
 } from "@vortex/platform/schema";
 import {
   createDatabaseApplicationReleaseAdoptionReleaseSetService,
@@ -108,7 +107,7 @@ const coordinator = () =>
  * installations, the application is not installed, or no target can be proven. The caller's
  * `applications.manage` decision is made first in the same request, so a person without it never
  * reaches the admin-only read; a refusal is indistinguishable from "nothing to adopt", so nothing
- * is disclosed. An unreadable target is logged with its code and offers nothing.
+ * is disclosed. A temporary read failure is raised so callers can log its cause and offer retry.
  */
 export const readApplicationReleaseAdoption = async (
   session: IdentitySession,
@@ -139,11 +138,11 @@ export const readApplicationReleaseAdoption = async (
   );
   if (result.kind !== "available") {
     if (result.kind === "temporarily_unavailable")
-      logRefusal(
-        "application-release-adoption",
-        `application ${scope.applicationRootId} target read`,
-        "APPLICATION_RELEASE_ADOPTION_TARGET_READ_FAILED",
-      );
+      throw new Error("APPLICATION_RELEASE_ADOPTION_TARGET_READ_FAILED", {
+        cause: new Error(result.cause ?? "Human request temporarily unavailable", {
+          cause: { code: result.databaseCode },
+        }),
+      });
     return undefined;
   }
   return result.value;

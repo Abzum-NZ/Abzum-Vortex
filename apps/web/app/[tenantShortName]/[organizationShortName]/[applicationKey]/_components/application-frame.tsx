@@ -25,7 +25,11 @@ import {
 import { Toaster } from "@vortex/ui/components/sonner";
 import type { ApplicationFrameModel } from "../../../../_lib/application-frame";
 import { signOut } from "../../../../auth/actions";
-import { readApplicationSwitcherAction, searchApplicationAction } from "../frame-actions";
+import {
+  readApplicationSwitcherAction,
+  readReleaseAdoptionAction,
+  searchApplicationAction,
+} from "../frame-actions";
 import {
   ApplicationFrameStateProvider,
   type ApplicationFramePageState,
@@ -56,7 +60,7 @@ const expressionOf = (parameters: URLSearchParams): string | undefined => {
  * The application frame: the definition's shell, its menu and its header, rendered once for the
  * application and kept mounted while its pages change. The current page renders inside the shell's
  * outlet and tells the frame its breadcrumb name, agent-tool state, unsaved-work guard and release
- * offer through the frame state.
+ * action through the frame state.
  */
 export function ApplicationFrame({
   model,
@@ -216,6 +220,35 @@ export function ApplicationFrame({
   const applicationSearchPageSubject = searchSubject.success ? searchSubject.data : undefined;
 
   const unsavedWork = pageState.unsavedWork;
+  const adoptRelease = pageState.adoptRelease;
+  const readReleaseAdoption = useCallback<
+    NonNullable<ApplicationAccountActions["readReleaseAdoption"]>
+  >(async () => {
+    const result = await readReleaseAdoptionAction(
+      application.tenantShortName,
+      application.organizationShortName,
+      application.key,
+    );
+    if (result.state !== "available") return result;
+    const offer = result.offer;
+    return {
+      state: "available",
+      ...(offer === undefined || adoptRelease === undefined
+        ? {}
+        : {
+            offer: {
+              version: offer.version,
+              adopt: () =>
+                adoptRelease(offer.offeredReleaseRevision, offer.installedReleaseRevision),
+            },
+          }),
+    };
+  }, [
+    adoptRelease,
+    application.tenantShortName,
+    application.organizationShortName,
+    application.key,
+  ]);
   const leaveIfConfirmed = useCallback(
     async (): Promise<boolean> =>
       unsavedWork === undefined ||
@@ -226,9 +259,7 @@ export function ApplicationFrame({
   const accountActions: ApplicationAccountActions = {
     account: model.account,
     organizationName: application.organizationShortName,
-    ...(pageState.releaseAdoption === undefined
-      ? {}
-      : { releaseAdoption: pageState.releaseAdoption }),
+    ...(adoptRelease === undefined ? {} : { readReleaseAdoption }),
     chooseOrganization: async () => {
       if (await leaveIfConfirmed()) router.push("/signed-in");
     },
