@@ -52,7 +52,12 @@ export const projectRecordsTableTotals = (
     if (result.outcome === "refused")
       return {
         ...identity,
-        state: result.reasonCode === "read_forbidden" ? "withheld" : "mixed_currency",
+        state:
+          result.reasonCode === "read_forbidden"
+            ? "withheld"
+            : result.reasonCode === "mixed_currency"
+              ? "mixed_currency"
+              : "unavailable",
       };
     if (result.value === null) return { ...identity, state: "empty" };
     const value = result.value;

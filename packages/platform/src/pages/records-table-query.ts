@@ -670,15 +670,14 @@ const readGrouped = async (
     ...(isDate ? { dateBucket: { unit: group.dateUnit, timeZone: group.timeZone } } : {}),
   };
   if (!group.membersOnly) {
+    const totals = recordsTableTotalReads(request.settings, built.fieldIds);
     const summaryCommand = protectedQuerySummaryCommandSchema.safeParse({
       moduleRootId: request.moduleRootId,
       queryId: request.queryId,
       inputValues: request.inputValues,
       grouping: {
         ...grouping,
-        ...(recordsTableTotalReads(request.settings, built.fieldIds).length === 0
-          ? {}
-          : { aggregates: recordsTableTotalReads(request.settings, built.fieldIds) }),
+        ...(totals.length === 0 ? {} : { aggregates: totals }),
       },
       ...(group.after === null ? {} : { groupAfter: group.after }),
       ...(built.command.search === undefined ? {} : { search: built.command.search }),

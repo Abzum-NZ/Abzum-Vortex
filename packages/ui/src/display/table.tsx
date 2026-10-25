@@ -731,7 +731,6 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
           <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
             {message}
           </div>
-
           {subRowsOpen === undefined ? null : gridFeatures.subRowsController(subRowsOpen)}
           {ready && availability === "unavailable" ? (
             <DisplayStateContainer
