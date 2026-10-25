@@ -152,7 +152,7 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
     "No records to show",
   );
   // Every write on a row is reported once it settles, so rows drawn beneath the page are read again.
-  const rowWritten = useRef<(recordId: string) => void>(() => undefined);
+  const rowWritten = useRef<(recordId: string | undefined) => void>(() => undefined);
   const events = useRowWrites(hostEvents, rowWritten);
   // Publication refuses a Records table without its contract, so a missing one is a definition
   // error: it renders the error state below, never a second way of choosing columns or controls.
@@ -236,6 +236,15 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
     announce,
   });
   rowWritten.current = reportRowWrite;
+  // A bulk run changes rows the table does not name one by one, including selected rows beneath the
+  // page: once it settles, every level drawn beneath the page is read again.
+  const bulkStatus = bulkRun?.status;
+  const lastBulkStatus = useRef(bulkStatus);
+  useEffect(() => {
+    const was = lastBulkStatus.current;
+    lastBulkStatus.current = bulkStatus;
+    if (was === "running" && bulkStatus !== "running") reportRowWrite(undefined);
+  }, [bulkStatus, reportRowWrite]);
   const [clearCount, setClearCount] = useState(0);
 
   // The pivot view: the address opened the table in it, or the person opened it here. It is a view

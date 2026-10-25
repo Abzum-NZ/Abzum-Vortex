@@ -78,8 +78,12 @@ export type SubRowsControls = Readonly<{
   toggle: (recordId: string) => void;
 }>;
 
-/** A settled write on one row of the table (an edit or a row command); each is a new value. */
-export type RowWrite = Readonly<{ recordId: string }>;
+/**
+ * A settled write on the table's rows; each is a new value. `recordId` names the one row an edit or
+ * a row command changed; it is undefined for a write over rows the table does not name one by one
+ * (a bulk run), after which every level held beneath the page is read again.
+ */
+export type RowWrite = Readonly<{ recordId: string | undefined }>;
 
 /**
  * The table's event handlers, reporting each settled write on a row (an inline edit, a row edit or a
@@ -88,7 +92,7 @@ export type RowWrite = Readonly<{ recordId: string }>;
  */
 export const useRowWrites = (
   events: DisplayEventHandlers | undefined,
-  written: RefObject<(recordId: string) => void>,
+  written: RefObject<(recordId: string | undefined) => void>,
 ): DisplayEventHandlers | undefined =>
   useMemo(() => {
     if (events === undefined) return undefined;
@@ -205,15 +209,15 @@ export const useRowLines = (
   subRows: SubRowsControls | undefined;
   /** What the feature's controller is drawn from; undefined while no feature contributes sub-rows. */
   open: SubRowsOpen | undefined;
-  /** Reports a settled write on a row, so the controller reads the row's level again. */
-  rowWritten: (recordId: string) => void;
+  /** Reports a settled write, so the controller reads the written row's level (or every level) again. */
+  rowWritten: (recordId: string | undefined) => void;
 }> => {
   const { kind, enabled, rows, paged, rowName, announce } = input;
   const active = enabled ? kind : undefined;
   const [expanded, setExpanded] = useState<readonly string[]>([]);
   const [beneath, setBeneath] = useState<SubRowsBeneath>(noBeneath);
   const [written, setWritten] = useState<RowWrite | undefined>(undefined);
-  const rowWritten = useCallback((recordId: string) => setWritten({ recordId }), []);
+  const rowWritten = useCallback((recordId: string | undefined) => setWritten({ recordId }), []);
   const lines = useMemo(
     () =>
       flatten(

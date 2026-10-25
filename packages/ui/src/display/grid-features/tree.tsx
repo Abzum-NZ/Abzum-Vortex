@@ -286,13 +286,19 @@ function Levels({ context, expandedRecordIds, publish, written }: GridFeatureSub
   }, []);
 
   // A settled write on a row of an opened level (an inline edit or a row command) reads that level
-  // again: the host's refresh reads only the page, and a child row must never keep a value or a
-  // revision the server has since replaced.
+  // again, and a write over unnamed rows (a bulk run) reads every opened level again: the host's
+  // refresh reads only the page, and a child row must never keep a value or a revision the server
+  // has since replaced.
   useEffect(() => {
     if (written === undefined) return;
     for (const id of wantedRef.current) {
       const node = nodesRef.current.get(id);
-      if (node?.kind === "ready" && node.rows.some((row) => row.recordId === written.recordId)) {
+      if (node?.kind !== "ready") continue;
+      if (written.recordId === undefined) {
+        void reads.current.load(id, true);
+        continue;
+      }
+      if (node.rows.some((row) => row.recordId === written.recordId)) {
         void reads.current.load(id, true);
         return;
       }
