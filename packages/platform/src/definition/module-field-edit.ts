@@ -63,6 +63,8 @@ export type InlineModuleFieldChange = Readonly<{
   unique: boolean;
   filterable: boolean;
   sortable: boolean;
+  /** Index ranking metadata; null removes the declaration. Type and privacy rules still apply. */
+  searchPriority: NonNullable<Field["search_priority"]> | null;
   personalData: Field["personal_data"];
   publicDisplay: Field["public_display"];
   type: string;
@@ -378,6 +380,7 @@ export const changeInlineModuleField = (
     sortable: change.sortable,
     personal_data: change.personalData,
     public_display: change.publicDisplay,
+    ...(change.searchPriority === null ? {} : { search_priority: change.searchPriority }),
   };
   let field: Field;
   let wasPersonLink = false;
@@ -410,6 +413,22 @@ export const changeInlineModuleField = (
     includeFieldInStandardPermissions(module, record, { key, type: change.type as Field["type"] });
   } else {
     field = record.fields[fieldIndex]!;
+    const reference = `${qualifiedRecord}.${field.key}`;
+    if (
+      change.searchPriority === null &&
+      source.body.search?.record_types.some(
+        (entry) =>
+          entry.fields.some((item) => item.field === reference) ||
+          entry.title_field === reference ||
+          entry.subtitle_field === reference,
+      )
+    )
+      return {
+        kind: "invalid",
+        issues: [
+          `${field.label} is used in application search. Remove it from the record type's Search settings before removing its index priority.`,
+        ],
+      };
     if (
       field.key === record.title_field &&
       !recordTitleFieldEligible({ type: change.type, settings })
@@ -491,6 +510,7 @@ export const changeInlineModuleField = (
     if (helpText === "") delete destination.help_text;
     else destination.help_text = helpText;
     Object.assign(destination, shape);
+    if (change.searchPriority === null) delete destination.search_priority;
     if (change.defaultValue === undefined) delete destination.default;
     else destination.default = change.defaultValue;
   }

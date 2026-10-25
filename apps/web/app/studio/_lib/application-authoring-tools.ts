@@ -3,6 +3,7 @@ import {
   personalDataClassSchema,
   publicDisplaySchema,
   revisionSchema,
+  searchPrioritySchema,
   sourceApplicationBodySchema,
 } from "@vortex/platform/schema";
 import { z } from "zod";
@@ -24,6 +25,11 @@ const fieldChange = z
     unique: z.boolean(),
     filterable: z.boolean(),
     sortable: z.boolean(),
+    searchPriority: searchPrioritySchema
+      .nullable()
+      .describe(
+        "Search index ranking metadata, or null to remove it. Field type and privacy rules still apply.",
+      ),
     personalData: personalDataClassSchema,
     publicDisplay: publicDisplaySchema,
     settings: z.record(z.string(), z.json()),

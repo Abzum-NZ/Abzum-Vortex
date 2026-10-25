@@ -346,25 +346,58 @@ function ViewSwitcher({
 }: Readonly<{ context: GridFeatureContext; views: GridViewsState }>): ReactElement | null {
   const request = useMemo(() => requestOf(context), [context]);
   const [open, setOpen] = useState(false);
+  const [listing, setListing] = useState<
+    Readonly<{ items: readonly GridViewItem[]; canShare: boolean }> | "loading" | "unavailable"
+  >("loading");
+  const listRequest = useRef(0);
   const [search, setSearch] = useState("");
   const [prompt, setPrompt] = useState<Prompt>(null);
   const [confirm, confirmElement] = useConfirm();
   const searchId = useId();
+  useEffect(
+    () => () => {
+      listRequest.current += 1;
+    },
+    [],
+  );
   if (request === undefined) return null;
   const { selected } = views;
   const needle = search.trim().toLowerCase();
-  const shown = views.items.filter(
+  const shown = (typeof listing === "object" ? listing.items : []).filter(
     (view) => needle === "" || view.name.toLowerCase().includes(needle),
   );
   const personal = shown.filter((view) => view.mine);
   const shared = shown.filter((view) => !view.mine && view.scope === "shared");
   const defaults = shown.filter((view) => view.scope === "default");
+  // The page read already says whether the person may share; the fresh list refines it once it answers.
+  const canShare = typeof listing === "object" ? listing.canShare : views.canShare;
   const canChange =
-    selected !== null && selected.scope !== "default" && (selected.mine || views.canShare);
+    selected !== null && selected.scope !== "default" && (selected.mine || canShare);
   const unsaved = selected !== null && differsFrom(context, selected);
   const hidden = selected === null ? undefined : hiddenSentence(selected);
   const label = selected?.name ?? "Views";
-  const close = (): void => setOpen(false);
+  const loadList = (): void => {
+    const token = ++listRequest.current;
+    setListing("loading");
+    void request({ kind: "list" })
+      .then((result) => {
+        if (token === listRequest.current)
+          setListing(result.outcome === "listed" ? result : "unavailable");
+      })
+      .catch((error: unknown) => {
+        console.error("[grid-views] picker list unavailable", error);
+        if (token === listRequest.current) setListing("unavailable");
+      });
+  };
+  const changeOpen = (next: boolean): void => {
+    setOpen(next);
+    if (next) loadList();
+    else {
+      listRequest.current += 1;
+      setListing("loading");
+    }
+  };
+  const close = (): void => changeOpen(false);
   const choose = (viewId: string | null): void => {
     close();
     void request({ kind: "select", viewId });
@@ -399,7 +432,7 @@ function ViewSwitcher({
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <Popover open={open} onOpenChange={setOpen}>
+      <Popover open={open} onOpenChange={changeOpen}>
         <PopoverTrigger render={<Button variant="outline" size="sm" />}>
           <Icon name="eye" aria-hidden="true" />
           <span className="max-w-40 truncate">{label}</span>
@@ -429,6 +462,7 @@ function ViewSwitcher({
             <div
               role="listbox"
               aria-label="Views"
+              aria-busy={listing === "loading"}
               className="flex max-h-64 flex-col gap-1 overflow-y-auto"
             >
               <Button
@@ -445,13 +479,26 @@ function ViewSwitcher({
               {listOf("Default", defaults)}
               {listOf("Personal", personal)}
               {listOf("Shared with me", shared)}
-              {shown.length === 0 && needle !== "" ? (
+              {listing === "loading" ? (
+                <p role="status" className="px-2 py-1 text-sm text-muted-foreground">
+                  Loading views…
+                </p>
+              ) : listing === "unavailable" ? (
+                <div className="px-2 py-1">
+                  <p role="alert" className="text-sm text-destructive">
+                    Views could not be loaded.
+                  </p>
+                  <Button variant="ghost" size="sm" onClick={loadList}>
+                    Retry
+                  </Button>
+                </div>
+              ) : shown.length === 0 && needle !== "" ? (
                 <p role="status" className="px-2 py-1 text-sm text-muted-foreground">
                   No matching views
                 </p>
               ) : null}
             </div>
-            {selected !== null && !selected.mine && !views.canShare ? (
+            {selected !== null && !selected.mine && !canShare ? (
               <p className="text-xs text-muted-foreground">
                 Shared with you, so it is read-only. Save as makes your own copy.
               </p>
@@ -514,7 +561,7 @@ function ViewSwitcher({
                   Rename…
                 </Button>
               ) : null}
-              {selected !== null && selected.scope !== "default" && views.canShare ? (
+              {selected !== null && selected.scope !== "default" && canShare ? (
                 <Button
                   size="sm"
                   variant="outline"

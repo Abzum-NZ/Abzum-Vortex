@@ -20,6 +20,7 @@ declare
   rest_after uuid[];
   round_room integer;
   candidate_values jsonb[];
+  candidate_matches boolean[];
   decided_loaded jsonb[];
   decided_decisions jsonb[];
   decided_bounds jsonb[];
@@ -31,6 +32,7 @@ declare
   search_text text := p_filter ->> 'search';
   matches boolean;
   found_ids uuid[] := array[]::uuid[];
+  readable_parent_ids uuid[] := array[]::uuid[];
   candidates uuid[];
   owners uuid[];
   decided_ids uuid[];
@@ -63,9 +65,9 @@ begin
   from pg_catalog.jsonb_array_elements_text(p_filter -> 'searchFieldIds') as item(value);
   -- Keep the protected scan's parameter slots; slots 1,2,6,7,8,10 occur in access predicates and
   -- slot 9 in the query's pushed filter predicate.
-  -- Each round reads, for every undecided owner within the remaining budget, its next candidate that
-  -- matches the query's filter after the one it last examined (keyset by record id), so the work is
-  -- bounded by the candidates examined. Owners the budget did not reach stay undecided.
+  -- Each round reads the next matching child per owner, or its sole parent regardless of filters.
+  -- Parent readability and filtered tree membership reuse the same exact batched decision.
+  -- Work is bounded by candidates examined; owners beyond the budget stay undecided.
   while examined < 500 and pg_catalog.cardinality(pending) > 0 loop
     round_room := 500 - examined;
     batch_owners := pending[1 : round_room];
@@ -75,11 +77,13 @@ begin
     execute pg_catalog.format(
       'select pg_catalog.array_agg(candidate.record_id order by pending_item.owner_id),
          pg_catalog.array_agg(pending_item.owner_id order by pending_item.owner_id),
-         pg_catalog.array_agg(candidate.filter_values order by pending_item.owner_id)
+         pg_catalog.array_agg(candidate.filter_values order by pending_item.owner_id),
+         pg_catalog.array_agg(candidate.matches_filter order by pending_item.owner_id)
        from rows from (pg_catalog.unnest($11::uuid[]), pg_catalog.unnest($12::uuid[]))
          as pending_item(owner_id, after_id)
        cross join lateral (
-         select stored.record_id, pg_catalog.jsonb_build_object(%8$s) as filter_values
+         select stored.record_id, pg_catalog.jsonb_build_object(%8$s) as filter_values,
+           (case when not %10$L::boolean then true when (%9$s) then true else false end) as matches_filter
          from vortex_record.relationship_edges as edge
          join record_data.%2$I as stored on stored.organisation_id = edge.from_organisation_id
            and stored.record_id = edge.%3$I
@@ -90,7 +94,7 @@ begin
            and (pending_item.after_id is null or stored.record_id > pending_item.after_id)
            and stored.lifecycle_state = ''active''
            and %6$s and (%7$s)
-           and (case when (%9$s) then true else false end)
+           and (%10$L::boolean or (case when (%9$s) then true else false end))
          order by stored.record_id
          limit 1
        ) as candidate',
@@ -98,8 +102,8 @@ begin
       p_relationship_id, storage_contract_id,
       case when p_storage_plan #>> '{storage,storageScope}' = 'application_contained'
         then 'stored.application_root_id = $2' else 'stored.application_root_id is null' end,
-      access_sql, coalesce(p_filter ->> 'valuesSql', ''), p_filter ->> 'predicate')
-    into candidates, owners, candidate_values
+      access_sql, coalesce(p_filter ->> 'valuesSql', ''), p_filter ->> 'predicate', p_parents)
+    into candidates, owners, candidate_values, candidate_matches
     using p_organization_id, p_application_root_id, null::text[], null::uuid, 501,
       (p_storage_plan #>> '{access,ownerAccountId}')::uuid, owner_groups, shared_records,
       p_filter -> 'parameters', p_storage_plan #> '{access,parameters}', batch_owners, batch_after;
@@ -136,22 +140,28 @@ begin
           decided_decisions[decided_index], decided_bounds[decided_index], p_shared
         ) as row_read;
       end if;
-      if outcome = 'allowed' and readable_values is not null then
-        matches := not exists (
-          select 1 from pg_catalog.unnest(filter_ids) as referenced(id)
-          where not (readable_values ? referenced.id));
-        if matches and filter_condition is not null and not filter_exact then
-          begin
-            matches := vortex_access.evaluate_query_condition_internal(
-              filter_condition, p_filter -> 'fieldTypes', candidate_values[candidate_index],
-              p_filter -> 'inputTypes', p_filter -> 'inputs', false);
-          exception when invalid_parameter_value then
-            return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'filter_invalid');
-          end;
-        end if;
-        if matches and search_text is not null then
-          matches := vortex_record.query_search_matches_internal(
-            readable_values, search_field_ids, search_text);
+      if p_parents and outcome = 'allowed' then
+        readable_parent_ids := pg_catalog.array_append(readable_parent_ids, owners[candidate_index]);
+      end if;
+      if outcome = 'allowed' then
+        matches := candidate_matches[candidate_index];
+        if matches and readable_values is not null then
+          matches := not exists (
+            select 1 from pg_catalog.unnest(filter_ids) as referenced(id)
+            where not (readable_values ? referenced.id));
+          if matches and filter_condition is not null and not filter_exact then
+            begin
+              matches := vortex_access.evaluate_query_condition_internal(
+                filter_condition, p_filter -> 'fieldTypes', candidate_values[candidate_index],
+                p_filter -> 'inputTypes', p_filter -> 'inputs', false);
+            exception when invalid_parameter_value then
+              return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'filter_invalid');
+            end;
+          end if;
+          if matches and search_text is not null then
+            matches := vortex_record.query_search_matches_internal(
+              readable_values, search_field_ids, search_text);
+          end if;
         end if;
         if not matches then outcome := 'filtered'; end if;
       end if;
@@ -173,6 +183,7 @@ begin
   end loop;
   -- Owners still pending when the budget ran out are undecided: the page is returned, not refused.
   return pg_catalog.jsonb_build_object('outcome', 'completed', 'recordIds', pg_catalog.to_jsonb(found_ids),
+    'readableParentRecordIds', pg_catalog.to_jsonb(readable_parent_ids),
     'undecidedIds', case when p_parents then '[]'::jsonb else pg_catalog.to_jsonb(pending) end);
 end
 $function$;
