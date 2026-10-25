@@ -116,6 +116,7 @@ type FormState = Readonly<{
   unique: boolean;
   filterable: boolean;
   sortable: boolean;
+  searchPriority: NonNullable<SourceField["search_priority"]> | null;
   personalData: SourceField["personal_data"];
   publicDisplay: SourceField["public_display"];
   settings: StudioSettingValues;
@@ -347,6 +348,7 @@ export function ModuleFieldsEditor({
       unique: existing?.unique ?? false,
       filterable: existing?.filterable ?? false,
       sortable: existing?.sortable ?? false,
+      searchPriority: existing?.search_priority ?? null,
       personalData: existing === undefined ? "none" : existing.personal_data,
       publicDisplay: existing === undefined ? "refused" : existing.public_display,
       settings: reading.reading.values,
@@ -418,6 +420,7 @@ export function ModuleFieldsEditor({
               unique: next.unique,
               filterable: next.filterable,
               sortable: next.sortable,
+              searchPriority: next.searchPriority,
               personalData: next.personalData,
               publicDisplay: next.publicDisplay,
               type: next.type,
@@ -654,6 +657,7 @@ export function ModuleFieldsEditor({
           unique: form.unique,
           filterable: form.filterable,
           sortable: form.sortable,
+          searchPriority: form.searchPriority,
           personalData: form.personalData,
           publicDisplay: form.publicDisplay,
           type: form.type,
@@ -1084,6 +1088,29 @@ export function ModuleFieldsEditor({
           <p className="text-xs text-muted-foreground">The title is always filterable.</p>
         ) : null}
         {flag("sortable", "Allow sorting")}
+        <StudioField
+          label="Search index priority"
+          hint="Rank this field when it is indexed. Field type and privacy rules still decide which values enter search. Choose application result fields in the record type's Search tab."
+        >
+          {(control) => (
+            <StudioOptionControl
+              {...control}
+              value={form.searchPriority ?? ""}
+              unset="Not indexed"
+              disabled={disabled}
+              options={[
+                { value: "first", label: "Found first" },
+                { value: "normal", label: "Normal" },
+                { value: "last", label: "Found last" },
+              ]}
+              onChange={(next) =>
+                change({
+                  searchPriority: next === "" ? null : (next as FormState["searchPriority"]),
+                })
+              }
+            />
+          )}
+        </StudioField>
         <fieldset className="space-y-2">
           <legend className="text-sm font-semibold">Also show it on</legend>
           {offered.length === 0 ? (
