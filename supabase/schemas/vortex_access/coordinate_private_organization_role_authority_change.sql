@@ -229,14 +229,11 @@ begin
       'target', pg_catalog.jsonb_build_object('kind', 'organization'),
       'requiredPermission', pg_catalog.jsonb_build_object(
         'ownerKind', 'platform',
-        -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
-        'ownerId', 'cabe121e-0baf-4084-9471-cce915d460a8',
+        'ownerId', vortex_access.platform_permission_owner_id(),
         'permissionId', case
           when operation_name in ('accept_new_application_role', 'accept_application_role_revision')
-            -- guard-allow: function-uuid fixed installation permission identity without declaration-table read access
-            then '7ecd3304-f16c-47d4-94db-0964980091ba'
-          -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
-          else '87c96495-c806-4692-9bc2-250ddb10613c'
+            then vortex_access.platform_permission_id('platform.organization.applications.manage')
+          else vortex_access.platform_permission_id('platform.organization.roles.manage')
         end
       ),
       'recentAuthentication', case

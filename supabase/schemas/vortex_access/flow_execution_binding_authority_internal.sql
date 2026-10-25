@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_access.flow_execution_binding_authority_internal(p_actor_identity_id uuid, p_actor_organization_account_id uuid, p_organization_id uuid, p_mode text) RETURNS TABLE(tenant_id uuid, access_version bigint, correlation_id uuid)
+CREATE OR REPLACE FUNCTION vortex_access.flow_execution_binding_authority_internal(p_actor_identity_id uuid, p_actor_organization_account_id uuid, p_organization_id uuid, p_mode text) RETURNS TABLE(tenant_id uuid, access_version bigint, correlation_id uuid)
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO ''
     AS $$
@@ -34,10 +34,10 @@ begin
       'target', pg_catalog.jsonb_build_object('kind', 'organization'),
       'requiredPermission', pg_catalog.jsonb_build_object(
         'ownerKind', 'platform',
-        'ownerId', 'cabe121e-0baf-4084-9471-cce915d460a8',
+        'ownerId', vortex_access.platform_permission_owner_id(),
         'permissionId', case when p_mode = 'read'
-          then '9901c0dc-8bac-45c7-be0b-3642cb839bb1'
-          else '156d01f3-8f80-45fb-8fc8-b31c47dbb1df'
+          then vortex_access.platform_permission_id('platform.organization.assignments.read')
+          else vortex_access.platform_permission_id('platform.organization.assignments.manage')
         end
       ),
       'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),

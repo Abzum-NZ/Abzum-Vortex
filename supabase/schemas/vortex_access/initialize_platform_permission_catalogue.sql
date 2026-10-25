@@ -18,8 +18,7 @@ declare
   current_registration vortex_access.permission_registrations%rowtype;
   resulting_version bigint;
   expected_count bigint;
-  -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
-  platform_owner_id constant uuid := 'cabe121e-0baf-4084-9471-cce915d460a8';
+  platform_owner_id constant uuid := vortex_access.platform_permission_owner_id();
   catalogue_fingerprint constant text :=
     'sha256:60d2c42cab03723fda56198083a70e8703792587546379372334d99609b15538';
 begin
