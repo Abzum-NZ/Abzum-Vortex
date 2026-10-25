@@ -24,6 +24,7 @@ import {
   studioPaletteChoices,
   studioQueryOffered,
   studioRowActionEventId,
+  type StudioPaletteChoice,
 } from "./contextual-palette";
 import {
   adjustedSlotOrder,
@@ -61,6 +62,7 @@ import {
   plainSource,
   plainSettings,
 } from "./application-composition-regions";
+import { FORM_CONTAINER_KEY, NESTED_FORM_REASON } from "./application-composition-forms";
 
 /** One place on a page or layout where a new block can go, as the palette and the add command know it. */
 export type AddPlace = {
@@ -169,11 +171,30 @@ export const addPlaces = (
         choices: studioPaletteChoices(catalogue, admitted()),
       }),
     });
-    const visit = (items: readonly SourceItem[], steps: readonly SlotStep[]): void => {
+    // A form takes no other form: inside one, the form choice is offered as unavailable.
+    const formChoices = (
+      inForm: boolean,
+      choices: readonly StudioPaletteChoice[],
+    ): readonly StudioPaletteChoice[] =>
+      choices.map((choice) =>
+        inForm && choice.key === FORM_CONTAINER_KEY
+          ? Object.freeze({
+              ...choice,
+              unavailable: NESTED_FORM_REASON,
+              unavailableWhenFilled: NESTED_FORM_REASON,
+            })
+          : choice,
+      );
+    const visit = (
+      items: readonly SourceItem[],
+      steps: readonly SlotStep[],
+      inForm: boolean,
+    ): void => {
       for (const item of items) {
         const release = releaseFor(catalogue, item);
         if (release === undefined) continue;
         const slots = itemSlots(catalogue, item);
+        const childInForm = inForm || release.key === FORM_CONTAINER_KEY;
         for (const declaration of release.slots) {
           if (declaration.repeats !== undefined) continue;
           const parentAlias = item.props.id;
@@ -191,26 +212,29 @@ export const addPlaces = (
               depth: childSteps.length,
               choices:
                 outlet === undefined
-                  ? studioPaletteChoices(
-                      catalogue,
-                      discovery.getPlacementChoices({
-                        kind: "slot",
-                        parent: {
-                          blockId: release.blockId,
-                          releaseVersion: release.releaseVersion,
-                        },
-                        slotKey: declaration.key,
-                      }),
+                  ? formChoices(
+                      childInForm,
+                      studioPaletteChoices(
+                        catalogue,
+                        discovery.getPlacementChoices({
+                          kind: "slot",
+                          parent: {
+                            blockId: release.blockId,
+                            releaseVersion: release.releaseVersion,
+                          },
+                          slotKey: declaration.key,
+                        }),
+                      ),
                     )
                   : [],
             }),
           });
           const child = slots.get(declaration.key);
-          if (child !== undefined) visit(child.items, childSteps);
+          if (child !== undefined) visit(child.items, childSteps, childInForm);
         }
       }
     };
-    visit(region.zone.items, []);
+    visit(region.zone.items, [], false);
   }
   return places;
 };
