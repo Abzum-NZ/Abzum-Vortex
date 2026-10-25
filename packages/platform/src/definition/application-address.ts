@@ -502,12 +502,6 @@ const projectPermittedApplication = async (
     throw new Error("APPLICATION_ADDRESS_RELEASE_UNAVAILABLE");
   if (!releaseRows[0].current_release) return null;
 
-  const roleRows = await transaction.query<SourceRoleRow>`
-    select source_role_id from vortex_access.read_current_application_role_ids_for_launcher()
-  `;
-  const activeRoleIds = new Set(
-    roleRows.map((row) => roleIdSchema.parse(row.source_role_id).toLowerCase()),
-  );
   if (new Set(candidate.pages.map((page) => page.key)).size !== candidate.pages.length)
     throw new Error("APPLICATION_PAGE_ADDRESS_UNAVAILABLE");
 
@@ -548,11 +542,26 @@ const projectPermittedApplication = async (
           (page) => page.key === addressedPage.key || page.key === candidate.homePageKey,
         ),
   );
-  const roleHomes = [...candidate.roles]
-    .sort((left, right) => (left.key < right.key ? -1 : left.key > right.key ? 1 : 0))
-    .filter((role) => activeRoleIds.has(role.roleId.toLowerCase()))
-    .map((role) => candidate.pages.find((page) => sameId(page.pageId, role.homePageId)))
-    .filter((page) => page !== undefined);
+  // Role homes need the current role IDs. They are read once, on first use, and both uses below
+  // run only after the release home is refused, so an allowed release home never reads them.
+  const readRoleHomes = async () => {
+    const roleRows = await transaction.query<SourceRoleRow>`
+      select source_role_id from vortex_access.read_current_application_role_ids_for_launcher()
+    `;
+    const activeRoleIds = new Set(
+      roleRows.map((row) => roleIdSchema.parse(row.source_role_id).toLowerCase()),
+    );
+    return [...candidate.roles]
+      .sort((left, right) => (left.key < right.key ? -1 : left.key > right.key ? 1 : 0))
+      .filter((role) => activeRoleIds.has(role.roleId.toLowerCase()))
+      .map((role) => candidate.pages.find((page) => sameId(page.pageId, role.homePageId)))
+      .filter((page) => page !== undefined);
+  };
+  let roleHomeRead: ReturnType<typeof readRoleHomes> | undefined;
+  const roleHomes = () => {
+    roleHomeRead ??= readRoleHomes();
+    return roleHomeRead;
+  };
   const pageAllowed = (page: ApplicationCandidate["pages"][number]) =>
     decisions.get(page.accessPermissionKey)?.allowed === true;
   if (addressedPage !== undefined) {
@@ -564,7 +573,7 @@ const projectPermittedApplication = async (
     if (!candidate.pages.some((page) => page.key === candidate.homePageKey && pageAllowed(page))) {
       // Preserve the existing role-home order when the release home is refused. Decide another
       // home only as needed; a current role's already-allowed addressed page needs no extra read.
-      for (const page of roleHomes) {
+      for (const page of await roleHomes()) {
         await decidePages([page]);
         if (pageAllowed(page)) break;
       }
@@ -587,10 +596,9 @@ const projectPermittedApplication = async (
 
   // The release home wins if authorised. Otherwise use the lowest source
   // role key among current application roles with an open home.
-  const roleHome = roleHomes.find((page) => allowedPageKeys.has(page.key));
   const homePageKey = allowedPageKeys.has(candidate.homePageKey)
     ? candidate.homePageKey
-    : roleHome?.key;
+    : (await roleHomes()).find((page) => allowedPageKeys.has(page.key))?.key;
   // A home chosen from current role assignments depends on time-bound assignments, memberships and
   // activations that the page decisions' expiry does not cover, so only a projection that does not
   // depend on them is remembered.
