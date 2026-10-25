@@ -998,7 +998,7 @@ const loadApplicationPageJoined = async (
     kind: "available",
     model: {
       ...model,
-      navigation: navigation.value,
+      ...(options?.includeNavigation === false ? {} : { navigation: navigation.value }),
       webMcpTools: projectPageWebMcpTools({
         page,
         ...(guidedForm === undefined ? {} : { activeStepId: guidedForm.activeStepId }),

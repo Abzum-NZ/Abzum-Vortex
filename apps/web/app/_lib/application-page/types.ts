@@ -141,12 +141,15 @@ export type PlacementReadModel = Readonly<{
 
 export type ApplicationPageModel = PlacementReadModel &
   Readonly<{
-    navigation: ProjectedNavigation;
+    /** Client page changes replace the mounted frame's navigation; documents use its own copy. */
+    navigation?: ProjectedNavigation;
     /** Permission-filtered tools that map to one usable control on this page. */
     webMcpTools: readonly PageWebMcpTool[];
   }>;
 
 export type PageLoadOptions = Readonly<{
+  /** Omit navigation from a document's page payload; the frame carries the shared projection. */
+  includeNavigation?: boolean;
   /** Send the page before the placements that only show their own query's rows have read. */
   streamPlacementReads?: boolean;
 }>;
