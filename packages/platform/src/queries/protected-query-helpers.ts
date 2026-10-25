@@ -9,6 +9,12 @@ import type {
   ProtectedQuerySummaryCommand,
 } from "./protected-query-contracts";
 import { inputsReadSchema } from "./protected-query-read-schemas";
+import {
+  parseQueryInputDeclarations,
+  QueryInputRefusalError,
+  validateQueryInputValues,
+} from "./typed-input-validation";
+import type { JsonValue } from "../schema";
 
 export type ResolvedInputs = Extract<z.infer<typeof inputsReadSchema>, { outcome: "resolved" }>;
 
@@ -105,4 +111,45 @@ export const normalizeConditionFieldIdentifiers = (condition: unknown): unknown 
         : normalizeConditionFieldIdentifiers(value);
   }
   return normalized;
+};
+
+/**
+ * The admission every protected query mode runs before its SQL: the query's declared inputs, the
+ * continuation's release (when the request continues one), the declarations and the caller's
+ * values. A refusal is logged with its cause.
+ */
+export const admitQueryInputs = async (
+  transaction: RequestDatabaseTransaction,
+  command: Pick<ProtectedQueryCommand, "moduleRootId" | "queryId" | "inputValues">,
+  continuedReleaseRevision?: number,
+): Promise<
+  | Readonly<{
+      outcome: "admitted";
+      declared: ResolvedInputs;
+      inputValues: Readonly<Record<string, JsonValue>>;
+    }>
+  | Extract<ProtectedQueryResult, { outcome: "refused" }>
+> => {
+  const declared = await readInputs(transaction, command);
+  if (declared.outcome === "refused")
+    return refuseWithCause(declared.reasonCode, "query_inputs", declared.reasonCode);
+  if (
+    continuedReleaseRevision !== undefined &&
+    continuedReleaseRevision !== declared.moduleReleaseRevision
+  )
+    return refuseWithCause("cursor_stale", "continuation", "release_changed");
+  const declarations = parseQueryInputDeclarations(declared.inputs);
+  if (declarations === undefined)
+    return refuseWithCause("descriptor_invalid", "query_inputs", "declarations_unreadable");
+  try {
+    return {
+      outcome: "admitted",
+      declared,
+      inputValues: validateQueryInputValues(declarations, command.inputValues),
+    };
+  } catch (error) {
+    if (error instanceof QueryInputRefusalError)
+      return refuseWithCause("input_invalid", "query_inputs", error.message);
+    throw error;
+  }
 };

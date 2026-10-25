@@ -24,17 +24,12 @@ import {
   type ResultRow,
   one,
   refuseWithCause,
-  readInputs,
   sqlArray,
+  admitQueryInputs,
 } from "./protected-query-helpers";
 import { pageAnchorSchema, pageReadSchema } from "./protected-query-read-schemas";
 import type { QueryCache } from "./protected-query-types";
 import { readThroughQueryCache } from "./shared-cache-adapter";
-import {
-  parseQueryInputDeclarations,
-  validateQueryInputValues,
-  QueryInputRefusalError,
-} from "./typed-input-validation";
 
 /**
  * One table read makes at most this many database reads, each examining at most
@@ -176,23 +171,9 @@ export const runCommand = async (
       return refuseWithCause("cursor_stale", "continuation", "other_scope_or_query");
   }
 
-  const declared = await readInputs(transaction, command);
-  if (declared.outcome === "refused")
-    return refuseWithCause(declared.reasonCode, "query_inputs", declared.reasonCode);
-  if (after !== undefined && after.moduleReleaseRevision !== declared.moduleReleaseRevision)
-    return refuseWithCause("cursor_stale", "continuation", "release_changed");
-  const declarations = parseQueryInputDeclarations(declared.inputs);
-  if (declarations === undefined)
-    return refuseWithCause("descriptor_invalid", "query_inputs", "declarations_unreadable");
-
-  let inputValues: Readonly<Record<string, JsonValue>>;
-  try {
-    inputValues = validateQueryInputValues(declarations, command.inputValues);
-  } catch (error) {
-    if (error instanceof QueryInputRefusalError)
-      return refuseWithCause("input_invalid", "query_inputs", error.message);
-    throw error;
-  }
+  const admitted = await admitQueryInputs(transaction, command, after?.moduleReleaseRevision);
+  if (admitted.outcome === "refused") return admitted;
+  const { declared, inputValues } = admitted;
   // The fingerprint binds the query inputs, the user's sort, filter and search and the page size,
   // so a continuation issued under one order or narrowing can never be replayed under another. The
   // requested columns are not bound: a keyset position is the sort-key values and record identity
