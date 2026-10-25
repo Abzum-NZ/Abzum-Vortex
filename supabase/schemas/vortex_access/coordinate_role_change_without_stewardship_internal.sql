@@ -1,4 +1,4 @@
-create or replace function vortex_access.coordinate_role_change_without_stewardship_v1_internal(
+create or replace function vortex_access.coordinate_role_change_without_stewardship_internal(
   p_evidence jsonb,
   p_changed_by uuid,
   p_correlation_id uuid
@@ -1389,14 +1389,16 @@ end
 $function$;
 
 revoke execute on function
-  vortex_access.coordinate_role_change_without_stewardship_v1_internal(
+  vortex_access.coordinate_role_change_without_stewardship_internal(
     jsonb, uuid, uuid
   )
 from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
-comment on function vortex_access.coordinate_role_change_without_stewardship_v1_internal(
+comment on function vortex_access.coordinate_role_change_without_stewardship_internal(
   jsonb, uuid, uuid
 ) is
   'Owner-only atomic seven-intent role governance composition. It verifies exact evidence and manifests, changes Access once, and grants no caller authority.';
 
-grant execute on function vortex_access.coordinate_role_change_without_stewardship_v1_internal(jsonb, uuid, uuid) to postgres;
+grant execute on function vortex_access.coordinate_role_change_without_stewardship_internal(jsonb, uuid, uuid) to postgres;
+
+alter function vortex_access.coordinate_role_change_without_stewardship_internal(jsonb, uuid, uuid) owner to vortex_owner;

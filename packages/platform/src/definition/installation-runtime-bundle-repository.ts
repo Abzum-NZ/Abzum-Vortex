@@ -253,7 +253,7 @@ export const createInstallationRuntimeBundleRepository = (
       }
       try {
         const rows = await transaction.query<BundleIndexRow>`
-          select vortex_definition.write_installation_runtime_bundle_internal(
+          select vortex_definition.write_installation_runtime_bundle(
             ${command.applicationRootId}::uuid,
             ${command.applicationReleaseRevision}::bigint,
             ${command.bundleFormatVersion}::integer,

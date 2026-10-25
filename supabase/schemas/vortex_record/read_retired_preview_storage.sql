@@ -1,4 +1,4 @@
-create or replace function vortex_record.read_retired_preview_storage_internal(
+create or replace function vortex_record.read_retired_preview_storage(
   p_limit integer
 )
 returns setof uuid
@@ -20,11 +20,11 @@ as $function$
   limit greatest(1, least(coalesce(p_limit, 1), 100));
 $function$;
 
-alter function vortex_record.read_retired_preview_storage_internal(integer) owner to vortex_owner;
+alter function vortex_record.read_retired_preview_storage(integer) owner to vortex_owner;
 
-revoke all on function vortex_record.read_retired_preview_storage_internal(integer)
+revoke all on function vortex_record.read_retired_preview_storage(integer)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
-grant execute on function vortex_record.read_retired_preview_storage_internal(integer)
+grant execute on function vortex_record.read_retired_preview_storage(integer)
   to vortex_runtime;
-comment on function vortex_record.read_retired_preview_storage_internal(integer) is
+comment on function vortex_record.read_retired_preview_storage(integer) is
   'Lists a bounded batch of retired preview storage identities (their preview is gone) for the background drop.';

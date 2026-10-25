@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION vortex_access.coordinate_application_access_without_stewardship_v1_internal(p_operation text, p_expected_revision bigint, p_prepared_templates jsonb, p_organization_id uuid, p_application_root_id uuid, p_changed_by uuid, p_correlation_id uuid) RETURNS TABLE(outcome text, operation text, organization_id uuid, application_root_id uuid, registration_state text, registration_revision bigint, access_version bigint, correlation_id uuid)
+CREATE OR REPLACE FUNCTION vortex_access.coordinate_application_access_without_stewardship_internal(p_operation text, p_expected_revision bigint, p_prepared_templates jsonb, p_organization_id uuid, p_application_root_id uuid, p_changed_by uuid, p_correlation_id uuid) RETURNS TABLE(outcome text, operation text, organization_id uuid, application_root_id uuid, registration_state text, registration_revision bigint, access_version bigint, correlation_id uuid)
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO ''
     AS $_$
@@ -236,7 +236,7 @@ begin
   end if;
 
   -- The organization version row is already locked. Check before invoking the
-  -- legacy raw helper, whose input-error handler also catches numeric overflow.
+  -- registration helper, whose input-error handler also catches numeric overflow.
   -- A complete exact no-op returned above does not need a new Access version.
   if exists (
     select 1 from vortex_access.organization_access_versions as version
@@ -279,13 +279,13 @@ begin
 
   if p_operation = 'withdraw' then
     select changed.* into strict raw_result
-    from vortex_access.withdraw_application_permission_registration_v1_internal(
+    from vortex_access.withdraw_application_permission_registration_internal(
       p_organization_id, p_application_root_id, p_expected_revision,
       p_changed_by, p_correlation_id
     ) as changed;
   else
     select changed.* into strict raw_result
-    from vortex_access.apply_application_permission_registration_v1_internal(
+    from vortex_access.apply_application_permission_registration_internal(
       p_operation, p_expected_revision, permission_candidate,
       p_changed_by, p_correlation_id
     ) as changed;
@@ -723,10 +723,10 @@ exception
 end
 $_$;
 
-COMMENT ON FUNCTION vortex_access.coordinate_application_access_without_stewardship_v1_internal(p_operation text, p_expected_revision bigint, p_prepared_templates jsonb, p_organization_id uuid, p_application_root_id uuid, p_changed_by uuid, p_correlation_id uuid) IS 'Internal application-access implementation retained only behind the stewardship safeguard.';
+COMMENT ON FUNCTION vortex_access.coordinate_application_access_without_stewardship_internal(p_operation text, p_expected_revision bigint, p_prepared_templates jsonb, p_organization_id uuid, p_application_root_id uuid, p_changed_by uuid, p_correlation_id uuid) IS 'Internal application-access implementation retained only behind the stewardship safeguard.';
 
-REVOKE ALL ON FUNCTION vortex_access.coordinate_application_access_without_stewardship_v1_internal(p_operation text, p_expected_revision bigint, p_prepared_templates jsonb, p_organization_id uuid, p_application_root_id uuid, p_changed_by uuid, p_correlation_id uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION vortex_access.coordinate_application_access_without_stewardship_internal(p_operation text, p_expected_revision bigint, p_prepared_templates jsonb, p_organization_id uuid, p_application_root_id uuid, p_changed_by uuid, p_correlation_id uuid) FROM PUBLIC;
 
-alter function vortex_access.coordinate_application_access_without_stewardship_v1_internal(p_operation text, p_expected_revision bigint, p_prepared_templates jsonb, p_organization_id uuid, p_application_root_id uuid, p_changed_by uuid, p_correlation_id uuid) owner to vortex_owner;
+alter function vortex_access.coordinate_application_access_without_stewardship_internal(p_operation text, p_expected_revision bigint, p_prepared_templates jsonb, p_organization_id uuid, p_application_root_id uuid, p_changed_by uuid, p_correlation_id uuid) owner to vortex_owner;
 
-grant execute on function vortex_access.coordinate_application_access_without_stewardship_v1_internal(p_operation text, p_expected_revision bigint, p_prepared_templates jsonb, p_organization_id uuid, p_application_root_id uuid, p_changed_by uuid, p_correlation_id uuid) to postgres;
+grant execute on function vortex_access.coordinate_application_access_without_stewardship_internal(p_operation text, p_expected_revision bigint, p_prepared_templates jsonb, p_organization_id uuid, p_application_root_id uuid, p_changed_by uuid, p_correlation_id uuid) to postgres;

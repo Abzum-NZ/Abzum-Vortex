@@ -1,4 +1,4 @@
-create or replace function vortex_definition.lock_application_page_adoption_draft_internal(
+create or replace function vortex_definition.lock_application_page_adoption_draft(
   p_root_id uuid,
   p_expected_draft_revision bigint,
   p_expected_release_revision bigint
@@ -50,13 +50,11 @@ begin
 end
 $function$;
 
-alter function vortex_definition.lock_application_page_adoption_draft_internal(uuid,bigint,bigint)
-  owner to postgres;
-revoke all on function vortex_definition.lock_application_page_adoption_draft_internal(uuid,bigint,bigint)
+revoke all on function vortex_definition.lock_application_page_adoption_draft(uuid,bigint,bigint)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-grant execute on function vortex_definition.lock_application_page_adoption_draft_internal(uuid,bigint,bigint)
+grant execute on function vortex_definition.lock_application_page_adoption_draft(uuid,bigint,bigint)
   to vortex_request;
-comment on function vortex_definition.lock_application_page_adoption_draft_internal(uuid,bigint,bigint) is
+comment on function vortex_definition.lock_application_page_adoption_draft(uuid,bigint,bigint) is
   'Locks an ordinary Application draft for current HUMAN page adoption derivation in Access, root and draft order; returns only its existing protected publication state and writes no source or release.';
 
-alter function vortex_definition.lock_application_page_adoption_draft_internal(p_root_id uuid, p_expected_draft_revision bigint, p_expected_release_revision bigint) owner to vortex_owner;
+alter function vortex_definition.lock_application_page_adoption_draft(uuid,bigint,bigint) owner to vortex_owner;

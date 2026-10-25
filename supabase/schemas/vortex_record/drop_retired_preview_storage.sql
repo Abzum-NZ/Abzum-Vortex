@@ -1,4 +1,4 @@
-create or replace function vortex_record.drop_retired_preview_storage_internal(
+create or replace function vortex_record.drop_retired_preview_storage(
   p_storage_contract_id uuid
 )
 returns boolean
@@ -66,11 +66,11 @@ begin
 end
 $function$;
 
-alter function vortex_record.drop_retired_preview_storage_internal(uuid) owner to vortex_owner;
+alter function vortex_record.drop_retired_preview_storage(uuid) owner to vortex_owner;
 
-revoke all on function vortex_record.drop_retired_preview_storage_internal(uuid)
+revoke all on function vortex_record.drop_retired_preview_storage(uuid)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
-grant execute on function vortex_record.drop_retired_preview_storage_internal(uuid)
+grant execute on function vortex_record.drop_retired_preview_storage(uuid)
   to vortex_runtime;
-comment on function vortex_record.drop_retired_preview_storage_internal(uuid) is
+comment on function vortex_record.drop_retired_preview_storage(uuid) is
   'Drops one retired preview storage identity (its preview is gone), including its preview records and record metadata, in its own short background transaction: a held lock fails fast and the next run retries. Preview storage references no platform table, so the drop locks only its own table.';

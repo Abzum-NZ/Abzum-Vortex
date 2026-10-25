@@ -1,4 +1,4 @@
-create or replace function vortex_platform.finish_abandoned_file_upload_internal(p_file_id uuid, p_claim_id uuid)
+create or replace function vortex_platform.finish_abandoned_file_upload(p_file_id uuid, p_claim_id uuid)
 returns boolean language plpgsql volatile security definer set search_path = ''
 as $function$
 declare
@@ -16,9 +16,9 @@ begin
   return true;
 end
 $function$;
-alter function vortex_platform.finish_abandoned_file_upload_internal(uuid,uuid) owner to vortex_owner;
-revoke all on function vortex_platform.finish_abandoned_file_upload_internal(uuid,uuid)
+alter function vortex_platform.finish_abandoned_file_upload(uuid,uuid) owner to vortex_owner;
+revoke all on function vortex_platform.finish_abandoned_file_upload(uuid,uuid)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
-grant execute on function vortex_platform.finish_abandoned_file_upload_internal(uuid,uuid) to vortex_runtime;
-comment on function vortex_platform.finish_abandoned_file_upload_internal(uuid,uuid) is
+grant execute on function vortex_platform.finish_abandoned_file_upload(uuid,uuid) to vortex_runtime;
+comment on function vortex_platform.finish_abandoned_file_upload(uuid,uuid) is
   'Finalizes only the matching abandoned-upload cleanup claim after confirmed Storage deletion; leaves terminal file metadata and removes upload state.';

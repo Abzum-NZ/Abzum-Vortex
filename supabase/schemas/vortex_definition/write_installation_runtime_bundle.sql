@@ -1,4 +1,4 @@
-create or replace function vortex_definition.write_installation_runtime_bundle_internal(
+create or replace function vortex_definition.write_installation_runtime_bundle(
   p_application_root_id uuid,
   p_application_release_revision bigint,
   p_bundle_format_version integer,
@@ -484,15 +484,15 @@ exception
 end
 $function$;
 
-alter function vortex_definition.write_installation_runtime_bundle_internal(uuid,bigint,integer,text,jsonb) owner to vortex_owner;
+alter function vortex_definition.write_installation_runtime_bundle(uuid,bigint,integer,text,jsonb) owner to vortex_owner;
 
-revoke all on function vortex_definition.write_installation_runtime_bundle_internal(
+revoke all on function vortex_definition.write_installation_runtime_bundle(
   uuid, bigint, integer, text, jsonb
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_record_adapter;
-grant execute on function vortex_definition.write_installation_runtime_bundle_internal(
+grant execute on function vortex_definition.write_installation_runtime_bundle(
   uuid, bigint, integer, text, jsonb
 ) to vortex_request;
-comment on function vortex_definition.write_installation_runtime_bundle_internal(
+comment on function vortex_definition.write_installation_runtime_bundle(
   uuid, bigint, integer, text, jsonb
 ) is
   'Atomically stores one immutable runtime bundle for an authorised exact Application release and pin fingerprint.';

@@ -1,4 +1,4 @@
-create or replace function vortex_definition.remove_abandoned_runtime_bundles_internal(
+create or replace function vortex_definition.remove_abandoned_runtime_bundles(
   p_limit integer
 )
 returns jsonb
@@ -204,14 +204,14 @@ begin
   );
 end
 $function$;
-alter function vortex_definition.remove_abandoned_runtime_bundles_internal(integer) owner to vortex_owner;
+alter function vortex_definition.remove_abandoned_runtime_bundles(integer) owner to vortex_owner;
 
 
-alter function vortex_definition.remove_abandoned_runtime_bundles_internal(integer)
+alter function vortex_definition.remove_abandoned_runtime_bundles(integer)
   owner to vortex_owner;
-revoke all on function vortex_definition.remove_abandoned_runtime_bundles_internal(integer)
+revoke all on function vortex_definition.remove_abandoned_runtime_bundles(integer)
   from public, anon, authenticated, service_role, vortex_request, vortex_record_adapter;
-grant execute on function vortex_definition.remove_abandoned_runtime_bundles_internal(integer)
+grant execute on function vortex_definition.remove_abandoned_runtime_bundles(integer)
   to vortex_runtime;
-comment on function vortex_definition.remove_abandoned_runtime_bundles_internal(integer) is
+comment on function vortex_definition.remove_abandoned_runtime_bundles(integer) is
   'Removes one bounded batch of expired never-activated or superseded runtime bundles and orphaned access plans.';

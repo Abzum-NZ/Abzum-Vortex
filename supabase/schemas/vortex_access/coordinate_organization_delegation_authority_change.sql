@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_access.coordinate_organization_delegation_authority_change(p_operation text, p_organization_id uuid, p_delegation_authority_id uuid, p_expected_delegation_revision bigint, p_holder_kind text, p_organization_account_id uuid, p_group_id uuid, p_scope_kind text, p_bounded_permissions jsonb, p_starts_at timestamp with time zone, p_expires_at timestamp with time zone, p_changed_by uuid, p_correlation_id uuid) RETURNS TABLE(outcome text, operation text, delegation jsonb, access_version bigint, correlation_id uuid)
+CREATE OR REPLACE FUNCTION vortex_access.coordinate_organization_delegation_authority_change(p_operation text, p_organization_id uuid, p_delegation_authority_id uuid, p_expected_delegation_revision bigint, p_holder_kind text, p_organization_account_id uuid, p_group_id uuid, p_scope_kind text, p_bounded_permissions jsonb, p_starts_at timestamp with time zone, p_expires_at timestamp with time zone, p_changed_by uuid, p_correlation_id uuid) RETURNS TABLE(outcome text, operation text, delegation jsonb, access_version bigint, correlation_id uuid)
     LANGUAGE plpgsql
     SET search_path TO ''
     AS $$
@@ -6,7 +6,7 @@ declare
   changed record;
 begin
   select result.* into strict changed
-  from vortex_access.coordinate_delegation_change_without_stewardship_v1_internal(
+  from vortex_access.coordinate_delegation_change_without_stewardship_internal(
       p_operation, p_organization_id, p_delegation_authority_id,
       p_expected_delegation_revision, p_holder_kind,
       p_organization_account_id, p_group_id, p_scope_kind,

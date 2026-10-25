@@ -375,7 +375,7 @@ export const createHumanApplicationDraftWriter = (
           let locked: readonly DatabaseRow[];
           try {
             locked = await transaction.query<DatabaseRow>`
-              select vortex_definition.lock_application_page_adoption_draft_internal(
+              select vortex_definition.lock_application_page_adoption_draft(
                 ${command.data.rootId}::uuid,
                 ${command.data.expectedDraftRevision},
                 ${command.data.expectedPublicationAnchor}

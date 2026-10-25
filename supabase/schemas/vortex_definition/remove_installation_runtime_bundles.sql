@@ -1,4 +1,4 @@
-create or replace function vortex_definition.remove_installation_runtime_bundles_internal(
+create or replace function vortex_definition.remove_installation_runtime_bundles(
   p_application_root_id uuid
 )
 returns jsonb
@@ -88,14 +88,14 @@ begin
   );
 end
 $function$;
-alter function vortex_definition.remove_installation_runtime_bundles_internal(uuid) owner to vortex_owner;
+alter function vortex_definition.remove_installation_runtime_bundles(uuid) owner to vortex_owner;
 
 
-alter function vortex_definition.remove_installation_runtime_bundles_internal(uuid)
+alter function vortex_definition.remove_installation_runtime_bundles(uuid)
   owner to vortex_owner;
-revoke all on function vortex_definition.remove_installation_runtime_bundles_internal(uuid)
+revoke all on function vortex_definition.remove_installation_runtime_bundles(uuid)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
-grant execute on function vortex_definition.remove_installation_runtime_bundles_internal(uuid)
+grant execute on function vortex_definition.remove_installation_runtime_bundles(uuid)
   to vortex_request;
-comment on function vortex_definition.remove_installation_runtime_bundles_internal(uuid) is
+comment on function vortex_definition.remove_installation_runtime_bundles(uuid) is
   'Lists and removes all runtime bundle registrations and access plans for one authorised installation after its bindings are detached.';

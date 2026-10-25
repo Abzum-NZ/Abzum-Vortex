@@ -1,4 +1,4 @@
-create or replace function vortex_definition.expire_abandoned_preview_installations_internal(
+create or replace function vortex_definition.expire_abandoned_preview_installations(
   p_limit integer
 )
 returns integer
@@ -35,12 +35,12 @@ begin
 end
 $function$;
 
-alter function vortex_definition.expire_abandoned_preview_installations_internal(integer)
+alter function vortex_definition.expire_abandoned_preview_installations(integer)
   owner to vortex_owner;
 
-revoke all on function vortex_definition.expire_abandoned_preview_installations_internal(integer)
+revoke all on function vortex_definition.expire_abandoned_preview_installations(integer)
   from public, anon, authenticated, service_role, vortex_request;
-grant execute on function vortex_definition.expire_abandoned_preview_installations_internal(integer)
+grant execute on function vortex_definition.expire_abandoned_preview_installations(integer)
   to vortex_runtime;
-comment on function vortex_definition.expire_abandoned_preview_installations_internal(integer) is
+comment on function vortex_definition.expire_abandoned_preview_installations(integer) is
   'Removes a bounded batch of expired preview installations across organisations, for scheduled runtime maintenance only; their isolated Record storage is retired with them and dropped in the background.';

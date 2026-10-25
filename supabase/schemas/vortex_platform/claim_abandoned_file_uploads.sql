@@ -1,4 +1,4 @@
-create or replace function vortex_platform.claim_abandoned_file_uploads_internal(p_limit integer, p_storage_project text)
+create or replace function vortex_platform.claim_abandoned_file_uploads(p_limit integer, p_storage_project text)
 returns jsonb language plpgsql volatile security definer set search_path = ''
 as $function$
 declare
@@ -49,9 +49,9 @@ begin
   return result;
 end
 $function$;
-alter function vortex_platform.claim_abandoned_file_uploads_internal(integer,text) owner to vortex_owner;
-revoke all on function vortex_platform.claim_abandoned_file_uploads_internal(integer,text)
+alter function vortex_platform.claim_abandoned_file_uploads(integer,text) owner to vortex_owner;
+revoke all on function vortex_platform.claim_abandoned_file_uploads(integer,text)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
-grant execute on function vortex_platform.claim_abandoned_file_uploads_internal(integer,text) to vortex_runtime;
-comment on function vortex_platform.claim_abandoned_file_uploads_internal(integer,text) is
+grant execute on function vortex_platform.claim_abandoned_file_uploads(integer,text) to vortex_runtime;
+comment on function vortex_platform.claim_abandoned_file_uploads(integer,text) is
   'Claims a bounded batch of expired never-activated uploads, including clean and rejected inspections; abandoned claims retry after five minutes.';
