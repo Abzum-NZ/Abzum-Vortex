@@ -12,16 +12,18 @@ import {
 import type { DefinitionRenderErrorLocation } from "../definition-error";
 import {
   fail,
-  parseFields,
-  parseProjectedPart,
-  parseRowCapabilities,
-  parseSummaryMetrics,
   requireArray,
   requireExactKeys,
   requireNonEmptyString,
   requirePositiveInteger,
   requireRecord,
   requireString,
+} from "./payload-parse";
+import {
+  parseFields,
+  parseProjectedPart,
+  parseRowCapabilities,
+  parseSummaryMetrics,
   type BoardBucketPayload,
   type BoardPage,
   type BoardPayload,

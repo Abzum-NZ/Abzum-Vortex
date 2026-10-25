@@ -20,7 +20,7 @@ import {
   readStudioPreviewState,
   studioPreviewRunsDraft,
 } from "./studio-application-preview";
-import { loadInstalledContext, requestDependencies } from "./application-page/load";
+import { loadInstalledContext, requestDependencies } from "./application-page/installed-context";
 import { createPlacementReadServices } from "./application-page/placement-services";
 import { loadOrganizationLauncher } from "./organization-context";
 import { getQueryContinuationKey } from "./query-continuation-key";

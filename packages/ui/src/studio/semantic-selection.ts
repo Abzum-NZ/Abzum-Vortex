@@ -47,32 +47,54 @@ export type StudioSemanticSelection =
   | Readonly<{ kind: "role"; roleKey: string }>;
 
 /** The Data tab's kinds of selection: Modules and what they hold. */
-export type StudioDataSelection = Extract<StudioSemanticSelection, { kind: "module" | "record_type" | "field" | "query" }>;
+export type StudioDataSelection = Extract<
+  StudioSemanticSelection,
+  { kind: "module" | "record_type" | "field" | "query" }
+>;
 
 /** Whether a selection is one the Data tab shows. */
-export const isStudioDataSelection = (selection: StudioSemanticSelection | null): selection is StudioDataSelection =>
-  selection !== null && (selection.kind === "module" || selection.kind === "record_type" ||
-    selection.kind === "field" || selection.kind === "query");
+export const isStudioDataSelection = (
+  selection: StudioSemanticSelection | null,
+): selection is StudioDataSelection =>
+  selection !== null &&
+  (selection.kind === "module" ||
+    selection.kind === "record_type" ||
+    selection.kind === "field" ||
+    selection.kind === "query");
 
 type SourceFlowTaskOf = ApplicationSourceDocument["body"]["flows"][number]["tasks"][number];
 
 /** Every authored task of a flow in display order, with its path inside the flow. */
 export const studioFlowTaskEntries = (
-  flow: Readonly<{ tasks: readonly SourceFlowTaskOf[]; errors?: readonly SourceFlowTaskOf[] | undefined;
-    finally?: readonly SourceFlowTaskOf[] | undefined }>,
+  flow: Readonly<{
+    tasks: readonly SourceFlowTaskOf[];
+    errors?: readonly SourceFlowTaskOf[] | undefined;
+    finally?: readonly SourceFlowTaskOf[] | undefined;
+  }>,
 ): Readonly<{ task: SourceFlowTaskOf; path: readonly (string | number)[] }>[] => {
   const entries: { task: SourceFlowTaskOf; path: readonly (string | number)[] }[] = [];
-  const walk = (tasks: readonly SourceFlowTaskOf[] | undefined, path: readonly (string | number)[]) => {
+  const walk = (
+    tasks: readonly SourceFlowTaskOf[] | undefined,
+    path: readonly (string | number)[],
+  ) => {
     (tasks ?? []).forEach((task, index) => {
       const taskPath = [...path, index];
       entries.push({ task, path: taskPath });
-      if ("then" in task) { walk(task.then, [...taskPath, "then"]); walk(task.else, [...taskPath, "else"]); }
+      if ("then" in task) {
+        walk(task.then, [...taskPath, "then"]);
+        walk(task.else, [...taskPath, "else"]);
+      }
       if ("cases" in task) {
-        task.cases.forEach((branch, caseIndex) => walk(branch.tasks, [...taskPath, "cases", caseIndex, "tasks"]));
+        task.cases.forEach((branch, caseIndex) =>
+          walk(branch.tasks, [...taskPath, "cases", caseIndex, "tasks"]),
+        );
         walk(task.default, [...taskPath, "default"]);
       }
       if ("tasks" in task) walk(task.tasks, [...taskPath, "tasks"]);
-      if ("branches" in task) task.branches.forEach((branch, branchIndex) => walk(branch, [...taskPath, "branches", branchIndex]));
+      if ("branches" in task)
+        task.branches.forEach((branch, branchIndex) =>
+          walk(branch, [...taskPath, "branches", branchIndex]),
+        );
     });
   };
   walk(flow.tasks, ["tasks"]);
@@ -85,13 +107,21 @@ export const studioFlowTaskEntries = (
 export const studioFlowOfSelection = (
   selection: StudioSemanticSelection | null,
 ): Extract<StudioSemanticSelection, { kind: "flow" }> | null =>
-  selection?.kind === "flow" ? selection
+  selection?.kind === "flow"
+    ? selection
     : selection?.kind === "flow_step"
-      ? Object.freeze({ kind: "flow", flowAlias: selection.flowAlias, moduleKey: selection.moduleKey })
+      ? Object.freeze({
+          kind: "flow",
+          flowAlias: selection.flowAlias,
+          moduleKey: selection.moduleKey,
+        })
       : null;
 
 const studioWords = (key: string): string => {
-  const words = key.trim().replace(/[-_.]+/g, " ").replace(/\s+/g, " ");
+  const words = key
+    .trim()
+    .replace(/[-_.]+/g, " ")
+    .replace(/\s+/g, " ");
   return words === "" ? key : `${words.charAt(0).toUpperCase()}${words.slice(1)}`;
 };
 
@@ -173,9 +203,7 @@ type SelectionIndex = Readonly<{
   roleKeys: ReadonlySet<string>;
 }>;
 
-export type StudioSemanticSelectionListener = (
-  selection: StudioSemanticSelection | null,
-) => void;
+export type StudioSemanticSelectionListener = (selection: StudioSemanticSelection | null) => void;
 
 export interface StudioSemanticSelectionStore {
   /** Returns the current semantic identity, or `null` when the editor cleared selection. */
@@ -222,8 +250,9 @@ const itemPropsByRole = (catalogue: ImmutablePlatformBlockCatalogue, item: Sourc
 };
 
 /** A flow's name as a person reads it: its authored name label, else its readable key. */
-export const studioFlowLabel = (flow: Readonly<{ key: string; labels?: Readonly<Record<string, string>> | undefined }>): string =>
-  authoredLabel(flow.labels?.name, readableKey(flow.key, "Flow"));
+export const studioFlowLabel = (
+  flow: Readonly<{ key: string; labels?: Readonly<Record<string, string>> | undefined }>,
+): string => authoredLabel(flow.labels?.name, readableKey(flow.key, "Flow"));
 
 const readableKey = (value: string | undefined, fallback: string): string => {
   const key = value?.trim().replace(/[-_]+/g, " ").replace(/\s+/g, " ");
@@ -240,10 +269,7 @@ export const traverseStudioSemanticSelectionDraft = (
   draft: StudioApplicationSelectionDraft,
   listener: StudioSemanticSelectionTraversalListener,
 ): void => {
-  const visit = (
-    node: StudioSemanticSelectionTraversalNode,
-    children?: () => void,
-  ): void => {
+  const visit = (node: StudioSemanticSelectionTraversalNode, children?: () => void): void => {
     listener(Object.freeze({ phase: "enter", node }));
     children?.();
     listener(Object.freeze({ phase: "exit", node }));
@@ -390,20 +416,34 @@ export const traverseStudioSemanticSelectionDraft = (
       visit(Object.freeze({ kind: "section", section: "flows", label: "Flows" }), () => {
         const owners = [
           { moduleKey: null, flows: draft.source.body.flows },
-          ...draft.source.body.modules.map((module) => ({ moduleKey: module.key, flows: module.flows })),
+          ...draft.source.body.modules.map((module) => ({
+            moduleKey: module.key,
+            flows: module.flows,
+          })),
         ];
         for (const owner of owners)
           for (const flow of owner.flows) {
             const selection = Object.freeze({
-              kind: "flow", flowAlias: flow.id, moduleKey: owner.moduleKey,
+              kind: "flow",
+              flowAlias: flow.id,
+              moduleKey: owner.moduleKey,
             } as const);
             visit(Object.freeze({ kind: "flow", label: studioFlowLabel(flow), selection }), () => {
               for (const { task } of studioFlowTaskEntries(flow))
-                visit(Object.freeze({
-                  kind: "flow_step",
-                  label: Object.values(flowTaskRegistry).find((entry) => entry.type === task.type)?.title ?? studioWords(task.type),
-                  selection: Object.freeze({ kind: "flow_step", flowAlias: flow.id, moduleKey: owner.moduleKey, taskId: task.id } as const),
-                }));
+                visit(
+                  Object.freeze({
+                    kind: "flow_step",
+                    label:
+                      Object.values(flowTaskRegistry).find((entry) => entry.type === task.type)
+                        ?.title ?? studioWords(task.type),
+                    selection: Object.freeze({
+                      kind: "flow_step",
+                      flowAlias: flow.id,
+                      moduleKey: owner.moduleKey,
+                      taskId: task.id,
+                    } as const),
+                  }),
+                );
             });
           }
       });
@@ -423,27 +463,55 @@ const normalizeSelection = (
     case "shell":
       return Object.freeze({ kind: "shell", shellAlias: selection.shellAlias });
     case "navigation":
-      return Object.freeze({ kind: "navigation", navigationItemAlias: selection.navigationItemAlias });
+      return Object.freeze({
+        kind: "navigation",
+        navigationItemAlias: selection.navigationItemAlias,
+      });
     case "flow":
       return typeof selection.moduleKey === "string" || selection.moduleKey === null
-        ? Object.freeze({ kind: "flow", flowAlias: selection.flowAlias, moduleKey: selection.moduleKey })
+        ? Object.freeze({
+            kind: "flow",
+            flowAlias: selection.flowAlias,
+            moduleKey: selection.moduleKey,
+          })
         : undefined;
     case "flow_step":
-      return (typeof selection.moduleKey === "string" || selection.moduleKey === null) && typeof selection.taskId === "string"
-        ? Object.freeze({ kind: "flow_step", flowAlias: selection.flowAlias, moduleKey: selection.moduleKey, taskId: selection.taskId })
+      return (typeof selection.moduleKey === "string" || selection.moduleKey === null) &&
+        typeof selection.taskId === "string"
+        ? Object.freeze({
+            kind: "flow_step",
+            flowAlias: selection.flowAlias,
+            moduleKey: selection.moduleKey,
+            taskId: selection.taskId,
+          })
         : undefined;
     case "placement":
       return Object.freeze({ kind: "placement", placementAlias: selection.placementAlias });
     case "module":
       return Object.freeze({ kind: "module", moduleKey: selection.moduleKey });
     case "record_type":
-      return Object.freeze({ kind: "record_type", moduleKey: selection.moduleKey, recordKey: selection.recordKey });
+      return Object.freeze({
+        kind: "record_type",
+        moduleKey: selection.moduleKey,
+        recordKey: selection.recordKey,
+      });
     case "field":
-      return Object.freeze({ kind: "field", moduleKey: selection.moduleKey, recordKey: selection.recordKey, fieldKey: selection.fieldKey });
+      return Object.freeze({
+        kind: "field",
+        moduleKey: selection.moduleKey,
+        recordKey: selection.recordKey,
+        fieldKey: selection.fieldKey,
+      });
     case "query":
-      return Object.freeze({ kind: "query", moduleKey: selection.moduleKey, queryKey: selection.queryKey });
+      return Object.freeze({
+        kind: "query",
+        moduleKey: selection.moduleKey,
+        queryKey: selection.queryKey,
+      });
     case "role":
-      return typeof selection.roleKey === "string" ? Object.freeze({ kind: "role", roleKey: selection.roleKey }) : undefined;
+      return typeof selection.roleKey === "string"
+        ? Object.freeze({ kind: "role", roleKey: selection.roleKey })
+        : undefined;
     default:
       return undefined;
   }
@@ -482,19 +550,24 @@ export const studioSemanticSelectionKey = (selection: StudioSemanticSelection): 
 /** The item that holds a Data selection: a field's record type, a record type's or query's Module. */
 const dataParent = (selection: StudioSemanticSelection): StudioSemanticSelection | undefined => {
   switch (selection.kind) {
-    case "field": return { kind: "record_type", moduleKey: selection.moduleKey, recordKey: selection.recordKey };
-    case "record_type": case "query": return { kind: "module", moduleKey: selection.moduleKey };
-    default: return undefined;
+    case "field":
+      return {
+        kind: "record_type",
+        moduleKey: selection.moduleKey,
+        recordKey: selection.recordKey,
+      };
+    case "record_type":
+    case "query":
+      return { kind: "module", moduleKey: selection.moduleKey };
+    default:
+      return undefined;
   }
 };
 
 const selectionKey = (selection: StudioSemanticSelection | null): string | null =>
   selection === null ? null : studioSemanticSelectionKey(selection);
 
-const containsSelection = (
-  index: SelectionIndex,
-  selection: StudioSemanticSelection,
-): boolean => {
+const containsSelection = (index: SelectionIndex, selection: StudioSemanticSelection): boolean => {
   switch (selection.kind) {
     case "application":
       return selection.applicationRootId === index.applicationRootId;
@@ -514,7 +587,10 @@ const containsSelection = (
     case "record_type":
     case "field":
     case "query":
-      return index.usedModuleKeys.has(selection.moduleKey) || index.dataKeys.has(studioSemanticSelectionKey(selection));
+      return (
+        index.usedModuleKeys.has(selection.moduleKey) ||
+        index.dataKeys.has(studioSemanticSelectionKey(selection))
+      );
     case "role":
       return index.roleKeys.has(selection.roleKey);
   }
@@ -556,11 +632,21 @@ const indexDraft = (draft: StudioApplicationSelectionDraft): SelectionIndex => {
     const moduleKey = module.key;
     dataKeys.add(studioSemanticSelectionKey({ kind: "module", moduleKey }));
     for (const record of module.record_types) {
-      dataKeys.add(studioSemanticSelectionKey({ kind: "record_type", moduleKey, recordKey: record.key }));
+      dataKeys.add(
+        studioSemanticSelectionKey({ kind: "record_type", moduleKey, recordKey: record.key }),
+      );
       for (const field of record.fields)
-        dataKeys.add(studioSemanticSelectionKey({ kind: "field", moduleKey, recordKey: record.key, fieldKey: field.key }));
+        dataKeys.add(
+          studioSemanticSelectionKey({
+            kind: "field",
+            moduleKey,
+            recordKey: record.key,
+            fieldKey: field.key,
+          }),
+        );
     }
-    for (const query of module.queries) dataKeys.add(studioSemanticSelectionKey({ kind: "query", moduleKey, queryKey: query.key }));
+    for (const query of module.queries)
+      dataKeys.add(studioSemanticSelectionKey({ kind: "query", moduleKey, queryKey: query.key }));
   }
 
   return {
@@ -620,14 +706,18 @@ export const createStudioSemanticSelectionStore = (
         } else if (selection.kind === "flow_step") {
           // A removed step leaves its flow selected.
           const flow = studioFlowOfSelection(selection);
-          next = flow !== null && containsSelection(index, flow) ? flow : applicationSelection(index.applicationRootId);
+          next =
+            flow !== null && containsSelection(index, flow)
+              ? flow
+              : applicationSelection(index.applicationRootId);
         } else if (selection.kind === "role") {
           // A removed role leaves the application selected.
           next = applicationSelection(index.applicationRootId);
         } else {
           // A Data item that left the draft selects what held it, when that is still there.
           let parent = dataParent(selection);
-          while (parent !== undefined && !containsSelection(index, parent)) parent = dataParent(parent);
+          while (parent !== undefined && !containsSelection(index, parent))
+            parent = dataParent(parent);
           next = parent ?? applicationSelection(index.applicationRootId);
         }
       }
@@ -644,10 +734,3 @@ export const createStudioSemanticSelectionStore = (
     },
   });
 };
-
-export {
-  projectStudioSemanticOutline,
-  type StudioPlacementDescriber,
-  type StudioSemanticOutline,
-  type StudioSemanticOutlineNode,
-} from "./semantic-outline";
