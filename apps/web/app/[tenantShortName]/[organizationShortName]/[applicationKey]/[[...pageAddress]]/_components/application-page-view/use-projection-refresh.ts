@@ -42,13 +42,21 @@ export function useProjectionRefresh(
   refreshRef.current = refresh;
   // A payload update may replace the effect before an earlier read settles.
   const inFlight = useRef(new Set<string>());
+  // Placements whose last ready payload showed a pending state: a failed reread keeps polling them.
+  const pendingBefore = useRef(new Set<string>());
   useEffect(() => {
     const timers = new Map<string, ReturnType<typeof setTimeout>>();
     let disposed = false;
     for (const [placementId, policy] of Object.entries(policies)) {
       const state = Object.entries(data).find(([id]) => id.toLowerCase() === placementId)?.[1];
-      if (state?.status !== "ready" || !isRecord(state.values)) continue;
-      const payload = state.values;
+      // A temporary read failure replaces the payload; the background work it showed may still be
+      // pending, so the placement keeps being reread until a ready payload decides.
+      const retrying = state?.status === "error" && pendingBefore.current.has(placementId);
+      if (!retrying && (state?.status !== "ready" || !isRecord(state.values))) {
+        pendingBefore.current.delete(placementId);
+        continue;
+      }
+      const payload = state?.status === "ready" && isRecord(state.values) ? state.values : {};
       const pendingRows =
         payload.kind === "table" && Array.isArray(payload.rows)
           ? payload.rows.filter(
@@ -58,16 +66,25 @@ export function useProjectionRefresh(
                 pendingChoice(row.cells[policy.fieldId], policy.values),
             )
           : [];
+      // A detail shows the field among its fields or as its heading (its header carries the key).
       const pendingDetail =
         payload.kind === "record_detail" &&
-        Array.isArray(payload.fields) &&
-        payload.fields.some(
-          (field) =>
-            isRecord(field) &&
-            field.key === policy.fieldId &&
-            pendingChoice(field.value, policy.values),
-        );
-      if (pendingRows.length === 0 && !pendingDetail) continue;
+        ((Array.isArray(payload.fields) &&
+          payload.fields.some(
+            (field) =>
+              isRecord(field) &&
+              field.key === policy.fieldId &&
+              pendingChoice(field.value, policy.values),
+          )) ||
+          (pendingChoice(payload.heading, policy.values) &&
+            root.current?.querySelector(
+              `[data-vortex-placement-id="${CSS.escape(placementId)}"] [data-vortex-heading-field-key="${CSS.escape(policy.fieldId)}"]`,
+            ) != null));
+      if (!retrying && pendingRows.length === 0 && !pendingDetail) {
+        pendingBefore.current.delete(placementId);
+        continue;
+      }
+      if (!retrying) pendingBefore.current.add(placementId);
       const tick = async (): Promise<void> => {
         if (disposed) return;
         const placement =
@@ -77,11 +94,13 @@ export function useProjectionRefresh(
           !inFlight.current.has(placementId) &&
           document.visibilityState === "visible" &&
           onScreen(placement) &&
-          ((pendingDetail &&
-            onScreen(
-              placement?.querySelector(`[data-vortex-field-key="${CSS.escape(policy.fieldId)}"]`) ??
-                null,
-            )) ||
+          (retrying ||
+            (pendingDetail &&
+              onScreen(
+                placement?.querySelector(
+                  `[data-vortex-field-key="${CSS.escape(policy.fieldId)}"]`,
+                ) ?? null,
+              )) ||
             pendingRows.some(
               (row) =>
                 typeof row.recordId === "string" &&
@@ -97,7 +116,10 @@ export function useProjectionRefresh(
             await refreshRef.current([placementId]);
           } finally {
             inFlight.current.delete(placementId);
+            // A thrown transport failure must not bypass the next poll.
+            if (!disposed) schedule();
           }
+          return;
         }
         // Serial reads: a slow response never builds a queue. A new payload or navigation
         // disposes this policy, and a terminal state schedules no further work.
