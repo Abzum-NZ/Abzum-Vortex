@@ -13,6 +13,7 @@ import { SubRowNoticeView } from "./sub-row-notice";
 import { SUB_ROW_INDENT_REM, type RowLine, type SubRowsControls } from "./sub-rows";
 import type { GridColumn } from "./table-layout";
 import { CARD_SPACING } from "./table-geometry";
+import { isOwnClick } from "./table-interaction";
 
 const PRIORITY_ORDER: Readonly<Record<RecordsTableColumnContract["priority"], number>> = {
   essential: 0,
@@ -163,6 +164,7 @@ export function RecordsCards({
             )}
             onClick={(event: MouseEvent<HTMLLIElement>) => {
               const target = event.target;
+              if (!isOwnClick(event)) return;
               if (
                 target instanceof Element &&
                 (target.closest(INTERACTIVE_IN_CARD) !== null ||

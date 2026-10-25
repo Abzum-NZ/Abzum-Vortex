@@ -60,7 +60,7 @@ import {
 } from "./table-geometry";
 import type { GridColumn, GridLayoutControls } from "./table-layout";
 import { TotalValues } from "./table-totals";
-import { isInteractiveGridTarget } from "./table-interaction";
+import { isInteractiveGridTarget, isOwnClick } from "./table-interaction";
 import {
   ACTIONS_COLUMN,
   EXPAND_COLUMN,
@@ -237,7 +237,12 @@ const GridRow = memo(function GridRow({
       )}
       style={{ height: rowHeight }}
       onClick={(event: MouseEvent<HTMLDivElement>) => {
-        if (!activatable || isInteractiveGridTarget(event.target, event.currentTarget)) return;
+        if (
+          !activatable ||
+          !isOwnClick(event) ||
+          isInteractiveGridTarget(event.target, event.currentTarget)
+        )
+          return;
         onActivate(row.recordId);
       }}
     >
@@ -1068,7 +1073,7 @@ export function RecordsGrid({
         )}
         style={slot.style}
         onClick={(event) => {
-          if (sortable && !resizing.current) sortBy(slot.id, event.shiftKey);
+          if (sortable && !resizing.current && isOwnClick(event)) sortBy(slot.id, event.shiftKey);
         }}
         onDragOver={(event) => {
           if (slot.kind === "data" && dragged.current !== undefined) event.preventDefault();
