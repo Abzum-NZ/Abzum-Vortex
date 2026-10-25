@@ -1,3 +1,4 @@
+import { z } from "zod";
 import type { AuthoredGridView, GridViewDocument } from "../../../pages/grid-view-state";
 import {
   featureAvailable,
@@ -342,12 +343,16 @@ const featureRefusal: GridFeatureRefusal = {
   guidance: "Select a sortable or filterable field in the bound query, or turn Saved views off.",
 };
 
+const projectionSchema = z.literal(true);
+
 export const recordsTableSavedViewsFeature: RecordsTableFeatureDefinition<
   RecordsTableSavedViewsSettings,
   "saved_views"
-> = {
+> &
+  Readonly<{ property: "savedViews"; projectionSchema: typeof projectionSchema }> = {
   key: "saved_views",
   property: "savedViews",
+  projectionSchema,
   settings: featureSettings,
   refusals: [featureRefusal],
   onBoard: "unsupported",

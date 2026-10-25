@@ -1,3 +1,4 @@
+import { z } from "zod";
 import {
   featureAvailable,
   featureEnabled,
@@ -49,12 +50,16 @@ const featureRefusal: GridFeatureRefusal = {
   guidance: "Choose a query with fields, then set each column's pin position in Columns.",
 };
 
+const projectionSchema = z.literal(true);
+
 export const recordsTablePinningFeature: RecordsTableFeatureDefinition<
   RecordsTablePinningSettings,
   "pinning"
-> = {
+> &
+  Readonly<{ property: "pinning"; projectionSchema: typeof projectionSchema }> = {
   key: "pinning",
   property: "pinning",
+  projectionSchema,
   settings: featureSettings,
   refusals: [featureRefusal],
   onBoard: "unsupported",

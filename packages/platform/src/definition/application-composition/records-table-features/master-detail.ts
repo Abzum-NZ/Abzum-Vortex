@@ -1,3 +1,4 @@
+import { z } from "zod";
 import type { ComponentSettingValue } from "../block-property-schema";
 import { checkQueryBindings } from "../query-binding-check";
 import { readQueryBindings, type QueryBindingsRead } from "../query-bindings";
@@ -143,12 +144,17 @@ const featureRefusal: GridFeatureRefusal = {
     "Choose a link to this record type, a query of the linked records with an input bound to This row, and its columns, or turn Related records off.",
 };
 
+const positiveSchema = z.number().int().min(1);
+const projectionSchema = z.object({ pageSize: positiveSchema }).strict().readonly();
+
 export const recordsTableMasterDetailFeature: RecordsTableFeatureDefinition<
   RecordsTableMasterDetailSettings,
   "master_detail"
-> = {
+> &
+  Readonly<{ property: "masterDetail"; projectionSchema: typeof projectionSchema }> = {
   key: "master_detail",
   property: "masterDetail",
+  projectionSchema,
   settings: featureSettings,
   refusals: [featureRefusal],
   onBoard: "unsupported",

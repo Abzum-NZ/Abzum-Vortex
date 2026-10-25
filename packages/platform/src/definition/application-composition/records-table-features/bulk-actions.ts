@@ -1,3 +1,4 @@
+import { z } from "zod";
 import type { ComponentSettingValue } from "../block-property-schema";
 import {
   featureAvailable,
@@ -175,12 +176,27 @@ const featureRefusal: GridFeatureRefusal = {
     "Add a named action of the bound record type that needs no input typed for one record, with a limit of at most 5,000 records, or turn Bulk actions off.",
 };
 
+const textSchema = z.string().min(1);
+const bulkActionSchema = z
+  .object({
+    action: textSchema,
+    label: textSchema,
+    confirm: z.boolean(),
+    maxRecords: z.number().int().min(1).max(recordsTableBulkActionRecordLimit),
+  })
+  .strict()
+  .readonly();
+
+const projectionSchema = z.array(bulkActionSchema).min(1).readonly();
+
 export const recordsTableBulkActionsFeature: RecordsTableFeatureDefinition<
   RecordsTableBulkActionsSettings,
   "bulk_actions"
-> = {
+> &
+  Readonly<{ property: "bulkActions"; projectionSchema: typeof projectionSchema }> = {
   key: "bulk_actions",
   property: "bulkActions",
+  projectionSchema,
   settings: featureSettings,
   refusals: [featureRefusal],
   onBoard: "unsupported",

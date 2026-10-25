@@ -1,3 +1,5 @@
+import { z } from "zod";
+import { builderKeySchema, fieldIdSchema } from "../../../catalogue/identifiers";
 import type { RecordsTableActionContract } from "./row-actions";
 import type { ComponentSettingValue } from "../block-property-schema";
 import type { RecordsTableFeatures } from "./index";
@@ -532,6 +534,8 @@ export type RecordsTableFeatureDefinition<
    * when the feature is off for this viewer. Publication has already refused any combination the
    * feature does not support, so the projection never repeats a check.
    */
+  /** The strict wire schema for this feature's viewer projection, absent for a separate payload. */
+  projectionSchema?: z.ZodType;
   project?(
     state: RecordsTableFeatureState<Settings>,
     context: GridFeatureProjectionContext,
@@ -539,3 +543,11 @@ export type RecordsTableFeatureDefinition<
 }>;
 
 export const RECORDS_TABLE_UNVIRTUALIZED_ROW_LIMIT = 100;
+
+/** A field key as the table's columns spell it: an authored key or a field identity. */
+export const projectionFieldKeySchema = z
+  .string()
+  .refine(
+    (value) => builderKeySchema.safeParse(value).success || fieldIdSchema.safeParse(value).success,
+    "A field is named by its key or identity",
+  );

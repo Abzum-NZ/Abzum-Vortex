@@ -1,3 +1,4 @@
+import { z } from "zod";
 import {
   featureAvailable,
   featureEnabled,
@@ -50,12 +51,16 @@ const featureRefusal: GridFeatureRefusal = {
     "Select a text field the record type marks searchable in the query, or turn Search off.",
 };
 
+const projectionSchema = z.literal(true);
+
 export const recordsTableSearchFeature: RecordsTableFeatureDefinition<
   RecordsTableSearchSettings,
   "search"
-> = {
+> &
+  Readonly<{ property: "search"; projectionSchema: typeof projectionSchema }> = {
   key: "search",
   property: "search",
+  projectionSchema,
   settings: featureSettings,
   refusals: [featureRefusal],
   onBoard: "unsupported",
