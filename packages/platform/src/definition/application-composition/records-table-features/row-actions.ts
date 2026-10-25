@@ -1,3 +1,5 @@
+import { namedActionAvailabilitySchema } from "../../../pages/named-action-availability-schema";
+import { z } from "zod";
 import type { RecordsTableFeatureProjection } from "../../../pages/records-table-feature-projection";
 import type { ComponentSettingValue } from "../block-property-schema";
 import {
@@ -63,9 +65,54 @@ const rowActionLimitRefusal: GridFeatureRefusal = {
   guidance: "Choose Row menu for the remaining actions.",
 };
 
-export const recordsTableRowActionsFeature: RecordsTableFeatureDefinition<object, "row_actions"> = {
+export const recordsTableRowActionIcons = [
+  "workflow",
+  "check",
+  "close",
+  "info",
+  "minus",
+  "eye",
+  "plus",
+  "undo",
+] as const;
+
+/** The record action kinds a configured row or bulk action may require of the viewer. */
+export const recordsTableActionCapabilities = ["update", "delete", "restore"] as const;
+export type RecordsTableActionCapability = (typeof recordsTableActionCapabilities)[number];
+
+const textSchema = z.string().min(1);
+const rowActionSchema = z
+  .object({
+    eventId: textSchema,
+    label: textSchema,
+    icon: z.enum(recordsTableRowActionIcons),
+    placement: z.enum(["inline", "menu"]),
+    capability: z.enum(recordsTableActionCapabilities).optional(),
+  })
+  .strict()
+  .readonly();
+
+const projectionSchema = z
+  .object({
+    actions: z
+      .array(rowActionSchema)
+      .min(1)
+      .max(20)
+      .refine(
+        (actions) => new Set(actions.map((action) => action.eventId)).size === actions.length,
+        "Each row action is named once",
+      )
+      .readonly(),
+    availability: namedActionAvailabilitySchema,
+  })
+  .strict()
+  .readonly();
+
+export const recordsTableRowActionsFeature: RecordsTableFeatureDefinition<object, "row_actions"> &
+  Readonly<{ property: "rowActions"; projectionSchema: typeof projectionSchema }> = {
   key: "row_actions",
   property: "rowActions",
+  projectionSchema,
   settings: featureSettings,
   refusals: [featureRefusal, rowActionLimitRefusal],
   onBoard: "supported",
@@ -88,21 +135,6 @@ export const recordsTableRowActionsFeature: RecordsTableFeatureDefinition<object
         )
       : featureAvailable,
 };
-
-export const recordsTableRowActionIcons = [
-  "workflow",
-  "check",
-  "close",
-  "info",
-  "minus",
-  "eye",
-  "plus",
-  "undo",
-] as const;
-
-/** The record action kinds a configured row or bulk action may require of the viewer. */
-export const recordsTableActionCapabilities = ["update", "delete", "restore"] as const;
-export type RecordsTableActionCapability = (typeof recordsTableActionCapabilities)[number];
 
 /**
  * One row action bound to a workflow. `eventId` is the stable identity of the flow binding the

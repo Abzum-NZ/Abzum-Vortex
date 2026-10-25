@@ -1,3 +1,5 @@
+import type { recordsTableInlineEditEvent } from "../../definition/application-composition/records-table-features/inline-edit";
+import type { recordsTableRowEditEvent } from "../../definition/application-composition/records-table-features/row-edit";
 export { recordsTableRowActionsProjection } from "../../definition/application-composition/records-table-features/row-actions";
 export { rowMayChangeField } from "../../definition/application-composition/records-table-features/shared";
 import type {
@@ -13,6 +15,7 @@ import type {
   ProtectedQueryRow,
 } from "../../queries/protected-query-contracts";
 import {
+  recordsTableSearchFeature,
   recordsTableFeatureDefinition,
   recordsTableFeatureKeys,
   recordsTableFeatureState,
@@ -36,12 +39,12 @@ export type RecordsTableRequestPart =
   | "parameters"
   | "sort"
   | "filter"
-  | "search"
+  | typeof recordsTableSearchFeature.key
   | "command"
   | "cursor"
   | "bulk_action"
-  | "inline_edit"
-  | "row_edit"
+  | typeof recordsTableInlineEditEvent
+  | typeof recordsTableRowEditEvent
   | "row_action"
   | "row_clicked"
   | "row_detail"
@@ -149,7 +152,7 @@ export const recordsTableNarrowingRefusal = (
   narrowing: Readonly<{ search: string | null; filters: readonly Readonly<{ fieldId: string }>[] }>,
 ): RecordsTableRequestRefusal | undefined => {
   if (narrowing.search !== null && features?.search !== true)
-    return recordsTableRequestRefusal("search", "search_not_offered");
+    return recordsTableRequestRefusal(recordsTableSearchFeature.key, "search_not_offered");
   const offered = features?.columnFilters ?? [];
   if (
     narrowing.filters.some(

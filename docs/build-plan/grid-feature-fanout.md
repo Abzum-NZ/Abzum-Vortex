@@ -16,6 +16,7 @@ A grid feature is declared once, in its definition file under `packages/platform
 | Check against the bound query | `check(state, facts, context)` | done for every feature |
 | Events its controls raise | optional `events` | done for every feature |
 | The viewer's projection part | `project(state, context)` | done for search, column filters, pinning and totals; **open for the rest** |
+| The strict viewer projection wire contract | `projectionSchema` | done for every table projection; Board keeps its separate payload |
 | UI view (lazy chunk, extension points, row panel) | entry in `gridFeatureViews`, `packages/ui/src/display/grid-features/registry.tsx` | done for every feature (keyed by the definition object) |
 | Studio panel (editor, start settings) | entry in `studioGridFeatures`, `packages/ui/src/studio/grid-features/index.ts` | done for every feature (keyed by the definition object) |
 
@@ -25,7 +26,7 @@ The guard rule `grid-feature-definition` (blocking; `tooling/guard/config.ts`) e
 - `featureNotPossible` names one of its file's own refusals;
 - no object or array in the grid code lists three or more feature keys (a second registry).
 
-One allowance remains: the projection wire schema (task P below).
+The projection wire schema is assembled from each definition's typed `projectionSchema` under its `property`, with no `grid-feature-definition` allowance. Shared filter fields live with Column filters; Inline editing owns the cell-editor schema also used by Row editing. Board keeps its separate payload and borrows the same filter-field and formatting schemas.
 
 **Proof features, fully on the contract:** sort/filter (Search, Column filters), Column pinning, Footer totals. Use them as the pattern:
 - `search.ts`, `column-filters.ts` and `pinning.ts` each have `project`.
@@ -71,4 +72,4 @@ Acceptance for every feature task:
 |---|---|---|---|---|
 | P | Projection wire schema | Move each feature's Zod part of `recordsTableFeatureProjectionSchema` (`pages/records-table-feature-projection.ts`) into its definition as `projectionSchema`. Assemble the schema from typed parts, one `definition.property` each, so `RecordsTableFeatureProjection` keeps its exact type. Move the column filter field schemas into `column-filters.ts` (they depend only on `recordsTableFilterKinds` and the identifier schemas). Remove the `guard-allow: grid-feature-definition` on the schema once no literal list remains. | `projected-data.ts` and `projected-grid-features.ts` parse the same payloads; the guard reports no allowance for this rule. | hard |
 | S | Summary query modes | `run_module_query_summary` still switches on hidden keys of its user-input parameter (`boardSummary`, `grouping`, `pivot`, `groupLimit`, `totals`). Split it the way C1 split `run_module_query`: one typed function per mode over shared helpers, one migration (version reserved by the coordinator), callers in `queries/protected-query-summary.ts` in the same PR. Compare old and new outputs on a lane for every mode and persona before dropping the old function (see the C1 PR for the method). | The comparison is byte-identical; `pnpm guard` passes. | hard |
-| R | Remaining grid code that names features by key | After F1–F13, search the grid folders for feature keys used as strings (`rg '"(saved_views\|bulk_actions\|inline_edit\|row_edit\|row_actions\|master_detail\|conditional_formatting)"' packages`) and route each through its definition. Then extend the guard rule to flag any feature-key string literal in the grid folders. | Guard extended; 0 blocking. | simple |
+| R | Remaining grid code that names features by key | After F1–F13, search the grid folders for feature keys used as strings (`rg '"(saved_views\|bulk_actions\|inline_edit\|row_edit\|row_actions\|master_detail\|conditional_formatting)"' packages`) and route each through its definition. Do not add or extend guard rules (owner decision). | No feature-key literals outside their definitions in grid code; guard 0 blocking. | simple |

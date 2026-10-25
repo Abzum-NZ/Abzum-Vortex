@@ -1,5 +1,7 @@
 "use client";
 
+import { recordsTableSavedViewsFeature } from "@vortex/platform/schema";
+
 import { createContext, useContext, useEffect } from "react";
 import {
   canonicalJson,
@@ -64,17 +66,14 @@ export const studioCanvasGridKey = (
   settings: Readonly<Record<string, unknown>>,
 ): string => {
   const features = settings.features;
+  const savedViews = isRecord(features) ? features[recordsTableSavedViewsFeature.key] : undefined;
   return canonicalJson([
     query ?? null,
     ...["columns", "density", "query_parameters", "sortable_fields", "default_sort"].map(
       (key) => settings[key] ?? null,
     ),
     isRecord(features)
-      ? [
-          features.search,
-          features.column_filters,
-          isRecord(features.saved_views) ? features.saved_views.enabled : null,
-        ]
+      ? [features.search, features.column_filters, isRecord(savedViews) ? savedViews.enabled : null]
       : null,
   ]);
 };

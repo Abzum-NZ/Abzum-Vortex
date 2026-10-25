@@ -1,3 +1,4 @@
+import { z } from "zod";
 import {
   featureAvailable,
   featureEnabled,
@@ -138,12 +139,26 @@ const featureRefusal: GridFeatureRefusal = {
     "Turn on the export action for the bound record type in Data and set a row limit of at most 100,000, or turn Export off.",
 };
 
+const projectionSchema = z
+  .object({
+    maxRows: z.number().int().min(1).max(RECORDS_TABLE_EXPORT_MAXIMUM_ROWS),
+    formats: z
+      .array(z.enum(recordsTableExportFormats))
+      .min(1)
+      .refine((formats) => new Set(formats).size === formats.length, "Name each format once")
+      .readonly(),
+  })
+  .strict()
+  .readonly();
+
 export const recordsTableExportFeature: RecordsTableFeatureDefinition<
   RecordsTableExportSettings,
   "export"
-> = {
+> &
+  Readonly<{ property: "export"; projectionSchema: typeof projectionSchema }> = {
   key: "export",
   property: "export",
+  projectionSchema,
   settings: featureSettings,
   refusals: [featureRefusal],
   onBoard: "unsupported",

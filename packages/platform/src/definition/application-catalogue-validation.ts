@@ -1,3 +1,5 @@
+import { recordsTableInlineEditEvent } from "./application-composition/records-table-features/inline-edit";
+import { recordsTableRowEditEvent } from "./application-composition/records-table-features/row-edit";
 import {
   builderKeySchema,
   readRecordDetailContract,
@@ -401,7 +403,7 @@ export function validateApplicationSourceCatalogue(
           checkRowBehaviour(
             "features",
             features.inlineEdit.eventId,
-            "inline_edit",
+            recordsTableInlineEditEvent,
             "record_reference",
           );
         // An editable field must be one the bound query selects and one of the declared columns;
@@ -416,7 +418,12 @@ export function validateApplicationSourceCatalogue(
       }
       if (features.rowEdit.enabled) {
         if (features.rowEdit.eventId !== undefined)
-          checkRowBehaviour("features", features.rowEdit.eventId, "row_edit", "record_reference");
+          checkRowBehaviour(
+            "features",
+            features.rowEdit.eventId,
+            recordsTableRowEditEvent,
+            "record_reference",
+          );
         // An editable field must be one the bound query selects and one of the declared columns;
         // a field that is never shown could never be edited in place.
         const columnFields = new Set(table.columns.map((column) => column.field));

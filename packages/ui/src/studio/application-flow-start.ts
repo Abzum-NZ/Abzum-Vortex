@@ -1,3 +1,4 @@
+import { recordsTableInlineEditEvent, recordsTableRowEditEvent } from "@vortex/platform/schema";
 import {
   builderKeySchema,
   flowLiteralSchema,
@@ -116,11 +117,11 @@ const suppliedByEvent: Readonly<
     { name: "value", label: "The column it was dropped in" },
   ],
   card_added: [{ name: "value", label: "The column the card is added to" }],
-  row_edit: [
+  [recordsTableRowEditEvent]: [
     { name: "record_id", label: "The edited record" },
     { name: "values", label: "All changed fields of the row" },
   ],
-  inline_edit: [
+  [recordsTableInlineEditEvent]: [
     { name: "record_id", label: "The edited record" },
     { name: "values", label: "The edited values" },
   ],

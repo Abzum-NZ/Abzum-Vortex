@@ -228,7 +228,7 @@ export const studioGridFeatureStart = (
   facts: Pick<RecordsTableQueryFacts, "fields" | "groupBy" | "grouped">,
 ): Readonly<Record<string, SourceBlockPropertyValueContract>> => ({
   ...studioGridFeatureStartSettings[key],
-  ...(key === "grouping" ? studioGroupingStart(facts) : {}),
+  ...(key === recordsTableGroupingFeature.key ? studioGroupingStart(facts) : {}),
 });
 
 /**

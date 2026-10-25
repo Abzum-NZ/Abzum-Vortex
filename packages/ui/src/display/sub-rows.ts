@@ -1,5 +1,7 @@
 "use client";
 
+import { recordsTableInlineEditEvent, recordsTableRowEditEvent } from "@vortex/platform/schema";
+
 import { useCallback, useEffect, useMemo, useState, type RefObject } from "react";
 import type {
   DisplayEventHandler,
@@ -97,8 +99,8 @@ export const useRowWrites = (
           return await handler(event);
         } finally {
           if (
-            event.event === "inline_edit" ||
-            event.event === "row_edit" ||
+            event.event === recordsTableInlineEditEvent ||
+            event.event === recordsTableRowEditEvent ||
             event.event === "row_action"
           )
             written.current(event.recordId);
