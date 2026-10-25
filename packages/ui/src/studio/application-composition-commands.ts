@@ -77,6 +77,7 @@ import {
   workingCopy,
   zoneHandle,
   workingItem,
+  regionAfter,
   commitWorking,
   validateRegion,
   plainSource,
@@ -84,6 +85,7 @@ import {
 } from "./application-composition-regions";
 import { applyAdd, commandSettings } from "./application-composition-add";
 import { applyWrap } from "./application-composition-wrap";
+import { applyStudioCompositionGate } from "./application-composition-gate";
 
 export type * from "./application-composition-model";
 export {
@@ -137,26 +139,6 @@ const pageContentRegion = (
 /** The regions whose blocks move: a page's editable content and a layout's own blocks. */
 const movableRegion = (region: Region): boolean =>
   region.shell !== undefined || pageContentRegion(region);
-
-/** The region's content once the block leaves its slot and, for a move, joins the end of another. */
-const regionAfter = (
-  target: Target,
-  alias: string,
-  destination?: readonly SlotStep[],
-): SourceItem[] => {
-  const working = workingCopy(target.region);
-  const from = zoneHandle(working, target.steps);
-  const moved = from.items.find((item) => item.props.id === alias) ?? refuse();
-  from.set(
-    from.items.filter((item) => item !== moved),
-    from.order,
-  );
-  if (destination !== undefined) {
-    const to = zoneHandle(working, destination);
-    to.set([...to.items, moved], to.order);
-  }
-  return working.items;
-};
 
 /**
  * Only actual non-repeatable slots in this original movable region are destinations. A layout
@@ -725,6 +707,7 @@ export const applyStudioCompositionCommand = (
       return applyRemoval(current, selection, command);
     }
     if (command.kind === "settings") return applySettings(current, selection, command);
+    if (command.kind === "gate") return applyStudioCompositionGate(current, selection, command);
     if (command.kind === "wrap") return applyWrap(current, selection, command);
     const resolved = resolve(current, selection);
     if (resolved === undefined) return { kind: "invalid" };
