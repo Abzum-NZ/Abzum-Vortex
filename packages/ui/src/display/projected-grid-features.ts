@@ -1,3 +1,4 @@
+import { recordsTableTotalsSchema, type RecordsTableTotal } from "@vortex/platform/schema";
 import {
   type RecordsTableBulkRefusalReason,
   type RecordsTableExportFormat,
@@ -311,6 +312,7 @@ export type TableGroup = Readonly<{
   key: string;
   label: string;
   count: number;
+  totals?: readonly RecordsTableTotal[];
   unassigned?: true;
 }>;
 
@@ -354,7 +356,7 @@ export const parseTableGroups = (
   const groups = requireArray(record.groups, "Projected groups must be an array", location).map(
     (item): TableGroup => {
       const group = requireRecord(item, "A projected group must be an object", location);
-      requireExactKeys(group, ["key", "label", "count", "unassigned"], location);
+      requireExactKeys(group, ["key", "label", "count", "unassigned", "totals"], location);
       if (group.unassigned !== undefined && group.unassigned !== true)
         fail("A projected group is only ever unassigned", location);
       if (typeof group.count !== "number" || !Number.isInteger(group.count) || group.count < 0)
@@ -363,6 +365,15 @@ export const parseTableGroups = (
         key: requireNonEmptyString(group.key, "A projected group needs its key", location),
         label: requireNonEmptyString(group.label, "A projected group needs its label", location),
         count: group.count as number,
+        ...(group.totals === undefined
+          ? {}
+          : {
+              totals: (() => {
+                const parsed = recordsTableTotalsSchema.safeParse(group.totals);
+                if (!parsed.success) return fail("Projected group totals are invalid", location);
+                return parsed.data;
+              })(),
+            }),
         ...(group.unassigned === true ? { unassigned: true as const } : {}),
       });
     },
