@@ -42,6 +42,8 @@ export type StudioCompositionCommand =
     }>
   | Readonly<{ kind: "move"; destination: StudioCompositionDestination }>
   | Readonly<{ kind: "remove" }>
+  /** Set or clear only this block's view gate, keeping its settings, content and bindings. */
+  | Readonly<{ kind: "gate"; gate: string | null }>
   /**
    * Puts the selected block into a new container block of this release, which takes the block's
    * place. The block keeps its name, settings and orders; the container's first fixed slot that

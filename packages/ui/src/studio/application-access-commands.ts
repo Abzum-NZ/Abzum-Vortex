@@ -191,7 +191,7 @@ export const studioRoleHolds = (role: Role, key: string): boolean | undefined =>
 const holders = (body: Body, key: string): readonly Role[] =>
   body.roles.filter((role) => role.permissions.includes(key));
 
-/** The permissions that can open a page or show a menu entry: the application's own named permissions. */
+/** The permissions offered for page, menu and block gates: the application's own named permissions. */
 export const studioAccessGateChoices = (source: Source) =>
   source.body.permissions
     .filter(
@@ -654,12 +654,21 @@ const gateKey = (
     });
     return { key: permission.key, label: permission.label, created: true };
   }
-  const choice = studioAccessGateChoices(candidate).find((entry) => entry.key === gate.key);
-  if (choice === undefined)
-    refuse(
-      "Only one of the application's own named permissions can open a page or show a menu entry.",
-    );
-  return { key: choice!.key, label: choice!.label, created: false };
+  const choice = resolveStudioAccessGate(candidate, gate.key);
+  if (choice.kind === "refused") return refuse(choice.message);
+  return { key: choice.key, label: choice.label, created: false };
+};
+
+/** The one existing-permission validation for page, menu and block gate edits. */
+export const resolveStudioAccessGate = (source: Source, key: string) => {
+  const choice = studioAccessGateChoices(source).find((entry) => entry.key === key);
+  return choice === undefined
+    ? ({
+        kind: "refused",
+        message:
+          "Only one of the application's own named permissions can be chosen for a page, menu or block gate.",
+      } as const)
+    : ({ kind: "resolved", key: choice.key, label: choice.label } as const);
 };
 
 const createdWords = (gate: ReturnType<typeof gateKey>) =>

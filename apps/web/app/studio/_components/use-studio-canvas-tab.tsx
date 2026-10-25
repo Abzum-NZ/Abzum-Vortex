@@ -59,6 +59,7 @@ import { pageUsingLayout } from "../_lib/studio-view-request";
 import type { StudioApplicationCanvasFrames } from "../../_lib/studio-application-draft";
 import { studioMenuPosition } from "@vortex/ui/studio";
 import { ApplicationCompositionEditor } from "./application-composition-editor";
+import { StudioBlockGate } from "./studio-block-gate";
 import { ApplicationVisibilityConditionEditor } from "./application-visibility-condition-editor";
 import { StudioBlockSetupDialog, type StudioBlockSetupRequest } from "./studio-block-setup-dialog";
 import { StudioQuerySheet } from "./studio-query-sheet";
@@ -861,6 +862,15 @@ export function useStudioCanvasTab({
           canvasArrangement={studioCanvasGridArrangement(gridStates.get(selected.placementAlias))}
           onCommand={commandComposition}
           onNewQuery={(use) => setQuerySheet({ use })}
+        />
+      )}
+      {selected?.kind === "placement" && inspector.status === "resolved" && (
+        <StudioBlockGate
+          key={`gate:${draft.lifetime}:${selectionKey}`}
+          context={compositionContext}
+          selection={selected}
+          disabled={draft.locked}
+          onCommand={commandComposition}
         />
       )}
       {selected?.kind === "placement" && inspector.status === "resolved" && (

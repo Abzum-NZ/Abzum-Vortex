@@ -41,7 +41,9 @@ import {
   validateStoredShell,
   validateStoredApplicationOutlets,
   validateStoredZone,
+  removeFlowBindingsOf,
 } from "./stored-composition";
+import { studioFormChangeRefusal, studioFormShapeRefusal } from "./application-composition-forms";
 import { restoreStudioGridFeatureBindings } from "./grid-features";
 import type { StudioSemanticSelection } from "./semantic-selection";
 import type {
@@ -75,6 +77,7 @@ import {
   workingCopy,
   zoneHandle,
   workingItem,
+  regionAfter,
   commitWorking,
   validateRegion,
   plainSource,
@@ -82,6 +85,7 @@ import {
 } from "./application-composition-regions";
 import { applyAdd, commandSettings } from "./application-composition-add";
 import { applyWrap } from "./application-composition-wrap";
+import { applyStudioCompositionGate } from "./application-composition-gate";
 
 export type * from "./application-composition-model";
 export {
@@ -122,16 +126,17 @@ type MoveDestination = {
   steps: readonly SlotStep[];
 };
 
-/** A display page's content is its main area or the content slot its layout opens for it. */
+/** A page's editable content is its main area or the content slot its layout opens for it. */
 const pageContentRegion = (
   region: Region,
 ): region is Region & { page: NonNullable<Region["page"]> } =>
   (region.ordinaryMain === true || region.parent !== undefined) &&
   (region.page?.type === "list" ||
     region.page?.type === "detail" ||
+    region.page?.type === "form" ||
     region.page?.type === "dashboard");
 
-/** The regions whose blocks move: a display page's content and a layout's own blocks. */
+/** The regions whose blocks move: a page's editable content and a layout's own blocks. */
 const movableRegion = (region: Region): boolean =>
   region.shell !== undefined || pageContentRegion(region);
 
@@ -141,6 +146,7 @@ const movableRegion = (region: Region): boolean =>
  */
 const moveDestinations = (
   catalogue: ImmutablePlatformBlockCatalogue,
+  source: ApplicationSourceDocument,
   target: Target,
   alias: string,
 ): MoveDestination[] => {
@@ -200,7 +206,17 @@ const moveDestinations = (
       });
   }
   visit(target.region.zone, []);
-  return selectedPathSupported ? result : [];
+  return selectedPathSupported
+    ? result.filter(
+        (candidate) =>
+          studioFormChangeRefusal(
+            catalogue,
+            source,
+            target.region.zone.items,
+            regionAfter(target, alias, candidate.steps),
+          ) === undefined,
+      )
+    : [];
 };
 
 /** The item with exactly these settings: each declared property it holds is replaced. */
@@ -455,7 +471,7 @@ const resolveRemoval = (
   if (resolved === undefined) return { kind: "invalid" };
   const { source, target, alias } = resolved;
   // Any of a layout's own blocks leaves with everything inside it, as any of them can be added.
-  // A page removes one display item, and only from its content.
+  // A page removes one item, and only from its editable content.
   const layout = target.region.shell !== undefined;
   if (!layout) {
     if (!pageContentRegion(target.region)) return { kind: "unsupported", reason: "page_kind" };
@@ -501,12 +517,22 @@ const resolveRemoval = (
       const key = releaseKey(item.props.vortex.block);
       releaseUses.set(key, (releaseUses.get(key) ?? 0) + 1);
     }
+  // A block's own flow bindings leave with it (see applyRemoval); a flow step that still names it
+  // refuses the removal.
   for (const item of removed) {
     const reference = studioPlacementRemovalReference(source, item.props.id, aliases);
     if (reference !== undefined) return { kind: "blocked", ...reference };
     const key = releaseKey(item.props.vortex.block);
     releaseUses.set(key, releaseUses.get(key)! - 1);
   }
+  const broken = studioFormChangeRefusal(
+    catalogue,
+    source,
+    target.region.zone.items,
+    regionAfter(target, alias),
+  );
+  if (broken !== undefined)
+    return studioFormShapeRefusal(broken) ? { kind: "invalid" } : { kind: "blocked", ...broken };
   // What a flow still names is the cause to fix first, so it is told before the item's content is.
   if (
     !layout &&
@@ -566,6 +592,10 @@ const applyRemoval = (
     ),
   );
   commitWorking(current.catalogue, target.region, working);
+  removeFlowBindingsOf(
+    source.body,
+    new Set(sourceItemTree([target.item]).map((item) => item.props.id)),
+  );
   validateStoredApplicationOutlets(current.catalogue, source);
   source.body.platform_block_dependencies = source.body.platform_block_dependencies.filter(
     (dependency) => !unusedReleases.includes(releaseKey(dependency)),
@@ -595,10 +625,12 @@ export const describeStudioCompositionDestinations = (
     validateRegion(catalogue, target.region);
     return {
       kind: "available",
-      destinations: moveDestinations(catalogue, target, alias).map(({ destination, label }) => ({
-        destination,
-        label,
-      })),
+      destinations: moveDestinations(catalogue, source, target, alias).map(
+        ({ destination, label }) => ({
+          destination,
+          label,
+        }),
+      ),
     };
   } catch (error) {
     console.error("[studio] move model failed", error);
@@ -675,6 +707,7 @@ export const applyStudioCompositionCommand = (
       return applyRemoval(current, selection, command);
     }
     if (command.kind === "settings") return applySettings(current, selection, command);
+    if (command.kind === "gate") return applyStudioCompositionGate(current, selection, command);
     if (command.kind === "wrap") return applyWrap(current, selection, command);
     const resolved = resolve(current, selection);
     if (resolved === undefined) return { kind: "invalid" };
@@ -689,8 +722,8 @@ export const applyStudioCompositionCommand = (
       closedPlain(command, ["kind", "destination"]);
       if (!movableRegion(target.region)) return { kind: "unsupported" };
       const destination = parseDestination(command.destination);
-      const resolvedDestination = moveDestinations(catalogue, target, alias).find((candidate) =>
-        sameDestination(candidate.destination, destination),
+      const resolvedDestination = moveDestinations(catalogue, source, target, alias).find(
+        (candidate) => sameDestination(candidate.destination, destination),
       );
       if (resolvedDestination === undefined) return { kind: "invalid" };
       const working = workingCopy(target.region);

@@ -77,6 +77,10 @@ export const refusalNotices: Readonly<
     tone: "problem",
     text: "This version changes stored fields in a way existing records cannot accept. Keep existing choice options unchanged when adding options, and preserve field types, storage and ownership settings.",
   },
+  application_republish_required: {
+    tone: "problem",
+    text: "Republish required: this release uses superseded platform definitions. Republish the application, then install or upgrade to the new release.",
+  },
   application_not_installed: {
     tone: "problem",
     text: "This application is not installed in this organisation, so there is nothing to upgrade or remove. Install it first if it is needed here.",

@@ -31,6 +31,7 @@ import {
   validateRegion,
   plainSource,
 } from "./application-composition-regions";
+import { FORM_CONTAINER_KEY, NESTED_FORM_REASON, holdsForm } from "./application-composition-forms";
 import { addPlaces, commandSettings, newBlockItem } from "./application-composition-add";
 import { studioOwnsSetting } from "./contextual-palette";
 
@@ -107,6 +108,9 @@ export const resolveWrap = (
     // the container's required settings are asked for before it wraps.
     const unavailable =
       choice.unavailableWhenFilled ??
+      (release.key === FORM_CONTAINER_KEY && holdsForm(catalogue, [target.item])
+        ? NESTED_FORM_REASON
+        : undefined) ??
       (choice.needsQuery
         ? "It reads its own data. Add it from the Blocks panel, then move this block into it."
         : accepting === undefined

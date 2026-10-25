@@ -309,6 +309,7 @@ export {
   type ApplicationAccountActions,
   type ApplicationShellRuntime,
   type ApplicationSwitcherData,
+  type ApplicationSwitcherSource,
   type ApplicationWebMcpRuntime,
   ContentTransition,
   isClientPageChange,
