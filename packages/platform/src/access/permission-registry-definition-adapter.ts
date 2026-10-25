@@ -48,9 +48,11 @@ export class PermissionRegistryPreparationError extends Error {
 }
 
 export interface PermissionRegistryDefinitionSetReader {
+  /** Consumption verifies the current catalogue; replacement/removal authenticates stored facts. */
   read(
     context: SessionContext,
     command: SystemApplicationBoundReleaseSetCommand,
+    purpose?: "consume" | "replace_or_remove",
   ): Promise<SystemApplicationBoundReleaseSetResult>;
 }
 
