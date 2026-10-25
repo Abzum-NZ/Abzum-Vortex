@@ -1,8 +1,10 @@
+import { spawnSync } from "node:child_process";
+import { isLoopbackHostname } from "@vortex/platform/schema";
 import { createRequire } from "node:module";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { findRepositoryRoot, loadCurrentSetupState } from "../development-setup/state";
 import { loadLocalWebEnvironment } from "../demo-setup/local-environment";
-import { DevelopmentSetupRefusal } from "../development-setup/guards";
+import { DevelopmentSetupRefusal, isLocalSupabaseApiUrl } from "../development-setup/guards";
 
 /**
  * What the list-paging scripts share: a guarded connection to one database lane and the facts of
@@ -48,11 +50,15 @@ export const openLane = (): LaneFacts => {
   if (![2, 3, 4, 5, 7, 8, 9].includes(lane))
     throw new Error("Pass --lane 2, 3, 4, 5, 7, 8 or 9. The main stack is never used.");
   const databasePort = 54322 + 1000 * (lane - 1);
-  const runtimePort = new URL(process.env.VORTEX_RUNTIME_DATABASE_URL ?? "").port;
+  const runtime = new URL(process.env.VORTEX_RUNTIME_DATABASE_URL ?? "");
+  if (runtime.protocol !== "postgresql:" || !isLoopbackHostname(runtime.hostname))
+    throw new Error("The lane database must use PostgreSQL on loopback.");
+  const runtimePort = runtime.port;
   if (Number(runtimePort) !== databasePort)
     throw new Error(
       `VORTEX_RUNTIME_DATABASE_URL uses port ${runtimePort}, not lane ${lane} (${databasePort}). Run lane.mjs env ${lane}.`,
     );
+  validateLaneAuth(lane);
   const state = loadCurrentSetupState();
   if (!state.setupCompleted)
     throw new DevelopmentSetupRefusal(
@@ -92,11 +98,47 @@ export const laneAuthEndpoint = (lane: number): string => {
   } catch {
     throw new Error("VORTEX_SUPABASE_URL is not a valid URL.");
   }
-  if (!["127.0.0.1", "localhost"].includes(url.hostname) || Number(url.port) !== apiPort)
+  if (!isLocalSupabaseApiUrl(url) || Number(url.port) !== apiPort)
     throw new Error(
       `VORTEX_SUPABASE_URL uses ${url.host}, not lane ${lane} (127.0.0.1:${apiPort}). Run lane.mjs env ${lane}.`,
     );
   return configured;
+};
+
+/** Compare credentials to the selected running stack without printing any secret. */
+const validateLaneAuth = (lane: number): void => {
+  const endpoint = new URL(laneAuthEndpoint(lane));
+  const key = process.env.VORTEX_DEV_SERVICE_ROLE_KEY;
+  if (key === undefined || key.length === 0)
+    throw new Error(`The lane service key is missing. Run lane.mjs env ${lane}.`);
+  const workdir = resolve(process.env.VORTEX_LANES_ROOT ?? "A:/Apps/vortex-lanes", `db${lane}`);
+  const result = spawnSync(
+    process.execPath,
+    [
+      join(findRepositoryRoot(), "node_modules", "supabase", "dist", "supabase.js"),
+      "status",
+      "--output",
+      "json",
+      "--workdir",
+      workdir,
+    ],
+    { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+  );
+  if (result.status !== 0)
+    throw new Error(`Cannot inspect lane ${lane}. Start the selected lane before provisioning.`);
+  let status: Record<string, unknown>;
+  try {
+    status = JSON.parse(result.stdout) as Record<string, unknown>;
+  } catch {
+    throw new Error(`Lane ${lane} status is not valid JSON.`);
+  }
+  if (typeof status.API_URL !== "string" || typeof status.SECRET_KEY !== "string")
+    throw new Error(`Lane ${lane} status has no API URL or service key.`);
+  const actual = new URL(status.API_URL);
+  if (!isLocalSupabaseApiUrl(actual) || actual.port !== endpoint.port || key !== status.SECRET_KEY)
+    throw new Error(
+      `The Supabase API or service key does not match lane ${lane}. Run lane.mjs env ${lane}.`,
+    );
 };
 
 export const personaEmails = {

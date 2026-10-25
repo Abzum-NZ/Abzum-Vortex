@@ -186,13 +186,15 @@ const validateContext = (candidate: SessionContext): SessionContext => {
   return parsed.data;
 };
 
-// Bound lock queues and running statements on every request path. Publication can spend
-// time compiling in Node between queries, so database-idle time must not expire a transaction.
+// Bound idle callbacks as well as lock queues and statements. An owned request lifetime
+// already bounds compilation between queries; other callers need a database idle backstop.
 // LOCAL settings disappear at commit/rollback before the pooled connection is reused.
 const setRequestTimeouts = async (transaction: TransactionDriver): Promise<void> => {
   await transaction.query`
     select pg_catalog.set_config('lock_timeout', '5s', true),
-      pg_catalog.set_config('statement_timeout', '60s', true)
+      pg_catalog.set_config('statement_timeout', '60s', true),
+      pg_catalog.set_config('idle_in_transaction_session_timeout',
+        ${currentRequestDatabaseLifetimeOwner() === undefined ? "60s" : "0"}, true)
   `;
 };
 
