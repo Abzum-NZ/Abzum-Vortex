@@ -154,6 +154,14 @@ export const recordsTableTreeFeature: RecordsTableFeatureDefinition<
       ...(childPageSize === undefined ? {} : { childPageSize }),
     };
   },
+  // A tree needs the parent link among the fields the viewer is guaranteed to see.
+  project: (state, { readable }) =>
+    state.enabled &&
+    state.childPageSize !== undefined &&
+    state.parentField !== undefined &&
+    readable(state.parentField)
+      ? { pageSize: state.childPageSize }
+      : undefined,
   // The records need a one-record link to their own record type among the query's columns; when
   // on, the chosen link must be one of them and the page size must fit the shared row budget.
   conflicts: (state, _facts, { features }) => {

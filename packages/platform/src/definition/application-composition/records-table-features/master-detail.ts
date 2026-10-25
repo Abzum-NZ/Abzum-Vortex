@@ -168,6 +168,12 @@ export const recordsTableMasterDetailFeature: RecordsTableFeatureDefinition<
       bindings: readQueryBindings(group),
     };
   },
+  // Every expanded row is read again under the viewer's current access: the projection only says
+  // rows expand; a viewer who cannot read the related records sees the panel's neutral refusal.
+  project: (state) =>
+    state.enabled && state.childPageSize !== undefined
+      ? { pageSize: state.childPageSize }
+      : undefined,
   // A link from another record type to this one must exist; when on, the chosen link, the query
   // that reads its records, the columns that query selects, the page size and the query's input
   // bindings (one bound to This row) must all fit. Each refusal names the part that does not.

@@ -2,6 +2,7 @@ import "server-only";
 
 import {
   readQueryBindings,
+  recordsTableMasterDetailFeature,
   recordsTableContractOrLog,
   sameId,
   type BlockPropertyValueContract,
@@ -142,7 +143,9 @@ export const readRecordsTableRowDetail = async (
   const groupOf = (value: BlockPropertyValueContract | undefined) =>
     value?.kind === "group" ? value.properties : undefined;
   const bindings = readQueryBindings(
-    groupOf(groupOf(placementSettingsOf(placement)["features"])?.["master_detail"]) ?? {},
+    groupOf(
+      groupOf(placementSettingsOf(placement)["features"])?.[recordsTableMasterDetailFeature.key],
+    ) ?? {},
   );
   if (bindings.kind === "malformed") return refuse("bindings_malformed");
   const resolution = await resolveQueryBindings(

@@ -198,10 +198,6 @@ export const projectRecordsTableFeatures = (
   const editableFields = recordsTableEditableFields(contract, rows, bounds, editors);
   const rowEdit = features.rowEdit;
   const rowFields = projectedEditableFields(rowEdit, rows, bounds, editors);
-  // Every expanded row is read again under the viewer's current access: the projection only says
-  // rows expand; a viewer who cannot read the related records sees the panel's neutral refusal.
-  const masterDetail = features.masterDetail;
-  const tree = features.tree;
   // A pivot is offered only when the viewer may read its rows, columns and measure on every
   // record; the pivot read applies the same field policy again.
   const pivotSettings = features.pivot;
@@ -304,16 +300,6 @@ export const projectRecordsTableFeatures = (
     ...(editableFields.length === 0 || !inlineEdit.enabled || inlineEdit.eventId === undefined
       ? {}
       : { inlineEdit: { eventId: inlineEdit.eventId, fields: editableFields } }),
-    ...(masterDetail.enabled && masterDetail.childPageSize !== undefined
-      ? { masterDetail: { pageSize: masterDetail.childPageSize } }
-      : {}),
-    // A tree needs the parent link among the fields the viewer is guaranteed to see.
-    ...(tree.enabled &&
-    tree.childPageSize !== undefined &&
-    tree.parentField !== undefined &&
-    readable(tree.parentField)
-      ? { tree: { pageSize: tree.childPageSize } }
-      : {}),
     ...(grouping === undefined || grouping.label === "" ? {} : { grouping }),
     ...(conditionalFormatting === undefined || !features.conditionalFormatting.enabled
       ? {}
