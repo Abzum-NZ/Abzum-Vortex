@@ -70,7 +70,6 @@ const readSummary = async (
       ${command.search ?? null}::text,
       ${sqlArray(command.searchableFieldIds)}::text::uuid[],
       ${JSON.stringify(command.grouping)}::text::jsonb,
-      ${command.totals === undefined ? null : JSON.stringify(command.totals)}::text::jsonb,
       ${command.groupAfter ?? null}::text
     ) as result
   `

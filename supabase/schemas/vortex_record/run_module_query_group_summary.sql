@@ -9,7 +9,6 @@ create or replace function vortex_record.run_module_query_group_summary(
   p_search text,
   p_searchable_field_ids uuid[],
   p_grouping jsonb,
-  p_totals jsonb,
   p_group_after text
 )
 returns jsonb
@@ -36,15 +35,15 @@ begin
   if query_item is null then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
   end if;
-  if p_totals is not null or p_grouping -> 'aggregates' is not null then
+  if p_grouping -> 'aggregates' is not null then
     query_item := vortex_record.module_summary_totals_internal(query_item,
-      coalesce(p_totals, p_grouping -> 'aggregates'), true);
+      p_grouping -> 'aggregates', true);
     if query_item ->> 'outcome' = 'refused' then return query_item; end if;
   end if;
   planned := vortex_record.module_summary_plan_internal(
     p_module_root_id, p_query_id, p_expected_release_revision, p_input_values, p_filter,
     p_filterable_field_ids, p_search, p_searchable_field_ids, opened, query_item,
-    (p_grouping ->> 'fieldId')::uuid, (p_totals is not null or p_grouping -> 'aggregates' is not null),
+    (p_grouping ->> 'fieldId')::uuid, (p_grouping -> 'aggregates' is not null),
     null, null, null,
     pg_catalog.jsonb_build_object(pg_catalog.lower(p_grouping ->> 'fieldId'), p_grouping -> 'dateBucket'),
     ((p_grouping ->> 'limit')::numeric)::integer, p_group_after, null, null
@@ -55,7 +54,7 @@ begin
 end
 $function$;
 
-alter function vortex_record.run_module_query_group_summary(uuid,uuid,bigint,jsonb,jsonb,uuid[],text,uuid[],jsonb,jsonb,text) owner to vortex_record_adapter;
-revoke all on function vortex_record.run_module_query_group_summary(uuid,uuid,bigint,jsonb,jsonb,uuid[],text,uuid[],jsonb,jsonb,text)
+alter function vortex_record.run_module_query_group_summary(uuid,uuid,bigint,jsonb,jsonb,uuid[],text,uuid[],jsonb,text) owner to vortex_record_adapter;
+revoke all on function vortex_record.run_module_query_group_summary(uuid,uuid,bigint,jsonb,jsonb,uuid[],text,uuid[],jsonb,text)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-grant execute on function vortex_record.run_module_query_group_summary(uuid,uuid,bigint,jsonb,jsonb,uuid[],text,uuid[],jsonb,jsonb,text) to vortex_request;
+grant execute on function vortex_record.run_module_query_group_summary(uuid,uuid,bigint,jsonb,jsonb,uuid[],text,uuid[],jsonb,text) to vortex_request;
