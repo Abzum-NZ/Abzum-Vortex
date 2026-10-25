@@ -51,6 +51,12 @@ export const one = (rows: readonly ResultRow[]): unknown => {
   return rows[0].result;
 };
 
+/**
+ * The Postgres array literal of schema-validated identities or closed keys, bound as text and cast
+ * by the statement (`::text::uuid[]`, `::text::text[]`). Never used for free text.
+ */
+export const sqlArray = (values: readonly string[]): string => `{${values.join(",")}}`;
+
 /** Every field identifier a typed condition tree reads, lower-cased; a malformed node contributes none. */
 export const conditionFieldIds = (condition: unknown, into: Set<string>): void => {
   if (Array.isArray(condition)) {

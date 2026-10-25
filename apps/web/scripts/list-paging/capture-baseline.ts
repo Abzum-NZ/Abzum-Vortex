@@ -14,11 +14,11 @@ import { argumentValue, openLane, personaEmails, postgres, type LaneFacts, type 
  * the platform default of 40 rows.
  *
  * The read is the one the application makes: a request transaction initialised with the person's
- * own request context, `set local role vortex_request`, then `vortex_record.run_module_query` with
+ * own request context, `set local role vortex_request`, then `vortex_record.run_module_query_rows` with
  * the arguments the protected query service passes for the list page's query. The context is read
  * back from a real human request so it carries the person's current access version. The plan comes
  * from `auto_explain` (nested statements, analyze, buffers), which the lane's database already
- * preloads, so it is the plan of the statement `run_module_query` builds and executes, not of the
+ * preloads, so it is the plan of the statement the module query scan builds and executes, not of the
  * function call around it; only statements slower than one second are logged.
  *
  * One list read costs time proportional to the number of rows, so the script does not walk to page
@@ -196,25 +196,22 @@ const read = async (
     notices.length = 0;
     const started = performance.now();
     const [row] = await transaction`
-      select vortex_record.run_module_query(
+      select vortex_record.run_module_query_rows(
         ${moduleRootId}::uuid,
         ${query.queryId}::uuid,
         ${inputs.moduleReleaseRevision as number}::bigint,
         '{}'::jsonb,
-        ${JSON.stringify(query.selectedFieldIds)}::text::jsonb,
+        ${`{${query.selectedFieldIds.join(",")}}`}::text::uuid[],
+        '{}'::text[],
+        null::jsonb,
+        '{}'::uuid[],
+        '[]'::jsonb,
+        null::text,
+        '{}'::uuid[],
+        '{}'::uuid[],
         ${pageSize}::integer,
         ${after === null ? null : JSON.stringify(after)}::text::jsonb,
-        '[]'::jsonb,
-        ${JSON.stringify({
-          sort: [],
-          filter: null,
-          search: null,
-          sortableFieldIds: [],
-          filterableFieldIds: [],
-          searchableFieldIds: [],
-        })}::text::jsonb,
-        'forward'::text,
-        null::uuid[]
+        'forward'::text
       ) as result`;
     const milliseconds = performance.now() - started;
     const result = row!.result as {
@@ -245,7 +242,7 @@ const read = async (
 type SortColumn = Readonly<{ column: string; type: string; direction: "asc" | "desc" }>;
 
 /**
- * The keyset position `run_module_query` uses for the row at an offset of the query's list: the
+ * The keyset position the module query scan uses for the row at an offset of the query's list: the
  * same filter, the same order (nulls first ascending, last descending, text in the C collation,
  * record identity last) and the same sort-key text, taken from every stored row of the application.
  */

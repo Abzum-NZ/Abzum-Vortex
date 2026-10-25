@@ -26,6 +26,7 @@ import {
   filterInputRefusal,
   readInputs,
   normalizeConditionFieldIdentifiers,
+  sqlArray,
 } from "./protected-query-helpers";
 import { treeLevelPageReadSchema, type pageAnchorSchema } from "./protected-query-read-schemas";
 import {
@@ -42,26 +43,24 @@ const readTreeLevelPage = async (
   after: QueryContinuation | undefined,
 ) => {
   const rows = await transaction.query<ResultRow>`
-    select vortex_record.run_module_query(
+    select vortex_record.run_module_query_tree_level(
       ${command.moduleRootId}::uuid,
       ${command.queryId}::uuid,
       ${releaseRevision}::bigint,
       ${JSON.stringify(inputValues)}::text::jsonb,
-      ${JSON.stringify(command.requestedFieldIds)}::text::jsonb,
+      ${sqlArray(command.requestedFieldIds)}::text::uuid[],
+      ${sqlArray(command.requestedSystemFieldKeys)}::text::text[],
+      ${command.filter === undefined ? null : JSON.stringify(command.filter)}::text::jsonb,
+      ${sqlArray(command.filterableFieldIds)}::text::uuid[],
+      ${JSON.stringify(command.sort)}::text::jsonb,
+      ${command.search ?? null}::text,
+      ${sqlArray(command.sortableFieldIds)}::text::uuid[],
+      ${sqlArray(command.searchableFieldIds)}::text::uuid[],
+      ${command.parentFieldId}::uuid,
+      ${command.parentRecordId ?? null}::uuid,
       ${command.pageSize}::integer,
       ${after === undefined ? null : JSON.stringify({ sort: after.sort, sortKey: after.sortKey, phase: after.phase, recordId: after.recordId })}::text::jsonb,
-      ${JSON.stringify(command.requestedSystemFieldKeys)}::text::jsonb,
-      ${JSON.stringify({
-        sort: command.sort,
-        filter: command.filter ?? null,
-        search: command.search ?? null,
-        sortableFieldIds: command.sortableFieldIds,
-        filterableFieldIds: command.filterableFieldIds,
-        searchableFieldIds: command.searchableFieldIds,
-        tree: { fieldId: command.parentFieldId, parentRecordId: command.parentRecordId },
-      })}::text::jsonb,
-      ${command.pageDirection ?? "forward"}::text,
-      ${null}::uuid[]
+      ${command.pageDirection ?? "forward"}::text
     ) as result
   `;
   return treeLevelPageReadSchema.parse(one(rows));

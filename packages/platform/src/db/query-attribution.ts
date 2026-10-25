@@ -36,7 +36,12 @@ const familyOf = (strings: TemplateStringsArray): ProtectedReadFamily | undefine
   if (!/^\s*(select|with)\b/i.test(sql)) return undefined;
   if (sql.includes("vortex_access.evaluate_organization_permission_eligibility("))
     return sql.includes("jsonb_array_elements(") ? "eligibility_batch" : "eligibility_single";
-  if (sql.includes("vortex_record.run_module_query(")) return "module_query";
+  if (
+    /vortex_record\.run_module_query_(?:rows|exact_rows|board_column|board_columns|group_members|tree_level)\(/u.test(
+      sql,
+    )
+  )
+    return "module_query";
   if (sql.includes("vortex_record.read_record_titles(")) return "record_titles";
   if (
     /vortex_definition\.(read_(?:current_active_installation|active_installation_bundle_identity|application_installation_bindings|installation_runtime_bundle_(?:index|parts)|prepared_installation_runtime_source|builder_preview_installation)|assert_prepared_installation_runtime_bundle)\(/u.test(
@@ -63,7 +68,7 @@ export const observeProtectedRead = async <ResultRow extends DatabaseRow>(
   let failed = true;
   try {
     const rows = await query(strings, ...values);
-    // run_module_query returns one JSON envelope: `rows`, or `columns[].rows` for a batched board
+    // Every module query page read returns one JSON envelope: `rows`, or `columns[].rows` for a batched board
     // read. Count its rows, never their contents.
     const envelopeRows = (result: unknown): number => {
       if (typeof result !== "object" || result === null) return 0;

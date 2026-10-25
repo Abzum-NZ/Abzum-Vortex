@@ -28,6 +28,7 @@ import {
   filterInputRefusal,
   readInputs,
   normalizeConditionFieldIdentifiers,
+  sqlArray,
 } from "./protected-query-helpers";
 import { groupedMemberPageReadSchema, type pageAnchorSchema } from "./protected-query-read-schemas";
 import {
@@ -45,27 +46,24 @@ const readGroupedMemberPage = async (
   after: QueryContinuation | undefined,
 ) => {
   const rows = await transaction.query<ResultRow>`
-    select vortex_record.run_module_query(
+    select vortex_record.run_module_query_group_members(
       ${command.moduleRootId}::uuid,
       ${command.queryId}::uuid,
       ${releaseRevision}::bigint,
       ${JSON.stringify(inputValues)}::text::jsonb,
-      ${JSON.stringify(command.requestedFieldIds)}::text::jsonb,
+      ${sqlArray(command.requestedFieldIds)}::text::uuid[],
+      ${sqlArray(command.requestedSystemFieldKeys)}::text::text[],
+      ${command.filter === undefined ? null : JSON.stringify(command.filter)}::text::jsonb,
+      ${sqlArray(command.filterableFieldIds)}::text::uuid[],
+      ${JSON.stringify(command.sort)}::text::jsonb,
+      ${command.search ?? null}::text,
+      ${sqlArray(command.sortableFieldIds)}::text::uuid[],
+      ${sqlArray(command.searchableFieldIds)}::text::uuid[],
+      ${command.grouping === undefined ? null : JSON.stringify(command.grouping)}::text::jsonb,
+      ${JSON.stringify(selector)}::text::jsonb,
       ${command.pageSize}::integer,
       ${after === undefined ? null : JSON.stringify({ sort: after.sort, sortKey: after.sortKey, phase: after.phase, recordId: after.recordId })}::text::jsonb,
-      ${JSON.stringify(command.requestedSystemFieldKeys)}::text::jsonb,
-      ${JSON.stringify({
-        sort: command.sort,
-        filter: command.filter ?? null,
-        search: command.search ?? null,
-        sortableFieldIds: command.sortableFieldIds,
-        filterableFieldIds: command.filterableFieldIds,
-        searchableFieldIds: command.searchableFieldIds,
-        ...(command.grouping === undefined ? {} : { grouping: command.grouping }),
-        groupMember: selector,
-      })}::text::jsonb,
-      ${command.pageDirection ?? "forward"}::text,
-      ${null}::uuid[]
+      ${command.pageDirection ?? "forward"}::text
     ) as result
   `;
   return groupedMemberPageReadSchema.parse(one(rows));

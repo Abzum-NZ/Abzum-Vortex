@@ -25,6 +25,7 @@ import {
   one,
   refuseWithCause,
   readInputs,
+  sqlArray,
 } from "./protected-query-helpers";
 import { pageAnchorSchema, pageReadSchema } from "./protected-query-read-schemas";
 import type { QueryCache } from "./protected-query-types";
@@ -37,7 +38,7 @@ import {
 
 /**
  * One table read makes at most this many database reads, each examining at most
- * `tableReadCandidatesPerCall` candidates (the `scan_limit` of run_module_query), so one request
+ * `tableReadCandidatesPerCall` candidates (the `scan_limit` of module_query_scan_internal), so one request
  * examines at most `tableReadCandidatesPerRequest` candidates.
  */
 export const tableReadCallsPerRequest = 4;
@@ -86,19 +87,42 @@ const readPage = async (
   inputValues: Readonly<Record<string, JsonValue>>,
   after: QueryContinuation | undefined,
 ) => {
-  const rows = await transaction.query<ResultRow>`
-    select vortex_record.run_module_query(
+  const rows =
+    command.exactRecordIds === undefined
+      ? await transaction.query<ResultRow>`
+    select vortex_record.run_module_query_rows(
       ${command.moduleRootId}::uuid,
       ${command.queryId}::uuid,
       ${releaseRevision}::bigint,
       ${JSON.stringify(inputValues)}::text::jsonb,
-      ${JSON.stringify(command.requestedFieldIds)}::text::jsonb,
+      ${sqlArray(command.requestedFieldIds)}::text::uuid[],
+      ${sqlArray(command.requestedSystemFieldKeys)}::text::text[],
+      ${command.filter === undefined ? null : JSON.stringify(command.filter)}::text::jsonb,
+      ${sqlArray(command.filterableFieldIds)}::text::uuid[],
+      ${JSON.stringify(command.sort)}::text::jsonb,
+      ${command.search ?? null}::text,
+      ${sqlArray(command.sortableFieldIds)}::text::uuid[],
+      ${sqlArray(command.searchableFieldIds)}::text::uuid[],
       ${command.pageSize}::integer,
       ${after === undefined ? null : JSON.stringify({ sort: after.sort, sortKey: after.sortKey, phase: after.phase, recordId: after.recordId })}::text::jsonb,
-      ${JSON.stringify(command.requestedSystemFieldKeys)}::text::jsonb,
-      ${JSON.stringify(userQueryInputs(command))}::text::jsonb,
-      ${command.pageDirection ?? "forward"}::text,
-      ${command.exactRecordIds === undefined ? null : `{${command.exactRecordIds.join(",")}}`}::text::uuid[]
+      ${command.pageDirection ?? "forward"}::text
+    ) as result
+  `
+      : await transaction.query<ResultRow>`
+    select vortex_record.run_module_query_exact_rows(
+      ${command.moduleRootId}::uuid,
+      ${command.queryId}::uuid,
+      ${releaseRevision}::bigint,
+      ${JSON.stringify(inputValues)}::text::jsonb,
+      ${sqlArray(command.requestedFieldIds)}::text::uuid[],
+      ${sqlArray(command.requestedSystemFieldKeys)}::text::text[],
+      ${command.filter === undefined ? null : JSON.stringify(command.filter)}::text::jsonb,
+      ${sqlArray(command.filterableFieldIds)}::text::uuid[],
+      ${JSON.stringify(command.sort)}::text::jsonb,
+      ${command.search ?? null}::text,
+      ${sqlArray(command.sortableFieldIds)}::text::uuid[],
+      ${sqlArray(command.searchableFieldIds)}::text::uuid[],
+      ${sqlArray(command.exactRecordIds)}::text::uuid[]
     ) as result
   `;
   return pageReadSchema.parse(one(rows));
@@ -172,7 +196,7 @@ export const runCommand = async (
   // The fingerprint binds the query inputs, the user's sort, filter and search and the page size,
   // so a continuation issued under one order or narrowing can never be replayed under another. The
   // requested columns are not bound: a keyset position is the sort-key values and record identity
-  // of a row (run_module_query never reads the projection to place it), and every read
+  // of a row (the scan never reads the projection to place it), and every read
   // re-authorises its own projection, so showing or hiding a column rereads the same page.
   const inputFingerprint = fingerprintQueryInputs({
     inputValues,
