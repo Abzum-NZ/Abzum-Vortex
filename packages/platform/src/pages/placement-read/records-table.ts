@@ -8,23 +8,8 @@ import {
   type RecordsTableContract,
   type RecordsTableGroupingFieldType,
 } from "../../schema";
-import {
-  decodeRecordsTableFieldFilter,
-  readRecordsTableQueryState,
-  readRecordsTableView,
-  type RecordsTablePageRequest,
-  type RecordsTableQueryState,
-} from "../records-table-state";
-import {
-  authoredGridLayout,
-  addressedDefaultGridViews,
-  gridViewLayout,
-  resolveGridLayout,
-  resolveSelectedGridView,
-  type GridLayoutState,
-  type GridViewsState,
-} from "../grid-view-state";
-import { addressedGridView, gridViewPlacement } from "../grid-views";
+import { readRecordsTableQueryState, type RecordsTablePageRequest } from "../records-table-state";
+import { resolveRecordsTableView } from "./records-table-view";
 import type { RecordsTableGroupRead } from "../records-table-features/grouping";
 import { decideRecordTypeExport } from "../records-table-features/record-type-access";
 import {
@@ -35,7 +20,6 @@ import type { RecordsTableReadDecider, RecordsTableReadDecisions } from "../reco
 import {
   conditionalFormattingRelativeDates,
   conditionalFormattingUsesRelativeDates,
-  personalFormattingAllowed,
   personalFormattingRules,
   recordsTableRowActionsProjection,
   type ConditionalFormattingContext,
@@ -129,130 +113,22 @@ export const readRecordsTable = async (
     data[placementId] = { status: "refused", reason: "table_address_invalid" };
     return;
   }
-  const queryId = String(bound.query.queryId).toLowerCase();
-  const recordType = bound.query.recordType;
-  const readable =
-    gridLayouts.readable === undefined
-      ? undefined
-      : (gridLayouts.readable.get(
-          recordType.state === "resolved" ? String(recordType.recordTypeId).toLowerCase() : "",
-        ) ?? new Set<string>());
-  const authored = authoredGridLayout(contract, readable);
-  if (authored === undefined) {
+  const view = resolveRecordsTableView({
+    contract,
+    placementId,
+    bound,
+    pageDefinition: read.pageDefinition,
+    gridLayouts,
+    addressEntries,
+    state: addressed.state,
+  });
+  if (view === undefined) {
     logPlacementFailure(address, placementId, "table_columns_withheld");
     data[placementId] = { status: "refused", reason: "not_permitted" };
     return;
   }
-  const stored = gridLayouts.stored.layouts.get(placementId.toLowerCase());
-  // Saved views: only the selected or automatic view, re-evaluated under the viewer's
-  // access (a column or filter they cannot see is left out and counted).
-  let views: GridViewsState | undefined;
-  let selectedQuery: RecordsTableQueryState | undefined;
-  let selectedLayout: GridLayoutState["layout"] | undefined;
-  if (contract.features.savedViews.enabled && gridLayouts.storage === "personal") {
-    const listed = (gridLayouts.stored.views.get(placementId.toLowerCase()) ?? []).filter(
-      (view) => view.queryId === queryId,
-    );
-    const installedViews = gridViewPlacement(read.pageDefinition, placementId)?.contract.features
-      .savedViews;
-    if (installedViews?.enabled !== true) throw new Error("GRID_DEFAULT_VIEWS_NOT_INSTALLED");
-    const defaults = addressedDefaultGridViews(
-      installedViews.defaultViews,
-      gridLayouts.stored.roleKeys,
-      gridLayouts.stored.defaultDocuments,
-      {
-        viewId: readRecordsTableView(placementId, addressEntries)?.viewId,
-        automatic: stored === undefined,
-      },
-    );
-    const addressedView = readRecordsTableView(placementId, addressEntries);
-    const automatic =
-      stored === undefined && addressedView === undefined
-        ? defaults.find((view) => view.isDefault)
-        : undefined;
-    const view =
-      addressedView ??
-      (automatic === undefined ? undefined : { viewId: automatic.viewId, cleared: false });
-    const resolvedView =
-      view === undefined
-        ? { selected: null, notice: null }
-        : resolveSelectedGridView(
-            authored,
-            defaults.find((candidate) => candidate.viewId === view.viewId) ??
-              addressedGridView(
-                listed,
-                queryId,
-                view.viewId,
-                gridLayouts.stored.shareable.has(placementId.toLowerCase()),
-              ),
-            readable,
-            personalFormattingAllowed(contract),
-          );
-    views = {
-      canShare: gridLayouts.stored.shareable.has(placementId.toLowerCase()),
-      basedOnViewId: stored?.basedOnViewId ?? null,
-      selected: resolvedView.selected,
-      notice: resolvedView.notice,
-      ...(installedViews.personalFormatting && contract.features.conditionalFormatting.enabled
-        ? {
-            formattingFields: (
-              bound.module.content.recordTypes.find(
-                (candidate) =>
-                  recordType.state === "resolved" &&
-                  String(candidate.recordTypeId).toLowerCase() ===
-                    String(recordType.recordTypeId).toLowerCase(),
-              )?.fields ?? []
-            ).filter((field) =>
-              authored.columns.some(
-                (column) => column.fieldId === String(field.fieldId).toLowerCase(),
-              ),
-            ),
-          }
-        : {}),
-    };
-    const selected = resolvedView.selected;
-    if (selected !== null) {
-      // The address wins: a view's own sort, filters and search apply only when the address names
-      // none and the person has not cleared them.
-      if (
-        view?.cleared === false &&
-        addressed.state.sort.length === 0 &&
-        addressed.state.filters.length === 0 &&
-        addressed.state.search === null
-      )
-        selectedQuery = {
-          ...addressed.state,
-          sort: selected.document.sort,
-          filters: selected.document.filters.flatMap(({ fieldId, filter }) => {
-            const typed = decodeRecordsTableFieldFilter(filter);
-            return typed === undefined ? [] : [{ fieldId, filter: typed }];
-          }),
-          search: selected.document.search,
-        };
-      // A layout the person arranged from this view is theirs; otherwise the view's shows.
-      if (stored?.basedOnViewId !== selected.viewId)
-        selectedLayout = gridViewLayout(selected.document);
-    }
-  }
-  const resolvedLayout =
-    selectedLayout !== undefined
-      ? { layout: selectedLayout, reset: false }
-      : resolveGridLayout(
-          authored,
-          stored?.layout === undefined
-            ? undefined
-            : { queryId: stored.queryId, layout: stored.layout },
-          queryId,
-        );
-  const layout: GridLayoutState = {
-    storage: gridLayouts.storage,
-    queryId,
-    revision: stored?.revision ?? null,
-    layout: resolvedLayout.layout,
-    authored,
-    reset: resolvedLayout.reset,
-    ...(views === undefined ? {} : { views }),
-  };
+  const { layout, readable, state: effectiveState } = view;
+  const recordType = bound.query.recordType;
   // A date-and-time filter takes whole days in the organisation's time zone, so the zone is read
   // only when the table offers a filter on such a field.
   const filterTargets = Object.fromEntries(
@@ -445,7 +321,6 @@ export const readRecordsTable = async (
             );
           return decisions;
         };
-  const effectiveState = selectedQuery ?? addressed.state;
   const continuation = read.tableContinuation;
   const explicitRequest =
     continuation !== undefined && sameId(continuation.placementId, placementId)

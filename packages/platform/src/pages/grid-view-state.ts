@@ -278,7 +278,7 @@ export type GridLayoutState = Readonly<{
   revision: number | null;
   /** The layout applied: every column the person may see, in display order. */
   layout: GridLayout;
-  /** The authored layout narrowed to the columns the person may see: what Reset layout restores. */
+  /** The selected or automatic view's authored layout, or the table's, narrowed for Reset layout. */
   authored: GridLayout;
   /** The stored layout named a column that is no longer available, so the authored one applies. */
   reset: boolean;
