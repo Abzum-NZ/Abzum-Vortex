@@ -1,6 +1,5 @@
 import type {
   ConditionalFormattingProjection,
-  RecordsTableBulkActionContract,
   RecordsTableContract,
   RecordsTableFeatureProjection,
   RecordsTableFilterField,
@@ -117,12 +116,6 @@ const projectedEditableFields = (
   });
 };
 
-/** The one bulk-action projection; a disabled feature offers neither actions nor availability reads. */
-export const recordsTableBulkActions = (
-  contract: RecordsTableContract,
-): readonly RecordsTableBulkActionContract[] =>
-  contract.features.bulkActions.enabled ? contract.features.bulkActions.actions : [];
-
 /**
  * The row actions a table offers and, per row, whether the capabilities its read decided make each
  * eligible; absent when the feature is off or the table declares none. Named-action eligibility is
@@ -190,7 +183,6 @@ export const projectRecordsTableFeatures = (
       return part === undefined ? [] : [[definition.property, part]];
     }),
   ) as Partial<RecordsTableFeatureProjection>;
-  const bulkActions = recordsTableBulkActions(contract);
   const inlineEdit = features.inlineEdit;
   const editableFields = recordsTableEditableFields(contract, rows, bounds, editors);
   const rowEdit = features.rowEdit;
@@ -296,7 +288,6 @@ export const projectRecordsTableFeatures = (
       : {}),
     ...(rowActions === undefined ? {} : { rowActions }),
     ...declared,
-    ...(bulkActions.length === 0 ? {} : { bulkActions }),
     ...(editableFields.length === 0 || !inlineEdit.enabled || inlineEdit.eventId === undefined
       ? {}
       : { inlineEdit: { eventId: inlineEdit.eventId, fields: editableFields } }),
