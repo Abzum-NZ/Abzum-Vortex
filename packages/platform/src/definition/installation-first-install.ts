@@ -222,17 +222,23 @@ export const readFirstInstallReleaseSet = async (
   catalogue: ImmutableDefinitionPublicationCatalogueDefinition,
   selector: FirstInstallSelector,
   context: InstallationHumanContext,
+  purpose: "consume" | "replace_or_remove" = "consume",
 ): Promise<SystemApplicationBoundReleaseSetResult> => {
   let candidate: unknown;
   try {
     candidate = await createDatabaseFirstInstallApplicationReleaseSetService(
       catalogue,
       transaction,
+      purpose,
     ).read({
       applicationRootId: selector.rootId,
       applicationReleaseRevision: selector.releaseRevision,
     });
   } catch (error) {
+    if (error instanceof DefinitionError && error.code === "DEFINITION_DEPENDENCY_SUPERSEDED")
+      installationProblem("DEFINITION_DEPENDENCY_SUPERSEDED", "refused", "republish_required", {
+        cause: error,
+      });
     if (!(error instanceof DefinitionError))
       installationProblem(
         "first_install_release_set_read_failed",
