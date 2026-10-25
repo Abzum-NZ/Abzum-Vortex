@@ -12,7 +12,6 @@ import {
   identityAuthorityIdSchema,
   identitySessionSchema,
   logRefusal,
-  organizationLauncherEntrySchema,
   isPresentationOnlyApplicationExperience,
   namespacedKeySchema,
   organizationAccessDeclarationSchema,
@@ -275,13 +274,15 @@ const describeApplicationAddressFailure = (error: unknown): string => {
 };
 
 type AddressRow = Readonly<{ address: unknown }>;
-type OrganizationLauncherRow = DatabaseRow &
+const addressedOrganizationSchema = z
+  .object({
+    organization_id: organizationIdSchema,
+    account_display_name: z.string().trim().min(1).max(120).nullable(),
+  })
+  .strict();
+type AddressedOrganizationRow = DatabaseRow &
   Readonly<{
     organization_id: unknown;
-    tenant_short_name: unknown;
-    tenant_display_name: unknown;
-    organization_short_name: unknown;
-    organization_display_name: unknown;
     account_display_name: unknown;
   }>;
 type SourceRoleRow = Readonly<{ source_role_id: unknown }>;
@@ -502,12 +503,6 @@ const projectPermittedApplication = async (
     throw new Error("APPLICATION_ADDRESS_RELEASE_UNAVAILABLE");
   if (!releaseRows[0].current_release) return null;
 
-  const roleRows = await transaction.query<SourceRoleRow>`
-    select source_role_id from vortex_access.read_current_application_role_ids_for_launcher()
-  `;
-  const activeRoleIds = new Set(
-    roleRows.map((row) => roleIdSchema.parse(row.source_role_id).toLowerCase()),
-  );
   if (new Set(candidate.pages.map((page) => page.key)).size !== candidate.pages.length)
     throw new Error("APPLICATION_PAGE_ADDRESS_UNAVAILABLE");
 
@@ -548,11 +543,26 @@ const projectPermittedApplication = async (
           (page) => page.key === addressedPage.key || page.key === candidate.homePageKey,
         ),
   );
-  const roleHomes = [...candidate.roles]
-    .sort((left, right) => (left.key < right.key ? -1 : left.key > right.key ? 1 : 0))
-    .filter((role) => activeRoleIds.has(role.roleId.toLowerCase()))
-    .map((role) => candidate.pages.find((page) => sameId(page.pageId, role.homePageId)))
-    .filter((page) => page !== undefined);
+  // Role homes need the current role IDs. They are read once, on first use, and both uses below
+  // run only after the release home is refused, so an allowed release home never reads them.
+  const readRoleHomes = async () => {
+    const roleRows = await transaction.query<SourceRoleRow>`
+      select source_role_id from vortex_access.read_current_application_role_ids_for_launcher()
+    `;
+    const activeRoleIds = new Set(
+      roleRows.map((row) => roleIdSchema.parse(row.source_role_id).toLowerCase()),
+    );
+    return [...candidate.roles]
+      .sort((left, right) => (left.key < right.key ? -1 : left.key > right.key ? 1 : 0))
+      .filter((role) => activeRoleIds.has(role.roleId.toLowerCase()))
+      .map((role) => candidate.pages.find((page) => sameId(page.pageId, role.homePageId)))
+      .filter((page) => page !== undefined);
+  };
+  let roleHomeRead: ReturnType<typeof readRoleHomes> | undefined;
+  const roleHomes = () => {
+    roleHomeRead ??= readRoleHomes();
+    return roleHomeRead;
+  };
   const pageAllowed = (page: ApplicationCandidate["pages"][number]) =>
     decisions.get(page.accessPermissionKey)?.allowed === true;
   if (addressedPage !== undefined) {
@@ -564,7 +574,7 @@ const projectPermittedApplication = async (
     if (!candidate.pages.some((page) => page.key === candidate.homePageKey && pageAllowed(page))) {
       // Preserve the existing role-home order when the release home is refused. Decide another
       // home only as needed; a current role's already-allowed addressed page needs no extra read.
-      for (const page of roleHomes) {
+      for (const page of await roleHomes()) {
         await decidePages([page]);
         if (pageAllowed(page)) break;
       }
@@ -586,11 +596,13 @@ const projectPermittedApplication = async (
     if (allowedRequirementKeys.has(page.accessPermissionKey)) allowedPageKeys.add(page.key);
 
   // The release home wins if authorised. Otherwise use the lowest source
-  // role key among current application roles with an open home.
-  const roleHome = roleHomes.find((page) => allowedPageKeys.has(page.key));
+  // role key among current application roles with an open home. With no page open, no role home
+  // can be chosen, so the role IDs are not read.
   const homePageKey = allowedPageKeys.has(candidate.homePageKey)
     ? candidate.homePageKey
-    : roleHome?.key;
+    : allowedPageKeys.size === 0
+      ? undefined
+      : (await roleHomes()).find((page) => allowedPageKeys.has(page.key))?.key;
   // A home chosen from current role assignments depends on time-bound assignments, memberships and
   // activations that the page decisions' expiry does not cover, so only a projection that does not
   // depend on them is remembered.
@@ -992,56 +1004,39 @@ const readAddressedApplicationIdentityAtAddress = async (
   try {
     const rows = await withRuntimeTransaction(
       async (transaction) =>
-        transaction.query<OrganizationLauncherRow>`
+        transaction.query<AddressedOrganizationRow>`
         select *
-        from vortex_identity.list_organization_launcher(
-          ${session.data.identityId}::uuid
+        from vortex_identity.read_organization_at_address(
+          ${session.data.identityId}::uuid,
+          ${tenantShortName.data}::text,
+          ${organizationShortName.data}::text
         )
       `,
     );
-    const entries = rows.map((row) =>
-      organizationLauncherEntrySchema.safeParse({
-        organizationId: row.organization_id,
-        tenantShortName: row.tenant_short_name,
-        tenantDisplayName: row.tenant_display_name,
-        organizationShortName: row.organization_short_name,
-        organizationDisplayName: row.organization_display_name,
-        ...(row.account_display_name === null || row.account_display_name === undefined
-          ? {}
-          : { accountDisplayName: row.account_display_name }),
-      }),
-    );
-    if (entries.some((entry) => !entry.success)) return undefined;
-    const matchedEntries = entries.flatMap((entry) =>
-      entry.success &&
-      entry.data.tenantShortName === tenantShortName.data &&
-      entry.data.organizationShortName === organizationShortName.data
-        ? [entry.data]
-        : [],
-    );
-    if (matchedEntries.length !== 1 || matchedEntries[0] === undefined) return undefined;
-    const address = matchedEntries[0];
+    if (rows.length === 0) return undefined;
+    if (rows.length !== 1) throw new Error("ORGANIZATION_ADDRESS_NOT_UNIQUE");
+    const address = addressedOrganizationSchema.parse(rows[0]);
     const identity = await readAddressedActiveApplicationIdentity(
       session.data,
-      address.organizationId,
+      address.organization_id,
       identityAuthorityId.data,
       applicationKey.data,
     );
     if (
       identity === undefined ||
-      identity.organizationId !== address.organizationId ||
+      identity.organizationId !== address.organization_id ||
       (identity.previewInstallationId === undefined
         ? identity.definitionKey !== applicationKey.data
         : previewApplicationKey(identity.previewInstallationId) !== applicationKey.data)
     )
       return undefined;
     return Object.freeze({
-      organizationId: address.organizationId,
-      tenantShortName: address.tenantShortName,
-      organizationShortName: address.organizationShortName,
-      ...(address.accountDisplayName === undefined
+      organizationId: address.organization_id,
+      tenantShortName: tenantShortName.data,
+      organizationShortName: organizationShortName.data,
+      ...(address.account_display_name === null
         ? {}
-        : { accountDisplayName: address.accountDisplayName }),
+        : { accountDisplayName: address.account_display_name }),
       identity,
     });
   } catch (error) {

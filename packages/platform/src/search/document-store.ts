@@ -5,6 +5,7 @@ import {
   organizationIdSchema,
   recordIdSchema,
   recordTypeIdSchema,
+  searchableFieldTypes,
   type FieldType,
   type ModuleField,
   type PersonalDataClass,
@@ -26,31 +27,6 @@ import { searchIndexFieldDiscloses } from "./sensitivity-policy";
 
 /** Version of the stored document shape; bumped only by a deliberate rebuild. */
 export const searchDocumentSchemaVersion = 1;
-
-/**
- * Field types whose stored value carries searchable words. Identifier-only
- * values (links to records or people) and yes/no values carry none, and
- * attachments are searched only through a separate file-search policy.
- */
-const searchableFieldTypes = new Set<FieldType>([
-  "text",
-  "long_text",
-  "formatted_text",
-  "whole_number",
-  "decimal_number",
-  "money",
-  "date",
-  "date_time",
-  "choice",
-  "several_choices",
-  "reference_number",
-  "email_address",
-  "phone_number",
-  "web_address",
-  "table",
-  "calculation",
-  "total",
-]);
 
 /** Ranking weight per declared search priority; ranking never overrides access. */
 export const searchPriorityWeights: Readonly<Record<SearchPriority, number>> = Object.freeze({
@@ -123,7 +99,12 @@ export const searchableFieldConfigurationFor = (
     fields: Object.freeze(
       recordType.fields.flatMap((field): SearchableFieldConfigurationEntry[] => {
         const priority = field.searchPriority;
-        if (priority === undefined || !isIndexableField({ ...field, priority }, policy) || !searchIndexFieldDiscloses(recordType.fields, field.fieldId, policy)) return [];
+        if (
+          priority === undefined ||
+          !isIndexableField({ ...field, priority }, policy) ||
+          !searchIndexFieldDiscloses(recordType.fields, field.fieldId, policy)
+        )
+          return [];
         const optionLabels = optionLabelsFor(field);
         return [
           Object.freeze({
@@ -185,9 +166,7 @@ export type SearchDocumentDeletion = SearchDocumentIdentity &
   }>;
 
 export type SearchDocumentRefusalCode =
-  | "invalid_snapshot"
-  | "configuration_mismatch"
-  | "shared_source_record";
+  "invalid_snapshot" | "configuration_mismatch" | "shared_source_record";
 
 export type BuildSearchDocumentResult =
   | Readonly<{ success: true; output: SearchDocument | SearchDocumentDeletion }>
@@ -440,12 +419,7 @@ export type SearchDocumentStoreCommand = Readonly<{
  * its version).
  */
 export type SearchDocumentStoreOutcome =
-  | "stored"
-  | "replaced"
-  | "rebuilt"
-  | "replayed"
-  | "ignored_older"
-  | "ignored_deleted";
+  "stored" | "replaced" | "rebuilt" | "replayed" | "ignored_older" | "ignored_deleted";
 
 export const searchDocumentStoreCommand = (
   output: SearchDocument | SearchDocumentDeletion,

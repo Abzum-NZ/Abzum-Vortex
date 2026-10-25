@@ -47,6 +47,9 @@ export type PageGrid = Readonly<{
   selectedViewId: string | undefined;
   defaultViews: readonly Readonly<{
     viewId: string;
+    placementId: string;
+    role: string;
+    isDefault: boolean;
     queryId: string;
     document: GridViewDocument;
   }>[];
@@ -79,6 +82,9 @@ export const pageGridLayoutRequest = (
         ? []
         : feature.defaultViews.map((view) => ({
             viewId: view.viewId,
+            placementId,
+            role: view.role,
+            isDefault: view.isDefault,
             queryId: installed.queryId,
             document: view.document,
           })),
@@ -112,7 +118,12 @@ export const readPageGridLayouts = async (
         grids.map((grid) => grid.placementId),
         grids.flatMap((grid) => (grid.selectedViewId === undefined ? [] : [grid.selectedViewId])),
         recordTypeIds,
-        grids.flatMap((grid) => grid.defaultViews),
+        grids.flatMap((grid) =>
+          grid.defaultViews.map((view) => ({
+            ...view,
+            selectedViewId: grid.selectedViewId ?? null,
+          })),
+        ),
       );
       return { stored, readable: stored.readable };
     },

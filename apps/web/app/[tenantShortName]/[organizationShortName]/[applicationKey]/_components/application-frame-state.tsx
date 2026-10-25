@@ -30,6 +30,8 @@ export type ApplicationFramePageState = Readonly<{
 export type FramePageStateOwner = Readonly<Record<string, never>>;
 
 export type ApplicationFrameStateValue = Readonly<{
+  /** The current frame's projection, shared with navigation blocks in page content. */
+  navigation: ProjectedNavigation;
   /** Sets one part of the page state on behalf of `owner`. */
   setPageState: <Key extends keyof ApplicationFramePageState>(
     key: Key,
