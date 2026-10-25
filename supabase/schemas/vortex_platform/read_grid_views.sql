@@ -96,7 +96,8 @@ begin
   end loop;
 
   -- The visible grids need their layouts and selected/automatic view documents only. The picker
-  -- inventory is read separately when opened; unselected defaults are never narrowed here.
+  -- inventory is read separately when opened. The automatic default also supplies the reset
+  -- baseline while a personal layout is stored; this reads configuration, never record rows.
   return pg_catalog.jsonb_build_object(
     'visibleFields', visible_fields,
     'defaultDocuments', coalesce((
@@ -113,15 +114,6 @@ begin
           supplied.value ->> 'viewId' = supplied.value ->> 'selectedViewId'
           or (supplied.value -> 'selectedViewId' = 'null'::jsonb
             and (supplied.value ->> 'isDefault')::boolean
-            and not exists (
-              select 1 from vortex_platform.grid_views as current_layout
-              where current_layout.organization_id = scope.organization_id
-                and current_layout.organization_account_id = scope.organization_account_id
-                and current_layout.application_root_id = scope.application_root_id
-                and current_layout.page_id = p_page_id
-                and current_layout.placement_id = (supplied.value ->> 'placementId')::uuid
-                and current_layout.kind = 'current_layout'
-            )
             and supplied.position = (
               select candidate.position
               from pg_catalog.jsonb_array_elements(p_default_views) with ordinality as candidate(value, position)
@@ -192,6 +184,6 @@ revoke all on function vortex_platform.read_grid_views(uuid, uuid[], uuid[], jso
 grant execute on function vortex_platform.read_grid_views(uuid, uuid[], uuid[], jsonb, uuid[]) to vortex_request;
 
 comment on function vortex_platform.read_grid_views(uuid, uuid[], uuid[], jsonb, uuid[]) is
-  'Reads current layouts, readable columns, role keys and only selected or automatic view documents for the visible page; the picker inventory is read on demand.';
+  'Reads current layouts, readable columns, role keys and selected or automatic reset-baseline view documents for the visible page; the picker inventory is read on demand.';
 
 alter function vortex_platform.read_grid_views(uuid, uuid[], uuid[], jsonb, uuid[]) owner to vortex_owner;

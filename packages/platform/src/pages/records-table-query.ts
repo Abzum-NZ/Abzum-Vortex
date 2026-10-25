@@ -929,7 +929,13 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
         return refusedBecause("columns", `read_${result.kind}`);
       if (result?.value.outcome === "refused") {
         refusedBecause("columns", `read_refused ${result.value.reasonCode}`);
-        return { kind: "refused", reasonCode: result.value.reasonCode };
+        return {
+          kind: "refused",
+          reasonCode: result.value.reasonCode,
+          ...(result.value.reasonCode === "sort_invalid"
+            ? { refusalReason: "sort_field_not_sortable" as const }
+            : {}),
+        };
       }
       const read: GroupedPage | undefined =
         grouped?.kind === "read"

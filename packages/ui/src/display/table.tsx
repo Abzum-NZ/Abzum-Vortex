@@ -71,6 +71,7 @@ const narrowed = (narrowing: TableNarrowing | undefined): boolean =>
 const carriedColumns = (
   contract: RecordsTableContract,
   projected: readonly DisplayColumn[],
+  sortableFields: readonly string[],
 ): GridColumn[] => {
   const labels = new Map(projected.map((column) => [column.key, column.label]));
   return contract.columns.flatMap((column): GridColumn[] => {
@@ -82,7 +83,7 @@ const carriedColumns = (
             key: column.field,
             label: column.label ?? projectedLabel,
             declared: column,
-            sortable: contract.sortableFields.some((field) => sameFieldKey(field, column.field)),
+            sortable: sortableFields.some((field) => sameFieldKey(field, column.field)),
             width: columnWidth(column),
           },
         ];
@@ -160,12 +161,13 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
   const presentation = useTablePresentation(contract);
   const projectedColumns = values?.columns;
   const projectedHidden = values?.hiddenColumns;
+  const sortableFields = values?.sortableFields;
   const columns = useMemo(
     () =>
-      contract === undefined || projectedColumns === undefined
+      contract === undefined || projectedColumns === undefined || sortableFields === undefined
         ? []
-        : carriedColumns(contract, projectedColumns),
-    [contract, projectedColumns],
+        : carriedColumns(contract, projectedColumns, sortableFields),
+    [contract, projectedColumns, sortableFields],
   );
   const declaredColumns = useMemo(
     () => [...(projectedColumns ?? []), ...(projectedHidden ?? [])],
@@ -639,6 +641,17 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
           >
             {null}
           </DisplayStateContainer>
+          {state.status !== "refused" ||
+          state.reason !== "sort_field_not_sortable" ||
+          events?.sort_changed === undefined ? null : (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void events.sort_changed?.({ event: "sort_changed", sort: [] })}
+            >
+              Clear sort
+            </Button>
+          )}
           {state.status !== "error" || events?.refresh === undefined ? null : (
             <Button
               variant="outline"

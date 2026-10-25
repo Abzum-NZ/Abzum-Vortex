@@ -180,6 +180,8 @@ export type TableNarrowing = Readonly<{
 /** The ready values a table block renders. */
 export type TablePayload = Readonly<{
   kind: "table";
+  /** Declared sort fields readable on every record for this viewer. */
+  sortableFields: readonly string[];
   columns: readonly DisplayColumn[];
   /**
    * The declared columns the page was read without, in declared order: headings only. Showing one
@@ -1057,6 +1059,7 @@ export const parseTablePayload = (
     record,
     [
       "kind",
+      "sortableFields",
       "columns",
       "hiddenColumns",
       "layout",
@@ -1085,6 +1088,13 @@ export const parseTablePayload = (
   );
   // A column is either shown or hidden, never both.
   const seenColumns = new Set<string>();
+  const sortableFields = requireArray(
+    record.sortableFields,
+    "Projected sortable fields must be an array",
+    location,
+  ).map((field) =>
+    parseProjectedPart(fieldIdSchema, field, "A projected sortable field is invalid", location),
+  );
   const columns = parseColumns(record.columns, location, "columns", seenColumns);
   const hiddenColumns = parseColumns(record.hiddenColumns, location, "hiddenColumns", seenColumns);
   const layout = gridLayoutStateSchema.safeParse(record.layout);
@@ -1167,6 +1177,7 @@ export const parseTablePayload = (
   const selectionParts = parseTableSelectionParts(record, location);
   return Object.freeze({
     kind: "table",
+    sortableFields,
     columns,
     hiddenColumns,
     layout: layout.data,
