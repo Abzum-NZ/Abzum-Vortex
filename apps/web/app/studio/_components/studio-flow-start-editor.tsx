@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Icon } from "@vortex/ui";
 import { Button } from "@vortex/ui/components/button";
 import { Checkbox } from "@vortex/ui/components/checkbox";
@@ -355,7 +355,10 @@ function InputSettings({
   disabled: boolean;
   onChange: (input: StudioFlowInputDraft, setting?: string) => true | string;
 }>) {
-  const recordKind = input.type === "record_reference" || input.type === "record_reference_list";
+  // Choosing a record kind needs a second choice before the input is complete enough to apply.
+  const [type, setType] = useState(input.type);
+  useEffect(() => setType(input.type), [input.type, input.recordType]);
+  const recordKind = type === "record_reference" || type === "record_reference_list";
   return (
     <>
       <StartText
@@ -370,12 +373,21 @@ function InputSettings({
         <StudioOptionControl
           id={`${id}-type`}
           disabled={disabled}
-          value={input.type}
+          value={type}
           options={workflowValueTypeSchema.options.map((type) => ({
             value: type,
             label: typeLabels[type] ?? studioWords(type),
           }))}
-          onChange={(type) => onChange({ ...input, type })}
+          onChange={(next) => {
+            if (
+              (next === "record_reference" || next === "record_reference_list") &&
+              input.recordType === null
+            ) {
+              setType(next);
+              return;
+            }
+            if (onChange({ ...input, type: next }) === true) setType(next);
+          }}
         />
       </div>
       {recordKind && (
@@ -387,8 +399,11 @@ function InputSettings({
             value={input.recordType ?? ""}
             unset="Choose…"
             options={recordTypes.map((entry) => ({ value: entry.key, label: entry.label }))}
-            onChange={(next) => onChange({ ...input, recordType: next === "" ? null : next })}
+            onChange={(next) => onChange({ ...input, type, recordType: next === "" ? null : next })}
           />
+          {type !== input.type && (
+            <StudioHelp hint="Choose a record type to apply this kind of value." />
+          )}
         </div>
       )}
       <div className="flex items-center gap-2">
