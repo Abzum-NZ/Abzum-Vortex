@@ -121,11 +121,7 @@ const groupLabel = (
   value: JsonValue | undefined,
   recordLinks: ProjectedRecordLinks | undefined,
 ): string | undefined => {
-  // A link the viewer may not read arrives as the summary's "not_available" group, as in a pivot.
-  if (field.type === "link")
-    return value === "not_available"
-      ? "Not available"
-      : (recordLinkPlainText(value, recordLinks) ?? "Not available");
+  if (field.type === "link") return recordLinkPlainText(value, recordLinks);
   if (field.type === "choice")
     return field.settings.options.find((candidate) => candidate.value === value)?.label;
   return typeof value === "string" || typeof value === "number" || typeof value === "boolean"
