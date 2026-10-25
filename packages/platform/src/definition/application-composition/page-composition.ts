@@ -16,7 +16,7 @@ import {
 } from "../../catalogue/identifiers";
 import { positiveFiniteSchema } from "./shared";
 import type { BlockPropertyValueContract } from "./block-property-values";
-import { typedSettingValue, withDeclaredDefaults } from "./block-property-schema";
+import { typedSettingValue } from "./block-property-schema";
 import {
   platformBlockDependenciesSchema,
   platformBlockReferenceSchema,
@@ -222,20 +222,11 @@ export const compiledItemSettings = (
   release: Parameters<typeof releaseSettingDeclarations>[0],
 ): Record<string, BlockPropertyValueContract> => {
   const settings: Record<string, BlockPropertyValueContract> = {};
-  const declarations = releaseSettingDeclarations(release);
-  // A declared default fills a property the release does not hold, exactly as authoring does.
-  // Puck writes `undefined` for an untouched field, which is absent.
-  const held = withDeclaredDefaults(
-    Object.fromEntries(
-      declarations.flatMap((declaration) =>
-        Object.hasOwn(props, declaration.key) ? [[declaration.key, props[declaration.key]]] : [],
-      ),
-    ),
-    declarations,
-  );
-  for (const declaration of declarations) {
-    if (!Object.hasOwn(held, declaration.key)) continue;
-    const value = held[declaration.key];
+  for (const declaration of releaseSettingDeclarations(release)) {
+    if (!Object.hasOwn(props, declaration.key)) continue;
+    const value = props[declaration.key];
+    // Puck writes `undefined` for an untouched field, which is absent.
+    if (value === undefined) continue;
     const typed = typedSettingValue(value, declaration);
     if (typed === undefined)
       throw new TypeError(

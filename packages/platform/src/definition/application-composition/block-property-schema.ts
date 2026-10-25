@@ -421,13 +421,8 @@ const plainStringOf = (schema: z.ZodType<string>, value: unknown): string | unde
   return parsed.success ? parsed.data : undefined;
 };
 
-/**
- * Plain settings with every declared default applied; a supplied value always takes precedence and
- * an undefined one is absent. Authored sources and compiled releases are typed through this one
- * rule, so a property a release predates (an optional grid feature added later, for instance)
- * reads as its catalogue default rather than failing.
- */
-export const withDeclaredDefaults = (
+/** Apply only declared defaults; an explicitly supplied value always takes precedence. */
+const sourceSettingsWithDefaults = (
   settings: Readonly<Record<string, unknown>>,
   declarations: readonly BlockPropertySchemaContract[],
 ): Readonly<Record<string, unknown>> => ({
@@ -436,7 +431,7 @@ export const withDeclaredDefaults = (
       .filter((declaration) => declaration.defaultValue !== undefined)
       .map((declaration) => [declaration.key, plainSettingValue(declaration.defaultValue!)]),
   ),
-  ...Object.fromEntries(Object.entries(settings).filter(([, value]) => value !== undefined)),
+  ...settings,
 });
 
 /**
@@ -544,7 +539,7 @@ export const typedSourceSettingValue = (
       const properties: Record<string, SourceBlockPropertyValueContract> = {};
       let complete = true;
       for (const [key, nested] of Object.entries(
-        withDeclaredDefaults(group, declaration.properties),
+        sourceSettingsWithDefaults(group, declaration.properties),
       )) {
         const property = declared.get(key);
         if (property === undefined) {
@@ -589,7 +584,7 @@ export const typedSourceSettings = (
 }> => {
   const failures: ComponentSettingFailure[] = [];
   const typed: Record<string, SourceBlockPropertyValueContract> = {};
-  const effectiveSettings = withDeclaredDefaults(settings, declarations);
+  const effectiveSettings = sourceSettingsWithDefaults(settings, declarations);
   const declared = new Set(declarations.map((declaration) => declaration.key));
   for (const key of Object.keys(settings))
     if (!declared.has(key))
@@ -741,9 +736,7 @@ const typedSettingCandidate = (
       if (group === undefined) return undefined;
       const declared = new Map(declaration.properties.map((property) => [property.key, property]));
       const properties: Record<string, unknown> = {};
-      for (const [key, nested] of Object.entries(
-        withDeclaredDefaults(group, declaration.properties),
-      )) {
+      for (const [key, nested] of Object.entries(group)) {
         const property = declared.get(key);
         if (property === undefined) return undefined;
         properties[key] = typedSettingCandidate(nested, property);
