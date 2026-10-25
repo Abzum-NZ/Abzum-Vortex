@@ -103,12 +103,19 @@ const requiredInput = (source: ApplicationSourceDocument, item: SourceItem): boo
     ),
   );
 
+/**
+ * Caller names a form submission fills from the whole form, never from the answer of that name
+ * (the private form submit adapter): `values` takes every answer, the owner group its own choice.
+ */
+const wholeFormCallerNames: ReadonlySet<unknown> = new Set(["values", "selected_owner_group_id"]);
+
 /** The flow a form's submit binding feeds with this answer, by name, if one does. */
 const mappingFlow = (
   source: ApplicationSourceDocument,
   form: string,
   name: unknown,
 ): StudioPlacementReference | undefined => {
+  if (wholeFormCallerNames.has(name)) return undefined;
   const binding = source.body.flow_bindings.find(
     (candidate) =>
       candidate.control === form &&
