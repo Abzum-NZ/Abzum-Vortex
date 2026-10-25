@@ -27,6 +27,7 @@ import {
   settingField,
   unreadable,
   type SettingsRecord,
+  type GridFeatureSettingsDeclaration,
 } from "./records-table-features/shared";
 export {
   UnreadableSettingError,
@@ -378,13 +379,18 @@ export const readRecordDetailContract = (
 };
 
 /** A custom editor reads the same list bound as the catalogue validator. Missing bounds are defects. */
-export const recordsTableSettingMaximumItems = (...path: readonly string[]): number => {
+export const recordsTableSettingMaximumItems = (
+  root: string | GridFeatureSettingsDeclaration,
+  ...nested: readonly string[]
+): number => {
+  const path = typeof root === "string" ? [root, ...nested] : nested;
   let properties: readonly {
     key?: string | undefined;
     kind?: string | undefined;
     maximumItems?: number | undefined;
     properties?: readonly unknown[] | undefined;
-  }[] = catalogueSources.TABLE_BLOCK_RELEASE.properties;
+  }[] =
+    typeof root === "string" ? catalogueSources.TABLE_BLOCK_RELEASE.properties : root.properties;
   for (const [index, key] of path.entries()) {
     const property = properties.find((candidate) => candidate.key === key);
     if (

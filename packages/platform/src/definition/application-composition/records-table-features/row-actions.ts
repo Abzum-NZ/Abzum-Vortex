@@ -1,3 +1,4 @@
+import type { RecordsTableFeatureProjection } from "../../../pages/records-table-feature-projection";
 import type { ComponentSettingValue } from "../block-property-schema";
 import {
   featureAvailable,
@@ -10,6 +11,8 @@ import {
   requiredText,
   unreadable,
   type RecordsTableFeatureDefinition,
+  type RecordsTableFeatureState,
+  type GridFeatureProjectionContext,
   type GridFeatureRefusal,
   type GridFeatureSettingsDeclaration,
 } from "./shared";
@@ -75,6 +78,8 @@ export const recordsTableRowActionsFeature: RecordsTableFeatureDefinition<object
     facts.table.rowActions.filter((action) => action.placement === "inline").length > 3
       ? featureNotPossible(rowActionLimitRefusal)
       : undefined,
+  project: (state, context) =>
+    recordsTableRowActionsProjection(state, context.rowBehaviours, context.rows),
   check: (_state, facts) =>
     facts.grouped || facts.maximumPageSize === undefined
       ? featureNotPossible(
@@ -145,3 +150,39 @@ export const readRecordsTableRowActions = (
   }
   return actions;
 };
+
+/**
+ * The row actions a table offers and, per row, whether the capabilities its read decided make each
+ * eligible; absent when the feature is off or the table declares none. Named-action eligibility is
+ * decided afterwards, in the read's own request, by `projectRowActionAvailability`.
+ */
+export const recordsTableRowActionsProjection = (
+  state: RecordsTableFeatureState<object>,
+  rowBehaviours: GridFeatureProjectionContext["rowBehaviours"],
+  rows: GridFeatureProjectionContext["rows"],
+): RecordsTableFeatureProjection["rowActions"] =>
+  state.enabled && rowBehaviours.rowActions.length > 0
+    ? {
+        actions: rowBehaviours.rowActions,
+        availability: rows.flatMap((row) =>
+          row.revision === undefined
+            ? []
+            : [
+                {
+                  recordId: row.recordId,
+                  revision: row.revision,
+                  actions: rowBehaviours.rowActions.map((action) =>
+                    action.capability === undefined ||
+                    row.capabilities?.actions.includes(action.capability) === true
+                      ? { action: action.eventId, eligible: true as const }
+                      : {
+                          action: action.eventId,
+                          eligible: false as const,
+                          reason: "not_permitted" as const,
+                        },
+                  ),
+                },
+              ],
+        ),
+      }
+    : undefined;

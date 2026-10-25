@@ -166,7 +166,7 @@ export const recordsTableExportFeature: RecordsTableFeatureDefinition<
     state.enabled &&
     exportAllowed &&
     state.maxRows !== undefined &&
-    columns.some((field) => readable(field))
+    columns.some((column) => readable(column.field))
       ? { maxRows: state.maxRows, formats: state.formats }
       : undefined,
   // Export reads whole records, so the query must return records, and the record type must
