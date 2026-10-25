@@ -1,6 +1,8 @@
 import { cache } from "react";
 import {
   placementBlockRelease,
+  placementSettings,
+  DRAWER_BLOCK_RELEASE,
   type InstalledRuntimeContext,
   type HumanOrganizationRequestDependencies,
   createHumanInstalledPageBundleContextLoader,
@@ -23,6 +25,7 @@ import {
   type OrganizationSelectionCandidate,
   recordIdSchema,
   sameId,
+  isRecord,
   compiledPageShellId,
   recordsTableParameterPlacement,
 } from "@vortex/platform/schema";
@@ -62,6 +65,7 @@ import {
 import {
   isApplicationLauncherPlacement,
   logPlacementFailure,
+  controlSelectedRecordType,
   pageQueryBindingContext,
   placementParameterDependencies,
   resolvedQueryRecordTypeId,
@@ -633,6 +637,24 @@ const loadApplicationPageJoined = async (
       ? permittedApplicationsRead.applications.map((application) => application.key)
       : undefined;
 
+  // Every query input of the page's blocks resolves from the same server-side facts: what the page
+  // declares, its address, the subject read above and the viewer. A relative date reads the
+  // organisation's time zone once, only when one asks for it.
+  const bindingContext = pageQueryBindingContext({
+    context,
+    pageDefinition,
+    parameters,
+    readSubject:
+      subjectType === undefined
+        ? undefined
+        : () =>
+            subjectId.success
+              ? readSubject(String(subjectType.recordTypeId), subjectId.data)
+              : Promise.resolve({ kind: "refused" }),
+    subjectRecordTypeId: subjectType === undefined ? undefined : String(subjectType.recordTypeId),
+    readViewerTeams: services.readViewerTeams,
+    readTimeZone: services.readTimeZone,
+  });
   const pageSubjectRecordTypeId =
     subjectType === undefined ? undefined : String(subjectType.recordTypeId);
   const { recordTypeByPlacement, dataPlacementsByRecordType, editFormDataPlacementIds } =
@@ -642,6 +664,7 @@ const loadApplicationPageJoined = async (
       pageSubjectRecordTypeId,
       context,
       editFormPlacementIds,
+      selectedRecordType: (control) => controlSelectedRecordType(bindingContext, control),
     });
 
   const { refreshPlacementsByBinding, selectedReadTypesByFlow } = projectFlowBindingTargets({
@@ -689,24 +712,6 @@ const loadApplicationPageJoined = async (
   };
   const resolveRecordLinks: RecordLinkResolver = services.recordLinkResolver(context);
   const gridLayouts = await gridLayoutsRead;
-  // Every query input of the page's blocks resolves from the same server-side facts: what the page
-  // declares, its address, the subject read above and the viewer. A relative date reads the
-  // organisation's time zone once, only when one asks for it.
-  const bindingContext = pageQueryBindingContext({
-    context,
-    pageDefinition,
-    parameters,
-    readSubject:
-      subjectType === undefined
-        ? undefined
-        : () =>
-            subjectId.success
-              ? readSubject(String(subjectType.recordTypeId), subjectId.data)
-              : Promise.resolve({ kind: "refused" }),
-    subjectRecordTypeId: subjectType === undefined ? undefined : String(subjectType.recordTypeId),
-    readViewerTeams: services.readViewerTeams,
-    readTimeZone: services.readTimeZone,
-  });
   const placementReaderInput: PlacementReaderInput = {
     context,
     session,
@@ -922,6 +927,19 @@ const loadApplicationPageJoined = async (
     refreshPlacementsByBinding,
     refreshWhileByPlacement,
     pageParameters: {
+      drawers: Object.fromEntries(
+        allPlacements.flatMap((placement) => {
+          const block = placement.vortex.block;
+          if (!isRecord(block) || !sameId(String(block.blockId), DRAWER_BLOCK_RELEASE.blockId))
+            return [];
+          const source = placementSettings(placement.props).open_with;
+          const control =
+            source?.kind === "text"
+              ? allPlacements.find((candidate) => sameId(candidate.placementId, source.value))
+              : undefined;
+          return control === undefined ? [] : [[placement.placementId, control.placementId]];
+        }),
+      ),
       tableIds: allPlacements.filter(isTablePlacement).map((placement) => placement.placementId),
       controlKinds: Object.fromEntries(
         allPlacements

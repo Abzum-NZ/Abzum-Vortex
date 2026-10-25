@@ -88,6 +88,8 @@ export type PlacementReadModel = Readonly<{
     dependents: Readonly<Record<string, readonly string[]>>;
     controls: Readonly<Record<string, string>>;
     controlKinds: Readonly<Record<string, string>>;
+    /** Each drawer's Open with control, by placement identity. */
+    drawers: Readonly<Record<string, string>>;
     tableIds: readonly string[];
   }>;
   /** Displayed values of readable edit fields, used only to omit unchanged fields on submit. */
