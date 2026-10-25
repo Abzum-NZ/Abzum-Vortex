@@ -3,7 +3,7 @@
 import type { ReactElement } from "react";
 import { Icon, resolveVortexIconName } from "../icons";
 import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from "../components/card";
-import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "../components/empty";
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from "../components/empty";
 import { cellValueToText } from "../display/cell";
 import { DisplayHeader, RowActionControl } from "../display/controls";
 import { rowActionEventIdOf } from "../display/context";
@@ -34,6 +34,8 @@ export function ApplicationLauncher(props: LauncherRenderProps): ReactElement {
   const settings = readLauncherSettings(props, context.location);
   const nameKey = settings.cellKey("name_key", "name");
   const iconKey = settings.cellKey("icon_key", "icon");
+  const actionLabel = settings.text("action_label") ?? "Open";
+  const emptyMessage = settings.text("empty_message") ?? "No applications to show";
   // The launcher bindings write an optional fixed `description` cell; it is not a declared setting.
   const descriptionKey = "description";
   const values = context.values;
@@ -51,7 +53,7 @@ export function ApplicationLauncher(props: LauncherRenderProps): ReactElement {
           accessibleName={context.accessibleName}
           availability={props.availability}
           projectedData={context.state}
-          emptyMessage="No applications to show"
+          emptyMessage={emptyMessage}
         >
           {values === undefined ? null : (
             <section
@@ -73,16 +75,13 @@ export function ApplicationLauncher(props: LauncherRenderProps): ReactElement {
                   aria-label={`${context.accessibleName}: empty`}
                 >
                   <EmptyHeader>
-                    <EmptyTitle>No applications to show</EmptyTitle>
-                    <EmptyDescription>
-                      No applications match your search or are available for this account.
-                    </EmptyDescription>
+                    <EmptyTitle>{emptyMessage}</EmptyTitle>
                   </EmptyHeader>
                 </Empty>
               ) : (
                 <ul className="m-0 grid list-none grid-cols-1 gap-4 p-0 sm:grid-cols-2 lg:grid-cols-3">
                   {rows.map((row) => {
-                    const name = cellText(row.cells, nameKey) || "untitled application";
+                    const name = cellText(row.cells, nameKey) || "Untitled";
                     const icon = cellText(row.cells, iconKey);
                     const description = cellText(row.cells, descriptionKey);
                     const iconName = resolveVortexIconName(icon);
@@ -95,9 +94,8 @@ export function ApplicationLauncher(props: LauncherRenderProps): ReactElement {
                             openable &&
                               "cursor-pointer hover:border-primary/50 hover:bg-accent/30 hover:shadow-md focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2",
                           )}
-                          tabIndex={openable ? 0 : undefined}
-                          role={openable ? "button" : undefined}
-                          aria-label={openable ? `Open ${name}` : undefined}
+                          // A click anywhere on the tile runs its action; keyboard and assistive
+                          // technology reach the one button below, so no control nests in another.
                           onClick={
                             openable
                               ? () =>
@@ -106,20 +104,6 @@ export function ApplicationLauncher(props: LauncherRenderProps): ReactElement {
                                     eventId: rowActionEventId,
                                     recordId: row.recordId,
                                   })
-                              : undefined
-                          }
-                          onKeyDown={
-                            openable
-                              ? (event) => {
-                                  if (event.key === "Enter" || event.key === " ") {
-                                    event.preventDefault();
-                                    context.events?.row_action?.({
-                                      event: "row_action",
-                                      eventId: rowActionEventId,
-                                      recordId: row.recordId,
-                                    });
-                                  }
-                                }
                               : undefined
                           }
                         >
@@ -163,7 +147,7 @@ export function ApplicationLauncher(props: LauncherRenderProps): ReactElement {
                                 name={name}
                                 eventId={rowActionEventId}
                                 events={context.events}
-                                label="Open"
+                                label={actionLabel}
                               />
                             </CardFooter>
                           ) : null}

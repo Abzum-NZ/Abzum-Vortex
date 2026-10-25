@@ -2427,6 +2427,26 @@
         "maxLength": 40
       },
       {
+        "kind": "text",
+        "key": "action_label",
+        "presentation": true,
+        "label": "Tile action",
+        "help": "The word on each tile's button; unset says Open",
+        "required": false,
+        "minLength": 1,
+        "maxLength": 30
+      },
+      {
+        "kind": "text",
+        "key": "empty_message",
+        "presentation": true,
+        "label": "Empty message",
+        "help": "Shown when there are no tiles; unset says No applications to show",
+        "required": false,
+        "minLength": 1,
+        "maxLength": 200
+      },
+      {
         "shared": "query_parameters"
       },
       {
