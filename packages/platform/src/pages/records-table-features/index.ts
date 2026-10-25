@@ -182,7 +182,13 @@ export const projectRecordsTableFeatures = (
   const readable = (field: string): boolean =>
     bounds.readableFieldIds.some((fieldId) => sameField(fieldId, field));
   // Each feature that declares its projection decides its own part for this viewer.
-  const context = { readable, searchable: bounds.searchable, filterFields };
+  const context = {
+    readable,
+    searchable: bounds.searchable,
+    filterFields,
+    fieldLabels,
+    pivotView,
+  };
   const declared = Object.fromEntries(
     recordsTableFeatureKeys.flatMap((key) => {
       const definition = recordsTableFeatureDefinition(key);
@@ -198,41 +204,6 @@ export const projectRecordsTableFeatures = (
   const editableFields = recordsTableEditableFields(contract, rows, bounds, editors);
   const rowEdit = features.rowEdit;
   const rowFields = projectedEditableFields(rowEdit, rows, bounds, editors);
-  // A pivot is offered only when the viewer may read its rows, columns and measure on every
-  // record; the pivot read applies the same field policy again.
-  const pivotSettings = features.pivot;
-  const pivotFields = pivotSettings.enabled
-    ? [pivotSettings.rowField, pivotSettings.columnField, pivotSettings.measureField]
-    : [];
-  const pivot =
-    pivotSettings.enabled &&
-    pivotSettings.rowPageSize !== undefined &&
-    pivotSettings.rowField !== undefined &&
-    pivotSettings.columnField !== undefined &&
-    pivotSettings.measureFunction !== undefined &&
-    pivotFields.every((field) => field === undefined || readable(field))
-      ? {
-          rowPageSize: pivotSettings.rowPageSize,
-          totals: pivotSettings.totals,
-          ...(pivotView === undefined ? {} : { view: pivotView }),
-        }
-      : undefined;
-  // Grouping is offered only for a field the viewer is guaranteed to see on every record; a
-  // withheld field is never grouped by, so no group ever stands for a value the viewer cannot read.
-  const groupingSettings = features.grouping;
-  const grouping =
-    groupingSettings.enabled &&
-    groupingSettings.field !== undefined &&
-    groupingSettings.unassignedLabel !== undefined &&
-    groupingSettings.opensGrouped !== undefined &&
-    readable(groupingSettings.field)
-      ? {
-          fieldId: groupingSettings.field.toLowerCase(),
-          label: fieldLabels?.[groupingSettings.field.toLowerCase()] ?? "",
-          unassignedLabel: groupingSettings.unassignedLabel,
-          opensGrouped: groupingSettings.opensGrouped,
-        }
-      : undefined;
   const exportSettings = features.export;
   // A status bar total names only fields the table shows as columns; with none left it is omitted.
   const statusBarFields = features.spreadsheet.enabled
@@ -300,11 +271,9 @@ export const projectRecordsTableFeatures = (
     ...(editableFields.length === 0 || !inlineEdit.enabled || inlineEdit.eventId === undefined
       ? {}
       : { inlineEdit: { eventId: inlineEdit.eventId, fields: editableFields } }),
-    ...(grouping === undefined || grouping.label === "" ? {} : { grouping }),
     ...(conditionalFormatting === undefined || !features.conditionalFormatting.enabled
       ? {}
       : { conditionalFormatting }),
-    ...(pivot === undefined ? {} : { pivot }),
   };
   return Object.keys(projection).length === 0 ? undefined : projection;
 };

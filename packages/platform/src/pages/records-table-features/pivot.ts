@@ -6,6 +6,7 @@ import {
   recordLinkValueSchema,
   readQueryBindings,
   recordsTableContractOrLog,
+  recordsTablePivotFeature,
   UnreadableSettingError,
   type IdentitySession,
   type JsonValue,
@@ -131,7 +132,10 @@ const refused = (message: string): PivotResult => Object.freeze({ status: "refus
 const failed = Object.freeze({ status: "error" as const });
 
 const refuse = (reason: string): PivotResult => {
-  logRecordsTableRequestRefusal(recordsTableRequestRefusal("command", reason), "pivot");
+  logRecordsTableRequestRefusal(
+    recordsTableRequestRefusal("command", reason),
+    recordsTablePivotFeature.key,
+  );
   return refused("This pivot is not available.");
 };
 
@@ -248,7 +252,7 @@ const measureNames: Readonly<Record<string, string>> = {
 export const readRecordsTablePivot = async (request: PivotRequest): Promise<PivotResult> => {
   const { context, placement } = request;
   const settings = placementSettingsOf(placement);
-  const contract = recordsTableContractOrLog(settings, "pivot");
+  const contract = recordsTableContractOrLog(settings, recordsTablePivotFeature.key);
   const feature = contract?.features.pivot;
   if (contract === undefined || feature === undefined || !feature.enabled)
     return refuse("feature_off");
@@ -307,7 +311,7 @@ export const readRecordsTablePivot = async (request: PivotRequest): Promise<Pivo
     ...(timeZone === undefined ? {} : { timeZone }),
   });
   if (narrowing.kind === "refused") {
-    logRecordsTableRequestRefusal(narrowing, "pivot");
+    logRecordsTableRequestRefusal(narrowing, recordsTablePivotFeature.key);
     return refused("This pivot is not available.");
   }
 
@@ -366,7 +370,7 @@ export const readRecordsTablePivot = async (request: PivotRequest): Promise<Pivo
     if (opening.kind === "stale")
       logRecordsTableRequestRefusal(
         recordsTableRequestRefusal("cursor", `cursor_stale ${opening.cause}`),
-        "pivot",
+        recordsTablePivotFeature.key,
       );
     else after = opening.groupKey;
   }
@@ -388,7 +392,7 @@ export const readRecordsTablePivot = async (request: PivotRequest): Promise<Pivo
   if (summary.outcome === "refused") {
     logRecordsTableRequestRefusal(
       recordsTableRequestRefusal("command", `summary_refused code=${summary.reasonCode}`),
-      "pivot",
+      recordsTablePivotFeature.key,
     );
     switch (summary.reasonCode) {
       case "pivot_columns_exceeded":
