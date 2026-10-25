@@ -573,6 +573,68 @@ function gitOutput(args: string[]): string | undefined {
     return undefined;
   }
 }
+// Pins make in-place catalogue evolution explicit. They are compared as source data rather than
+// importing a catalogue, so an invalid pin cannot prevent the warning from explaining its impact.
+for (const file of [
+  "packages/platform/src/definition/application-composition-release-identities.ts",
+  "packages/platform/src/theme/platform-theme-catalogue.ts",
+]) {
+  const previous = gitOutput(["show", `origin/main:${file}`]);
+  if (previous === undefined) {
+    console.warn(
+      `catalogue-release-superseded skipped: origin/main:${file} is not available locally`,
+    );
+    continue;
+  }
+  const pins = (content: string): Map<string, { fingerprint: string; line: number }> => {
+    const result = new Map<string, { fingerprint: string; line: number }>();
+    const source = ts.createSourceFile(file, content, ts.ScriptTarget.Latest, true);
+    const visit = (node: ts.Node): void => {
+      if (ts.isObjectLiteralExpression(node)) {
+        const strings = new Map(
+          node.properties.flatMap((property) =>
+            ts.isPropertyAssignment(property) &&
+            ts.isIdentifier(property.name) &&
+            ts.isStringLiteral(property.initializer)
+              ? [[property.name.text, property.initializer.text] as const]
+              : [],
+          ),
+        );
+        const key = strings.get("key");
+        const fingerprint = strings.get("contentFingerprint");
+        if (key !== undefined && fingerprint !== undefined)
+          result.set(key, { fingerprint, line: lineAt(content, node.getStart(source)) });
+      }
+      if (
+        ts.isVariableDeclaration(node) &&
+        ts.isIdentifier(node.name) &&
+        node.name.text === "DEFAULT_PLATFORM_THEME_CONTENT_FINGERPRINT" &&
+        node.initializer !== undefined &&
+        ts.isStringLiteral(node.initializer)
+      )
+        result.set("DEFAULT_PLATFORM_THEME_RELEASE", {
+          fingerprint: node.initializer.text,
+          line: lineAt(content, node.getStart(source)),
+        });
+      ts.forEachChild(node, visit);
+    };
+    visit(source);
+    return result;
+  };
+  const before = pins(previous);
+  const after = pins(read(file));
+  for (const key of new Set([...before.keys(), ...after.keys()])) {
+    const current = after.get(key);
+    if (before.get(key)?.fingerprint !== current?.fingerprint)
+      add(
+        "catalogue-release-superseded",
+        file,
+        current?.line ?? 1,
+        `${key}: compiled releases using these blocks become stale; record the STALE-REBUILD lanes in the PR`,
+      );
+  }
+}
+
 const mainMigrationList = gitOutput([
   "ls-tree",
   "--name-only",

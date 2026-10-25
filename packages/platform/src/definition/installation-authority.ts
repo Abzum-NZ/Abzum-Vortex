@@ -38,6 +38,7 @@ type InstallationProblemKind =
   "conflict" | "refused" | "authentication_required" | "temporarily_unavailable" | "failed";
 
 export type InstallationUnavailableReason =
+  | "republish_required"
   | "not_installed"
   | "not_newer"
   | "module_set_changed"
