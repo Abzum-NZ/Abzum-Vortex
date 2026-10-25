@@ -82,6 +82,7 @@ import {
 } from "./application-composition-regions";
 import { applyAdd, commandSettings } from "./application-composition-add";
 import { applyWrap } from "./application-composition-wrap";
+import { applyStudioCompositionGate } from "./application-composition-gate";
 
 export type * from "./application-composition-model";
 export {
@@ -675,6 +676,7 @@ export const applyStudioCompositionCommand = (
       return applyRemoval(current, selection, command);
     }
     if (command.kind === "settings") return applySettings(current, selection, command);
+    if (command.kind === "gate") return applyStudioCompositionGate(current, selection, command);
     if (command.kind === "wrap") return applyWrap(current, selection, command);
     const resolved = resolve(current, selection);
     if (resolved === undefined) return { kind: "invalid" };
