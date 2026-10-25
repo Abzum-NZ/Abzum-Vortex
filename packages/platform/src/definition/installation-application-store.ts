@@ -154,6 +154,12 @@ const namedRefusalCodes: Readonly<
 
 /** A command's failure: a conflict, a refusal (permission or eligibility) or a temporary failure. */
 const commandFailure = (problem: InstallationProblemShape): ApplicationStoreResult => {
+  if (problem.unavailableReason === "republish_required")
+    return {
+      kind: "confirmed_failure",
+      outcome: "refused",
+      diagnostic: { code: "application_republish_required" },
+    };
   if (problem.unavailableReason === "storage_incompatible")
     return {
       kind: "confirmed_failure",

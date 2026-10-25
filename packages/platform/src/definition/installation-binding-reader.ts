@@ -178,6 +178,7 @@ export const readInstallationReleaseSet = async (
   releaseRevision: number,
   organizationId: string,
   correlationId: string,
+  purpose: "consume" | "replace_or_remove" = "consume",
 ): Promise<SystemApplicationBoundReleaseSetResult> => {
   let releaseSet: SystemApplicationBoundReleaseSetResult;
   try {
@@ -185,8 +186,13 @@ export const readInstallationReleaseSet = async (
     releaseSet = await createDatabaseApplicationReleaseAdoptionReleaseSetService(
       catalogue,
       transaction,
+      purpose,
     ).read({ applicationRootId: rootId, applicationReleaseRevision: releaseRevision });
   } catch (error) {
+    if (error instanceof DefinitionError && error.code === "DEFINITION_DEPENDENCY_SUPERSEDED")
+      installationProblem("DEFINITION_DEPENDENCY_SUPERSEDED", "refused", "republish_required", {
+        cause: error,
+      });
     if (!(error instanceof DefinitionError) || error.code === "DEFINITION_READ_FAILED")
       installationProblem("release_set_read_failed", "temporarily_unavailable", undefined, {
         cause: error,
