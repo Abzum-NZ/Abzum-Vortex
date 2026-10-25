@@ -47,10 +47,13 @@ export function StudioCanvasCompiledSettings({
  * revision with their preview access, by block name, with what each block looked like in that
  * saved revision. A block is given its records only while it is still exactly as it was saved; a
  * block edited since shows that it needs a save, never the records of its old settings.
- * `refused` means the builder may not preview this application, so no records are read.
+ * `refused` means the builder may not preview this application, so no records are read;
+ * `not_runnable` means the saved draft has a problem to fix before it can run, named by `sentence`.
  */
 export type StudioCanvasRecords = Readonly<{
-  state: "loading" | "ready" | "refused" | "unavailable";
+  state: "loading" | "ready" | "refused" | "not_runnable" | "unavailable";
+  /** Why the saved draft cannot run yet, when `state` is `not_runnable`. */
+  sentence?: string;
   /** The records of each data block of the saved revision, by block name. */
   records: Readonly<Record<string, unknown>>;
   /** Each block's release, settings and query in the saved revision the records were read for. */
@@ -130,6 +133,8 @@ const recordsNote = (records: StudioCanvasRecords, id: string): string | undefin
   if (records.state === "loading") return "Reading records…";
   if (records.state === "refused")
     return "Showing records here needs permission to preview this application.";
+  if (records.state === "not_runnable")
+    return `Records show here once the draft can run. ${records.sentence ?? ""}`.trim();
   if (records.state === "unavailable") return "Records could not be read just now.";
   if (Object.hasOwn(records.records, id)) return undefined;
   return records.sample !== undefined && records.sample.title === undefined

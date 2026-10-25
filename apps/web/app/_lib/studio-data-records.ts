@@ -115,6 +115,8 @@ export type StudioDataRecordsResult =
   /** The query refused this read, for example because it needs inputs or the builder may not read it. */
   | Readonly<{ kind: "query_refused"; reason: string }>
   | Readonly<{ kind: "refused" }>
+  /** The saved draft has a problem to fix before its preview can run. */
+  | Readonly<{ kind: "not_runnable"; sentence: string }>
   | Readonly<{ kind: "temporarily_unavailable" }>;
 
 type ModuleRecordType = ModuleRelease["content"]["recordTypes"][number];

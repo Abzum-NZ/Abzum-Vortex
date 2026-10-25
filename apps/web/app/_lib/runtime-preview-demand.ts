@@ -56,6 +56,7 @@ const demandRuntimePreview = async (
     );
     signal?.throwIfAborted();
     if (state.kind === "conflict") return conflict("draft_revision_stale");
+    if (state.kind === "not_runnable") return { kind: "temporarily_unavailable" };
     if (state.kind !== "read") return state;
     if (state.preview === undefined) return conflict("none");
     if (
@@ -71,6 +72,7 @@ const demandRuntimePreview = async (
       demand,
       signal,
     );
+    if (result.kind === "not_runnable") return { kind: "temporarily_unavailable" };
     return result.kind === "conflict" ? conflict("materialize_superseded") : result;
   } finally {
     release();

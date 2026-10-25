@@ -62,6 +62,8 @@ export type StudioPreviewRead =
   | Readonly<{ kind: "conflict" }>
   /** The preview does not run this revision's data shape yet: wait until it is ready, then read. */
   | Readonly<{ kind: "following" }>
+  /** The saved draft has a problem to fix before its preview can run. */
+  | Readonly<{ kind: "not_runnable"; sentence: string }>
   | Readonly<{ kind: "temporarily_unavailable" }>;
 
 /** Opens the builder's preview of the saved draft at this revision for reading records. */
