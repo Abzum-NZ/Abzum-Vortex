@@ -94,7 +94,9 @@ export function RangeStatusBar({
   }, [context.lines, context.columns, range, statusBar]);
 
   const key =
-    target === undefined ? undefined : `${target.recordIds.join(",")}|${target.fieldIds.join(",")}`;
+    target === undefined
+      ? undefined
+      : `${target.recordIds.join(",")}|${target.fieldIds.join(",")}|${target.pageOnly}`;
   useEffect(() => {
     if (target === undefined || request === undefined) {
       setSummary(undefined);
