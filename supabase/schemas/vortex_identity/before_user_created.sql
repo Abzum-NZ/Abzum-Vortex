@@ -6,6 +6,8 @@ security definer
 set search_path = ''
 as $function$
 begin
+  -- Validation only: GoTrue v2.196.0 calls this hook outside its user-insert transaction, so
+  -- evidence written here could outlive a failed insert. The auth.users trigger writes it.
   perform vortex_identity.validate_privacy_notice_internal(event #> '{user,user_metadata}');
   return '{}'::jsonb;
 exception when sqlstate 'P0001' then

@@ -16,9 +16,9 @@ declare
 begin
   -- Shares the publication lock with signup validation, so a version cannot change mid-insert.
   perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('vortex.privacy.notice', 0));
+  published_at := pg_catalog.clock_timestamp();
   perform 1 from vortex_identity.identity_projections p
     where p.identity_id = p_publisher_identity_id and p.state = 'active' for share;
-  published_at := pg_catalog.clock_timestamp();
   if not found or vortex_identity.resolve_active_vortex_super_administrator_assignment_internal(
     p_publisher_identity_id, published_at
   ) is null then

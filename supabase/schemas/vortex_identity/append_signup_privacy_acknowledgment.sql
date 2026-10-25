@@ -8,15 +8,19 @@ as $function$
 declare
   notice_version uuid;
 begin
-  -- GoTrue v2.196.0 requires before_user_created outside its insert transaction. Evidence belongs here.
+  -- GoTrue v2.196.0 refuses to call before_user_created inside a transaction (checkTX), so the
+  -- hook runs before and apart from the user insert and cannot write evidence that commits or
+  -- rolls back with the account. This AFTER INSERT trigger runs in the insert transaction.
+  -- Public self-registration is refused by the hook without an acknowledgement. Accounts that
+  -- GoTrue creates without the hook (Admin API provisioning) claim none and record none.
+  if (new.raw_user_meta_data -> 'privacy_notice_acknowledged') is distinct from 'true'::jsonb then
+    return new;
+  end if;
   notice_version := vortex_identity.validate_privacy_notice_internal(new.raw_user_meta_data);
   insert into vortex_identity.privacy_notice_acknowledgments (
-    identity_id, notice_version_id, acknowledged_at, channel, correlation_id
+    identity_id, notice_version_id, acknowledged_at, correlation_id
   ) values (
-    new.id, notice_version, pg_catalog.clock_timestamp(),
-    case when new.raw_app_meta_data ->> 'provider' = 'email'
-      then 'email_registration' else 'identity_registration' end,
-    pg_catalog.gen_random_uuid()
+    new.id, notice_version, pg_catalog.clock_timestamp(), pg_catalog.gen_random_uuid()
   );
   return new;
 end

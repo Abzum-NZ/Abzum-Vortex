@@ -19,7 +19,6 @@ create table if not exists vortex_identity.privacy_notice_acknowledgments (
   identity_id uuid not null,
   notice_version_id uuid not null references vortex_identity.privacy_notice_versions(id),
   acknowledged_at timestamptz not null,
-  channel text not null check (channel in ('email_registration', 'identity_registration')),
   correlation_id uuid not null unique,
   primary key (identity_id, notice_version_id)
 );
@@ -79,9 +78,9 @@ declare
 begin
   -- Shares the publication lock with signup validation, so a version cannot change mid-insert.
   perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('vortex.privacy.notice', 0));
+  published_at := pg_catalog.clock_timestamp();
   perform 1 from vortex_identity.identity_projections p
     where p.identity_id = p_publisher_identity_id and p.state = 'active' for share;
-  published_at := pg_catalog.clock_timestamp();
   if not found or vortex_identity.resolve_active_vortex_super_administrator_assignment_internal(
     p_publisher_identity_id, published_at
   ) is null then
@@ -153,6 +152,8 @@ security definer
 set search_path = ''
 as $function$
 begin
+  -- Validation only: GoTrue v2.196.0 calls this hook outside its user-insert transaction, so
+  -- evidence written here could outlive a failed insert. The auth.users trigger writes it.
   perform vortex_identity.validate_privacy_notice_internal(event #> '{user,user_metadata}');
   return '{}'::jsonb;
 exception when sqlstate 'P0001' then
@@ -183,15 +184,19 @@ as $function$
 declare
   notice_version uuid;
 begin
-  -- GoTrue v2.196.0 requires before_user_created outside its insert transaction. Evidence belongs here.
+  -- GoTrue v2.196.0 refuses to call before_user_created inside a transaction (checkTX), so the
+  -- hook runs before and apart from the user insert and cannot write evidence that commits or
+  -- rolls back with the account. This AFTER INSERT trigger runs in the insert transaction.
+  -- Public self-registration is refused by the hook without an acknowledgement. Accounts that
+  -- GoTrue creates without the hook (Admin API provisioning) claim none and record none.
+  if (new.raw_user_meta_data -> 'privacy_notice_acknowledged') is distinct from 'true'::jsonb then
+    return new;
+  end if;
   notice_version := vortex_identity.validate_privacy_notice_internal(new.raw_user_meta_data);
   insert into vortex_identity.privacy_notice_acknowledgments (
-    identity_id, notice_version_id, acknowledged_at, channel, correlation_id
+    identity_id, notice_version_id, acknowledged_at, correlation_id
   ) values (
-    new.id, notice_version, pg_catalog.clock_timestamp(),
-    case when new.raw_app_meta_data ->> 'provider' = 'email'
-      then 'email_registration' else 'identity_registration' end,
-    pg_catalog.gen_random_uuid()
+    new.id, notice_version, pg_catalog.clock_timestamp(), pg_catalog.gen_random_uuid()
   );
   return new;
 end
@@ -225,8 +230,14 @@ create trigger privacy_notice_acknowledgments_immutable
 before update or delete on vortex_identity.privacy_notice_acknowledgments
 for each row execute function vortex_identity.refuse_privacy_notice_mutation();
 reset role;
--- GoTrue v2.196.0 requires before_user_created to run outside its user-insert transaction.
--- Evidence must be appended by this trigger to commit or roll back with the account.
+-- GoTrue v2.196.0 refuses hook calls inside a transaction, so before_user_created alone cannot
+-- write evidence atomically with the account; this trigger appends it in the insert transaction.
+-- Rollback (operational role, evidence tables retained), after disabling the hook configuration:
+--   drop trigger if exists vortex_signup_privacy_acknowledgment on auth.users;
+--   drop function if exists vortex_identity.append_signup_privacy_acknowledgment();
+--   revoke execute on function vortex_identity.before_user_created(jsonb) from supabase_auth_admin;
+--   drop function if exists vortex_identity.before_user_created(jsonb);
+--   revoke usage on schema vortex_identity from supabase_auth_admin;
 -- guard-allow: migration-owner-role The GoTrue-owned auth table requires postgres to attach this approved integration trigger.
 drop trigger if exists vortex_signup_privacy_acknowledgment on auth.users;
 -- guard-allow: migration-owner-role The GoTrue-owned auth table requires postgres for the approved integration trigger.

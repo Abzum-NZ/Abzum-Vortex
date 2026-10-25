@@ -116,12 +116,22 @@ flowchart LR
 - `vortex_record_inventory` is the second restricted role: the account-deletion inventory reads record data through organisation-scoped policies.
 
 The local signup privacy integration uses `vortex_identity.before_user_created`, owned by
-`vortex_owner` and executable only by `supabase_auth_admin`. It validates the acknowledgement;
-`vortex_identity.append_signup_privacy_acknowledgment`, also owned by `vortex_owner`, writes
-evidence from an `auth.users` AFTER INSERT trigger. GoTrue v2.196.0 requires the hook to run
-outside its user-insert transaction, so only the trigger can commit evidence atomically with
-the account. Both use one private validator and a fixed empty search path. The trigger does
-not alter Auth rows. Hosted activation requires separate rollout approval.
+`vortex_owner` and executable only by `supabase_auth_admin`. It validates the acknowledgement and
+refuses public self-registration without it. GoTrue v2.196.0 refuses to call the hook inside a
+transaction, so the hook cannot write evidence that commits or rolls back with the account.
+`vortex_identity.append_signup_privacy_acknowledgment`, also owned by `vortex_owner`, therefore
+writes the evidence (identity, notice version, time and a correlation ID; no IP or user agent)
+from an `auth.users` AFTER INSERT trigger for every account that claims an acknowledgement.
+Admin API provisioning does not pass through the hook, claims none and records none. Both use
+one private validator and a fixed empty search path. The trigger does not alter Auth rows.
+Hosted activation requires separate rollout approval.
+
+Rollback, as the operational role and keeping the version and evidence tables: disable the hook
+configuration, then `drop trigger if exists vortex_signup_privacy_acknowledgment on auth.users`,
+`drop function if exists vortex_identity.append_signup_privacy_acknowledgment()`,
+`revoke execute on function vortex_identity.before_user_created(jsonb) from supabase_auth_admin`,
+`drop function if exists vortex_identity.before_user_created(jsonb)` and
+`revoke usage on schema vortex_identity from supabase_auth_admin`.
 
 The operational `postgres` role retains explicit privileges on the transferred objects for the local seed and controlled migrations; ownership remains with `vortex_owner`. The restricted record roles and their organisation-scoped grants and policies remain separate.
 
