@@ -1,7 +1,7 @@
 "use client";
 
 import { Item, ItemContent, ItemDescription, ItemTitle } from "../components/item";
-import { createContext, useContext, type ReactElement, type ReactNode } from "react";
+import { Component, createContext, useContext, type ReactElement, type ReactNode } from "react";
 import type { ComponentConfig, Config, Field } from "@puckeditor/core";
 import {
   canonicalResponsivePlacement,
@@ -211,6 +211,43 @@ const releaseOf = (
     : undefined;
 };
 
+/**
+ * One canvas block that cannot be drawn says so in its own place, with the reason, while the rest of
+ * the page and the outline stay usable; the cause goes to the console. It draws again when the
+ * block's settings change.
+ */
+class CanvasBlockBoundary extends Component<
+  Readonly<{ settings: unknown; children: ReactNode }>,
+  Readonly<{ message: string | null }>
+> {
+  override state: Readonly<{ message: string | null }> = { message: null };
+
+  static getDerivedStateFromError(error: unknown) {
+    return { message: error instanceof Error ? error.message : "" };
+  }
+
+  override componentDidCatch(error: unknown) {
+    console.error("[studio] a canvas block could not be shown", error);
+  }
+
+  override componentDidUpdate(previous: Readonly<{ settings: unknown }>) {
+    if (previous.settings !== this.props.settings && this.state.message !== null)
+      this.setState({ message: null });
+  }
+
+  override render() {
+    if (this.state.message === null) return this.props.children;
+    return (
+      <Item variant="outline" size="sm" role="alert" className="border-destructive">
+        <ItemContent>
+          <ItemTitle>This block can't be shown</ItemTitle>
+          <ItemDescription>{this.state.message}</ItemDescription>
+        </ItemContent>
+      </Item>
+    );
+  }
+}
+
 function CanvasBlock({
   component,
   registry,
@@ -359,6 +396,20 @@ const canvasConfigs = new WeakMap<Config, Config>();
  * settings in its inspector. No defaults are merged: a block dropped from the palette is added by
  * Studio's add command, never by Puck.
  */
+/** The input blocks that each register one form field. */
+const formFieldRendererKeys: ReadonlySet<string> = new Set([
+  "platform.renderer.field_input",
+  "platform.renderer.text_input",
+  "platform.renderer.table_input",
+  "platform.renderer.attachment_input",
+  "platform.renderer.link_input",
+  "platform.renderer.rich_text_input",
+  "platform.renderer.number_input",
+  "platform.renderer.boolean_input",
+  "platform.renderer.date_input",
+  "platform.renderer.choice_input",
+]);
+
 export const studioCanvasConfig = (config: Config, registry: PlatformComponentRegistry): Config => {
   let canvas = canvasConfigs.get(config);
   if (canvas !== undefined) return canvas;
@@ -383,8 +434,13 @@ export const studioCanvasConfig = (config: Config, registry: PlatformComponentRe
               },
             }),
         render: (props: Record<string, unknown>) => (
-          <CanvasBlock component={component} registry={registry} props={props} />
+          <CanvasBlockBoundary settings={props.vortex}>
+            <CanvasBlock component={component} registry={registry} props={props} />
+          </CanvasBlockBoundary>
         ),
+        // A second input for a field the form already shows would be refused when the form
+        // draws, so a field input is never duplicated; add another field from the palette.
+        ...(formFieldRendererKeys.has(type) ? { permissions: { duplicate: false } } : {}),
       },
     ]),
   );

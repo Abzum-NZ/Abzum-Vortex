@@ -222,14 +222,23 @@ export const studioGroupingStart = (
       };
 };
 
-/** The settings a feature starts with for this bound query; Group by also starts as the query groups. */
+/**
+ * The settings a feature starts with for this bound query: Group by also starts as the query
+ * groups, and Board starts on the query's first stage field, so switching it on makes columns.
+ */
 export const studioGridFeatureStart = (
   key: RecordsTableFeatureKey,
-  facts: Pick<RecordsTableQueryFacts, "fields" | "groupBy" | "grouped">,
-): Readonly<Record<string, SourceBlockPropertyValueContract>> => ({
-  ...studioGridFeatureStartSettings[key],
-  ...(key === recordsTableGroupingFeature.key ? studioGroupingStart(facts) : {}),
-});
+  facts: Pick<RecordsTableQueryFacts, "fields" | "groupBy" | "grouped" | "board">,
+): Readonly<Record<string, SourceBlockPropertyValueContract>> => {
+  const stageField = facts.board?.stageFields[0];
+  return {
+    ...studioGridFeatureStartSettings[key],
+    ...(key === recordsTableGroupingFeature.key ? studioGroupingStart(facts) : {}),
+    ...(key === recordsTableBoardFeature.key && stageField !== undefined
+      ? { column_field: { kind: "field_reference", field: stageField } }
+      : {}),
+  };
+};
 
 /**
  * What the draft offers a row's related records: every query and link it can read, the page's
