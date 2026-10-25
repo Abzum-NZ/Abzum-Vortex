@@ -121,11 +121,15 @@ export function useGridFullScreen(
   }, [leave]);
 
   // The shortcut toggles from anywhere inside the table; Escape leaves the in-app layer. Menus are
-  // portalled outside the table, so their own Escape never reaches this listener.
+  // portalled outside the table, so their own Escape never reaches this listener. It listens on the
+  // document and reads the table's element on each key: a lazily loaded grid feature mounts that
+  // element again after this effect has run, and a listener on the first one would never fire.
   useEffect(() => {
-    const element = container.current;
-    if (element === null || !allowed) return;
+    if (!allowed) return;
     const onKeyDown = (event: KeyboardEvent): void => {
+      const element = container.current;
+      if (element === null || !(event.target instanceof Node) || !element.contains(event.target))
+        return;
       if (
         (event.ctrlKey || event.metaKey) &&
         event.shiftKey &&
@@ -141,8 +145,9 @@ export function useGridFullScreen(
         leave();
       }
     };
-    element.addEventListener("keydown", onKeyDown);
-    return () => element.removeEventListener("keydown", onKeyDown);
+    // Capture keeps the order the table's own listener had: before the grid's React handlers.
+    document.addEventListener("keydown", onKeyDown, true);
+    return () => document.removeEventListener("keydown", onKeyDown, true);
   }, [container, allowed, toggle, leave]);
 
   // A table that stops allowing full screen, or unmounts, leaves it.
