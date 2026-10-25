@@ -522,7 +522,8 @@ export const readRecordsTable = async (
     console.error(
       `[page] data placement refused: class=${resolved.reasonCode === undefined ? "records_table" : "protected_query"} code=${resolved.reasonCode ?? "query_refused"}`,
     );
-    // A date group that left the supported years has its own business sentence.
+    // A date group that left the supported years, and a filter or sort the table cannot apply, has
+    // its own business sentence.
     data[placementId] = {
       status: "refused",
       reason:
@@ -531,7 +532,7 @@ export const readRecordsTable = async (
           ? resolved.reasonCode
           : resolved.reasonCode === "field_unbounded" && queryGrouped
             ? "grouping_unavailable"
-            : "not_permitted",
+            : (resolved.refusalReason ?? "not_permitted"),
     };
   } else if (resolved.display.status === "empty") data[placementId] = { status: "empty" };
   else {

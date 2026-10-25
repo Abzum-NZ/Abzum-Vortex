@@ -177,8 +177,23 @@ export type RecordsTableQueryRequest = Readonly<{
 }>;
 
 /**
+ * The business refusal of a filter or sort the table cannot apply. A cause that a withheld
+ * field can also produce (one the viewer cannot read, or one missing from their offered filters)
+ * is not one of these: it keeps the permission wording.
+ */
+type RecordsTableRefusalReason =
+  | "filter_field_not_filterable"
+  | "filter_unavailable"
+  | "filter_field_repeated"
+  | "filter_value_invalid"
+  | "filter_date_out_of_range"
+  | "filter_value_mismatch"
+  | "sort_field_not_sortable";
+
+/**
  * A refusal is never an empty page. The Query engine's closed reason code is retained only for
- * server-side diagnostics; the component receives the same neutral refusal for every cause.
+ * server-side diagnostics; the component receives the same neutral refusal for every cause, except
+ * a filter or sort the table cannot apply, which carries its own business refusal reason.
  * `unavailable` is a temporary failure the placement may retry.
  */
 export type RecordsTableQueryResolution =
@@ -193,7 +208,11 @@ export type RecordsTableQueryResolution =
       nextContinuationToken?: string;
       previousContinuationToken?: string;
     }>
-  | Readonly<{ kind: "refused"; reasonCode?: ProtectedQueryRefusalReasonCode }>
+  | Readonly<{
+      kind: "refused";
+      reasonCode?: ProtectedQueryRefusalReasonCode;
+      refusalReason?: RecordsTableRefusalReason;
+    }>
   | Readonly<{ kind: "unavailable" }>;
 
 /** What the viewer may do on this table, decided with its rows. Absent parts are not offered. */
@@ -210,11 +229,43 @@ export type RecordsTableReadDecider = (
 
 const refused = Object.freeze({ kind: "refused" as const });
 
-/** The refusal of a table read, with its part and cause logged; the client sees it neutral. */
-const refusedBecause = (part: RecordsTableRequestPart, reason: string) => {
-  logRecordsTableRequestRefusal(recordsTableRequestRefusal(part, reason), "table_read");
-  return refused;
+/** The business refusal a request refusal earns: only a filter or sort the table cannot apply. */
+const recordsTableRefusalReason = (
+  refusal: RecordsTableRequestRefusal,
+): RecordsTableRefusalReason | undefined => {
+  switch (`${refusal.part}/${refusal.reason}`) {
+    case "filter/field_not_filterable":
+      return "filter_field_not_filterable";
+    case "filter/feature_off":
+      return "filter_unavailable";
+    case "filter/field_filtered_twice":
+      return "filter_field_repeated";
+    case "filter/value_malformed":
+      return "filter_value_invalid";
+    case "filter/value_out_of_range":
+      return "filter_date_out_of_range";
+    case "filter/value_not_for_field":
+      return "filter_value_mismatch";
+    case "sort/sort_field_not_sortable":
+      return "sort_field_not_sortable";
+    default:
+      return undefined;
+  }
 };
+
+/**
+ * Logs a refused table read with its part and cause. The client sees the business reason that
+ * cause earns, or the neutral refusal.
+ */
+const refusedFor = (refusal: RecordsTableRequestRefusal): RecordsTableQueryResolution => {
+  logRecordsTableRequestRefusal(refusal, "table_read");
+  const refusalReason = recordsTableRefusalReason(refusal);
+  return refusalReason === undefined ? refused : { kind: "refused", refusalReason };
+};
+
+/** The refusal of a table read, with its part and cause logged; the client sees it neutral. */
+const refusedBecause = (part: RecordsTableRequestPart, reason: string) =>
+  refusedFor(recordsTableRequestRefusal(part, reason));
 
 /** The rows with only the visible columns' values: a value read only for formatting never leaves. */
 const visibleRows = (
@@ -793,18 +844,12 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
     request: RecordsTableQueryRequest,
   ): Promise<RecordsTableQueryResolution> {
     const built = buildRecordsTableQueryCommand(request);
-    if (built.kind === "refused") {
-      logRecordsTableRequestRefusal(built, "table_read");
-      return refused;
-    }
+    if (built.kind === "refused") return refusedFor(built);
     // A filter on a field the table does not describe a control for is not the viewer's to use:
     // refused before any row is read. What depends on the viewer's own field bound is decided
     // after the read below, because the bound comes only with it.
     const undescribed = recordsTableNarrowingContractRefusal(built.filterFields, built.narrowing);
-    if (undescribed !== undefined) {
-      logRecordsTableRequestRefusal(undescribed, "table_read");
-      return refused;
-    }
+    if (undescribed !== undefined) return refusedFor(undescribed);
     // The viewer decisions ride on the read's own request: the last decision taken wins, and a
     // table with several reads (a grouped one) decides on the read that carries its rows.
     let decisions: RecordsTableReadDecisions | undefined;
@@ -983,10 +1028,7 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
         projected.status === "ready" ? projected.values.features : undefined,
         built.narrowing,
       );
-      if (narrowingRefusal !== undefined) {
-        logRecordsTableRequestRefusal(narrowingRefusal, "table_read");
-        return refused;
-      }
+      if (narrowingRefusal !== undefined) return refusedFor(narrowingRefusal);
       const nextContinuationToken = read.nextContinuationToken;
       const previousContinuationToken = read.previousContinuationToken;
       const display: ProjectedComponentData<ProjectedTableValues> =

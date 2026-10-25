@@ -344,7 +344,14 @@ export type DisplayRefusalReason =
   | "not_found"
   | "value_out_of_range"
   | "dataset_limit_exceeded"
-  | "grouping_unavailable";
+  | "grouping_unavailable"
+  | "filter_field_not_filterable"
+  | "filter_unavailable"
+  | "filter_field_repeated"
+  | "filter_value_invalid"
+  | "filter_date_out_of_range"
+  | "filter_value_mismatch"
+  | "sort_field_not_sortable";
 
 /**
  * Explicit, data-safe state for one placement, parameterised by that block's own ready values.
@@ -367,6 +374,13 @@ const DISPLAY_REFUSAL_REASONS: readonly DisplayRefusalReason[] = [
   "value_out_of_range",
   "dataset_limit_exceeded",
   "grouping_unavailable",
+  "filter_field_not_filterable",
+  "filter_unavailable",
+  "filter_field_repeated",
+  "filter_value_invalid",
+  "filter_date_out_of_range",
+  "filter_value_mismatch",
+  "sort_field_not_sortable",
 ];
 
 // The data-free states carry no values, so one frozen instance serves every block's state type.
