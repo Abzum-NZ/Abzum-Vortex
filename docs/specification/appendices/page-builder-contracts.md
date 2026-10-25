@@ -182,7 +182,7 @@ Use the same Puck config and registered React components for preview and live re
 
 Before copying source, inventory Fluid-owned code, third-party licenses and assets. Copy only required generic authoring/components; do not import its demo applications, broad local MCP server or entire dependency tree. Local tabs/drafts must be scoped by current account, organisation, app and revision; do not persist sensitive HR labels in unscoped browser storage.
 
-Follow the [inspected builder integration map](../../build-plan/fluid-integration-map.md) when adapting the canvas, palette, inspector, shell editing and preview controls. The map identifies which prototype connections must be replaced and the owning tasks for each. The implementation supplies revision handling, permissions, persistence, keyboard control and semantic operations.
+The implementation supplies revision handling, permissions, persistence, keyboard control and semantic operations.
 
 ## Current representation
 

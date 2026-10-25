@@ -429,7 +429,7 @@ Already present and to be used: `Item`, `Empty`, `Badge`, `Button`, `Collapsible
 
 ## F. Implementation plan (8 slices, one PR each)
 
-Each PR is walked in the running app on a freshly reset lane (db2-db5, never :3000). Each PR attaches **before and after screenshots at 1440 × 900 in light and dark** for the listed scenarios, and runs `tooling/theme/off-theme-detector.js` on the Studio frame with zero findings in both modes. `pnpm verify` and `pnpm guard` must pass. No tests are added (owner rule).
+Each PR is walked in the running app on a local database lane. Each PR attaches **before and after screenshots at 1440 × 900 in light and dark** for the listed scenarios, and runs `tooling/theme/off-theme-detector.js` on the Studio frame with zero findings in both modes. `pnpm verify` and `pnpm guard` must pass. No tests are added (owner rule).
 
 **Open PRs that touch Studio files** (checked 19 Oct with `gh pr list`):
 - #2975 (forms, workflows, titles): `module-fields-editor`, `studio-data-tab`, `studio-flows-panel`, `studio-new-flow-dialog`, `studio-placement-workflows`, plus ui/studio command files.

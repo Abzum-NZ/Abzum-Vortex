@@ -1,6 +1,6 @@
 # Access operations and their consumers
 
-[Roadmap archive](README.md) · [Access specification](../specification/04-access-and-permissions.md)
+[Build plan](README.md) · [Access specification](../specification/04-access-and-permissions.md)
 
 ## Administration and IAM
 
