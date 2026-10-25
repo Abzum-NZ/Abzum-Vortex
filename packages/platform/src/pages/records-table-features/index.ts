@@ -190,9 +190,6 @@ export const projectRecordsTableFeatures = (
       return part === undefined ? [] : [[definition.property, part]];
     }),
   ) as Partial<RecordsTableFeatureProjection>;
-  // A view keeps the whole grid (columns, density, search, and any sort or filter), so it is
-  // offered wherever the table enables it.
-  const savedViews = features.savedViews.enabled;
   const bulkActions = recordsTableBulkActions(contract);
   const inlineEdit = features.inlineEdit;
   const editableFields = recordsTableEditableFields(contract, rows, bounds, editors);
@@ -299,7 +296,6 @@ export const projectRecordsTableFeatures = (
       : {}),
     ...(rowActions === undefined ? {} : { rowActions }),
     ...declared,
-    ...(savedViews ? { savedViews: true as const } : {}),
     ...(bulkActions.length === 0 ? {} : { bulkActions }),
     ...(editableFields.length === 0 || !inlineEdit.enabled || inlineEdit.eventId === undefined
       ? {}
