@@ -63,6 +63,7 @@ import {
 import { decideRecordTypeExport } from "./record-type-access";
 import { personalFormattingAllowed } from "./conditional-formatting";
 import type { InstalledRuntimeContext } from "../../definition/index";
+import { withPooledRequestLifetime } from "../../db";
 
 /**
  * The one authority behind a Records table export. It re-reads the installed placement and
@@ -86,6 +87,8 @@ export type RecordsTableExportDependencies = HumanOrganizationRequestDependencie
  * that many authored-size reads in one request transaction.
  */
 const recordsPerRead = 200;
+/** The longest one export page may read for; each statement in it is also held to the timeout. */
+const pageReadLimitMs = 5 * 60_000;
 
 /** A failure the transport reports as the export's reason; the person only sees a neutral message. */
 const exportFailure = (reason: string, cause?: unknown): Error =>
@@ -739,8 +742,11 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
        * One page: the export permission and fields decided again, then up to 200 records of
        * protected reads, in the one request transaction of the page. A revocation stops the stream
        * at the next page. A scan-limited read ends its page, so the enumeration ceiling counts reads.
+       * A cancelled export or a page past its time limit cancels the statement in flight on the
+       * server, so its transaction rolls back and the connection is released at once.
        */
       const readPage = async (
+        signal: AbortSignal,
         extra: Readonly<{ exactRecordIds?: readonly string[]; continuationToken?: string }>,
       ): Promise<
         Readonly<{
@@ -749,33 +755,41 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
           scanLimited: boolean;
         }>
       > => {
-        const page = await requests.run(session, address.selection, async (transaction, scope) => {
-          const current = await decideRecordTypeExport(transaction, scope, installed, recordTypeId);
-          if (current.kind === "refused")
-            return { kind: "denied" as const, reason: current.reason };
-          const allowed = current.fieldIds;
-          if (allowed !== undefined && columnIds.some((fieldId) => !allowed.has(fieldId)))
-            return { kind: "denied" as const, reason: "export_fields_changed" };
-          const rows: ProtectedQueryRow[] = [];
-          let next: string | undefined;
-          let scanLimited = false;
-          const reads = extra.exactRecordIds === undefined ? keysetReadsPerPage : 1;
-          for (let call = 0; call < reads; call += 1) {
-            const prepared = prepare(
-              call === 0 || next === undefined ? extra : { continuationToken: next },
+        const lifetime = { signal, deadline: Date.now() + pageReadLimitMs };
+        const page = await withPooledRequestLifetime(lifetime, () =>
+          requests.run(session, address.selection, async (transaction, scope) => {
+            const current = await decideRecordTypeExport(
+              transaction,
+              scope,
+              installed,
+              recordTypeId,
             );
-            if (prepared.kind === "final")
-              return { kind: "denied" as const, reason: prepared.reason };
-            const result = await prepared.read(transaction, scope);
-            if (result.outcome !== "completed")
-              return { kind: "denied" as const, reason: `read_refused_${result.reasonCode}` };
-            rows.push(...result.rows);
-            next = result.nextContinuationToken;
-            scanLimited = result.scanLimited;
-            if (next === undefined || scanLimited) break;
-          }
-          return { kind: "read" as const, rows, next, scanLimited };
-        });
+            if (current.kind === "refused")
+              return { kind: "denied" as const, reason: current.reason };
+            const allowed = current.fieldIds;
+            if (allowed !== undefined && columnIds.some((fieldId) => !allowed.has(fieldId)))
+              return { kind: "denied" as const, reason: "export_fields_changed" };
+            const rows: ProtectedQueryRow[] = [];
+            let next: string | undefined;
+            let scanLimited = false;
+            const reads = extra.exactRecordIds === undefined ? keysetReadsPerPage : 1;
+            for (let call = 0; call < reads; call += 1) {
+              const prepared = prepare(
+                call === 0 || next === undefined ? extra : { continuationToken: next },
+              );
+              if (prepared.kind === "final")
+                return { kind: "denied" as const, reason: prepared.reason };
+              const result = await prepared.read(transaction, scope);
+              if (result.outcome !== "completed")
+                return { kind: "denied" as const, reason: `read_refused_${result.reasonCode}` };
+              rows.push(...result.rows);
+              next = result.nextContinuationToken;
+              scanLimited = result.scanLimited;
+              if (next === undefined || scanLimited) break;
+            }
+            return { kind: "read" as const, rows, next, scanLimited };
+          }),
+        );
         if (page.kind !== "available") throw exportFailure(`access_${page.kind}`);
         if (page.value.kind === "denied") throw exportFailure(page.value.reason);
         return page.value;
@@ -795,7 +809,7 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
             pageSignal.throwIfAborted();
             const rows = [
               ...(
-                await readPage({
+                await readPage(pageSignal, {
                   exactRecordIds: selectedIds.slice(start, start + recordsPerRead),
                 })
               ).rows,
@@ -821,7 +835,10 @@ export const createRecordsTableExportService = (dependencies: RecordsTableExport
         let scanLimitedCount = 0;
         do {
           pageSignal.throwIfAborted();
-          const read = await readPage(continuationToken === undefined ? {} : { continuationToken });
+          const read = await readPage(
+            pageSignal,
+            continuationToken === undefined ? {} : { continuationToken },
+          );
           const fresh = read.rows.filter((row) => {
             const recordId = String(row.recordId).toLowerCase();
             if (excluded.has(recordId) || seen.has(recordId)) return false;
