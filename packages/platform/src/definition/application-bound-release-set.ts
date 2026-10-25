@@ -222,12 +222,12 @@ const projectBoundReleaseSet = async (
     roots.size !== modules.length
   )
     throw new DefinitionError("DEFINITION_RELEASE_INTEGRITY_FAILED");
-  return { application, modules };
+  const result = { application, modules };
+  if (!exactModuleClosure(result)) throw new DefinitionError("DEFINITION_RELEASE_INTEGRITY_FAILED");
+  return result;
 };
 
-const exactFirstInstallModuleClosure = (
-  releaseSet: SystemApplicationBoundReleaseSetResult,
-): boolean => {
+const exactModuleClosure = (releaseSet: SystemApplicationBoundReleaseSetResult): boolean => {
   const modulesByIdentity = new Map(
     releaseSet.modules.map(
       (module) => [`${module.rootId.toLowerCase()}:${module.releaseRevision}`, module] as const,
@@ -309,6 +309,7 @@ export const createSystemApplicationBoundReleaseSetService = (
   async read(
     contextCandidate: SessionContext,
     commandCandidate: unknown,
+    purpose: "consume" | "replace_or_remove" = "consume",
   ): Promise<SystemApplicationBoundReleaseSetResult> {
     const context = sessionContextSchema.safeParse(contextCandidate);
     const command = systemApplicationBoundReleaseSetCommandSchema.safeParse(commandCandidate);
@@ -339,7 +340,7 @@ export const createSystemApplicationBoundReleaseSetService = (
         correlationId: context.data.correlationId,
         allowEmptyModules: true,
       },
-      catalogue,
+      purpose === "consume" ? catalogue : undefined,
     )) as SystemApplicationBoundReleaseSetResult;
   },
 });
@@ -460,9 +461,6 @@ export const createDatabaseFirstInstallApplicationReleaseSetService = (
         catalogue,
       );
       const result = projected as SystemApplicationBoundReleaseSetResult;
-      if (!exactFirstInstallModuleClosure(result))
-        throw new DefinitionError("DEFINITION_RELEASE_INTEGRITY_FAILED");
-
       const current = await readFirstInstallReleaseSet(transaction, command.data);
       const currentSet = storedSystemSetSchema.safeParse(current.candidate);
       if (!currentSet.success) throw new DefinitionError("DEFINITION_RELEASE_INTEGRITY_FAILED");
