@@ -112,7 +112,7 @@ const flowReferenceWords: Readonly<Record<StudioCompositionRemovalReason, string
   flow_component: "is refreshed or filtered by a flow",
   flow_panel: "is a panel a flow opens",
   required_slot: "fills a required area",
-  required_field: "contains an input for a required field",
+  required_field: "contains an input for a required field with no default value",
   content_outlet: "holds a content outlet of its layout",
   unresolved_target: "is named by a flow step that cannot be checked",
 };

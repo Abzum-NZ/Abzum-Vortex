@@ -43,7 +43,7 @@ export const studioPlacementReferenceSentence = (reference: StudioPlacementRefer
         : `Flow "${reference.flow}", step "${reference.step}"`;
   switch (reference.reason) {
     case "required_field":
-      return "This item holds an input for a required field. Make the field optional in Data, or clear the input's Required setting, first.";
+      return "This item holds an input for a required field with no default value, so a new record could not be saved without it. Make the field optional or give it a default in Data, or clear the input's Required setting, first.";
     case "flow_input":
       return `${where} reads this form input. Change its input mapping first.`;
     case "flow_form":

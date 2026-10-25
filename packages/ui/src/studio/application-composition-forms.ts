@@ -14,8 +14,9 @@ import { releaseFor, itemSlots } from "./application-composition-regions";
  * - forms never nest;
  * - an input, and a Submit or Reset button, keeps the form that encloses it; one outside any
  *   form (just added at the page's top level) may join a form;
- * - a form that stays keeps its inputs for required fields, inputs marked Required, and inputs
- *   whose answers its submit binding maps by name into a flow.
+ * - a form that stays keeps its inputs for required fields without a default value, inputs marked
+ *   Required, and inputs whose answers its submit binding maps by name into a flow. A required
+ *   field with a default is filled by it when its input is left out.
  */
 export const FORM_CONTAINER_KEY = "platform.form.container";
 export const NESTED_FORM_REASON = "A form can't go inside another form.";
@@ -95,7 +96,9 @@ const requiredInput = (source: ApplicationSourceDocument, item: SourceItem): boo
     module.record_types.some((record) =>
       record.fields.some(
         (field) =>
-          field.required && item.props.field === `${module.key}:${record.key}.${field.key}`,
+          field.required &&
+          !("default" in field && field.default !== undefined) &&
+          item.props.field === `${module.key}:${record.key}.${field.key}`,
       ),
     ),
   );
