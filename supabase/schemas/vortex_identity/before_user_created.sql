@@ -21,3 +21,7 @@ revoke all on function vortex_identity.before_user_created(jsonb)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 grant execute on function vortex_identity.before_user_created(jsonb) to supabase_auth_admin;
 alter function vortex_identity.before_user_created(jsonb) owner to vortex_owner;
+-- Schema ownership remains with postgres; vortex_owner cannot grant schema USAGE onward.
+reset role;
+grant usage on schema vortex_identity to supabase_auth_admin;
+set role vortex_owner;

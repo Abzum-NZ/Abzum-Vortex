@@ -1,5 +1,4 @@
 import { spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
 import { signupPrivacyNoticeSetting } from "@vortex/definitions";
 import { identityIdSchema } from "@vortex/platform/schema";
 
@@ -15,8 +14,7 @@ const content = JSON.stringify(setting.content);
 const quote = (value: string): string => `'${value.replaceAll("'", "''")}'`;
 const sql = `select vortex_identity.publish_privacy_notice_version(
   ${quote(publisher)}::uuid, ${quote(setting.versionLabel)},
-  ${quote(setting.effectiveAt)}::timestamptz, ${quote(content)}::jsonb,
-  ${quote(createHash("sha256").update(content).digest("hex"))}
+  ${quote(setting.effectiveAt)}::timestamptz, ${quote(content)}::jsonb
 );`;
 const result = spawnSync(
   "docker",

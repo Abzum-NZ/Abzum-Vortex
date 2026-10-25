@@ -1,6 +1,6 @@
 set role vortex_owner;
 
-create table vortex_identity.privacy_notice_versions (
+create table if not exists vortex_identity.privacy_notice_versions (
   id uuid primary key,
   publication_order bigint generated always as identity unique,
   version_label text not null unique check (length(version_label) between 1 and 100),
@@ -15,7 +15,7 @@ create table vortex_identity.privacy_notice_versions (
 );
 -- Current is exactly the latest publication: no mutable current flag or overlapping windows.
 -- No tenant exists at signup. Evidence is identity-scoped and survives projection/account removal.
-create table vortex_identity.privacy_notice_acknowledgments (
+create table if not exists vortex_identity.privacy_notice_acknowledgments (
   identity_id uuid not null,
   notice_version_id uuid not null references vortex_identity.privacy_notice_versions(id),
   acknowledged_at timestamptz not null,
@@ -30,7 +30,6 @@ alter table vortex_identity.privacy_notice_acknowledgments force row level secur
 revoke all on table vortex_identity.privacy_notice_versions, vortex_identity.privacy_notice_acknowledgments
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 grant select on table vortex_identity.privacy_notice_versions, vortex_identity.privacy_notice_acknowledgments to postgres;
-grant usage on schema vortex_identity to supabase_auth_admin;
 create or replace function vortex_identity.read_current_privacy_notice(p_version_id uuid default null)
 returns jsonb
 language plpgsql
@@ -66,8 +65,7 @@ create or replace function vortex_identity.publish_privacy_notice_version(
   p_publisher_identity_id uuid,
   p_version_label text,
   p_effective_at timestamptz,
-  p_content jsonb,
-  p_content_sha256 text
+  p_content jsonb
 )
 returns uuid
 language plpgsql
@@ -96,7 +94,7 @@ begin
     or pg_catalog.jsonb_typeof(p_content -> 'title') is distinct from 'string'
     or pg_catalog.jsonb_typeof(p_content -> 'collectionNotice') is distinct from 'string'
     or pg_catalog.jsonb_typeof(p_content -> 'paragraphs') is distinct from 'array'
-    or p_content_sha256 is null or p_content_sha256 !~ '^[0-9a-f]{64}$' then
+    then
     raise exception using errcode = '22023', message = 'Privacy notice publication input is invalid';
   end if;
   insert into vortex_identity.privacy_notice_versions (
@@ -104,17 +102,17 @@ begin
     published_by, correlation_id
   ) values (
     version_id, p_version_label, '/auth/privacy?version=' || version_id::text,
-    p_content, p_content_sha256, p_effective_at, published_at,
+    p_content, pg_catalog.encode(extensions.digest(pg_catalog.convert_to(p_content::text, 'UTF8'), 'sha256'), 'hex'), p_effective_at, published_at,
     p_publisher_identity_id, pg_catalog.gen_random_uuid()
   );
   return version_id;
 end
 $function$;
-revoke all on function vortex_identity.publish_privacy_notice_version(uuid, text, timestamptz, jsonb, text)
+revoke all on function vortex_identity.publish_privacy_notice_version(uuid, text, timestamptz, jsonb)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 -- The operational command is server-only; no browser role can name a publisher or publish content.
-grant execute on function vortex_identity.publish_privacy_notice_version(uuid, text, timestamptz, jsonb, text) to postgres;
-alter function vortex_identity.publish_privacy_notice_version(uuid, text, timestamptz, jsonb, text) owner to vortex_owner;
+grant execute on function vortex_identity.publish_privacy_notice_version(uuid, text, timestamptz, jsonb) to postgres;
+alter function vortex_identity.publish_privacy_notice_version(uuid, text, timestamptz, jsonb) owner to vortex_owner;
 
 create or replace function vortex_identity.validate_privacy_notice_internal(p_metadata jsonb)
 returns uuid
@@ -170,6 +168,10 @@ revoke all on function vortex_identity.before_user_created(jsonb)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 grant execute on function vortex_identity.before_user_created(jsonb) to supabase_auth_admin;
 alter function vortex_identity.before_user_created(jsonb) owner to vortex_owner;
+-- Schema ownership remains with postgres; vortex_owner cannot grant schema USAGE onward.
+reset role;
+grant usage on schema vortex_identity to supabase_auth_admin;
+set role vortex_owner;
 
 create or replace function vortex_identity.append_signup_privacy_acknowledgment()
 returns trigger
@@ -181,7 +183,7 @@ as $function$
 declare
   notice_version uuid;
 begin
-  -- GoTrue's before-user-created hook is outside its insert transaction. Evidence belongs here.
+  -- GoTrue v2.196.0 requires before_user_created outside its insert transaction. Evidence belongs here.
   notice_version := vortex_identity.validate_privacy_notice_internal(new.raw_user_meta_data);
   insert into vortex_identity.privacy_notice_acknowledgments (
     identity_id, notice_version_id, acknowledged_at, channel, correlation_id
@@ -197,6 +199,8 @@ $function$;
 revoke all on function vortex_identity.append_signup_privacy_acknowledgment()
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 alter function vortex_identity.append_signup_privacy_acknowledgment() owner to vortex_owner;
+-- The operational migration role needs EXECUTE to attach the trigger to GoTrue's table.
+grant execute on function vortex_identity.append_signup_privacy_acknowledgment() to postgres;
 
 create or replace function vortex_identity.refuse_privacy_notice_mutation()
 returns trigger
@@ -212,14 +216,20 @@ revoke all on function vortex_identity.refuse_privacy_notice_mutation()
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 alter function vortex_identity.refuse_privacy_notice_mutation() owner to vortex_owner;
 
+drop trigger if exists privacy_notice_versions_immutable on vortex_identity.privacy_notice_versions;
 create trigger privacy_notice_versions_immutable
 before update or delete on vortex_identity.privacy_notice_versions
 for each row execute function vortex_identity.refuse_privacy_notice_mutation();
+drop trigger if exists privacy_notice_acknowledgments_immutable on vortex_identity.privacy_notice_acknowledgments;
 create trigger privacy_notice_acknowledgments_immutable
 before update or delete on vortex_identity.privacy_notice_acknowledgments
 for each row execute function vortex_identity.refuse_privacy_notice_mutation();
 reset role;
+-- GoTrue v2.196.0 requires before_user_created to run outside its user-insert transaction.
+-- Evidence must be appended by this trigger to commit or roll back with the account.
 -- guard-allow: migration-owner-role The GoTrue-owned auth table requires postgres to attach this approved integration trigger.
+drop trigger if exists vortex_signup_privacy_acknowledgment on auth.users;
+-- guard-allow: migration-owner-role The GoTrue-owned auth table requires postgres for the approved integration trigger.
 create trigger vortex_signup_privacy_acknowledgment
   after insert on auth.users
   for each row execute function vortex_identity.append_signup_privacy_acknowledgment();

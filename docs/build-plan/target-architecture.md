@@ -115,6 +115,14 @@ flowchart LR
 - `vortex_record_adapter` is the role the record-data RLS policies are written for.
 - `vortex_record_inventory` is the second restricted role: the account-deletion inventory reads record data through organisation-scoped policies.
 
+The local signup privacy integration uses `vortex_identity.before_user_created`, owned by
+`vortex_owner` and executable only by `supabase_auth_admin`. It validates the acknowledgement;
+`vortex_identity.append_signup_privacy_acknowledgment`, also owned by `vortex_owner`, writes
+evidence from an `auth.users` AFTER INSERT trigger. GoTrue v2.196.0 requires the hook to run
+outside its user-insert transaction, so only the trigger can commit evidence atomically with
+the account. Both use one private validator and a fixed empty search path. The trigger does
+not alter Auth rows. Hosted activation requires separate rollout approval.
+
 The operational `postgres` role retains explicit privileges on the transferred objects for the local seed and controlled migrations; ownership remains with `vortex_owner`. The restricted record roles and their organisation-scoped grants and policies remain separate.
 
 
