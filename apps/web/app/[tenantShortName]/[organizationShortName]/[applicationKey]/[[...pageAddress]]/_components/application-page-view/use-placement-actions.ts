@@ -18,6 +18,7 @@ import type {
   Notice,
   RefreshedPlacementData,
   TableContinuationTarget,
+  ControlReport,
 } from "./types";
 import { asComponentBinding } from "./event-values";
 
@@ -45,7 +46,7 @@ export function usePlacementActions({
     formPlacementId?: string,
     afterAccepted?: () => Promise<Notice | undefined>,
     sourceBindingId?: string,
-    reportOnControl?: true,
+    reportOnControl?: ControlReport,
   ) => Promise<DispatchOutcome>;
   flowRuntime: ReturnType<typeof createFlowRuntime>;
   formOwners: Readonly<Record<string, string>>;
@@ -88,7 +89,7 @@ export function usePlacementActions({
       /** One identity for this user gesture, so a repeated request is the same run. */
       clickId?: string,
       /** The gesture is shown on its own control, which tells the person its outcome. */
-      reportOnControl?: true,
+      reportOnControl?: ControlReport,
     ) => {
       const callerInputs = { ...supplied };
       for (const selectedReadInput of binding.selectedReadInputs ?? []) {
