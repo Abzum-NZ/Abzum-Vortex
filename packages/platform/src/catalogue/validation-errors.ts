@@ -69,6 +69,7 @@ export const definitionValidationErrorCodes = [
   "definition_records_table_master_detail",
   "definition_records_table_tree",
   "definition_records_table_grouping",
+  "definition_records_table_totals",
   "definition_records_table_conditional_formatting",
   "definition_records_table_pinning",
   "definition_records_table_pivot",
@@ -220,6 +221,12 @@ const definitionValidationErrorCatalogueSource = {
       "Choose the link that points to each record's parent and how many child records to show at a time, or turn Tree off.",
   },
   // Grouping names its own part (the field, its choice count) in its sentence.
+  definition_records_table_totals: {
+    order: 39,
+    message: "Totals need up to six compatible measures over the table columns.",
+    guidance:
+      "Choose number or money columns, or count any stored column, and turn Board and Pivot off.",
+  },
   definition_records_table_grouping: {
     order: 39,
     message: "Group by needs a choice, stage, link or date field in the bound query.",

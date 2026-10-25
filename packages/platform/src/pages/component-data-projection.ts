@@ -8,6 +8,7 @@ import {
   type GridLayoutState,
   type JsonValue,
   type RecordsDisplayFormat,
+  type RecordsTableTotal,
   type RecordsTableFeatureProjection,
   type RecordsTableFilterField,
   type RecordsTableInlineEditor,
@@ -144,6 +145,7 @@ export type ProjectedTableGroup = Readonly<{
   key: string;
   label: string;
   count: number;
+  totals?: readonly RecordsTableTotal[];
   /** The group of records that hold no value, or whose value the viewer cannot see. */
   unassigned?: true;
 }>;
@@ -183,6 +185,7 @@ export type ProjectedTableValues = Readonly<{
   rows: readonly ProjectedTableRow[];
   /** Present when the table is grouped: its rows are then the open group's members only. */
   groups?: ProjectedTableGroups;
+  totals?: readonly RecordsTableTotal[];
   /** The grid features this viewer may use on this read; absent when every feature is off. */
   features?: RecordsTableFeatureProjection;
   /** The order the page was read in, when it is the viewer's or the authored default sort. */
@@ -268,6 +271,7 @@ export type ComponentDataProjectionInput = Readonly<{
   exportAllowed?: boolean;
   /** The groups a grouped read counted; absent for an ordinary read. */
   groups?: ProjectedTableGroups;
+  totals?: readonly RecordsTableTotal[];
 }>;
 
 /** One declared column of a table field: its key, readable heading, cell type and, for a choice, its options. */
@@ -527,6 +531,7 @@ export const projectRecordsTableData = (
       hiddenColumns,
       layout,
       ...(input.groups === undefined ? {} : { groups: input.groups }),
+      ...(input.totals === undefined ? {} : { totals: input.totals }),
       ...(features === undefined ? {} : { features }),
       rows: completeRows.map((row) => {
         const format = formatting?.rows.get(row.recordId);

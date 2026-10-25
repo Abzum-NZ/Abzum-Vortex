@@ -47,6 +47,7 @@ import { useRowLines, useRowWrites } from "./sub-rows";
 import { useGroupedTable } from "./table-groups-state";
 import type { CardRenderers } from "./table-cards";
 import { columnWidth, useTablePresentation } from "./table-geometry";
+import { TableTotals } from "./table-totals";
 import { RecordsGrid, type GridRenderers } from "./table-grid";
 import { useGridLayout, type GridColumn } from "./table-layout";
 import { TableLoadingState, useLoadingReveal } from "./table-loading";
@@ -589,6 +590,7 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
         contract={contract}
         layout={layout}
         rows={rows}
+        totals={grouped === undefined ? values?.totals : undefined}
         lines={lines}
         sort={values?.sort}
         selection={selectable ? "multiple" : undefined}
@@ -685,6 +687,7 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
             grouped={grouped}
             loading={loading}
             members={membersView}
+            columns={layout.shown}
           />
         </Suspense>
       );
@@ -742,6 +745,16 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
           ) : (
             body
           )}
+          {ready &&
+          !pivotOpen &&
+          values?.totals !== undefined &&
+          (grouped !== undefined || presentation === "cards" || rows.length === 0) ? (
+            <TableTotals
+              totals={values.totals}
+              columns={layout.shown}
+              label="Totals for all matching records"
+            />
+          ) : null}
           {!ready || values === undefined || pivotOpen || grouped !== undefined ? null : (
             <div className="mt-2 flex shrink-0 flex-wrap items-center justify-between gap-2">
               <p className="m-0 text-xs text-muted-foreground tabular-nums">
