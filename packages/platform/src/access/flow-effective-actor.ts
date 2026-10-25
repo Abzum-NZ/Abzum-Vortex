@@ -1,34 +1,34 @@
 import "server-only";
 
 import { z } from "zod";
+import { correlationIdSchema, type CorrelationId } from "../catalogue/common";
 import {
-  sameId,
   actorIdSchema,
   applicationRootIdSchema,
   builderKeySchema,
   containedComponentIdSchema,
-  correlationIdSchema,
-  flowExecutionBindingSurfaceSchema,
-  flowNodeRunAsSchema,
   organizationAccountIdSchema,
   organizationIdSchema,
-  protectedOperationDescriptorSchema,
-  protectedOperationReferenceSchema,
   revisionSchema,
   ruleIdSchema,
-  sessionContextSchema,
-  stableDefinitionReleaseVersionSchema,
   timestampSchema,
   workflowNodeIdSchema,
-  type CorrelationId,
-  type SessionContext,
-} from "../schema";
+} from "../catalogue/identifiers";
+import { sameId } from "../catalogue/runtime-primitives";
+import {
+  flowExecutionBindingSurfaceSchema,
+  flowNodeRunAsSchema,
+  protectedOperationDescriptorSchema,
+  protectedOperationReferenceSchema,
+} from "../definition/application-flow-bindings";
+import { stableDefinitionReleaseVersionSchema } from "../definition/version-impact";
+import { sessionContextSchema, type SessionContext } from "./identity-access";
 import {
   withResolvedRequestTransaction,
   type DatabaseRow,
   type RequestDatabaseTransaction,
   type ResolvedRequestContext,
-} from "../db/index";
+} from "../db/request-transaction";
 import {
   flowExecutionBindingReadResultSchema,
   type FlowExecutionBindingReadResult,

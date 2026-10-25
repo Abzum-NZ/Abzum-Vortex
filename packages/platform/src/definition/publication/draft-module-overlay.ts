@@ -1,14 +1,14 @@
 import "server-only";
 
+import type { SessionContext } from "../../access/identity-access";
+import type { OrganizationId } from "../../catalogue/identifiers";
+import type { ModuleSourceDocument } from "../definition-source";
 import {
-  moduleVersionImpactHistoryEntrySchema,
   publishDefinitionResultSchema,
-  type ModuleSourceDocument,
-  type OrganizationId,
   type PublishDefinitionResult,
-  type SessionContext,
   type StoredDefinitionDraft,
-} from "../../schema";
+} from "../definition-store-contracts";
+import { moduleVersionImpactHistoryEntrySchema } from "../version-impact";
 import { fingerprintCanonicalValue } from "../canonical-json-definition";
 import { extractStoredSourceIdentityRequirements } from "../source-identities";
 import { derivedOwnedModuleRootId, derivedSourceIdentityId } from "../derived-definition-id";

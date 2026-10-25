@@ -1,12 +1,10 @@
 import "server-only";
 
-import {
-  activeApplicationInstallationEvidenceSchema,
-  inspectApplicationPageReplacements,
-  pageIdSchema,
-  sameId,
-  type PageDefinition,
-} from "../schema";
+import { pageIdSchema } from "../catalogue/identifiers";
+import { sameId } from "../catalogue/runtime-primitives";
+import { activeApplicationInstallationEvidenceSchema } from "../files/storage";
+import { inspectApplicationPageReplacements } from "../pages/application-page-replacement";
+import type { PageDefinition } from "./application-contracts";
 import { z } from "zod";
 import {
   requireInstalledRuntimeContext,

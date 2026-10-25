@@ -1,18 +1,18 @@
 import "server-only";
 
 import { z } from "zod";
+import { correlationIdSchema } from "../catalogue/common";
 import {
-  databaseRevision,
   builderKeySchema,
-  correlationIdSchema,
   namespacedKeySchema,
   organizationIdSchema,
   platformIdSchema,
   revisionSchema,
   tenantIdSchema,
   timestampSchema,
-} from "../schema";
-import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
+} from "../catalogue/identifiers";
+import { databaseRevision } from "../catalogue/runtime-primitives";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
 import {
   capabilityPolicyAppliedScopeSchema,
   capabilityPolicyQuantitySchema,

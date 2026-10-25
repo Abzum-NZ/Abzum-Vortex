@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { correlationIdSchema } from "./common";
 import { builderKeySchema, namespacedKeySchema } from "./identifiers";
+import { recordsTableFeatureRefusals } from "../definition/application-composition/records-table-features/index";
 import { recordsTableFeatureRefusalCodes } from "../definition/application-composition/records-table-features/shared";
 
 export const definitionValidationCatalogueVersion = "1.4.0" as const;
@@ -251,22 +252,6 @@ export const definitionValidationErrorCatalogue: Readonly<
 > = Object.freeze(parsedDefinitionValidationErrorCatalogue);
 
 /**
- * The grid feature refusals: each feature definition declares its own codes and sentences, and the
- * feature registry hands them to this catalogue once, when it loads. The catalogue never imports the
- * features (they use its codes), so neither module waits on the other while modules load.
- */
-let featureValidationEntries: readonly Readonly<
-  { code: DefinitionValidationErrorCode } & DefinitionValidationCatalogueEntry
->[] = [];
-export const registerFeatureValidationEntries = (
-  entries: readonly Readonly<
-    { code: DefinitionValidationErrorCode } & DefinitionValidationCatalogueEntry
-  >[],
-): void => {
-  featureValidationEntries = entries;
-};
-
-/**
  * The catalogue entry of any definition validation code: the platform's own, or a grid feature's
  * refusal as its feature definition declares it.
  */
@@ -275,7 +260,7 @@ export const definitionValidationEntry = (
 ): Readonly<DefinitionValidationCatalogueEntry> => {
   if (Object.hasOwn(definitionValidationErrorCatalogue, code))
     return definitionValidationErrorCatalogue[code as PlatformDefinitionValidationErrorCode];
-  const entry = featureValidationEntries.find((candidate) => candidate.code === code);
+  const entry = recordsTableFeatureRefusals.find((candidate) => candidate.code === code);
   if (entry === undefined) throw new Error(`No validation sentence for ${code}`);
   return entry;
 };

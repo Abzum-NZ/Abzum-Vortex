@@ -1,7 +1,8 @@
 import "server-only";
 
-import { sameId, type RecordTypeDefinition } from "../schema";
-import type { RequestDatabaseTransaction } from "../db/index";
+import { sameId } from "../catalogue/runtime-primitives";
+import type { RecordTypeDefinition } from "../definition/module-contracts";
+import type { RequestDatabaseTransaction } from "../db/request-transaction";
 
 /**
  * The write-time rule behind a declared field dependency, the same for a record save, a named

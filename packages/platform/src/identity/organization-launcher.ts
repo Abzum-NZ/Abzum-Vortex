@@ -7,12 +7,12 @@ import {
   type IdentitySession,
   type OrganizationLauncherEntry,
   type OrganizationLauncherResolution,
-} from "../schema";
+} from "../access/identity-access";
 import {
   withRuntimeTransaction,
   type DatabaseRow,
   type RequestDatabaseTransaction,
-} from "../db/index";
+} from "../db/request-transaction";
 
 type RuntimeTransactionRunner = <Result>(
   operation: (transaction: RequestDatabaseTransaction) => Promise<Result>,
@@ -69,4 +69,3 @@ export const createOrganizationLauncherService = (
     },
   });
 };
-

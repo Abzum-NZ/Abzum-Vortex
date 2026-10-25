@@ -1,7 +1,7 @@
 import "server-only";
 
 import { z } from "zod";
-import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
 import {
   gridLayoutSchema,
   gridViewDocumentSchema,
@@ -25,7 +25,7 @@ import {
 import type { ModuleField } from "../definition/module-contracts";
 import { placementSettings } from "../definition/application-composition-catalogue";
 import { walkPageComposition } from "./placement-walk";
-import type { PageDefinition } from "../schema";
+import type { PageDefinition } from "../definition/application-contracts";
 
 /**
  * The stored grid layouts and named views of the current person. Each operation runs inside the

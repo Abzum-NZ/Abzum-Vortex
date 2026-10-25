@@ -2,24 +2,26 @@ import "server-only";
 
 import { z } from "zod";
 import {
-  describeFailure,
-  applicationSourceDocumentSchema,
   applicationRootIdSchema,
-  canonicalJson,
   fingerprintSchema,
   pageIdSchema,
-  createDefinitionRootCommandSchema,
   organizationIdSchema,
   platformIdSchema,
   revisionSchema,
-  sameId,
-  saveDefinitionDraftCommandSchema,
+} from "../catalogue/identifiers";
+import { describeFailure, sameId } from "../catalogue/runtime-primitives";
+import { canonicalJson } from "../definition/canonical-json";
+import {
+  applicationSourceDocumentSchema,
   type ApplicationSourceDocument,
-  type IdentitySession,
-  type SelectedOrganizationScope,
+} from "../definition/definition-source";
+import {
+  createDefinitionRootCommandSchema,
+  saveDefinitionDraftCommandSchema,
   type StoredDefinitionDraft,
-} from "../schema";
-import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
+} from "../definition/definition-store-contracts";
+import type { IdentitySession, SelectedOrganizationScope } from "./identity-access";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
 import type { PlatformPermissionSource } from "./platform-permissions";
 import {
   assertBeforeLiveDeadline,
@@ -29,17 +31,16 @@ import {
   readDatabaseClock,
   readLiveHumanContext,
 } from "./live-context";
+import { BuilderAuthorityError, requireBuilderAuthority } from "../definition/builder-authority";
 import {
-  BuilderAuthorityError,
-  createDefinitionStore,
   readApplicationDefinitionDraft,
-  requireBuilderAuthority,
-  extractApplicationSourceIdentityRequirements,
   type StoredApplicationDefinitionDraft,
-} from "../definition/definition-index";
+} from "../definition/definition-draft-read";
+import { createDefinitionStore } from "../definition/definition-store";
+import { extractApplicationSourceIdentityRequirements } from "../definition/source-identities";
 import { createBuilderAuthority, type BuilderTargetFactsReader } from "./builder-authority";
 import type { createHumanOrganizationRequestService } from "./human-organization-request";
-import { DefinitionError, classifyDatabaseError } from "../definition/definition-index";
+import { DefinitionError, classifyDatabaseError } from "../definition/definition-error";
 
 /** Why a draft write was refused, in terms the person can act on. */
 export type HumanApplicationDraftRefusalReason =

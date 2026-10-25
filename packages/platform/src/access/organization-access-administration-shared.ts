@@ -1,14 +1,12 @@
 import "server-only";
 
-import {
-  databaseRevision,
-  describeFailure,
-  sameId,
-  type AffectedRoleAssignment,
-  type OrganizationRoleChangeCandidate,
-  type PreparedOrganizationRoleChange,
-} from "../schema";
-import type { DatabaseRow } from "../db/index";
+import { databaseRevision, describeFailure, sameId } from "../catalogue/runtime-primitives";
+import type { AffectedRoleAssignment } from "./organization-access-catalogue";
+import type {
+  OrganizationRoleChangeCandidate,
+  PreparedOrganizationRoleChange,
+} from "./organization-role-changes";
+import type { DatabaseRow } from "../db/request-transaction";
 import { organizationRoleTemplateSourceSchema } from "./organization-role-changes";
 import type { createHumanOrganizationRequestService } from "./human-organization-request";
 import type { HumanOrganizationRequestResult } from "./human-organization-request";

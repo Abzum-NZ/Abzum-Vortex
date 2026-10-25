@@ -1,8 +1,10 @@
 import "server-only";
 
 import { createHash } from "node:crypto";
+import { jsonValueSchema, type JsonValue } from "../catalogue/common";
+import { logRefusal } from "../catalogue/runtime-primitives";
+import { canonicalJson } from "./canonical-json";
 import {
-  canonicalJson,
   installationRuntimeBundleMaximumPartBytes,
   installationRuntimeBundleIndexSchema,
   installationRuntimeBundleKeySchema,
@@ -10,16 +12,13 @@ import {
   installationRuntimeBundleReadPartsCommandSchema,
   installationRuntimeBundleSections,
   installationRuntimeBundleWriteCommandSchema,
-  jsonValueSchema,
-  logRefusal,
   type InstallationRuntimeBundleIndex,
   type InstallationRuntimeBundleKey,
   type InstallationRuntimeBundlePart,
   type InstallationRuntimeBundleSection,
   type InstallationRuntimeBundleWriteCommand,
-  type JsonValue,
-} from "../schema";
-import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
+} from "./installation-runtime-bundle";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
 import {
   DefinitionError,
   classifyDatabaseError,
@@ -244,7 +243,12 @@ export const createInstallationRuntimeBundleRepository = (
       try {
         parts = prepareParts(command);
       } catch (error) {
-        logRefusal("runtime-bundles", "prepare parts", "INVALID_INSTALLATION_RUNTIME_BUNDLE", error);
+        logRefusal(
+          "runtime-bundles",
+          "prepare parts",
+          "INVALID_INSTALLATION_RUNTIME_BUNDLE",
+          error,
+        );
         throw new DefinitionError("INVALID_INSTALLATION_RUNTIME_BUNDLE");
       }
       try {

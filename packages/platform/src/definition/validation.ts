@@ -1,13 +1,13 @@
 import { applicationCatalogueRuleCodes } from "./application-catalogue-validation";
 import type { createContractValueWalker } from "./contract-value-walker";
+import type { DefinitionRuleFailure } from "../catalogue/validation-errors";
 import {
-  type DefinitionRuleFailure,
   type DefinitionPublicationContext,
   definitionPublicationContextSchema,
   moduleCompilationRequestSchema,
   applicationCompilationRequestSchema,
   definitionCompilationRequestSchema,
-} from "../schema";
+} from "./definition-compilation-contracts";
 import { settleDefinitionRuleFailures } from "./rule-failure-order";
 import { DefinitionCompilationError } from "./compilation-error";
 import { compareCanonicalStrings } from "./canonical-json-definition";

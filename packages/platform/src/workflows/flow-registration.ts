@@ -1,20 +1,10 @@
 import "server-only";
 
-import {
-  isRecord,
-  applicationRootIdSchema,
-  fingerprintSchema,
-  flowSchema,
-  organizationIdSchema,
-  revisionSchema,
-  stableDefinitionReleaseVersionSchema,
-  timestampSchema,
-  workflowIdSchema,
-  type ApplicationRootId,
-  type OrganizationId,
-  type SemanticVersion,
-} from "../schema";
-import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
+import { applicationRootIdSchema, fingerprintSchema, organizationIdSchema, revisionSchema, timestampSchema, workflowIdSchema, type ApplicationRootId, type OrganizationId, type SemanticVersion } from "../catalogue/identifiers";
+import { isRecord } from "../catalogue/runtime-primitives";
+import { stableDefinitionReleaseVersionSchema } from "../definition/version-impact";
+import { flowSchema } from "./flow-contracts";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
 import {
   kestraFlowCompilerEnvironments,
   type KestraFlowCandidate,

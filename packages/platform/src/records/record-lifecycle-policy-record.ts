@@ -1,40 +1,40 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
+import type { IdentitySession, OrganizationSelectionCandidate } from "../access/identity-access";
 import {
-  describeFailure,
-  sameId,
   activityIdSchema,
   applicationRootIdSchema,
-  archiveDestinationReferenceSchema,
   connectionInstanceIdSchema,
-  maximumRecoveryWindowDays,
   organizationIdSchema,
-  organizationLifecycleLimitsSchema,
-  initialRecordLifecyclePolicySchema,
-  recordLifecycleActionSchema,
-  recordTypeLifecyclePolicySchema,
   revisionSchema,
   storageContractIdSchema,
   workflowIdSchema,
   type ApplicationRootId,
-  type IdentitySession,
   type OrganizationId,
   type StorageContractId,
+} from "../catalogue/identifiers";
+import { describeFailure, sameId } from "../catalogue/runtime-primitives";
+import {
+  archiveDestinationReferenceSchema,
+  maximumRecoveryWindowDays,
+  organizationLifecycleLimitsSchema,
+  initialRecordLifecyclePolicySchema,
+  recordLifecycleActionSchema,
+  recordTypeLifecyclePolicySchema,
   type OrganizationLifecycleLimits,
-  type OrganizationSelectionCandidate,
   type RecordTypeLifecyclePolicy,
-} from "../schema";
+} from "./record-lifecycle-policy";
 import {
   createHumanOrganizationRequestService,
   type HumanOrganizationRequestDependencies,
   type HumanOrganizationRequestResult,
-} from "../access/index";
+} from "../access/human-organization-request";
 import {
   withRuntimeTransaction,
   type DatabaseRow,
   type RequestDatabaseTransaction,
-} from "../db/index";
+} from "../db/request-transaction";
 
 /**
  * Common age/count fields shared by every record-type lifecycle policy

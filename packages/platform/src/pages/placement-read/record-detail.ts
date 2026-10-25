@@ -1,7 +1,13 @@
 import "server-only";
 
-import { readRecordDetailContract, recordIdSchema, sameId, type JsonValue } from "../../schema";
-import { protectedQueryCommandSchema, type ProtectedQueryRow } from "../../queries/index";
+import type { JsonValue } from "../../catalogue/common";
+import { recordIdSchema } from "../../catalogue/identifiers";
+import { sameId } from "../../catalogue/runtime-primitives";
+import { readRecordDetailContract } from "../../definition/application-composition/records-display";
+import {
+  protectedQueryCommandSchema,
+  type ProtectedQueryRow,
+} from "../../queries/protected-query-contracts";
 import { projectRecordDetailData } from "../component-data-projection";
 import {
   logPlacementFailure,

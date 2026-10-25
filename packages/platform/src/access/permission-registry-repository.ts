@@ -1,7 +1,7 @@
 import "server-only";
 
+import { databaseRevision } from "../catalogue/runtime-primitives";
 import {
-  databaseRevision,
   applicationPermissionCatalogueSnapshotCommandSchema,
   applicationPermissionCatalogueSnapshotSchema,
   permissionCatalogueEntrySchema,
@@ -10,8 +10,8 @@ import {
   type ApplicationPermissionCatalogueSnapshotCommand,
   type PermissionCatalogueLookupCommand,
   type PermissionCatalogueEntry,
-} from "../schema";
-import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
+} from "./permission-registry";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
 
 export const permissionRegistryRepositoryErrorCodes = [
   "INVALID_PERMISSION_REGISTRY_COMMAND",

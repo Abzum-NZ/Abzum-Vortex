@@ -1,7 +1,8 @@
 import "server-only";
 
-import type { createOrganizationAccessAdministrationService } from "../access/index";
-import { canonicalJson, type IdentitySession } from "../schema";
+import type { createOrganizationAccessAdministrationService } from "../access/organization-access-administration-access";
+import type { IdentitySession } from "../access/identity-access";
+import { canonicalJson } from "./canonical-json";
 import { installationProblem } from "./installation-authority";
 import {
   acceptApplicationRoleChanges,

@@ -1,17 +1,19 @@
 import "server-only";
 
 import {
-  sameId,
   applicationRootIdSchema,
   fieldIdSchema,
   organizationIdSchema,
   recordTypeIdSchema,
+} from "../catalogue/identifiers";
+import { sameId } from "../catalogue/runtime-primitives";
+import {
   sharedRecipientCapabilitySchema,
   sharedResultGroupSchema,
   type SharedRecipientCapability,
   type SharedResultGroup,
   type SharedResultSourceRefusalCode,
-} from "../schema";
+} from "../queries/shared-result-groups";
 import {
   searchDocumentLimits,
   searchPriorityWeights,

@@ -1,30 +1,32 @@
 import "server-only";
 
+import type { IdentitySession, OrganizationSelectionCandidate } from "../access/identity-access";
+import type { JsonValue } from "../catalogue/common";
+import type { ModuleRootId, QueryId } from "../catalogue/identifiers";
+import { describeFailure, unavailableResult } from "../catalogue/runtime-primitives";
+import type { BlockPropertyValueContract } from "../definition/application-composition/block-property-values";
 import {
-  describeFailure,
-  unavailableResult,
-  gridLayoutVisibleFieldIds,
   recordsTableContractOrLog,
-  type BlockPropertyValueContract,
   type RecordsTableContract,
-  type GridLayoutState,
-  type IdentitySession,
-  type JsonValue,
-  type ModuleRootId,
-  type OrganizationSelectionCandidate,
-  type QueryId,
-  readRecordsTableFieldFilter,
+} from "../definition/application-composition/records-display";
+import {
   recordsTableFilterKindOf,
-  type RecordsTableFieldFilter,
-  type RecordsTableFeatureProjection,
   type RecordsTableFilterField,
-  type RecordsTableInlineEditor,
+} from "../definition/application-composition/records-table-features/column-filters";
+import type { RecordsTableInlineEditor } from "../definition/application-composition/records-table-features/inline-edit";
+import { gridLayoutVisibleFieldIds, type GridLayoutState } from "./grid-view-state";
+import type { RecordsTableFeatureProjection } from "./records-table-feature-projection";
+import {
+  readRecordsTableFieldFilter,
+  type RecordsTableFieldFilter,
   type RecordsTableFilterValue,
-  type RecordsTableQueryState,
-  type RecordsTableSortKey,
-  type RecordsTableSortState,
-} from "../schema";
-import type { HumanOrganizationRequestResult } from "../access/index";
+} from "./records-table-filters";
+import type {
+  RecordsTableQueryState,
+  RecordsTableSortKey,
+  RecordsTableSortState,
+} from "./records-table-state";
+import type { HumanOrganizationRequestResult } from "../access/human-organization-request";
 import {
   protectedQueryCommandSchema,
   protectedQueryGroupedMembersCommandSchema,
@@ -40,8 +42,8 @@ import {
   type ProtectedQuerySummaryCompleted,
   type ProtectedQueryTreeLevelCommand,
   type ProtectedQueryTreeLevelResult,
-  type ProtectedReadDecider,
-} from "../queries/index";
+} from "../queries/protected-query-contracts";
+import type { ProtectedReadDecider } from "../queries/protected-query-service";
 import {
   collectRecordLinks,
   projectRecordsTableData,
@@ -72,7 +74,7 @@ import {
 } from "./records-table-features/grouping";
 import { recordsTableTotalReads, projectRecordsTableTotals } from "./records-table-features/totals";
 import { CalendarEndpointError, calendarAddDays, calendarStartOfDay } from "./calendar-date";
-import { recordLinkLabelKey } from "../definition/app-index";
+import { recordLinkLabelKey } from "../definition/viewer-safe-record-link";
 
 /**
  * The one Query engine entry point a Records table reads through. The composition root supplies

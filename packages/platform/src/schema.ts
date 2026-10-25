@@ -30,6 +30,7 @@ export * from "./definition/module-link-dependencies";
 export * from "./definition/module-field-formulas";
 export * from "./definition/module-field-edit";
 export * from "./definition/module-query-edit";
+export * from "./definition/module-query-totals";
 export * from "./definition/module-query-exposure";
 export * from "./definition/application-search-edit";
 export * from "./definition/module-links";

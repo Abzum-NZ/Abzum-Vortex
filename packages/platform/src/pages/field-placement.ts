@@ -1,22 +1,17 @@
 import "server-only";
 
-import {
-  exactDecimalTextSchema,
-  isRecord,
-  moduleFieldValueSchemas,
-  pipelineAllowsMove,
-  richTextDocumentSchema,
-  sameId,
-  timestampSchema,
-  type JsonValue,
-  type RecordTypePipeline,
-} from "../schema";
+import type { JsonValue } from "../catalogue/common";
+import { timestampSchema } from "../catalogue/identifiers";
+import { isRecord, sameId } from "../catalogue/runtime-primitives";
+import { pipelineAllowsMove, type RecordTypePipeline } from "../definition/record-type-pipelines";
+import { exactDecimalTextSchema, moduleFieldValueSchemas } from "../records/module-field-values";
+import { richTextDocumentSchema } from "../records/rich-text";
 import {
   FIELD_INPUT_BLOCK_RELEASE,
   FIELD_INPUT_CONTROL_RELEASES,
-  type InstalledRuntimeContext,
-} from "../definition/index";
-import type { RequestDatabaseTransaction } from "../db/index";
+} from "../definition/application-composition-catalogue";
+import type { InstalledRuntimeContext } from "../definition/installed-runtime-context";
+import type { RequestDatabaseTransaction } from "../db/request-transaction";
 import { decideChoiceOptionPermission } from "../records/choice-option-permission";
 import type { PageDataState, PlacementReadEntry } from "./placement-read/shared";
 

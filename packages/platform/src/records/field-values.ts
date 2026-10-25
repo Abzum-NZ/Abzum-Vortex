@@ -1,27 +1,28 @@
 import { isDeepStrictEqual } from "node:util";
+import type { JsonValue } from "../catalogue/common";
+import type { FileId, PermissionId } from "../catalogue/identifiers";
 import {
-  currencyCodeSchema,
-  exactDecimalDigitCounts,
-  exactDecimalTextSchema,
-  exactDecimalWithinBounds,
   moduleFieldSchema,
-  moduleFieldValueSchemas,
-  moneyValueSchema,
-  normalizeExactDecimal,
-  parseExactDecimal,
+  recordTypeDefinitionSchema,
+  type ModuleField,
+  type RecordTypeDefinition,
+} from "../definition/module-contracts";
+import {
   pipelineAllowsMove,
   pipelineMoveRefusalMessage,
   pipelineStartStage,
-  recordTypeDefinitionSchema,
+} from "../definition/record-type-pipelines";
+import { exactDecimalDigitCounts, normalizeExactDecimal, parseExactDecimal } from "./exact-decimal";
+import {
+  currencyCodeSchema,
+  exactDecimalTextSchema,
+  exactDecimalWithinBounds,
+  moduleFieldValueSchemas,
+  moneyValueSchema,
   sourceExactDecimalTextSchema,
   sourceModuleFieldValueSchemas,
   sourceMoneyValueSchema,
-  type FileId,
-  type JsonValue,
-  type ModuleField,
-  type PermissionId,
-  type RecordTypeDefinition,
-} from "../schema";
+} from "./module-field-values";
 
 type ValueMap = Readonly<Record<string, unknown>>;
 type ValuePath = readonly (string | number)[];

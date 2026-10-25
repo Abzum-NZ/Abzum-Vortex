@@ -2,40 +2,45 @@ import type { PlatformPermissionSource } from "../access/platform-permissions";
 import "server-only";
 
 import {
-  compiledPageShellId,
-  sameId,
-  applicationExperienceStateSchema,
+  identitySessionSchema,
+  type IdentitySession,
+  type SelectedOrganizationScope,
+} from "../access/identity-access";
+import {
+  organizationAccessDeclarationSchema,
+  type OrganizationAccessDeclaration,
+} from "../access/organization-access-decision";
+import { applicationExperienceStateSchema } from "../catalogue/catalogues";
+import {
   applicationRootIdSchema,
-  applicationShellSchema,
-  applicationThemeSchema,
   builderKeySchema,
   identityAuthorityIdSchema,
-  identitySessionSchema,
-  logRefusal,
-  isPresentationOnlyApplicationExperience,
   namespacedKeySchema,
-  organizationAccessDeclarationSchema,
   organizationIdSchema,
-  pageDefinitionSchema,
   pageIdSchema,
   permissionIdSchema,
   revisionSchema,
   roleIdSchema,
   type IdentityAuthorityId,
-  type IdentitySession,
-  type OrganizationAccessDeclaration,
-  type SelectedOrganizationScope,
-} from "../schema";
+} from "../catalogue/identifiers";
+import { sameId, logRefusal } from "../catalogue/runtime-primitives";
 import {
-  createHumanOrganizationRequestService,
-  readCurrentOrganizationDefaultApplicationAfterAuthorization,
-  decideOrganizationAccessBatch,
-} from "../access/index";
+  compiledPageShellId,
+  applicationShellSchema,
+} from "./application-composition/page-composition";
+import { applicationThemeSchema } from "./application-composition/theme";
+import {
+  isPresentationOnlyApplicationExperience,
+  pageDefinitionSchema,
+} from "./application-contracts";
+import { createHumanOrganizationRequestService } from "../access/human-organization-request";
+import { decideOrganizationAccessBatch } from "../access/organization-access-decision-access";
+import { readCurrentOrganizationDefaultApplicationAfterAuthorization } from "../access/organization-runtime-settings-administration";
 import {
   withRuntimeTransaction,
   type DatabaseRow,
   type RequestDatabaseTransaction,
-} from "../db/index";
+} from "../db/request-transaction";
 import { z } from "zod";
 import { createHumanInstalledPageBundleContextLoader } from "./installed-page-bundle-context";
 import type { InstalledRuntimeContext } from "./installed-runtime-context";

@@ -1,4 +1,5 @@
-import { normalizeExactDecimal, type DefinitionCompilationOutput } from "../../schema";
+import { normalizeExactDecimal } from "../../records/exact-decimal";
+import type { DefinitionCompilationOutput } from "../definition-compilation-contracts";
 import { fingerprintCanonicalValue } from "../canonical-json-definition";
 import { moduleQueryBorrowable } from "../module-query-exposure";
 import type { Resolution } from "./resolution";

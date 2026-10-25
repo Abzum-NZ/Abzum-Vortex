@@ -1,17 +1,14 @@
 import { createHash } from "node:crypto";
+import type { FieldType, PersonalDataClass, SearchPriority } from "../catalogue/catalogues";
 import {
   applicationRootIdSchema,
   fieldIdSchema,
   organizationIdSchema,
   recordIdSchema,
   recordTypeIdSchema,
-  searchableFieldTypes,
-  type FieldType,
-  type ModuleField,
-  type PersonalDataClass,
-  type RecordTypeDefinition,
-  type SearchPriority,
-} from "../schema";
+} from "../catalogue/identifiers";
+import { searchableFieldTypes } from "../definition/application-search-edit";
+import type { ModuleField, RecordTypeDefinition } from "../definition/module-contracts";
 import { searchIndexFieldDiscloses } from "./sensitivity-policy";
 
 /**

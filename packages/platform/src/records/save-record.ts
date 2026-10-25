@@ -1,34 +1,36 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
+import type { IdentitySession, OrganizationSelectionCandidate } from "../access/identity-access";
+import { organizationRuntimeSettingsSchema } from "../access/organization-runtime-settings-schema";
+import type { JsonValue } from "../catalogue/common";
 import {
-  describeFailure,
   activityIdSchema,
   applicationRootIdSchema,
-  databaseRevision,
   eventOccurrenceIdSchema,
   fieldIdSchema,
-  organizationRuntimeSettingsSchema,
+} from "../catalogue/identifiers";
+import { describeFailure, databaseRevision } from "../catalogue/runtime-primitives";
+import {
   recordTypeDefinitionSchema,
+  writableSystemProjectionRegistrations,
+} from "../definition/module-contracts";
+import type { ExecutionAuthorityContext } from "../workflows/flow-contracts";
+import {
   saveRecordCommandSchema,
   saveRecordResultSchema,
-  writableSystemProjectionRegistrations,
-  type IdentitySession,
-  type JsonValue,
-  type ExecutionAuthorityContext,
-  type OrganizationSelectionCandidate,
   type RecordSaveFieldCorrection,
   type SaveRecordCommand,
   type SaveRecordResult,
-} from "../schema";
+} from "./records";
 import {
   createHumanOrganizationRequestService,
-  readCurrentOrganizationRuntimeSettingsAfterAuthorization,
   type HumanOrganizationRequestDependencies,
   type HumanOrganizationRequestResult,
-} from "../access/index";
-import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
-import type { BeforeSaveRuleWarning } from "../rules/index";
+} from "../access/human-organization-request";
+import { readCurrentOrganizationRuntimeSettingsAfterAuthorization } from "../access/organization-runtime-settings-administration";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
+import type { BeforeSaveRuleWarning } from "../rules/before-save-flow-run";
 import {
   beforeSaveRuleRefusedIssueCode,
   beforeSaveRuleUnavailableIssueCode,

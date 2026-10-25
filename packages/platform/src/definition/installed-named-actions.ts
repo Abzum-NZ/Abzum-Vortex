@@ -1,4 +1,4 @@
-import { installedNamedActionReferenceSchema } from "../schema";
+import { installedNamedActionReferenceSchema } from "../records/named-actions";
 import type { FlowNamedAction } from "./flow-orchestrator-types";
 import type { InstalledRuntimeContext } from "./installed-runtime-context";
 import type { ActionInputDefinition } from "./module-contracts";

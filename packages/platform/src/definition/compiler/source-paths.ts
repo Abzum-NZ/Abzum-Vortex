@@ -1,12 +1,12 @@
+import { jsonValueSchema } from "../../catalogue/common";
 import {
   applicationSourceDocumentSchema,
-  jsonValueSchema,
-  walkDefinitionContract,
   definitionSourceDocumentSchema,
   moduleSourceDocumentSchema,
   sourceProvenanceRegistry,
   type SourceProvenanceAnnotation,
-} from "../../schema";
+} from "../definition-source";
+import { walkDefinitionContract } from "../definitions";
 import {
   asObject,
   camelCase,

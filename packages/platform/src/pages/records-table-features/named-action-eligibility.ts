@@ -1,10 +1,13 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
-import type { InstalledNamedActionReference } from "../../schema";
-import type { RequestDatabaseTransaction } from "../../db/index";
-import type { ActionFlowRunner } from "../../rules/index";
-import { namedActionPreviewEligibility, type NamedActionEligibility } from "../../records/index";
+import type { InstalledNamedActionReference } from "../../records/named-actions";
+import type { RequestDatabaseTransaction } from "../../db/request-transaction";
+import type { ActionFlowRunner } from "../../rules/action-flow-run";
+import {
+  namedActionPreviewEligibility,
+  type NamedActionEligibility,
+} from "../../records/action-record-availability";
 import { readableSubjectFromProjection } from "../page-subject-read";
 
 /** One record of a selection and the identity its command would run with. */

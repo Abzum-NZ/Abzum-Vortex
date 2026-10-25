@@ -1,16 +1,17 @@
 import "server-only";
 
 import {
-  unavailableError,
-  databaseRevision,
   applicationRootIdSchema,
-  organizationRuntimeSettingsSchema,
   namespacedKeySchema,
   type NamespacedKey,
   type ApplicationRootId,
+} from "../catalogue/identifiers";
+import { unavailableError, databaseRevision } from "../catalogue/runtime-primitives";
+import {
+  organizationRuntimeSettingsSchema,
   type OrganizationRuntimeSettings,
-} from "../schema";
-import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
+} from "./organization-runtime-settings-schema";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
 
 type ReadRow = DatabaseRow & {
   organization_id: unknown;

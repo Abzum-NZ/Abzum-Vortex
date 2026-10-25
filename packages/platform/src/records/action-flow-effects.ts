@@ -1,27 +1,26 @@
+import { jsonValueSchema, type JsonValue } from "../catalogue/common";
+import { organizationAccountIdSchema, timestampSchema } from "../catalogue/identifiers";
+import type {
+  actionDefinitionSchema,
+  recordTypeDefinitionSchema,
+} from "../definition/module-contracts";
+import { compileTextInputPattern } from "../pages/text-input-pattern";
+import { normalizeExactDecimal, parseExactDecimal } from "./exact-decimal";
 import {
-  type actionDefinitionSchema,
-  compileTextInputPattern,
   currencyCodeSchema,
   dateValueSchema,
   exactDecimalWithinBounds,
   inspectRecordRichText,
-  jsonValueSchema,
   moneyValueSchema,
-  normalizeExactDecimal,
-  organizationAccountIdSchema,
-  parseExactDecimal,
   recordLinkValueSchema,
-  type recordTypeDefinitionSchema,
   recordRichTextDocumentSchema,
-  timestampSchema,
-  type JsonValue,
-} from "../schema";
+} from "./module-field-values";
 import {
   flowRuntimeValueOf,
   type ActionFlowOutcome,
   type ActionFlowSeed,
-  type FlowProtectedTaskCall,
-} from "../rules/index";
+} from "../rules/action-flow-run";
+import type { FlowProtectedTaskCall } from "../rules/flow-interpreter";
 
 /**
  * What the record service owns about running a named action as a flow (#1063): checking the action's

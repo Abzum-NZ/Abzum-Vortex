@@ -1,6 +1,6 @@
 import "server-only";
 
-import { isLoopbackHostname } from "../schema";
+import { isLoopbackHostname } from "../identity/loopback-hostname";
 
 /** Trusted server configuration, never a destination selected by an HTTP request. */
 export type FileStorageDestination = Readonly<{

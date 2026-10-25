@@ -1,13 +1,13 @@
 import "server-only";
 
 import {
-  describeFailure,
   identitySessionResolutionSchema,
-  type CorrelationId,
   type IdentityProjection,
   type IdentitySessionResolution,
   type VerifiedIdentity,
-} from "../schema";
+} from "../access/identity-access";
+import type { CorrelationId } from "../catalogue/common";
+import { describeFailure } from "../catalogue/runtime-primitives";
 import {
   IdentityVerificationError,
   type IdentityVerificationRefusalCode,

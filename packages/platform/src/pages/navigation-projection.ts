@@ -1,31 +1,38 @@
 import type { PlatformPermissionSource } from "../access/platform-permissions";
 import "server-only";
 
+import type {
+  IdentitySession,
+  OrganizationSelectionCandidate,
+  SelectedOrganizationScope,
+} from "../access/identity-access";
+import type { OrganizationAccessDeclaration } from "../access/organization-access-decision";
+import type { PermissionRegistryEntryCandidate } from "../access/permission-registry";
+import type { PermissionDeclaration } from "../access/permissions";
 import {
-  sameId,
   applicationRootIdSchema,
   revisionSchema,
   type ApplicationRootId,
-  type IdentitySession,
-  type NavigationItem,
-  type OrganizationAccessDeclaration,
-  type OrganizationSelectionCandidate,
-  type PermissionDeclaration,
-  type PermissionRegistryEntryCandidate,
-  type ProjectedNavigation,
-  type SelectedOrganizationScope,
   type PlatformId,
+} from "../catalogue/identifiers";
+import { sameId } from "../catalogue/runtime-primitives";
+import type { NavigationItem } from "../definition/application-contracts";
+import {
+  type ProjectedNavigation,
   collectNavigationPermissionKeys,
   projectNavigation,
-} from "../schema";
-import type { RequestDatabaseTransaction } from "../db/index";
+} from "./projected-navigation";
+import type { RequestDatabaseTransaction } from "../db/request-transaction";
 import {
   createHumanOrganizationRequestService,
-  decideOrganizationAccessBatch,
   type HumanOrganizationRequestDependencies,
   type HumanOrganizationRequestResult,
-} from "../access/index";
-import { requireInstalledRuntimeContext, type InstalledRuntimeContext } from "../definition/app-index";
+} from "../access/human-organization-request";
+import { decideOrganizationAccessBatch } from "../access/organization-access-decision-access";
+import {
+  requireInstalledRuntimeContext,
+  type InstalledRuntimeContext,
+} from "../definition/installed-runtime-context";
 
 export type NavigationPermissionBinding = Readonly<{
   permissionKey: string;
@@ -206,7 +213,11 @@ export const createStoredNavigationProjectionService = (
     const permission = (key: string): NavigationPermissionBindingValue => {
       const platform = dependencies.permissions.forKey(key);
       if (platform !== undefined)
-        return { kind: "platform", ownerId: dependencies.permissions.ownerId, permission: platform };
+        return {
+          kind: "platform",
+          ownerId: dependencies.permissions.ownerId,
+          permission: platform,
+        };
       const matches = registration.entries.filter((entry) => entry.permission.key === key);
       if (matches.length !== 1 || matches[0] === undefined)
         throw new Error("STORED_NAVIGATION_PERMISSION_BINDING_UNAVAILABLE");

@@ -1,34 +1,35 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
+import { correlationIdSchema } from "../catalogue/common";
+import { identityAuthorityIdSchema, type IdentityAuthorityId } from "../catalogue/identifiers";
+import { databaseRevision, databaseCode, describeFailure } from "../catalogue/runtime-primitives";
 import {
-  databaseRevision,
-  databaseCode,
-  describeFailure,
+  protectedOperationChannelSchema,
+  type ProtectedOperationChannel,
+} from "../definition/application-flow-bindings";
+import {
   clampTelemetryDurationMs,
-  correlationIdSchema,
   countersForOutcome,
-  identityAuthorityIdSchema,
+  type ServiceTelemetryPort,
+  type TelemetryOutcome,
+} from "../events/telemetry";
+import {
   identitySessionSchema,
   organizationSelectionCandidateSchema,
-  protectedOperationChannelSchema,
   selectedOrganizationScopeSchema,
   sessionContextSchema,
-  type IdentityAuthorityId,
   type IdentitySession,
   type OrganizationSelectionCandidate,
-  type ProtectedOperationChannel,
   type SelectedOrganizationScope,
-  type ServiceTelemetryPort,
   type SessionContext,
-  type TelemetryOutcome,
-} from "../schema";
+} from "./identity-access";
 import {
   withResolvedRequestTransaction,
   type DatabaseRow,
   type RequestDatabaseTransaction,
   type ResolvedRequestContext,
-} from "../db/index";
+} from "../db/request-transaction";
 
 import { readDatabaseClock } from "./live-context";
 
@@ -330,7 +331,11 @@ export const createHumanOrganizationRequestService = (
           ? { kind: "unavailable", code: "role_settings_change_required", cause }
           : refused
             ? { kind: "unavailable" }
-            : { kind: "temporarily_unavailable", cause, ...(code === undefined ? {} : { databaseCode: code }) };
+            : {
+                kind: "temporarily_unavailable",
+                cause,
+                ...(code === undefined ? {} : { databaseCode: code }),
+              };
     }
   };
 

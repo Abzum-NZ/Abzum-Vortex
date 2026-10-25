@@ -4,19 +4,21 @@ import { z } from "zod";
 import {
   applicationRootIdSchema,
   containedComponentIdSchema,
-  flowExecutionBindingActorSchema,
-  flowExecutionBindingEffectiveStateSchema,
-  flowExecutionBindingSchema,
   identityIdSchema,
   organizationAccountIdSchema,
   organizationIdSchema,
-  protectedOperationReferenceSchema,
   ruleIdSchema,
-  stableDefinitionReleaseVersionSchema,
   workflowNodeIdSchema,
-} from "../schema";
-import type { FlowExecutionBinding } from "../schema";
-import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
+} from "../catalogue/identifiers";
+import {
+  flowExecutionBindingActorSchema,
+  flowExecutionBindingEffectiveStateSchema,
+  flowExecutionBindingSchema,
+  protectedOperationReferenceSchema,
+} from "../definition/application-flow-bindings";
+import { stableDefinitionReleaseVersionSchema } from "../definition/version-impact";
+import type { FlowExecutionBinding } from "../definition/application-flow-bindings";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
 
 /**
  * One exact execution-authority grant for a published application flow node. A binding names the

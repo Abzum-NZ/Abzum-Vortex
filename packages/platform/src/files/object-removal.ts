@@ -1,14 +1,20 @@
 import "server-only";
 
 import { createHash, randomUUID } from "node:crypto";
+import type { CorrelationId } from "../catalogue/common";
+import {
+  platformIdSchema,
+  type FileId,
+  type Fingerprint,
+  type OrganizationId,
+  type PlatformId,
+  type Revision,
+} from "../catalogue/identifiers";
 import {
   fileObjectRemovalPartialStateSchema,
   fileObjectRemovalReceiptSchema,
   fileObjectRemovalRequestSchema,
   fileRecordSchema,
-  platformIdSchema,
-  type CorrelationId,
-  type FileId,
   type FileObjectRemovalPartialState,
   type FileObjectRemovalReceipt,
   type FileObjectRemovalRequest,
@@ -16,15 +22,8 @@ import {
   type FileRemovalEligibleDecision,
   type FileRemovalEligibilityDecision,
   type FileRemovalStage,
-  type Fingerprint,
-  type OrganizationId,
-  type PlatformId,
-  type Revision,
-} from "../schema";
-import {
-  isValidFileLifecycleTransition,
-  transitionFileLifecycleState,
-} from "./file-metadata";
+} from "./file-contracts";
+import { isValidFileLifecycleTransition, transitionFileLifecycleState } from "./file-metadata";
 import { logRefusal } from "../catalogue/runtime-primitives";
 import type { FileRemovalEligibilityService } from "./removal-eligibility";
 
@@ -76,9 +75,7 @@ type FileRemovalTerminalRecord = Readonly<{
   receipt: FileObjectRemovalReceipt;
 }>;
 
-type FileRemovalPersistedRecord =
-  | FileRemovalProgressRecord
-  | FileRemovalTerminalRecord;
+type FileRemovalPersistedRecord = FileRemovalProgressRecord | FileRemovalTerminalRecord;
 
 type FileRemovalFileSnapshot = Readonly<{
   revision: Revision;
@@ -111,43 +108,51 @@ export type FileRemovalRepository = Readonly<{
   readFileSnapshot(fileId: FileId): Promise<FileRemovalFileSnapshot | null>;
   read(deletionKey: string): Promise<FileRemovalPersistedRecord | null>;
   begin(intent: FileRemovalIntent): Promise<FileRemovalPersistedRecord>;
-  claimStage(input: Readonly<{
-    deletionKey: string;
-    intentFingerprint: Fingerprint;
-    expectedVersion: number;
-    stage: FileRemovalStage;
-    claim: FileRemovalStageClaim;
-    claimedAt: string;
-  }>): Promise<FileRemovalStageClaimResult>;
-  completeExternalStage(input: Readonly<{
-    deletionKey: string;
-    intentFingerprint: Fingerprint;
-    expectedVersion: number;
-    stage: "previews" | "storage_object";
-    claimId: PlatformId;
-    effectOutcome: "removed" | "already_absent";
-    completedAt: string;
-  }>): Promise<FileRemovalProgressRecord>;
-  interruptStage(input: Readonly<{
-    deletionKey: string;
-    intentFingerprint: Fingerprint;
-    expectedVersion: number;
-    stage: FileRemovalStage;
-    claimId: PlatformId;
-    interruptedAt: string;
-  }>): Promise<FileRemovalProgressRecord>;
-  finalize(input: Readonly<{
-    deletionKey: string;
-    intentFingerprint: Fingerprint;
-    expectedVersion: number;
-    claimId: PlatformId;
-    expectedFileRevision: Revision;
-    expectedOrganizationId: OrganizationId;
-    expectedBucketId: FileRecord["bucketId"];
-    expectedObjectPath: FileRecord["storageKey"];
-    tombstone: FileRecord;
-    receipt: FileObjectRemovalReceipt;
-  }>): Promise<FileRemovalTerminalRecord>;
+  claimStage(
+    input: Readonly<{
+      deletionKey: string;
+      intentFingerprint: Fingerprint;
+      expectedVersion: number;
+      stage: FileRemovalStage;
+      claim: FileRemovalStageClaim;
+      claimedAt: string;
+    }>,
+  ): Promise<FileRemovalStageClaimResult>;
+  completeExternalStage(
+    input: Readonly<{
+      deletionKey: string;
+      intentFingerprint: Fingerprint;
+      expectedVersion: number;
+      stage: "previews" | "storage_object";
+      claimId: PlatformId;
+      effectOutcome: "removed" | "already_absent";
+      completedAt: string;
+    }>,
+  ): Promise<FileRemovalProgressRecord>;
+  interruptStage(
+    input: Readonly<{
+      deletionKey: string;
+      intentFingerprint: Fingerprint;
+      expectedVersion: number;
+      stage: FileRemovalStage;
+      claimId: PlatformId;
+      interruptedAt: string;
+    }>,
+  ): Promise<FileRemovalProgressRecord>;
+  finalize(
+    input: Readonly<{
+      deletionKey: string;
+      intentFingerprint: Fingerprint;
+      expectedVersion: number;
+      claimId: PlatformId;
+      expectedFileRevision: Revision;
+      expectedOrganizationId: OrganizationId;
+      expectedBucketId: FileRecord["bucketId"];
+      expectedObjectPath: FileRecord["storageKey"];
+      tombstone: FileRecord;
+      receipt: FileObjectRemovalReceipt;
+    }>,
+  ): Promise<FileRemovalTerminalRecord>;
 }>;
 
 type FileRemovalEffectResult = Readonly<{
@@ -155,32 +160,31 @@ type FileRemovalEffectResult = Readonly<{
 }>;
 
 export type FilePreviewDeleter = Readonly<{
-  deletePreviews(input: Readonly<{
-    organizationId: OrganizationId;
-    fileId: FileId;
-    previewReferences: FileRecord["previewReferences"];
-    idempotencyKey: string;
-  }>): Promise<FileRemovalEffectResult>;
+  deletePreviews(
+    input: Readonly<{
+      organizationId: OrganizationId;
+      fileId: FileId;
+      previewReferences: FileRecord["previewReferences"];
+      idempotencyKey: string;
+    }>,
+  ): Promise<FileRemovalEffectResult>;
 }>;
 
 export type FileStorageDeleter = Readonly<{
-  deleteObject(input: Readonly<{
-    organizationId: OrganizationId;
-    bucketId: FileRecord["bucketId"];
-    objectPath: FileRecord["storageKey"];
-    idempotencyKey: string;
-  }>): Promise<FileRemovalEffectResult>;
+  deleteObject(
+    input: Readonly<{
+      organizationId: OrganizationId;
+      bucketId: FileRecord["bucketId"];
+      objectPath: FileRecord["storageKey"];
+      idempotencyKey: string;
+    }>,
+  ): Promise<FileRemovalEffectResult>;
 }>;
 
-export type FileRemovalResult =
-  | FileObjectRemovalReceipt
-  | FileObjectRemovalPartialState;
+export type FileRemovalResult = FileObjectRemovalReceipt | FileObjectRemovalPartialState;
 
 export type FileRemovalCoordinatorDependencies = Readonly<{
-  eligibilityService: Pick<
-    FileRemovalEligibilityService,
-    "decideFileRemovalEligibility"
-  >;
+  eligibilityService: Pick<FileRemovalEligibilityService, "decideFileRemovalEligibility">;
   repository: FileRemovalRepository;
   previewDeleter: FilePreviewDeleter;
   storageDeleter: FileStorageDeleter;
@@ -220,9 +224,7 @@ const intentBindingMatches = (
   intent.governingPolicyRevision === decision.binding.governingPolicyRevision &&
   intent.holdPolicyRevision === decision.binding.holdPolicyRevision;
 
-const fingerprintIntent = (
-  intent: Omit<FileRemovalIntent, "intentFingerprint">,
-): Fingerprint => {
+const fingerprintIntent = (intent: Omit<FileRemovalIntent, "intentFingerprint">): Fingerprint => {
   const canonicalFileRecord = fileRecordSchema.parse(intent.fileRecord);
   const stableEvidence = {
     deletionKey: intent.deletionKey,
@@ -237,15 +239,11 @@ const fingerprintIntent = (
     eligibleDecidedAt: intent.eligibleDecidedAt,
     fileRecord: canonicalFileRecord,
   };
-  return createHash("sha256")
-    .update(JSON.stringify(stableEvidence))
-    .digest("hex") as Fingerprint;
+  return createHash("sha256").update(JSON.stringify(stableEvidence)).digest("hex") as Fingerprint;
 };
 
-const operationKey = (
-  intentFingerprint: Fingerprint,
-  stage: FileRemovalStage,
-): string => `file-removal:${intentFingerprint}:${stage}`;
+const operationKey = (intentFingerprint: Fingerprint, stage: FileRemovalStage): string =>
+  `file-removal:${intentFingerprint}:${stage}`;
 
 const assertRecordMatchesIntent = (
   record: FileRemovalPersistedRecord,
@@ -271,9 +269,7 @@ const assertRecordMatchesIntent = (
     persisted.fileRecord.storageKey !== intent.fileRecord.storageKey ||
     JSON.stringify(persistedFileRecord) !== JSON.stringify(expectedFileRecord)
   ) {
-    throw new Error(
-      "File removal refused: deletion key is already bound to different evidence",
-    );
+    throw new Error("File removal refused: deletion key is already bound to different evidence");
   }
 };
 
@@ -284,10 +280,9 @@ const assertProgressRecord = (record: FileRemovalProgressRecord): void => {
   partialResult(record);
   if (
     (record.status === "executing") !== (record.claim !== undefined) ||
-    (record.claim !== undefined && record.claim.operationKey !== operationKey(
-      record.intent.intentFingerprint,
-      record.currentStage,
-    ))
+    (record.claim !== undefined &&
+      record.claim.operationKey !==
+        operationKey(record.intent.intentFingerprint, record.currentStage))
   ) {
     throw new Error("File removal refused: repository returned an invalid stage state");
   }
@@ -310,15 +305,11 @@ const assertRequestMatchesRecord = (
     binding.governingPolicyRevision !== intent.governingPolicyRevision ||
     binding.holdPolicyRevision !== intent.holdPolicyRevision
   ) {
-    throw new Error(
-      "File removal refused: deletion key is already bound to different evidence",
-    );
+    throw new Error("File removal refused: deletion key is already bound to different evidence");
   }
 };
 
-function partialResult(
-  record: FileRemovalProgressRecord,
-): FileObjectRemovalPartialState {
+function partialResult(record: FileRemovalProgressRecord): FileObjectRemovalPartialState {
   return Object.freeze(
     fileObjectRemovalPartialStateSchema.parse({
       fileId: record.intent.fileId,
@@ -334,9 +325,7 @@ function partialResult(
   );
 }
 
-const terminalResult = (
-  record: FileRemovalTerminalRecord,
-): FileObjectRemovalReceipt => {
+const terminalResult = (record: FileRemovalTerminalRecord): FileObjectRemovalReceipt => {
   if (!Number.isSafeInteger(record.version) || record.version < 1) {
     throw new Error("File removal refused: repository returned an invalid version");
   }
@@ -365,10 +354,7 @@ const asResult = (record: FileRemovalPersistedRecord): FileRemovalResult =>
 export const createFileRemovalCoordinator = (
   dependencies: FileRemovalCoordinatorDependencies,
 ): FileRemovalCoordinator => {
-  if (
-    typeof dependencies?.eligibilityService?.decideFileRemovalEligibility !==
-    "function"
-  )
+  if (typeof dependencies?.eligibilityService?.decideFileRemovalEligibility !== "function")
     throw new Error("File removal requires an eligibility service");
   if (typeof dependencies?.repository?.begin !== "function")
     throw new Error("File removal requires a durable repository");
@@ -392,15 +378,12 @@ export const createFileRemovalCoordinator = (
   // A resumed removal may run long after its intent was recorded, so a legal
   // hold, share or policy change since then must stop it before any external
   // side effect. Runs before the stage is claimed so a refusal leaves no claim.
-  const assertIntentStillEligible = async (
-    intent: FileRemovalIntent,
-  ): Promise<void> => {
+  const assertIntentStillEligible = async (intent: FileRemovalIntent): Promise<void> => {
     let currentDecision: FileRemovalEligibilityDecision;
     try {
-      currentDecision =
-        await dependencies.eligibilityService.decideFileRemovalEligibility({
-          fileId: intent.fileId,
-        });
+      currentDecision = await dependencies.eligibilityService.decideFileRemovalEligibility({
+        fileId: intent.fileId,
+      });
     } catch (error) {
       throw new Error("File removal refused: current eligibility is unavailable", {
         cause: error,
@@ -430,10 +413,9 @@ export const createFileRemovalCoordinator = (
       } else {
         let currentDecision: FileRemovalEligibilityDecision;
         try {
-          currentDecision =
-            await dependencies.eligibilityService.decideFileRemovalEligibility({
-              fileId: request.fileId,
-            });
+          currentDecision = await dependencies.eligibilityService.decideFileRemovalEligibility({
+            fileId: request.fileId,
+          });
         } catch (error) {
           throw new Error("File removal refused: current eligibility is unavailable", {
             cause: error,
@@ -458,23 +440,21 @@ export const createFileRemovalCoordinator = (
         }
 
         const startedAt = nowIso(clock);
-        const intentWithoutFingerprint: Omit<
-          FileRemovalIntent,
-          "intentFingerprint"
-        > = Object.freeze({
-          deletionKey: request.deletionKey,
-          correlationId: request.correlationId,
-          fileId: fileRecord.fileId,
-          organizationId: fileRecord.organizationId,
-          authorityFingerprint: currentDecision.binding.authorityFingerprint,
-          fileRevision: currentDecision.binding.fileRevision,
-          recordRevision: currentDecision.binding.recordRevision,
-          governingPolicyRevision: currentDecision.binding.governingPolicyRevision,
-          holdPolicyRevision: currentDecision.binding.holdPolicyRevision,
-          eligibleDecidedAt: request.decision.decidedAt,
-          fileRecord: Object.freeze({ ...fileRecord }),
-          startedAt,
-        });
+        const intentWithoutFingerprint: Omit<FileRemovalIntent, "intentFingerprint"> =
+          Object.freeze({
+            deletionKey: request.deletionKey,
+            correlationId: request.correlationId,
+            fileId: fileRecord.fileId,
+            organizationId: fileRecord.organizationId,
+            authorityFingerprint: currentDecision.binding.authorityFingerprint,
+            fileRevision: currentDecision.binding.fileRevision,
+            recordRevision: currentDecision.binding.recordRevision,
+            governingPolicyRevision: currentDecision.binding.governingPolicyRevision,
+            holdPolicyRevision: currentDecision.binding.holdPolicyRevision,
+            eligibleDecidedAt: request.decision.decidedAt,
+            fileRecord: Object.freeze({ ...fileRecord }),
+            startedAt,
+          });
         intent = Object.freeze({
           ...intentWithoutFingerprint,
           intentFingerprint: fingerprintIntent(intentWithoutFingerprint),
@@ -498,9 +478,7 @@ export const createFileRemovalCoordinator = (
         const claim: FileRemovalStageClaim = Object.freeze({
           claimId,
           operationKey: operationKey(intent.intentFingerprint, stage),
-          expiresAt: new Date(
-            Date.parse(claimedAt) + STAGE_CLAIM_MILLISECONDS,
-          ).toISOString(),
+          expiresAt: new Date(Date.parse(claimedAt) + STAGE_CLAIM_MILLISECONDS).toISOString(),
         });
         const claimResult = await dependencies.repository.claimStage({
           deletionKey: intent.deletionKey,
@@ -530,11 +508,9 @@ export const createFileRemovalCoordinator = (
 
         if (stage === "metadata") {
           const removedAt = nowIso(clock);
-          const tombstone = transitionFileLifecycleState(
-            intent.fileRecord,
-            "removed",
-            { clock: () => new Date(removedAt) },
-          );
+          const tombstone = transitionFileLifecycleState(intent.fileRecord, "removed", {
+            clock: () => new Date(removedAt),
+          });
           const receipt = fileObjectRemovalReceiptSchema.parse({
             receiptId: platformIdSchema.parse(idGenerator()),
             fileId: intent.fileId,
@@ -594,10 +570,7 @@ export const createFileRemovalCoordinator = (
           });
           assertRecordMatchesIntent(interrupted, intent);
           assertProgressRecord(interrupted);
-          if (
-            interrupted.status !== "interrupted" ||
-            interrupted.currentStage !== stage
-          ) {
+          if (interrupted.status !== "interrupted" || interrupted.currentStage !== stage) {
             throw new Error(
               "File removal refused: repository did not persist the interrupted stage",
             );
@@ -622,9 +595,7 @@ export const createFileRemovalCoordinator = (
           record.currentStage !== nextStage ||
           record.status !== "ready"
         ) {
-          throw new Error(
-            "File removal refused: repository did not advance the completed stage",
-          );
+          throw new Error("File removal refused: repository did not advance the completed stage");
         }
       }
     },

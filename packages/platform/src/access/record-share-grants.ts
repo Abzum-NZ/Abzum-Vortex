@@ -2,28 +2,29 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 import {
-  isRecord,
-  sameId,
-  accessGrantSchema,
   activityIdSchema,
   clusterIdSchema,
   fingerprintSchema,
   grantConsentDecisionIdSchema,
-  grantConsentDecisionSchema,
   grantConsentRequestIdSchema,
-  grantConsentRequestSchema,
   grantIdSchema,
   organizationAccountIdSchema,
   roleIdSchema,
+} from "../catalogue/identifiers";
+import { isRecord, sameId } from "../catalogue/runtime-primitives";
+import {
+  accessGrantSchema,
+  grantConsentDecisionSchema,
+  grantConsentRequestSchema,
   type AccessGrant,
   type GrantConsentDecision,
   type GrantConsentRequest,
   type IdentitySession,
   type OrganizationSelectionCandidate,
   type SelectedOrganizationScope,
-} from "../schema";
-import type { DatabaseRow } from "../db/index";
-import { fingerprintCanonicalValue } from "../definition/definition-index";
+} from "./identity-access";
+import type { DatabaseRow } from "../db/request-transaction";
+import { fingerprintCanonicalValue } from "../definition/canonical-json-definition";
 import { z } from "zod";
 import {
   createHumanOrganizationRequestService,
@@ -597,8 +598,7 @@ export const createRecordShareGrantService = (dependencies: RecordShareGrantDepe
         return { kind: "unavailable" };
       const decisionId = grantConsentDecisionIdSchema.safeParse(newDecisionId());
       const activityId = activityIdSchema.safeParse(newActivityId());
-      if (!decisionId.success || !activityId.success)
-        return { kind: "temporarily_unavailable" };
+      if (!decisionId.success || !activityId.success) return { kind: "temporarily_unavailable" };
       return requests.runChange(session, candidate, async (transaction, scope) => {
         const rows = await transaction.query<ResultRow>`
           select vortex_access.record_share_grant_consent_decision_for_administration(

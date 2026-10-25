@@ -1,22 +1,23 @@
 import "server-only";
 
-import {
-  authoredGridLayout,
-  sameId,
-  type IdentitySession,
-  type JsonValue,
-  type RecordsRangeSummaryField,
-  type RecordsRangeSummaryRequest,
-  type RecordsRangeSummaryResult,
-  type RecordsRangeSummaryTotal,
-  type RecordsTableFilterValue,
-  type RecordsTableSortKey,
-} from "../../schema";
+import type { IdentitySession } from "../../access/identity-access";
+import type { JsonValue } from "../../catalogue/common";
+import { sameId } from "../../catalogue/runtime-primitives";
+import { authoredGridLayout } from "../grid-view-state";
+import type {
+  RecordsRangeSummaryField,
+  RecordsRangeSummaryRequest,
+  RecordsRangeSummaryResult,
+  RecordsRangeSummaryTotal,
+} from "../records-range-summary";
+import type { RecordsTableFilterValue } from "../records-table-filters";
+import type { RecordsTableSortKey } from "../records-table-state";
 import {
   createHumanOrganizationRequestService,
   type HumanOrganizationRequestDependencies,
-} from "../../access/index";
-import { createProtectedQueryService, type QueryContinuationKey } from "../../queries/index";
+} from "../../access/human-organization-request";
+import type { QueryContinuationKey } from "../../queries/continuation-token";
+import { createProtectedQueryService } from "../../queries/protected-query-service";
 import type {
   AggregateDescriptor,
   AggregateResult,

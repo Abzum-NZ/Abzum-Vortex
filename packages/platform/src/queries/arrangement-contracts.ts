@@ -1,20 +1,18 @@
 import "server-only";
 
 import { z } from "zod";
+import { fieldTypeKeys } from "../catalogue/catalogues";
+import { jsonValueSchema } from "../catalogue/common";
 import {
-  boardColumnReadLimit,
   builderKeySchema,
-  calendarMappingSchema,
-  exactDecimalTextSchema,
   fieldIdSchema,
-  fieldTypeKeys,
-  jsonValueSchema,
   moduleRootIdSchema,
-  moneyValueSchema,
   queryIdSchema,
   recordIdSchema,
-  stableDefinitionReleaseVersionSchema,
-} from "../schema";
+} from "../catalogue/identifiers";
+import { boardColumnReadLimit, calendarMappingSchema } from "../definition/application-contracts";
+import { stableDefinitionReleaseVersionSchema } from "../definition/version-impact";
+import { exactDecimalTextSchema, moneyValueSchema } from "../records/module-field-values";
 import {
   protectedQueryBoardMembersCommandSchema,
   protectedQueryBoardSelectorSchema,

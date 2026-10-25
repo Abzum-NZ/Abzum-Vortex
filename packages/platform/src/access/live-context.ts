@@ -3,20 +3,23 @@ import "server-only";
 import { z } from "zod";
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
 import { DefinitionError } from "../definition/definition-error";
+import { timestampSchema, type IdentityAuthorityId } from "../catalogue/identifiers";
 import {
   databaseRevision,
   databaseTimestamp,
   describeFailure,
-  organizationAccessDeclarationSchema,
-  organizationPermissionEligibilitySchema,
   sameId,
+} from "../catalogue/runtime-primitives";
+import {
   sessionContextSchema,
-  timestampSchema,
-  type IdentityAuthorityId,
   type IdentitySession,
   type SelectedOrganizationScope,
   type SessionContext,
-} from "../schema";
+} from "./identity-access";
+import {
+  organizationAccessDeclarationSchema,
+  organizationPermissionEligibilitySchema,
+} from "./organization-access-decision";
 import type { PlatformPermissionSource } from "./platform-permissions";
 
 export type LiveHumanContext = Extract<SessionContext, { callerKind: "human" }>;

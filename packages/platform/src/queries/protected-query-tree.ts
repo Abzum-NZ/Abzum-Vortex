@@ -1,13 +1,10 @@
 import "server-only";
 
 import type { z } from "zod";
-import type { RequestDatabaseTransaction } from "../db/index";
-import {
-  type JsonValue,
-  type SelectedOrganizationScope,
-  type IdentitySession,
-  sameId,
-} from "../schema";
+import type { RequestDatabaseTransaction } from "../db/request-transaction";
+import type { SelectedOrganizationScope, IdentitySession } from "../access/identity-access";
+import type { JsonValue } from "../catalogue/common";
+import { sameId } from "../catalogue/runtime-primitives";
 import {
   type QueryContinuation,
   type QueryContinuationKey,

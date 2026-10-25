@@ -1,6 +1,6 @@
 import "server-only";
 
-import { personalDataClassSchema, type PersonalDataClass } from "../schema";
+import { personalDataClassSchema, type PersonalDataClass } from "../catalogue/catalogues";
 
 /**
  * Shared derived-data exclusion policy for the organisation search index (#95).

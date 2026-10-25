@@ -1,19 +1,18 @@
 import "server-only";
 
 import { z } from "zod";
+import type { IdentitySession, OrganizationSelectionCandidate } from "../access/identity-access";
+import { jsonValueSchema } from "../catalogue/common";
 import {
-  databaseRevision,
   fieldIdSchema,
-  jsonValueSchema,
   recordIdSchema,
   recordTypeIdSchema,
   moduleRootIdSchema,
   revisionSchema,
-  saveRecordCommandSchema,
-  type IdentitySession,
-  type OrganizationSelectionCandidate,
-} from "../schema";
-import type { RequestDatabaseTransaction } from "../db/index";
+} from "../catalogue/identifiers";
+import { databaseRevision } from "../catalogue/runtime-primitives";
+import { saveRecordCommandSchema } from "../records/records";
+import type { RequestDatabaseTransaction } from "../db/request-transaction";
 import type { createRecordSaveService } from "../records/save-record";
 
 /** The exact published Record target and evaluated values of one durable update. */

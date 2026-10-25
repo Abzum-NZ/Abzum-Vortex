@@ -1,29 +1,18 @@
 import "server-only";
 
-import {
-  builderKeySchema,
-  describeFailure,
-  findPlatformServiceOperation,
-  flowValueSchema,
-  flowTaskChildLists,
-  flowTaskRegistry,
-  jsonValueSchema,
-  PLATFORM_SERVICE_OPERATIONS,
-  platformOperationKey,
-  protectedOperationRequestSchema,
-  protectedOperationReferenceSetSchema,
-  stableDefinitionReleaseVersionSchema,
-  workflowExecutionReferenceSchema,
-  workflowNodeIdSchema,
-  workflowRunIdSchema,
-  type FlowReference,
-  type FlowTask,
-  type FlowValue,
-  type JsonValue,
-  type WorkflowExecutionReference,
-} from "../schema";
-import { evaluateFlowFormula, type FlowRuntimeValue } from "../rules/index";
-import type { RequestDatabaseTransaction } from "../db/index";
+import { jsonValueSchema, type JsonValue } from "../catalogue/common";
+import { builderKeySchema, workflowNodeIdSchema, workflowRunIdSchema } from "../catalogue/identifiers";
+import { findPlatformServiceOperation, PLATFORM_SERVICE_OPERATIONS } from "../catalogue/platform-service-operation-catalogue";
+import { describeFailure } from "../catalogue/runtime-primitives";
+import { protectedOperationReferenceSetSchema } from "../definition/application-flow-bindings";
+import { stableDefinitionReleaseVersionSchema } from "../definition/version-impact";
+import { protectedOperationRequestSchema, workflowExecutionReferenceSchema, type WorkflowExecutionReference } from "../rules/automation-contracts";
+import { platformOperationKey } from "./default-flow-sources";
+import { flowTaskChildLists, type FlowTask } from "./flow-contracts";
+import { flowTaskRegistry } from "./flow-task-registry";
+import { flowValueSchema, type FlowReference, type FlowValue } from "./flow-values";
+import { evaluateFlowFormula, type FlowRuntimeValue } from "../rules/flow-formula";
+import type { RequestDatabaseTransaction } from "../db/request-transaction";
 import { z } from "zod";
 import {
   resolveDurableActorContext,

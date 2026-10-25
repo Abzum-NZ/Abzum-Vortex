@@ -1,11 +1,11 @@
 import "server-only";
 import { z } from "zod";
+import { applicationRootIdSchema } from "../catalogue/identifiers";
 import {
-  applicationRootIdSchema,
   sourceIdentityReservationSchema,
   type SourceIdentityReservation,
-} from "../schema";
-import type { RequestDatabaseTransaction } from "../db/index";
+} from "./definition-compilation-contracts";
+import type { RequestDatabaseTransaction } from "../db/request-transaction";
 
 /** The protected database read includes this application's owned modules and historical aliases. */
 export const readSourceIdentityReservations = async (

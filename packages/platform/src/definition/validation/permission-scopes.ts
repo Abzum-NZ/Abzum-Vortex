@@ -3,7 +3,7 @@ import {
   type FlowTask,
   flowReadFieldsProjectionSchema,
   flowTaskChildLists,
-} from "../../schema";
+} from "../../workflows/flow-contracts";
 import { flowReadFieldsScalarTypeForField } from "../flow-compilation";
 import type { JsonObject } from "./context";
 import { object, array } from "./helpers";

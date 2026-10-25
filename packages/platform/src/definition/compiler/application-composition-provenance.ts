@@ -1,11 +1,11 @@
+import type { BlockPropertySchemaContract } from "../application-composition/block-property-schema";
 import {
-  controlReferenceSettingKeys,
   releaseSettingDeclarations,
-  type ApplicationSourceDocument,
-  type BlockPropertySchemaContract,
-  type DefinitionProvenanceEntry,
   type PlatformBlockRelease,
-} from "../../schema";
+} from "../application-composition/platform-block-release";
+import { controlReferenceSettingKeys } from "../application-composition/query-binding-check";
+import type { DefinitionProvenanceEntry } from "../definition-provenance";
+import type { ApplicationSourceDocument } from "../definition-source";
 import { sameCanonicalValue } from "../canonical-json-definition";
 import { applicationTypedValueTarget, sourceResolvesIdentity } from "./provenance";
 import type { Resolution } from "./resolution";

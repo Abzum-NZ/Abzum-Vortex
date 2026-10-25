@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { JsonValue } from "../../schema";
+import type { JsonValue } from "../../catalogue/common";
 import { projectCalendarPlacement, type CalendarPlacementContract } from "../calendar-query";
 import { addressParameter } from "../records-table-state";
 import {

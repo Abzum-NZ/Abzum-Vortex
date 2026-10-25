@@ -1,20 +1,21 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
+import { activityIdSchema, directShareIdSchema } from "../catalogue/identifiers";
 import {
-  activityIdSchema,
   changeOrganizationDirectRecordShareResultSchema,
-  directShareIdSchema,
   grantOrganizationDirectRecordShareCommandSchema,
   revokeOrganizationDirectRecordShareCommandSchema,
   type ChangeOrganizationDirectRecordShareResult,
   type GrantOrganizationDirectRecordShareCommand,
-  type IdentitySession,
-  type OrganizationSelectionCandidate,
   type RevokeOrganizationDirectRecordShareCommand,
-  type SelectedOrganizationScope,
-} from "../schema";
-import type { RequestDatabaseTransaction } from "../db/index";
+} from "../records/record-share-operations";
+import type {
+  IdentitySession,
+  OrganizationSelectionCandidate,
+  SelectedOrganizationScope,
+} from "./identity-access";
+import type { RequestDatabaseTransaction } from "../db/request-transaction";
 import {
   createHumanOrganizationRequestService,
   type HumanOrganizationRequestDependencies,

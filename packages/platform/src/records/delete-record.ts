@@ -1,7 +1,9 @@
 import "server-only";
 
-import { correlationIdSchema, recordIdSchema, type SaveRecordCommand } from "../schema";
-import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
+import { correlationIdSchema } from "../catalogue/common";
+import { recordIdSchema } from "../catalogue/identifiers";
+import type { SaveRecordCommand } from "./records";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
 import {
   calculateLockedRelationshipTotalSave,
   type CalculateRelationshipTotalSaveResult,

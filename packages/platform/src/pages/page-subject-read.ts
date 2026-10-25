@@ -1,34 +1,28 @@
 import "server-only";
 
 import { z } from "zod";
-import {
-  jsonValueSchema,
-  describeFailure,
-  recordIdSchema,
-  recordTypeIdSchema,
-  revisionSchema,
-  isRecord,
-  readRecordDetailContract,
-  readQueryBindings,
-  type ExecuteNamedActionCommand,
-  type IdentitySession,
-  type OrganizationSelectionCandidate,
-} from "../schema";
+import type { IdentitySession, OrganizationSelectionCandidate } from "../access/identity-access";
+import { jsonValueSchema } from "../catalogue/common";
+import { recordIdSchema, recordTypeIdSchema, revisionSchema } from "../catalogue/identifiers";
+import { describeFailure, isRecord } from "../catalogue/runtime-primitives";
+import { readQueryBindings } from "../definition/application-composition/query-bindings";
+import { readRecordDetailContract } from "../definition/application-composition/records-display";
+import type { ExecuteNamedActionCommand } from "../records/named-actions";
 import {
   createHumanOrganizationRequestService,
   type HumanOrganizationRequestDependencies,
-} from "../access/index";
-import type { RequestDatabaseTransaction } from "../db/index";
+} from "../access/human-organization-request";
+import type { RequestDatabaseTransaction } from "../db/request-transaction";
 import {
   readSubjectWithNamedActionAvailability,
   type NamedActionAvailability,
 } from "../records/action-record-availability";
-import type { ActionFlowRunner } from "../rules/index";
+import type { ActionFlowRunner } from "../rules/action-flow-run";
 import {
   protectedQueryRowCapabilitiesSchema,
   protectedQueryRowSchema,
   type ProtectedQueryRow,
-} from "../queries/index";
+} from "../queries/protected-query-contracts";
 
 /** Subject values consumed by the projected placements, including headings and query inputs. */
 export const pageSubjectFieldIds = (

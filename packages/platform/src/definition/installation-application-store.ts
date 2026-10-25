@@ -1,18 +1,17 @@
 import "server-only";
 
 import { z } from "zod";
-import type { HumanOrganizationRequestResult } from "../access/index";
+import type { HumanOrganizationRequestResult } from "../access/human-organization-request";
+import type { IdentitySession, OrganizationSelectionCandidate } from "../access/identity-access";
+import type { JsonValue } from "../catalogue/common";
 import {
   applicationRootIdSchema,
-  canonicalJson,
-  describeFailure,
   organizationIdSchema,
   roleIdSchema,
-  type FlowRefusalFeedback,
-  type IdentitySession,
-  type JsonValue,
-  type OrganizationSelectionCandidate,
-} from "../schema";
+} from "../catalogue/identifiers";
+import { describeFailure } from "../catalogue/runtime-primitives";
+import type { FlowRefusalFeedback } from "../workflows/flow-refusal-feedback";
+import { canonicalJson } from "./canonical-json";
 import type {
   InstallationMemberRoleRefusal,
   InstallationProblemShape,

@@ -2,12 +2,9 @@ import "server-only";
 
 import { createHash, randomBytes } from "node:crypto";
 import {
-  databaseTimestamp,
-  databaseRevision,
   createOrganizationInvitationCommandSchema,
   ensureIdentityProjectionCommandSchema,
   identityProjectionSchema,
-  isNonNilUuidText,
   invitationSchema,
   revokeOrganizationInvitationCommandSchema,
   verifiedIdentitySchema,
@@ -17,12 +14,17 @@ import {
   type Invitation,
   type RevokeOrganizationInvitationCommand,
   type VerifiedIdentity,
-} from "../schema";
+} from "../access/identity-access";
+import {
+  databaseTimestamp,
+  databaseRevision,
+  isNonNilUuidText,
+} from "../catalogue/runtime-primitives";
 import {
   withRuntimeTransaction,
   type DatabaseRow,
   type RequestDatabaseTransaction,
-} from "../db/index";
+} from "../db/request-transaction";
 import { requireRequestIdentityNotDisabled } from "./identity-disablement-publication";
 
 export const organizationAccountErrorCodes = [

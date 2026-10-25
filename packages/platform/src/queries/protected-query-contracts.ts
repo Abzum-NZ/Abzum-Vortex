@@ -1,23 +1,24 @@
 import "server-only";
 
 import { z } from "zod";
+import { jsonValueSchema, sortKeySchema } from "../catalogue/common";
 import {
-  boardColumnReadLimit,
-  recordsTableAggregateOperations,
   builderKeySchema,
-  conditionNodeSchema,
   fieldIdSchema,
-  jsonValueSchema,
   moduleRootIdSchema,
   queryIdSchema,
   recordIdSchema,
   revisionSchema,
-  sortKeySchema,
-  stableDefinitionReleaseVersionSchema,
+} from "../catalogue/identifiers";
+import { recordsTableAggregateOperations } from "../definition/application-composition/records-table-totals";
+import { boardColumnReadLimit } from "../definition/application-contracts";
+import { conditionNodeSchema } from "../definition/module-foundation-contracts";
+import { stableDefinitionReleaseVersionSchema } from "../definition/version-impact";
+import {
   moduleFieldValueSchemas,
   recordLinkValueSchema,
   sourceExactDecimalTextSchema,
-} from "../schema";
+} from "../records/module-field-values";
 import {
   recordSystemValuesSchema,
   supportedRecordSystemFieldKeySchema,

@@ -1,13 +1,10 @@
 import "server-only";
 
 import { z } from "zod";
-import { withRuntimeTransaction } from "../db/index";
-import {
-  correlationIdSchema,
-  fileRecordSchema,
-  platformIdSchema,
-  timestampSchema,
-} from "../schema";
+import { withRuntimeTransaction } from "../db/request-transaction";
+import { correlationIdSchema } from "../catalogue/common";
+import { platformIdSchema, timestampSchema } from "../catalogue/identifiers";
+import { fileRecordSchema } from "./file-contracts";
 import { createStorageCredentialBridge, type StorageKeyDefinition } from "./storage-credentials";
 import { resolveFileStorageDestination, type FileStorageDestination } from "./storage-destination";
 

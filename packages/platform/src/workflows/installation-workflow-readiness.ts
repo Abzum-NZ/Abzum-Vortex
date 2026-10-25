@@ -1,28 +1,9 @@
 import "server-only";
 
-import {
-  sameId,
-  isRecord,
-  applicationRootIdSchema,
-  installationWorkflowActivationPlanSchema,
-  installationWorkflowWithdrawalReconciliationSchema,
-  organizationIdSchema,
-  revisionSchema,
-  stableDefinitionReleaseVersionSchema,
-  workflowRunIdSchema,
-  type ApplicationRootId,
-  type InstallationWorkflowActivationEvidence,
-  type InstallationWorkflowActivationPlan,
-  type InstallationWorkflowFlowReference,
-  type InstallationWorkflowReadinessRefusalReason,
-  type InstallationWorkflowRegisteredFlow,
-  type InstallationWorkflowRetainedStart,
-  type InstallationWorkflowScheduleChange,
-  type InstallationWorkflowWithdrawalReconciliation,
-  type OrganizationId,
-  type SemanticVersion,
-  type WorkflowRunId,
-} from "../schema";
+import { applicationRootIdSchema, organizationIdSchema, revisionSchema, workflowRunIdSchema, type ApplicationRootId, type OrganizationId, type SemanticVersion, type WorkflowRunId } from "../catalogue/identifiers";
+import { sameId, isRecord } from "../catalogue/runtime-primitives";
+import { stableDefinitionReleaseVersionSchema } from "../definition/version-impact";
+import { installationWorkflowActivationPlanSchema, installationWorkflowWithdrawalReconciliationSchema, type InstallationWorkflowActivationEvidence, type InstallationWorkflowActivationPlan, type InstallationWorkflowFlowReference, type InstallationWorkflowReadinessRefusalReason, type InstallationWorkflowRegisteredFlow, type InstallationWorkflowRetainedStart, type InstallationWorkflowScheduleChange, type InstallationWorkflowWithdrawalReconciliation } from "../rules/automation-contracts";
 import {
   kestraFlowCompilerEnvironments,
   type KestraFlowCompilerEnvironment,

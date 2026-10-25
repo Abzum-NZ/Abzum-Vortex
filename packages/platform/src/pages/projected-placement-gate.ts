@@ -1,5 +1,5 @@
 import { isRecord } from "../catalogue/runtime-primitives";
-import { sameId } from "../schema";
+import { sameId } from "../catalogue/runtime-primitives";
 import { projectedUseAvailability } from "./placement-read/shared";
 import { walkPlacementData, type VisitedPlacement } from "./placement-walk";
 

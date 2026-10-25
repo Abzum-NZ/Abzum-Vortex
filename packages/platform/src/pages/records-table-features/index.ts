@@ -2,14 +2,12 @@ import type { recordsTableInlineEditEvent } from "../../definition/application-c
 import type { recordsTableRowEditEvent } from "../../definition/application-composition/records-table-features/row-edit";
 export { recordsTableRowActionsProjection } from "../../definition/application-composition/records-table-features/row-actions";
 export { rowMayChangeField } from "../../definition/application-composition/records-table-features/shared";
-import type {
-  ConditionalFormattingProjection,
-  RecordsTableContract,
-  RecordsTableFeatureProjection,
-  RecordsTableFilterField,
-  RecordsTableInlineEditor,
-  RecordsTablePivotView,
-} from "../../schema";
+import type { RecordsTableContract } from "../../definition/application-composition/records-display";
+import type { RecordsTableFilterField } from "../../definition/application-composition/records-table-features/column-filters";
+import type { ConditionalFormattingProjection } from "../../definition/application-composition/records-table-features/conditional-formatting";
+import type { RecordsTableInlineEditor } from "../../definition/application-composition/records-table-features/inline-edit";
+import type { RecordsTableFeatureProjection } from "../records-table-feature-projection";
+import type { RecordsTablePivotView } from "../records-table-state";
 import type {
   ProtectedQueryFieldBounds,
   ProtectedQueryRow,
@@ -19,7 +17,7 @@ import {
   recordsTableFeatureDefinition,
   recordsTableFeatureKeys,
   recordsTableFeatureState,
-} from "../../schema";
+} from "../../definition/application-composition/records-table-features";
 
 export {
   conditionalFormattingFieldIds,

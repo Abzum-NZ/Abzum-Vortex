@@ -1,33 +1,34 @@
 import "server-only";
 
 import { createHash } from "node:crypto";
+import type { IdentitySession, OrganizationSelectionCandidate } from "../access/identity-access";
+import type { JsonValue } from "../catalogue/common";
 import {
-  describeFailure,
-  flowTaskChildLists,
-  canonicalJson,
-  flowSchema,
-  flowReadFieldsProjectionSchema,
-  flowReadFieldsTypeMapSchema,
   fieldIdSchema,
   recordIdSchema,
   recordTypeIdSchema,
-  sameId,
-  type ApplicationContent,
-  type ExactDefinitionDependency,
-  type FlowBindingInvocation,
+  type IdentityAuthorityId,
+} from "../catalogue/identifiers";
+import { describeFailure, sameId, isRecord } from "../catalogue/runtime-primitives";
+import {
+  flowTaskChildLists,
+  flowSchema,
+  flowReadFieldsProjectionSchema,
+  flowReadFieldsTypeMapSchema,
   type FlowDefinition,
   type FlowReadFieldsScalarType,
   type FlowTask,
-  type FormContinuationOutcome,
-  type FormContinuationRequest,
-  type IdentityAuthorityId,
-  type IdentitySession,
-  type JsonValue,
-  type ModuleDefinitionConsumerReadResult,
-  type OrganizationSelectionCandidate,
-  type ProtectedOperationChannel,
-  isRecord,
-} from "../schema";
+} from "../workflows/flow-contracts";
+import type { FlowBindingInvocation } from "../workflows/flow-invocation-contracts";
+import type {
+  FormContinuationOutcome,
+  FormContinuationRequest,
+} from "../workflows/form-continuation-contracts";
+import type { ApplicationContent } from "./application-contracts";
+import type { ProtectedOperationChannel } from "./application-flow-bindings";
+import { canonicalJson } from "./canonical-json";
+import type { ModuleDefinitionConsumerReadResult } from "./definition-consumer-read";
+import type { ExactDefinitionDependency } from "./definition-store-contracts";
 import type { RecordReferenceChoiceCommand } from "../queries/reference-choice-contracts";
 import type { PermittedApplication, PermittedApplicationsRead } from "./application-address";
 import { createOrganizationAccessAdministrationService } from "../access/organization-access-administration-access";

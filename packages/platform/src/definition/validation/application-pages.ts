@@ -7,28 +7,32 @@ import {
 } from "../application-composition-catalogue";
 import { registeredBlockReleases, type JsonObject } from "./context";
 import { walkPageComposition } from "../../pages/placement-walk";
+import { gridViewDocumentSchema } from "../../pages/grid-view-state";
+import type { BlockPropertySchemaContract } from "../application-composition/block-property-schema";
 import {
-  readRecordsTableContract,
-  gridViewDocumentSchema,
-  readRecordDetailContract,
-  recordsTableBoardFactsOf,
-  calendarMappingSchema,
-  calendarBlockSourceIsSupported,
-  moduleQueryDefinitionSchema,
-  checkRecordsTableFeatures,
-  recordsTableGroupingRequired,
-  recordsTableQueryFacts,
-  type BlockPropertySchemaContract,
-  type RecordsTableContract,
-  type RecordsTableQueryFacts,
-  type RecordsTableRelatedRecordsFacts,
   compiledPageBindingFacts,
   compiledPlacementBindingProblems,
   compiledQueryInputs,
   compiledRecordBindingFields,
-  queryTotalLabel,
-  queryTotalReferenceProblem,
-} from "../../schema";
+} from "../application-composition/compiled-query-bindings";
+import {
+  readRecordsTableContract,
+  readRecordDetailContract,
+  type RecordsTableContract,
+} from "../application-composition/records-display";
+import {
+  checkRecordsTableFeatures,
+  recordsTableGroupingRequired,
+} from "../application-composition/records-table-features";
+import { recordsTableBoardFactsOf } from "../application-composition/records-table-features/board";
+import { recordsTableQueryFacts } from "../application-composition/records-table-features/query-facts";
+import type {
+  RecordsTableQueryFacts,
+  RecordsTableRelatedRecordsFacts,
+} from "../application-composition/records-table-features/shared";
+import { calendarMappingSchema, calendarBlockSourceIsSupported } from "../application-contracts";
+import { moduleQueryDefinitionSchema } from "../module-contracts";
+import { queryTotalLabel, queryTotalReferenceProblem } from "../module-query-edit";
 import type { ApplicationScope } from "./application-scope";
 
 export function applicationPageRules(scope: ApplicationScope): void {

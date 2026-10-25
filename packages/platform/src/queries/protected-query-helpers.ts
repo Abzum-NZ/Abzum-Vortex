@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { z, ZodError } from "zod";
-import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
 import type {
   ProtectedQueryRefusalReasonCode,
   ProtectedQueryResult,

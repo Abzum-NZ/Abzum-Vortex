@@ -1,14 +1,14 @@
 import "server-only";
 
+import { isNonNilUuidText } from "../catalogue/runtime-primitives";
 import {
-  isNonNilUuidText,
   moduleInstallationStorageCommandSchema,
   moduleInstallationStorageResultSchema,
   type ModuleInstallationStorageCommand,
   type ModuleInstallationStorageErrorCode,
   type ModuleInstallationStorageResult,
-} from "../schema";
-import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
+} from "../files/storage";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
 import {
   DefinitionError,
   classifyDatabaseError,

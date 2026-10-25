@@ -1,14 +1,13 @@
 import "server-only";
 
+import type { SessionContext } from "../access/identity-access";
 import {
   definitionPublicationConfirmationSchema,
   prepareDefinitionPublicationCommandSchema,
   type ExactDefinitionDependency,
   type PrepareDefinitionPublicationCommand,
-  type SessionContext,
-  type VersionImpact,
-  type VersionImpactReason,
-} from "../schema";
+} from "./definition-store-contracts";
+import type { VersionImpact, VersionImpactReason } from "./version-impact";
 import { applicationValidationContractVersion } from "./application-contract-versions";
 import type { ModuleSourceDocument } from "./module-source-contracts";
 import { applicationModuleSources } from "./application-module-lowering";

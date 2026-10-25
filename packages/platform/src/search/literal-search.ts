@@ -1,4 +1,4 @@
-import { isRecord } from "../schema";
+import { isRecord } from "../catalogue/runtime-primitives";
 import "server-only";
 
 import {
@@ -31,8 +31,7 @@ export const literalSearchRefusalReasonCodes = Object.freeze([
   ...permittedSearchRefusalReasonCodes,
 ] as const);
 
-export type LiteralSearchRefusalReasonCode =
-  (typeof literalSearchRefusalReasonCodes)[number];
+export type LiteralSearchRefusalReasonCode = (typeof literalSearchRefusalReasonCodes)[number];
 
 /** One bounded local expression evaluated over current permitted candidates. */
 export type LiteralSearchInput = Readonly<{
@@ -86,10 +85,8 @@ type TokenMatcherNode = {
   readonly termIndices: number[];
 };
 
-const hasOnlyKeys = (
-  value: Readonly<Record<string, unknown>>,
-  keys: readonly string[],
-): boolean => Object.keys(value).every((key) => keys.includes(key));
+const hasOnlyKeys = (value: Readonly<Record<string, unknown>>, keys: readonly string[]): boolean =>
+  Object.keys(value).every((key) => keys.includes(key));
 
 const isLiteralSearchInput = (value: unknown): value is LiteralSearchInput =>
   isRecord(value) &&
@@ -149,8 +146,7 @@ const parseExpression = (
     } else {
       const termStart = offset;
       while (offset < expression.length && !isWhitespace(expression[offset]!)) {
-        if (expression[offset] === '"')
-          return { success: false, reasonCode: "invalid_expression" };
+        if (expression[offset] === '"') return { success: false, reasonCode: "invalid_expression" };
         offset += 1;
       }
 
@@ -250,8 +246,7 @@ const matchCandidate = (
     let state = 0;
 
     for (const token of entryTokens) {
-      while (state !== 0 && !matcher[state]!.next.has(token))
-        state = matcher[state]!.failure;
+      while (state !== 0 && !matcher[state]!.next.has(token)) state = matcher[state]!.failure;
       state = matcher[state]!.next.get(token) ?? 0;
 
       for (const termIndex of matcher[state]!.termIndices) {

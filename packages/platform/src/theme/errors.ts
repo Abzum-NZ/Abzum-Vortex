@@ -4,7 +4,7 @@ import type {
   DefinitionRuleFailure,
   DefinitionRuleFailureFamily,
   DefinitionValidationLocation,
-} from "../schema";
+} from "../catalogue/validation-errors";
 import type { ThemeValidationFailure } from "./types";
 
 export const THEME_DEFAULT_RULE_CODE = "vortex.definition.application_block_settings";

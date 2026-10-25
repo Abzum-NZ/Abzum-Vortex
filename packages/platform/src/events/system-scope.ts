@@ -1,19 +1,18 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
+import { sessionContextSchema, type SessionContext } from "../access/identity-access";
 import {
   applicationRootIdSchema,
   actorIdSchema,
   revisionSchema,
-  sessionContextSchema,
   tenantIdSchema,
-  type SessionContext,
-} from "../schema";
+} from "../catalogue/identifiers";
 import {
   withResolvedRequestTransaction,
   withRuntimeTransaction,
   type DatabaseRow,
   type RequestDatabaseTransaction,
-} from "../db/index";
+} from "../db/request-transaction";
 
 export const inEventConsumerScope = async <Result>(
   organizationId: string,

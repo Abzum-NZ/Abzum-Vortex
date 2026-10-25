@@ -1,17 +1,15 @@
 import { calculationFormulaDependencies as calculationDependencies } from "../definition/module-calculation-formula";
+import { jsonValueSchema, type JsonValue } from "../catalogue/common";
+import { timestampSchema } from "../catalogue/identifiers";
 import {
-  formatExactDecimal,
-  jsonValueSchema,
-  moneyValueSchema,
-  parseExactDecimal,
   recordTypeDefinitionSchema,
-  timestampSchema,
-  type FlowFormula,
-  type JsonValue,
   type ModuleField,
   type RecordTypeDefinition,
-} from "../schema";
-import { evaluateFlowFormula, type FlowFormulaScope } from "../rules/index";
+} from "../definition/module-contracts";
+import type { FlowFormula } from "../workflows/flow-values";
+import { formatExactDecimal, parseExactDecimal } from "./exact-decimal";
+import { moneyValueSchema } from "./module-field-values";
+import { evaluateFlowFormula, type FlowFormulaScope } from "../rules/flow-formula";
 import { persistedRecordFieldValueMatches } from "./field-values";
 
 type CalculationField = Extract<ModuleField, { type: "calculation" }>;

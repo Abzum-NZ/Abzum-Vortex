@@ -1,13 +1,10 @@
 import "server-only";
 
 import { createClient, type SupabaseClient, type User } from "@supabase/supabase-js";
-import {
-  describeFailure,
-  identityAuthoritySchema,
-  identityIdSchema,
-  isLoopbackHostname,
-  type IdentityAuthority,
-} from "../schema";
+import { identityAuthoritySchema, type IdentityAuthority } from "../access/identity-access";
+import { identityIdSchema } from "../catalogue/identifiers";
+import { describeFailure } from "../catalogue/runtime-primitives";
+import { isLoopbackHostname } from "./loopback-hostname";
 import { createIdentityVerifier } from "./identity-verifier";
 import { readPrivacyNotice } from "./privacy-notice";
 

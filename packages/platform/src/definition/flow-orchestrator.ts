@@ -3,31 +3,34 @@ import "server-only";
 import { randomBytes, randomUUID } from "node:crypto";
 import { z } from "zod";
 import {
-  executeNamedActionCommandSchema,
-  flowWarningNoticeSchema,
-  executionAuthorityContextSchema,
-  flowMaximumServerSeconds,
   identitySessionSchema,
-  isRecord,
   organizationSelectionCandidateSchema,
-  ruleIdSchema,
-  type ExecuteNamedActionCommand,
-  type FlowDefinition,
   type IdentitySession,
   type OrganizationSelectionCandidate,
-} from "../schema";
-import { readFlowRunAsPrincipalForRun } from "../access/index";
-import { withRuntimeTransaction } from "../db/index";
+} from "../access/identity-access";
+import { ruleIdSchema } from "../catalogue/identifiers";
+import { isRecord } from "../catalogue/runtime-primitives";
 import {
-  collectActionFlowTasks,
-  flowLibraryOf,
+  executeNamedActionCommandSchema,
+  type ExecuteNamedActionCommand,
+} from "../records/named-actions";
+import {
+  executionAuthorityContextSchema,
+  flowMaximumServerSeconds,
+  type FlowDefinition,
+} from "../workflows/flow-contracts";
+import { flowWarningNoticeSchema } from "../workflows/form-continuation-contracts";
+import { readFlowRunAsPrincipalForRun } from "../access/flow-run-as-principals";
+import { withRuntimeTransaction } from "../db/request-transaction";
+import { collectActionFlowTasks, flowLibraryOf } from "../rules/action-flow-run";
+import {
   resumeFlowRun,
   startFlowRun,
   type FlowLibrary,
   type FlowRunResume,
   type FlowRunState,
   type FlowRunStep,
-} from "../rules/index";
+} from "../rules/flow-interpreter";
 import type { FlowContinuationStore } from "./flow-continuation-store";
 import { reportUnexpectedFailure } from "./definition-error";
 import {

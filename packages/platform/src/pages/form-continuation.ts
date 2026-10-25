@@ -1,14 +1,13 @@
 import "server-only";
 
-import type { HumanOrganizationRequestResult } from "../access/index";
+import type { HumanOrganizationRequestResult } from "../access/human-organization-request";
+import type { IdentitySession, OrganizationSelectionCandidate } from "../access/identity-access";
 import type {
   FormContinuationOutcome,
   FormContinuationRequest,
   FormContinuationService,
   FormContinuationStartRequest,
-  IdentitySession,
-  OrganizationSelectionCandidate,
-} from "../schema";
+} from "../workflows/form-continuation-contracts";
 import type {
   AbandonPrivateFormDraftCommand,
   PrivateFormDraftAbandonResult,

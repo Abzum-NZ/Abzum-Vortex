@@ -1,4 +1,4 @@
-import { isRecord } from "../schema";
+import { isRecord } from "../catalogue/runtime-primitives";
 import "server-only";
 
 /**

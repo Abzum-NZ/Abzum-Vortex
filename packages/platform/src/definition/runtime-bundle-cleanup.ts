@@ -1,12 +1,13 @@
 import "server-only";
 
 import { createHash, timingSafeEqual } from "node:crypto";
-import { applicationRootIdSchema, logRefusal, type ApplicationRootId } from "../schema";
+import { applicationRootIdSchema, type ApplicationRootId } from "../catalogue/identifiers";
+import { logRefusal } from "../catalogue/runtime-primitives";
 import {
   withRuntimeTransaction,
   type DatabaseRow,
   type RequestDatabaseTransaction,
-} from "../db/index";
+} from "../db/request-transaction";
 import { DefinitionError } from "./definition-error";
 
 export const runtimeBundleCleanupLimits = Object.freeze({

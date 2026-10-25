@@ -1,7 +1,8 @@
 import "server-only";
 
-import { recordTypeDefinitionSchema, type EventOccurrenceEnvelope } from "../schema";
-import type { DatabaseRow } from "../db/index";
+import { recordTypeDefinitionSchema } from "../definition/module-contracts";
+import type { EventOccurrenceEnvelope } from "../events/occurrence-contracts";
+import type { DatabaseRow } from "../db/request-transaction";
 import { inEventConsumerScope } from "../events/system-scope";
 import type { SearchIndexOccurrenceDependencies, SearchIndexRecordType } from "./event-consumer";
 import type {

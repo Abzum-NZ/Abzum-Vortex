@@ -1,31 +1,37 @@
+import { valueTypesCompatible } from "../catalogue/catalogues";
+import { recordTypeIdSchema } from "../catalogue/identifiers";
+import type {
+  DefinitionRuleFailureFamily,
+  DefinitionValidationLocation,
+} from "../catalogue/validation-errors";
 import {
-  flowLiteralSchema,
   flowMaximumForEachItemsDurable,
   flowMaximumForEachItemsOther,
   flowMaximumServerSeconds,
   flowMaximumTaskCount,
   flowMaximumTaskNestingDepth,
-  flowMaximumTaskOutputPathDepth,
-  flowTaskChildLists,
-  flowTaskRegistry,
   flowTriggerExecutionKinds,
+  flowTaskChildLists,
   isFlowControlTask,
-  recordTypeIdSchema,
   validateFlowCallGraph,
-  validateFlowTaskPlacement,
-  valueTypesCompatible,
-  type DefinitionRuleFailureFamily,
-  type DefinitionValidationLocation,
   type FlowDefinition,
-  type FlowFormula,
-  type FlowReference,
   type FlowSource,
   type FlowTask,
+} from "../workflows/flow-contracts";
+import type { SourceFlow } from "../workflows/flow-source-contracts";
+import {
+  flowTaskRegistry,
+  validateFlowTaskPlacement,
   type FlowTaskPlacementIssue,
   type FlowTaskTypeDefinition,
+} from "../workflows/flow-task-registry";
+import {
+  flowLiteralSchema,
+  flowMaximumTaskOutputPathDepth,
+  type FlowFormula,
+  type FlowReference,
   type FlowValue,
-  type SourceFlow,
-} from "../schema";
+} from "../workflows/flow-values";
 import type { DefinitionCompilerRefusalCode } from "./compilation-error";
 import { flowTaskOutputMembers } from "./flow-output-members";
 

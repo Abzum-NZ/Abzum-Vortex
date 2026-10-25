@@ -1,22 +1,21 @@
 import "server-only";
 
+import { jsonValueSchema } from "../catalogue/common";
+import { applicationRootIdSchema } from "../catalogue/identifiers";
+import { resolvePageComposition } from "../pages/page-composition-resolution";
+import { canonicalJson } from "./canonical-json";
 import {
-  applicationRootIdSchema,
-  canonicalJson,
   installationRuntimeBundleFormatVersion,
   installationRuntimeBundlePagesSectionSchema,
   installationRuntimeBundleSections,
   installationRuntimeBundleSourceManifestSchema,
   installationRuntimeBundleWriteCommandSchema,
-  jsonValueSchema,
-  resolvePageComposition,
   type InstallationRuntimeBundleIndex,
   type PreparedInstallationRuntimeSource,
   type InstallationRuntimeBundleWriteCommand,
-} from "../schema";
-import type { RequestDatabaseTransaction } from "../db/index";
-import { createInstallationRuntimeBundleRepository } from "./module-index";
-
+} from "./installation-runtime-bundle";
+import type { RequestDatabaseTransaction } from "../db/request-transaction";
+import { createInstallationRuntimeBundleRepository } from "./installation-runtime-bundle-repository";
 
 const compareCanonical = (left: string, right: string): number =>
   left < right ? -1 : left > right ? 1 : 0;
@@ -83,7 +82,8 @@ const buildInstallationRuntimeBundleWriteCommand = (
   if (
     canonicalJson(sourceManifest.application) !== canonicalJson(expectedApplicationIdentity) ||
     canonicalJson(sourceManifest.modules) !== canonicalJson(expectedModuleIdentities) ||
-    sourceManifest.preparedRecordAccessPlan.planKey !== sourceCandidate.preparedRecordAccessPlan.planKey ||
+    sourceManifest.preparedRecordAccessPlan.planKey !==
+      sourceCandidate.preparedRecordAccessPlan.planKey ||
     sourceManifest.preparedRecordAccessPlan.mappingFingerprint !==
       sourceCandidate.preparedRecordAccessPlan.mappingFingerprint
   )
@@ -145,13 +145,16 @@ const buildInstallationRuntimeBundleWriteCommand = (
     navigation,
     flows: { flows, flowBindings },
     trigger_index: flows
-      .flatMap((flow) => flow.triggers.map((trigger) => ({
-        flowId: flow.id,
-        trigger,
-      })))
-      .sort((left, right) =>
-        compareCanonical(left.flowId, right.flowId) ||
-        compareCanonical(left.trigger.id, right.trigger.id),
+      .flatMap((flow) =>
+        flow.triggers.map((trigger) => ({
+          flowId: flow.id,
+          trigger,
+        })),
+      )
+      .sort(
+        (left, right) =>
+          compareCanonical(left.flowId, right.flowId) ||
+          compareCanonical(left.trigger.id, right.trigger.id),
       ),
     theme,
     component_registry: platformBlockDependencies,

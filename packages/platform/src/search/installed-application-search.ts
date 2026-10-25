@@ -1,18 +1,14 @@
 import "server-only";
 
 import { z } from "zod";
-import {
-  activeApplicationInstallationEvidenceSchema,
-  fieldIdSchema,
-  jsonValueSchema,
-  recordIdSchema,
-  revisionSchema,
-  sameId,
-  type ApplicationSearch,
-  type SelectedOrganizationScope,
-} from "../schema";
-import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
-import { protectedQueryRowCapabilitiesSchema } from "../queries/index";
+import type { SelectedOrganizationScope } from "../access/identity-access";
+import { jsonValueSchema } from "../catalogue/common";
+import { fieldIdSchema, recordIdSchema, revisionSchema } from "../catalogue/identifiers";
+import { sameId } from "../catalogue/runtime-primitives";
+import type { ApplicationSearch } from "../definition/application-contracts";
+import { activeApplicationInstallationEvidenceSchema } from "../files/storage";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
+import { protectedQueryRowCapabilitiesSchema } from "../queries/protected-query-contracts";
 import {
   searchConfiguredApplication,
   type ApplicationSearchRecord,

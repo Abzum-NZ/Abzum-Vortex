@@ -1,10 +1,7 @@
-import {
-  type DefinitionRuleFailure,
-  walkDefinitionContract,
-  jsonValueSchema,
-  builderKeySchema,
-  namespacedKeySchema,
-} from "../../schema";
+import { jsonValueSchema } from "../../catalogue/common";
+import { builderKeySchema, namespacedKeySchema } from "../../catalogue/identifiers";
+import type { DefinitionRuleFailure } from "../../catalogue/validation-errors";
+import { walkDefinitionContract } from "../definitions";
 import { fingerprintCanonicalValue } from "../canonical-json-definition";
 import type { z } from "zod";
 import {

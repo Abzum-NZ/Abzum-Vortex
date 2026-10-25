@@ -1,8 +1,8 @@
 import "server-only";
 
 import { createHash } from "node:crypto";
+import { sameId } from "../catalogue/runtime-primitives";
 import {
-  sameId,
   fileRemovalAuthoritySnapshotSchema,
   fileRemovalEligibilityDecisionSchema,
   fileRemovalEligibilityRequestSchema,
@@ -12,7 +12,7 @@ import {
   type FileRemovalOwnerBinding,
   type FileRemovalRefusalReason,
   type ProtectedLegalHoldReference,
-} from "../schema";
+} from "./file-contracts";
 
 export {
   type FileRemovalAuthoritySnapshot,

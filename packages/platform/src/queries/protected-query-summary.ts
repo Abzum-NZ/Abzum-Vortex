@@ -1,7 +1,8 @@
 import "server-only";
 
-import type { RequestDatabaseTransaction } from "../db/index";
-import type { JsonValue, SelectedOrganizationScope } from "../schema";
+import type { RequestDatabaseTransaction } from "../db/request-transaction";
+import type { SelectedOrganizationScope } from "../access/identity-access";
+import type { JsonValue } from "../catalogue/common";
 import {
   type ProtectedQuerySummaryCommand,
   protectedQuerySummaryResultSchema,
