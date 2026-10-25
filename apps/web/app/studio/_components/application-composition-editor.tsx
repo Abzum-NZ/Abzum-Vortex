@@ -812,13 +812,11 @@ export function ApplicationCompositionEditor(props: Props) {
             {removalModel.kind === "blocked"
               ? removalModel.reason === "required_slot"
                 ? "This area needs at least this item."
-                : removalModel.reason === "required_field"
-                  ? "This item contains an input for a required field. Make the field optional in Data, or clear the input's Required setting, before removing it."
-                  : removalModel.reason === "content_outlet"
-                    ? "This item holds a content outlet of its layout. Retarget the outlet in the Layout inspector first."
-                    : removalModel.reason === "unresolved_target"
-                      ? "Something this item points to cannot be found. It cannot be removed."
-                      : `${studioPlacementReferenceSentence(removalModel)} It cannot be removed.`
+                : removalModel.reason === "content_outlet"
+                  ? "This item holds a content outlet of its layout. Retarget the outlet in the Layout inspector first."
+                  : removalModel.reason === "unresolved_target"
+                    ? "Something this item points to cannot be found. It cannot be removed."
+                    : `${studioPlacementReferenceSentence(removalModel)} It cannot be removed.`
               : removalModel.kind === "invalid"
                 ? "This item could not be read. Reload Studio."
                 : removalModel.reason === "page_kind"

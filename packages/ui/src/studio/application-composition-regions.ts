@@ -148,17 +148,6 @@ export const releaseFor = (
   item: SourceItem,
 ): PlatformBlockRelease | undefined => storedItemRelease(catalogue, item);
 
-/** Forms never nest: no form holds another form at any depth, whichever command places it. */
-export const FORM_CONTAINER_KEY = "platform.form.container";
-export const NESTED_FORM_REASON = "A form can't go inside another form.";
-
-/** Whether any of these items, or anything inside them, is a form. */
-export const holdsForm = (
-  catalogue: ImmutablePlatformBlockCatalogue,
-  items: readonly SourceItem[],
-): boolean =>
-  sourceItemTree(items).some((item) => releaseFor(catalogue, item)?.key === FORM_CONTAINER_KEY);
-
 /**
  * The child slots an item fills, with their authored breakpoint orders. A known release decides
  * which props are slots, including empty ones; otherwise only non-empty item arrays are slots.

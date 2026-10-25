@@ -17,7 +17,6 @@ const object = (value: unknown): Record<string, unknown> => {
 };
 
 export type StudioCompositionRemovalReason =
-  | "flow_control"
   | "flow_input"
   | "flow_form"
   | "flow_component"
@@ -43,10 +42,10 @@ export const studioPlacementReferenceSentence = (reference: StudioPlacementRefer
         ? `Flow "${reference.flow}"`
         : `Flow "${reference.flow}", step "${reference.step}"`;
   switch (reference.reason) {
+    case "required_field":
+      return "This item holds an input for a required field. Make the field optional in Data, or clear the input's Required setting, first.";
     case "flow_input":
       return `${where} reads this form input. Change its input mapping first.`;
-    case "flow_control":
-      return `${where} starts from this item. Change that flow first.`;
     case "flow_form":
       return `${where} shows this form. Change that step first.`;
     case "flow_component":
@@ -75,26 +74,15 @@ export const sourceNames = (source: ApplicationSourceDocument): Set<string> => {
 };
 
 /**
- * What still names a placement (its flow bindings, or a flow task that targets it), read only from
- * declared placement identity positions, never arbitrary literal data. `aliases` is every placement
- * in the application.
+ * The flow task that still targets a placement, read only from declared placement identity
+ * positions, never arbitrary literal data. `aliases` is every placement in the application. The
+ * placement's own flow bindings are not a reference: they leave with it (removeFlowBindingsOf).
  */
 export const studioPlacementRemovalReference = (
   source: ApplicationSourceDocument,
   alias: string,
   aliases: ReadonlySet<string>,
 ): StudioPlacementReference | undefined => {
-  const binding = source.body.flow_bindings.find((entry) => entry.control === alias);
-  if (binding !== undefined) {
-    const bound = [
-      ...source.body.flows,
-      ...source.body.modules.flatMap((module) => module.flows),
-    ].find((flow) => flow.id === binding.flow || flow.key === binding.flow);
-    return {
-      reason: "flow_control",
-      ...(bound === undefined ? {} : { flow: studioFlowLabel(bound) }),
-    };
-  }
   const target = (
     value: unknown,
     qualified: boolean,

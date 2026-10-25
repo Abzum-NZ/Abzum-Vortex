@@ -41,9 +41,11 @@ import {
   validateStoredShell,
   validateStoredApplicationOutlets,
   validateStoredZone,
+  removeFlowBindingsOf,
 } from "./stored-composition";
+import { studioFormChangeRefusal, studioFormShapeRefusal } from "./application-composition-forms";
 import { restoreStudioGridFeatureBindings } from "./grid-features";
-import { studioFlowLabel, type StudioSemanticSelection } from "./semantic-selection";
+import type { StudioSemanticSelection } from "./semantic-selection";
 import type {
   StudioCompositionBreakpoint,
   StudioCompositionContext,
@@ -63,8 +65,6 @@ import {
   refuse,
   regions,
   releaseFor,
-  holdsForm,
-  FORM_CONTAINER_KEY,
   itemSlots,
   itemReading,
   pinnedRelease,
@@ -138,103 +138,24 @@ const pageContentRegion = (
 const movableRegion = (region: Region): boolean =>
   region.shell !== undefined || pageContentRegion(region);
 
-/** The form that encloses a slot reached by these steps, if any. */
-const formAt = (
-  catalogue: ImmutablePlatformBlockCatalogue,
-  region: Region,
-  steps: readonly SlotStep[],
-): string | undefined => {
-  let zone = region.zone;
-  let form: string | undefined;
-  for (const step of steps) {
-    const parent = zone.items.find((item) => item.props.id === step.parentAlias) ?? refuse();
-    if (releaseFor(catalogue, parent)?.key === FORM_CONTAINER_KEY) form = parent.props.id;
-    zone = itemSlots(catalogue, parent).get(step.slotKey) ?? refuse();
-  }
-  return form;
-};
-
-const isFormInput = (key: string | undefined): boolean =>
-  key?.startsWith("platform.form.") === true && key.endsWith("_input");
-
-/**
- * A form travels with its children and never lands inside another form; an input, or a Submit or
- * Reset button, outside a form of its own keeps its enclosing form.
- */
-const keepsFormContext = (
-  catalogue: ImmutablePlatformBlockCatalogue,
+/** The region's content once the block leaves its slot and, for a move, joins the end of another. */
+const regionAfter = (
   target: Target,
-  destination: readonly SlotStep[],
-): boolean => {
-  const needsForm = (item: SourceItem): boolean => {
-    const key = releaseFor(catalogue, item)?.key;
-    if (key === FORM_CONTAINER_KEY) return false;
-    return (
-      isFormInput(key) ||
-      (key === "platform.action.button" &&
-        (item.props.action_kind === "submit" || item.props.action_kind === "reset")) ||
-      [...itemSlots(catalogue, item).values()].some((slot) => slot.items.some(needsForm))
-    );
-  };
-  const destinationForm = formAt(catalogue, target.region, destination);
-  if (destinationForm !== undefined && holdsForm(catalogue, [target.item])) return false;
-  return (
-    !needsForm(target.item) || formAt(catalogue, target.region, target.steps) === destinationForm
+  alias: string,
+  destination?: readonly SlotStep[],
+): SourceItem[] => {
+  const working = workingCopy(target.region);
+  const from = zoneHandle(working, target.steps);
+  const moved = from.items.find((item) => item.props.id === alias) ?? refuse();
+  from.set(
+    from.items.filter((item) => item !== moved),
+    from.order,
   );
-};
-
-/** Required record fields, and inputs marked required, keep their input when content is removed. */
-const requiredFieldInput = (context: StudioCompositionContext, item: SourceItem): boolean =>
-  sourceItemTree([item]).some(
-    (child) =>
-      isFormInput(releaseFor(context.catalogue, child)?.key) &&
-      (child.props.required === true ||
-        context.source.body.modules.some((module) =>
-          module.record_types.some((record) =>
-            record.fields.some(
-              (field) =>
-                field.required && child.props.field === `${module.key}:${record.key}.${field.key}`,
-            ),
-          ),
-        )),
-  );
-
-/**
- * The flow whose submit binding maps an answer this content holds: a mapped answer is a flow
- * dependency, just as a directly named control is. An automatic input answers under its field key.
- */
-const boundFormInput = (
-  context: StudioCompositionContext,
-  target: Target,
-): { flow?: string } | undefined => {
-  const form = formAt(context.catalogue, target.region, target.steps);
-  if (form === undefined) return undefined;
-  const names = new Set<string>();
-  for (const item of sourceItemTree([target.item])) {
-    if (!isFormInput(releaseFor(context.catalogue, item)?.key)) continue;
-    const field = item.props.field;
-    const name =
-      typeof field === "string" ? field.slice(field.lastIndexOf(".") + 1) : item.props.name;
-    if (typeof name === "string") names.add(name);
+  if (destination !== undefined) {
+    const to = zoneHandle(working, destination);
+    to.set([...to.items, moved], to.order);
   }
-  const binding = context.source.body.flow_bindings.find(
-    (candidate) =>
-      candidate.control === form &&
-      Object.values(candidate.inputs).some(
-        (input) =>
-          typeof input === "object" &&
-          input !== null &&
-          "kind" in input &&
-          input.kind === "caller" &&
-          names.has(input.name),
-      ),
-  );
-  if (binding === undefined) return undefined;
-  const flow = [
-    ...context.source.body.flows,
-    ...context.source.body.modules.flatMap((module) => module.flows),
-  ].find((candidate) => candidate.id === binding.flow || candidate.key === binding.flow);
-  return flow === undefined ? {} : { flow: studioFlowLabel(flow) };
+  return working.items;
 };
 
 /**
@@ -243,6 +164,7 @@ const boundFormInput = (
  */
 const moveDestinations = (
   catalogue: ImmutablePlatformBlockCatalogue,
+  source: ApplicationSourceDocument,
   target: Target,
   alias: string,
 ): MoveDestination[] => {
@@ -303,7 +225,15 @@ const moveDestinations = (
   }
   visit(target.region.zone, []);
   return selectedPathSupported
-    ? result.filter((candidate) => keepsFormContext(catalogue, target, candidate.steps))
+    ? result.filter(
+        (candidate) =>
+          studioFormChangeRefusal(
+            catalogue,
+            source,
+            target.region.zone.items,
+            regionAfter(target, alias, candidate.steps),
+          ) === undefined,
+      )
     : [];
 };
 
@@ -605,16 +535,22 @@ const resolveRemoval = (
       const key = releaseKey(item.props.vortex.block);
       releaseUses.set(key, (releaseUses.get(key) ?? 0) + 1);
     }
+  // A block's own flow bindings leave with it (see applyRemoval); a flow step that still names it
+  // refuses the removal.
   for (const item of removed) {
     const reference = studioPlacementRemovalReference(source, item.props.id, aliases);
     if (reference !== undefined) return { kind: "blocked", ...reference };
     const key = releaseKey(item.props.vortex.block);
     releaseUses.set(key, releaseUses.get(key)! - 1);
   }
-  if (requiredFieldInput(context, target.item))
-    return { kind: "blocked", reason: "required_field" };
-  const mapped = boundFormInput(context, target);
-  if (mapped !== undefined) return { kind: "blocked", reason: "flow_input", ...mapped };
+  const broken = studioFormChangeRefusal(
+    catalogue,
+    source,
+    target.region.zone.items,
+    regionAfter(target, alias),
+  );
+  if (broken !== undefined)
+    return studioFormShapeRefusal(broken) ? { kind: "invalid" } : { kind: "blocked", ...broken };
   // What a flow still names is the cause to fix first, so it is told before the item's content is.
   if (
     !layout &&
@@ -674,6 +610,10 @@ const applyRemoval = (
     ),
   );
   commitWorking(current.catalogue, target.region, working);
+  removeFlowBindingsOf(
+    source.body,
+    new Set(sourceItemTree([target.item]).map((item) => item.props.id)),
+  );
   validateStoredApplicationOutlets(current.catalogue, source);
   source.body.platform_block_dependencies = source.body.platform_block_dependencies.filter(
     (dependency) => !unusedReleases.includes(releaseKey(dependency)),
@@ -703,10 +643,12 @@ export const describeStudioCompositionDestinations = (
     validateRegion(catalogue, target.region);
     return {
       kind: "available",
-      destinations: moveDestinations(catalogue, target, alias).map(({ destination, label }) => ({
-        destination,
-        label,
-      })),
+      destinations: moveDestinations(catalogue, source, target, alias).map(
+        ({ destination, label }) => ({
+          destination,
+          label,
+        }),
+      ),
     };
   } catch (error) {
     console.error("[studio] move model failed", error);
@@ -797,8 +739,8 @@ export const applyStudioCompositionCommand = (
       closedPlain(command, ["kind", "destination"]);
       if (!movableRegion(target.region)) return { kind: "unsupported" };
       const destination = parseDestination(command.destination);
-      const resolvedDestination = moveDestinations(catalogue, target, alias).find((candidate) =>
-        sameDestination(candidate.destination, destination),
+      const resolvedDestination = moveDestinations(catalogue, source, target, alias).find(
+        (candidate) => sameDestination(candidate.destination, destination),
       );
       if (resolvedDestination === undefined) return { kind: "invalid" };
       const working = workingCopy(target.region);

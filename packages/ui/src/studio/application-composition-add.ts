@@ -51,8 +51,6 @@ import {
   regions,
   releaseFor,
   itemSlots,
-  FORM_CONTAINER_KEY,
-  NESTED_FORM_REASON,
   closedPlain,
   parseDestination,
   parseOwner,
@@ -64,6 +62,7 @@ import {
   plainSource,
   plainSettings,
 } from "./application-composition-regions";
+import { FORM_CONTAINER_KEY, NESTED_FORM_REASON } from "./application-composition-forms";
 
 /** One place on a page or layout where a new block can go, as the palette and the add command know it. */
 export type AddPlace = {

@@ -20,9 +20,6 @@ import {
   type Region,
   toolsFor,
   releaseFor,
-  holdsForm,
-  FORM_CONTAINER_KEY,
-  NESTED_FORM_REASON,
   pinnedRelease,
   manifestMatches,
   resolve,
@@ -34,6 +31,7 @@ import {
   validateRegion,
   plainSource,
 } from "./application-composition-regions";
+import { FORM_CONTAINER_KEY, NESTED_FORM_REASON, holdsForm } from "./application-composition-forms";
 import { addPlaces, commandSettings, newBlockItem } from "./application-composition-add";
 import { studioOwnsSetting } from "./contextual-palette";
 
