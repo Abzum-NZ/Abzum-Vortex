@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useId, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react";
 import { Button } from "@vortex/ui/components/button";
 import {
   Dialog,
@@ -24,6 +24,7 @@ import {
 } from "@vortex/ui/studio";
 
 import { plainSettingValue, typedSourceSettingValue } from "@vortex/platform/schema";
+import { useLeaveWarning } from "./use-leave-warning";
 
 /** A new block whose required settings or query the person gives before it is added. */
 export type StudioBlockSetupRequest = Readonly<{
@@ -74,26 +75,35 @@ export function StudioBlockSetupDialog({
   const [grouped, setGrouped] = useState(false);
   const [groupValues, setGroupValues] = useState<StudioCompositionSettings>({});
   const [problem, setProblem] = useState("");
+  // Typed setup values are not in the draft until the block is added, so leaving asks first.
+  const [touched, setTouched] = useState(false);
+  useLeaveWarning(request !== null && touched);
   const formId = useId();
   // The draft's query list keeps its contents but not its identity across autosave and agent
-  // edits, so the reset below follows the references themselves.
-  const queriesKey = useMemo(
-    () => queries.map((candidate) => candidate.reference).join("\u0000"),
-    [queries],
-  );
+  // edits, so the query choice follows the references themselves.
+  const queriesKey = JSON.stringify(queries.map((candidate) => candidate.reference));
+  const references = useMemo(() => JSON.parse(queriesKey) as string[], [queriesKey]);
+  // A new request starts from its defaults; a draft edit while it is open keeps what was typed.
   useEffect(() => {
     setValues(setupDefaults(request?.choice));
     setGrouped(false);
     setGroupValues({});
     setProblem("");
-    setQuery(
+    setTouched(false);
+    setQuery("");
+  }, [request]);
+  // The chosen query stays while the draft still has it; otherwise the page's own query, then the first.
+  useEffect(() => {
+    setQuery((current) =>
       request?.choice.needsQuery !== true
         ? ""
-        : queries.some((candidate) => candidate.reference === request.pageQuery)
-          ? request.pageQuery!
-          : (queries[0]?.reference ?? ""),
+        : references.includes(current)
+          ? current
+          : request.pageQuery !== undefined && references.includes(request.pageQuery)
+            ? request.pageQuery
+            : (references[0] ?? ""),
     );
-  }, [request, queriesKey]);
+  }, [request, references]);
   // A block without a query picks any field of the draft; one with a query, only that query's fields.
   const choices = useMemo(
     () => studioBlockChoices(draftChoices, query === "" ? null : query),
@@ -171,6 +181,7 @@ export function StudioBlockSetupDialog({
               value={query}
               disabled={false}
               onChange={(next) => {
+                setTouched(true);
                 setQuery(next);
                 setValues(setupDefaults(choice));
                 setGrouped(false);
@@ -186,6 +197,7 @@ export function StudioBlockSetupDialog({
             choices={choices}
             disabled={false}
             onChange={(next) => {
+              setTouched(true);
               choosePreset(next);
               setProblem("");
             }}
@@ -198,6 +210,7 @@ export function StudioBlockSetupDialog({
               choices={choices}
               disabled={false}
               onChange={(next) => {
+                setTouched(true);
                 setGroupValues(next);
                 setProblem("");
               }}
