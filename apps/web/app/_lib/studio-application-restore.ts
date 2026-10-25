@@ -26,6 +26,7 @@ import {
 import { DefinitionError, classifyDatabaseError } from "@vortex/platform/server";
 import { platformPermissionSource } from "./platform-permission-source";
 import { readStudioPersonLabel } from "./studio-person-labels";
+import { describeFailure } from "@vortex/platform/schema";
 
 type ApplicationDraft = Extract<StoredDefinitionDraft, { kind: "application" }>;
 type FailureKind = StudioApplicationRestoreFailure["kind"];
@@ -157,7 +158,8 @@ export async function restoreStudioApplicationDraft(
   let resolved: Awaited<ReturnType<typeof resolveIdentitySession>>;
   try {
     resolved = await resolveIdentitySession();
-  } catch {
+  } catch (error) {
+    console.error(`[studio] STUDIO_RESTORE_SESSION_UNAVAILABLE: ${describeFailure(error)}`);
     return failedCommand("temporarily_unavailable", false);
   }
   if (resolved.kind !== "active")

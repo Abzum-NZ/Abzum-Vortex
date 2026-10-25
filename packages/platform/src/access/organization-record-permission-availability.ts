@@ -75,13 +75,17 @@ const boundEvidence = (
     databaseRevision(row.access_version) !== evidence.accessVersion ||
     typeof row.correlation_id !== "string" ||
     !sameId(row.correlation_id, evidence.correlationId) ||
-    typeof observedAt !== "string" || typeof expiresAt !== "string" ||
-    !Number.isFinite(Date.parse(observedAt)) || !Number.isFinite(Date.parse(expiresAt)) ||
+    typeof observedAt !== "string" ||
+    typeof expiresAt !== "string" ||
+    !Number.isFinite(Date.parse(observedAt)) ||
+    !Number.isFinite(Date.parse(expiresAt)) ||
     Date.parse(evidence.checkedAt) !== Date.parse(observedAt)
-  ) return false;
+  )
+    return false;
   if (evidence.outcome === "refused") return true;
   const permission = declaration.requiredPermissions[0];
-  return permission !== undefined &&
+  return (
+    permission !== undefined &&
     evidence.eligiblePermissions.every((candidate) =>
       samePermission(candidate.permission, permission),
     ) &&
@@ -89,7 +93,8 @@ const boundEvidence = (
     Date.parse(evidence.validUntil) > Date.parse(observedAt) &&
     Date.parse(evidence.validUntil) <= Date.parse(expiresAt) &&
     Date.parse(expiresAt) > Date.now() &&
-    Date.parse(evidence.validUntil) > Date.now();
+    Date.parse(evidence.validUntil) > Date.now()
+  );
 };
 
 /** Consumes the private core through its fixed Access-owned, human-context-bound wrapper. */
@@ -112,8 +117,8 @@ export const evaluateOrganizationRecordPermissionAvailability = async (
         ${JSON.stringify(declaration.data)}::text::jsonb
       )
     `;
-  } catch {
-    throw unavailableError(unavailableCode);
+  } catch (error) {
+    throw unavailableError(unavailableCode, undefined, error);
   }
   const row = rows[0];
   if (rows.length !== 1 || row === undefined) throw unavailableError(unavailableCode);

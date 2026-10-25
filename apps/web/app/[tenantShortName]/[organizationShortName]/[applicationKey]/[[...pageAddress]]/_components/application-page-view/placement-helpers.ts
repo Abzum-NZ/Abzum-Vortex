@@ -70,7 +70,9 @@ export const boardPayloadFor = (candidate: unknown): BoardPayload | undefined =>
   if (!isRecord(candidate) || candidate.status !== "ready") return undefined;
   try {
     return parseBoardPayload(candidate.values);
-  } catch {
+  } catch (error) {
+    // The server built this payload; a parse failure is a defect, so the cause stays visible.
+    console.error("[page] BOARD_PAYLOAD_INVALID", error);
     return undefined;
   }
 };

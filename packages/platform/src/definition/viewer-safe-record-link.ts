@@ -411,7 +411,8 @@ export const createViewerSafeRecordLinkService = (
         return request.kind === "available"
           ? viewerSafeRecordPinAcquisitionResultSchema.parse(request.value)
           : pinUnavailable;
-      } catch {
+      } catch (error) {
+        console.error(`[definition] RECORD_PIN_ACQUISITION_FAILED: ${describeFailure(error)}`);
         return pinUnavailable;
       }
     },

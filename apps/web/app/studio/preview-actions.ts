@@ -5,6 +5,7 @@ import {
   provisionStudioApplicationPreview,
   type StudioApplicationPreviewResult,
 } from "../_lib/studio-application-preview";
+import { describeFailure } from "@vortex/platform/schema";
 
 /** Provisions the running preview of the saved draft; never browser source or unsaved edits. */
 export async function previewStudioApplication(
@@ -18,7 +19,8 @@ export async function previewStudioApplication(
         ? { kind: "temporarily_unavailable" }
         : { kind: "refused", reason: "permission_refused" };
     return await provisionStudioApplicationPreview(resolved.session, organizationId, candidate);
-  } catch {
+  } catch (error) {
+    console.error(`[studio] STUDIO_PREVIEW_PROVISION_FAILED: ${describeFailure(error)}`);
     return { kind: "temporarily_unavailable" };
   }
 }

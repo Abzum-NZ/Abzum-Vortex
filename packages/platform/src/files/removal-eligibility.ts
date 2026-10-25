@@ -13,6 +13,7 @@ import {
   type FileRemovalRefusalReason,
   type ProtectedLegalHoldReference,
 } from "../schema";
+import { describeFailure } from "../catalogue/runtime-primitives";
 
 export {
   type FileRemovalAuthoritySnapshot,
@@ -335,7 +336,8 @@ export const createFileRemovalEligibilityService = (
       let resolution: FileRemovalAuthorityResolution;
       try {
         resolution = await dependencies.resolveCurrentAuthority(request.data);
-      } catch {
+      } catch (error) {
+        console.error(`[files] FILE_REMOVAL_AUTHORITY_UNAVAILABLE: ${describeFailure(error)}`);
         return refused("authority_unavailable", decidedAt);
       }
       if (!resolution.available) return refused("authority_unavailable", decidedAt);

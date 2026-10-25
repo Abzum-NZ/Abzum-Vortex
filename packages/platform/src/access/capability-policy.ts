@@ -625,8 +625,7 @@ export type CapabilityPolicyPlatformOperatorService = ReturnType<
 >;
 
 type CapabilityCeilingPersonOperation =
-  | "set_capability_policy_ceiling"
-  | "revoke_capability_policy_ceiling";
+  "set_capability_policy_ceiling" | "revoke_capability_policy_ceiling";
 
 export type CapabilityCeilingPersonMutationResult =
   | (CapabilityCeilingResult & { readonly operation: "set_capability_policy_ceiling" })
@@ -890,8 +889,8 @@ export const resolveEffectiveCapabilityPolicy = async (
         ${request.data.unit}::text
       )
     `;
-  } catch {
-    throw new Error("CAPABILITY_POLICY_UNAVAILABLE");
+  } catch (error) {
+    throw new Error("CAPABILITY_POLICY_UNAVAILABLE", { cause: error });
   }
   if (rows.length !== 1 || rows[0] === undefined) throw new Error("CAPABILITY_POLICY_UNAVAILABLE");
   const row = rows[0];

@@ -2,6 +2,7 @@ import { z } from "zod";
 import { correlationIdSchema } from "./common";
 import { builderKeySchema, namespacedKeySchema } from "./identifiers";
 import { recordsTableFeatureRefusalCodes } from "../definition/application-composition/records-table-features/shared";
+import { describeFailure } from "./runtime-primitives";
 
 export const definitionValidationCatalogueVersion = "1.4.0" as const;
 
@@ -602,7 +603,10 @@ export function translateDefinitionSchemaError(
         `[definition] definition_sortable_field_limit ${context.correlationId}: a record type declares more than eight sortable fields`,
       );
     return finishResult(errors, context.correlationId);
-  } catch {
+  } catch (error) {
+    console.error(
+      `[definition] DEFINITION_VALIDATION_TRANSLATION_FAILED: ${describeFailure(error)}`,
+    );
     return finishResult(
       [
         makePublicError(
