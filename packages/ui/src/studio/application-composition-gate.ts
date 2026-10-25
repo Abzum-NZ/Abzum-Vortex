@@ -14,11 +14,17 @@ import {
   validateRegion,
   workingCopy,
   workingItem,
+  regionAfter,
 } from "./application-composition-regions";
+import { studioFormChangeRefusal, studioFormShapeRefusal } from "./application-composition-forms";
+import { studioPlacementReferenceSentence } from "./composition-references";
 import type { StudioSemanticSelection } from "./semantic-selection";
 import { validateStoredApplicationOutlets } from "./stored-composition";
 
-/** Gate edits keep every placement, form context, required input and flow reference intact. */
+/**
+ * Gate edits keep every placement, form context and flow reference intact, and never hide what a
+ * form needs (the form rule of removal).
+ */
 const resolveGateTarget = (
   context: StudioCompositionContext,
   selection: StudioSemanticSelection | null,
@@ -101,6 +107,20 @@ export const applyStudioCompositionGate = (
           ? "This block has no permission gate to clear."
           : "This block already has that permission gate.",
     };
+  // A gate hides the block from people without the permission: what its form needs stays visible.
+  if (key !== undefined) {
+    const hidden = studioFormChangeRefusal(
+      current.catalogue,
+      source,
+      target.region.zone.items,
+      regionAfter(target, alias),
+    );
+    if (hidden !== undefined && !studioFormShapeRefusal(hidden))
+      return {
+        kind: "refused",
+        reason: `A permission gate hides this block from people without the permission. ${studioPlacementReferenceSentence(hidden)}`,
+      };
+  }
   const working = workingCopy(target.region);
   const item = workingItem(working, target.steps, alias);
   if (key === undefined) delete item.props.vortex.view_permission;
