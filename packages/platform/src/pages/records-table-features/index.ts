@@ -107,33 +107,21 @@ export const projectRecordsTableFeatures = (
     filterFields,
     fieldLabels,
     pivotView,
+    conditionalFormatting,
+    exportAllowed: exportAllowed === true,
     features,
     columns: contract.columns,
     rows,
     editors,
     rowBehaviours: contract.rowBehaviours,
   };
-  const declared = Object.fromEntries(
+  const projection = Object.fromEntries(
     recordsTableFeatureKeys.flatMap((key) => {
       const definition = recordsTableFeatureDefinition(key);
       const part = definition.project?.(recordsTableFeatureState(features, key), context);
       return part === undefined ? [] : [[definition.property, part]];
     }),
-  ) as Partial<RecordsTableFeatureProjection>;
-  const exportSettings = features.export;
-  const projection: RecordsTableFeatureProjection = {
-    ...(exportSettings.enabled &&
-    exportAllowed === true &&
-    exportSettings.maxRows !== undefined &&
-    exportSettings.formats.length > 0 &&
-    contract.columns.some((column) => readable(column.field))
-      ? { export: { maxRows: exportSettings.maxRows, formats: exportSettings.formats } }
-      : {}),
-    ...declared,
-    ...(conditionalFormatting === undefined || !features.conditionalFormatting.enabled
-      ? {}
-      : { conditionalFormatting }),
-  };
+  ) as RecordsTableFeatureProjection;
   return Object.keys(projection).length === 0 ? undefined : projection;
 };
 

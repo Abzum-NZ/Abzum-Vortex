@@ -2,6 +2,7 @@
 
 import { useId, useMemo, useState, type DragEvent, type ReactElement } from "react";
 import {
+  recordsTableConditionalFormattingFeature,
   recordsTableSettingMaximumItems,
   conditionalColumnFormatFieldTypes,
   conditionalColumnFormatIssue,
@@ -213,7 +214,12 @@ export function StudioConditionalFormattingEditor({
         <div className="flex items-center justify-between gap-2">
           <h4 id={`${ownId}-rules`} className="text-sm font-medium">
             Rules (up to{" "}
-            {recordsTableSettingMaximumItems("features", "conditional_formatting", "rules")})
+            {recordsTableSettingMaximumItems(
+              "features",
+              recordsTableConditionalFormattingFeature.key,
+              "rules",
+            )}
+            )
           </h4>
           <Button
             type="button"
@@ -223,7 +229,11 @@ export function StudioConditionalFormattingEditor({
               disabled ||
               initial === undefined ||
               ruleItems.length >=
-                recordsTableSettingMaximumItems("features", "conditional_formatting", "rules")
+                recordsTableSettingMaximumItems(
+                  "features",
+                  recordsTableConditionalFormattingFeature.key,
+                  "rules",
+                )
             }
             onClick={addRule}
           >
@@ -380,7 +390,7 @@ export function StudioConditionalFormattingEditor({
                 formatItems.length >=
                   recordsTableSettingMaximumItems(
                     "features",
-                    "conditional_formatting",
+                    recordsTableConditionalFormattingFeature.key,
                     "column_formats",
                   )
               }

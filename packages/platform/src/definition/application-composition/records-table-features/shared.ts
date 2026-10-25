@@ -3,6 +3,7 @@ import type { ComponentSettingValue } from "../block-property-schema";
 import type { RecordsTableFeatures } from "./index";
 import type { ProtectedQueryRow } from "../../../queries/protected-query-contracts";
 import type {
+  ConditionalFormattingProjection,
   RecordsTableInlineEditField,
   RecordsTableInlineEditor,
 } from "../../../pages/records-table-feature-projection";
@@ -444,6 +445,10 @@ export type GridFeatureProjectionContext = Readonly<{
   fieldLabels: Readonly<Record<string, string>> | undefined;
   /** The page of pivot rows this read asked for, carried back with the projection. */
   pivotView: Readonly<{ cursor?: string | undefined }> | undefined;
+  /** The formatting this read evaluated for the viewer's rows; undefined when no rule applies. */
+  conditionalFormatting: ConditionalFormattingProjection | undefined;
+  /** The viewer holds an export permission that reaches every record, decided in this read. */
+  exportAllowed: boolean;
   features: RecordsTableFeatures;
   columns: readonly Readonly<{ field: string }>[];
   rowBehaviours: Readonly<{ rowActions: readonly RecordsTableActionContract[] }>;

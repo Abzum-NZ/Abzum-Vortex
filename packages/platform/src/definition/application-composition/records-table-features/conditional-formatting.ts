@@ -935,6 +935,9 @@ export const recordsTableConditionalFormattingFeature: RecordsTableFeatureDefini
   // needs at least one field to build a rule from.
   // On a board a rule colours whole cards.
   boardCheck: (state, board) => (state.enabled ? boardFormattingProblem(state, board) : undefined),
+  // The styles the rules matched on this read's rows; a feature that is off formats nothing.
+  project: (state, { conditionalFormatting }) =>
+    state.enabled && conditionalFormatting !== undefined ? conditionalFormatting : undefined,
   check: (state, facts) => {
     if (facts.fields.length === 0)
       return notPossible("Formatting needs at least one field in the bound query.");

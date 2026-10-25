@@ -5,6 +5,9 @@ import {
   checkRecordsTableFeature,
   plainSourceSettingValue,
   readRecordsTableFeatures,
+  recordsTableBoardFeature,
+  recordsTableConditionalFormattingFeature,
+  recordsTableExportFeature,
   recordsTableFeatureDescription,
   recordsTableFilterKindOf,
   recordsTableFeatureKeys,
@@ -286,7 +289,7 @@ export function StudioGridFeatures({
           const check =
             features === undefined ||
             incomplete.has(key) ||
-            (features.board.enabled && key !== "board" && !enabled)
+            (features.board.enabled && key !== recordsTableBoardFeature.key && !enabled)
               ? undefined
               : checkRecordsTableFeature(
                   key,
@@ -399,7 +402,7 @@ export function StudioGridFeatures({
                 />
               ) : null}
               {enabled &&
-              key === "conditional_formatting" &&
+              key === recordsTableConditionalFormattingFeature.key &&
               features !== undefined &&
               !incomplete.has(key) ? (
                 <div className="pb-2">
@@ -434,14 +437,14 @@ export function StudioGridFeatures({
                   />
                 </div>
               ) : null}
-              {enabled && key === "export" ? (
+              {enabled && key === recordsTableExportFeature.key ? (
                 <StudioExportEditor
                   value={current}
                   disabled={disabled}
                   onChange={(next) => write(key, next)}
                 />
               ) : null}
-              {enabled && key === "board" ? (
+              {enabled && key === recordsTableBoardFeature.key ? (
                 <StudioBoardEditor
                   idPrefix={`${switchId}-editor`}
                   value={current}
