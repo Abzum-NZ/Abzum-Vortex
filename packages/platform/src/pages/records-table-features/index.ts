@@ -1,4 +1,3 @@
-import { projectedEditableFields } from "../../definition/application-composition/records-table-features/shared";
 export { rowMayChangeField } from "../../definition/application-composition/records-table-features/shared";
 import type {
   ConditionalFormattingProjection,
@@ -146,8 +145,6 @@ export const projectRecordsTableFeatures = (
   ) as Partial<RecordsTableFeatureProjection>;
   const inlineEdit = features.inlineEdit;
   const editableFields = declared.inlineEdit?.fields ?? [];
-  const rowEdit = features.rowEdit;
-  const rowFields = projectedEditableFields(rowEdit, context);
   // Every expanded row is read again under the viewer's current access: the projection only says
   // rows expand; a viewer who cannot read the related records sees the panel's neutral refusal.
   const masterDetail = features.masterDetail;
@@ -216,12 +213,6 @@ export const projectRecordsTableFeatures = (
     exportSettings.formats.length > 0 &&
     contract.columns.some((column) => readable(column.field))
       ? { export: { maxRows: exportSettings.maxRows, formats: exportSettings.formats } }
-      : {}),
-    ...(rowEdit.enabled &&
-    rowEdit.eventId !== undefined &&
-    rowEdit.trigger === "button" &&
-    rowFields.length > 0
-      ? { rowEdit: { eventId: rowEdit.eventId, trigger: rowEdit.trigger, fields: rowFields } }
       : {}),
     ...(features.spreadsheet.enabled &&
     typeof features.spreadsheet.rangeSelect === "boolean" &&

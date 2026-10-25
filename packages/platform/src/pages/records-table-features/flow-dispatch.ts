@@ -7,6 +7,7 @@ import {
   fieldIdSchema,
   sameId,
   recordsTableInlineEditEvent,
+  recordsTableRowEditEvent,
 } from "../../schema";
 import type { ComponentFlowBinding } from "../../schema";
 import type { RequestDatabaseTransaction } from "../../db";
@@ -113,7 +114,7 @@ export const recordsTableBindingRefusal = async (
     event !== "row_clicked" &&
     event !== "bulk_action" &&
     event !== recordsTableInlineEditEvent &&
-    event !== "row_edit"
+    event !== recordsTableRowEditEvent
   )
     return undefined;
   const props = installedPlacementProps(installation.applicationContent, binding.controlId);
@@ -150,8 +151,9 @@ export const recordsTableBindingRefusal = async (
       !sameId(contract.rowBehaviours.rowClick.eventId, binding.eventId))
   )
     return recordsTableRequestRefusal(event, "command_not_declared");
-  const editing = event === recordsTableInlineEditEvent || event === "row_edit";
-  const inline = event === "row_edit" ? contract.features.rowEdit : contract.features.inlineEdit;
+  const editing = event === recordsTableInlineEditEvent || event === recordsTableRowEditEvent;
+  const inline =
+    event === recordsTableRowEditEvent ? contract.features.rowEdit : contract.features.inlineEdit;
   let editedFields: string[] = [];
   if (editing) {
     if (!inline.enabled) return recordsTableRequestRefusal(event, "feature_off");
@@ -284,7 +286,7 @@ export const recordsTableBindingRefusal = async (
         const module = installation.modules?.find((entry) => entry.content.queries.includes(query));
         if (module === undefined) return recordsTableRequestRefusal(event, "query_module_missing");
         const editors = fieldEditorsOf(module, installation.modules ?? []);
-        if (event === "row_edit") {
+        if (event === recordsTableRowEditEvent) {
           const projection = projectRecordsTableFeatures(
             contract,
             {

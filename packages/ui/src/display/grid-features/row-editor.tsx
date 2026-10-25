@@ -11,6 +11,8 @@ import {
 } from "react";
 import {
   flowFieldCorrectionSchema,
+  recordsTableRowEditFeature,
+  recordsTableRowEditEvent,
   type JsonValue,
   type RecordsTableInlineEditor,
 } from "@vortex/platform/schema";
@@ -198,7 +200,7 @@ function RowEditScope({ context, children, retainRow }: GridFeatureScopeProps): 
     });
   };
   const save = async (): Promise<void> => {
-    const handler = context.events?.row_edit;
+    const handler = context.events?.[recordsTableRowEditEvent];
     if (draft === undefined || handler === undefined || submitting.current || conflict) return;
     const values: Record<string, JsonValue> = {};
     const invalid: Record<string, string> = {};
@@ -225,7 +227,7 @@ function RowEditScope({ context, children, retainRow }: GridFeatureScopeProps): 
     try {
       const answer = requireRecord(
         await handler({
-          event: "row_edit",
+          event: recordsTableRowEditEvent,
           eventId: draft.eventId,
           recordId: draft.recordId,
           revision: draft.revision,
@@ -233,7 +235,7 @@ function RowEditScope({ context, children, retainRow }: GridFeatureScopeProps): 
           commandId: crypto.randomUUID(),
         }),
         "A row save must return its outcome",
-        { propertyPath: ["row_edit"] },
+        { propertyPath: [recordsTableRowEditFeature.key] },
       );
       if (!mounted.current) return;
       if (answer.kind === "saved") {
@@ -284,7 +286,10 @@ function RowEditScope({ context, children, retainRow }: GridFeatureScopeProps): 
                 ...unlocated,
               ].join(" "),
         );
-      } else fail("A row save returned an invalid outcome", { propertyPath: ["row_edit"] });
+      } else
+        fail("A row save returned an invalid outcome", {
+          propertyPath: [recordsTableRowEditFeature.key],
+        });
     } catch (error) {
       console.error("[display] row save failed", error);
       if (mounted.current) {
@@ -461,7 +466,7 @@ function RowCommands({ context, row }: GridFeatureCommandProps): ReactElement | 
     !available ||
     !row.capabilities?.actions.includes("update") ||
     row.revision === undefined ||
-    context.events?.row_edit === undefined
+    context.events?.[recordsTableRowEditEvent] === undefined
   )
     return null;
   return (

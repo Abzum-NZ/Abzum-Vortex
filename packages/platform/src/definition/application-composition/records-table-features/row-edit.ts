@@ -5,6 +5,7 @@ import {
   featureNotPossible,
   optionalChoice,
   optionalText,
+  projectedEditableFields,
   recordsTableDependencyMissing,
   recordsTableFieldNotEditableReason,
   requiredFieldList,
@@ -142,6 +143,15 @@ export const recordsTableRowEditFeature: RecordsTableFeatureDefinition<
       ...(trigger === undefined ? {} : { trigger }),
     };
   },
+  project: (state, context) => {
+    const fields = projectedEditableFields(state, context);
+    return !state.enabled ||
+      state.eventId === undefined ||
+      state.trigger !== "button" ||
+      fields.length === 0
+      ? undefined
+      : { eventId: state.eventId, trigger: state.trigger, fields };
+  },
   check: (state, facts) => {
     if (facts.grouped || !facts.fields.some((field) => field.editable))
       return featureNotPossible(
@@ -172,3 +182,8 @@ export const recordsTableRowEditFeature: RecordsTableFeatureDefinition<
     return featureAvailable;
   },
 };
+
+/** The control event declared by this feature. */
+export const recordsTableRowEditEvent = Object.keys(
+  recordsTableRowEditFeature.events!,
+)[0] as typeof recordsTableRowEditFeature.key;

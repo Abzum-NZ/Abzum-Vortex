@@ -452,3 +452,5 @@ export const authoredRecordsTableEventAvailable = (
 };
 
 export { recordsTableInlineEditEvent } from "./inline-edit";
+
+export { recordsTableRowEditEvent } from "./row-edit";
