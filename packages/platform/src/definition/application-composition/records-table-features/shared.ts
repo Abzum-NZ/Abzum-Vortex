@@ -441,6 +441,10 @@ export type GridFeatureProjectionContext = Readonly<{
   searchable: boolean;
   /** The filter control of each filterable field, by lower-cased field identity. */
   filterFields: Readonly<Record<string, object>> | undefined;
+  /** The business label of each field, by lower-cased field identity. */
+  fieldLabels: Readonly<Record<string, string>> | undefined;
+  /** The page of pivot rows this read asked for, carried back with the projection. */
+  pivotView: Readonly<{ cursor?: string | undefined }> | undefined;
   /** The formatting this read evaluated for the viewer's rows; undefined when no rule applies. */
   conditionalFormatting: ConditionalFormattingProjection | undefined;
   /** The viewer holds an export permission that reaches every record, decided in this read. */

@@ -304,6 +304,27 @@ export const recordsTableGroupingFeature: RecordsTableFeatureDefinition<
       opensGrouped: requiredBoolean(group["opens_grouped"], "opens_grouped"),
     };
   },
+  // Grouping is offered only for a field the viewer is guaranteed to see on every record; a
+  // withheld field is never grouped by, so no group ever stands for a value the viewer cannot read.
+  project: (state, { readable, fieldLabels }) => {
+    if (
+      !state.enabled ||
+      state.field === undefined ||
+      state.unassignedLabel === undefined ||
+      state.opensGrouped === undefined ||
+      !readable(state.field)
+    )
+      return undefined;
+    const label = fieldLabels?.[state.field.toLowerCase()] ?? "";
+    return label === ""
+      ? undefined
+      : {
+          fieldId: state.field.toLowerCase(),
+          label,
+          unassignedLabel: state.unassignedLabel,
+          opensGrouped: state.opensGrouped,
+        };
+  },
   conflicts: (state, facts, { features }) => {
     // A grouped query has no flat rows, so a table that reads one (and is not a board, which reads
     // it its own way) shows its records in groups.

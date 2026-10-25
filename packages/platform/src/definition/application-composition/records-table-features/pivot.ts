@@ -367,6 +367,23 @@ export const recordsTablePivotFeature: RecordsTableFeatureDefinition<
       ...(rowPageSize === undefined ? {} : { rowPageSize }),
     };
   },
+  // A pivot is offered only when the viewer may read its rows, columns and measure on every
+  // record; the pivot read applies the same field policy again.
+  project: (state, { readable, pivotView }) =>
+    state.enabled &&
+    state.rowPageSize !== undefined &&
+    state.rowField !== undefined &&
+    state.columnField !== undefined &&
+    state.measureFunction !== undefined &&
+    [state.rowField, state.columnField, state.measureField].every(
+      (field) => field === undefined || readable(field),
+    )
+      ? {
+          rowPageSize: state.rowPageSize,
+          totals: state.totals,
+          ...(pivotView === undefined ? {} : { view: pivotView }),
+        }
+      : undefined,
   // A pivot needs two different dimensions the bound query selects: a choice field (at most 50
   // choices as columns), a link or a date field, each one people can filter by. When on, the rows,
   // the columns, what the cells total and the page size must all fit; each refusal names the part

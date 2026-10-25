@@ -105,6 +105,8 @@ export const projectRecordsTableFeatures = (
     readable,
     searchable: bounds.searchable,
     filterFields,
+    fieldLabels,
+    pivotView,
     conditionalFormatting,
     exportAllowed: exportAllowed === true,
     features,
@@ -113,67 +115,13 @@ export const projectRecordsTableFeatures = (
     editors,
     rowBehaviours: contract.rowBehaviours,
   };
-  const declared = Object.fromEntries(
+  const projection = Object.fromEntries(
     recordsTableFeatureKeys.flatMap((key) => {
       const definition = recordsTableFeatureDefinition(key);
       const part = definition.project?.(recordsTableFeatureState(features, key), context);
       return part === undefined ? [] : [[definition.property, part]];
     }),
-  ) as Partial<RecordsTableFeatureProjection>;
-  // Every expanded row is read again under the viewer's current access: the projection only says
-  // rows expand; a viewer who cannot read the related records sees the panel's neutral refusal.
-  const masterDetail = features.masterDetail;
-  const tree = features.tree;
-  // A pivot is offered only when the viewer may read its rows, columns and measure on every
-  // record; the pivot read applies the same field policy again.
-  const pivotSettings = features.pivot;
-  const pivotFields = pivotSettings.enabled
-    ? [pivotSettings.rowField, pivotSettings.columnField, pivotSettings.measureField]
-    : [];
-  const pivot =
-    pivotSettings.enabled &&
-    pivotSettings.rowPageSize !== undefined &&
-    pivotSettings.rowField !== undefined &&
-    pivotSettings.columnField !== undefined &&
-    pivotSettings.measureFunction !== undefined &&
-    pivotFields.every((field) => field === undefined || readable(field))
-      ? {
-          rowPageSize: pivotSettings.rowPageSize,
-          totals: pivotSettings.totals,
-          ...(pivotView === undefined ? {} : { view: pivotView }),
-        }
-      : undefined;
-  // Grouping is offered only for a field the viewer is guaranteed to see on every record; a
-  // withheld field is never grouped by, so no group ever stands for a value the viewer cannot read.
-  const groupingSettings = features.grouping;
-  const grouping =
-    groupingSettings.enabled &&
-    groupingSettings.field !== undefined &&
-    groupingSettings.unassignedLabel !== undefined &&
-    groupingSettings.opensGrouped !== undefined &&
-    readable(groupingSettings.field)
-      ? {
-          fieldId: groupingSettings.field.toLowerCase(),
-          label: fieldLabels?.[groupingSettings.field.toLowerCase()] ?? "",
-          unassignedLabel: groupingSettings.unassignedLabel,
-          opensGrouped: groupingSettings.opensGrouped,
-        }
-      : undefined;
-  const projection: RecordsTableFeatureProjection = {
-    ...declared,
-    ...(masterDetail.enabled && masterDetail.childPageSize !== undefined
-      ? { masterDetail: { pageSize: masterDetail.childPageSize } }
-      : {}),
-    // A tree needs the parent link among the fields the viewer is guaranteed to see.
-    ...(tree.enabled &&
-    tree.childPageSize !== undefined &&
-    tree.parentField !== undefined &&
-    readable(tree.parentField)
-      ? { tree: { pageSize: tree.childPageSize } }
-      : {}),
-    ...(grouping === undefined || grouping.label === "" ? {} : { grouping }),
-    ...(pivot === undefined ? {} : { pivot }),
-  };
+  ) as RecordsTableFeatureProjection;
   return Object.keys(projection).length === 0 ? undefined : projection;
 };
 

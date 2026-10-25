@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactElement } from "react";
+import { recordsTablePivotFeature } from "@vortex/platform/schema";
 import { Alert, AlertDescription } from "../../components/alert";
 import { Button } from "../../components/button";
 import { Empty, EmptyHeader, EmptyTitle } from "../../components/empty";
@@ -55,7 +56,7 @@ type BodyState =
   | Readonly<{ kind: "refused"; message: string }>
   | Readonly<{ kind: "error" }>;
 
-const location = { propertyPath: ["pivot"] };
+const location = { propertyPath: [recordsTablePivotFeature.property] };
 
 const parseDrill = (value: unknown): Drill => {
   const record = requireRecord(value, "A pivot drill-down must be an object", location);
