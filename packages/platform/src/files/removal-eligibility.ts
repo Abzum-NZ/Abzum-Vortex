@@ -319,7 +319,8 @@ export const createFileRemovalEligibilityService = (
       let now: Date;
       try {
         now = clock();
-      } catch {
+      } catch (error) {
+        console.error(`[files] FILE_REMOVAL_CLOCK_UNAVAILABLE: ${describeFailure(error)}`);
         return refused("authority_unavailable", new Date().toISOString());
       }
       const nowMilliseconds = now.getTime();

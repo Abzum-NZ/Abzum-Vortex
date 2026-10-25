@@ -128,7 +128,10 @@ export const createHumanOrganizationRequestService = (
         durationMs: clampTelemetryDurationMs(startedAtMs, clock().valueOf()),
         counters: countersForOutcome(outcome),
       });
-    } catch {
+    } catch (error) {
+      console.error(
+        `[access] request telemetry not recorded ACCESS_TELEMETRY_FAILED: ${describeFailure(error)}`,
+      );
       // Telemetry must not change the protected request's safe outcome.
     }
   };

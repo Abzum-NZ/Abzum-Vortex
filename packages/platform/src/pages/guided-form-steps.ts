@@ -36,7 +36,7 @@ import {
   timestampSchema,
   type PlatformId,
 } from "../catalogue/identifiers";
-import { isRecord, sameId } from "../catalogue/runtime-primitives";
+import { describeFailure, isRecord, sameId } from "../catalogue/runtime-primitives";
 import type {
   ApplicationShell,
   PageComposition,
@@ -345,7 +345,10 @@ const guidedStepRoots = (
     let root: unknown;
     try {
       root = resolveShellLayout(shell, pageContent);
-    } catch {
+    } catch (error) {
+      console.error(
+        `[page] guided step content does not fit its shell GUIDED_STEP_SHELL_INVALID: ${describeFailure(error)}`,
+      );
       // A step whose content does not fit its shell has no fields, exactly as an unknown page.
       return undefined;
     }

@@ -525,7 +525,10 @@ function emitDiagnostic(
 ) {
   try {
     sink?.(diagnostic);
-  } catch {
+  } catch (error) {
+    console.error(
+      `[validation] diagnostic not stored VALIDATION_DIAGNOSTIC_SINK_FAILED: ${describeFailure(error)}`,
+    );
     // Diagnostic storage must never change the safe public result.
   }
 }

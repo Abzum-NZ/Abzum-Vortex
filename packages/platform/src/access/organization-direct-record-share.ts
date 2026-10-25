@@ -1,4 +1,5 @@
 import "server-only";
+import { describeFailure } from "../catalogue/runtime-primitives";
 
 import { randomUUID } from "node:crypto";
 import { activityIdSchema, directShareIdSchema } from "../catalogue/identifiers";
@@ -69,7 +70,10 @@ export const createOrganizationDirectRecordShareService = (
       try {
         directShareId = directShareIdSchema.parse(newDirectShareId());
         activityId = activityIdSchema.parse(newActivityId());
-      } catch {
+      } catch (error) {
+        console.error(
+          `[access] direct share identifiers unavailable DIRECT_SHARE_IDENTIFIERS_FAILED: ${describeFailure(error)}`,
+        );
         return { kind: "temporarily_unavailable" };
       }
       return requests.runAccessChange(session, candidate, async (transaction, scope) =>
@@ -91,7 +95,10 @@ export const createOrganizationDirectRecordShareService = (
       let activityId: string;
       try {
         activityId = activityIdSchema.parse(newActivityId());
-      } catch {
+      } catch (error) {
+        console.error(
+          `[access] direct share identifiers unavailable DIRECT_SHARE_IDENTIFIERS_FAILED: ${describeFailure(error)}`,
+        );
         return { kind: "temporarily_unavailable" };
       }
       return requests.runAccessChange(session, candidate, async (transaction, scope) =>

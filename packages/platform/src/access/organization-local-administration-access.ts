@@ -3,6 +3,7 @@ import "server-only";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { activityIdSchema } from "../catalogue/identifiers";
 import {
+  describeFailure,
   unavailableError,
   databaseTimestamp,
   databaseRevision,
@@ -602,7 +603,10 @@ export const createOrganizationLocalAdministrationService = (
       let activityId: string;
       try {
         activityId = activityIdSchema.parse(newActivityId());
-      } catch {
+      } catch (error) {
+        console.error(
+          `[access] profile change identifier unavailable PROFILE_ACTIVITY_ID_FAILED: ${describeFailure(error)}`,
+        );
         return { kind: "temporarily_unavailable" };
       }
       return requests.runProfileChange<UpdateOwnProfileResult | "conflict">(
