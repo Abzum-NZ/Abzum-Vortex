@@ -104,5 +104,13 @@ export function usePageParameters({
     },
     [model.pageParameters.controlKinds, publish],
   );
-  return useMemo(() => ({ change, publish }), [change, publish]);
+  // Dismissing a drawer opened by a control clears that control's selection.
+  const dismiss = useCallback(
+    (placementId: string) => {
+      const control = model.pageParameters.drawers[placementId];
+      if (control !== undefined) publish(control, "", false);
+    },
+    [model.pageParameters.drawers, publish],
+  );
+  return useMemo(() => ({ change, publish, dismiss }), [change, publish, dismiss]);
 }

@@ -198,6 +198,7 @@ export const createPlacementReadServices = (
     resolveRecordLinks,
     readCalendarSettings,
     readSubject,
+    records: subjects,
     launcherValues: applicationLauncherQueryRowsToListValues,
     boardData: (values) => parseDisplayData({ status: "ready", values }, parseBoardPayload),
   });
