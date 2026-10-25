@@ -11,7 +11,7 @@ import {
   type SessionContext,
   type StoredDefinitionSource,
 } from "@vortex/platform/schema";
-import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/platform/server";
+import type { RequestDatabaseTransaction } from "@vortex/platform/server";
 import {
   BuilderAuthorityError,
   createHumanApplicationDraftWriter,
@@ -19,6 +19,7 @@ import {
   createBuilderAuthority,
   requireBuilderAuthority,
   type BuilderTargetFactsReader,
+  readBuilderApplicationOrigin,
 } from "@vortex/platform/server";
 import {
   readApplicationDefinitionDraft,
@@ -45,23 +46,11 @@ import { platformPermissionSource } from "./platform-permission-source";
 
 type SourceIdentityAssignment = ReturnType<typeof sourceIdentityAssignmentSchema.parse>;
 
-type ClassificationRow = DatabaseRow & { outcome: unknown; application_origin_kind: unknown };
 const targetFacts: BuilderTargetFactsReader = async (transaction, _scope, rootId) => {
   if (rootId === undefined) return { isSystemApplication: false };
-  const rows = await transaction.query<ClassificationRow>`
-    select outcome, application_origin_kind
-    from vortex_definition.read_builder_application_root_classification(${rootId}::uuid)
-  `;
-  const row = rows[0];
-  if (
-    rows.length !== 1 ||
-    row === undefined ||
-    row.outcome !== "available" ||
-    (row.application_origin_kind !== "ordinary" &&
-      row.application_origin_kind !== "platform_system_application")
-  )
-    throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING");
-  return { isSystemApplication: row.application_origin_kind === "platform_system_application" };
+  const origin = await readBuilderApplicationOrigin(transaction, rootId);
+  if (origin === undefined) throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING");
+  return { isSystemApplication: origin === "platform_system_application" };
 };
 
 const sameDraft = (candidate: unknown, current: StoredApplicationDefinitionDraft): boolean => {

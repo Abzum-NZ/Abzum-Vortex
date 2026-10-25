@@ -37,7 +37,11 @@ import {
   extractApplicationSourceIdentityRequirements,
   type StoredApplicationDefinitionDraft,
 } from "../definition/definition-index";
-import { createBuilderAuthority, type BuilderTargetFactsReader } from "./builder-authority";
+import {
+  createBuilderAuthority,
+  type BuilderTargetFactsReader,
+  readBuilderApplicationOrigin,
+} from "./builder-authority";
 import type { createHumanOrganizationRequestService } from "./human-organization-request";
 import { DefinitionError, classifyDatabaseError } from "../definition/definition-index";
 
@@ -69,26 +73,12 @@ function invalidResult(): never {
   throw new DefinitionError("INVALID_DEFINITION_STORAGE_RESULT");
 }
 
-type ClassificationRow = DatabaseRow & { outcome: unknown; application_origin_kind: unknown };
-
 /** Unknown, missing, foreign and wrong-kind roots share one neutral conflict. */
 const targetFacts: BuilderTargetFactsReader = async (transaction, _scope, rootId) => {
   if (rootId === undefined) return { isSystemApplication: false };
-  const rows = await transaction.query<ClassificationRow>`
-    select outcome, application_origin_kind
-    from vortex_definition.read_builder_application_root_classification(${rootId}::uuid)
-  `;
-  const row = rows[0];
-  if (rows.length !== 1 || row === undefined) invalidResult();
-  if (row.outcome === "unavailable" && row.application_origin_kind === null)
-    throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING");
-  if (
-    row.outcome !== "available" ||
-    (row.application_origin_kind !== "ordinary" &&
-      row.application_origin_kind !== "platform_system_application")
-  )
-    invalidResult();
-  return { isSystemApplication: row.application_origin_kind === "platform_system_application" };
+  const origin = await readBuilderApplicationOrigin(transaction, rootId);
+  if (origin === undefined) throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING");
+  return { isSystemApplication: origin === "platform_system_application" };
 };
 
 const derivedDraftCommandSchema = z

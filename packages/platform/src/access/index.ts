@@ -112,6 +112,8 @@ export {
 } from "../definition/definition-index";
 export {
   createBuilderAuthority,
+  readBuilderApplicationOrigin,
+  type BuilderApplicationOrigin,
   type BuilderAuthorityDependencies,
   type BuilderTargetFactsReader,
 } from "./builder-authority";

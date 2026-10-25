@@ -36,7 +36,11 @@ import {
   readLiveHumanContext,
   type LiveHumanContext,
 } from "./live-context";
-import { createBuilderAuthority, type BuilderTargetFactsReader } from "./builder-authority";
+import {
+  createBuilderAuthority,
+  type BuilderTargetFactsReader,
+  readBuilderApplicationOrigin,
+} from "./builder-authority";
 import type { PlatformPermissionSource } from "./platform-permissions";
 import type { createHumanOrganizationRequestService } from "./human-organization-request";
 import {
@@ -90,15 +94,7 @@ class ExpectedBuilderPublicationRefusal extends Error {
 /** Existing roots never acquire a default classification or a System fallback. */
 const targetFacts: BuilderTargetFactsReader = async (transaction, _scope, rootId) => {
   if (rootId === undefined) throw new PublicationContextRefused("root_missing");
-  const rows = await transaction.query<DatabaseRow>`
-    select outcome, application_origin_kind
-    from vortex_definition.read_builder_application_root_classification(${rootId}::uuid)
-  `;
-  if (
-    rows.length !== 1 ||
-    rows[0]?.outcome !== "available" ||
-    rows[0]?.application_origin_kind !== "ordinary"
-  )
+  if ((await readBuilderApplicationOrigin(transaction, rootId)) !== "ordinary")
     throw new PublicationContextRefused("application_root_not_ordinary");
   return { isSystemApplication: false };
 };
