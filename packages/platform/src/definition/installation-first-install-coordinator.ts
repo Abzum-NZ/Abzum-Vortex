@@ -54,7 +54,9 @@ import {
 } from "./installation-first-install";
 import { createPreparedInstallationRuntimeSourceReader } from "./prepared-installation-runtime-source";
 
-type PreparedFirstInstallRegistration = ReturnType<typeof prepareApplicationRoleTemplatesForHumanRequest>;
+type PreparedFirstInstallRegistration = ReturnType<
+  typeof prepareApplicationRoleTemplatesForHumanRequest
+>;
 
 /** What the first-install coordinator needs from the application: its request runner and the first-install reads. */
 export type FirstInstallCoordinatorEnvironment = FirstInstallEnvironment &
@@ -73,7 +75,8 @@ function problem(kind: InstallationProblemShape["kind"]): never {
   return installationProblem(kind, kind, undefined);
 }
 
-const same = (left: unknown, right: unknown): boolean => canonicalJson(left) === canonicalJson(right);
+const same = (left: unknown, right: unknown): boolean =>
+  canonicalJson(left) === canonicalJson(right);
 
 const firstInstallDefinitionAccess = (
   environment: FirstInstallCoordinatorEnvironment,
@@ -83,9 +86,11 @@ const firstInstallDefinitionAccess = (
   onPreparedRegistration: (prepared: PreparedFirstInstallRegistration) => void,
 ): HumanInstallationDefinitionAccess => ({
   async readReleaseSet(session, target) {
-    if (!sameId(target.organizationId, selector.organizationId) ||
+    if (
+      !sameId(target.organizationId, selector.organizationId) ||
       !sameId(target.applicationRootId, selector.rootId) ||
-      target.applicationReleaseRevision !== selector.releaseRevision)
+      target.applicationReleaseRevision !== selector.releaseRevision
+    )
       throw new DefinitionError("APPLICATION_INSTALLATION_RELEASE_UNAVAILABLE");
     let callbackFailure: unknown;
     const result = await environment.requests.runChange(
@@ -94,27 +99,61 @@ const firstInstallDefinitionAccess = (
       async (transaction, scope, issuedAt) => {
         try {
           if (scope.applicationRootId !== undefined) problem("refused");
-          const context = await readInstallationHumanContext(transaction, scope, session, issuedAt, {
-            organizationId: selector.organizationId,
-          });
+          const context = await readInstallationHumanContext(
+            transaction,
+            scope,
+            session,
+            issuedAt,
+            {
+              organizationId: selector.organizationId,
+            },
+          );
           await readInstallationOrdinaryRoot(transaction, selector.rootId);
           await firstInstallLatestReleaseMatches(transaction, selector, latest);
-          const releaseSet = await readFirstInstallReleaseSet(transaction, environment.catalogue, selector, context);
+          const releaseSet = await readFirstInstallReleaseSet(
+            transaction,
+            environment.catalogue,
+            selector,
+            context,
+          );
           if (!sameFirstInstallRelease(releaseSet, expectedReleaseSet)) problem("conflict");
           await firstInstallLatestReleaseMatches(transaction, selector, latest);
-          const finalContext = await readInstallationHumanContext(transaction, scope, session, issuedAt, {
-            organizationId: selector.organizationId,
-          });
+          const finalContext = await readInstallationHumanContext(
+            transaction,
+            scope,
+            session,
+            issuedAt,
+            {
+              organizationId: selector.organizationId,
+            },
+          );
           if (!same(context, finalContext)) problem("refused");
-          await requireInstallationAuthority(transaction, scope, environment.permissions, installationOperation(selector.rootId, environment.containsCustomComponents(releaseSet)));
+          await requireInstallationAuthority(
+            transaction,
+            scope,
+            environment.permissions,
+            installationOperation(
+              selector.rootId,
+              environment.containsCustomComponents(releaseSet),
+            ),
+          );
           const installDeadlines = await readInstallationAuthorityDeadlines(
-            transaction, scope, finalContext, environment.permissions, selector.rootId, environment.containsCustomComponents(releaseSet),
+            transaction,
+            scope,
+            finalContext,
+            environment.permissions,
+            selector.rootId,
+            environment.containsCustomComponents(releaseSet),
           );
           const completedAt = await readInstallationDatabaseTime(transaction);
-          if (Date.parse(completedAt) >= Math.min(
-            Date.parse(finalContext.expiresAt),
-            ...installDeadlines.map((deadline) => Date.parse(deadline)),
-          )) problem("refused");
+          if (
+            Date.parse(completedAt) >=
+            Math.min(
+              Date.parse(finalContext.expiresAt),
+              ...installDeadlines.map((deadline) => Date.parse(deadline)),
+            )
+          )
+            problem("refused");
           return releaseSet;
         } catch (error) {
           callbackFailure = error;
@@ -129,14 +168,19 @@ const firstInstallDefinitionAccess = (
     return result.value;
   },
   async prepareRegistrationCandidate(target, releaseSet) {
-    if (!sameId(target.organizationId, selector.organizationId) ||
+    if (
+      !sameId(target.organizationId, selector.organizationId) ||
       !sameId(target.applicationRootId, selector.rootId) ||
       target.applicationReleaseRevision !== selector.releaseRevision ||
-      !sameFirstInstallRelease(releaseSet, expectedReleaseSet))
+      !sameFirstInstallRelease(releaseSet, expectedReleaseSet)
+    )
       throw new DefinitionError("APPLICATION_INSTALLATION_RELEASE_UNAVAILABLE");
     const prepared = prepareApplicationRoleTemplatesForHumanRequest(
       target.organizationId,
-      { applicationRootId: target.applicationRootId, releaseRevision: target.applicationReleaseRevision },
+      {
+        applicationRootId: target.applicationRootId,
+        releaseRevision: target.applicationReleaseRevision,
+      },
       releaseSet,
     );
     onPreparedRegistration(prepared);
@@ -151,14 +195,22 @@ const exactFirstInstallBindings = (
   state: "active" | "provisioned",
 ): boolean => {
   const relevant = bindings.moduleBindings.filter((binding) => binding.state !== "detached");
-  return bindings.registeredReleaseRevision === selector.releaseRevision &&
+  return (
+    bindings.registeredReleaseRevision === selector.releaseRevision &&
     relevant.length === releaseSet.modules.length &&
-    releaseSet.modules.every((module) => relevant.filter((binding) =>
-      sameId(binding.organizationId, selector.organizationId) &&
-      sameId(binding.applicationRootId, selector.rootId) &&
-      sameId(binding.moduleRootId, module.rootId) &&
-      binding.applicationReleaseRevision === selector.releaseRevision &&
-      binding.moduleReleaseRevision === module.releaseRevision && binding.state === state).length === 1);
+    releaseSet.modules.every(
+      (module) =>
+        relevant.filter(
+          (binding) =>
+            sameId(binding.organizationId, selector.organizationId) &&
+            sameId(binding.applicationRootId, selector.rootId) &&
+            sameId(binding.moduleRootId, module.rootId) &&
+            binding.applicationReleaseRevision === selector.releaseRevision &&
+            binding.moduleReleaseRevision === module.releaseRevision &&
+            binding.state === state,
+        ).length === 1,
+    )
+  );
 };
 
 const sameFirstInstallBindings = (
@@ -168,28 +220,45 @@ const sameFirstInstallBindings = (
 
 const assertFirstInstallCoordinatorBoundary = (
   mode: "prepare" | "activate",
-  phase: "before" | "after_first" | "after_final",
+  phase: "before" | "after_final",
   selector: FirstInstallSelector,
   expected: FirstInstallExpectation,
   releaseSet: SystemApplicationBoundReleaseSetResult,
   bindings: InstallationBindings,
 ): void => {
   if (!sameFirstInstallBindings(bindings, expected.moduleBindings)) {
-    if (!(phase === "after_final" && mode === "prepare" &&
-      exactFirstInstallBindings(selector, releaseSet, bindings, "provisioned")) &&
-      !(phase === "after_final" && mode === "activate" &&
-        exactFirstInstallBindings(selector, releaseSet, bindings, "active")))
+    if (
+      !(
+        phase === "after_final" &&
+        mode === "prepare" &&
+        exactFirstInstallBindings(selector, releaseSet, bindings, "provisioned")
+      ) &&
+      !(
+        phase === "after_final" &&
+        mode === "activate" &&
+        exactFirstInstallBindings(selector, releaseSet, bindings, "active")
+      )
+    )
       problem("conflict");
   }
-  if (phase === "before" && mode === "prepare" &&
+  if (
+    phase === "before" &&
+    mode === "prepare" &&
     expected.registrationState !== "unprepared" &&
-    expected.registrationState !== "registration_aligned_partial")
+    expected.registrationState !== "registration_aligned_partial"
+  )
     problem("conflict");
-  if (phase === "before" && mode === "activate" &&
-    expected.registrationState !== "provisioned_inactive")
+  if (
+    phase === "before" &&
+    mode === "activate" &&
+    expected.registrationState !== "provisioned_inactive"
+  )
     problem("conflict");
-  if ((phase === "after_first" || (phase === "before" && mode === "activate")) &&
-    bindings.registeredReleaseRevision !== selector.releaseRevision)
+  if (
+    phase === "before" &&
+    mode === "activate" &&
+    bindings.registeredReleaseRevision !== selector.releaseRevision
+  )
     problem("conflict");
   if (phase === "after_final") {
     const expectedState = mode === "prepare" ? "provisioned" : "active";
@@ -199,8 +268,8 @@ const assertFirstInstallCoordinatorBoundary = (
 };
 
 /**
- * The installation coordinator for one first install: each of its two transactions re-proves the
- * latest published version, release, bindings, context and authority around the coordinator's own write.
+ * First-install preparation has two transactions; activation has one atomic Access transaction.
+ * Each re-proves the latest release, bindings, context and authority around its own write.
  */
 export const createFirstInstallCoordinator = (
   environment: FirstInstallCoordinatorEnvironment,
@@ -223,120 +292,201 @@ export const createFirstInstallCoordinator = (
   ): Promise<HumanOrganizationRequestResult<Result>> => {
     const currentStep = step++;
     if (currentStep > 1) problem("temporarily_unavailable");
+    if (mode === "activate" && (currentStep !== 0 || requestMode !== "runAccessChange"))
+      problem("temporarily_unavailable");
     let callbackFailure: unknown;
-    const result = await environment.requests[requestMode](session, candidate, async (transaction, scope, issuedAt) => {
-      try {
-        if (!sameId(candidate.organizationId, selector.organizationId) ||
-          candidate.applicationRootId !== undefined || scope.applicationRootId !== undefined)
-          problem("refused");
-        const context = await readInstallationHumanContext(transaction, scope, session, issuedAt, {
-          organizationId: selector.organizationId,
-        });
-        await readInstallationOrdinaryRoot(transaction, selector.rootId);
-        await firstInstallLatestReleaseMatches(transaction, selector, expected.latest);
-        // Immutable content was verified before this phase; only shared phases reload it.
-        const releaseSet = requestMode === "runAccessChange"
-          ? expectedReleaseSet
-          : await readFirstInstallReleaseSet(transaction, environment.catalogue, selector, context);
-        if (!sameFirstInstallRelease(releaseSet, expectedReleaseSet)) problem("conflict");
-        await requireInstallationAuthority(transaction, scope, environment.permissions, installationOperation(selector.rootId, environment.containsCustomComponents(releaseSet)));
-        const before = await readInstallationBindings(transaction, selector.rootId);
-        if (currentStep === 0 && mode === "prepare" &&
-          before.registeredReleaseRevision !== expected.registeredReleaseRevision)
-          problem("conflict");
-        if (!sameFirstInstallBindings(before, expected.moduleBindings)) problem("conflict");
-        assertFirstInstallCoordinatorBoundary(
-          mode, currentStep === 0 ? "before" : "after_first", selector, expected, releaseSet, before,
-        );
-        let registrationContext: InstallationHumanContext | undefined;
-        let registrationDeadline: string | undefined;
-        if (currentStep === 0 && mode === "prepare") {
-          const prepared = preparedRegistration;
-          if (prepared === undefined) problem("temporarily_unavailable");
-          registrationContext = context;
-          const acceptedInstall = {
-            ...installationOperation(selector.rootId, environment.containsCustomComponents(releaseSet)),
-            acceptedPermissions: firstInstallConferredPermissions(prepared),
-          } satisfies BuilderOperation;
-          const installDeadlines = await readBuilderOperationDeadlines(
-            transaction, scope, context, environment.permissions, acceptedInstall,
+    const result = await environment.requests[requestMode](
+      session,
+      candidate,
+      async (transaction, scope, issuedAt) => {
+        try {
+          if (
+            !sameId(candidate.organizationId, selector.organizationId) ||
+            candidate.applicationRootId !== undefined ||
+            scope.applicationRootId !== undefined
+          )
+            problem("refused");
+          const context = await readInstallationHumanContext(
+            transaction,
+            scope,
+            session,
+            issuedAt,
+            {
+              organizationId: selector.organizationId,
+            },
           );
-          registrationDeadline = [context.expiresAt, ...installDeadlines]
-            .reduce((earliest, deadline) =>
-              Date.parse(deadline) < Date.parse(earliest) ? deadline : earliest);
-          const prewriteAt = await readInstallationDatabaseTime(transaction);
-          if (!Number.isFinite(Date.parse(prewriteAt)) ||
-            !Number.isFinite(Date.parse(registrationDeadline)) ||
-            Date.parse(prewriteAt) >= Date.parse(registrationDeadline)) problem("refused");
-        }
-        const value = await operation(transaction, scope, issuedAt);
-        if (currentStep === 0 && mode === "prepare") {
-          if (typeof value !== "boolean" || registrationContext === undefined ||
-            registrationDeadline === undefined ||
-            value !== (before.registeredReleaseRevision !== selector.releaseRevision))
+          await readInstallationOrdinaryRoot(transaction, selector.rootId);
+          await firstInstallLatestReleaseMatches(transaction, selector, expected.latest);
+          // Immutable content was verified before this phase; only shared phases reload it.
+          const releaseSet =
+            requestMode === "runAccessChange"
+              ? expectedReleaseSet
+              : await readFirstInstallReleaseSet(
+                  transaction,
+                  environment.catalogue,
+                  selector,
+                  context,
+                );
+          if (!sameFirstInstallRelease(releaseSet, expectedReleaseSet)) problem("conflict");
+          await requireInstallationAuthority(
+            transaction,
+            scope,
+            environment.permissions,
+            installationOperation(
+              selector.rootId,
+              environment.containsCustomComponents(releaseSet),
+            ),
+          );
+          const before = await readInstallationBindings(transaction, selector.rootId);
+          if (
+            currentStep === 0 &&
+            mode === "prepare" &&
+            before.registeredReleaseRevision !== expected.registeredReleaseRevision
+          )
             problem("conflict");
+          if (currentStep === 1 && before.registeredReleaseRevision !== selector.releaseRevision)
+            problem("conflict");
+          if (!sameFirstInstallBindings(before, expected.moduleBindings)) problem("conflict");
+          assertFirstInstallCoordinatorBoundary(
+            mode,
+            "before",
+            selector,
+            expected,
+            releaseSet,
+            before,
+          );
+          let registrationContext: InstallationHumanContext | undefined;
+          let registrationDeadline: string | undefined;
+          if (currentStep === 0 && mode === "prepare") {
+            const prepared = preparedRegistration;
+            if (prepared === undefined) problem("temporarily_unavailable");
+            registrationContext = context;
+            const acceptedInstall = {
+              ...installationOperation(
+                selector.rootId,
+                environment.containsCustomComponents(releaseSet),
+              ),
+              acceptedPermissions: firstInstallConferredPermissions(prepared),
+            } satisfies BuilderOperation;
+            const installDeadlines = await readBuilderOperationDeadlines(
+              transaction,
+              scope,
+              context,
+              environment.permissions,
+              acceptedInstall,
+            );
+            registrationDeadline = [context.expiresAt, ...installDeadlines].reduce(
+              (earliest, deadline) =>
+                Date.parse(deadline) < Date.parse(earliest) ? deadline : earliest,
+            );
+            const prewriteAt = await readInstallationDatabaseTime(transaction);
+            if (
+              !Number.isFinite(Date.parse(prewriteAt)) ||
+              !Number.isFinite(Date.parse(registrationDeadline)) ||
+              Date.parse(prewriteAt) >= Date.parse(registrationDeadline)
+            )
+              problem("refused");
+          }
+          const value = await operation(transaction, scope, issuedAt);
+          if (currentStep === 0 && mode === "prepare") {
+            if (
+              typeof value !== "boolean" ||
+              registrationContext === undefined ||
+              registrationDeadline === undefined ||
+              value !== (before.registeredReleaseRevision !== selector.releaseRevision)
+            )
+              problem("conflict");
+            const completedAt = await readInstallationDatabaseTime(transaction);
+            if (
+              !Number.isFinite(Date.parse(completedAt)) ||
+              Date.parse(completedAt) >= Date.parse(registrationDeadline) ||
+              Date.parse(completedAt) >= Date.parse(registrationContext.expiresAt)
+            )
+              problem("refused");
+            return value;
+          }
+          const after = await readInstallationBindings(transaction, selector.rootId);
+          assertFirstInstallCoordinatorBoundary(
+            mode,
+            "after_final",
+            selector,
+            expected,
+            releaseSet,
+            after,
+          );
+          await firstInstallLatestReleaseMatches(transaction, selector, expected.latest);
+          const finalContext = await readInstallationHumanContext(
+            transaction,
+            scope,
+            session,
+            issuedAt,
+            {
+              organizationId: selector.organizationId,
+            },
+          );
+          if (!same(context, finalContext)) problem("refused");
+          await requireInstallationAuthority(
+            transaction,
+            scope,
+            environment.permissions,
+            installationOperation(
+              selector.rootId,
+              environment.containsCustomComponents(releaseSet),
+            ),
+          );
+          const installDeadlines = await readInstallationAuthorityDeadlines(
+            transaction,
+            scope,
+            finalContext,
+            environment.permissions,
+            selector.rootId,
+            environment.containsCustomComponents(releaseSet),
+          );
           const completedAt = await readInstallationDatabaseTime(transaction);
-          if (!Number.isFinite(Date.parse(completedAt)) ||
-            Date.parse(completedAt) >= Date.parse(registrationDeadline) ||
-            Date.parse(completedAt) >= Date.parse(registrationContext.expiresAt))
+          if (
+            Date.parse(completedAt) >=
+            Math.min(
+              Date.parse(finalContext.expiresAt),
+              ...installDeadlines.map((deadline) => Date.parse(deadline)),
+            )
+          )
             problem("refused");
           return value;
+        } catch (error) {
+          callbackFailure = error;
+          throw error;
         }
-        const after = await readInstallationBindings(transaction, selector.rootId);
-        if (currentStep === 0) {
-          if (after.registeredReleaseRevision !== selector.releaseRevision ||
-            !sameFirstInstallBindings(after, expected.moduleBindings)) problem("conflict");
-          assertFirstInstallCoordinatorBoundary(
-            mode, "after_first", selector, expected, releaseSet, after,
-          );
-        } else {
-          assertFirstInstallCoordinatorBoundary(
-            mode, "after_final", selector, expected, releaseSet, after,
-          );
-        }
-        await firstInstallLatestReleaseMatches(transaction, selector, expected.latest);
-        const finalContext = await readInstallationHumanContext(transaction, scope, session, issuedAt, {
-          organizationId: selector.organizationId,
-        });
-        if (!same(context, finalContext)) problem("refused");
-        if (currentStep === 0) {
-          const completedAt = await readInstallationDatabaseTime(transaction);
-          if (Date.parse(finalContext.expiresAt) <= Date.parse(completedAt)) problem("refused");
-          return value;
-        }
-        await requireInstallationAuthority(transaction, scope, environment.permissions, installationOperation(selector.rootId, environment.containsCustomComponents(releaseSet)));
-        const installDeadlines = await readInstallationAuthorityDeadlines(
-          transaction, scope, finalContext, environment.permissions, selector.rootId, environment.containsCustomComponents(releaseSet),
-        );
-        const completedAt = await readInstallationDatabaseTime(transaction);
-        if (Date.parse(completedAt) >= Math.min(
-          Date.parse(finalContext.expiresAt),
-          ...installDeadlines.map((deadline) => Date.parse(deadline)),
-        )) problem("refused");
-        return value;
-      } catch (error) {
-        callbackFailure = error;
-        throw error;
-      }
-    });
+      },
+    );
     if (callbackFailure !== undefined && result.kind !== "available") throw callbackFailure;
     return result;
   };
-  const installerRequests: Pick<FirstInstallCoordinatorEnvironment["requests"], "runAccessChange" | "runChange"> = {
+  const installerRequests: Pick<
+    FirstInstallCoordinatorEnvironment["requests"],
+    "runAccessChange" | "runChange"
+  > = {
     runAccessChange: (...args) => runInstallerRequest("runAccessChange", ...args),
     runChange: (...args) => runInstallerRequest("runChange", ...args),
   };
   return createApplicationInstallationCoordinator({
     installerRequests,
     resolveModuleContributions,
-    builderAuthority: (transaction, scope) => createBuilderAuthority({ transaction, scope, targetFacts: installationTargetFacts, permissions: environment.permissions }),
+    builderAuthority: (transaction, scope) =>
+      createBuilderAuthority({
+        transaction,
+        scope,
+        targetFacts: installationTargetFacts,
+        permissions: environment.permissions,
+      }),
     containsCustomComponents: environment.containsCustomComponents,
     humanDefinitionAccess: firstInstallDefinitionAccess(
       environment,
       selector,
       expected.latest,
       expectedReleaseSet,
-      (prepared) => { preparedRegistration = prepared; },
+      (prepared) => {
+        preparedRegistration = prepared;
+      },
     ),
     preparedRuntimeSource: createPreparedInstallationRuntimeSourceReader(environment.catalogue, [
       expectedReleaseSet,
@@ -351,21 +501,30 @@ export const verifyFirstInstallActivation = (
   releaseSet: SystemApplicationBoundReleaseSetResult,
 ): void => {
   const installed = result.installation;
-  const expectedModules = new Map(releaseSet.modules.map((module) => [module.rootId.toLowerCase(), module]));
-  if (!sameId(installed.organizationId, selector.organizationId) ||
+  const expectedModules = new Map(
+    releaseSet.modules.map((module) => [module.rootId.toLowerCase(), module]),
+  );
+  if (
+    !sameId(installed.organizationId, selector.organizationId) ||
     !sameId(installed.applicationRootId, selector.rootId) ||
     installed.applicationReleaseRevision !== selector.releaseRevision ||
     installed.moduleBindings.length !== expectedModules.size ||
-    new Set(installed.moduleBindings.map((binding) => binding.moduleRootId.toLowerCase())).size !== expectedModules.size ||
+    new Set(installed.moduleBindings.map((binding) => binding.moduleRootId.toLowerCase())).size !==
+      expectedModules.size ||
     installed.moduleBindings.some((binding) => {
       const module = expectedModules.get(binding.moduleRootId.toLowerCase());
-      return binding.state !== "active" || !sameId(binding.organizationId, selector.organizationId) ||
+      return (
+        binding.state !== "active" ||
+        !sameId(binding.organizationId, selector.organizationId) ||
         !sameId(binding.applicationRootId, selector.rootId) ||
-        binding.applicationReleaseRevision !== selector.releaseRevision || module === undefined ||
-        binding.moduleReleaseRevision !== module.releaseRevision;
+        binding.applicationReleaseRevision !== selector.releaseRevision ||
+        module === undefined ||
+        binding.moduleReleaseRevision !== module.releaseRevision
+      );
     }) ||
     (result.outcome === "activated" && result.previousApplicationReleaseRevision !== null) ||
     (result.outcome === "unchanged" &&
-      result.previousApplicationReleaseRevision !== selector.releaseRevision))
+      result.previousApplicationReleaseRevision !== selector.releaseRevision)
+  )
     problem("failed");
 };

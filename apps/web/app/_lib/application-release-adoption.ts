@@ -49,6 +49,7 @@ const humanDefinitionAccess = (): HumanInstallationDefinitionAccess => ({
   async readReleaseSet(
     session: IdentitySession,
     target,
+    purpose,
   ): Promise<SystemApplicationBoundReleaseSetResult> {
     const result = await requests().run(
       session,
@@ -57,6 +58,7 @@ const humanDefinitionAccess = (): HumanInstallationDefinitionAccess => ({
         createDatabaseApplicationReleaseAdoptionReleaseSetService(
           installedReleaseCatalogue,
           transaction,
+          purpose,
         ).read({
           applicationRootId: target.applicationRootId,
           applicationReleaseRevision: target.applicationReleaseRevision,
