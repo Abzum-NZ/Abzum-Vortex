@@ -75,6 +75,12 @@ export function StudioBlockSetupDialog({
   const [groupValues, setGroupValues] = useState<StudioCompositionSettings>({});
   const [problem, setProblem] = useState("");
   const formId = useId();
+  // The draft's query list keeps its contents but not its identity across autosave and agent
+  // edits, so the reset below follows the references themselves.
+  const queriesKey = useMemo(
+    () => queries.map((candidate) => candidate.reference).join("\u0000"),
+    [queries],
+  );
   useEffect(() => {
     setValues(setupDefaults(request?.choice));
     setGrouped(false);
@@ -87,7 +93,7 @@ export function StudioBlockSetupDialog({
           ? request.pageQuery!
           : (queries[0]?.reference ?? ""),
     );
-  }, [request, queries]);
+  }, [request, queriesKey]);
   // A block without a query picks any field of the draft; one with a query, only that query's fields.
   const choices = useMemo(
     () => studioBlockChoices(draftChoices, query === "" ? null : query),
