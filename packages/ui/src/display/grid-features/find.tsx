@@ -111,6 +111,7 @@ export default function Find({ context, surface }: GridFeatureInteractionProps):
       (context.rows.length > 0 && context.columns[0] !== undefined
         ? { row: 0, field: context.columns[0].key }
         : undefined);
+    previous.current = undefined;
     if (destination !== undefined) latest.current.focusCell(destination.row, destination.field);
   };
   const step = (offset: number): void => {
@@ -120,7 +121,15 @@ export default function Find({ context, surface }: GridFeatureInteractionProps):
   };
   if (!open)
     return (
-      <Button size="sm" variant="ghost" onClick={() => setOpen(true)}>
+      <Button
+        size="sm"
+        variant="ghost"
+        onClick={() => {
+          // Only Ctrl+F from a cell has a cell to return to.
+          previous.current = undefined;
+          setOpen(true);
+        }}
+      >
         <Icon name="search" aria-hidden="true" />
         Find on page
       </Button>

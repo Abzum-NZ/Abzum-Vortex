@@ -9,6 +9,7 @@ import { AuthShell } from "../../../auth/_components/auth-shell";
  */
 export const unavailableAddress = (
   <AuthShell
+    addressState="unavailable"
     eyebrow="Application access"
     title="Application unavailable"
     description="This application address cannot be opened from your current sign-in."
@@ -27,6 +28,7 @@ export function PageNotOpenAddress({
 }: Readonly<{ applicationName: string; homeHref: string }>): ReactElement {
   return (
     <AuthShell
+      addressState="page_not_open"
       eyebrow={applicationName}
       title="You don't have access to this page"
       description="Your role can't open this page, or it no longer exists. Ask an administrator if you need it."
@@ -44,6 +46,7 @@ export function TemporarilyUnavailableAddress({
 }: Readonly<{ retryHref: string }>): ReactElement {
   return (
     <AuthShell
+      addressState="temporarily_unavailable"
       eyebrow="Application access"
       title="This address is temporarily unavailable"
       description="Your sign-in is still active. Try loading this address again."
@@ -57,6 +60,7 @@ export function TemporarilyUnavailableAddress({
 
 export const suspendedOrganizationAccount = (
   <AuthShell
+    addressState="suspended"
     eyebrow="Organisation access"
     title="Your organisation account is suspended"
     description="This account needs explicit reactivation before it can be used. Signing in will not reactivate it."

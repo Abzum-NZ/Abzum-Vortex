@@ -5,7 +5,7 @@ import { resolve } from "node:path";
 import { performance } from "node:perf_hooks";
 import { pathToFileURL } from "node:url";
 import { createClient } from "@supabase/supabase-js";
-import { argumentValue, openLane, personaEmails, type LaneFacts } from "./lane";
+import { argumentValue, laneAuthEndpoint, openLane, personaEmails, type LaneFacts } from "./lane";
 
 /**
  * Measures PAGE server time, which the query-level baseline (`capture-baseline.ts`) does not: for
@@ -80,6 +80,8 @@ type Sample = Readonly<{
   milliseconds: number;
   status: number;
   source: "Server-Timing" | "wall clock";
+  /** The address state the response rendered instead of the page (refused or unavailable). */
+  addressState: string | undefined;
 }>;
 type Result = Readonly<{
   persona: PersonaName;
@@ -133,15 +135,19 @@ const launchBrowser = async (): Promise<Browser> => {
 };
 
 /** The owner's password is in the environment; the other personas get a fresh one on this lane. */
-const passwordFor = async (persona: PersonaName, email: string): Promise<string> => {
+const passwordFor = async (
+  facts: LaneFacts,
+  persona: PersonaName,
+  email: string,
+): Promise<string> => {
   if (persona === "owner") {
     const owned = process.env.VORTEX_DEMO_OWNER_PASSWORD;
     if (owned === undefined) throw new Error("VORTEX_DEMO_OWNER_PASSWORD is not set.");
     return owned;
   }
-  const url = process.env.VORTEX_SUPABASE_URL;
+  const url = laneAuthEndpoint(facts.lane);
   const key = process.env.VORTEX_DEV_SERVICE_ROLE_KEY;
-  if (url === undefined || key === undefined)
+  if (key === undefined)
     throw new Error("The lane Supabase URL and service key are not in the web environment.");
   const admin = createClient(url, key, {
     auth: { autoRefreshToken: false, persistSession: false },
@@ -186,13 +192,17 @@ const signedInCookie = async (
 const request = async (url: string, cookie: string): Promise<Sample> => {
   const started = performance.now();
   const response = await fetch(url, { headers: { cookie }, redirect: "follow" });
-  await response.text();
+  const html = await response.text();
   const elapsed = performance.now() - started;
+  // A refused or unavailable address still answers 200 with a fallback page; it carries the
+  // data-vortex-address-state marker, which an opened application page never does.
+  const addressState = /data-vortex-address-state="([a-z_]+)"/.exec(html)?.[1];
   const header = /dur=([0-9.]+)/i.exec(response.headers.get("server-timing") ?? "");
   return {
     milliseconds: header?.[1] === undefined ? elapsed : Number(header[1]),
     status: response.status,
     source: header?.[1] === undefined ? "wall clock" : "Server-Timing",
+    addressState,
   };
 };
 
@@ -236,13 +246,22 @@ const measure = async (
     await request(url, cookie);
     const samples: Sample[] = [];
     for (let run = 0; run < runs; run += 1) samples.push(await request(url, cookie));
-    const failed = [first, ...samples].find((sample) => sample.status !== 200);
+    // A sample counts only when the page itself was rendered: an HTTP error or a refused/unavailable
+    // fallback marks the whole target as a problem, so no p95 comes from a page that did not open.
+    const failed = [first, ...samples].find(
+      (sample) => sample.status !== 200 || sample.addressState !== undefined,
+    );
     results.push({
       persona,
       label: target.label,
       first,
       samples,
-      problem: failed === undefined ? undefined : `HTTP ${failed.status}`,
+      problem:
+        failed === undefined
+          ? undefined
+          : failed.status !== 200
+            ? `HTTP ${failed.status}`
+            : `refused: ${failed.addressState}`,
     });
     log(`${persona} ${target.label}: ${samples.length} runs`);
   }
@@ -251,7 +270,7 @@ const measure = async (
 
 const render = (results: readonly Result[], runs: number, lane: number, base: URL): string => {
   const rows = results.map((result) => {
-    if (result.first === undefined)
+    if (result.first === undefined || result.problem?.startsWith("refused") === true)
       return `| ${result.persona} | ${result.label} | | | | | | ${result.problem ?? "not measured"} |`;
     const times = result.samples.map((sample) => sample.milliseconds);
     const p95 = percentile(times, 0.95);
@@ -285,14 +304,23 @@ const main = async (): Promise<void> => {
   if (chosen !== undefined && !personaNames.includes(chosen as PersonaName))
     throw new Error("--persona must be owner, member or viewer.");
   const facts = openLane();
-  const recordIds = await loadRecordIds(facts);
-  await facts.administration.end();
+  let recordIds: Awaited<ReturnType<typeof loadRecordIds>>;
+  try {
+    recordIds = await loadRecordIds(facts);
+  } finally {
+    await facts.administration.end();
+  }
   const browser = await launchBrowser();
   const results: Result[] = [];
   try {
     for (const persona of chosen === undefined ? personaNames : [chosen as PersonaName]) {
       const email = personaEmails[persona]();
-      const cookie = await signedInCookie(browser, base, email, await passwordFor(persona, email));
+      const cookie = await signedInCookie(
+        browser,
+        base,
+        email,
+        await passwordFor(facts, persona, email),
+      );
       results.push(...(await measure(facts, base, persona, cookie, runs, recordIds)));
     }
   } finally {
