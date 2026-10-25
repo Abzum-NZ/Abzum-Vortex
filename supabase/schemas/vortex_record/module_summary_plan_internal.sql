@@ -1,10 +1,25 @@
-create or replace function vortex_record.run_module_query_summary_internal(
+-- One protected summary plan: field policy, filter pushdown, aggregate expressions and candidate scan.
+create or replace function vortex_record.module_summary_plan_internal(
   p_module_root_id uuid,
   p_query_id uuid,
   p_expected_release_revision bigint,
   p_input_values jsonb,
-  p_user_inputs jsonb,
-  p_prepared_plan jsonb
+  p_filter jsonb,
+  p_filterable_field_ids uuid[],
+  p_search text,
+  p_searchable_field_ids uuid[],
+  p_prepared_plan jsonb,
+  p_query jsonb,
+  p_grouping_field_id uuid,
+  p_field_counts boolean,
+  p_pivot_row_field_id uuid,
+  p_pivot_column_field_id uuid,
+  p_pivot_measure_field_id uuid,
+  p_buckets jsonb,
+  p_group_limit integer,
+  p_group_after text,
+  p_choice_field_id uuid,
+  p_columns jsonb
 )
 returns jsonb
 language plpgsql
@@ -19,9 +34,9 @@ declare
   uuid_pattern constant text :=
     '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
   prepared_plan jsonb := p_prepared_plan;
-  user_search text := nullif(pg_catalog.btrim(p_user_inputs ->> 'search'), '');
+  user_search text := nullif(pg_catalog.btrim(p_search), '');
   search_field_ids text[] := array[]::text[];
-  declared_searchable_ids jsonb := coalesce(p_user_inputs -> 'searchableFieldIds', '[]'::jsonb);
+  declared_searchable_ids jsonb := coalesce(pg_catalog.to_jsonb(p_searchable_field_ids), '[]'::jsonb);
   resolved jsonb;
   query_item jsonb;
   record_type_item jsonb;
@@ -64,7 +79,6 @@ declare
   scan_sql text;
   candidate_sql text;
   selected_sql text;
-  summary_sql text;
   expression_pairs text[] := array[]::text[];
   group_value_pairs text[] := array[]::text[];
   group_by_terms text[] := array[]::text[];
@@ -72,7 +86,7 @@ declare
   group_values_sql text;
   group_value_sql text;
   group_page_limit integer;
-  group_after text := p_user_inputs ->> 'groupAfter';
+  group_after text := p_group_after;
   pivot_mode boolean := false;
   group_cursor jsonb;
   pivot_row_field_id text;
@@ -111,28 +125,25 @@ declare
   aggregate_alias text;
   average_places integer;
   value_expression text;
-  groups_json_sql text := '''[]''::jsonb';
   board_summary_mode boolean := false;
   board_choice_field_id text;
   board_options jsonb;
   board_option jsonb;
   board_option_values text[] := array[]::text[];
-  board_bucket_sql text;
-  board_requested_columns jsonb := p_user_inputs #> '{boardSummary,columns}';
+  board_requested_columns jsonb := p_columns;
   board_requested_positions integer[] := array[]::integer[];
   board_requested_column jsonb;
   board_option_position integer;
-  board_totals_sql text;
-  board_empty_aggregates_sql text;
-  result_value jsonb;
-  error_message text;
 begin
-  board_summary_mode := p_user_inputs ? 'boardSummary';
-  if board_summary_mode then
-    board_choice_field_id := pg_catalog.lower(p_user_inputs #>> '{boardSummary,choiceFieldId}');
-  end if;
+  board_summary_mode := p_choice_field_id is not null;
+  board_choice_field_id := p_choice_field_id::text;
+  pivot_mode := p_pivot_row_field_id is not null;
+  pivot_row_field_id := p_pivot_row_field_id::text;
+  pivot_column_field_id := p_pivot_column_field_id::text;
+  pivot_measure_field_id := p_pivot_measure_field_id::text;
+  pivot_buckets := coalesce(p_buckets, '{}'::jsonb);
   resolved := prepared_plan -> 'resolved';
-  query_item := prepared_plan -> 'query';
+  query_item := p_query;
   record_type_item := prepared_plan -> 'recordType';
   if record_type_item ? 'systemProjection' then
     -- A protected reader supplies bounded pages, not an unbounded relation
@@ -143,61 +154,6 @@ begin
   context_organization_id := (prepared_plan #>> '{scope,organizationId}')::uuid;
   context_application_root_id := (prepared_plan #>> '{scope,applicationRootId}')::uuid;
 
-  if p_user_inputs ? 'grouping' then
-    query_item := vortex_record.grouping_query_internal(
-      query_item, record_type_item, p_user_inputs -> 'grouping', 50
-    );
-    if query_item is null then
-      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
-    end if;
-  end if;
-  -- Grid totals name selected visible columns only; the ordinary summary engine owns every
-  -- calculation and every field-policy check, including per-bucket withholding.
-  if p_user_inputs ? 'totals' or p_user_inputs #> '{grouping,aggregates}' is not null then
-    aggregate_items := coalesce(p_user_inputs -> 'totals', p_user_inputs #> '{grouping,aggregates}');
-    if pg_catalog.jsonb_typeof(aggregate_items) is distinct from 'array' then
-      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
-    end if;
-    if pg_catalog.jsonb_array_length(aggregate_items) not between 1 and 6 then
-      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
-    end if;
-    for aggregate_item in select item.value from pg_catalog.jsonb_array_elements(aggregate_items) as item(value) loop
-      if pg_catalog.jsonb_typeof(aggregate_item) is distinct from 'object' then
-        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
-      end if;
-      if aggregate_item - array['fieldId', 'operation', 'alias']::text[] <> '{}'::jsonb
-        or pg_catalog.jsonb_typeof(aggregate_item -> 'fieldId') is distinct from 'string'
-        or pg_catalog.jsonb_typeof(aggregate_item -> 'operation') is distinct from 'string'
-        or pg_catalog.jsonb_typeof(aggregate_item -> 'alias') is distinct from 'string'
-        or aggregate_item ->> 'operation' not in ('count', 'sum', 'average', 'minimum', 'maximum', 'distinct_count')
-        or not exists (select 1 from pg_catalog.jsonb_array_elements_text(query_item -> 'selectedFieldIds') as selected(id)
-          where pg_catalog.lower(selected.id) = pg_catalog.lower(aggregate_item ->> 'fieldId')) then
-        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
-      end if;
-    end loop;
-    query_item := query_item || pg_catalog.jsonb_build_object('aggregates', aggregate_items,
-      'groupByFieldIds', case when p_user_inputs ? 'grouping' then query_item -> 'groupByFieldIds' else '[]'::jsonb end);
-  end if;
-  pivot_mode := p_user_inputs ? 'pivot';
-  if pivot_mode then
-    query_item := vortex_record.pivot_query_internal(
-      query_item, record_type_item, p_user_inputs -> 'pivot'
-    );
-    if query_item is null then
-      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
-    end if;
-    pivot_row_field_id := pg_catalog.lower(p_user_inputs #>> '{pivot,rowFieldId}');
-    pivot_column_field_id := pg_catalog.lower(p_user_inputs #>> '{pivot,columnFieldId}');
-    pivot_measure_field_id := pg_catalog.lower(p_user_inputs #>> '{pivot,measure,fieldId}');
-    pivot_buckets := pg_catalog.jsonb_build_object(
-      pivot_row_field_id, p_user_inputs #> '{pivot,rowDateBucket}',
-      pivot_column_field_id, p_user_inputs #> '{pivot,columnDateBucket}'
-    );
-  elsif p_user_inputs ? 'grouping' then
-    pivot_buckets := pg_catalog.jsonb_build_object(
-      pg_catalog.lower(p_user_inputs #>> '{grouping,fieldId}'), p_user_inputs #> '{grouping,dateBucket}'
-    );
-  end if;
   -- A group continuation is the jsonb text [rank, title, canonical group value] of the last group
   -- a page returned, for pivot rows and grouped tables alike; anything else is forged.
   if group_after is not null then
@@ -217,11 +173,7 @@ begin
   end if;
   -- Every grouped read pages its groups: the requested page size, or the default, held to the maximum.
   -- The candidate ceiling bounds the rows a read may scan, never the groups it returns.
-  group_page_limit := least(group_page_maximum, greatest(1, coalesce(case
-    when pivot_mode then ((p_user_inputs #>> '{pivot,rowLimit}')::numeric)::integer
-    when p_user_inputs ? 'grouping' then ((p_user_inputs #>> '{grouping,limit}')::numeric)::integer
-    when p_user_inputs ? 'groupLimit' then ((p_user_inputs ->> 'groupLimit')::numeric)::integer
-    end, group_page_default)));
+  group_page_limit := least(group_page_maximum, greatest(1, coalesce(p_group_limit, group_page_default)));
   if pg_catalog.jsonb_typeof(declared_searchable_ids) is distinct from 'array' then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
   end if;
@@ -346,7 +298,7 @@ begin
       or aggregate_alias = any (aggregate_aliases)
       or (aggregate_item ? 'fieldId' and aggregate_field_id is null)
       or (aggregate_operation <> 'count' and aggregate_field_id is null)
-      or (aggregate_operation = 'count' and aggregate_field_id is not null and not (p_user_inputs ? 'totals' or p_user_inputs #> '{grouping,aggregates}' is not null)) then
+      or (aggregate_operation = 'count' and aggregate_field_id is not null and not p_field_counts) then
       return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
     end if;
     aggregate_aliases := pg_catalog.array_append(aggregate_aliases, aggregate_alias);
@@ -408,8 +360,8 @@ begin
   into bound_field_ids
   from pg_catalog.jsonb_array_elements_text(prepared_plan -> 'fieldBoundIds') as item(value)
   where fields_by_id ? item.value;
-  if p_user_inputs ? 'grouping' and not (
-    pg_catalog.lower(p_user_inputs #>> '{grouping,fieldId}') = any (readable_field_ids)
+  if p_grouping_field_id is not null and not (
+    p_grouping_field_id::text = any (readable_field_ids)
   ) then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'field_unbounded');
   end if;
@@ -425,7 +377,7 @@ begin
 
   prepared_plan := vortex_record.prepare_module_query_internal(
     p_module_root_id, p_query_id, p_expected_release_revision, p_input_values,
-    p_user_inputs -> 'filter', coalesce(p_user_inputs -> 'filterableFieldIds', '[]'::jsonb),
+    p_filter, coalesce(pg_catalog.to_jsonb(p_filterable_field_ids), '[]'::jsonb),
     'complete', prepared_plan
   );
   if prepared_plan ->> 'outcome' is distinct from 'prepared' then
@@ -965,23 +917,6 @@ begin
   -- Omitted grouping fields are withheld on that row, so they form no group;
   -- a readable JSON null remains a legitimate null group.
   if board_summary_mode then
-    board_bucket_sql := pg_catalog.format(
-      'case when pg_catalog.jsonb_typeof(candidate.projected_values -> %L) = ''string'' then case ',
-      board_choice_field_id
-    );
-    board_option_position := 0;
-    for board_option in
-      select item.value from pg_catalog.jsonb_array_elements(board_options) as item(value)
-    loop
-      board_option_position := board_option_position + 1;
-      board_bucket_sql := board_bucket_sql || pg_catalog.format(
-        'when (candidate.projected_values ->> %L) collate "C" = %L collate "C" then %s ',
-        board_choice_field_id, board_option ->> 'value', board_option_position
-      );
-    end loop;
-    board_bucket_sql := board_bucket_sql || 'else 0 end else 0 end';
-    -- Requested buckets are data, validated against the installed options. Only these buckets
-    -- enter the existing capped aggregate path; unread columns retain navigation metadata only.
     for board_requested_column in
       select item.value from pg_catalog.jsonb_array_elements(board_requested_columns) as item(value)
     loop
@@ -996,479 +931,54 @@ begin
       end if;
     end loop;
 
-    if aggregate_object_sql = '' then
-      board_totals_sql := 'select ''{}''::jsonb as aggregate_values';
-      board_empty_aggregates_sql := 'select ''{}''::jsonb as aggregates';
-    else
-      board_totals_sql := pg_catalog.format(
-        'select pg_catalog.jsonb_build_object(%s) as aggregate_values
-         from normalized as candidate',
-        aggregate_object_sql
-      );
-      board_empty_aggregates_sql := pg_catalog.format(
-        'select pg_catalog.jsonb_build_object(%s) as aggregates
-         from (select null::jsonb as projected_values) as candidate where false',
-        aggregate_object_sql
-      );
-    end if;
-    if fast_path then
-      -- One grouping-set scan computes both each bucket and the grand total.
-      -- The raw candidate count is retained separately for the existing limit.
-      summary_sql := pg_catalog.format(
-        'with candidate as materialized (%s),
-         candidate_count as (select pg_catalog.count(*)::integer as value from candidate),
-         selected as (%s),
-         normalized as (
-           select bucket.projected_values, bucket.bucket_index
-           from (select candidate.projected_values, %s as bucket_index
-             from selected as candidate) as bucket
-           where bucket.bucket_index = any (%L::integer[])
-         ),
-         aggregate_rows as materialized (
-           select grouping(candidate.bucket_index) as is_total,
-             candidate.bucket_index,
-             pg_catalog.count(*)::integer as row_count,
-             %s as aggregates
-           from normalized as candidate
-           group by rollup(candidate.bucket_index)
-         ),
-         totals as (select row_count, aggregates from aggregate_rows where is_total = 1),
-         grouped as (select bucket_index, row_count, aggregates from aggregate_rows where is_total = 0),
-         installed_options as (
-           select choice_option.value, choice_option.position::integer as position
-           from pg_catalog.jsonb_array_elements(%L::jsonb)
-             with ordinality as choice_option(value, position)
-         ),
-         empty_aggregates as (%s),
-         columns_result as (
-           select coalesce(pg_catalog.jsonb_agg(
-             pg_catalog.jsonb_build_object(
-               ''value'', installed.value ->> ''value'',
-               ''label'', installed.value ->> ''label'',
-               ''rowCount'', case when installed.position = any (%L::integer[]) then coalesce(grouped.row_count, 0) else null end,
-               ''aggregates'', case when installed.position = any (%L::integer[]) then coalesce(grouped.aggregates, empty_aggregates.aggregates) else ''{}''::jsonb end
-             ) order by installed.position
-           ), ''[]''::jsonb) as value
-           from installed_options as installed
-           left join grouped on grouped.bucket_index = installed.position
-           cross join empty_aggregates
-         ),
-         unassigned_result as (
-           select pg_catalog.jsonb_build_object(
-             ''rowCount'', case when 0 = any (%L::integer[]) then coalesce(grouped.row_count, 0) else null end,
-             ''aggregates'', case when 0 = any (%L::integer[]) then coalesce(grouped.aggregates, empty_aggregates.aggregates) else ''{}''::jsonb end
-           ) as value
-           from (select 0::integer as bucket_index) as unassigned
-           left join grouped on grouped.bucket_index = unassigned.bucket_index
-           cross join empty_aggregates
-         )
-         select case when candidate_count.value > %s
-           then pg_catalog.jsonb_build_object(''outcome'', ''refused'', ''reasonCode'', ''dataset_limit_exceeded'')
-           else pg_catalog.jsonb_build_object(
-             ''outcome'', ''completed'',
-             ''moduleRootId'', %L,
-             ''moduleReleaseVersion'', %L,
-             ''queryId'', %L,
-             ''choiceFieldId'', %L,
-             ''totalRowCount'', totals.row_count,
-             ''columns'', columns_result.value,
-             ''unassigned'', unassigned_result.value,
-             ''aggregates'', totals.aggregates
-           ) end
-         from candidate_count cross join totals
-           cross join columns_result cross join unassigned_result',
-        candidate_sql,
-        selected_sql,
-        board_bucket_sql,
-        board_requested_positions::text,
-        case when aggregate_object_sql = '' then '''{}''::jsonb'
-          else pg_catalog.format('pg_catalog.jsonb_build_object(%s)', aggregate_object_sql) end,
-        board_options::text,
-        board_empty_aggregates_sql,
-        board_requested_positions::text, board_requested_positions::text,
-        board_requested_positions::text, board_requested_positions::text,
-        summary_candidate_limit,
-        p_module_root_id::text,
-        resolved ->> 'moduleReleaseVersion',
-        p_query_id::text,
-        board_choice_field_id
-      );
-    else
-    summary_sql := pg_catalog.format(
-      'with candidate as materialized (%s),
-       candidate_count as (select pg_catalog.count(*)::integer as value from candidate),
-       selected as materialized (%s),
-       normalized as materialized (
-         select bucket.projected_values, bucket.bucket_index
-         from (select candidate.projected_values, %s as bucket_index
-           from selected as candidate) as bucket
-         where bucket.bucket_index = any (%L::integer[])
-       ),
-       selected_count as (select pg_catalog.count(*)::integer as value from normalized),
-       installed_options as (
-         select choice_option.value, choice_option.position::integer as position
-         from pg_catalog.jsonb_array_elements(%L::jsonb)
-           with ordinality as choice_option(value, position)
-       ),
-       totals as (%s),
-       grouped as (
-         select candidate.bucket_index,
-           pg_catalog.count(*)::integer as row_count,
-           pg_catalog.jsonb_build_object(%s) as aggregates
-         from normalized as candidate
-         group by candidate.bucket_index
-       ),
-       empty_aggregates as (%s),
-       columns_result as (
-         select coalesce(pg_catalog.jsonb_agg(
-           pg_catalog.jsonb_build_object(
-             ''value'', installed.value ->> ''value'',
-             ''label'', installed.value ->> ''label'',
-             ''rowCount'', case when installed.position = any (%L::integer[]) then coalesce(grouped.row_count, 0) else null end,
-             ''aggregates'', case when installed.position = any (%L::integer[]) then coalesce(grouped.aggregates, empty_aggregates.aggregates) else ''{}''::jsonb end
-           ) order by installed.position
-         ), ''[]''::jsonb) as value
-         from installed_options as installed
-         left join grouped on grouped.bucket_index = installed.position
-         cross join empty_aggregates
-       ),
-       unassigned_result as (
-         select pg_catalog.jsonb_build_object(
-           ''rowCount'', case when 0 = any (%L::integer[]) then coalesce(grouped.row_count, 0) else null end,
-           ''aggregates'', case when 0 = any (%L::integer[]) then coalesce(grouped.aggregates, empty_aggregates.aggregates) else ''{}''::jsonb end
-         ) as value
-         from (select 0::integer as bucket_index) as unassigned
-         left join grouped on grouped.bucket_index = unassigned.bucket_index
-         cross join empty_aggregates
-       )
-       select case when candidate_count.value > %s
-         then pg_catalog.jsonb_build_object(''outcome'', ''refused'', ''reasonCode'', ''dataset_limit_exceeded'')
-         else pg_catalog.jsonb_build_object(
-           ''outcome'', ''completed'',
-           ''moduleRootId'', %L,
-           ''moduleReleaseVersion'', %L,
-           ''queryId'', %L,
-           ''choiceFieldId'', %L,
-           ''totalRowCount'', selected_count.value,
-           ''columns'', columns_result.value,
-           ''unassigned'', unassigned_result.value,
-           ''aggregates'', totals.aggregate_values
-         ) end
-       from candidate_count cross join selected_count cross join totals
-         cross join columns_result cross join unassigned_result',
-      candidate_sql,
-      selected_sql,
-      board_bucket_sql,
-      board_requested_positions::text,
-      board_options::text,
-      board_totals_sql,
-      aggregate_object_sql,
-      board_empty_aggregates_sql,
-      board_requested_positions::text, board_requested_positions::text,
-      board_requested_positions::text, board_requested_positions::text,
-      summary_candidate_limit,
-      p_module_root_id::text,
-      resolved ->> 'moduleReleaseVersion',
-      p_query_id::text,
-      board_choice_field_id
-    );
-    end if;
-  elsif pivot_mode then
-    -- One grouping-sets statement yields every cell, each row total, each column total and the
-    -- grand total over the full readable filtered set. Averages and extremes are computed for
-    -- each set, never combined from cells. Axis values are ordered by (rank, title, canonical
-    -- text), so link values follow their readable target title; rows are keyset-paged on that tuple.
-    summary_sql := pg_catalog.format(
-      'with candidate as materialized (%s),
-       candidate_count as (select pg_catalog.count(*)::integer as value from candidate),
-       selected as materialized (%s),
-       raw_dimensions as materialized (
-         select candidate.projected_values, coalesce(%s, ''null''::jsonb) as row_value, coalesce(%s, ''null''::jsonb) as column_value
-         from selected as candidate
-         where %s and (select value from candidate_count) <= %s
-       ),
-       row_values as materialized (
-         select * from vortex_record.dimension_value_internal(
-           (select pg_catalog.array_agg(distinct row_value) from raw_dimensions), %L::jsonb
-         )
-       ),
-       column_values as materialized (
-         select * from vortex_record.dimension_value_internal(
-           (select pg_catalog.array_agg(distinct column_value) from raw_dimensions), %L::jsonb
-         )
-       ),
-       dimensions as materialized (
-         select source.projected_values, rows.normalized as row_value,
-           rows.sort_rank as row_rank, rows.sort_title as row_title,
-           columns.normalized as column_value,
-           columns.sort_rank as column_rank, columns.sort_title as column_title
-         from raw_dimensions as source
-         join row_values as rows on rows.value = source.row_value
-         join column_values as columns on columns.value = source.column_value
-       ),
-       crossed as materialized (
-         select grouping(candidate.row_value, candidate.column_value) as level,
-           candidate.row_rank, candidate.row_title, candidate.row_value,
-           candidate.column_rank, candidate.column_title, candidate.column_value,
-           pg_catalog.count(*)::integer as row_count,
-           pg_catalog.jsonb_build_object(%s) as aggregates
-         from dimensions as candidate
-         group by grouping sets (
-           (candidate.row_rank, candidate.row_title, candidate.row_value,
-            candidate.column_rank, candidate.column_title, candidate.column_value),
-           (candidate.row_rank, candidate.row_title, candidate.row_value),
-           (candidate.column_rank, candidate.column_title, candidate.column_value), ()
-         )
-       ),
-       column_axis as materialized (
-         select * from crossed where level = 2
-       ),
-       column_count as (select pg_catalog.count(*)::integer as value from column_axis),
-       row_axis as materialized (
-         select crossed.*, pg_catalog.jsonb_build_array(
-           crossed.row_rank, crossed.row_title, crossed.row_value::text
-         )::text as row_key
-         from crossed
-         where level = 1
-           and (%L::text is null or (
-             crossed.row_rank, crossed.row_title collate "C", crossed.row_value::text collate "C"
-           ) > (%L::integer, %L::text collate "C", %L::text collate "C"))
-         order by crossed.row_rank, crossed.row_title collate "C", crossed.row_value::text collate "C"
-         limit %s
-       ),
-       visible_rows as materialized (
-         select * from row_axis
-         order by row_rank, row_title collate "C", row_value::text collate "C" limit %s
-       ),
-       visible_cells as materialized (
-         select cell.row_value, pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
-           ''column'', cell.column_value, ''rowCount'', cell.row_count,
-           ''aggregates'', cell.aggregates
-         ) order by cell.column_rank, cell.column_title collate "C", cell.column_value::text collate "C") as cells
-         from crossed as cell
-         join visible_rows as visible on visible.row_value = cell.row_value
-         where cell.level = 0
-         group by cell.row_value
-       ),
-       grand as (select row_count, aggregates from crossed where level = 3)
-       select case
-         when candidate_count.value > %s
-           then pg_catalog.jsonb_build_object(''outcome'', ''refused'', ''reasonCode'', ''dataset_limit_exceeded'')
-         when column_count.value > %s
-           then pg_catalog.jsonb_build_object(''outcome'', ''refused'', ''reasonCode'', ''pivot_columns_exceeded'')
-         else pg_catalog.jsonb_build_object(
-           ''outcome'', ''completed'',
-           ''moduleRootId'', %L,
-           ''moduleReleaseVersion'', %L,
-           ''queryId'', %L,
-           ''groupByFieldIds'', %L::jsonb,
-           ''totalRowCount'', grand.row_count,
-           ''groups'', ''[]''::jsonb,
-           ''aggregates'', grand.aggregates,
-           ''nextGroupKey'', case when (select pg_catalog.count(*) from row_axis) > %s
-             then (select row_key from visible_rows
-               order by row_rank desc, row_title collate "C" desc, row_value::text collate "C" desc limit 1)
-             else null end,
-           ''pivot'', pg_catalog.jsonb_build_object(
-             ''rowFieldId'', %L,
-             ''columnFieldId'', %L,
-             ''rowGroupCount'', (select pg_catalog.count(*) from crossed where level = 1),
-             ''columns'', (
-               select coalesce(pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
-                 ''value'', axis.column_value, ''rowCount'', axis.row_count, ''aggregates'', axis.aggregates
-               ) order by axis.column_rank, axis.column_title collate "C", axis.column_value::text collate "C"), ''[]''::jsonb)
-               from column_axis as axis
-             ),
-             ''rows'', (
-               select coalesce(pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
-                 ''key'', visible.row_key, ''value'', visible.row_value, ''rowCount'', visible.row_count,
-                 ''aggregates'', visible.aggregates,
-                 ''cells'', coalesce(row_cells.cells, ''[]''::jsonb)
-               ) order by visible.row_rank, visible.row_title collate "C", visible.row_value::text collate "C"), ''[]''::jsonb)
-               from visible_rows as visible
-               left join visible_cells as row_cells on row_cells.row_value = visible.row_value
-             )
-           )
-         ) end
-       from candidate_count cross join column_count cross join grand',
-      candidate_sql,
-      selected_sql,
-      group_by_terms[1],
-      group_by_terms[2],
-      group_presence_sql,
-      summary_candidate_limit,
-      (fields_by_id -> pivot_row_field_id)::text,
-      (fields_by_id -> pivot_column_field_id)::text,
-      aggregate_object_sql,
-      group_after, group_cursor ->> 0, group_cursor ->> 1, group_cursor ->> 2,
-      group_page_limit + 1, group_page_limit,
-      summary_candidate_limit,
-      pivot_column_limit,
-      p_module_root_id::text,
-      resolved ->> 'moduleReleaseVersion',
-      p_query_id::text,
-      pg_catalog.to_jsonb(group_ids)::text,
-      group_page_limit,
-      pivot_row_field_id,
-      pivot_column_field_id
-    );
-  elsif pg_catalog.cardinality(group_ids) > 0 then
-    -- Groups are ordered and keyset-paged on (rank, title, canonical value); the group key a member
-    -- read selects by stays the canonical value text.
-    groups_json_sql := pg_catalog.format(
-      '(select coalesce(pg_catalog.jsonb_agg(
-         pg_catalog.jsonb_build_object(
-           ''groupKey'', grouped.group_values::text,
-           ''groupValues'', grouped.group_values,
-           ''rowCount'', grouped.row_count,
-           ''aggregates'', grouped.aggregates
-         ) order by grouped.sort_rank, grouped.sort_title collate "C", grouped.group_values::text collate "C"
-       ), ''[]''::jsonb) from visible_groups as grouped)'
-    );
-    summary_sql := pg_catalog.format(
-      'with candidate as materialized (%s),
-       candidate_count as (select pg_catalog.count(*)::integer as value from candidate),
-       selected as materialized (%s),
-       selected_count as (select pg_catalog.count(*)::integer as value from selected),
-       totals as (%s),
-       raw_dimensions as materialized (
-         select candidate.projected_values, %s as group_values
-         from selected as candidate
-         where %s and (select value from candidate_count) <= %s
-       ),
-       %saxis_values as materialized (%s),
-       dimensions as materialized (
-         select source.projected_values, axis.normalized as group_values, axis.sort_rank, axis.sort_title
-         from raw_dimensions as source
-         join axis_values as axis on axis.value = source.group_values
-       ),
-       grouped as (
-         select candidate.group_values, candidate.sort_rank, candidate.sort_title,
-           pg_catalog.count(*)::integer as row_count,
-           pg_catalog.jsonb_build_object(%s) as aggregates
-         from dimensions as candidate
-         group by candidate.group_values, candidate.sort_rank, candidate.sort_title
-       ),
-       paged_groups as materialized (
-         select * from grouped
-         where %L::text is null or (
-           grouped.sort_rank, grouped.sort_title collate "C", grouped.group_values::text collate "C"
-         ) > (%L::integer, %L::text collate "C", %L::text collate "C")
-         order by grouped.sort_rank, grouped.sort_title collate "C", grouped.group_values::text collate "C"
-         limit %s
-       ),
-       visible_groups as materialized (
-         select * from paged_groups
-         order by sort_rank, sort_title collate "C", group_values::text collate "C" limit %s
-       )
-       select case when candidate_count.value > %s
-         then pg_catalog.jsonb_build_object(''outcome'', ''refused'', ''reasonCode'', ''dataset_limit_exceeded'')
-         else pg_catalog.jsonb_build_object(
-           ''outcome'', ''completed'',
-           ''moduleRootId'', %L,
-           ''moduleReleaseVersion'', %L,
-           ''queryId'', %L,
-           ''groupByFieldIds'', %L::jsonb,
-           ''totalRowCount'', selected_count.value,
-           ''groups'', %s,
-           ''aggregates'', totals.aggregate_values,
-           ''nextGroupKey'', case when (select pg_catalog.count(*) from paged_groups) > %s
-             then (select pg_catalog.jsonb_build_array(sort_rank, sort_title, group_values::text)::text
-               from visible_groups
-               order by sort_rank desc, sort_title collate "C" desc, group_values::text collate "C" desc limit 1)
-             else null end
-         ) end
-       from candidate_count cross join selected_count cross join totals',
-      candidate_sql,
-      selected_sql,
-      summary_totals_sql,
-      group_values_sql,
-      group_presence_sql,
-      summary_candidate_limit,
-      group_axis_ctes_sql,
-      group_dimension_sql,
-      aggregate_object_sql,
-      group_after, group_cursor ->> 0, group_cursor ->> 1, group_cursor ->> 2,
-      group_page_limit + 1, group_page_limit,
-      summary_candidate_limit,
-      p_module_root_id::text,
-      resolved ->> 'moduleReleaseVersion',
-      p_query_id::text,
-      pg_catalog.to_jsonb(group_ids)::text,
-      groups_json_sql,
-      group_page_limit
-    );
-  else
-    summary_sql := pg_catalog.format(
-      'with candidate as materialized (%s),
-       candidate_count as (select pg_catalog.count(*)::integer as value from candidate),
-       selected as materialized (%s),
-       selected_count as (select pg_catalog.count(*)::integer as value from selected),
-       totals as (%s)
-       select case when candidate_count.value > %s
-         then pg_catalog.jsonb_build_object(''outcome'', ''refused'', ''reasonCode'', ''dataset_limit_exceeded'')
-         else pg_catalog.jsonb_build_object(
-           ''outcome'', ''completed'',
-           ''moduleRootId'', %L,
-           ''moduleReleaseVersion'', %L,
-           ''queryId'', %L,
-           ''groupByFieldIds'', %L::jsonb,
-           ''totalRowCount'', selected_count.value,
-           ''groups'', ''[]''::jsonb,
-           ''aggregates'', totals.aggregate_values
-         ) end
-       from candidate_count cross join selected_count cross join totals',
-      candidate_sql,
-      selected_sql,
-      summary_totals_sql,
-      summary_candidate_limit,
-      p_module_root_id::text,
-      resolved ->> 'moduleReleaseVersion',
-      p_query_id::text,
-      pg_catalog.to_jsonb(group_ids)::text
-    );
   end if;
-
-  begin
-    execute summary_sql into result_value
-      using context_organization_id, context_application_root_id, null::text[], null::uuid,
-        summary_candidate_limit + 1, access_owner_account_id, access_owner_group_ids,
-        access_shared_record_ids, filter_parameters, access_parameters, null::jsonb,
-        filter_condition, filter_types, parameter_types, parameter_values,
-        filter_ids, summary_field_ids, search_field_ids, user_search;
-  exception
-    when invalid_parameter_value then
-      -- Only the query condition evaluator's refusal is a filter the reader got wrong; any other
-      -- invalid parameter is a platform fault and propagates to the adapter, which logs it.
-      get stacked diagnostics error_message = message_text;
-      if error_message is distinct from 'Query condition is invalid' then
-        raise;
-      end if;
-      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'filter_invalid');
-    when sqlstate 'V3187' then
-      -- A readable date bucket left the supported year domain (grouping_value_internal).
-      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'value_out_of_range');
-  end;
-  -- A grid's grouped read carries the reader's field bound, as its plain page read does, so the
-  -- collapsed table offers the same controls without reading a member page.
-  if p_user_inputs ? 'grouping' and result_value ->> 'outcome' = 'completed' then
-    result_value := result_value || pg_catalog.jsonb_build_object(
-      'fieldBounds', pg_catalog.jsonb_build_object(
-        'readableFieldIds', pg_catalog.to_jsonb(bound_field_ids),
-        'searchable', search_field_ids && bound_field_ids
-      )
-    );
-  end if;
-  return result_value;
+  return pg_catalog.jsonb_build_object('outcome', 'planned')
+    || pg_catalog.jsonb_build_object('summary_candidate_limit', pg_catalog.to_jsonb(summary_candidate_limit),
+      'resolved', pg_catalog.to_jsonb(resolved),
+      'fast_path', pg_catalog.to_jsonb(fast_path),
+      'candidate_sql', pg_catalog.to_jsonb(candidate_sql),
+      'selected_sql', pg_catalog.to_jsonb(selected_sql),
+      'aggregate_object_sql', pg_catalog.to_jsonb(aggregate_object_sql),
+      'board_choice_field_id', pg_catalog.to_jsonb(board_choice_field_id),
+      'board_options', pg_catalog.to_jsonb(board_options),
+      'board_requested_positions', pg_catalog.to_jsonb(board_requested_positions),
+      'p_module_root_id', pg_catalog.to_jsonb(p_module_root_id),
+      'p_query_id', pg_catalog.to_jsonb(p_query_id),
+      'group_ids', pg_catalog.to_jsonb(group_ids),
+      'fields_by_id', pg_catalog.to_jsonb(fields_by_id),
+      'group_by_terms', pg_catalog.to_jsonb(group_by_terms),
+      'group_page_limit', pg_catalog.to_jsonb(group_page_limit),
+      'group_after', pg_catalog.to_jsonb(group_after),
+      'group_cursor', pg_catalog.to_jsonb(group_cursor),
+      'pivot_row_field_id', pg_catalog.to_jsonb(pivot_row_field_id),
+      'pivot_column_field_id', pg_catalog.to_jsonb(pivot_column_field_id),
+      'pivot_column_limit', pg_catalog.to_jsonb(pivot_column_limit),
+      'group_presence_sql', pg_catalog.to_jsonb(group_presence_sql),
+      'group_values_sql', pg_catalog.to_jsonb(group_values_sql),
+      'group_dimension_sql', pg_catalog.to_jsonb(group_dimension_sql),
+      'group_axis_ctes_sql', pg_catalog.to_jsonb(group_axis_ctes_sql),
+      'summary_totals_sql', pg_catalog.to_jsonb(summary_totals_sql),
+      'user_search', pg_catalog.to_jsonb(user_search),
+      'search_field_ids', pg_catalog.to_jsonb(search_field_ids),
+      'context_organization_id', pg_catalog.to_jsonb(context_organization_id),
+      'context_application_root_id', pg_catalog.to_jsonb(context_application_root_id),
+      'access_parameters', pg_catalog.to_jsonb(access_parameters),
+      'access_owner_account_id', pg_catalog.to_jsonb(access_owner_account_id),
+      'access_owner_group_ids', pg_catalog.to_jsonb(access_owner_group_ids),
+      'access_shared_record_ids', pg_catalog.to_jsonb(access_shared_record_ids),
+      'bound_field_ids', pg_catalog.to_jsonb(bound_field_ids),
+      'filter_condition', pg_catalog.to_jsonb(filter_condition))
+    || pg_catalog.jsonb_build_object('filter_types', pg_catalog.to_jsonb(filter_types),
+      'parameter_types', pg_catalog.to_jsonb(parameter_types),
+      'parameter_values', pg_catalog.to_jsonb(parameter_values),
+      'filter_ids', pg_catalog.to_jsonb(filter_ids),
+      'filter_parameters', pg_catalog.to_jsonb(filter_parameters),
+      'summary_field_ids', pg_catalog.to_jsonb(summary_field_ids))
+  ;
 end
 $function$;
 
-alter function vortex_record.run_module_query_summary_internal(uuid,uuid,bigint,jsonb,jsonb,jsonb) owner to vortex_owner;
-
-revoke all on function vortex_record.run_module_query_summary_internal(uuid,uuid,bigint,jsonb,jsonb,jsonb)
+alter function vortex_record.module_summary_plan_internal(uuid,uuid,bigint,jsonb,jsonb,uuid[],text,uuid[],jsonb,jsonb,uuid,boolean,uuid,uuid,uuid,jsonb,integer,text,uuid,jsonb) owner to vortex_owner;
+revoke all on function vortex_record.module_summary_plan_internal(uuid,uuid,bigint,jsonb,jsonb,uuid[],text,uuid[],jsonb,jsonb,uuid,boolean,uuid,uuid,uuid,jsonb,integer,text,uuid,jsonb)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-grant execute on function vortex_record.run_module_query_summary_internal(uuid,uuid,bigint,jsonb,jsonb,jsonb)
-  to vortex_record_adapter;
-
-comment on function vortex_record.run_module_query_summary_internal(uuid,uuid,bigint,jsonb,jsonb,jsonb) is
-  'Owner-only summary execution over the access plan prepared by the protected adapter entry point; explicit organisation and application scope and the exact read plan bound every aggregate scan, including a pivot crossed in one grouping-sets statement and every link grouping dimension folded through one protected title batch per link field; a grid''s grouped read also returns the reader''s guaranteed field bound.';
+grant execute on function vortex_record.module_summary_plan_internal(uuid,uuid,bigint,jsonb,jsonb,uuid[],text,uuid[],jsonb,jsonb,uuid,boolean,uuid,uuid,uuid,jsonb,integer,text,uuid,jsonb) to vortex_record_adapter;
