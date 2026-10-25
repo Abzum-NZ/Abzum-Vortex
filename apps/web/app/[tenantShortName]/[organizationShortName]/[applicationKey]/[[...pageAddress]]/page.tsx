@@ -249,19 +249,22 @@ async function readApplicationAddressPage({ params, searchParams }: ApplicationA
       displayName === undefined ? { email } : { email, displayName };
     return (
       <BarePage>
-        <ApplicationExperiencePage
-          page={experience.page}
-          shells={experience.shells}
-          theme={experience.theme}
-          organizationName={organizationShortName}
-          account={account}
-          platformBlockReleases={platformBlockReleasesFor(experience.page, experience.shells)}
-          fieldInputControlReleases={fieldInputControlReleasesFor(
-            experience.page.composition,
-            ...experience.shells.map((shell) => shell.layout),
-          )}
-          platformThemeTokens={DEFAULT_PLATFORM_THEME_RELEASE.tokens}
-        />
+        {/* The application's own page for an address its viewer cannot open (refused or missing). */}
+        <div className="contents" data-vortex-address-state="page_not_open">
+          <ApplicationExperiencePage
+            page={experience.page}
+            shells={experience.shells}
+            theme={experience.theme}
+            organizationName={organizationShortName}
+            account={account}
+            platformBlockReleases={platformBlockReleasesFor(experience.page, experience.shells)}
+            fieldInputControlReleases={fieldInputControlReleasesFor(
+              experience.page.composition,
+              ...experience.shells.map((shell) => shell.layout),
+            )}
+            platformThemeTokens={DEFAULT_PLATFORM_THEME_RELEASE.tokens}
+          />
+        </div>
       </BarePage>
     );
   }

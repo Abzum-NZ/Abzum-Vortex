@@ -210,7 +210,8 @@ export const upgradeOne = async (
       return;
     }
   }
-  await prepareRelease(facts, applicationKey, log);
+  // An upgrade prepares its storage inside the coordinator's atomic switch; the first-install
+  // preparation would only refuse an already installed application.
   const activation = await createApplicationInstallationCoordinator(
     coordinatorDependencies(facts),
   ).activate(
