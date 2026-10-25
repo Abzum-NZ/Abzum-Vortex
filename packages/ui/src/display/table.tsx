@@ -177,6 +177,7 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
     declared: declaredColumns,
     stored: values?.layout,
     events,
+    pinning: values?.features?.pinning === true,
   });
   const loadedKeys = useMemo(
     () => new Set(columns.map((column) => column.key.toLowerCase())),
@@ -589,6 +590,7 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
       <RecordsGrid
         accessibleName={accessibleName}
         contract={contract}
+        pinning={features?.pinning === true}
         layout={layout}
         rows={rows}
         totals={grouped === undefined ? values?.totals : undefined}

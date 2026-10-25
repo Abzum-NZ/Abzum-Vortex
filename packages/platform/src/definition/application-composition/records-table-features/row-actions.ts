@@ -10,18 +10,75 @@ import {
   requiredText,
   unreadable,
   type RecordsTableFeatureDefinition,
+  type GridFeatureRefusal,
+  type GridFeatureSettingsDeclaration,
 } from "./shared";
 
 /** Row declarations remain the table's single flow-binding list. The feature controls their use. */
-export const recordsTableRowActionsFeature: RecordsTableFeatureDefinition<object> = {
+/** The feature's setting group in the Table release, off by default. */
+const featureSettings = {
+  kind: "group",
   key: "row_actions",
+  label: "Row actions",
+  help: "Buttons and a menu that run each row's declared workflows",
+  required: false,
+  defaultValue: {
+    kind: "group",
+    properties: {
+      enabled: {
+        kind: "boolean",
+        value: false,
+      },
+    },
+  },
+  properties: [
+    {
+      kind: "boolean",
+      key: "enabled",
+      label: "Enabled",
+      help: "Offer the declared row actions",
+      required: true,
+      defaultValue: {
+        kind: "boolean",
+        value: false,
+      },
+    },
+  ],
+} as const satisfies GridFeatureSettingsDeclaration;
+
+/** The feature's refusals and their business sentences. */
+const featureRefusal: GridFeatureRefusal = {
+  code: "definition_records_table_row_actions",
+  order: 39,
+  message: "Row actions need a query that returns individual records",
+  guidance: "Choose a query that lists records rather than totals or groups.",
+};
+const rowActionLimitRefusal: GridFeatureRefusal = {
+  code: "definition_records_table_row_action_limit",
+  order: 39,
+  message: "At most three actions can sit beside the row; move the rest to the menu",
+  guidance: "Choose Row menu for the remaining actions.",
+};
+
+export const recordsTableRowActionsFeature: RecordsTableFeatureDefinition<object, "row_actions"> = {
+  key: "row_actions",
+  property: "rowActions",
+  settings: featureSettings,
+  refusals: [featureRefusal, rowActionLimitRefusal],
+  onBoard: "supported",
+  events: { row_action: {} },
   label: "Row actions",
   description: "Run a row's workflows from buttons and a menu",
   read: (group) => ({ enabled: featureEnabled(group) }),
+  conflicts: (state, facts) =>
+    state.enabled &&
+    facts.table.rowActions.filter((action) => action.placement === "inline").length > 3
+      ? featureNotPossible(rowActionLimitRefusal)
+      : undefined,
   check: (_state, facts) =>
     facts.grouped || facts.maximumPageSize === undefined
       ? featureNotPossible(
-          "definition_records_table_row_actions",
+          featureRefusal,
           "Row actions need a query that returns individual records",
         )
       : featureAvailable,

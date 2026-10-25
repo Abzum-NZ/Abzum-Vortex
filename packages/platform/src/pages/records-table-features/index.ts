@@ -12,6 +12,11 @@ import type {
   ProtectedQueryFieldBounds,
   ProtectedQueryRow,
 } from "../../queries/protected-query-contracts";
+import {
+  recordsTableFeatureDefinition,
+  recordsTableFeatureKeys,
+  recordsTableFeatureState,
+} from "../../schema";
 
 export {
   conditionalFormattingFieldIds,
@@ -176,15 +181,15 @@ export const projectRecordsTableFeatures = (
   const { features } = contract;
   const readable = (field: string): boolean =>
     bounds.readableFieldIds.some((fieldId) => sameField(fieldId, field));
-  // A declared filter field the installed definition gives no filter kind, or that the viewer may
-  // not read on every record, is not offered; the read refuses a filter on it.
-  const columnFilters = features.columnFilters.enabled
-    ? features.columnFilters.fields.flatMap((field) => {
-        const described = filterFields?.[field.toLowerCase()];
-        return described === undefined || !readable(field) ? [] : [described];
-      })
-    : [];
-  const search = features.search.enabled && bounds.searchable;
+  // Each feature that declares its projection decides its own part for this viewer.
+  const context = { readable, searchable: bounds.searchable, filterFields };
+  const declared = Object.fromEntries(
+    recordsTableFeatureKeys.flatMap((key) => {
+      const definition = recordsTableFeatureDefinition(key);
+      const part = definition.project?.(recordsTableFeatureState(features, key), context);
+      return part === undefined ? [] : [[definition.property, part]];
+    }),
+  ) as Partial<RecordsTableFeatureProjection>;
   // A view keeps the whole grid (columns, density, search, and any sort or filter), so it is
   // offered wherever the table enables it.
   const savedViews = features.savedViews.enabled;
@@ -293,12 +298,7 @@ export const projectRecordsTableFeatures = (
         }
       : {}),
     ...(rowActions === undefined ? {} : { rowActions }),
-    ...(features.totals.enabled && !features.board.enabled && !features.pivot.enabled
-      ? { totals: true as const }
-      : {}),
-    ...(features.pinning.enabled ? { pinning: true as const } : {}),
-    ...(search ? { search: true as const } : {}),
-    ...(columnFilters.length === 0 ? {} : { columnFilters }),
+    ...declared,
     ...(savedViews ? { savedViews: true as const } : {}),
     ...(bulkActions.length === 0 ? {} : { bulkActions }),
     ...(editableFields.length === 0 || !inlineEdit.enabled || inlineEdit.eventId === undefined

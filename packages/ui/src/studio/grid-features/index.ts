@@ -6,6 +6,23 @@ import {
   recordsTableQueryFacts,
   recordsTableFieldFilterable,
   recordsTableGroupingFieldTypes,
+  recordsTableBoardFeature,
+  recordsTableBulkActionsFeature,
+  recordsTableColumnFiltersFeature,
+  recordsTableConditionalFormattingFeature,
+  recordsTableExportFeature,
+  recordsTableGroupingFeature,
+  recordsTableInlineEditFeature,
+  recordsTableMasterDetailFeature,
+  recordsTablePinningFeature,
+  recordsTablePivotFeature,
+  recordsTableRowActionsFeature,
+  recordsTableRowEditFeature,
+  recordsTableSavedViewsFeature,
+  recordsTableSearchFeature,
+  recordsTableSpreadsheetFeature,
+  recordsTableTotalsFeature,
+  recordsTableTreeFeature,
   type QueryBindingField,
   type QueryBindingPageFacts,
   type RecordsTableFeatureKey,
@@ -41,100 +58,147 @@ type StudioGridFeatureEditor =
     }>
   | Readonly<{ kind: "custom" }>;
 
-export const studioGridFeatureEditors: Readonly<
-  Record<RecordsTableFeatureKey, StudioGridFeatureEditor>
-> = {
-  pinning: { kind: "settings" },
-  spreadsheet: { kind: "custom" },
-  search: { kind: "settings" },
-  // Only fields people can filter by: stored, filterable and of a type a filter fits.
-  column_filters: {
-    kind: "settings",
-    offers: (field) =>
-      recordsTableFieldFilterable({
-        field: field.reference,
-        label: field.label,
-        type: field.type,
-        sortable: field.sortable,
-        filterable: field.filterable,
-        searchable: field.searchable,
-        editable: false,
-        parentLink: false,
-      }),
-  },
-  saved_views: { kind: "custom" },
-  bulk_actions: { kind: "settings", boundRecordTypeActions: true },
-  inline_edit: { kind: "custom" },
-  row_edit: { kind: "custom" },
-  row_actions: { kind: "custom" },
-  master_detail: { kind: "settings" },
-  // Only the links from a record type to itself can name a record's parent.
-  tree: { kind: "settings", offers: (field) => field.parentLink === true },
-  // Only choice (and stage), link and date fields people can filter by can be grouped; the check names the rest.
-  totals: { kind: "settings" },
-  grouping: {
-    kind: "settings",
-    offers: (field) =>
-      field.filterable &&
-      (recordsTableGroupingFieldTypes as readonly string[]).includes(field.type),
-  },
-  conditional_formatting: { kind: "custom" },
-  // The catalogue restricts the row and column pickers to choice, link and date fields and the measure
-  // picker to number and money fields, so Studio offers only fields a pivot can use.
-  pivot: {
-    kind: "settings",
-    offers: (field) =>
-      (["choice", "link", "date", "date_time"] as readonly string[]).includes(field.type)
-        ? field.filterable
-        : (["whole_number", "decimal_number", "money"] as readonly string[]).includes(field.type),
-  },
-  board: { kind: "custom" },
-  export: { kind: "custom" },
-};
-
 /**
- * The settings a feature starts with when it is switched on, so the definition holds them from the
- * start. A feature that is off holds only its switch, so these cannot be catalogue defaults.
+ * One grid feature's Studio panel, keyed by the feature's own definition: how Studio edits its
+ * settings, and the settings it starts with when it is switched on (so the definition holds them from
+ * the start; a feature that is off holds only its switch, so these cannot be catalogue defaults).
  */
-export const studioGridFeatureStartSettings: Readonly<
+type StudioGridFeature = Readonly<{
+  definition: Readonly<{ key: RecordsTableFeatureKey }>;
+  editor: StudioGridFeatureEditor;
+  start?: Readonly<Record<string, SourceBlockPropertyValueContract>>;
+}>;
+
+const studioGridFeatures: readonly StudioGridFeature[] = [
+  { definition: recordsTablePinningFeature, editor: { kind: "settings" } },
+  {
+    definition: recordsTableSpreadsheetFeature,
+    editor: { kind: "custom" },
+    start: {
+      range_select: { kind: "boolean", value: true },
+      find: { kind: "boolean", value: true },
+      paste: { kind: "boolean", value: false },
+      fill: { kind: "boolean", value: false },
+      undo: { kind: "boolean", value: false },
+      status_bar_fields: { kind: "list", items: [] },
+      status_bar_operations: { kind: "list", items: [] },
+    },
+  },
+  { definition: recordsTableSearchFeature, editor: { kind: "settings" } },
+  {
+    definition: recordsTableColumnFiltersFeature,
+    // Only fields people can filter by: stored, filterable and of a type a filter fits.
+    editor: {
+      kind: "settings",
+      offers: (field) =>
+        recordsTableFieldFilterable({
+          field: field.reference,
+          label: field.label,
+          type: field.type,
+          sortable: field.sortable,
+          filterable: field.filterable,
+          searchable: field.searchable,
+          editable: false,
+          parentLink: false,
+        }),
+    },
+  },
+  { definition: recordsTableSavedViewsFeature, editor: { kind: "custom" } },
+  {
+    definition: recordsTableBulkActionsFeature,
+    editor: { kind: "settings", boundRecordTypeActions: true },
+  },
+  { definition: recordsTableInlineEditFeature, editor: { kind: "custom" } },
+  {
+    definition: recordsTableRowEditFeature,
+    editor: { kind: "custom" },
+    start: {
+      trigger: { kind: "choice", value: "button" },
+      fields: { kind: "list", items: [] },
+    },
+  },
+  { definition: recordsTableRowActionsFeature, editor: { kind: "custom" } },
+  {
+    definition: recordsTableMasterDetailFeature,
+    editor: { kind: "settings" },
+    // Related records read ten at a time unless the builder chooses otherwise.
+    start: { child_page_size: { kind: "number", value: 10 } },
+  },
+  {
+    definition: recordsTableTreeFeature,
+    // Only the links from a record type to itself can name a record's parent.
+    editor: { kind: "settings", offers: (field) => field.parentLink === true },
+    // A tree reads forty records of a level at a time unless the builder chooses otherwise.
+    start: { child_page_size: { kind: "number", value: 40 } },
+  },
+  {
+    definition: recordsTableTotalsFeature,
+    editor: { kind: "settings" },
+    start: { measures: { kind: "list", items: [] } },
+  },
+  {
+    definition: recordsTableGroupingFeature,
+    // Only choice (and stage), link and date fields people can filter by can be grouped; the check
+    // names the rest.
+    editor: {
+      kind: "settings",
+      offers: (field) =>
+        field.filterable &&
+        (recordsTableGroupingFieldTypes as readonly string[]).includes(field.type),
+    },
+    // Records with no value are named "Unassigned" and groups read forty at a time unless the
+    // builder chooses otherwise. Whether the table opens grouped starts from the bound query
+    // (`studioGroupingStart`).
+    start: {
+      unassigned_label: { kind: "text", value: "Unassigned" },
+      group_page_size: { kind: "number", value: 40 },
+    },
+  },
+  { definition: recordsTableConditionalFormattingFeature, editor: { kind: "custom" } },
+  {
+    definition: recordsTablePivotFeature,
+    // The catalogue restricts the row and column pickers to choice, link and date fields and the
+    // measure picker to number and money fields, so Studio offers only fields a pivot can use.
+    editor: {
+      kind: "settings",
+      offers: (field) =>
+        (["choice", "link", "date", "date_time"] as readonly string[]).includes(field.type)
+          ? field.filterable
+          : (["whole_number", "decimal_number", "money"] as readonly string[]).includes(field.type),
+    },
+    // A pivot starts as a count of records, 40 rows at a time, with totals.
+    start: {
+      measure_function: { kind: "choice", value: "count" },
+      row_page_size: { kind: "number", value: 40 },
+      totals: { kind: "boolean", value: true },
+    },
+  },
+  { definition: recordsTableBoardFeature, editor: { kind: "custom" } },
+  {
+    definition: recordsTableExportFeature,
+    editor: { kind: "custom" },
+    // Export starts as CSV with the authored default row limit.
+    start: {
+      formats: { kind: "list", items: [{ kind: "choice", value: "csv" }] },
+      max_rows: { kind: "number", value: 10000 },
+    },
+  },
+];
+
+export const studioGridFeatureEditors = Object.fromEntries(
+  studioGridFeatures.map((feature) => [feature.definition.key, feature.editor]),
+) as Readonly<Record<RecordsTableFeatureKey, StudioGridFeatureEditor>>;
+
+/** The settings each feature starts with when it is switched on. */
+export const studioGridFeatureStartSettings = Object.fromEntries(
+  studioGridFeatures.flatMap((feature) =>
+    feature.start === undefined ? [] : [[feature.definition.key, feature.start]],
+  ),
+) as Readonly<
   Partial<
     Record<RecordsTableFeatureKey, Readonly<Record<string, SourceBlockPropertyValueContract>>>
   >
-> = {
-  totals: { measures: { kind: "list", items: [] } },
-  row_edit: { trigger: { kind: "choice", value: "button" }, fields: { kind: "list", items: [] } },
-  spreadsheet: {
-    range_select: { kind: "boolean", value: true },
-    find: { kind: "boolean", value: true },
-    paste: { kind: "boolean", value: false },
-    fill: { kind: "boolean", value: false },
-    undo: { kind: "boolean", value: false },
-    status_bar_fields: { kind: "list", items: [] },
-    status_bar_operations: { kind: "list", items: [] },
-  },
-  // Related records read ten at a time unless the builder chooses otherwise.
-  master_detail: { child_page_size: { kind: "number", value: 10 } },
-  // A tree reads forty records of a level at a time unless the builder chooses otherwise.
-  tree: { child_page_size: { kind: "number", value: 40 } },
-  // Records with no value are named "Unassigned" and groups read forty at a time unless the
-  // builder chooses otherwise. Whether the table opens grouped starts from the bound query
-  // (`studioGroupingStart`).
-  grouping: {
-    unassigned_label: { kind: "text", value: "Unassigned" },
-    group_page_size: { kind: "number", value: 40 },
-  },
-  // Export starts as CSV with the authored default row limit.
-  export: {
-    formats: { kind: "list", items: [{ kind: "choice", value: "csv" }] },
-    max_rows: { kind: "number", value: 10000 },
-  },
-  // A pivot starts as a count of records, 40 rows at a time, with totals.
-  pivot: {
-    measure_function: { kind: "choice", value: "count" },
-    row_page_size: { kind: "number", value: 40 },
-    totals: { kind: "boolean", value: true },
-  },
-};
+>;
 
 /**
  * What Group by starts with when the bound query already groups: its first grouping field, and a

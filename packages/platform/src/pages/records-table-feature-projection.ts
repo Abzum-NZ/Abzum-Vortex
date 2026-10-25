@@ -333,6 +333,7 @@ const rowActionSchema = z
  * feature off carries no projection at all.
  */
 export const recordsTableFeatureProjectionSchema = z
+  // guard-allow: grid-feature-definition the typed wire schema of the projection; each part moves into its definition in the fan-out (docs/build-plan/grid-feature-fanout.md)
   .object({
     pinning: onlyTrue.optional(),
     totals: onlyTrue.optional(),

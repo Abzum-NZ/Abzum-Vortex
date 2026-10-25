@@ -113,6 +113,8 @@ export type GridRenderers = Readonly<{
 export type RecordsGridProps = Readonly<{
   accessibleName: string;
   contract: RecordsTableContract;
+  /** The viewer's projection turns column pinning on. */
+  pinning: boolean;
   layout: GridLayoutControls;
   /** The rows of the page, which "select all" selects. */
   rows: readonly DisplayRow[];
@@ -355,6 +357,7 @@ const GridSpanRow = ({
 export function RecordsGrid({
   accessibleName,
   contract,
+  pinning,
   layout,
   rows,
   lines,
@@ -485,7 +488,6 @@ export function RecordsGrid({
   const visibleIds = visibleColumns.map((column) => column.id);
   const visibleSignature = visibleIds.join("\u0000");
   const scrollRef = useRef<HTMLDivElement>(null);
-  const pinning = contract.features.pinning.enabled;
   const pinSignature = visibleIds.map((id) => layout.state.pins[id.toLowerCase()]).join(",");
   const pinningStyle = useGridPinning(
     scrollRef,
