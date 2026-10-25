@@ -1,4 +1,5 @@
 import "server-only";
+export { readPrivacyNotice } from "./privacy-notice";
 
 export * from "./identity-verification-error";
 export {
