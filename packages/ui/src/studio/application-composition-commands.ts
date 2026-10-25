@@ -122,18 +122,107 @@ type MoveDestination = {
   steps: readonly SlotStep[];
 };
 
-/** A display page's content is its main area or the content slot its layout opens for it. */
+/** A page's editable content is its main area or the content slot its layout opens for it. */
 const pageContentRegion = (
   region: Region,
 ): region is Region & { page: NonNullable<Region["page"]> } =>
   (region.ordinaryMain === true || region.parent !== undefined) &&
   (region.page?.type === "list" ||
     region.page?.type === "detail" ||
+    region.page?.type === "form" ||
     region.page?.type === "dashboard");
 
-/** The regions whose blocks move: a display page's content and a layout's own blocks. */
+/** The regions whose blocks move: a page's editable content and a layout's own blocks. */
 const movableRegion = (region: Region): boolean =>
   region.shell !== undefined || pageContentRegion(region);
+
+const formAt = (
+  catalogue: ImmutablePlatformBlockCatalogue,
+  region: Region,
+  steps: readonly SlotStep[],
+): string | undefined => {
+  let zone = region.zone;
+  let form: string | undefined;
+  for (const step of steps) {
+    const parent = zone.items.find((item) => item.props.id === step.parentAlias) ?? refuse();
+    if (releaseFor(catalogue, parent)?.key === "platform.form.container") form = parent.props.id;
+    zone = itemSlots(catalogue, parent).get(step.slotKey) ?? refuse();
+  }
+  return form;
+};
+
+const isFormInput = (key: string | undefined): boolean =>
+  key?.startsWith("platform.form.") === true && key.endsWith("_input");
+
+/** The enclosing form travels with its children; moving a child keeps its existing form. */
+const keepsFormContext = (
+  catalogue: ImmutablePlatformBlockCatalogue,
+  target: Target,
+  destination: readonly SlotStep[],
+): boolean => {
+  const needsForm = (item: SourceItem): boolean => {
+    const key = releaseFor(catalogue, item)?.key;
+    if (key === "platform.form.container") return false;
+    return (
+      isFormInput(key) ||
+      (key === "platform.action.button" &&
+        (item.props.action_kind === "submit" || item.props.action_kind === "reset")) ||
+      [...itemSlots(catalogue, item).values()].some((slot) => slot.items.some(needsForm))
+    );
+  };
+  if (
+    formAt(catalogue, target.region, destination) !== undefined &&
+    sourceItemTree([target.item]).some(
+      (item) => releaseFor(catalogue, item)?.key === "platform.form.container",
+    )
+  )
+    return false;
+  return (
+    !needsForm(target.item) ||
+    formAt(catalogue, target.region, target.steps) === formAt(catalogue, target.region, destination)
+  );
+};
+
+/** Required record fields must keep an input when content is removed. */
+const requiredFieldInput = (context: StudioCompositionContext, item: SourceItem): boolean =>
+  sourceItemTree([item]).some(
+    (child) =>
+      isFormInput(releaseFor(context.catalogue, child)?.key) &&
+      (child.props.required === true ||
+        context.source.body.modules.some((module) =>
+          module.record_types.some((record) =>
+            record.fields.some(
+              (field) =>
+                field.required && child.props.field === `${module.key}:${record.key}.${field.key}`,
+            ),
+          ),
+        )),
+  );
+
+/** A mapped answer is a flow dependency, just as a directly named control is. */
+const boundFormInput = (context: StudioCompositionContext, target: Target): boolean => {
+  if (!isFormInput(releaseFor(context.catalogue, target.item)?.key)) return false;
+  const field = target.item.props.field;
+  const name =
+    typeof field === "string" ? field.slice(field.lastIndexOf(".") + 1) : target.item.props.name;
+  if (typeof name !== "string") return false;
+  const form = formAt(context.catalogue, target.region, target.steps);
+  return (
+    form !== undefined &&
+    context.source.body.flow_bindings.some(
+      (binding) =>
+        binding.control === form &&
+        Object.values(binding.inputs).some(
+          (input) =>
+            typeof input === "object" &&
+            input !== null &&
+            "kind" in input &&
+            input.kind === "caller" &&
+            input.name === name,
+        ),
+    )
+  );
+};
 
 /**
  * Only actual non-repeatable slots in this original movable region are destinations. A layout
@@ -200,7 +289,9 @@ const moveDestinations = (
       });
   }
   visit(target.region.zone, []);
-  return selectedPathSupported ? result : [];
+  return selectedPathSupported
+    ? result.filter((candidate) => keepsFormContext(catalogue, target, candidate.steps))
+    : [];
 };
 
 /** The item with exactly these settings: each declared property it holds is replaced. */
@@ -455,7 +546,7 @@ const resolveRemoval = (
   if (resolved === undefined) return { kind: "invalid" };
   const { source, target, alias } = resolved;
   // Any of a layout's own blocks leaves with everything inside it, as any of them can be added.
-  // A page removes one display item, and only from its content.
+  // A page removes one item, and only from its editable content.
   const layout = target.region.shell !== undefined;
   if (!layout) {
     if (!pageContentRegion(target.region)) return { kind: "unsupported", reason: "page_kind" };
@@ -507,6 +598,9 @@ const resolveRemoval = (
     const key = releaseKey(item.props.vortex.block);
     releaseUses.set(key, releaseUses.get(key)! - 1);
   }
+  if (requiredFieldInput(context, target.item))
+    return { kind: "blocked", reason: "required_field" };
+  if (boundFormInput(context, target)) return { kind: "blocked", reason: "flow_input" };
   // What a flow still names is the cause to fix first, so it is told before the item's content is.
   if (
     !layout &&

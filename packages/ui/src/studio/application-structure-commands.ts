@@ -108,10 +108,12 @@ const placementsOf = (source: Source) => [
 
 const flowReferenceWords: Readonly<Record<StudioCompositionRemovalReason, string>> = {
   flow_control: "is bound to a flow",
+  flow_input: "supplies an input a flow reads",
   flow_form: "is the form a flow waits for",
   flow_component: "is refreshed or filtered by a flow",
   flow_panel: "is a panel a flow opens",
   required_slot: "fills a required area",
+  required_field: "contains an input for a required field",
   content_outlet: "holds a content outlet of its layout",
   unresolved_target: "is named by a flow step that cannot be checked",
 };

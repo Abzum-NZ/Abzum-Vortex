@@ -18,10 +18,12 @@ const object = (value: unknown): Record<string, unknown> => {
 
 export type StudioCompositionRemovalReason =
   | "flow_control"
+  | "flow_input"
   | "flow_form"
   | "flow_component"
   | "flow_panel"
   | "required_slot"
+  | "required_field"
   | "content_outlet"
   | "unresolved_target";
 
@@ -41,6 +43,8 @@ export const studioPlacementReferenceSentence = (reference: StudioPlacementRefer
         ? `Flow "${reference.flow}"`
         : `Flow "${reference.flow}", step "${reference.step}"`;
   switch (reference.reason) {
+    case "flow_input":
+      return `${where} reads this form input. Change its input mapping first.`;
     case "flow_control":
       return `${where} starts from this item. Change that flow first.`;
     case "flow_form":
