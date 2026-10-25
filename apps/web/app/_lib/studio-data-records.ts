@@ -261,6 +261,7 @@ export const readStudioDataRecords = async (
       if (trail === undefined) return { kind: "query_refused", reason: "continuation_invalid" };
       const after = trail.at(-1);
       const summaryCommand = protectedQuerySummaryCommandSchema.safeParse({
+        mode: "published",
         moduleRootId: module.rootId,
         queryId: query.queryId,
         inputValues: {},

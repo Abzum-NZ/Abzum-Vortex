@@ -38,7 +38,7 @@ const readSummary = async (
   releaseRevision: number,
   inputValues: Readonly<Record<string, JsonValue>>,
 ) => {
-  const rows = await (command.pivot !== undefined
+  const rows = await (command.mode === "pivot"
     ? transaction.query<ResultRow>`
     select vortex_record.run_module_query_pivot(
       ${command.moduleRootId}::uuid,
@@ -53,7 +53,7 @@ const readSummary = async (
       ${command.groupAfter ?? null}::text
     ) as result
   `
-    : command.grouping !== undefined
+    : command.mode === "grouping"
       ? transaction.query<ResultRow>`
     select vortex_record.run_module_query_group_summary(
       ${command.moduleRootId}::uuid,
@@ -68,7 +68,7 @@ const readSummary = async (
       ${command.groupAfter ?? null}::text
     ) as result
   `
-      : command.totals !== undefined
+      : command.mode === "totals"
         ? transaction.query<ResultRow>`
     select vortex_record.run_module_query_totals(
       ${command.moduleRootId}::uuid,
@@ -144,7 +144,7 @@ export const summariseCommand = async (
   );
   if (
     result.outcome === "completed" &&
-    command.grouping !== undefined &&
+    command.mode === "grouping" &&
     (result.groups.length > command.grouping.limit ||
       result.groupByFieldIds.length !== 1 ||
       result.groupByFieldIds[0]?.toLowerCase() !== command.grouping.fieldId.toLowerCase() ||
@@ -155,8 +155,7 @@ export const summariseCommand = async (
   // The query's own grouping is paged too: at most the requested page, or the default 40.
   if (
     result.outcome === "completed" &&
-    command.grouping === undefined &&
-    command.pivot === undefined &&
+    (command.mode === "published" || command.mode === "totals") &&
     (result.groups.length > (command.groupLimit ?? 40) ||
       (result.nextGroupKey !== null &&
         result.nextGroupKey !== undefined &&
@@ -165,7 +164,7 @@ export const summariseCommand = async (
     throw new Error("PROTECTED_QUERY_RESULT_INVALID");
   if (
     result.outcome === "completed" &&
-    command.pivot !== undefined &&
+    command.mode === "pivot" &&
     (result.pivot === undefined ||
       result.pivot.rows.length > command.pivot.rowLimit ||
       result.pivot.rowFieldId.toLowerCase() !== command.pivot.rowFieldId.toLowerCase() ||

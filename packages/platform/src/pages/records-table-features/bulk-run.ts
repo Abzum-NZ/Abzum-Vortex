@@ -257,6 +257,7 @@ export const createRecordsTableBulkService = (dependencies: RecordsTableBulkDepe
       const built = commandFor(placement, descriptor);
       if (built === undefined) return { kind: "refused", reason: "not_available" };
       const summary = await queries.summarise(session, selectionOf(address), {
+        mode: "published",
         moduleRootId: built.command.moduleRootId,
         queryId: built.command.queryId,
         inputValues: built.command.inputValues,

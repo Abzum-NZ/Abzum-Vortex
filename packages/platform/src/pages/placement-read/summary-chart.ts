@@ -249,6 +249,7 @@ export const readSummaryOrChart = async (
   const { placementId } = placement;
   const { address, data } = read;
   const command = protectedQuerySummaryCommandSchema.safeParse({
+    mode: "published",
     moduleRootId: bound.module.rootId,
     queryId: bound.query.queryId,
     inputValues,
