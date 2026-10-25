@@ -414,9 +414,11 @@ export function ApplicationPageViewContent({
     selectTableViewInPlace,
     tableQueryPending,
     rereadTables,
+    tableData,
   } = useTablePageAddress({
     model,
     address,
+    currentSearch,
     currentData,
     refreshPlacements,
     setSelection,
@@ -473,7 +475,7 @@ export function ApplicationPageViewContent({
   });
 
   const { runtimeInputs } = useRuntimeInputs({
-    currentData,
+    currentData: tableData,
     model,
     formFeedback,
     guidedActiveFormIds,

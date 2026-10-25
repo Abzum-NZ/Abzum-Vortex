@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, type Dispatch, type SetStateAction } from "react";
+import { useCallback, useEffect, useMemo, useRef, type Dispatch, type SetStateAction } from "react";
 import {
   applyRecordsTablePivotView,
   applyRecordsTableQueryChange,
@@ -11,6 +11,8 @@ import {
   type RecordsTablePivotView,
   type GridViewDocument,
   type RecordsTableQueryChange,
+  type RecordsTableSortKey,
+  isRecord,
 } from "@vortex/platform/schema";
 import type { ApplicationPageModel } from "../../../../../../_lib/application-page";
 import type { PageAddress } from "./page-address";
@@ -18,6 +20,9 @@ import { tablePayloadFor } from "./placement-helpers";
 import type { PageSelection, TableContinuationTarget } from "./types";
 
 const entriesOf = (search: string) => [...new URLSearchParams(search)];
+
+const sortText = (keys: readonly RecordsTableSortKey[]): string =>
+  keys.map((key) => `${key.fieldId.toLowerCase()}:${key.direction}`).join(",");
 
 /** The address key of one table: the sorted query parameters it was or will be read for. */
 const keyOf = (search: string, placement: string): string =>
@@ -50,12 +55,15 @@ const tableIn = (tables: Map<string, TableRead>, placement: string): TableRead =
 export function useTablePageAddress({
   model,
   address,
+  currentSearch,
   currentData,
   refreshPlacements,
   setSelection,
 }: Readonly<{
   model: ApplicationPageModel;
   address: PageAddress;
+  /** The address as rendered; it changes with every write, load, Back and Forward. */
+  currentSearch: string;
   currentData: ApplicationPageModel["data"];
   refreshPlacements: (
     placementIds: readonly string[],
@@ -171,7 +179,8 @@ export function useTablePageAddress({
             .map(([name]) => recordsTableParameterPlacement(name))
             .filter((placement): placement is string => placement !== undefined),
         );
-        for (const placement of [...reads.current.tables.keys(), ...rebound]) placements.add(placement);
+        for (const placement of [...reads.current.tables.keys(), ...rebound])
+          placements.add(placement);
         const changed = [...placements].flatMap((placement) => {
           if (
             !rebound.has(placement) &&
@@ -317,7 +326,10 @@ export function useTablePageAddress({
       const held = Object.keys(currentData).find(
         (candidate) => candidate.toLowerCase() === placement,
       );
-      if (held === undefined || keyOf(address.search(), placement) !== tableIn(reads.current.tables, placement).shown)
+      if (
+        held === undefined ||
+        keyOf(address.search(), placement) !== tableIn(reads.current.tables, placement).shown
+      )
         continue;
       const selected = tablePayloadFor(currentData[held])?.layout.views?.selected;
       if (selected === null || selected === undefined || selected.viewId !== view.viewId) continue;
@@ -337,7 +349,38 @@ export function useTablePageAddress({
     }
   }, [address, currentData, model]);
 
+  // While a table's read is on its way it still shows the rows read for its earlier state, but its
+  // sort control shows the order the address now asks for: a second sort gesture (Shift+click right
+  // after a click) builds on the first, and no copy of the sort lives in the grid.
+  const tableData = useMemo(() => {
+    const entries = entriesOf(currentSearch);
+    let patched: Record<string, unknown> | undefined;
+    for (const [placementId, data] of Object.entries(currentData)) {
+      const placement = placementId.toLowerCase();
+      if (!model.pageParameters.tableIds.some((id) => id.toLowerCase() === placement)) continue;
+      if (keyOf(currentSearch, placement) === tableIn(reads.current.tables, placement).shown)
+        continue;
+      const state = readRecordsTableQueryState(placementId, entries);
+      if (state.kind !== "valid" || state.state.sort.length === 0) continue;
+      if (!isRecord(data) || data.status !== "ready" || !isRecord(data.values)) continue;
+      const shown = data.values.sort;
+      if (
+        isRecord(shown) &&
+        Array.isArray(shown.keys) &&
+        sortText(shown.keys as RecordsTableSortKey[]) === sortText(state.state.sort)
+      )
+        continue;
+      patched ??= { ...currentData };
+      patched[placementId] = {
+        ...data,
+        values: { ...data.values, sort: { keys: state.state.sort, explicit: true } },
+      };
+    }
+    return (patched ?? currentData) as ApplicationPageModel["data"];
+  }, [currentData, currentSearch, model]);
+
   return {
+    tableData,
     commitTablePage,
     changeTableQuery,
     commitPivotView,
