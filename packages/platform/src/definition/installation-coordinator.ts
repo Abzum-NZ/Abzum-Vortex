@@ -13,6 +13,7 @@ import {
   type ModuleContribution,
   type OrganizationId,
   type PreparedApplicationRoleTemplates,
+  type SelectedOrganizationScope,
   type SessionContext,
   type SystemApplicationBoundReleaseSetResult,
 } from "../schema";
@@ -95,9 +96,7 @@ import {
  * installer's recent authentication, and accepting role templates is refused unless every
  * permission they confer lies inside the installer's delegated assignment scope.
  *
- * The fixed activation requires the Application permission registration to name the exact release
- * it activates, and pins the organisation Access version that a registration change advances. The
- * Access change therefore commits in its own transaction before the binding switch:
+ * Registration and the binding switch share one exclusive Access-change transaction:
  *
  * 1. Align Access: register, update or reactivate the permission registration for the exact target
  *    release when it does not already name it. Registration assigns nothing to anybody.
@@ -105,9 +104,11 @@ import {
  *    every pinned Module's storage and attach the new contributions, then activate the complete
  *    binding set through the fixed operation (which also gives every record type its lifecycle
  *    policy and gates executable lifecycle policies) and append the lifecycle Activity. Any failure
- *    rolls the whole switch back, so the previously active exact release stays selected, and an
- *    upgrade then restores the registration to that still-active release.
+ *    rolls registration, roles, storage, bindings, runtime bundle and Activity back together, so
+ *    the previously active exact release and its permission registration stay selected.
  *
+ * The protected Access writer advances only its own established context to its resulting version;
+ * subsequent decisions recheck current authority at that version inside the same transaction.
  * A first installation is prepared before it is activated: `prepare` commits the registration,
  * provisioned inactive storage and the complete runtime bundle. An upgrade cannot pre-provision a
  * Module its active release still binds, so its storage is prepared inside the atomic switch.
@@ -145,7 +146,11 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
     session: IdentitySession,
     organizationId: OrganizationId,
     builderOperation: BuilderOperation,
-    operation: (transaction: InstallerTransaction, authority: BuilderAuthority) => Promise<Result>,
+    operation: (
+      transaction: InstallerTransaction,
+      authority: BuilderAuthority,
+      scope: SelectedOrganizationScope,
+    ) => Promise<Result>,
   ): Promise<Result> => {
     const captured: { failure?: DefinitionError<ApplicationInstallationCoordinatorErrorCode> } = {};
     const outcome = await dependencies.installerRequests[mode](
@@ -159,7 +164,7 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
           if (!sameId(authority.organizationId, organizationId))
             throw fail("APPLICATION_INSTALLATION_REFUSED");
           await requireBuilderAuthority(authority, builderOperation);
-          return await operation(transaction, authority);
+          return await operation(transaction, authority, scope);
         } catch (error) {
           captured.failure = toCoordinatorError(error);
           throw error;
@@ -245,10 +250,11 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
   const readReleaseSet = async (
     session: IdentitySession,
     target: ReleaseTarget,
+    purpose: "consume" | "replace_or_remove",
   ): Promise<SystemApplicationBoundReleaseSetResult> => {
     if (humanDefinitionAccess !== undefined) {
       try {
-        return await humanDefinitionAccess.readReleaseSet(session, target);
+        return await humanDefinitionAccess.readReleaseSet(session, target, purpose);
       } catch (error) {
         throw fail("APPLICATION_INSTALLATION_RELEASE_UNAVAILABLE", error);
       }
@@ -257,10 +263,14 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
     if (dependencies.definitionReader === undefined)
       throw fail("APPLICATION_INSTALLATION_RELEASE_UNAVAILABLE");
     try {
-      return await dependencies.definitionReader.read(context, {
-        applicationRootId: target.applicationRootId,
-        applicationReleaseRevision: target.applicationReleaseRevision,
-      });
+      return await dependencies.definitionReader.read(
+        context,
+        {
+          applicationRootId: target.applicationRootId,
+          applicationReleaseRevision: target.applicationReleaseRevision,
+        },
+        purpose,
+      );
     } catch (error) {
       throw fail("APPLICATION_INSTALLATION_RELEASE_UNAVAILABLE", error);
     }
@@ -406,17 +416,21 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
     let preparedTemplates: PreparedApplicationRoleTemplates;
     try {
       if (humanDefinitionAccess !== undefined) {
-        releaseSet = await humanDefinitionAccess.readReleaseSet(session, target);
+        releaseSet = await humanDefinitionAccess.readReleaseSet(session, target, "consume");
         preparedTemplates = await humanDefinitionAccess.prepareRegistrationCandidate(
           target,
           releaseSet,
         );
       } else if (roleTemplates !== undefined) {
         const context = definitionContext(target);
-        releaseSet = await dependencies.definitionReader!.read(context, {
-          applicationRootId: target.applicationRootId,
-          applicationReleaseRevision: target.applicationReleaseRevision,
-        });
+        releaseSet = await dependencies.definitionReader!.read(
+          context,
+          {
+            applicationRootId: target.applicationRootId,
+            applicationReleaseRevision: target.applicationReleaseRevision,
+          },
+          "consume",
+        );
         preparedTemplates = await roleTemplates.prepareRegistrationCandidate(context, {
           applicationRootId: target.applicationRootId,
           releaseRevision: target.applicationReleaseRevision,
@@ -581,7 +595,8 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
 
   /**
    * Points the permission registration at exactly this release when it names another one or none.
-   * Returns whether Access changed; an unchanged registration costs no Access-version advance.
+   * Returns the protected change's version for subsequent builder decisions; an already aligned
+   * registration costs no Access-version advance.
    */
   const alignAccess = async (
     transaction: InstallerTransaction,
@@ -590,69 +605,25 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
     applicationRootId: ApplicationRootId,
     applicationReleaseRevision: number,
     exact: ExactRelease,
-    acceptance:
-      "accept_role_templates" | "preserve_registered_authority" | "restore_accepted_role_templates",
-  ): Promise<boolean> => {
-    if (state.registeredReleaseRevision === applicationReleaseRevision) return false;
+    acceptance: "accept_role_templates" | "preserve_registered_authority",
+  ): Promise<Awaited<ReturnType<typeof changeAccess>> | null> => {
+    if (state.registeredReleaseRevision === applicationReleaseRevision) return null;
     // Without a proof of unchanged authority, registration follows the role-template acceptance
     // check: recent authentication and every conferred permission inside the installer's delegated
     // assignment scope, whatever any approval workflow says. It is decided in the same
-    // transaction and before registration: registering advances the Access version the request
-    // context is pinned to, so no decision can be made after it, and a permission the current
-    // registration does not yet hold lies outside every bounded delegated scope. Restoring the
-    // registration of a release that was already accepted grants nothing new and is not a fresh
-    // acceptance. A proved active upgrade with identical authority only advances registration;
-    // it also grants nothing new. The complete target evidence still goes to the normal SQL
+    // transaction and before registration: a permission the current registration does not yet
+    // hold lies outside every bounded delegated scope. A proved active upgrade with identical
+    // authority only advances registration and grants nothing new. The complete target evidence
+    // still goes to the normal SQL
     // continuity/narrowing writer, without changing any acceptance or assignment evidence.
     if (acceptance === "accept_role_templates")
       await requireBuilderAuthority(authority, installOperation(applicationRootId, exact, true));
-    const access = await changeAccess(
+    return changeAccess(
       transaction,
       newActivityId(),
       applicationRootId,
       "prepare",
       exact.preparedTemplates,
-    );
-    return access.outcome === "changed";
-  };
-
-  /**
-   * After a failed upgrade switch, points the registration back at the release that is still
-   * active. It acts only on the state it re-reads, so a switch that did commit is never undone. If
-   * this restoration cannot complete, activating the still-active release again realigns Access.
-   */
-  const restoreAccessToActiveRelease = async (
-    session: IdentitySession,
-    request: ApplicationInstallationActivationRequest,
-    activeReleaseRevision: number,
-  ): Promise<void> => {
-    const prior = await readExactRelease(session, {
-      organizationId: request.organizationId,
-      applicationRootId: request.applicationRootId,
-      applicationReleaseRevision: activeReleaseRevision,
-    });
-    await inInstallerTransaction(
-      "runAccessChange",
-      session,
-      request.organizationId,
-      installOperation(request.applicationRootId, prior, false),
-      async (transaction, authority) => {
-        const state = await readInstallationBindings(
-          transaction,
-          request.organizationId,
-          request.applicationRootId,
-        );
-        if (activeRelease(state)?.releaseRevision !== activeReleaseRevision) return;
-        await alignAccess(
-          transaction,
-          authority,
-          state,
-          request.applicationRootId,
-          activeReleaseRevision,
-          prior,
-          "restore_accepted_role_templates",
-        );
-      },
     );
   };
 
@@ -735,7 +706,7 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
             request.applicationRootId,
           );
           if (activeRelease(state) !== null) throw fail("APPLICATION_INSTALLATION_STALE");
-          return alignAccess(
+          const access = await alignAccess(
             transaction,
             authority,
             state,
@@ -744,6 +715,7 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
             exact,
             "accept_role_templates",
           );
+          return access?.outcome === "changed";
         },
       );
 
@@ -859,28 +831,46 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
               return null;
             });
 
-      // 1. Align Access with the exact target release. This must commit before the switch: it
-      //    advances the Access version that the fixed lifecycle operations pin to. An already
-      //    active target is only realigned, which repairs a registration left by a failed upgrade.
-      const alreadyActive = await inInstallerTransaction(
+      // Resolve the old storage set before any write. Registration and every part of the switch
+      // then share the exclusive organisation Access lock and the same commit or rollback.
+      const oldTarget =
+        request.expectedActiveReleaseRevision === null
+          ? null
+          : {
+              organizationId: request.organizationId,
+              applicationRootId: request.applicationRootId,
+              applicationReleaseRevision: request.expectedActiveReleaseRevision,
+            };
+      const oldExact =
+        oldTarget === null
+          ? null
+          : exactStorageRelease(
+              oldTarget,
+              await readReleaseSet(verifiedSession.data, oldTarget, "replace_or_remove"),
+            );
+      const switched = await inInstallerTransaction(
         "runAccessChange",
         verifiedSession.data,
         request.organizationId,
         installOperation(request.applicationRootId, exact, false),
-        async (transaction, authority) => {
+        async (transaction, authority, scope) => {
           const state = await readInstallationBindings(
             transaction,
             request.organizationId,
             request.applicationRootId,
           );
-          const mode = requireExpectedActive(request, activeRelease(state));
+          const active = activeRelease(state);
+          const mode = requireExpectedActive(request, active);
           if (mode === "switch" && preparedRuntimeSource === undefined)
             throw fail("APPLICATION_INSTALLATION_FAILED");
-          if (mode === "already_active") {
-            const installation = activeSummary(request, state);
-            requireExactBindings(request, pins, installation.moduleBindings, "active");
-          }
-          await alignAccess(
+          if (mode === "already_active")
+            requireExactBindings(
+              request,
+              pins,
+              activeSummary(request, state).moduleBindings,
+              "active",
+            );
+          const access = await alignAccess(
             transaction,
             authority,
             state,
@@ -891,23 +881,14 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
               ? "preserve_registered_authority"
               : "accept_role_templates",
           );
-          return mode === "already_active" ? activeSummary(request, state) : null;
-        },
-      );
-      if (alreadyActive !== null) {
-        // Access realignment may advance its version. A fresh human transaction repairs storage
-        // after that commit, without a lifecycle transition or binding revision advance.
-        const repaired = await inInstallerTransaction(
-          "runChange",
-          verifiedSession.data,
-          request.organizationId,
-          installOperation(request.applicationRootId, exact, false),
-          async (transaction) => {
-            const state = await readInstallationBindings(
-              transaction,
-              request.organizationId,
-              request.applicationRootId,
-            );
+          const currentAuthority =
+            access === null
+              ? authority
+              : dependencies.builderAuthority(transaction, {
+                  ...scope,
+                  accessVersion: access.accessVersion,
+                });
+          if (mode === "already_active") {
             const installation = activeSummary(request, state);
             requireExactBindings(request, pins, installation.moduleBindings, "active");
             await changeContributions(
@@ -917,174 +898,113 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
               installation.moduleBindings,
               "attach",
             );
-            return installation;
-          },
-        );
-        return {
-          outcome: "unchanged",
-          previousApplicationReleaseRevision: request.applicationReleaseRevision,
-          installation: repaired,
-          installedEvents: installedEvents(releaseSet, repaired),
-        };
-      }
-
-      // 2. Switch atomically: detach the prior release, prepare storage, activate, record Activity.
-      let switched: Omit<
-        ApplicationInstallationActivationResult<InstalledEvents>,
-        "installedEvents"
-      >;
-      try {
-        const oldTarget =
-          request.expectedActiveReleaseRevision === null
-            ? null
-            : {
-                organizationId: request.organizationId,
-                applicationRootId: request.applicationRootId,
-                applicationReleaseRevision: request.expectedActiveReleaseRevision,
-              };
-        const oldExact =
-          oldTarget === null
-            ? null
-            : exactStorageRelease(oldTarget, await readReleaseSet(verifiedSession.data, oldTarget));
-        switched = await inInstallerTransaction(
-          "runChange",
-          verifiedSession.data,
-          request.organizationId,
-          installOperation(request.applicationRootId, exact, false),
-          async (transaction, authority) => {
-            const state = await readInstallationBindings(
-              transaction,
-              request.organizationId,
-              request.applicationRootId,
-            );
-            const active = activeRelease(state);
-            if (requireExpectedActive(request, active) === "already_active") {
-              const installation = activeSummary(request, state);
-              requireExactBindings(request, pins, installation.moduleBindings, "active");
-              await changeContributions(
-                transaction,
-                request,
-                exact.contributionGroups,
-                installation.moduleBindings,
-                "attach",
-              );
-              return {
-                outcome: "unchanged" as const,
-                previousApplicationReleaseRevision: request.applicationReleaseRevision,
-                installation,
-              };
-            }
-
-            const lifecycle = createApplicationInstallationLifecycleRepository(transaction);
-            const current = currentBindingRevisions(state);
-            if (active !== null) {
-              if (
-                oldTarget === null ||
-                oldExact === null ||
-                active.releaseRevision !== oldTarget.applicationReleaseRevision
-              )
-                throw fail("APPLICATION_INSTALLATION_STALE");
-              requireExactBindings(oldTarget, oldExact.pins, active.bindings, "active");
-              const detached = requireLifecycleResult(
-                await lifecycle.detach({
-                  applicationRootId: request.applicationRootId,
-                  applicationReleaseRevision: active.releaseRevision,
-                  expectedModuleBindings: expectedBindings(active.bindings),
-                }),
-                request.organizationId,
-                request.applicationRootId,
-                active.releaseRevision,
-                "detached",
-              );
-              requireExactBindings(oldTarget, oldExact.pins, detached.moduleBindings, "detached");
-              await changeContributions(
-                transaction,
-                oldTarget,
-                oldExact.contributionGroups,
-                detached.moduleBindings,
-                "detach",
-              );
-              for (const binding of detached.moduleBindings)
-                current.set(canonicalModuleRootId(binding.moduleRootId), binding.bindingRevision);
-            }
-
-            const provisioned = await provisionPins(transaction, request, pins, current);
-            await changeContributions(
-              transaction,
-              request,
-              exact.contributionGroups,
-              provisioned,
-              "attach",
-            );
-            if (preparedRuntimeSource === undefined) throw fail("APPLICATION_INSTALLATION_FAILED");
-            const preparedBindings = provisioned.map((result) => ({
-              moduleRootId: result.moduleRootId,
-              moduleReleaseRevision: result.moduleReleaseRevision,
-              bindingRevision: result.bindingRevision,
-              state: "provisioned" as const,
-            }));
-            const preparedSource = await preparedRuntimeSource(transaction, {
-              organizationId: request.organizationId,
-              applicationRootId: request.applicationRootId,
-              applicationReleaseRevision: request.applicationReleaseRevision,
-              moduleBindings: preparedBindings,
-            });
-            // A first installation was prepared earlier, so its bundle is only checked. An upgrade
-            // has no preparation step: its bundle is written here, inside the switch, so a failed
-            // switch keeps the previous release and a committed one always has its bundle.
-            if (active === null && request.expectedActiveReleaseRevision === null)
-              await assertPreparedInstallationRuntimeBundleMatches(
-                transaction,
-                preparedSource,
-                preparedBindings,
-              );
-            else await writePreparedInstallationRuntimeBundle(transaction, preparedSource);
             await requireBuilderAuthority(
-              authority,
+              currentAuthority,
               installOperation(request.applicationRootId, exact, false),
             );
-            const activated = requireLifecycleResult(
-              await lifecycle.activate({
+            return {
+              outcome: "unchanged" as const,
+              previousApplicationReleaseRevision: request.applicationReleaseRevision,
+              installation,
+            };
+          }
+
+          const lifecycle = createApplicationInstallationLifecycleRepository(transaction);
+          const current = currentBindingRevisions(state);
+          if (active !== null) {
+            if (
+              oldTarget === null ||
+              oldExact === null ||
+              active.releaseRevision !== oldTarget.applicationReleaseRevision
+            )
+              throw fail("APPLICATION_INSTALLATION_STALE");
+            requireExactBindings(oldTarget, oldExact.pins, active.bindings, "active");
+            const detached = requireLifecycleResult(
+              await lifecycle.detach({
                 applicationRootId: request.applicationRootId,
-                applicationReleaseRevision: request.applicationReleaseRevision,
-                expectedModuleBindings: expectedBindings(provisioned),
+                applicationReleaseRevision: active.releaseRevision,
+                expectedModuleBindings: expectedBindings(active.bindings),
               }),
               request.organizationId,
+              request.applicationRootId,
+              active.releaseRevision,
+              "detached",
+            );
+            requireExactBindings(oldTarget, oldExact.pins, detached.moduleBindings, "detached");
+            await changeContributions(
+              transaction,
+              oldTarget,
+              oldExact.contributionGroups,
+              detached.moduleBindings,
+              "detach",
+            );
+            for (const binding of detached.moduleBindings)
+              current.set(canonicalModuleRootId(binding.moduleRootId), binding.bindingRevision);
+          }
+
+          const provisioned = await provisionPins(transaction, request, pins, current);
+          await changeContributions(
+            transaction,
+            request,
+            exact.contributionGroups,
+            provisioned,
+            "attach",
+          );
+          if (preparedRuntimeSource === undefined) throw fail("APPLICATION_INSTALLATION_FAILED");
+          const preparedBindings = provisioned.map((result) => ({
+            moduleRootId: result.moduleRootId,
+            moduleReleaseRevision: result.moduleReleaseRevision,
+            bindingRevision: result.bindingRevision,
+            state: "provisioned" as const,
+          }));
+          const preparedSource = await preparedRuntimeSource(transaction, {
+            organizationId: request.organizationId,
+            applicationRootId: request.applicationRootId,
+            applicationReleaseRevision: request.applicationReleaseRevision,
+            moduleBindings: preparedBindings,
+          });
+          // A first installation was prepared earlier, so its bundle is only checked. An upgrade
+          // has no preparation step: its bundle is written here, inside the switch, so a failed
+          // switch keeps the previous release and a committed one always has its bundle.
+          if (active === null && request.expectedActiveReleaseRevision === null)
+            await assertPreparedInstallationRuntimeBundleMatches(
+              transaction,
+              preparedSource,
+              preparedBindings,
+            );
+          else await writePreparedInstallationRuntimeBundle(transaction, preparedSource);
+          await requireBuilderAuthority(
+            currentAuthority,
+            installOperation(request.applicationRootId, exact, false),
+          );
+          const activated = requireLifecycleResult(
+            await lifecycle.activate({
+              applicationRootId: request.applicationRootId,
+              applicationReleaseRevision: request.applicationReleaseRevision,
+              expectedModuleBindings: expectedBindings(provisioned),
+            }),
+            request.organizationId,
+            request.applicationRootId,
+            request.applicationReleaseRevision,
+            "active",
+          );
+          requireExactBindings(request, pins, activated.moduleBindings, "active");
+          if (activated.changed)
+            await recordOutcome(
+              transaction,
+              newActivityId(),
               request.applicationRootId,
               request.applicationReleaseRevision,
               "active",
             );
-            requireExactBindings(request, pins, activated.moduleBindings, "active");
-            if (activated.changed)
-              await recordOutcome(
-                transaction,
-                newActivityId(),
-                request.applicationRootId,
-                request.applicationReleaseRevision,
-                "active",
-              );
 
-            return {
-              outcome: activated.changed ? ("activated" as const) : ("unchanged" as const),
-              previousApplicationReleaseRevision: active?.releaseRevision ?? null,
-              installation: summary(activated),
-            };
-          },
-        );
-      } catch (error) {
-        // The prior exact release is still selected; point Access back at it. A failed first
-        // installation keeps its registration, which grants nobody access and is needed to retry
-        // the activation of its prepared release.
-        if (request.expectedActiveReleaseRevision !== null)
-          await restoreAccessToActiveRelease(
-            verifiedSession.data,
-            request,
-            request.expectedActiveReleaseRevision,
-          ).catch((restoreError: unknown) => {
-            logRefusal("installation", "access restore", "access_restore_failed", restoreError);
-          });
-        throw error;
-      }
+          return {
+            outcome: activated.changed ? ("activated" as const) : ("unchanged" as const),
+            previousApplicationReleaseRevision: active?.releaseRevision ?? null,
+            installation: summary(activated),
+          };
+        },
+      );
       return { ...switched, installedEvents: installedEvents(releaseSet, switched.installation) };
     },
 
@@ -1102,7 +1022,7 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
       if (!verifiedSession.success || !parsed.success)
         throw fail("INVALID_APPLICATION_INSTALLATION_COMMAND");
       const request = parsed.data;
-      const packageFacts = await readReleaseSet(verifiedSession.data, request);
+      const packageFacts = await readReleaseSet(verifiedSession.data, request, "replace_or_remove");
       const exact = exactStorageRelease(request, packageFacts);
 
       return inInstallerTransaction(

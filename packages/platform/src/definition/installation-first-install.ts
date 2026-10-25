@@ -123,7 +123,16 @@ export const firstInstallState = (
       firstInstallUnavailable("installation_incomplete");
     return "unprepared";
   }
-  if (bindings.registeredReleaseRevision !== selector.releaseRevision)
+  // An active installation of another release is an upgrade, even when a failed upgrade left the
+  // registration naming the selected release (#3503); the upgrade path repairs that mismatch.
+  if (
+    bindings.registeredReleaseRevision !== selector.releaseRevision ||
+    bindings.moduleBindings.some(
+      (binding) =>
+        binding.state === "active" &&
+        binding.applicationReleaseRevision !== selector.releaseRevision,
+    )
+  )
     firstInstallUnavailable("already_installed");
 
   const nonDetached = bindings.moduleBindings.filter((binding) => binding.state !== "detached");

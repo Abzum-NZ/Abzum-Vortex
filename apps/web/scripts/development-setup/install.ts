@@ -50,12 +50,12 @@ export type InstallFacts = Readonly<{
 }>;
 
 const definitionReader = (_facts: InstallFacts): PermissionRegistryDefinitionSetReader => ({
-  read: (context, command) =>
+  read: (context, command, purpose) =>
     inSystemTransaction(context, (transaction) =>
       createDatabaseSystemApplicationBoundReleaseSetService(
         developmentPublicationCatalogue,
         transaction,
-      ).read(context, command),
+      ).read(context, command, purpose),
     ),
 });
 
