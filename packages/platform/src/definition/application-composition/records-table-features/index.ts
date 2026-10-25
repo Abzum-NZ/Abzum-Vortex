@@ -250,16 +250,10 @@ type RecordsTableFeaturesRead =
   | Readonly<{ kind: "unreadable"; path: string }>;
 
 /**
- * Reads the `features` setting group. A group that is missing, a feature that does not say whether
- * it is on, or a feature with a setting or list entry it cannot read is unreadable, naming the
- * part: no renderer or server ever guesses a feature the definition did not decide, and a partial
- * entry never disappears.
- *
- * Contract: a feature key ABSENT from a present group is that feature OFF. Releases are immutable
- * once installed, so a grid feature added to the registry later is absent from every release
- * installed before it, and those grids (the App Store catalogue among them) must keep reading.
- * Studio and publication still write every key; this rule covers absence only, never a partial
- * entry (#3385, #3104 keep those strict).
+ * Reads the `features` setting group. The catalogue default fills in every feature, so a group
+ * that is missing, a feature that does not say whether it is on, or a feature with a setting or
+ * list entry it cannot read is unreadable, naming the part: no renderer or server ever guesses a
+ * feature the definition did not decide, and a partial entry never disappears.
  */
 export const readRecordsTableFeatures = (
   value: ComponentSettingValue | undefined,
@@ -269,7 +263,6 @@ export const readRecordsTableFeatures = (
     const read = <Key extends RecordsTableFeatureKey>(
       key: Key,
     ): RecordsTableFeatureState<object> => {
-      if (group[key] === undefined) return { enabled: false };
       const feature = requiredGroup(group[key], `features.${key}`);
       return withSettingPath(`features.${key}`, () => registry[key].definition.read(feature));
     };
