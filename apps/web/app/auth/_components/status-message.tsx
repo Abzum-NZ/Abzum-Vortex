@@ -6,6 +6,11 @@ type StatusMessageProps = Readonly<{
 
 const messages: Readonly<Record<string, string>> = {
   invalid: "Check the details and try again.",
+  privacy_notice_required: "Acknowledge the Privacy Policy before creating your account.",
+  privacy_notice_changed:
+    "The Privacy Policy has changed. Read the current policy and acknowledge it again.",
+  privacy_notice_unavailable:
+    "Account registration is temporarily unavailable. Please try again shortly.",
   invalid_credentials: "The email address or password was not accepted.",
   invalid_link: "This link is invalid or has expired. Request a new one and try again.",
   unavailable: "Sign-in is temporarily unavailable. Please try again shortly.",
