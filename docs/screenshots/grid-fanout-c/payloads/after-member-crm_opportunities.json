@@ -1,0 +1,1230 @@
+{
+ "board": [],
+ "table": [
+  {
+   "columns": [
+    {
+     "key": "1f46a74e-a312-366c-a667-cc87189b116c",
+     "label": "Opportunity number"
+    },
+    {
+     "key": "5637027d-adff-381b-beec-934d9b667f7c",
+     "label": "Opportunity name"
+    },
+    {
+     "key": "b3acb27c-a6a9-3c2f-ab88-b99dbc1f0a47",
+     "label": "Company"
+    },
+    {
+     "key": "98611607-1b3f-3325-97dd-69fe009b2c16",
+     "label": "Primary contact"
+    },
+    {
+     "key": "001e85aa-b88e-3ed7-a484-e25a7f52c546",
+     "label": "Value"
+    },
+    {
+     "key": "812b4736-ce8b-3c14-ba2a-71214ef6f8bc",
+     "label": "Net value"
+    },
+    {
+     "key": "9fca2aed-ea37-3d55-a86b-d9e1cb98f234",
+     "label": "Stage"
+    },
+    {
+     "key": "c02b5a5a-9cdd-3b7a-be22-d89a1acc1dbf",
+     "label": "Expected close date"
+    },
+    {
+     "key": "4f3a12dd-33e2-37f8-88ea-a9f873001845",
+     "label": "Probability"
+    }
+   ],
+   "features": {
+    "bulkActions": [
+     {
+      "action": "vortex.crm.opportunities.opportunity.mark_won",
+      "confirm": true,
+      "label": "Mark won",
+      "maxRecords": 5000
+     }
+    ],
+    "columnFilters": [
+     {
+      "fieldId": "5637027d-adff-381b-beec-934d9b667f7c",
+      "kind": "text",
+      "label": "Opportunity name",
+      "type": "text"
+     },
+     {
+      "fieldId": "b3acb27c-a6a9-3c2f-ab88-b99dbc1f0a47",
+      "kind": "link",
+      "label": "Company",
+      "type": "link"
+     },
+     {
+      "fieldId": "001e85aa-b88e-3ed7-a484-e25a7f52c546",
+      "kind": "money",
+      "label": "Value",
+      "type": "money"
+     },
+     {
+      "fieldId": "9fca2aed-ea37-3d55-a86b-d9e1cb98f234",
+      "kind": "choice",
+      "label": "Stage",
+      "options": [
+       {
+        "label": "Discovery",
+        "value": "discovery"
+       },
+       {
+        "label": "Qualified",
+        "value": "qualified"
+       },
+       {
+        "label": "Proposal",
+        "value": "proposal"
+       },
+       {
+        "label": "Negotiation",
+        "value": "negotiation"
+       },
+       {
+        "label": "Won",
+        "value": "won"
+       },
+       {
+        "label": "Lost",
+        "value": "lost"
+       }
+      ],
+      "type": "choice"
+     },
+     {
+      "fieldId": "c02b5a5a-9cdd-3b7a-be22-d89a1acc1dbf",
+      "kind": "date",
+      "label": "Expected close date",
+      "type": "date"
+     },
+     {
+      "fieldId": "4f3a12dd-33e2-37f8-88ea-a9f873001845",
+      "kind": "number",
+      "label": "Probability",
+      "type": "whole_number"
+     }
+    ],
+    "conditionalFormatting": {
+     "columns": {
+      "001e85aa-b88e-3ed7-a484-e25a7f52c546": {
+       "kind": "data_bar",
+       "token": "info"
+      }
+     },
+     "styles": {
+      "discounted": {
+       "badgeLabel": "Discount",
+       "bold": false,
+       "icon": "arrow_down",
+       "strike": false,
+       "text": true,
+       "tint": false,
+       "token": "success"
+      },
+      "negotiation": {
+       "bold": true,
+       "strike": false,
+       "text": false,
+       "tint": false,
+       "token": "info"
+      }
+     }
+    },
+    "export": {
+     "formats": [
+      "csv",
+      "xlsx"
+     ],
+     "maxRows": 10000
+    },
+    "inlineEdit": {
+     "eventId": "f5aa3932-b2bd-3da1-af5a-45732be918d6",
+     "fields": [
+      {
+       "editor": "$REF:values:features:rowEdit:fields:0:editor",
+       "field": "5637027d-adff-381b-beec-934d9b667f7c"
+      },
+      {
+       "editor": "$REF:values:features:rowEdit:fields:3:editor",
+       "field": "c02b5a5a-9cdd-3b7a-be22-d89a1acc1dbf"
+      },
+      {
+       "editor": "$REF:values:features:rowEdit:fields:4:editor",
+       "field": "4f3a12dd-33e2-37f8-88ea-a9f873001845"
+      }
+     ]
+    },
+    "pinning": true,
+    "rowEdit": {
+     "eventId": "b0139c04-eb32-3046-bc0f-a1ce545a5775",
+     "fields": [
+      {
+       "editor": {
+        "input": "text",
+        "kind": "text",
+        "maxLength": 255,
+        "required": true
+       },
+       "field": "5637027d-adff-381b-beec-934d9b667f7c"
+      },
+      {
+       "editor": {
+        "kind": "link",
+        "recordTypeId": "88b5a074-9073-3e66-8c8d-2289073ae499",
+        "required": true,
+        "targetLabel": "Company"
+       },
+       "field": "b3acb27c-a6a9-3c2f-ab88-b99dbc1f0a47"
+      },
+      {
+       "editor": {
+        "dependsOnField": "b3acb27c-a6a9-3c2f-ab88-b99dbc1f0a47",
+        "kind": "link",
+        "recordTypeId": "85817605-ded7-3888-8ce0-c0f28e638100",
+        "required": false,
+        "targetLabel": "Contact"
+       },
+       "field": "98611607-1b3f-3325-97dd-69fe009b2c16"
+      },
+      {
+       "editor": {
+        "kind": "date",
+        "required": true
+       },
+       "field": "c02b5a5a-9cdd-3b7a-be22-d89a1acc1dbf"
+      },
+      {
+       "editor": {
+        "kind": "whole_number",
+        "maximum": 100,
+        "minimum": 0,
+        "required": true
+       },
+       "field": "4f3a12dd-33e2-37f8-88ea-a9f873001845"
+      }
+     ],
+     "trigger": "button"
+    },
+    "savedViews": true,
+    "search": true,
+    "spreadsheet": {
+     "fill": true,
+     "find": true,
+     "paste": true,
+     "rangeSelect": true,
+     "statusBar": {
+      "fields": [
+       "001e85aa-b88e-3ed7-a484-e25a7f52c546"
+      ],
+      "operations": [
+       "count",
+       "sum",
+       "average"
+      ]
+     },
+     "undo": true
+    }
+   },
+   "hasNextPage": false,
+   "hasPreviousPage": false,
+   "hiddenColumns": [],
+   "kind": "table",
+   "layout": {
+    "authored": {
+     "columns": [
+      {
+       "fieldId": "1f46a74e-a312-366c-a667-cc87189b116c",
+       "pin": "start",
+       "visible": true
+      },
+      {
+       "fieldId": "5637027d-adff-381b-beec-934d9b667f7c",
+       "pin": "unpinned",
+       "visible": true
+      },
+      {
+       "fieldId": "b3acb27c-a6a9-3c2f-ab88-b99dbc1f0a47",
+       "pin": "unpinned",
+       "visible": true
+      },
+      "$REF:values:layout:layout:columns:7",
+      {
+       "fieldId": "001e85aa-b88e-3ed7-a484-e25a7f52c546",
+       "pin": "unpinned",
+       "visible": true
+      },
+      {
+       "fieldId": "812b4736-ce8b-3c14-ba2a-71214ef6f8bc",
+       "pin": "unpinned",
+       "visible": true
+      },
+      {
+       "fieldId": "9fca2aed-ea37-3d55-a86b-d9e1cb98f234",
+       "pin": "unpinned",
+       "visible": true
+      },
+      {
+       "fieldId": "c02b5a5a-9cdd-3b7a-be22-d89a1acc1dbf",
+       "pin": "unpinned",
+       "visible": true
+      },
+      "$REF:values:layout:layout:columns:8"
+     ]
+    },
+    "layout": {
+     "columns": [
+      {
+       "fieldId": "1f46a74e-a312-366c-a667-cc87189b116c",
+       "pin": "start",
+       "visible": true
+      },
+      {
+       "fieldId": "5637027d-adff-381b-beec-934d9b667f7c",
+       "pin": "unpinned",
+       "visible": true
+      },
+      {
+       "fieldId": "b3acb27c-a6a9-3c2f-ab88-b99dbc1f0a47",
+       "pin": "unpinned",
+       "visible": true
+      },
+      {
+       "fieldId": "001e85aa-b88e-3ed7-a484-e25a7f52c546",
+       "pin": "unpinned",
+       "visible": true
+      },
+      {
+       "fieldId": "812b4736-ce8b-3c14-ba2a-71214ef6f8bc",
+       "pin": "unpinned",
+       "visible": true
+      },
+      {
+       "fieldId": "9fca2aed-ea37-3d55-a86b-d9e1cb98f234",
+       "pin": "unpinned",
+       "visible": true
+      },
+      {
+       "fieldId": "c02b5a5a-9cdd-3b7a-be22-d89a1acc1dbf",
+       "pin": "unpinned",
+       "visible": true
+      },
+      {
+       "fieldId": "98611607-1b3f-3325-97dd-69fe009b2c16",
+       "pin": "unpinned",
+       "visible": true
+      },
+      {
+       "fieldId": "4f3a12dd-33e2-37f8-88ea-a9f873001845",
+       "pin": "unpinned",
+       "visible": true
+      }
+     ],
+     "density": "comfortable"
+    },
+    "queryId": "2c1e6b09-1a91-38b3-93b2-acf683314392",
+    "reset": false,
+    "revision": null,
+    "storage": "personal",
+    "views": {
+     "basedOnViewId": null,
+     "canShare": false,
+     "formattingFields": [
+      {
+       "fieldId": "1f46a74e-a312-366c-a667-cc87189b116c",
+       "filterable": true,
+       "key": "opportunity_number",
+       "label": "Opportunity number",
+       "personalData": "none",
+       "publicDisplay": "refused",
+       "required": true,
+       "searchPriority": "normal",
+       "settings": {
+        "digits": 7,
+        "prefix": "OPP-"
+       },
+       "sortable": true,
+       "type": "reference_number",
+       "unique": true
+      },
+      {
+       "fieldId": "5637027d-adff-381b-beec-934d9b667f7c",
+       "filterable": true,
+       "key": "name",
+       "label": "Opportunity name",
+       "personalData": "none",
+       "publicDisplay": "refused",
+       "required": true,
+       "searchPriority": "first",
+       "settings": {
+        "maxLength": 255
+       },
+       "sortable": true,
+       "type": "text",
+       "unique": false
+      },
+      {
+       "fieldId": "b3acb27c-a6a9-3c2f-ab88-b99dbc1f0a47",
+       "filterable": true,
+       "key": "company",
+       "label": "Company",
+       "personalData": "none",
+       "publicDisplay": "refused",
+       "required": true,
+       "searchPriority": "normal",
+       "settings": {
+        "onParentDelete": "refuse",
+        "reverseKey": "opportunities",
+        "reverseName": "Opportunities",
+        "target": {
+         "moduleRootId": "3028d563-a825-3b26-b411-80218e5d2a3b",
+         "recordTypeId": "88b5a074-9073-3e66-8c8d-2289073ae499",
+         "state": "resolved"
+        }
+       },
+       "sortable": false,
+       "type": "link",
+       "unique": false
+      },
+      {
+       "fieldId": "98611607-1b3f-3325-97dd-69fe009b2c16",
+       "filterable": true,
+       "key": "primary_contact",
+       "label": "Primary contact",
+       "personalData": "none",
+       "publicDisplay": "refused",
+       "required": false,
+       "searchPriority": "normal",
+       "settings": {
+        "dependsOn": {
+         "filterFieldId": "b85ddc30-d716-350d-8c5d-37daa5069b85",
+         "parentFieldId": "b3acb27c-a6a9-3c2f-ab88-b99dbc1f0a47"
+        },
+        "onParentDelete": "empty_optional",
+        "reverseKey": "primary_opportunities",
+        "reverseName": "Primary opportunities",
+        "target": {
+         "moduleRootId": "652dde1a-877e-360e-becf-5cce268dc59c",
+         "recordTypeId": "85817605-ded7-3888-8ce0-c0f28e638100",
+         "state": "resolved"
+        }
+       },
+       "sortable": false,
+       "type": "link",
+       "unique": false
+      },
+      {
+       "fieldId": "001e85aa-b88e-3ed7-a484-e25a7f52c546",
+       "filterable": true,
+       "key": "value",
+       "label": "Value",
+       "personalData": "none",
+       "publicDisplay": "refused",
+       "required": true,
+       "settings": {
+        "currencyMode": "organization_default",
+        "minimum": "0"
+       },
+       "sortable": true,
+       "type": "money",
+       "unique": false
+      },
+      {
+       "fieldId": "812b4736-ce8b-3c14-ba2a-71214ef6f8bc",
+       "filterable": true,
+       "key": "net_value",
+       "label": "Net value",
+       "personalData": "none",
+       "publicDisplay": "refused",
+       "required": true,
+       "settings": {
+        "decimalPlaces": 2,
+        "dependencyFieldIds": [
+         "001e85aa-b88e-3ed7-a484-e25a7f52c546",
+         "662bcfbc-80a7-3c94-8c4c-9e1ecc471526"
+        ],
+        "evaluation": "stored",
+        "expression": {
+         "args": [
+          {
+           "op": "reference",
+           "reference": {
+            "fieldId": "001e85aa-b88e-3ed7-a484-e25a7f52c546",
+            "source": "module_field"
+           }
+          },
+          {
+           "args": [
+            {
+             "op": "literal",
+             "type": "decimal_number",
+             "value": "1"
+            },
+            {
+             "args": [
+              {
+               "op": "reference",
+               "reference": {
+                "fieldId": "662bcfbc-80a7-3c94-8c4c-9e1ecc471526",
+                "source": "module_field"
+               }
+              },
+              {
+               "op": "literal",
+               "type": "decimal_number",
+               "value": "100"
+              }
+             ],
+             "op": "divide",
+             "rounding": "half_even",
+             "scale": 18
+            }
+           ],
+           "op": "subtract",
+           "rounding": "half_even",
+           "scale": 18
+          }
+         ],
+         "op": "multiply",
+         "rounding": "half_even",
+         "scale": 2
+        },
+        "resultType": "money"
+       },
+       "sortable": true,
+       "type": "calculation",
+       "unique": false
+      },
+      {
+       "default": 10,
+       "fieldId": "4f3a12dd-33e2-37f8-88ea-a9f873001845",
+       "filterable": true,
+       "key": "probability",
+       "label": "Probability",
+       "personalData": "none",
+       "publicDisplay": "refused",
+       "required": true,
+       "settings": {
+        "maximum": 100,
+        "minimum": 0
+       },
+       "sortable": true,
+       "type": "whole_number",
+       "unique": false
+      },
+      {
+       "default": "discovery",
+       "fieldId": "9fca2aed-ea37-3d55-a86b-d9e1cb98f234",
+       "filterable": true,
+       "key": "stage",
+       "label": "Stage",
+       "personalData": "none",
+       "publicDisplay": "refused",
+       "required": true,
+       "searchPriority": "normal",
+       "settings": {
+        "options": [
+         {
+          "label": "Discovery",
+          "value": "discovery"
+         },
+         {
+          "label": "Qualified",
+          "value": "qualified"
+         },
+         {
+          "label": "Proposal",
+          "value": "proposal"
+         },
+         {
+          "label": "Negotiation",
+          "value": "negotiation"
+         },
+         {
+          "label": "Won",
+          "requiredPermissionId": "473daca6-8f6c-323d-b1c1-f14eb07cae2d",
+          "value": "won"
+         },
+         {
+          "label": "Lost",
+          "value": "lost"
+         }
+        ]
+       },
+       "sortable": true,
+       "type": "choice",
+       "unique": false
+      },
+      {
+       "fieldId": "c02b5a5a-9cdd-3b7a-be22-d89a1acc1dbf",
+       "filterable": true,
+       "key": "expected_close_date",
+       "label": "Expected close date",
+       "personalData": "none",
+       "publicDisplay": "refused",
+       "required": true,
+       "settings": {},
+       "sortable": true,
+       "type": "date",
+       "unique": false
+      }
+     ],
+     "notice": null,
+     "selected": {
+      "document": {
+       "columns": "$REF:values:layout:layout:columns",
+       "density": "comfortable",
+       "filters": [],
+       "formatting": [],
+       "search": null,
+       "sort": []
+      },
+      "hidden": {
+       "columns": 0,
+       "filters": 0,
+       "formatting": 0,
+       "sort": 0
+      },
+      "mine": false,
+      "name": "Team pipeline",
+      "revision": 1,
+      "scope": "default",
+      "sharing": null,
+      "viewId": "d4266be5-35f9-46cf-9614-75b46a6d0673"
+     }
+    }
+   },
+   "narrowing": {
+    "filters": [],
+    "search": null
+   },
+   "page": 1,
+   "rows": [
+    {
+     "capabilities": {
+      "actions": [
+       "update",
+       "delete",
+       "restore"
+      ],
+      "changeableFieldIds": [
+       "001e85aa-b88e-3ed7-a484-e25a7f52c546",
+       "4f3a12dd-33e2-37f8-88ea-a9f873001845",
+       "5637027d-adff-381b-beec-934d9b667f7c",
+       "98611607-1b3f-3325-97dd-69fe009b2c16",
+       "9fca2aed-ea37-3d55-a86b-d9e1cb98f234",
+       "b3acb27c-a6a9-3c2f-ab88-b99dbc1f0a47",
+       "c02b5a5a-9cdd-3b7a-be22-d89a1acc1dbf"
+      ]
+     },
+     "cells": {
+      "001e85aa-b88e-3ed7-a484-e25a7f52c546": {
+       "kind": "text",
+       "text": "NZ$155,000.00"
+      },
+      "1f46a74e-a312-366c-a667-cc87189b116c": {
+       "kind": "text",
+       "text": "OPP-0000006"
+      },
+      "4f3a12dd-33e2-37f8-88ea-a9f873001845": {
+       "formatted": "75",
+       "kind": "number",
+       "value": 75
+      },
+      "5637027d-adff-381b-beec-934d9b667f7c": {
+       "kind": "text",
+       "text": "Analytics delivery partnership"
+      },
+      "812b4736-ce8b-3c14-ba2a-71214ef6f8bc": {
+       "kind": "text",
+       "text": "NZ$155,000.00"
+      },
+      "98611607-1b3f-3325-97dd-69fe009b2c16": {
+       "href": "/abzum/fanout_c/vortex.app.crm/crm_contact_detail?record_id=9877039a-4cdb-4426-bd5e-20b6b959f3a2",
+       "kind": "record_link",
+       "label": "Jack Chen"
+      },
+      "9fca2aed-ea37-3d55-a86b-d9e1cb98f234": {
+       "key": "negotiation",
+       "kind": "choice",
+       "label": "Negotiation"
+      },
+      "b3acb27c-a6a9-3c2f-ab88-b99dbc1f0a47": {
+       "href": "/abzum/fanout_c/vortex.app.crm/crm_company_detail?record_id=cf0297f7-8423-4fda-b062-173169da892f",
+       "kind": "record_link",
+       "label": "Alpine Data Partners"
+      },
+      "c02b5a5a-9cdd-3b7a-be22-d89a1acc1dbf": {
+       "iso": "2026-11-22",
+       "kind": "date"
+      }
+     },
+     "edit": {
+      "4f3a12dd-33e2-37f8-88ea-a9f873001845": 75,
+      "5637027d-adff-381b-beec-934d9b667f7c": "Analytics delivery partnership",
+      "98611607-1b3f-3325-97dd-69fe009b2c16": {
+       "recordId": "9877039a-4cdb-4426-bd5e-20b6b959f3a2",
+       "recordTypeId": "85817605-ded7-3888-8ce0-c0f28e638100"
+      },
+      "b3acb27c-a6a9-3c2f-ab88-b99dbc1f0a47": {
+       "recordId": "cf0297f7-8423-4fda-b062-173169da892f",
+       "recordTypeId": "88b5a074-9073-3e66-8c8d-2289073ae499"
+      },
+      "c02b5a5a-9cdd-3b7a-be22-d89a1acc1dbf": "2026-11-22"
+     },
+     "exact": {
+      "001e85aa-b88e-3ed7-a484-e25a7f52c546": "NZD 155000",
+      "4f3a12dd-33e2-37f8-88ea-a9f873001845": "75",
+      "812b4736-ce8b-3c14-ba2a-71214ef6f8bc": "NZD 155000"
+     },
+     "format": {
+      "cells": {
+       "9fca2aed-ea37-3d55-a86b-d9e1cb98f234": "negotiation"
+      },
+      "measures": {
+       "001e85aa-b88e-3ed7-a484-e25a7f52c546": 0.166
+      }
+     },
+     "recordId": "c114786a-f5b7-4243-9bee-4d93e8bc254f",
+     "revision": 4
+    },
+    {
+     "capabilities": {
+      "actions": [
+       "update",
+       "delete",
+       "restore"
+      ],
+      "changeableFieldIds": [
+       "001e85aa-b88e-3ed7-a484-e25a7f52c546",
+       "4f3a12dd-33e2-37f8-88ea-a9f873001845",
+       "5637027d-adff-381b-beec-934d9b667f7c",
+       "98611607-1b3f-3325-97dd-69fe009b2c16",
+       "9fca2aed-ea37-3d55-a86b-d9e1cb98f234",
+       "b3acb27c-a6a9-3c2f-ab88-b99dbc1f0a47",
+       "c02b5a5a-9cdd-3b7a-be22-d89a1acc1dbf"
+      ]
+     },
+     "cells": {
+      "001e85aa-b88e-3ed7-a484-e25a7f52c546": {
+       "kind": "text",
+       "text": "NZ$525,000.00"
+      },
+      "1f46a74e-a312-366c-a667-cc87189b116c": {
+       "kind": "text",
+       "text": "OPP-0000002"
+      },
+      "4f3a12dd-33e2-37f8-88ea-a9f873001845": {
+       "formatted": "80",
+       "kind": "number",
+       "value": 80
+      },
+      "5637027d-adff-381b-beec-934d9b667f7c": {
+       "kind": "text",
+       "text": "Clinical workflow expansion"
+      },
+      "812b4736-ce8b-3c14-ba2a-71214ef6f8bc": {
+       "kind": "text",
+       "text": "NZ$483,000.00"
+      },
+      "98611607-1b3f-3325-97dd-69fe009b2c16": {
+       "href": "/abzum/fanout_c/vortex.app.crm/crm_contact_detail?record_id=83dbf749-861d-4509-94e0-5ef6cafc3d1d",
+       "kind": "record_link",
+       "label": "Liam Patel"
+      },
+      "9fca2aed-ea37-3d55-a86b-d9e1cb98f234": {
+       "key": "negotiation",
+       "kind": "choice",
+       "label": "Negotiation"
+      },
+      "b3acb27c-a6a9-3c2f-ab88-b99dbc1f0a47": {
+       "href": "/abzum/fanout_c/vortex.app.crm/crm_company_detail?record_id=dd17a0b0-d57f-4f87-9d25-4d0566692dcb",
+       "kind": "record_link",
+       "label": "Southern Cross Health Group"
+      },
+      "c02b5a5a-9cdd-3b7a-be22-d89a1acc1dbf": {
+       "iso": "2026-11-29",
+       "kind": "date"
+      }
+     },
+     "edit": {
+      "4f3a12dd-33e2-37f8-88ea-a9f873001845": 80,
+      "5637027d-adff-381b-beec-934d9b667f7c": "Clinical workflow expansion",
+      "98611607-1b3f-3325-97dd-69fe009b2c16": {
+       "recordId": "83dbf749-861d-4509-94e0-5ef6cafc3d1d",
+       "recordTypeId": "85817605-ded7-3888-8ce0-c0f28e638100"
+      },
+      "b3acb27c-a6a9-3c2f-ab88-b99dbc1f0a47": {
+       "recordId": "dd17a0b0-d57f-4f87-9d25-4d0566692dcb",
+       "recordTypeId": "88b5a074-9073-3e66-8c8d-2289073ae499"
+      },
+      "c02b5a5a-9cdd-3b7a-be22-d89a1acc1dbf": "2026-11-29"
+     },
+     "exact": {
+      "001e85aa-b88e-3ed7-a484-e25a7f52c546": "NZD 525000",
+      "4f3a12dd-33e2-37f8-88ea-a9f873001845": "80",
+      "812b4736-ce8b-3c14-ba2a-71214ef6f8bc": "NZD 483000"
+     },
+     "format": {
+      "cells": {
+       "812b4736-ce8b-3c14-ba2a-71214ef6f8bc": "discounted",
+       "9fca2aed-ea37-3d55-a86b-d9e1cb98f234": "negotiation"
+      },
+      "measures": {
+       "001e85aa-b88e-3ed7-a484-e25a7f52c546": 0.561
+      }
+     },
+     "recordId": "ea12a5e8-bb7e-4fab-9d75-d978c0ec984d",
+     "revision": 4
+    },
+    {
+     "capabilities": {
+      "actions": [
+       "update",
+       "delete",
+       "restore"
+      ],
+      "changeableFieldIds": [
+       "001e85aa-b88e-3ed7-a484-e25a7f52c546",
+       "4f3a12dd-33e2-37f8-88ea-a9f873001845",
+       "5637027d-adff-381b-beec-934d9b667f7c",
+       "98611607-1b3f-3325-97dd-69fe009b2c16",
+       "9fca2aed-ea37-3d55-a86b-d9e1cb98f234",
+       "b3acb27c-a6a9-3c2f-ab88-b99dbc1f0a47",
+       "c02b5a5a-9cdd-3b7a-be22-d89a1acc1dbf"
+      ]
+     },
+     "cells": {
+      "001e85aa-b88e-3ed7-a484-e25a7f52c546": {
+       "kind": "text",
+       "text": "NZ$610,000.00"
+      },
+      "1f46a74e-a312-366c-a667-cc87189b116c": {
+       "kind": "text",
+       "text": "OPP-0000005"
+      },
+      "4f3a12dd-33e2-37f8-88ea-a9f873001845": {
+       "formatted": "65",
+       "kind": "number",
+       "value": 65
+      },
+      "5637027d-adff-381b-beec-934d9b667f7c": {
+       "kind": "text",
+       "text": "Store support transformation"
+      },
+      "812b4736-ce8b-3c14-ba2a-71214ef6f8bc": {
+       "kind": "text",
+       "text": "NZ$549,000.00"
+      },
+      "98611607-1b3f-3325-97dd-69fe009b2c16": {
+       "href": "/abzum/fanout_c/vortex.app.crm/crm_contact_detail?record_id=3f5f7e4c-e406-4e69-ab42-db6b8d89862e",
+       "kind": "record_link",
+       "label": "Mia Thompson"
+      },
+      "9fca2aed-ea37-3d55-a86b-d9e1cb98f234": {
+       "key": "proposal",
+       "kind": "choice",
+       "label": "Proposal"
+      },
+      "b3acb27c-a6a9-3c2f-ab88-b99dbc1f0a47": {
+       "href": "/abzum/fanout_c/vortex.app.crm/crm_company_detail?record_id=50e99734-60c1-4328-946e-91a95af46d59",
+       "kind": "record_link",
+       "label": "Goodnature Retail Network"
+      },
+      "c02b5a5a-9cdd-3b7a-be22-d89a1acc1dbf": {
+       "iso": "2026-12-06",
+       "kind": "date"
+      }
+     },
+     "edit": {
+      "4f3a12dd-33e2-37f8-88ea-a9f873001845": 65,
+      "5637027d-adff-381b-beec-934d9b667f7c": "Store support transformation",
+      "98611607-1b3f-3325-97dd-69fe009b2c16": {
+       "recordId": "3f5f7e4c-e406-4e69-ab42-db6b8d89862e",
+       "recordTypeId": "85817605-ded7-3888-8ce0-c0f28e638100"
+      },
+      "b3acb27c-a6a9-3c2f-ab88-b99dbc1f0a47": {
+       "recordId": "50e99734-60c1-4328-946e-91a95af46d59",
+       "recordTypeId": "88b5a074-9073-3e66-8c8d-2289073ae499"
+      },
+      "c02b5a5a-9cdd-3b7a-be22-d89a1acc1dbf": "2026-12-06"
+     },
+     "exact": {
+      "001e85aa-b88e-3ed7-a484-e25a7f52c546": "NZD 610000",
+      "4f3a12dd-33e2-37f8-88ea-a9f873001845": "65",
+      "812b4736-ce8b-3c14-ba2a-71214ef6f8bc": "NZD 549000"
+     },
+     "format": {
+      "cells": {
+       "812b4736-ce8b-3c14-ba2a-71214ef6f8bc": "discounted"
+      },
+      "measures": {
+       "001e85aa-b88e-3ed7-a484-e25a7f52c546": 0.652
+      }
+     },
+     "recordId": "e498a33c-cae8-44d5-b80e-987d72dd574d",
+     "revision": 3
+    },
+    {
+     "capabilities": {
+      "actions": [
+       "update",
+       "delete",
+       "restore"
+      ],
+      "changeableFieldIds": [
+       "001e85aa-b88e-3ed7-a484-e25a7f52c546",
+       "4f3a12dd-33e2-37f8-88ea-a9f873001845",
+       "5637027d-adff-381b-beec-934d9b667f7c",
+       "98611607-1b3f-3325-97dd-69fe009b2c16",
+       "9fca2aed-ea37-3d55-a86b-d9e1cb98f234",
+       "b3acb27c-a6a9-3c2f-ab88-b99dbc1f0a47",
+       "c02b5a5a-9cdd-3b7a-be22-d89a1acc1dbf"
+      ]
+     },
+     "cells": {
+      "001e85aa-b88e-3ed7-a484-e25a7f52c546": {
+       "kind": "text",
+       "text": "NZ$380,000.00"
+      },
+      "1f46a74e-a312-366c-a667-cc87189b116c": {
+       "kind": "text",
+       "text": "OPP-0000001"
+      },
+      "4f3a12dd-33e2-37f8-88ea-a9f873001845": {
+       "formatted": "70",
+       "kind": "number",
+       "value": 70
+      },
+      "5637027d-adff-381b-beec-934d9b667f7c": {
+       "kind": "text",
+       "text": "Cloud migration phase two"
+      },
+      "812b4736-ce8b-3c14-ba2a-71214ef6f8bc": {
+       "kind": "text",
+       "text": "NZ$380,000.00"
+      },
+      "98611607-1b3f-3325-97dd-69fe009b2c16": {
+       "href": "/abzum/fanout_c/vortex.app.crm/crm_contact_detail?record_id=c3f1449c-85aa-43ba-a7dc-ee6ca662cf34",
+       "kind": "record_link",
+       "label": "Amelia Ngata"
+      },
+      "9fca2aed-ea37-3d55-a86b-d9e1cb98f234": {
+       "key": "proposal",
+       "kind": "choice",
+       "label": "Proposal"
+      },
+      "b3acb27c-a6a9-3c2f-ab88-b99dbc1f0a47": {
+       "href": "/abzum/fanout_c/vortex.app.crm/crm_company_detail?record_id=d9b3c2ef-96f9-49e9-8ecd-6fc3d526b0b7",
+       "kind": "record_link",
+       "label": "Kauri Cloud Systems"
+      },
+      "c02b5a5a-9cdd-3b7a-be22-d89a1acc1dbf": {
+       "iso": "2026-12-14",
+       "kind": "date"
+      }
+     },
+     "edit": {
+      "4f3a12dd-33e2-37f8-88ea-a9f873001845": 70,
+      "5637027d-adff-381b-beec-934d9b667f7c": "Cloud migration phase two",
+      "98611607-1b3f-3325-97dd-69fe009b2c16": {
+       "recordId": "c3f1449c-85aa-43ba-a7dc-ee6ca662cf34",
+       "recordTypeId": "85817605-ded7-3888-8ce0-c0f28e638100"
+      },
+      "b3acb27c-a6a9-3c2f-ab88-b99dbc1f0a47": {
+       "recordId": "d9b3c2ef-96f9-49e9-8ecd-6fc3d526b0b7",
+       "recordTypeId": "88b5a074-9073-3e66-8c8d-2289073ae499"
+      },
+      "c02b5a5a-9cdd-3b7a-be22-d89a1acc1dbf": "2026-12-14"
+     },
+     "exact": {
+      "001e85aa-b88e-3ed7-a484-e25a7f52c546": "NZD 380000",
+      "4f3a12dd-33e2-37f8-88ea-a9f873001845": "70",
+      "812b4736-ce8b-3c14-ba2a-71214ef6f8bc": "NZD 380000"
+     },
+     "format": {
+      "measures": {
+       "001e85aa-b88e-3ed7-a484-e25a7f52c546": 0.406
+      }
+     },
+     "recordId": "d6c1c856-b3f1-4f7d-a52a-ceacb26ca842",
+     "revision": 3
+    },
+    {
+     "capabilities": {
+      "actions": [
+       "update",
+       "delete",
+       "restore"
+      ],
+      "changeableFieldIds": [
+       "001e85aa-b88e-3ed7-a484-e25a7f52c546",
+       "4f3a12dd-33e2-37f8-88ea-a9f873001845",
+       "5637027d-adff-381b-beec-934d9b667f7c",
+       "98611607-1b3f-3325-97dd-69fe009b2c16",
+       "9fca2aed-ea37-3d55-a86b-d9e1cb98f234",
+       "b3acb27c-a6a9-3c2f-ab88-b99dbc1f0a47",
+       "c02b5a5a-9cdd-3b7a-be22-d89a1acc1dbf"
+      ]
+     },
+     "cells": {
+      "001e85aa-b88e-3ed7-a484-e25a7f52c546": {
+       "kind": "text",
+       "text": "NZ$245,000.00"
+      },
+      "1f46a74e-a312-366c-a667-cc87189b116c": {
+       "kind": "text",
+       "text": "OPP-0000004"
+      },
+      "4f3a12dd-33e2-37f8-88ea-a9f873001845": {
+       "formatted": "45",
+       "kind": "number",
+       "value": 45
+      },
+      "5637027d-adff-381b-beec-934d9b667f7c": {
+       "kind": "text",
+       "text": "Technician scheduling rollout"
+      },
+      "812b4736-ce8b-3c14-ba2a-71214ef6f8bc": {
+       "kind": "text",
+       "text": "NZ$237,650.00"
+      },
+      "98611607-1b3f-3325-97dd-69fe009b2c16": {
+       "href": "/abzum/fanout_c/vortex.app.crm/crm_contact_detail?record_id=885b3c0a-6b5e-4068-b9b8-52042f7422ee",
+       "kind": "record_link",
+       "label": "Noah Williams"
+      },
+      "9fca2aed-ea37-3d55-a86b-d9e1cb98f234": {
+       "key": "qualified",
+       "kind": "choice",
+       "label": "Qualified"
+      },
+      "b3acb27c-a6a9-3c2f-ab88-b99dbc1f0a47": {
+       "href": "/abzum/fanout_c/vortex.app.crm/crm_company_detail?record_id=3c805f53-3c53-4c6b-b6a6-82c4488dac7f",
+       "kind": "record_link",
+       "label": "Summit Field Services"
+      },
+      "c02b5a5a-9cdd-3b7a-be22-d89a1acc1dbf": {
+       "iso": "2027-01-01",
+       "kind": "date"
+      }
+     },
+     "edit": {
+      "4f3a12dd-33e2-37f8-88ea-a9f873001845": 45,
+      "5637027d-adff-381b-beec-934d9b667f7c": "Technician scheduling rollout",
+      "98611607-1b3f-3325-97dd-69fe009b2c16": {
+       "recordId": "885b3c0a-6b5e-4068-b9b8-52042f7422ee",
+       "recordTypeId": "85817605-ded7-3888-8ce0-c0f28e638100"
+      },
+      "b3acb27c-a6a9-3c2f-ab88-b99dbc1f0a47": {
+       "recordId": "3c805f53-3c53-4c6b-b6a6-82c4488dac7f",
+       "recordTypeId": "88b5a074-9073-3e66-8c8d-2289073ae499"
+      },
+      "c02b5a5a-9cdd-3b7a-be22-d89a1acc1dbf": "2027-01-01"
+     },
+     "exact": {
+      "001e85aa-b88e-3ed7-a484-e25a7f52c546": "NZD 245000",
+      "4f3a12dd-33e2-37f8-88ea-a9f873001845": "45",
+      "812b4736-ce8b-3c14-ba2a-71214ef6f8bc": "NZD 237650"
+     },
+     "format": {
+      "cells": {
+       "812b4736-ce8b-3c14-ba2a-71214ef6f8bc": "discounted"
+      },
+      "measures": {
+       "001e85aa-b88e-3ed7-a484-e25a7f52c546": 0.262
+      }
+     },
+     "recordId": "dc195631-98dc-4d1d-8cfb-47aa92564c24",
+     "revision": 2
+    },
+    {
+     "capabilities": {
+      "actions": [
+       "update",
+       "delete",
+       "restore"
+      ],
+      "changeableFieldIds": [
+       "001e85aa-b88e-3ed7-a484-e25a7f52c546",
+       "4f3a12dd-33e2-37f8-88ea-a9f873001845",
+       "5637027d-adff-381b-beec-934d9b667f7c",
+       "98611607-1b3f-3325-97dd-69fe009b2c16",
+       "9fca2aed-ea37-3d55-a86b-d9e1cb98f234",
+       "b3acb27c-a6a9-3c2f-ab88-b99dbc1f0a47",
+       "c02b5a5a-9cdd-3b7a-be22-d89a1acc1dbf"
+      ]
+     },
+     "cells": {
+      "001e85aa-b88e-3ed7-a484-e25a7f52c546": {
+       "kind": "text",
+       "text": "NZ$935,000.00"
+      },
+      "1f46a74e-a312-366c-a667-cc87189b116c": {
+       "kind": "text",
+       "text": "OPP-0000008"
+      },
+      "4f3a12dd-33e2-37f8-88ea-a9f873001845": {
+       "formatted": "40",
+       "kind": "number",
+       "value": 40
+      },
+      "5637027d-adff-381b-beec-934d9b667f7c": {
+       "kind": "text",
+       "text": "Energy customer portal"
+      },
+      "812b4736-ce8b-3c14-ba2a-71214ef6f8bc": {
+       "kind": "text",
+       "text": "NZ$822,800.00"
+      },
+      "98611607-1b3f-3325-97dd-69fe009b2c16": {
+       "href": "/abzum/fanout_c/vortex.app.crm/crm_contact_detail?record_id=74ce0f57-65f7-49b4-9d65-e35b38aecad8",
+       "kind": "record_link",
+       "label": "Oliver King"
+      },
+      "9fca2aed-ea37-3d55-a86b-d9e1cb98f234": {
+       "key": "qualified",
+       "kind": "choice",
+       "label": "Qualified"
+      },
+      "b3acb27c-a6a9-3c2f-ab88-b99dbc1f0a47": {
+       "href": "/abzum/fanout_c/vortex.app.crm/crm_company_detail?record_id=088cc4d1-98a7-453f-b0e2-806ad7fd63ee",
+       "kind": "record_link",
+       "label": "Tealway Energy"
+      },
+      "c02b5a5a-9cdd-3b7a-be22-d89a1acc1dbf": {
+       "iso": "2027-01-15",
+       "kind": "date"
+      }
+     },
+     "edit": {
+      "4f3a12dd-33e2-37f8-88ea-a9f873001845": 40,
+      "5637027d-adff-381b-beec-934d9b667f7c": "Energy customer portal",
+      "98611607-1b3f-3325-97dd-69fe009b2c16": {
+       "recordId": "74ce0f57-65f7-49b4-9d65-e35b38aecad8",
+       "recordTypeId": "85817605-ded7-3888-8ce0-c0f28e638100"
+      },
+      "b3acb27c-a6a9-3c2f-ab88-b99dbc1f0a47": {
+       "recordId": "088cc4d1-98a7-453f-b0e2-806ad7fd63ee",
+       "recordTypeId": "88b5a074-9073-3e66-8c8d-2289073ae499"
+      },
+      "c02b5a5a-9cdd-3b7a-be22-d89a1acc1dbf": "2027-01-15"
+     },
+     "exact": {
+      "001e85aa-b88e-3ed7-a484-e25a7f52c546": "NZD 935000",
+      "4f3a12dd-33e2-37f8-88ea-a9f873001845": "40",
+      "812b4736-ce8b-3c14-ba2a-71214ef6f8bc": "NZD 822800"
+     },
+     "format": {
+      "cells": {
+       "812b4736-ce8b-3c14-ba2a-71214ef6f8bc": "discounted"
+      },
+      "measures": {
+       "001e85aa-b88e-3ed7-a484-e25a7f52c546": 1
+      }
+     },
+     "recordId": "d90796d2-4c7a-489d-abf9-6d7877d68918",
+     "revision": 2
+    },
+    {
+     "capabilities": {
+      "actions": [
+       "update",
+       "delete",
+       "restore"
+      ],
+      "changeableFieldIds": [
+       "001e85aa-b88e-3ed7-a484-e25a7f52c546",
+       "4f3a12dd-33e2-37f8-88ea-a9f873001845",
+       "5637027d-adff-381b-beec-934d9b667f7c",
+       "98611607-1b3f-3325-97dd-69fe009b2c16",
+       "9fca2aed-ea37-3d55-a86b-d9e1cb98f234",
+       "b3acb27c-a6a9-3c2f-ab88-b99dbc1f0a47",
+       "c02b5a5a-9cdd-3b7a-be22-d89a1acc1dbf"
+      ]
+     },
+     "cells": {
+      "001e85aa-b88e-3ed7-a484-e25a7f52c546": {
+       "kind": "text",
+       "text": "NZ$790,000.00"
+      },
+      "1f46a74e-a312-366c-a667-cc87189b116c": {
+       "kind": "text",
+       "text": "OPP-0000003"
+      },
+      "4f3a12dd-33e2-37f8-88ea-a9f873001845": {
+       "formatted": "25",
+       "kind": "number",
+       "value": 25
+      },
+      "5637027d-adff-381b-beec-934d9b667f7c": {
+       "kind": "text",
+       "text": "Customer operations platform"
+      },
+      "812b4736-ce8b-3c14-ba2a-71214ef6f8bc": {
+       "kind": "text",
+       "text": "NZ$750,500.00"
+      },
+      "98611607-1b3f-3325-97dd-69fe009b2c16": {
+       "href": "/abzum/fanout_c/vortex.app.crm/crm_contact_detail?record_id=c763d261-ccb2-43ac-aba8-8b235446b29c",
+       "kind": "record_link",
+       "label": "Sophie Morrison"
+      },
+      "9fca2aed-ea37-3d55-a86b-d9e1cb98f234": {
+       "key": "discovery",
+       "kind": "choice",
+       "label": "Discovery"
+      },
+      "b3acb27c-a6a9-3c2f-ab88-b99dbc1f0a47": {
+       "href": "/abzum/fanout_c/vortex.app.crm/crm_company_detail?record_id=191611f1-1a3d-43e7-a291-722d70c4a0c4",
+       "kind": "record_link",
+       "label": "Harbourlight Financial"
+      },
+      "c02b5a5a-9cdd-3b7a-be22-d89a1acc1dbf": {
+       "iso": "2027-01-28",
+       "kind": "date"
+      }
+     },
+     "edit": {
+      "4f3a12dd-33e2-37f8-88ea-a9f873001845": 25,
+      "5637027d-adff-381b-beec-934d9b667f7c": "Customer operations platform",
+      "98611607-1b3f-3325-97dd-69fe009b2c16": {
+       "recordId": "c763d261-ccb2-43ac-aba8-8b235446b29c",
+       "recordTypeId": "85817605-ded7-3888-8ce0-c0f28e638100"
+      },
+      "b3acb27c-a6a9-3c2f-ab88-b99dbc1f0a47": {
+       "recordId": "191611f1-1a3d-43e7-a291-722d70c4a0c4",
+       "recordTypeId": "88b5a074-9073-3e66-8c8d-2289073ae499"
+      },
+      "c02b5a5a-9cdd-3b7a-be22-d89a1acc1dbf": "2027-01-28"
+     },
+     "exact": {
+      "001e85aa-b88e-3ed7-a484-e25a7f52c546": "NZD 790000",
+      "4f3a12dd-33e2-37f8-88ea-a9f873001845": "25",
+      "812b4736-ce8b-3c14-ba2a-71214ef6f8bc": "NZD 750500"
+     },
+     "format": {
+      "cells": {
+       "812b4736-ce8b-3c14-ba2a-71214ef6f8bc": "discounted"
+      },
+      "measures": {
+       "001e85aa-b88e-3ed7-a484-e25a7f52c546": 0.845
+      }
+     },
+     "recordId": "40bb45d3-f7d6-44a2-bb62-f56e9329d5d3",
+     "revision": 1
+    }
+   ],
+   "scanLimited": false,
+   "selectionToken": "<sealed per read>"
+  }
+ ]
+}
