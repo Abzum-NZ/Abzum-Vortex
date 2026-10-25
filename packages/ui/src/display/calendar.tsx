@@ -140,132 +140,202 @@ export function CalendarDisplay(props: DisplayRenderProps<CalendarPayload>): Rea
   if (state.status === "empty")
     return <RecordsEmptyState accessibleName={accessibleName} message={emptyMessage} />;
 
-  // A shared or edited address can name a period the calendar cannot show; leaving it must not
-  // need the person to edit the address, so the current period is always one step away.
-  const datePinned = searchParams.has(addressParameter("date", placementId));
-  const leaveUnsupportedPeriod =
-    values === undefined && datePinned ? (
-      <Button
-        type="button"
-        variant="outline"
-        className="mt-2"
-        onClick={() =>
-          replaceParameters((parameters) =>
-            parameters.delete(addressParameter("date", placementId)),
-          )
-        }
-      >
-        Go to the current period
-      </Button>
-    ) : null;
+  // A malformed or unsupported period must leave the definition's current period reachable.
+  if (values === undefined && searchParams.has(addressParameter("date", placementId)))
+    return (
+      <>
+        <DisplayStateContainer
+          accessibleName={accessibleName}
+          availability={availability}
+          projectedData={state}
+          emptyMessage={emptyMessage}
+          {...(refusedMessage === undefined ? {} : { refusedMessage })}
+          {...(errorMessage === undefined ? {} : { errorMessage })}
+        >
+          {null}
+        </DisplayStateContainer>
+        <Button
+          type="button"
+          variant="outline"
+          className="mt-2"
+          onClick={() =>
+            replaceParameters((parameters) =>
+              parameters.delete(addressParameter("date", placementId)),
+            )
+          }
+        >
+          Go to the current period
+        </Button>
+      </>
+    );
 
   return (
-    <>
-      <DisplayStateContainer
-        accessibleName={accessibleName}
-        availability={availability}
-        projectedData={state}
-        emptyMessage={emptyMessage}
-        {...(refusedMessage === undefined ? {} : { refusedMessage })}
-        {...(errorMessage === undefined ? {} : { errorMessage })}
-      >
-        {values === undefined ? null : (
-          <section data-vortex-display="calendar" data-vortex-placement-id={placementId}>
-            <DisplayHeader title={title} accessibleName={accessibleName} events={events} />
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-              <div
-                className="flex flex-wrap items-center gap-2"
-                role="group"
-                aria-label="Calendar period"
+    <DisplayStateContainer
+      accessibleName={accessibleName}
+      availability={availability}
+      projectedData={state}
+      emptyMessage={emptyMessage}
+      {...(refusedMessage === undefined ? {} : { refusedMessage })}
+      {...(errorMessage === undefined ? {} : { errorMessage })}
+    >
+      {values === undefined ? null : (
+        <section data-vortex-display="calendar" data-vortex-placement-id={placementId}>
+          <DisplayHeader title={title} accessibleName={accessibleName} events={events} />
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+            <div
+              className="flex flex-wrap items-center gap-2"
+              role="group"
+              aria-label="Calendar period"
+            >
+              <Button
+                type="button"
+                variant="outline"
+                aria-label="Previous period"
+                disabled={!calendarPeriodSupported(values.view, previousDate, values.timeZone)}
+                onClick={() =>
+                  replaceParameters((parameters) =>
+                    parameters.set(addressParameter("date", placementId), previousDate),
+                  )
+                }
               >
-                <Button
-                  type="button"
-                  variant="outline"
-                  aria-label="Previous period"
-                  disabled={!calendarPeriodSupported(values.view, previousDate, values.timeZone)}
-                  onClick={() =>
-                    replaceParameters((parameters) =>
-                      parameters.set(addressParameter("date", placementId), previousDate),
-                    )
-                  }
-                >
-                  Previous
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() =>
-                    replaceParameters((parameters) =>
-                      parameters.set(
-                        addressParameter("date", placementId),
-                        localToday(values.timeZone),
-                      ),
-                    )
-                  }
-                >
-                  Today
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  aria-label="Next period"
-                  disabled={!calendarPeriodSupported(values.view, nextDate, values.timeZone)}
-                  onClick={() =>
-                    replaceParameters((parameters) =>
-                      parameters.set(addressParameter("date", placementId), nextDate),
-                    )
-                  }
-                >
-                  Next
-                </Button>
-                <h3 className="min-w-36 text-center font-medium" aria-live="polite">
-                  {values.view === "month"
-                    ? monthLabel(values.date, locale)
-                    : `${dayLabel(values.windowStart, locale)} – ${dayLabel(addDays(values.windowEnd, -1), locale)}`}
-                </h3>
-              </div>
-              <div className="flex gap-1" role="group" aria-label="Calendar view">
-                {calendarViews.map((view) => (
-                  <Button
-                    key={view}
-                    type="button"
-                    size="sm"
-                    variant={values.view === view ? "default" : "outline"}
-                    aria-pressed={values.view === view}
-                    disabled={!calendarPeriodSupported(view, values.date, values.timeZone)}
-                    onClick={() =>
-                      replaceParameters((parameters) =>
-                        parameters.set(addressParameter("calendar", placementId), view),
-                      )
-                    }
-                  >
-                    {view === "agenda" ? "Agenda" : view[0]!.toUpperCase() + view.slice(1)}
-                  </Button>
-                ))}
-              </div>
+                Previous
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() =>
+                  replaceParameters((parameters) =>
+                    parameters.set(
+                      addressParameter("date", placementId),
+                      localToday(values.timeZone),
+                    ),
+                  )
+                }
+              >
+                Today
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                aria-label="Next period"
+                disabled={!calendarPeriodSupported(values.view, nextDate, values.timeZone)}
+                onClick={() =>
+                  replaceParameters((parameters) =>
+                    parameters.set(addressParameter("date", placementId), nextDate),
+                  )
+                }
+              >
+                Next
+              </Button>
+              <h3 className="min-w-36 text-center font-medium" aria-live="polite">
+                {values.view === "month"
+                  ? monthLabel(values.date, locale)
+                  : `${dayLabel(values.windowStart, locale)} � ${dayLabel(addDays(values.windowEnd, -1), locale)}`}
+              </h3>
             </div>
-            {values.truncated ? (
-              <p className="mb-2 text-sm text-muted-foreground" role="status">
-                More items in this period than shown
-              </p>
-            ) : null}
-            {values.items.length === 0 && !values.truncated ? (
-              <RecordsEmptyState accessibleName={accessibleName} message={emptyMessage} />
-            ) : values.view === "agenda" ? (
-              <div className="space-y-3" data-vortex-calendar-view="agenda">
-                {days.map((day) => {
-                  const boundaries = dayBoundaries.get(day);
-                  const items =
-                    day >= values.windowStart && day < values.windowEnd
-                      ? values.items.filter((item) =>
-                          itemIntersectsDay(item, day, boundaries, values.endExclusive),
-                        )
-                      : [];
-                  if (items.length === 0) return null;
-                  return (
-                    <section key={day} aria-label={dayLabel(day, locale)} className="border-b pb-2">
-                      <h4 className="mb-1 font-medium">{dayLabel(day, locale)}</h4>
-                      <ul className="space-y-1">
+            <div className="flex gap-1" role="group" aria-label="Calendar view">
+              {calendarViews.map((view) => (
+                <Button
+                  key={view}
+                  type="button"
+                  size="sm"
+                  variant={values.view === view ? "default" : "outline"}
+                  aria-pressed={values.view === view}
+                  disabled={!calendarPeriodSupported(view, values.date, values.timeZone)}
+                  onClick={() =>
+                    replaceParameters((parameters) =>
+                      parameters.set(addressParameter("calendar", placementId), view),
+                    )
+                  }
+                >
+                  {view === "agenda" ? "Agenda" : view[0]!.toUpperCase() + view.slice(1)}
+                </Button>
+              ))}
+            </div>
+          </div>
+          {values.truncated ? (
+            <p className="mb-2 text-sm text-muted-foreground" role="status">
+              More items in this period than shown
+            </p>
+          ) : null}
+          {values.items.length === 0 && !values.truncated ? (
+            <RecordsEmptyState accessibleName={accessibleName} message={emptyMessage} />
+          ) : values.view === "agenda" ? (
+            <div className="space-y-3" data-vortex-calendar-view="agenda">
+              {days.map((day) => {
+                const boundaries = dayBoundaries.get(day);
+                const items =
+                  day >= values.windowStart && day < values.windowEnd
+                    ? values.items.filter((item) =>
+                        itemIntersectsDay(item, day, boundaries, values.endExclusive),
+                      )
+                    : [];
+                if (items.length === 0) return null;
+                return (
+                  <section key={day} aria-label={dayLabel(day, locale)} className="border-b pb-2">
+                    <h4 className="mb-1 font-medium">{dayLabel(day, locale)}</h4>
+                    <ul className="space-y-1">
+                      {items.map((item) => (
+                        <li key={item.recordId}>
+                          <CalendarItemButton
+                            item={item}
+                            timeZone={values.timeZone}
+                            locale={locale}
+                            events={events}
+                            rowActionEventId={rowActionEventId}
+                            showTime
+                          />
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                );
+              })}
+            </div>
+          ) : (
+            <div
+              className={
+                values.view === "week"
+                  ? "grid grid-cols-1 gap-2 sm:grid-cols-7"
+                  : "grid grid-cols-7 gap-1"
+              }
+              data-vortex-calendar-view={values.view}
+              role="group"
+              aria-label={`${values.view} calendar`}
+            >
+              {values.view === "month"
+                ? ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((weekday) => (
+                    <div
+                      key={weekday}
+                      className="px-1 py-2 text-center text-sm font-medium text-muted-foreground"
+                    >
+                      {weekday}
+                    </div>
+                  ))
+                : null}
+              {days.map((day) => {
+                const inPeriod = day >= values.windowStart && day < values.windowEnd;
+                const boundaries = dayBoundaries.get(day);
+                const items = inPeriod
+                  ? values.items.filter((item) =>
+                      itemIntersectsDay(item, day, boundaries, values.endExclusive),
+                    )
+                  : [];
+                return (
+                  <Card
+                    key={day}
+                    size="sm"
+                    role="group"
+                    aria-label={dayLabel(day, locale)}
+                    className={`min-h-24 min-w-0 ${inPeriod ? "" : "bg-muted/30 text-muted-foreground"}`}
+                  >
+                    <CardHeader className={values.view === "month" ? "text-right" : undefined}>
+                      <CardDescription>
+                        {values.view === "week" ? dayLabel(day, locale) : Number(day.slice(8, 10))}
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <ul className="flex flex-col gap-1">
                         {items.map((item) => (
                           <li key={item.recordId}>
                             <CalendarItemButton
@@ -274,85 +344,20 @@ export function CalendarDisplay(props: DisplayRenderProps<CalendarPayload>): Rea
                               locale={locale}
                               events={events}
                               rowActionEventId={rowActionEventId}
-                              showTime
+                              showTime={values.view === "week"}
                             />
                           </li>
                         ))}
                       </ul>
-                    </section>
-                  );
-                })}
-              </div>
-            ) : (
-              <div
-                className={
-                  values.view === "week"
-                    ? "grid grid-cols-1 gap-2 sm:grid-cols-7"
-                    : "grid grid-cols-7 gap-1"
-                }
-                data-vortex-calendar-view={values.view}
-                role="group"
-                aria-label={`${values.view} calendar`}
-              >
-                {values.view === "month"
-                  ? ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((weekday) => (
-                      <div
-                        key={weekday}
-                        className="px-1 py-2 text-center text-sm font-medium text-muted-foreground"
-                      >
-                        {weekday}
-                      </div>
-                    ))
-                  : null}
-                {days.map((day) => {
-                  const inPeriod = day >= values.windowStart && day < values.windowEnd;
-                  const boundaries = dayBoundaries.get(day);
-                  const items = inPeriod
-                    ? values.items.filter((item) =>
-                        itemIntersectsDay(item, day, boundaries, values.endExclusive),
-                      )
-                    : [];
-                  return (
-                    <Card
-                      key={day}
-                      size="sm"
-                      role="group"
-                      aria-label={dayLabel(day, locale)}
-                      className={`min-h-24 min-w-0 ${inPeriod ? "" : "bg-muted/30 text-muted-foreground"}`}
-                    >
-                      <CardHeader className={values.view === "month" ? "text-right" : undefined}>
-                        <CardDescription>
-                          {values.view === "week"
-                            ? dayLabel(day, locale)
-                            : Number(day.slice(8, 10))}
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent>
-                        <ul className="flex flex-col gap-1">
-                          {items.map((item) => (
-                            <li key={item.recordId}>
-                              <CalendarItemButton
-                                item={item}
-                                timeZone={values.timeZone}
-                                locale={locale}
-                                events={events}
-                                rowActionEventId={rowActionEventId}
-                                showTime={values.view === "week"}
-                              />
-                            </li>
-                          ))}
-                        </ul>
-                      </CardContent>
-                    </Card>
-                  );
-                })}
-              </div>
-            )}
-          </section>
-        )}
-      </DisplayStateContainer>
-      {leaveUnsupportedPeriod}
-    </>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      )}
+    </DisplayStateContainer>
   );
 }
 

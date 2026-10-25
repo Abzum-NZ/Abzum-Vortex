@@ -31,7 +31,7 @@ export function RecordDetailDisplay(props: DisplayRenderProps<RecordDetailPayloa
     events,
   } = resolveDisplayContext<RecordDetailPayload>(
     props,
-    (detail) => detail.fields.length === 0,
+    (detail) => detail.fields.length === 0 && detail.heading === undefined,
     "No details to show",
   );
   const contract = readRecordDetailContract(props.settings);
@@ -82,6 +82,7 @@ export function RecordDetailDisplay(props: DisplayRenderProps<RecordDetailPayloa
               className="*:mb-0"
               // The heading shows a field's value, so a projection refresh can find it on screen.
               data-vortex-field-key={contract?.headingField}
+              data-vortex-heading-field-key={contract?.headingField}
             >
               <DisplayHeader title={title} accessibleName={accessibleName} events={events} />
             </CardHeader>

@@ -76,7 +76,10 @@ export function useProjectionRefresh(
               field.key === policy.fieldId &&
               pendingChoice(field.value, policy.values),
           )) ||
-          pendingChoice(payload.heading, policy.values));
+          (pendingChoice(payload.heading, policy.values) &&
+            root.current?.querySelector(
+              `[data-vortex-placement-id="${CSS.escape(placementId)}"] [data-vortex-heading-field-key="${CSS.escape(policy.fieldId)}"]`,
+            ) != null));
       if (!retrying && pendingRows.length === 0 && !pendingDetail) {
         pendingBefore.current.delete(placementId);
         continue;
@@ -113,7 +116,10 @@ export function useProjectionRefresh(
             await refreshRef.current([placementId]);
           } finally {
             inFlight.current.delete(placementId);
+            // A thrown transport failure must not bypass the next poll.
+            if (!disposed) schedule();
           }
+          return;
         }
         // Serial reads: a slow response never builds a queue. A new payload or navigation
         // disposes this policy, and a terminal state schedules no further work.

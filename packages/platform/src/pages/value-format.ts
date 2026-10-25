@@ -7,22 +7,18 @@ const NUMBER_LOCALE = "en";
 const decimalFormat = new Intl.NumberFormat(NUMBER_LOCALE, { maximumFractionDigits: 20 });
 const moneyFormats = new Map<string, Intl.NumberFormat>();
 
-/**
- * A currency's formatter showing at least the currency's own minor units and, for an amount
- * stored with more decimal places, every one of them: a stored amount is never rounded on screen.
- */
-const moneyFormat = (currency: string, decimalPlaces: number): Intl.NumberFormat => {
-  const key = `${currency}:${decimalPlaces}`;
+/** Currency punctuation and minor units; exact fraction text is inserted without rounding. */
+const moneyFormat = (currency: string, hasFraction: boolean): Intl.NumberFormat => {
+  const key = `${currency}:${hasFraction}`;
   let format = moneyFormats.get(key);
   if (format === undefined) {
     const minor =
       new Intl.NumberFormat(NUMBER_LOCALE, { style: "currency", currency }).resolvedOptions()
-        .maximumFractionDigits ?? 2;
+        .minimumFractionDigits ?? 0;
     format = new Intl.NumberFormat(NUMBER_LOCALE, {
       style: "currency",
       currency,
-      minimumFractionDigits: minor,
-      maximumFractionDigits: Math.min(20, Math.max(minor, decimalPlaces)),
+      minimumFractionDigits: Math.max(minor, hasFraction ? 1 : 0),
     });
     moneyFormats.set(key, format);
   }
@@ -39,7 +35,14 @@ export const formatDecimal = (value: number | string): string =>
   decimalFormat.format(value as number);
 
 /** A money value with its own currency symbol or code and locale grouping. */
-export const formatMoney = (money: Readonly<{ currency: string; amount: string }>): string =>
-  moneyFormat(money.currency, money.amount.split(".")[1]?.length ?? 0).format(
-    money.amount as unknown as number,
-  );
+export const formatMoney = (money: Readonly<{ currency: string; amount: string }>): string => {
+  const [integer, fraction = ""] = money.amount.split(".");
+  const format = moneyFormat(money.currency, fraction.length > 0);
+  const minor = format.resolvedOptions().minimumFractionDigits ?? 0;
+  // BigInt keeps every integer digit; negative zero preserves the sign of amounts between -1 and 0.
+  const whole = integer === "-0" ? -0 : BigInt(integer!);
+  return format
+    .formatToParts(whole)
+    .map((part) => (part.type === "fraction" ? fraction.padEnd(minor, "0") : part.value))
+    .join("");
+};
