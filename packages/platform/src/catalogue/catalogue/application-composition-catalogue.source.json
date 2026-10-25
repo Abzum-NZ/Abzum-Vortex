@@ -330,6 +330,15 @@
       },
       {
         "kind": "text",
+        "key": "record_from",
+        "label": "Record from",
+        "help": "Show the record this control selects instead of the page's record",
+        "required": false,
+        "minLength": 1,
+        "maxLength": 200
+      },
+      {
+        "kind": "text",
         "key": "title",
         "presentation": true,
         "label": "Title",
@@ -1409,6 +1418,15 @@
         "label": "Initially open",
         "help": "Open when the page first renders, unless a projected open state is supplied",
         "required": false
+      },
+      {
+        "kind": "text",
+        "key": "open_with",
+        "label": "Open with",
+        "help": "Open while this control publishes a selected record; closing clears its selection",
+        "required": false,
+        "minLength": 1,
+        "maxLength": 200
       },
       {
         "kind": "choice",

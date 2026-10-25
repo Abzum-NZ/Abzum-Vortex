@@ -221,9 +221,14 @@ export function useStudioReleasesTab({
   ): Promise<StudioPublicationOutcome> => {
     if (draft.isHeld("publication") || latest.current.blockedReason() !== undefined)
       return { kind: "not_started", reason: "busy" };
-    if (!(await latest.current.flush())) return { kind: "not_started", reason: "not_saved" };
-    const snapshot = readSnapshot();
-    if (snapshot === null) return { kind: "not_started", reason: "not_saved" };
+    // A check shows as under way while the latest edits finish saving, so the dialog never offers it twice.
+    if (mode === "prepare") setPreparing(true);
+    const snapshot = (await latest.current.flush()) ? readSnapshot() : null;
+    if (snapshot === null) {
+      if (mode === "prepare" && request.current === null && latest.current.isActive())
+        setPreparing(false);
+      return { kind: "not_started", reason: "not_saved" };
+    }
     const confirmed = preparedRef.current;
     const releaseNote = (suppliedNote ?? note).trim();
     if (
@@ -249,18 +254,26 @@ export function useStudioReleasesTab({
     setPrepared(null);
     setProblem("");
     if (mode === "prepare") setPreparing(true);
-    const superseded = () =>
-      !latest.current.isActive() ||
-      ticket.cancelled ||
-      request.current !== ticket ||
-      latest.current.lifetime !== snapshot.lifetime;
+    // The dialog still waits on this request: it was neither closed, replaced nor unmounted.
+    const current = () =>
+      latest.current.isActive() && !ticket.cancelled && request.current === ticket;
+    const superseded = () => !current() || latest.current.lifetime !== snapshot.lifetime;
+    const discard = (): StudioPublicationOutcome => {
+      if (current())
+        setProblem(
+          mode === "prepare"
+            ? "The draft was reloaded while its summary was being checked. Check again before publishing."
+            : publicationProblemText("temporarily_unavailable", undefined),
+        );
+      return { kind: "discarded" };
+    };
     try {
       if (mode === "prepare") {
         const result = await prepareStudioApplicationPublication(organizationId, {
           rootId: snapshot.rootId,
           expectedDraftRevision: snapshot.draftRevision,
         });
-        if (superseded()) return { kind: "discarded" };
+        if (superseded()) return discard();
         const parsed =
           result.kind === "available"
             ? prepareDefinitionPublicationResultSchema.safeParse(result.preparation)
@@ -278,7 +291,7 @@ export function useStudioReleasesTab({
             latest.current.readCatalogue().releases.length === 0
           ) {
             const resources = await latest.current.loadAuthoringResources();
-            if (superseded()) return { kind: "discarded" };
+            if (superseded()) return discard();
             if (resources === null) {
               setProblem(
                 "The pages could not be checked for new fields. Close this window and try again.",
@@ -316,7 +329,7 @@ export function useStudioReleasesTab({
       }
       const confirmation = confirmed!.confirmation;
       const result = await publishStudioApplication(organizationId, { confirmation, releaseNote });
-      if (superseded()) return { kind: "discarded" };
+      if (superseded()) return discard();
       const parsed =
         result.kind === "available"
           ? publishDefinitionResultSchema.safeParse(result.publication)
@@ -362,7 +375,7 @@ export function useStudioReleasesTab({
         : { kind: "declined", result: result.kind, reason: result.reason };
     } catch (error) {
       console.error(`[studio] publication ${mode} request failed: ${describeFailure(error)}`);
-      if (!superseded())
+      if (current())
         setProblem(
           mode === "prepare"
             ? "The platform could not read what will be published. Try again in a moment."

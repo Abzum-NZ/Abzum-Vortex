@@ -17,7 +17,7 @@ import { readCalendar } from "./calendar";
 import { readLauncher } from "./launcher";
 import { readLinkTiles } from "./link-tiles";
 import { readQueryNotice } from "./query-notice";
-import { readQueryDetail, readSubjectDetail } from "./record-detail";
+import { readQueryDetail, readSelectedDetail, readSubjectDetail } from "./record-detail";
 import { readRecordsTable } from "./records-table";
 import {
   findModuleQuery,
@@ -112,7 +112,9 @@ export const readQueryPlacement = async (
   )
     return;
   if (detailContract !== undefined && queryId === undefined) {
-    await readSubjectDetail(read, placement);
+    const recordFrom = settings["record_from"];
+    if (recordFrom?.kind === "text") await readSelectedDetail(read, placement, recordFrom.value);
+    else await readSubjectDetail(read, placement);
     return;
   }
   const bound = queryId === undefined ? undefined : findModuleQuery(read.context, queryId);
@@ -249,7 +251,11 @@ export const readRecordsTableGroupMembers = async (
   }
 };
 
-export { pageQueryBindingContext, placementParameterDependencies } from "./bindings";
+export {
+  controlSelectedRecordType,
+  pageQueryBindingContext,
+  placementParameterDependencies,
+} from "./bindings";
 export {
   findModuleQuery,
   isApplicationLauncherPlacement,
