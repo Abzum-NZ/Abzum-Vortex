@@ -8,14 +8,20 @@ import {
   createApplicationInstallationCoordinator,
   type ApplicationInstallationCoordinatorDependencies,
 } from "@vortex/platform/server";
-import type { IdentityAuthorityId } from "@vortex/platform/schema";
+import {
+  organizationSelectionCandidateSchema,
+  sameId,
+  type IdentityAuthorityId,
+} from "@vortex/platform/schema";
 import {
   createDatabaseSystemApplicationBoundReleaseSetService,
   createPreparedInstallationRuntimeSourceReader,
   resolveModuleContributions,
+  readInstallationBindings,
+  type TrustedApplicationRootOriginKind,
 } from "@vortex/platform/server";
 import { releaseSetContainsCustomComponents } from "../../app/_lib/definition-catalogue";
-import { developmentPublicationCatalogue } from "./definitions";
+import { developmentPublicationCatalogue, publishShippedDefinitions } from "./definitions";
 import {
   developmentBuilderAuthority,
   inSystemTransaction,
@@ -126,16 +132,127 @@ const installOne = async (
   log(`installed ${applicationKey}: ${activation.outcome}`);
 };
 
-/** Installs every manifest application and records completion. */
-export const installApplications = async (
+/**
+ * Replaces only the observed active revision. System applications follow every shipped release;
+ * an ordinary application keeps its administrator's choice while that release still verifies.
+ */
+export const upgradeOne = async (
   facts: InstallFacts,
+  applicationKey: string,
+  origin: TrustedApplicationRootOriginKind,
   log: (message: string) => void,
 ): Promise<void> => {
-  await initializeLifecycleLimits(
-    facts.system.organizationId,
-    facts.manifest.initialLifecyclePolicy,
+  const published = release(facts, applicationKey);
+  let readFailure: unknown;
+  const observed = await createHumanOrganizationRequestService({
+    identityAuthorityId: facts.identityAuthorityId,
+  }).runChange(
+    nominatedOwnerSession(facts.stewardIdentityId),
+    organizationSelectionCandidateSchema.parse({ organizationId: facts.system.organizationId }),
+    async (transaction): Promise<number | null> => {
+      try {
+        const bindings = await readInstallationBindings(transaction, published.rootId);
+        if (!sameId(bindings.organizationId, facts.system.organizationId))
+          throw new Error(`Installation scope differs for ${applicationKey}`);
+        const revisions = new Set(
+          bindings.moduleBindings
+            .filter((binding) => binding.state === "active")
+            .map((binding) => binding.applicationReleaseRevision),
+        );
+        if (revisions.size > 1)
+          throw new Error(`Active installation is mixed for ${applicationKey}`);
+        return revisions.values().next().value ?? null;
+      } catch (error) {
+        readFailure = error;
+        throw error;
+      }
+    },
   );
-  for (const key of facts.manifest.applicationKeys) await installOne(facts, key, log);
+  if (observed.kind !== "available")
+    throw new Error(
+      `Active installation could not be read for ${applicationKey} (${observed.kind})`,
+      {
+        cause: readFailure ?? observed,
+      },
+    );
+  const activeRevision = observed.value;
+  if (activeRevision === null) {
+    await installOne(facts, applicationKey, log);
+    return;
+  }
+  if (activeRevision === published.releaseRevision) {
+    log(`active ${applicationKey}: unchanged`);
+    return;
+  }
+  if (activeRevision > published.releaseRevision)
+    throw new Error(`Active release is newer than the publication for ${applicationKey}`);
+
+  if (origin === "ordinary") {
+    const context = mintSystemContext(facts.system);
+    const superseded = await inSystemTransaction(context, (transaction) =>
+      createDatabaseSystemApplicationBoundReleaseSetService(
+        developmentPublicationCatalogue,
+        transaction,
+      ).read(context, {
+        applicationRootId: published.rootId,
+        applicationReleaseRevision: activeRevision,
+      }),
+    ).then(
+      () => false,
+      (error: unknown) => {
+        if (error instanceof DefinitionError && error.code === "DEFINITION_DEPENDENCY_SUPERSEDED")
+          return true;
+        throw error;
+      },
+    );
+    if (!superseded) {
+      log(`available ${applicationKey} ${published.releaseVersion}: awaiting in-page adoption`);
+      return;
+    }
+  }
+  await prepareRelease(facts, applicationKey, log);
+  const activation = await createApplicationInstallationCoordinator(
+    coordinatorDependencies(facts),
+  ).activate(
+    nominatedOwnerSession(facts.stewardIdentityId),
+    applicationInstallationActivationRequestSchema.parse({
+      organizationId: facts.system.organizationId,
+      applicationRootId: published.rootId,
+      applicationReleaseRevision: published.releaseRevision,
+      expectedActiveReleaseRevision: activeRevision,
+    }),
+  );
+  log(`upgraded ${applicationKey}: ${activation.outcome}`);
+};
+
+/** The one local shipped-refresh operation, including first install and interrupted-run recovery. */
+export const refreshShippedApplications = async (
+  facts: Omit<InstallFacts, "releases">,
+  log: (message: string) => void,
+): Promise<InstallFacts["releases"]> => {
+  // Existing organisations may have changed their lifecycle limits; a shipped refresh must not
+  // reapply the initial policy. The first completed root proves initialization already committed.
+  if (Object.keys(facts.state.releases).length === 0)
+    await initializeLifecycleLimits(
+      facts.system.organizationId,
+      facts.manifest.initialLifecyclePolicy,
+    );
+  facts.state.setupCompleted = false;
+  facts.state.save();
+  const releases = await publishShippedDefinitions(
+    facts.system,
+    facts.manifest.applicationKeys,
+    facts.state,
+    log,
+    (descriptor, published) =>
+      upgradeOne(
+        { ...facts, releases: new Map([[descriptor.source.key, published]]) },
+        descriptor.source.key,
+        descriptor.applicationOriginKind,
+        log,
+      ),
+  );
   facts.state.setupCompleted = true;
   facts.state.save();
+  return releases;
 };
