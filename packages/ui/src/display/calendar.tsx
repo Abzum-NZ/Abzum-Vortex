@@ -230,7 +230,7 @@ export function CalendarDisplay(props: DisplayRenderProps<CalendarPayload>): Rea
               <h3 className="min-w-36 text-center font-medium" aria-live="polite">
                 {values.view === "month"
                   ? monthLabel(values.date, locale)
-                  : `${dayLabel(values.windowStart, locale)} � ${dayLabel(addDays(values.windowEnd, -1), locale)}`}
+                  : `${dayLabel(values.windowStart, locale)} – ${dayLabel(addDays(values.windowEnd, -1), locale)}`}
               </h3>
             </div>
             <div className="flex gap-1" role="group" aria-label="Calendar view">
