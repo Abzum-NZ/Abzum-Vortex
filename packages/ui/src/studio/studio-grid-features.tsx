@@ -3,7 +3,6 @@
 import {
   recordsTableInlineEditFeature,
   recordsTableMasterDetailFeature,
-  recordsTableRowActionsFeature,
   recordsTableRowEditFeature,
   recordsTableSavedViewsFeature,
   recordsTableSpreadsheetFeature,
@@ -198,7 +197,7 @@ export function StudioGridFeatures({
   };
   const authoredPageSize = tableSettings["page_size"];
   const tablePageSize = authoredPageSize?.kind === "number" ? authoredPageSize.value : undefined;
-  const rowActions = tableSettings[recordsTableRowActionsFeature.key];
+  const rowActions = tableSettings["row_actions"];
   const facts = studioRecordsTableQueryFacts(
     query,
     signedIn,

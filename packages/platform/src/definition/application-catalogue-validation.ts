@@ -1,5 +1,4 @@
 import { recordsTableInlineEditEvent } from "./application-composition/records-table-features/inline-edit";
-import { recordsTableRowActionsFeature } from "./application-composition/records-table-features/row-actions";
 import { recordsTableRowEditEvent } from "./application-composition/records-table-features/row-edit";
 import {
   builderKeySchema,
@@ -377,12 +376,7 @@ export function validateApplicationSourceCatalogue(
           "record_reference",
         );
       for (const action of behaviours.rowActions)
-        checkRowBehaviour(
-          recordsTableRowActionsFeature.key,
-          action.eventId,
-          "row_action",
-          "record_reference",
-        );
+        checkRowBehaviour("row_actions", action.eventId, "row_action", "record_reference");
       const rowActionIds = new Set(behaviours.rowActions.map((action) => action.eventId));
       for (const binding of source.body.flow_bindings)
         if (
@@ -393,7 +387,7 @@ export function validateApplicationSourceCatalogue(
           report(
             "vortex.definition.application_block_references",
             "broken_reference",
-            at(recordsTableRowActionsFeature.key),
+            at("row_actions"),
           );
       // A bulk action runs a named action of the bound record type, never a flow binding, so no
       // flow binds the table's bulk action event.
