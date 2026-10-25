@@ -16,6 +16,7 @@ import {
   refuseWithCause,
   filterInputRefusal,
   readInputs,
+  sqlArray,
 } from "./protected-query-helpers";
 import {
   parseQueryInputDeclarations,
@@ -42,25 +43,66 @@ const readSummary = async (
   releaseRevision: number,
   inputValues: Readonly<Record<string, JsonValue>>,
 ) => {
-  const rows = await transaction.query<ResultRow>`
-    select vortex_record.run_module_query_summary(
+  const rows = await (command.pivot !== undefined
+    ? transaction.query<ResultRow>`
+    select vortex_record.run_module_query_pivot(
       ${command.moduleRootId}::uuid,
       ${command.queryId}::uuid,
       ${releaseRevision}::bigint,
       ${JSON.stringify(inputValues)}::text::jsonb,
-      ${JSON.stringify({
-        filter: command.filter ?? null,
-        search: command.search ?? null,
-        searchableFieldIds: command.searchableFieldIds,
-        ...(command.grouping === undefined ? {} : { grouping: command.grouping }),
-        ...(command.totals === undefined ? {} : { totals: command.totals }),
-        ...(command.pivot === undefined ? {} : { pivot: command.pivot }),
-        ...(command.groupLimit === undefined ? {} : { groupLimit: command.groupLimit }),
-        ...(command.groupAfter === undefined ? {} : { groupAfter: command.groupAfter }),
-        filterableFieldIds: command.filterableFieldIds,
-      })}::text::jsonb
+      ${JSON.stringify(command.filter ?? null)}::text::jsonb,
+      ${sqlArray(command.filterableFieldIds)}::text::uuid[],
+      ${command.search ?? null}::text,
+      ${sqlArray(command.searchableFieldIds)}::text::uuid[],
+      ${JSON.stringify(command.pivot)}::text::jsonb,
+      ${command.groupAfter ?? null}::text
     ) as result
-  `;
+  `
+    : command.grouping !== undefined
+      ? transaction.query<ResultRow>`
+    select vortex_record.run_module_query_group_summary(
+      ${command.moduleRootId}::uuid,
+      ${command.queryId}::uuid,
+      ${releaseRevision}::bigint,
+      ${JSON.stringify(inputValues)}::text::jsonb,
+      ${JSON.stringify(command.filter ?? null)}::text::jsonb,
+      ${sqlArray(command.filterableFieldIds)}::text::uuid[],
+      ${command.search ?? null}::text,
+      ${sqlArray(command.searchableFieldIds)}::text::uuid[],
+      ${JSON.stringify(command.grouping)}::text::jsonb,
+      ${command.groupAfter ?? null}::text
+    ) as result
+  `
+      : command.totals !== undefined
+        ? transaction.query<ResultRow>`
+    select vortex_record.run_module_query_totals(
+      ${command.moduleRootId}::uuid,
+      ${command.queryId}::uuid,
+      ${releaseRevision}::bigint,
+      ${JSON.stringify(inputValues)}::text::jsonb,
+      ${JSON.stringify(command.filter ?? null)}::text::jsonb,
+      ${sqlArray(command.filterableFieldIds)}::text::uuid[],
+      ${command.search ?? null}::text,
+      ${sqlArray(command.searchableFieldIds)}::text::uuid[],
+      ${JSON.stringify(command.totals)}::text::jsonb,
+      ${command.groupLimit ?? null}::integer,
+      ${command.groupAfter ?? null}::text
+    ) as result
+  `
+        : transaction.query<ResultRow>`
+    select vortex_record.run_module_query_published_summary(
+      ${command.moduleRootId}::uuid,
+      ${command.queryId}::uuid,
+      ${releaseRevision}::bigint,
+      ${JSON.stringify(inputValues)}::text::jsonb,
+      ${JSON.stringify(command.filter ?? null)}::text::jsonb,
+      ${sqlArray(command.filterableFieldIds)}::text::uuid[],
+      ${command.search ?? null}::text,
+      ${sqlArray(command.searchableFieldIds)}::text::uuid[],
+      ${command.groupLimit ?? null}::integer,
+      ${command.groupAfter ?? null}::text
+    ) as result
+  `);
   return protectedQuerySummaryResultSchema.parse(one(rows));
 };
 
@@ -71,16 +113,15 @@ const readBoardSummary = async (
   inputValues: Readonly<Record<string, JsonValue>>,
 ): Promise<ProtectedQueryBoardSummaryResult> => {
   const rows = await transaction.query<ResultRow>`
-    select vortex_record.run_module_query_summary(
+    select vortex_record.run_module_query_board_summary(
       ${command.moduleRootId}::uuid,
       ${command.queryId}::uuid,
       ${releaseRevision}::bigint,
       ${JSON.stringify(inputValues)}::text::jsonb,
-      ${JSON.stringify({
-        filter: command.filter ?? null,
-        filterableFieldIds: command.filterableFieldIds,
-        boardSummary: { choiceFieldId: command.choiceFieldId, columns: command.columns },
-      })}::text::jsonb
+      ${JSON.stringify(command.filter ?? null)}::text::jsonb,
+      ${sqlArray(command.filterableFieldIds)}::text::uuid[],
+      ${command.choiceFieldId}::uuid,
+      ${JSON.stringify(command.columns)}::text::jsonb
     ) as result
   `;
   return protectedQueryBoardSummaryResultSchema.parse(one(rows));
