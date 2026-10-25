@@ -189,7 +189,7 @@ export const PLATFORM_BLOCK_RELEASE_IDENTITIES = Object.freeze({
     key: "platform.launcher.application_launcher",
     rendererKey: "platform.renderer.application_launcher",
     releaseVersion: "1.0.0",
-    contentFingerprint: "sha256:7a20964d7a77eb9e3e4acde38d590291796820f842a08ada69bf34138002e633",
+    contentFingerprint: "sha256:3f77d549f8a36a119c2f1d5b329e1f30e284e4ffab6fa1c7e43c95c5a2bd3998",
   },
   LINK_TILES_BLOCK_RELEASE: {
     blockId: "c4d9e1f2-7a68-4c05-9b3d-5f2a8e6c0b47",
