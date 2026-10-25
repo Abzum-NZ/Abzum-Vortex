@@ -13,13 +13,7 @@
       "storage_contract_id": "srt_hr_employee",
       "storage_scope": "application_contained",
       "ownership_mode": "none",
-      "standard_actions": [
-        "create",
-        "read",
-        "update",
-        "soft_delete",
-        "restore"
-      ],
+      "standard_actions": ["create", "read", "update", "soft_delete", "restore"],
       "custom_actions": [],
       "fields": [
         {
@@ -157,13 +151,7 @@
       "storage_contract_id": "srt_hr_department",
       "storage_scope": "application_contained",
       "ownership_mode": "none",
-      "standard_actions": [
-        "create",
-        "read",
-        "update",
-        "soft_delete",
-        "restore"
-      ],
+      "standard_actions": ["create", "read", "update", "soft_delete", "restore"],
       "custom_actions": [],
       "fields": [
         {
@@ -211,13 +199,7 @@
       "storage_contract_id": "srt_hr_position",
       "storage_scope": "application_contained",
       "ownership_mode": "none",
-      "standard_actions": [
-        "create",
-        "read",
-        "update",
-        "soft_delete",
-        "restore"
-      ],
+      "standard_actions": ["create", "read", "update", "soft_delete", "restore"],
       "custom_actions": [],
       "fields": [
         {
@@ -292,13 +274,7 @@
       "storage_contract_id": "srt_hr_leave_entitlement",
       "storage_scope": "application_contained",
       "ownership_mode": "none",
-      "standard_actions": [
-        "create",
-        "read",
-        "update",
-        "soft_delete",
-        "restore"
-      ],
+      "standard_actions": ["create", "read", "update", "soft_delete", "restore"],
       "custom_actions": [],
       "fields": [
         {
@@ -430,13 +406,7 @@
       "storage_contract_id": "srt_hr_leave_request",
       "storage_scope": "application_contained",
       "ownership_mode": "none",
-      "standard_actions": [
-        "create",
-        "read",
-        "update",
-        "soft_delete",
-        "restore"
-      ],
+      "standard_actions": ["create", "read", "update", "soft_delete", "restore"],
       "custom_actions": [],
       "fields": [
         {
@@ -559,6 +529,10 @@
           "type": "link",
           "settings": {
             "target": "vortex.hr:leave_entitlement",
+            "depends_on": {
+              "parent_field": "employee",
+              "filter_field": "employee"
+            },
             "reverse_key": "leave_requests",
             "reverse_name": "Leave requests",
             "on_parent_delete": "refuse"
@@ -603,10 +577,7 @@
         ]
       },
       "field_policy": {
-        "readable_fields": [
-          "department_code",
-          "name"
-        ],
+        "readable_fields": ["department_code", "name"],
         "changeable_fields": []
       }
     },
@@ -626,14 +597,8 @@
         ]
       },
       "field_policy": {
-        "readable_fields": [
-          "department_code",
-          "name"
-        ],
-        "changeable_fields": [
-          "department_code",
-          "name"
-        ]
+        "readable_fields": ["department_code", "name"],
+        "changeable_fields": ["department_code", "name"]
       }
     },
     {
@@ -652,14 +617,8 @@
         ]
       },
       "field_policy": {
-        "readable_fields": [
-          "department_code",
-          "name"
-        ],
-        "changeable_fields": [
-          "department_code",
-          "name"
-        ]
+        "readable_fields": ["department_code", "name"],
+        "changeable_fields": ["department_code", "name"]
       }
     },
     {
@@ -678,11 +637,7 @@
         ]
       },
       "field_policy": {
-        "readable_fields": [
-          "position_code",
-          "title",
-          "department"
-        ],
+        "readable_fields": ["position_code", "title", "department"],
         "changeable_fields": []
       }
     },
@@ -702,16 +657,8 @@
         ]
       },
       "field_policy": {
-        "readable_fields": [
-          "position_code",
-          "title",
-          "department"
-        ],
-        "changeable_fields": [
-          "position_code",
-          "title",
-          "department"
-        ]
+        "readable_fields": ["position_code", "title", "department"],
+        "changeable_fields": ["position_code", "title", "department"]
       }
     },
     {
@@ -730,16 +677,8 @@
         ]
       },
       "field_policy": {
-        "readable_fields": [
-          "position_code",
-          "title",
-          "department"
-        ],
-        "changeable_fields": [
-          "position_code",
-          "title",
-          "department"
-        ]
+        "readable_fields": ["position_code", "title", "department"],
+        "changeable_fields": ["position_code", "title", "department"]
       }
     },
     {
@@ -953,13 +892,7 @@
         ]
       },
       "field_policy": {
-        "readable_fields": [
-          "employee",
-          "year",
-          "days",
-          "approved_days_taken",
-          "remaining_days"
-        ],
+        "readable_fields": ["employee", "year", "days", "approved_days_taken", "remaining_days"],
         "changeable_fields": []
       }
     },
@@ -979,18 +912,8 @@
         ]
       },
       "field_policy": {
-        "readable_fields": [
-          "employee",
-          "year",
-          "days",
-          "approved_days_taken",
-          "remaining_days"
-        ],
-        "changeable_fields": [
-          "employee",
-          "year",
-          "days"
-        ]
+        "readable_fields": ["employee", "year", "days", "approved_days_taken", "remaining_days"],
+        "changeable_fields": ["employee", "year", "days"]
       }
     },
     {
@@ -1009,18 +932,8 @@
         ]
       },
       "field_policy": {
-        "readable_fields": [
-          "employee",
-          "year",
-          "days",
-          "approved_days_taken",
-          "remaining_days"
-        ],
-        "changeable_fields": [
-          "employee",
-          "year",
-          "days"
-        ]
+        "readable_fields": ["employee", "year", "days", "approved_days_taken", "remaining_days"],
+        "changeable_fields": ["employee", "year", "days"]
       }
     }
   ],
@@ -1254,10 +1167,7 @@
       "label": "Departments",
       "record_type": "department",
       "inputs": [],
-      "select": [
-        "department_code",
-        "name"
-      ],
+      "select": ["department_code", "name"],
       "filter": null,
       "group_by": [],
       "aggregates": [],
@@ -1277,11 +1187,7 @@
       "label": "Positions",
       "record_type": "position",
       "inputs": [],
-      "select": [
-        "position_code",
-        "title",
-        "department"
-      ],
+      "select": ["position_code", "title", "department"],
       "filter": null,
       "group_by": [],
       "aggregates": [],
@@ -1328,14 +1234,7 @@
       "label": "Leave requests",
       "record_type": "leave_request",
       "inputs": [],
-      "select": [
-        "start_date",
-        "end_date",
-        "days",
-        "status",
-        "employee",
-        "entitlement"
-      ],
+      "select": ["start_date", "end_date", "days", "status", "employee", "entitlement"],
       "filter": null,
       "group_by": [],
       "aggregates": [],
@@ -1356,17 +1255,13 @@
       "description": "Total of approved leave days across the leave requests the viewer can read",
       "record_type": "leave_request",
       "inputs": [],
-      "select": [
-        "employee"
-      ],
+      "select": ["employee"],
       "filter": {
         "field": "status",
         "operator": "equals",
         "value": "approved"
       },
-      "group_by": [
-        "employee"
-      ],
+      "group_by": ["employee"],
       "aggregates": [
         {
           "operation": "sum",
@@ -1390,13 +1285,7 @@
       "label": "Leave entitlements",
       "record_type": "leave_entitlement",
       "inputs": [],
-      "select": [
-        "employee",
-        "year",
-        "days",
-        "approved_days_taken",
-        "remaining_days"
-      ],
+      "select": ["employee", "year", "days", "approved_days_taken", "remaining_days"],
       "filter": null,
       "group_by": [],
       "aggregates": [],
