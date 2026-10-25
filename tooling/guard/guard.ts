@@ -623,9 +623,10 @@ for (const file of [
   };
   const before = pins(previous);
   const after = pins(read(file));
-  for (const key of new Set([...before.keys(), ...after.keys()])) {
+  // Only a pin main already holds can supersede releases; a first pin or a new block cannot.
+  for (const [key, previousPin] of before) {
     const current = after.get(key);
-    if (before.get(key)?.fingerprint !== current?.fingerprint)
+    if (previousPin.fingerprint !== current?.fingerprint)
       add(
         "catalogue-release-superseded",
         file,
