@@ -508,6 +508,16 @@ const normalizeValue = (
       });
     candidate = normalizeExactDecimal(parsed.data);
   }
+  // A Number input that is not set to whole numbers submits its exact text, as a decimal input does.
+  // Integral text that is a safe integer is the same whole number the input publishes as a number.
+  if (
+    field.type === "whole_number" &&
+    origin === "submitted" &&
+    parseExactDecimal(value)?.scale === 0
+  ) {
+    const whole = Number(normalizeExactDecimal(value));
+    if (Number.isSafeInteger(whole)) candidate = whole;
+  }
 
   const leaf = moduleFieldValueSchemas[field.type].safeParse(candidate);
   const settingsValid =
