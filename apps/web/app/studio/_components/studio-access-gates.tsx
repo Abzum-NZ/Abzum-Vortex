@@ -15,10 +15,12 @@ import {
 import {
   studioAccessMenuEntries,
   studioAccessPermissions,
+  studioStandardFieldPolicy,
   StudioIconButton,
 } from "@vortex/ui/studio";
 import { StudioGateSelect } from "./studio-gate-select";
 import { StudioPermissionDeclaration } from "./studio-permission-declaration";
+import { StudioStandardFieldPolicy } from "./studio-standard-field-policy";
 import type { StudioAccessRun } from "./studio-access-role";
 import { StudioPlaceList } from "./studio-used-in";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@vortex/ui/components/tooltip";
@@ -276,6 +278,21 @@ export function StudioAccessPermissionList({
                             <Icon name="sliders-horizontal" />
                           </StudioIconButton>
                         )}
+                        {permission.standard && permission.recordKey !== undefined && (
+                          <StudioIconButton
+                            label={`Edit fields of ${permission.label}`}
+                            disabled={disabled}
+                            onClick={() =>
+                              setExpanded(
+                                expanded === `fields:${permission.key}`
+                                  ? null
+                                  : `fields:${permission.key}`,
+                              )
+                            }
+                          >
+                            <Icon name="sliders-horizontal" />
+                          </StudioIconButton>
+                        )}
                         <Popover>
                           <Tooltip>
                             <TooltipTrigger
@@ -340,6 +357,20 @@ export function StudioAccessPermissionList({
                       </div>
                     </TableCell>
                   </TableRow>
+                  {expanded === `fields:${permission.key}` && permission.standard && (
+                    <TableRow>
+                      <TableCell colSpan={4} className="whitespace-normal py-4">
+                        <StudioStandardFieldPolicy
+                          key={JSON.stringify(studioStandardFieldPolicy(source, permission.key))}
+                          source={source}
+                          permissionKey={permission.key}
+                          disabled={disabled}
+                          run={run}
+                          close={() => setExpanded(null)}
+                        />
+                      </TableCell>
+                    </TableRow>
+                  )}
                   {expanded === permission.key && declaration !== undefined && (
                     <TableRow>
                       <TableCell colSpan={4} className="whitespace-normal py-4">
