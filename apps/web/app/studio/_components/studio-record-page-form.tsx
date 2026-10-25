@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import type { ApplicationSourceDocument } from "@vortex/platform/schema";
 import { Button } from "@vortex/ui/components/button";
 import { Checkbox } from "@vortex/ui/components/checkbox";
+import { Input } from "@vortex/ui/components/input";
 import { NativeSelect, NativeSelectOption } from "@vortex/ui/components/native-select";
 import {
   studioRecordPageChoices,
@@ -43,6 +44,7 @@ export function StudioRecordPageForm({
   const [kind, setKind] = useState<StudioRecordPageKind>("list");
   const [shellChoice, setShellChoice] = useState(studioStructureDefaultShell(source) ?? "");
   const [addToMenu, setAddToMenu] = useState(true);
+  const [listName, setListName] = useState("");
   const chooseKind = (next: StudioRecordPageKind) => {
     setKind(next);
     setAddToMenu(next === "list");
@@ -68,8 +70,9 @@ export function StudioRecordPageForm({
       type: effectiveKind ?? "list",
       shellAlias: shellChoice === "" ? null : shellChoice,
       addToMenu: menuAllowed && addToMenu,
+      ...(effectiveKind === "list" && listName.trim() !== "" ? { name: listName } : {}),
     }),
-    [effectiveRecordType, effectiveKind, shellChoice, addToMenu, menuAllowed],
+    [effectiveRecordType, effectiveKind, shellChoice, addToMenu, menuAllowed, listName],
   );
   // The preview runs the generator on the draft a moment after the choices settle (an edited draft
   // is a new source), not on every change, and not on the callback's identity.
@@ -154,6 +157,23 @@ export function StudioRecordPageForm({
           </NativeSelect>
         )}
       </StudioField>
+      {effectiveKind === "list" && (
+        <StudioField
+          label="Page name"
+          hint="Leave empty to name it after the record type. A further list of the same records needs a name of its own."
+        >
+          {(control) => (
+            <Input
+              {...control}
+              value={listName}
+              maxLength={60}
+              placeholder="For example: Pipeline"
+              disabled={disabled}
+              onChange={(event) => setListName(event.target.value)}
+            />
+          )}
+        </StudioField>
+      )}
       <StudioField label="Layout" hint="The frame the page is drawn in.">
         {(control) => (
           <NativeSelect
