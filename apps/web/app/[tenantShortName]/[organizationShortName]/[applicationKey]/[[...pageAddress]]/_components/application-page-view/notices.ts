@@ -1,3 +1,4 @@
+import { flowRefusalFeedbackSentences } from "@vortex/platform/schema";
 import type { FormFlowFeedback } from "@vortex/ui";
 import type { Notice } from "./types";
 
@@ -68,52 +69,14 @@ const iamPeople = {
 
 export const refusalNotices: Readonly<
   Record<Extract<FormFlowFeedback, { kind: "refusal" }>["code"], Notice>
-> = {
-  invalid_command: { tone: "problem", text: "The supplied inputs are invalid." },
-  duplicate_conflict: { tone: "problem", text: "A conflicting item already exists." },
-  stale_revision: { tone: "problem", text: "This item changed. Refresh and try again." },
-  recent_authentication_required: {
-    tone: "problem",
-    text: "This action needs a sign-in within the last 15 minutes. Sign in again to continue.",
-    link: { label: "Sign in again", href: "/auth/session-ended" },
-  },
-  role_acceptance_required: {
-    tone: "problem",
-    text: "This role revision needs accepting before it can be assigned.",
-  },
-  role_settings_change_required: {
-    tone: "problem",
-    text: "Accepting application role changes keeps the role settings. Use Manage roles to change its name, description, classification or assignment and activation settings.",
-  },
-  application_storage_incompatible: {
-    tone: "problem",
-    text: "This version changes stored fields in a way existing records cannot accept. Keep existing choice options unchanged when adding options, and preserve field types, storage and ownership settings.",
-  },
-  application_republish_required: {
-    tone: "problem",
-    text: "Republish required: this release uses superseded platform definitions. Republish the application, then install or upgrade to the new release.",
-  },
-  application_not_installed: {
-    tone: "problem",
-    text: "This application is not installed in this organisation, so there is nothing to upgrade or remove. Install it first if it is needed here.",
-  },
-  application_not_newer: {
-    tone: "problem",
-    text: "There is no newer application release to install. Review the latest published release before trying again.",
-  },
-  applications_manage_required: {
-    tone: "problem",
-    text: "Installing or upgrading applications needs the Manage applications permission. An organisation steward can give you a role that has it in IAM.",
-  },
-  installation_delegation_required: {
-    tone: "problem",
-    text: "Installing this application needs app-installation authority over the permissions its roles grant. An organisation steward can grant it in IAM > People with Grant app-installation authority.",
-  },
-  assignments_manage_required: {
-    tone: "problem",
-    text: "Taking this application's role yourself needs the Manage access assignments permission. Install without taking the role, or ask an organisation steward for that permission in IAM.",
-  },
-};
+> = Object.fromEntries(
+  Object.entries(flowRefusalFeedbackSentences).map(([code, text]) => [
+    code,
+    code === "recent_authentication_required"
+      ? { tone: "problem", text, link: { label: "Sign in again", href: "/auth/session-ended" } }
+      : { tone: "problem", text },
+  ]),
+) as Readonly<Record<Extract<FormFlowFeedback, { kind: "refusal" }>["code"], Notice>>;
 
 /**
  * Where a refusal that names a missing permission sends the person: the platform's IAM People

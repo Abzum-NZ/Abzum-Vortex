@@ -477,13 +477,12 @@ begin
         raise exception using errcode = '55000',
           message = 'Existing contributed field storage is incompatible';
       end if;
-      if source_field ->> 'type' in ('choice', 'several_choices')
-        and p_module_release_revision >= contributor_revision
+      if p_module_release_revision >= contributor_revision
         and stored_field.field_definition is distinct from source_field then
-        update vortex_record.field_storage_mappings as mapping
-        set field_definition = source_field
-        where mapping.storage_contract_id = stored_catalogue.storage_contract_id
-          and mapping.field_id = field_id_value;
+        perform vortex_record.evolve_field_storage_internal(
+          stored_catalogue.storage_contract_id, field_id_value, source_field,
+          storage_scope_value, table_token, column_token, is_projection
+        );
         any_change := true;
       end if;
     end if;

@@ -9,31 +9,36 @@ immutable
 set search_path = ''
 as $function$
 declare
-  stored_meaning jsonb := vortex_record.field_storage_meaning(p_stored);
-  requested_meaning jsonb := vortex_record.field_storage_meaning(p_requested);
-  earlier_options jsonb;
-  later_options jsonb;
+  earlier jsonb := case when p_requested_is_older then p_requested else p_stored end;
+  later jsonb := case when p_requested_is_older then p_stored else p_requested end;
 begin
+  if vortex_record.field_storage_meaning(p_stored)
+    is distinct from vortex_record.field_storage_meaning(p_requested) then
+    return false;
+  end if;
+  -- A stored value of a choice field is an option value: every earlier option stays.
   if p_requested ->> 'type' in ('choice', 'several_choices') then
-    earlier_options := case when p_requested_is_older then p_requested else p_stored end #> '{settings,options}';
-    later_options := case when p_requested_is_older then p_stored else p_requested end #> '{settings,options}';
-    if pg_catalog.jsonb_typeof(earlier_options) is distinct from 'array'
-      or pg_catalog.jsonb_typeof(later_options) is distinct from 'array' then
+    if pg_catalog.jsonb_typeof(earlier #> '{settings,options}') is distinct from 'array'
+      or pg_catalog.jsonb_typeof(later #> '{settings,options}') is distinct from 'array' then
       return false;
     end if;
     if exists (
-      select 1 from pg_catalog.jsonb_array_elements(earlier_options) as earlier(value)
+      select 1 from pg_catalog.jsonb_array_elements(earlier #> '{settings,options}') as before(value)
       where not exists (
-        select 1 from pg_catalog.jsonb_array_elements(later_options) as later(value)
-        where later.value = earlier.value
+        select 1 from pg_catalog.jsonb_array_elements(later #> '{settings,options}') as after(value)
+        where after.value -> 'value' = before.value -> 'value'
       )
     ) then
       return false;
     end if;
-    stored_meaning := stored_meaning #- '{settings,options}';
-    requested_meaning := requested_meaning #- '{settings,options}';
   end if;
-  return stored_meaning is not distinct from requested_meaning;
+  -- Existing records may hold no value or a repeated value: a later release can drop these
+  -- constraints but not add them.
+  if (later ->> 'required')::boolean and not coalesce((earlier ->> 'required')::boolean, false)
+    or (later ->> 'unique')::boolean and not coalesce((earlier ->> 'unique')::boolean, false) then
+    return false;
+  end if;
+  return true;
 end
 $function$;
 

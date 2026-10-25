@@ -12,7 +12,11 @@ import {
   type KeyboardEvent,
   type ReactElement,
 } from "react";
-import type { FlowFieldCorrection, FlowRefusalFeedback } from "@vortex/platform/schema";
+import {
+  flowRefusalFeedbackSentences,
+  type FlowFieldCorrection,
+  type FlowRefusalFeedback,
+} from "@vortex/platform/schema";
 import { DefinitionRenderError } from "../definition-error";
 import { FlowSurfaceContext } from "../flow-runtime/flow-surface-context";
 import { resolveControlContext, type ControlRenderProps } from "./control-context";
@@ -77,30 +81,9 @@ const fieldCorrectionText: Readonly<Record<FlowFieldCorrection["code"], string>>
 
 const refusalFeedbackText = (feedback: Extract<FormFlowFeedback, { kind: "refusal" }>): string => {
   if (feedback.ruleMessages !== undefined) return feedback.ruleMessages.join(" ");
-  switch (feedback.code) {
-    case "invalid_command":
-      return feedback.fieldLabel === undefined
-        ? "The supplied inputs are invalid."
-        : `Check the ${feedback.fieldLabel} field and try again.`;
-    case "duplicate_conflict":
-      return "A conflicting item already exists.";
-    case "stale_revision":
-      return "This item changed. Refresh and try again.";
-    case "recent_authentication_required":
-      return "To protect your organisation, this change needs a sign-in within the last 15 minutes. Sign in again, then retry the change.";
-    case "role_settings_change_required":
-      return "Accepting application role changes keeps the role settings. Use Manage roles to change its name, description, classification or assignment and activation settings.";
-    case "application_storage_incompatible":
-      return "This version changes stored fields in a way existing records cannot accept. Keep existing choice options unchanged when adding options, and preserve field types, storage and ownership settings.";
-    case "applications_manage_required":
-      return "Installing or upgrading applications needs the Manage applications permission. An organisation steward can give you a role that has it in IAM.";
-    case "installation_delegation_required":
-      return "Installing this application needs app-installation authority over the permissions its roles grant. An organisation steward can grant it in IAM > People with Grant app-installation authority.";
-    case "assignments_manage_required":
-      return "Taking this application's role yourself needs the Manage access assignments permission. Install without taking the role, or ask an organisation steward for that permission in IAM.";
-    default:
-      return "The supplied inputs are invalid.";
-  }
+  if (feedback.code === "invalid_command" && feedback.fieldLabel !== undefined)
+    return `Check the ${feedback.fieldLabel} field and try again.`;
+  return flowRefusalFeedbackSentences[feedback.code];
 };
 
 const refusalRecoveryText = {

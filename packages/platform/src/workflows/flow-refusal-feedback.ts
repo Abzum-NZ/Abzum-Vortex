@@ -21,7 +21,33 @@ export const flowRefusalFeedbackCodeSchema = z.enum([
   "assignments_manage_required",
 ]);
 
-type FlowRefusalFeedbackCode = z.infer<typeof flowRefusalFeedbackCodeSchema>;
+export type FlowRefusalFeedbackCode = z.infer<typeof flowRefusalFeedbackCodeSchema>;
+
+/** The one sentence each confirmed refusal shows, on a page notice and in a form. */
+export const flowRefusalFeedbackSentences: Readonly<Record<FlowRefusalFeedbackCode, string>> = {
+  invalid_command: "The supplied inputs are invalid.",
+  duplicate_conflict: "A conflicting item already exists.",
+  stale_revision: "This item changed. Refresh and try again.",
+  recent_authentication_required:
+    "To protect your organisation, this change needs a sign-in within the last 15 minutes. Sign in again, then retry the change.",
+  role_acceptance_required: "This role revision needs accepting before it can be assigned.",
+  role_settings_change_required:
+    "Accepting application role changes keeps the role settings. Use Manage roles to change its name, description, classification or assignment and activation settings.",
+  application_storage_incompatible:
+    "This version changes stored fields in a way existing records cannot accept. Keep every existing choice option, do not make a field required or unique, and keep field types and storage settings.",
+  application_republish_required:
+    "Republish required: this release uses superseded platform definitions. Republish the application, then install or upgrade to the new release.",
+  application_not_installed:
+    "This application is not installed in this organisation, so there is nothing to upgrade or remove. Install it first if it is needed here.",
+  application_not_newer:
+    "There is no newer application release to install. Review the latest published release before trying again.",
+  applications_manage_required:
+    "Installing or upgrading applications needs the Manage applications permission. An organisation steward can give you a role that has it in IAM.",
+  installation_delegation_required:
+    "Installing this application needs app-installation authority over the permissions its roles grant. An organisation steward can grant it in IAM > People with Grant app-installation authority.",
+  assignments_manage_required:
+    "Taking this application's role yourself needs the Manage access assignments permission. Install without taking the role, or ask an organisation steward for that permission in IAM.",
+};
 
 /**
  * The confirmed refusals whose platform guidance a flow's authored refusal handler must not
