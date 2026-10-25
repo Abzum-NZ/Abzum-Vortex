@@ -64,7 +64,7 @@ export function useApplyDispatch({
       formPlacementId?: string,
       afterAccepted?: () => Promise<Notice | undefined>,
       sourceBindingId?: string,
-      /** The gesture is shown on its own control, so its outcome is returned and not put in the page notice. */
+      /** The control reports its outcome; linked recovery guidance also stays on the page. */
       reportOnControl?: true,
     ): Promise<DispatchOutcome> => {
       let outcome: DispatchOutcome = { notice: undefined, confirmed: false, changed: false };
@@ -83,7 +83,8 @@ export function useApplyDispatch({
         refusalFeedback?: Extract<FormFlowFeedback, { kind: "refusal" }>,
       ): void => {
         outcome = { ...outcome, notice: resultNotice };
-        if (reportOnControl) return;
+        // Control feedback shows text only. Keep the way forward visible and actionable on the page.
+        if (reportOnControl && resultNotice.link === undefined) return;
         // A refusal must remain visible after a flow's form dialog has closed.
         setNotice((current) => {
           // A client intent can refuse after the server has completed (for example, a page the
