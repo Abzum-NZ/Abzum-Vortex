@@ -68,6 +68,9 @@ import {
   recordsTableGroupingFeature,
   type RecordsTableGroupingSettings,
 } from "./grouping";
+import { recordsTableTotalsFeature, type RecordsTableTotalsSettings } from "./totals";
+export { recordsTableAggregateSupportsType } from "./totals";
+export type { RecordsTableTotalsSettings } from "./totals";
 import { recordsTableExportFeature, type RecordsTableExportSettings } from "./export";
 import {
   featureAvailable,
@@ -157,6 +160,7 @@ export type {
  * Studio editor (`@vortex/ui/studio` grid features) and a UI chunk (`display/grid-features`).
  */
 export type RecordsTableFeatures = Readonly<{
+  totals: RecordsTableFeatureState<RecordsTableTotalsSettings>;
   search: RecordsTableFeatureState<RecordsTableSearchSettings>;
   columnFilters: RecordsTableFeatureState<RecordsTableColumnFiltersSettings>;
   savedViews: RecordsTableFeatureState<RecordsTableSavedViewsSettings>;
@@ -176,6 +180,7 @@ export type RecordsTableFeatures = Readonly<{
 }>;
 
 const registry = {
+  totals: { property: "totals", definition: recordsTableTotalsFeature },
   spreadsheet: { property: "spreadsheet", definition: recordsTableSpreadsheetFeature },
   pinning: { property: "pinning", definition: recordsTablePinningFeature },
   search: { property: "search", definition: recordsTableSearchFeature },
@@ -217,6 +222,7 @@ export const recordsTableFeatureKeys = [
   "master_detail",
   "tree",
   "grouping",
+  "totals",
   "conditional_formatting",
   "pivot",
   "board",
@@ -358,6 +364,11 @@ export const checkRecordsTableFeature = (
     return featureNotPossible(
       "definition_records_table_tree",
       "Turn Board off to show records as a tree.",
+    );
+  if (key === "totals" && state.enabled && features.pivot.enabled)
+    return featureNotPossible(
+      "definition_records_table_totals",
+      "Turn Pivot off to show footer totals; a pivot has its own totals.",
     );
   // Paste and fill write through the table's inline edit, so they need it on with a field to change.
   if (

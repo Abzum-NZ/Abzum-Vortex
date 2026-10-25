@@ -16,6 +16,8 @@ import {
 } from "./display-events";
 import {
   jsonValueSchema,
+  recordsTableTotalsSchema,
+  type RecordsTableTotal,
   type JsonValue,
   builderKeySchema,
   moduleFieldValueSchemas,
@@ -192,6 +194,7 @@ export type TablePayload = Readonly<{
    * group's members only, so a closed table carries none.
    */
   groups?: TableGroups;
+  totals?: readonly RecordsTableTotal[];
   /**
    * The grid features the server projected for this viewer and read; absent when every feature is
    * off. The table draws a feature only from this projection, never from its settings alone.
@@ -344,7 +347,16 @@ export type DisplayRefusalReason =
   | "not_found"
   | "value_out_of_range"
   | "dataset_limit_exceeded"
-  | "grouping_unavailable";
+  | "grouping_unavailable"
+  | "filter_field_not_filterable"
+  | "filter_unavailable"
+  | "filter_field_repeated"
+  | "filter_value_invalid"
+  | "filter_date_out_of_range"
+  | "filter_value_mismatch"
+  | "sort_field_not_sortable"
+  | "search_unavailable"
+  | "table_address_invalid";
 
 /**
  * Explicit, data-safe state for one placement, parameterised by that block's own ready values.
@@ -367,6 +379,15 @@ const DISPLAY_REFUSAL_REASONS: readonly DisplayRefusalReason[] = [
   "value_out_of_range",
   "dataset_limit_exceeded",
   "grouping_unavailable",
+  "filter_field_not_filterable",
+  "filter_unavailable",
+  "filter_field_repeated",
+  "filter_value_invalid",
+  "filter_date_out_of_range",
+  "filter_value_mismatch",
+  "sort_field_not_sortable",
+  "search_unavailable",
+  "table_address_invalid",
 ];
 
 // The data-free states carry no values, so one frozen instance serves every block's state type.
@@ -1010,6 +1031,7 @@ export const parseTablePayload = (
       "layout",
       "rows",
       "groups",
+      "totals",
       "features",
       "selectedRecordIds",
       "sort",
@@ -1140,6 +1162,16 @@ export const parseTablePayload = (
     layout: layout.data,
     rows,
     ...(groups === undefined ? {} : { groups }),
+    ...(record.totals === undefined
+      ? {}
+      : {
+          totals: parseProjectedPart(
+            recordsTableTotalsSchema,
+            record.totals,
+            "Projected grid totals are invalid",
+            location,
+          ),
+        }),
     ...(features === undefined ? {} : { features }),
     ...selectionParts,
     ...(selection === undefined ? {} : { selectedRecordIds: selection }),

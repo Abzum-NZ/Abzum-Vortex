@@ -95,6 +95,13 @@ export type StudioAccessCommand =
       changeable: boolean;
       readPermissionKey: string;
     }>
+  /** Sets the fields a standard record permission reads and changes, for every role holding it. */
+  | Readonly<{
+      kind: "set_standard_field_policy";
+      permissionKey: string;
+      readableFields: readonly string[];
+      changeableFields: readonly string[];
+    }>
   | (Readonly<{ kind: "add_permission" }> & StudioPermissionDeclaration)
   | (Readonly<{ kind: "edit_permission"; permissionKey: string }> & StudioPermissionDeclaration)
   | Readonly<{ kind: "remove_permission"; permissionKey: string }>
@@ -446,27 +453,34 @@ const setFieldAccess = (
     };
   } else if (field.changeable === command.changeable)
     refuse(`Nothing changes for ${quoted(field.label)}.`);
-  // Create and update carry the same fields: what the role changes it may also set at creation.
-  if (field.changeable !== command.changeable)
+  // Create and update carry the same fields: what the role changes it may also set at creation,
+  // and a field the role stops reading leaves them too. A field the platform fills is never among
+  // the changed ones, so a list written here also drops one left from before it became filled.
+  if (field.changeable !== command.changeable || !reads)
     for (const kind of ["create", "update"] as const) {
       const held = heldOn(body, role, command.moduleKey, command.recordKey, kind)[0];
       if (held === undefined) continue;
-      const owned = ownedBy(body, role, held, taken, notes);
       const writeReads = new Set(
-        owned.field_policy?.readable_fields ?? record.fields.map((entry) => entry.key),
+        held.permission.field_policy?.readable_fields ?? record.fields.map((entry) => entry.key),
       );
       const writeChanges = new Set(
-        owned.field_policy?.changeable_fields ??
+        held.permission.field_policy?.changeable_fields ??
           record.fields.filter(changeableByPeople).map((entry) => entry.key),
       );
       if (command.changeable) {
         writeReads.add(field.key);
         writeChanges.add(field.key);
       } else writeChanges.delete(field.key);
-      (owned as { field_policy?: unknown }).field_policy = {
+      if (!reads) writeReads.delete(field.key);
+      for (const entry of record.fields)
+        if (!changeableByPeople(entry)) writeChanges.delete(entry.key);
+      const policy = {
         readable_fields: order(writeReads),
         changeable_fields: order(writeChanges),
       };
+      if (samePolicy(held.permission.field_policy, policy)) continue;
+      const owned = ownedBy(body, role, held, taken, notes);
+      (owned as { field_policy?: unknown }).field_policy = policy;
     }
   const what = !reads
     ? "does not read"
@@ -480,6 +494,139 @@ const setFieldAccess = (
       ...notes,
     ].join(" "),
     role.key,
+  );
+};
+
+/** Whether a permission's stored field policy is exactly this one. */
+const samePolicy = (
+  stored: ModulePermission["field_policy"],
+  policy: Readonly<{ readable_fields: readonly string[]; changeable_fields: readonly string[] }>,
+): boolean =>
+  stored !== undefined &&
+  stored.readable_fields.length === policy.readable_fields.length &&
+  stored.readable_fields.every((key, index) => key === policy.readable_fields[index]) &&
+  stored.changeable_fields.length === policy.changeable_fields.length &&
+  stored.changeable_fields.every((key, index) => key === policy.changeable_fields[index]);
+
+// ---------------------------------------------------------------------------------------------
+// Field policy of one standard record permission.
+// ---------------------------------------------------------------------------------------------
+
+/** Only Create and Update change fields; the other standard permissions read them. */
+const changesFields = (actionKind: string): boolean =>
+  actionKind === "create" || actionKind === "update";
+
+/** Read and Export show records, so each keeps a field; Delete and Restore may show none. */
+const needsReadableField = (actionKind: string): boolean =>
+  actionKind === "read" || actionKind === "export";
+
+export type StudioStandardFieldPolicy =
+  | Readonly<{
+      kind: "available";
+      permissionKey: string;
+      label: string;
+      recordName: string;
+      actionKind: string;
+      changesFields: boolean;
+      needsReadableField: boolean;
+      /** Roles holding the permission: every one of them gets its policy. */
+      roles: readonly string[];
+      fields: readonly Readonly<{
+        key: string;
+        label: string;
+        readable: boolean;
+        changeable: boolean;
+        producedByPlatform: boolean;
+      }>[];
+    }>
+  | Readonly<{ kind: "unavailable"; message: string }>;
+
+/**
+ * Which fields a standard record permission (Read, Create, Update, Delete, Restore or Export) lets
+ * people read and change. An unset list means every field. A field the platform fills shows as
+ * changed only while the stored list still names it, so the builder sees what saving removes.
+ */
+export const studioStandardFieldPolicy = (
+  source: Source,
+  permissionKey: string,
+): StudioStandardFieldPolicy => {
+  const summary = studioAccessPermissions(source).find(
+    (permission) => permission.key === permissionKey,
+  );
+  if (summary === undefined || !summary.standard || summary.moduleKey === undefined)
+    return {
+      kind: "unavailable",
+      message: "This is not a permission that comes with a record type.",
+    };
+  const module = source.body.modules.find((entry) => entry.key === summary.moduleKey)!;
+  const permission = module.permissions.find((entry) => entry.key === permissionKey)!;
+  const record = module.record_types.find((entry) => entry.key === permission.record_type);
+  if (record === undefined)
+    return { kind: "unavailable", message: "Its record type is no longer in the draft." };
+  const changes = changesFields(permission.action_kind);
+  const readable = permission.field_policy?.readable_fields;
+  const changeable = permission.field_policy?.changeable_fields;
+  return {
+    kind: "available",
+    permissionKey,
+    label: permission.label,
+    recordName: record.plural_name,
+    actionKind: permission.action_kind,
+    changesFields: changes,
+    needsReadableField: needsReadableField(permission.action_kind),
+    roles: holders(source.body, permissionKey).map((role) => role.name),
+    fields: record.fields.map((field) => ({
+      key: field.key,
+      label: field.label,
+      producedByPlatform: !changeableByPeople(field),
+      readable: readable === undefined || readable.includes(field.key),
+      changeable:
+        changes &&
+        (changeable === undefined ? changeableByPeople(field) : changeable.includes(field.key)),
+    })),
+  };
+};
+
+const setStandardFieldPolicy = (
+  candidate: Source,
+  command: Extract<StudioAccessCommand, { kind: "set_standard_field_policy" }>,
+): StudioAccessResult => {
+  const current = studioStandardFieldPolicy(candidate, command.permissionKey);
+  if (current.kind === "unavailable") return refuse(current.message);
+  const summary = permissionOf(candidate, command.permissionKey);
+  const module = candidate.body.modules.find((entry) => entry.key === summary.moduleKey)!;
+  const permission = module.permissions.find((entry) => entry.key === command.permissionKey)!;
+  const record = module.record_types.find((entry) => entry.key === permission.record_type)!;
+  const known = new Set(record.fields.map((field) => field.key));
+  if ([...command.readableFields, ...command.changeableFields].some((key) => !known.has(key)))
+    refuse("Choose fields from this record type only.");
+  if (!current.changesFields && command.changeableFields.length > 0)
+    refuse(`${quoted(current.label)} does not change records, so it has no fields to change.`);
+  const produced = record.fields.find(
+    (field) => command.changeableFields.includes(field.key) && !changeableByPeople(field),
+  );
+  if (produced !== undefined)
+    refuse(`The platform fills ${quoted(produced.label)}, so nobody changes it.`);
+  // A field that is changed is read too.
+  const readable = new Set([...command.readableFields, ...command.changeableFields]);
+  if (current.needsReadableField && readable.size === 0)
+    refuse(`${quoted(current.label)} shows ${record.plural_name}, so it reads at least one field.`);
+  const order = (keys: ReadonlySet<string>) =>
+    record.fields.map((field) => field.key).filter((key) => keys.has(key));
+  const policy = {
+    readable_fields: order(readable),
+    changeable_fields: current.changesFields ? order(new Set(command.changeableFields)) : [],
+  };
+  if (samePolicy(permission.field_policy, policy))
+    refuse(`Nothing changes for ${quoted(current.label)}.`);
+  (permission as { field_policy?: unknown }).field_policy = policy;
+  const holdersText =
+    current.roles.length === 0
+      ? "No role holds it yet."
+      : `Every role holding it gets this: ${current.roles.join(", ")}.`;
+  return applied(
+    candidate,
+    `${quoted(current.label)} now reads ${policy.readable_fields.length} of ${record.fields.length} fields${current.changesFields ? ` and changes ${policy.changeable_fields.length}` : ""}. ${holdersText}`,
   );
 };
 
@@ -897,6 +1044,8 @@ const applyAccessCommand = (source: Source, command: StudioAccessCommand): Studi
       }
       case "set_field_access":
         return setFieldAccess(candidate, command);
+      case "set_standard_field_policy":
+        return setStandardFieldPolicy(candidate, command);
       case "add_permission": {
         const permission = addPermission(candidate, command);
         return applied(
@@ -906,7 +1055,10 @@ const applyAccessCommand = (source: Source, command: StudioAccessCommand): Studi
       }
       case "edit_permission": {
         const summary = permissionOf(candidate, command.permissionKey);
-        if (summary.standard) refuse("Use Fields to change a standard record permission.");
+        if (summary.standard)
+          refuse(
+            "A permission that comes with its record type keeps its name and scope. Change its fields with Edit fields.",
+          );
         const permission =
           summary.moduleKey === undefined
             ? body.permissions.find((entry) => entry.key === command.permissionKey)

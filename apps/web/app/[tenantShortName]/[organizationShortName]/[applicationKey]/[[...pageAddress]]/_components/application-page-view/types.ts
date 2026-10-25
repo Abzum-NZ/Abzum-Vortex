@@ -66,6 +66,13 @@ export type Notice = Readonly<{
 }>;
 
 /**
+ * How a gesture's own control tells the person its outcome. A transient control (a grid row
+ * action's toast) is gone in seconds, so a problem also stays on the page; an in-place control (a
+ * cell editor) keeps its own refusal visible. Either way, a way forward (a link) stays on the page.
+ */
+export type ControlReport = "transient" | "in_place";
+
+/**
  * What one dispatched gesture came to: the sentence the person is told, whether the server
  * confirmed the write, and whether the record changed under the person. A gesture that is shown on
  * its own control (a grid cell) is reported only here and not in the page notice.

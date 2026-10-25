@@ -80,6 +80,8 @@ type Sample = Readonly<{
   milliseconds: number;
   status: number;
   source: "Server-Timing" | "wall clock";
+  /** The address state the response rendered instead of the page (refused or unavailable). */
+  addressState: string | undefined;
 }>;
 type Result = Readonly<{
   persona: PersonaName;
@@ -190,13 +192,17 @@ const signedInCookie = async (
 const request = async (url: string, cookie: string): Promise<Sample> => {
   const started = performance.now();
   const response = await fetch(url, { headers: { cookie }, redirect: "follow" });
-  await response.text();
+  const html = await response.text();
   const elapsed = performance.now() - started;
+  // A refused or unavailable address still answers 200 with a fallback page; it carries the
+  // data-vortex-address-state marker, which an opened application page never does.
+  const addressState = /data-vortex-address-state="([a-z_]+)"/.exec(html)?.[1];
   const header = /dur=([0-9.]+)/i.exec(response.headers.get("server-timing") ?? "");
   return {
     milliseconds: header?.[1] === undefined ? elapsed : Number(header[1]),
     status: response.status,
     source: header?.[1] === undefined ? "wall clock" : "Server-Timing",
+    addressState,
   };
 };
 
@@ -240,13 +246,22 @@ const measure = async (
     await request(url, cookie);
     const samples: Sample[] = [];
     for (let run = 0; run < runs; run += 1) samples.push(await request(url, cookie));
-    const failed = [first, ...samples].find((sample) => sample.status !== 200);
+    // A sample counts only when the page itself was rendered: an HTTP error or a refused/unavailable
+    // fallback marks the whole target as a problem, so no p95 comes from a page that did not open.
+    const failed = [first, ...samples].find(
+      (sample) => sample.status !== 200 || sample.addressState !== undefined,
+    );
     results.push({
       persona,
       label: target.label,
       first,
       samples,
-      problem: failed === undefined ? undefined : `HTTP ${failed.status}`,
+      problem:
+        failed === undefined
+          ? undefined
+          : failed.status !== 200
+            ? `HTTP ${failed.status}`
+            : `refused: ${failed.addressState}`,
     });
     log(`${persona} ${target.label}: ${samples.length} runs`);
   }
@@ -255,7 +270,7 @@ const measure = async (
 
 const render = (results: readonly Result[], runs: number, lane: number, base: URL): string => {
   const rows = results.map((result) => {
-    if (result.first === undefined)
+    if (result.first === undefined || result.problem?.startsWith("refused") === true)
       return `| ${result.persona} | ${result.label} | | | | | | ${result.problem ?? "not measured"} |`;
     const times = result.samples.map((sample) => sample.milliseconds);
     const p95 = percentile(times, 0.95);
