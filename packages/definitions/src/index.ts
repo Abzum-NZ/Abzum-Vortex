@@ -10,3 +10,4 @@ export * from "./hr";
 export * from "./tasks";
 export * from "./platform-permissions";
 export * from "./shipped-sources";
+export * from "./privacy-notice";

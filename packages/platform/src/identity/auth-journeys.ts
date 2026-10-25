@@ -9,6 +9,7 @@ import {
   type IdentityAuthority,
 } from "../schema";
 import { createIdentityVerifier } from "./identity-verifier";
+import { readPrivacyNotice } from "./privacy-notice";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u;
 const MINIMUM_PASSWORD_LENGTH = 8;
@@ -33,6 +34,8 @@ export type IdentityJourneyFailure =
   | "vortex.identity.invalid_input"
   | "vortex.identity.invalid_credentials"
   | "vortex.identity.invalid_or_expired_link"
+  | "vortex.identity.privacy_notice_required"
+  | "vortex.identity.privacy_notice_changed"
   | "vortex.identity.authority_unavailable";
 
 export type IdentityJourneyResult =
@@ -273,19 +276,41 @@ export const requestRegistration = async (
   configuration: IdentityJourneyConfiguration,
   email: string,
   password: string,
+  acknowledgment: Readonly<{ acknowledged: boolean; noticeVersionId: string }>,
 ): Promise<IdentityJourneyResult> => {
+  if (acknowledgment.acknowledged !== true) {
+    return { ok: false, code: "vortex.identity.privacy_notice_required" };
+  }
   if (!validEmail(email) || !validNewPassword(password)) {
     return { ok: false, code: "vortex.identity.invalid_input" };
   }
 
   try {
+    const notice = await readPrivacyNotice();
+    if (notice.id !== acknowledgment.noticeVersionId)
+      return { ok: false, code: "vortex.identity.privacy_notice_changed" };
     const authority = createAuthorityClient(configuration);
     const { error } = await authority.auth.signUp({
       email,
       password,
-      options: { emailRedirectTo: confirmationUrl(configuration) },
+      options: {
+        emailRedirectTo: confirmationUrl(configuration),
+        data: {
+          privacy_notice_acknowledged: true,
+          privacy_notice_version_id: notice.id,
+        },
+      },
     });
-    if (error) logProviderFailure("registration", error);
+    if (error) {
+      logProviderFailure("registration", error);
+      // Hook messages are fixed public codes; never inspect or log arbitrary provider text.
+      if (error.message === "privacy_notice_required")
+        return { ok: false, code: "vortex.identity.privacy_notice_required" };
+      if (error.message === "privacy_notice_changed")
+        return { ok: false, code: "vortex.identity.privacy_notice_changed" };
+      if (error.message === "privacy_notice_unavailable")
+        return { ok: false, code: "vortex.identity.authority_unavailable" };
+    }
 
     // Registration acknowledgement is intentionally neutral. Existing and new addresses
     // receive the same result so this boundary cannot be used for identity discovery.

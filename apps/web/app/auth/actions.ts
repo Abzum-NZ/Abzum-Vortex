@@ -29,6 +29,8 @@ const formValue = (formData: FormData, name: string, trim = true): string => {
 };
 
 const failureStatus = (code: string): string => {
+  if (code === "vortex.identity.privacy_notice_required") return "privacy_notice_required";
+  if (code === "vortex.identity.privacy_notice_changed") return "privacy_notice_changed";
   if (code === "vortex.identity.invalid_credentials") return "invalid_credentials";
   if (code === "vortex.identity.invalid_or_expired_link") return "invalid_link";
   if (code === "vortex.identity.authority_unavailable") return "unavailable";
@@ -57,6 +59,12 @@ export async function register(formData: FormData): Promise<never> {
     configuration,
     formValue(formData, "email"),
     formValue(formData, "password", false),
+    {
+      acknowledged:
+        formData.getAll("privacy_notice_acknowledged").length === 1 &&
+        formData.get("privacy_notice_acknowledged") === "on",
+      noticeVersionId: formValue(formData, "notice_version_id"),
+    },
   );
 
   redirect(
