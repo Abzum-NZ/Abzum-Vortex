@@ -1,4 +1,5 @@
 import "server-only";
+import { databaseCode } from "../catalogue/runtime-primitives";
 
 import { correlationIdSchema } from "../catalogue/common";
 import { recordIdSchema } from "../catalogue/identifiers";
@@ -170,11 +171,6 @@ class RecordLifecycleRollback extends Error {
     super("RECORD_LIFECYCLE_ROLLBACK");
   }
 }
-
-const databaseCode = (error: unknown): string | undefined =>
-  typeof error === "object" && error !== null && "code" in error
-    ? String((error as { readonly code?: unknown }).code)
-    : undefined;
 
 /**
  * How a failed lifecycle step settles its request transaction: a carried

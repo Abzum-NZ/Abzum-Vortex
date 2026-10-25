@@ -15,7 +15,12 @@ import {
   workflowRunIdSchema,
   type IdentityAuthorityId,
 } from "../catalogue/identifiers";
-import { databaseRevision, logRefusal, sameId } from "../catalogue/runtime-primitives";
+import {
+  databaseCode,
+  databaseRevision,
+  logRefusal,
+  sameId,
+} from "../catalogue/runtime-primitives";
 import { sessionContextSchema, type SessionContext } from "./identity-access";
 import {
   withResolvedRequestTransaction,
@@ -150,11 +155,6 @@ type SystemScopeRow = DatabaseRow & {
   application_root_id: unknown;
   access_version: unknown;
 };
-
-const databaseCode = (error: unknown): string | undefined =>
-  typeof error === "object" && error !== null && "code" in error
-    ? String((error as { readonly code?: unknown }).code)
-    : undefined;
 
 class DurableActorRefusal extends Error {
   constructor() {

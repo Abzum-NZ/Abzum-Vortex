@@ -1,4 +1,5 @@
 import "server-only";
+import { databaseCode } from "../catalogue/runtime-primitives";
 
 import {
   identitySessionSchema,
@@ -96,16 +97,6 @@ const mappedIdentitySqlErrorCodes = new Set([
   "40001",
   "22023",
 ]);
-
-const databaseCode = (error: unknown): string | undefined => {
-  try {
-    return typeof error === "object" && error !== null && "code" in error
-      ? String((error as { code?: unknown }).code)
-      : undefined;
-  } catch {
-    return undefined;
-  }
-};
 
 const isMappedIdentitySqlError = (error: unknown): boolean => {
   const code = databaseCode(error);

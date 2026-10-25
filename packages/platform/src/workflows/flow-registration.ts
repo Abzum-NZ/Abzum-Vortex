@@ -1,7 +1,7 @@
 import "server-only";
 
 import { applicationRootIdSchema, fingerprintSchema, organizationIdSchema, revisionSchema, timestampSchema, workflowIdSchema, type ApplicationRootId, type OrganizationId, type SemanticVersion } from "../catalogue/identifiers";
-import { isRecord } from "../catalogue/runtime-primitives";
+import { databaseCode, isRecord } from "../catalogue/runtime-primitives";
 import { stableDefinitionReleaseVersionSchema } from "../definition/version-impact";
 import { flowSchema } from "./flow-contracts";
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
@@ -279,11 +279,6 @@ const parseResult = (
   }
   throw invalidStorageResult();
 };
-
-const databaseCode = (error: unknown): string | undefined =>
-  typeof error === "object" && error !== null && "code" in error
-    ? String((error as { readonly code?: unknown }).code)
-    : undefined;
 
 const mapStorageFailure = (error: unknown): KestraFlowRegistrationError => {
   if (error instanceof KestraFlowRegistrationError) return error;

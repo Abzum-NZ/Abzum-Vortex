@@ -13,7 +13,7 @@ import {
   tenantIdSchema,
   timestampSchema,
 } from "../catalogue/identifiers";
-import { databaseRevision, databaseTimestamp } from "../catalogue/runtime-primitives";
+import { databaseCode, databaseRevision, databaseTimestamp } from "../catalogue/runtime-primitives";
 import {
   configuredTenantAdministrationOperatorContextSchema,
   type ConfiguredTenantAdministrationOperatorContext,
@@ -430,11 +430,6 @@ const subjectOf = (tenantId: unknown, organizationId: unknown) =>
   organizationId == null
     ? { kind: "tenant", tenantId }
     : { kind: "organization", tenantId, organizationId };
-
-const databaseCode = (error: unknown): string | undefined =>
-  typeof error === "object" && error !== null && "code" in error
-    ? String((error as { readonly code?: unknown }).code)
-    : undefined;
 
 /** Stable refusal codes for the administration commands. */
 export const capabilityPolicyRefusalCodes = [

@@ -1,4 +1,5 @@
 import "server-only";
+import { databaseCode } from "../catalogue/runtime-primitives";
 
 import { z } from "zod";
 import {
@@ -48,11 +49,6 @@ const parseResult = <Result>(
   if (!parsed.success) throw new Error(errorCode);
   return parsed.data;
 };
-
-const databaseCode = (error: unknown): string | undefined =>
-  typeof error === "object" && error !== null && "code" in error
-    ? String((error as { readonly code?: unknown }).code)
-    : undefined;
 
 /** Stable safe failures; database detail never crosses this boundary. */
 export const meteringEventErrorCodes = Object.freeze({

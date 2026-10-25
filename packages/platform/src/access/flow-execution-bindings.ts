@@ -1,4 +1,5 @@
 import "server-only";
+import { databaseCode } from "../catalogue/runtime-primitives";
 
 import { z } from "zod";
 import {
@@ -114,11 +115,6 @@ type ReadResultRow = DatabaseRow & {
   effective_state: unknown;
   result: unknown;
 };
-
-const databaseCode = (error: unknown): string | undefined =>
-  typeof error === "object" && error !== null && "code" in error
-    ? String((error as { readonly code?: unknown }).code)
-    : undefined;
 
 const mapStorageFailure = (error: unknown): FlowExecutionBindingError => {
   const code = databaseCode(error);

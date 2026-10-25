@@ -11,7 +11,7 @@ import {
   tenantIdSchema,
   timestampSchema,
 } from "../catalogue/identifiers";
-import { databaseRevision } from "../catalogue/runtime-primitives";
+import { databaseCode, databaseRevision } from "../catalogue/runtime-primitives";
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
 import {
   capabilityPolicyAppliedScopeSchema,
@@ -347,11 +347,6 @@ const parseResult = <Result>(
   if (!parsed.success) throw new Error(errorCode);
   return parsed.data;
 };
-
-const databaseCode = (error: unknown): string | undefined =>
-  typeof error === "object" && error !== null && "code" in error
-    ? String((error as { readonly code?: unknown }).code)
-    : undefined;
 
 const runCommand = async <Result>(
   operation: () => Promise<readonly ResultRow[]>,
