@@ -359,6 +359,26 @@ export const zoneHandle = (working: Working, steps: readonly SlotStep[]): ZoneHa
   };
 };
 
+/** The region's content once the block leaves its slot and, for a move, joins the end of another. */
+export const regionAfter = (
+  target: Target,
+  alias: string,
+  destination?: readonly SlotStep[],
+): SourceItem[] => {
+  const working = workingCopy(target.region);
+  const from = zoneHandle(working, target.steps);
+  const moved = from.items.find((item) => item.props.id === alias) ?? refuse();
+  from.set(
+    from.items.filter((item) => item !== moved),
+    from.order,
+  );
+  if (destination !== undefined) {
+    const to = zoneHandle(working, destination);
+    to.set([...to.items, moved], to.order);
+  }
+  return working.items;
+};
+
 export const workingItem = (
   working: Working,
   steps: readonly SlotStep[],

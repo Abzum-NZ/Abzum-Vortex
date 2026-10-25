@@ -1,9 +1,8 @@
 "use client";
-import { Fragment, useMemo, useState, type FormEvent } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { applicationUses, type ApplicationSourceDocument } from "@vortex/platform/schema";
 import { Icon } from "@vortex/ui";
 import { Button } from "@vortex/ui/components/button";
-import { Input } from "@vortex/ui/components/input";
 import { Badge } from "@vortex/ui/components/badge";
 import {
   Table,
@@ -14,16 +13,13 @@ import {
   TableRow,
 } from "@vortex/ui/components/table";
 import {
-  studioAccessGateChoices,
   studioAccessMenuEntries,
   studioAccessPermissions,
   StudioIconButton,
-  StudioReferencePicker,
-  type StudioAccessGate,
 } from "@vortex/ui/studio";
+import { StudioGateSelect } from "./studio-gate-select";
 import { StudioPermissionDeclaration } from "./studio-permission-declaration";
 import type { StudioAccessRun } from "./studio-access-role";
-import { StudioField } from "./studio-field";
 import { StudioPlaceList } from "./studio-used-in";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@vortex/ui/components/tooltip";
 import {
@@ -32,78 +28,6 @@ import {
   PopoverTitle,
   PopoverTrigger,
 } from "@vortex/ui/components/popover";
-
-const newChoice = "__new__";
-
-/** Chooses the permission that opens a page or shows a menu entry, or names a new one. */
-function GateSelect({
-  source,
-  value,
-  label,
-  disabled,
-  onGate,
-}: Readonly<{
-  source: ApplicationSourceDocument;
-  value: string;
-  label: string;
-  disabled: boolean;
-  onGate: (gate: StudioAccessGate) => boolean;
-}>) {
-  const choices = useMemo(() => studioAccessGateChoices(source), [source]);
-  const [creating, setCreating] = useState(false);
-  const [name, setName] = useState("");
-  const create = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (onGate({ kind: "new", label: name })) {
-      setCreating(false);
-      setName("");
-    }
-  };
-  return (
-    <div className="space-y-2">
-      <StudioReferencePicker
-        aria-label={label}
-        value={creating ? newChoice : value}
-        disabled={disabled}
-        options={[
-          ...choices.map((choice) => ({
-            value: choice.key,
-            label: choice.label,
-            description: choice.roles.length === 0 ? "No role yet" : choice.roles.join(", "),
-          })),
-          { value: newChoice, label: "New permission" },
-        ]}
-        onChange={(key) => {
-          setCreating(key === newChoice);
-          if (key !== newChoice) onGate({ kind: "existing", key });
-        }}
-      />
-      {creating && (
-        <form className="flex items-end gap-2" onSubmit={create}>
-          <StudioField label="New permission">
-            {(control) => (
-              <Input
-                {...control}
-                value={name}
-                maxLength={60}
-                placeholder="For example: View reports"
-                autoFocus
-                disabled={disabled}
-                onChange={(event) => setName(event.target.value)}
-              />
-            )}
-          </StudioField>
-          <Button type="submit" size="sm" disabled={disabled || name.trim().length === 0}>
-            Add and use
-          </Button>
-          <Button type="button" size="sm" variant="ghost" onClick={() => setCreating(false)}>
-            Cancel
-          </Button>
-        </form>
-      )}
-    </div>
-  );
-}
 
 /**
  * Who opens each page and sees each menu entry: one permission each, chosen from the application's
@@ -149,7 +73,7 @@ export function StudioAccessPageGates({
                 <TableRow key={page.id}>
                   <TableCell className="align-top font-medium">{page.name}</TableCell>
                   <TableCell className="align-top">
-                    <GateSelect
+                    <StudioGateSelect
                       source={source}
                       value={page.permission}
                       label={`Who can open ${page.name}`}
@@ -165,7 +89,7 @@ export function StudioAccessPageGates({
                         {own.map((entry) => (
                           <div key={entry.id} className="space-y-1">
                             <p className="text-sm text-muted-foreground">{entry.label}</p>
-                            <GateSelect
+                            <StudioGateSelect
                               source={source}
                               value={entry.permission}
                               label={`Who sees the menu entry ${entry.label}`}
@@ -203,7 +127,7 @@ export function StudioAccessPageGates({
                 <TableRow key={entry.id}>
                   <TableCell className="font-medium">{entry.label}</TableCell>
                   <TableCell>
-                    <GateSelect
+                    <StudioGateSelect
                       source={source}
                       value={entry.permission}
                       label={`Who sees the link ${entry.label}`}

@@ -1,14 +1,15 @@
 import "server-only";
 
 import { createBuilderAuthority, type BuilderTargetFactsReader } from "@vortex/platform/server";
+import { organizationIdSchema, sameId, type StoredDefinitionDraft } from "@vortex/platform/schema";
 import {
-  organizationIdSchema,
-  sameId,
-  type StoredDefinitionDraft,
-} from "@vortex/platform/schema";
-import { BuilderAuthorityError, createDatabaseDefinitionHistoryService, readLiveHumanContext, requireBuilderAuthority,
-  type LiveHumanContext } from "@vortex/platform/server";
-import type { DatabaseRow} from "@vortex/platform/server";
+  BuilderAuthorityError,
+  createDatabaseDefinitionHistoryService,
+  readLiveHumanContext,
+  requireBuilderAuthority,
+  type LiveHumanContext,
+} from "@vortex/platform/server";
+import type { DatabaseRow } from "@vortex/platform/server";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
 import { getIdentityAuthorityConfiguration } from "../auth/_lib/authority-configuration";
 import { installedReleaseCatalogue } from "./definition-catalogue";
@@ -38,8 +39,12 @@ const targetFacts: BuilderTargetFactsReader = async (transaction, _scope, rootId
     select outcome, application_origin_kind
     from vortex_definition.read_builder_application_root_classification(${rootId}::uuid)
   `;
-  if (rows.length !== 1 || rows[0]?.outcome !== "available" ||
-    rows[0]?.application_origin_kind !== "ordinary") throw new RestoreRefused();
+  if (
+    rows.length !== 1 ||
+    rows[0]?.outcome !== "available" ||
+    rows[0]?.application_origin_kind !== "ordinary"
+  )
+    throw new RestoreRefused();
   return { isSystemApplication: false };
 };
 
@@ -47,15 +52,34 @@ const failureKind = (error: unknown): FailureKind => {
   const kind = classifyDatabaseError(error);
   if (error instanceof DefinitionError) {
     if (error.code === "DEFINITION_DRAFT_STALE_OR_MISSING") return "conflict";
-    if (["DEFINITION_CONTEXT_REFUSED", "DEFINITION_RELEASE_NOT_FOUND", "DEFINITION_RELEASE_INTEGRITY_FAILED",
-      "INVALID_DEFINITION_RESTORE_COMMAND"].includes(error.code)) return "refused";
-  }
-  if (error instanceof DefinitionError) {
-    if (error.code === "DEFINITION_DRAFT_STALE_OR_MISSING" || kind === "conflict") return "conflict";
-    if (["DEFINITION_CONTEXT_REFUSED", "DEFINITION_ROOT_MISSING", "INVALID_DEFINITION_COMMAND"].includes(error.code))
+    if (
+      [
+        "DEFINITION_CONTEXT_REFUSED",
+        "DEFINITION_RELEASE_NOT_FOUND",
+        "DEFINITION_RELEASE_INTEGRITY_FAILED",
+        "DEFINITION_DEPENDENCY_SUPERSEDED",
+        "INVALID_DEFINITION_RESTORE_COMMAND",
+      ].includes(error.code)
+    )
       return "refused";
   }
-  if (error instanceof BuilderAuthorityError || error instanceof RestoreRefused || kind === "refused")
+  if (error instanceof DefinitionError) {
+    if (error.code === "DEFINITION_DRAFT_STALE_OR_MISSING" || kind === "conflict")
+      return "conflict";
+    if (
+      [
+        "DEFINITION_CONTEXT_REFUSED",
+        "DEFINITION_ROOT_MISSING",
+        "INVALID_DEFINITION_COMMAND",
+      ].includes(error.code)
+    )
+      return "refused";
+  }
+  if (
+    error instanceof BuilderAuthorityError ||
+    error instanceof RestoreRefused ||
+    kind === "refused"
+  )
     return "refused";
   if (kind === "conflict") return "conflict";
   return "temporarily_unavailable";
@@ -73,17 +97,22 @@ const createReceipt = (
   const restoredFromReleaseRevision = applicationDraft.restoredFromReleaseRevision;
   const restoredFromSourceFingerprint = applicationDraft.restoredFromSourceFingerprint;
   const restoreCorrelationId = applicationDraft.restoreCorrelationId;
-  if (!sameId(applicationDraft.organizationId, command.selector.organizationId) ||
+  if (
+    !sameId(applicationDraft.organizationId, command.selector.organizationId) ||
     !sameId(applicationDraft.rootId, command.selector.rootId) ||
     applicationDraft.draftRevision !== command.expected.draftRevision + 1 ||
     applicationDraft.publishedRevision !== command.expected.anchorReleaseRevision ||
     restoredFromReleaseRevision !== command.selector.releaseRevision ||
     restoredFromSourceFingerprint === undefined ||
     restoredFromSourceFingerprint !== applicationDraft.sourceFingerprint ||
-    restoredBy === undefined || !sameId(restoredBy, context.organizationAccountId) ||
+    restoredBy === undefined ||
+    !sameId(restoredBy, context.organizationAccountId) ||
     !sameId(applicationDraft.updatedBy, context.organizationAccountId) ||
-    restoredAt === undefined || applicationDraft.updatedAt !== restoredAt ||
-    restoreCorrelationId === undefined || restoreCorrelationId !== context.correlationId)
+    restoredAt === undefined ||
+    applicationDraft.updatedAt !== restoredAt ||
+    restoreCorrelationId === undefined ||
+    restoreCorrelationId !== context.correlationId
+  )
     throw new RestoreUnavailable();
 
   const receipt = studioApplicationRestoreReceiptSchema.safeParse({
@@ -103,7 +132,10 @@ const createReceipt = (
   return receipt.data;
 };
 
-const failedCommand = (kind: FailureKind, invocationStarted: boolean): StudioApplicationRestoreCommandResult => ({
+const failedCommand = (
+  kind: FailureKind,
+  invocationStarted: boolean,
+): StudioApplicationRestoreCommandResult => ({
   kind,
   stateMayHaveChanged: invocationStarted ? "unknown" : false,
 });
@@ -115,8 +147,11 @@ export async function restoreStudioApplicationDraft(
 ): Promise<StudioApplicationRestoreCommandResult> {
   const organizationId = organizationIdSchema.safeParse(organizationIdCandidate);
   const command = studioApplicationRestoreCommandSchema.safeParse(commandCandidate);
-  if (!organizationId.success || !command.success ||
-    !sameId(organizationId.data, command.data.selector.organizationId))
+  if (
+    !organizationId.success ||
+    !command.success ||
+    !sameId(organizationId.data, command.data.selector.organizationId)
+  )
     return failedCommand("refused", false);
 
   let resolved: Awaited<ReturnType<typeof resolveIdentitySession>>;
@@ -125,10 +160,11 @@ export async function restoreStudioApplicationDraft(
   } catch {
     return failedCommand("temporarily_unavailable", false);
   }
-  if (resolved.kind !== "active") return failedCommand(
-    resolved.kind === "temporarily_unavailable" ? "temporarily_unavailable" : "refused",
-    false,
-  );
+  if (resolved.kind !== "active")
+    return failedCommand(
+      resolved.kind === "temporarily_unavailable" ? "temporarily_unavailable" : "refused",
+      false,
+    );
 
   let invocationStarted = false;
   let callbackFailure: FailureKind | undefined;
@@ -138,11 +174,23 @@ export async function restoreStudioApplicationDraft(
       { organizationId: command.data.selector.organizationId },
       async (transaction, scope, issuedAt): Promise<StudioApplicationRestoreCommandResult> => {
         try {
-          if (!sameId(scope.organizationId, command.data.selector.organizationId) ||
-            Object.hasOwn(scope, "applicationRootId")) throw new RestoreRefused();
-          const context = await readLiveHumanContext(transaction, { scope, session: resolved.session, issuedAt,
-            identityAuthorityId: getIdentityAuthorityConfiguration().authorityId });
-          const authority = createBuilderAuthority({ transaction, scope, targetFacts, permissions: platformPermissionSource });
+          if (
+            !sameId(scope.organizationId, command.data.selector.organizationId) ||
+            Object.hasOwn(scope, "applicationRootId")
+          )
+            throw new RestoreRefused();
+          const context = await readLiveHumanContext(transaction, {
+            scope,
+            session: resolved.session,
+            issuedAt,
+            identityAuthorityId: getIdentityAuthorityConfiguration().authorityId,
+          });
+          const authority = createBuilderAuthority({
+            transaction,
+            scope,
+            targetFacts,
+            permissions: platformPermissionSource,
+          });
           await requireBuilderAuthority(authority, {
             kind: "draft_change",
             rootId: command.data.selector.rootId,
@@ -178,11 +226,16 @@ export async function restoreStudioApplicationDraft(
       if (result.value.kind !== "completed") return result.value;
       // The label is read after the restore committed, so a failed read never undoes or hides it.
       const { receipt } = result.value;
-      return { ...result.value, receipt: { ...receipt,
-        restoredByLabel: await readStudioPersonLabel(receipt.organizationId, receipt.restoredBy) } };
+      return {
+        ...result.value,
+        receipt: {
+          ...receipt,
+          restoredByLabel: await readStudioPersonLabel(receipt.organizationId, receipt.restoredBy),
+        },
+      };
     }
-    const kind = callbackFailure ?? (result.kind === "unavailable"
-      ? "refused" : "temporarily_unavailable");
+    const kind =
+      callbackFailure ?? (result.kind === "unavailable" ? "refused" : "temporarily_unavailable");
     return failedCommand(kind, invocationStarted);
   } catch (error) {
     return failedCommand(callbackFailure ?? failureKind(error), invocationStarted);

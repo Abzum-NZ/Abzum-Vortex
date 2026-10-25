@@ -159,7 +159,7 @@ type BoundProjectionExpectation = Readonly<{
 const projectBoundReleaseSet = async (
   candidate: unknown,
   expectation: BoundProjectionExpectation,
-  catalogue: DefinitionPublicationCatalogue,
+  catalogue: DefinitionPublicationCatalogue | undefined,
 ): Promise<ApplicationBoundReleaseSetResult | SystemApplicationBoundReleaseSetResult> => {
   const storedSet = (
     expectation.allowEmptyModules ? storedSystemSetSchema : storedSetSchema
@@ -229,10 +229,9 @@ const exactFirstInstallModuleClosure = (
   releaseSet: SystemApplicationBoundReleaseSetResult,
 ): boolean => {
   const modulesByIdentity = new Map(
-    releaseSet.modules.map((module) => [
-      `${module.rootId.toLowerCase()}:${module.releaseRevision}`,
-      module,
-    ] as const),
+    releaseSet.modules.map(
+      (module) => [`${module.rootId.toLowerCase()}:${module.releaseRevision}`, module] as const,
+    ),
   );
   if (modulesByIdentity.size !== releaseSet.modules.length) return false;
   const orderedRoots = releaseSet.modules.map((module) => module.rootId.toLowerCase());
@@ -379,8 +378,13 @@ const applicationReleaseAdoptionReleaseSetCommandSchema = z
 export const createDatabaseApplicationReleaseAdoptionReleaseSetService = (
   catalogueDefinition: ImmutableDefinitionPublicationCatalogueDefinition,
   transaction: RequestDatabaseTransaction,
+  purpose: "consume" | "replace_or_remove" = "consume",
 ) => {
-  const catalogue = createImmutableDefinitionPublicationCatalogue(catalogueDefinition);
+  // Retired content is never rendered. Its stored hashes and identities still verify below.
+  const catalogue =
+    purpose === "consume"
+      ? createImmutableDefinitionPublicationCatalogue(catalogueDefinition)
+      : undefined;
   return Object.freeze({
     async read(commandCandidate: unknown): Promise<SystemApplicationBoundReleaseSetResult> {
       const command = applicationReleaseAdoptionReleaseSetCommandSchema.safeParse(commandCandidate);
@@ -427,8 +431,12 @@ export const createDatabaseApplicationReleaseAdoptionReleaseSetService = (
 export const createDatabaseFirstInstallApplicationReleaseSetService = (
   catalogueDefinition: ImmutableDefinitionPublicationCatalogueDefinition,
   transaction: RequestDatabaseTransaction,
+  purpose: "consume" | "replace_or_remove" = "consume",
 ) => {
-  const catalogue = createImmutableDefinitionPublicationCatalogue(catalogueDefinition);
+  const catalogue =
+    purpose === "consume"
+      ? createImmutableDefinitionPublicationCatalogue(catalogueDefinition)
+      : undefined;
   return Object.freeze({
     async read(commandCandidate: unknown): Promise<SystemApplicationBoundReleaseSetResult> {
       const command = firstInstallApplicationReleaseSetCommandSchema.safeParse(commandCandidate);

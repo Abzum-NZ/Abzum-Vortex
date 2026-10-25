@@ -29,6 +29,7 @@ export {
 export * from "./condition-controls";
 export * from "./studio-query-filter";
 export * from "./application-composition-commands";
+export { describeStudioCompositionGate } from "./application-composition-gate";
 export * from "./field-placement";
 export * from "./application-flow-model";
 export * from "./application-flow-commands";
