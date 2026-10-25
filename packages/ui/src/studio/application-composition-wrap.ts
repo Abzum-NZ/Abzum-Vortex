@@ -20,6 +20,9 @@ import {
   type Region,
   toolsFor,
   releaseFor,
+  holdsForm,
+  FORM_CONTAINER_KEY,
+  NESTED_FORM_REASON,
   pinnedRelease,
   manifestMatches,
   resolve,
@@ -107,6 +110,9 @@ export const resolveWrap = (
     // the container's required settings are asked for before it wraps.
     const unavailable =
       choice.unavailableWhenFilled ??
+      (release.key === FORM_CONTAINER_KEY && holdsForm(catalogue, [target.item])
+        ? NESTED_FORM_REASON
+        : undefined) ??
       (choice.needsQuery
         ? "It reads its own data. Add it from the Blocks panel, then move this block into it."
         : accepting === undefined

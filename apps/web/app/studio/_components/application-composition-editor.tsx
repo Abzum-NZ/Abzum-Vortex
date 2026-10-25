@@ -813,7 +813,7 @@ export function ApplicationCompositionEditor(props: Props) {
               ? removalModel.reason === "required_slot"
                 ? "This area needs at least this item."
                 : removalModel.reason === "required_field"
-                  ? "This item contains an input for a required field. Make the field optional in Data before removing its input."
+                  ? "This item contains an input for a required field. Make the field optional in Data, or clear the input's Required setting, before removing it."
                   : removalModel.reason === "content_outlet"
                     ? "This item holds a content outlet of its layout. Retarget the outlet in the Layout inspector first."
                     : removalModel.reason === "unresolved_target"

@@ -43,7 +43,7 @@ import {
   validateStoredZone,
 } from "./stored-composition";
 import { restoreStudioGridFeatureBindings } from "./grid-features";
-import type { StudioSemanticSelection } from "./semantic-selection";
+import { studioFlowLabel, type StudioSemanticSelection } from "./semantic-selection";
 import type {
   StudioCompositionBreakpoint,
   StudioCompositionContext,
@@ -63,6 +63,8 @@ import {
   refuse,
   regions,
   releaseFor,
+  holdsForm,
+  FORM_CONTAINER_KEY,
   itemSlots,
   itemReading,
   pinnedRelease,
@@ -136,6 +138,7 @@ const pageContentRegion = (
 const movableRegion = (region: Region): boolean =>
   region.shell !== undefined || pageContentRegion(region);
 
+/** The form that encloses a slot reached by these steps, if any. */
 const formAt = (
   catalogue: ImmutablePlatformBlockCatalogue,
   region: Region,
@@ -145,7 +148,7 @@ const formAt = (
   let form: string | undefined;
   for (const step of steps) {
     const parent = zone.items.find((item) => item.props.id === step.parentAlias) ?? refuse();
-    if (releaseFor(catalogue, parent)?.key === "platform.form.container") form = parent.props.id;
+    if (releaseFor(catalogue, parent)?.key === FORM_CONTAINER_KEY) form = parent.props.id;
     zone = itemSlots(catalogue, parent).get(step.slotKey) ?? refuse();
   }
   return form;
@@ -154,7 +157,10 @@ const formAt = (
 const isFormInput = (key: string | undefined): boolean =>
   key?.startsWith("platform.form.") === true && key.endsWith("_input");
 
-/** The enclosing form travels with its children; moving a child keeps its existing form. */
+/**
+ * A form travels with its children and never lands inside another form; an input, or a Submit or
+ * Reset button, outside a form of its own keeps its enclosing form.
+ */
 const keepsFormContext = (
   catalogue: ImmutablePlatformBlockCatalogue,
   target: Target,
@@ -162,7 +168,7 @@ const keepsFormContext = (
 ): boolean => {
   const needsForm = (item: SourceItem): boolean => {
     const key = releaseFor(catalogue, item)?.key;
-    if (key === "platform.form.container") return false;
+    if (key === FORM_CONTAINER_KEY) return false;
     return (
       isFormInput(key) ||
       (key === "platform.action.button" &&
@@ -170,20 +176,14 @@ const keepsFormContext = (
       [...itemSlots(catalogue, item).values()].some((slot) => slot.items.some(needsForm))
     );
   };
-  if (
-    formAt(catalogue, target.region, destination) !== undefined &&
-    sourceItemTree([target.item]).some(
-      (item) => releaseFor(catalogue, item)?.key === "platform.form.container",
-    )
-  )
-    return false;
+  const destinationForm = formAt(catalogue, target.region, destination);
+  if (destinationForm !== undefined && holdsForm(catalogue, [target.item])) return false;
   return (
-    !needsForm(target.item) ||
-    formAt(catalogue, target.region, target.steps) === formAt(catalogue, target.region, destination)
+    !needsForm(target.item) || formAt(catalogue, target.region, target.steps) === destinationForm
   );
 };
 
-/** Required record fields must keep an input when content is removed. */
+/** Required record fields, and inputs marked required, keep their input when content is removed. */
 const requiredFieldInput = (context: StudioCompositionContext, item: SourceItem): boolean =>
   sourceItemTree([item]).some(
     (child) =>
@@ -199,29 +199,42 @@ const requiredFieldInput = (context: StudioCompositionContext, item: SourceItem)
         )),
   );
 
-/** A mapped answer is a flow dependency, just as a directly named control is. */
-const boundFormInput = (context: StudioCompositionContext, target: Target): boolean => {
-  if (!isFormInput(releaseFor(context.catalogue, target.item)?.key)) return false;
-  const field = target.item.props.field;
-  const name =
-    typeof field === "string" ? field.slice(field.lastIndexOf(".") + 1) : target.item.props.name;
-  if (typeof name !== "string") return false;
+/**
+ * The flow whose submit binding maps an answer this content holds: a mapped answer is a flow
+ * dependency, just as a directly named control is. An automatic input answers under its field key.
+ */
+const boundFormInput = (
+  context: StudioCompositionContext,
+  target: Target,
+): { flow?: string } | undefined => {
   const form = formAt(context.catalogue, target.region, target.steps);
-  return (
-    form !== undefined &&
-    context.source.body.flow_bindings.some(
-      (binding) =>
-        binding.control === form &&
-        Object.values(binding.inputs).some(
-          (input) =>
-            typeof input === "object" &&
-            input !== null &&
-            "kind" in input &&
-            input.kind === "caller" &&
-            input.name === name,
-        ),
-    )
+  if (form === undefined) return undefined;
+  const names = new Set<string>();
+  for (const item of sourceItemTree([target.item])) {
+    if (!isFormInput(releaseFor(context.catalogue, item)?.key)) continue;
+    const field = item.props.field;
+    const name =
+      typeof field === "string" ? field.slice(field.lastIndexOf(".") + 1) : item.props.name;
+    if (typeof name === "string") names.add(name);
+  }
+  const binding = context.source.body.flow_bindings.find(
+    (candidate) =>
+      candidate.control === form &&
+      Object.values(candidate.inputs).some(
+        (input) =>
+          typeof input === "object" &&
+          input !== null &&
+          "kind" in input &&
+          input.kind === "caller" &&
+          names.has(input.name),
+      ),
   );
+  if (binding === undefined) return undefined;
+  const flow = [
+    ...context.source.body.flows,
+    ...context.source.body.modules.flatMap((module) => module.flows),
+  ].find((candidate) => candidate.id === binding.flow || candidate.key === binding.flow);
+  return flow === undefined ? {} : { flow: studioFlowLabel(flow) };
 };
 
 /**
@@ -600,7 +613,8 @@ const resolveRemoval = (
   }
   if (requiredFieldInput(context, target.item))
     return { kind: "blocked", reason: "required_field" };
-  if (boundFormInput(context, target)) return { kind: "blocked", reason: "flow_input" };
+  const mapped = boundFormInput(context, target);
+  if (mapped !== undefined) return { kind: "blocked", reason: "flow_input", ...mapped };
   // What a flow still names is the cause to fix first, so it is told before the item's content is.
   if (
     !layout &&
