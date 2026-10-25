@@ -231,14 +231,16 @@ export function StudioCanvasBridge({
         resolvePageHref={() => "#"}
         onNavigatePage={ignoreNavigation}
         currentPageId={frame.pageId}
+        // The switcher names only the application being designed.
+        applicationSwitcher={{
+          state: "available",
+          applications: [{ key: frame.applicationName, name: frame.applicationName, href: "#" }],
+        }}
         applicationShellRuntime={{
           applicationName: frame.applicationName,
           applicationHref: "#",
           organizationName: "",
           pageName: frame.pageName,
-          // The switcher names only the application being designed.
-          applicationSwitcherState: "available",
-          applications: [{ key: frame.applicationName, name: frame.applicationName, href: "#" }],
         }}
         outlet={{ location: frame.frame.outlet, content: canvas as ReactNode }}
       />

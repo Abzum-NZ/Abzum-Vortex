@@ -18,6 +18,7 @@ import {
 } from "@vortex/platform/schema";
 import type {
   ApplicationAccount,
+  ApplicationSwitcherData,
   PlatformThemeTokens,
   FieldInputControlReleaseMap,
 } from "@vortex/ui";
@@ -49,8 +50,8 @@ export type ApplicationFrameModel = Readonly<{
   }>;
   /** The pages the viewer may open, for the current page's menu state and breadcrumb. */
   pages: readonly Readonly<{ pageId: string; key: string; name: string }>[];
-  applicationSwitcherState: "available" | "unavailable" | "temporarily_unavailable";
-  applications: readonly Readonly<{ key: string; name: string; href: string }>[];
+  /** Resolved, or the server-started read the shell's switcher streams in. */
+  applicationSwitcher: ApplicationSwitcherData | Promise<ApplicationSwitcherData>;
   account: ApplicationAccount;
   search: ApplicationSearchView;
   platformBlockReleases: readonly PlatformBlockRelease[];
@@ -175,29 +176,47 @@ export const loadApplicationFrame = cache(
     );
     // The application switcher reads the viewer's other applications under its own request, so it
     // runs beside the page and menu projections instead of after them.
-    const switcherRequest =
+    const applicationPath = (key: string, pageKey: string) =>
+      `/${encodeURIComponent(tenantShortName)}/${encodeURIComponent(organizationShortName)}/${encodeURIComponent(key)}/${encodeURIComponent(pageKey)}`;
+    const switcherApplications = (applications: typeof resolved.read.applications) =>
+      applications.map((candidate) => ({
+        key: candidate.key,
+        name: candidate.name,
+        href: applicationPath(candidate.key, candidate.homePageKey),
+      }));
+    const switcherRequest: ApplicationFrameModel["applicationSwitcher"] =
       shell?.presentation.topBar.applicationSwitcher === true
-        ? loadPermittedApplicationsAtAddress(session, tenantShortName, organizationShortName)
-        : undefined;
-    void switcherRequest?.catch(() => undefined);
+        ? loadPermittedApplicationsAtAddress(session, tenantShortName, organizationShortName).then(
+            (read): ApplicationSwitcherData => {
+              if (read.kind === "temporarily_unavailable")
+                console.error(
+                  `[application-shell] permitted applications unavailable: cause=${read.cause ?? "cause_not_provided"}`,
+                );
+              return {
+                state:
+                  read.kind === "available"
+                    ? "available"
+                    : read.kind === "temporarily_unavailable"
+                      ? "temporarily_unavailable"
+                      : "unavailable",
+                applications:
+                  read.kind === "available" ? switcherApplications(read.applications) : [],
+              };
+            },
+            // The streamed switcher has no error boundary of its own: an unexpected failure is the
+            // switcher's temporarily unavailable state, never a failed page.
+            (error: unknown): ApplicationSwitcherData => {
+              console.error("[application-shell] permitted applications failed", error);
+              return { state: "temporarily_unavailable", applications: [] };
+            },
+          )
+        : { state: "available", applications: switcherApplications(resolved.read.applications) };
     if (navigationRead === undefined) throw new Error("FRAME_NAVIGATION_NOT_READ");
     const [projected, navigation] = await Promise.all([projectedPageRead, navigationRead]);
     if (projected.kind !== "available" || projected.value === undefined) return undefined;
     if (navigation.kind !== "available") return undefined;
 
     const { frame } = splitProjectedPage(projected.value, shell);
-
-    const switcherRead = await switcherRequest;
-    if (switcherRead?.kind === "temporarily_unavailable")
-      console.error(
-        `[application-shell] permitted applications unavailable: cause=${switcherRead.cause ?? "cause_not_provided"}`,
-      );
-    const switcherApplications =
-      switcherRead?.kind === "available"
-        ? switcherRead.applications
-        : switcherRead === undefined
-          ? resolved.read.applications
-          : [];
 
     const query = addressed.query.getAll("q");
     const expression =
@@ -238,8 +257,6 @@ export const loadApplicationFrame = cache(
       const label = boundedRecordTypes.get(String(page.recordType?.recordTypeId).toLowerCase());
       if (label !== undefined && permittedKeys.has(page.key)) seedBoundedPages[page.key] = label;
     }
-    const applicationPath = (key: string, pageKey: string) =>
-      `/${encodeURIComponent(tenantShortName)}/${encodeURIComponent(organizationShortName)}/${encodeURIComponent(key)}/${encodeURIComponent(pageKey)}`;
     return {
       frame,
       shells: content.shells.map(({ shellId, key, name, presentation }) => ({
@@ -260,17 +277,7 @@ export const loadApplicationFrame = cache(
       pages: content.pages
         .filter((page) => permittedKeys.has(page.key))
         .map((page) => ({ pageId: page.pageId, key: page.key, name: page.name })),
-      applicationSwitcherState:
-        switcherRead === undefined || switcherRead.kind === "available"
-          ? "available"
-          : switcherRead.kind === "temporarily_unavailable"
-            ? "temporarily_unavailable"
-            : "unavailable",
-      applications: switcherApplications.map((candidate) => ({
-        key: candidate.key,
-        name: candidate.name,
-        href: applicationPath(candidate.key, candidate.homePageKey),
-      })),
+      applicationSwitcher: switcherRequest,
       account:
         resolved.read.accountDisplayName === undefined
           ? { email }

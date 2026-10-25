@@ -327,6 +327,7 @@ export {
   readQueryPlacement,
   pageQueryBindingContext,
   placementParameterDependencies,
+  controlSelectedRecordType,
   findModuleQuery,
   isApplicationLauncherPlacement,
   isBoardPlacement,

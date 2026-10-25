@@ -24,12 +24,78 @@ import {
   SelectItem,
 } from "../components/select";
 import { StudioReferencePicker } from "./studio-reference-picker";
+import { StudioField } from "./studio-field";
 import { StudioRecordReferenceControl } from "./studio-record-reference-control";
 import type { StudioSettingChoices } from "./studio-setting-controls";
 import type { StudioQueryChoice } from "./contextual-palette";
 
 type Value = SourceBlockPropertyValueContract;
 const text = (value: string): Value => ({ kind: "text", value });
+
+/** What each selection setting says: a drawer's Open with and a Record detail's Record from. */
+const selectionSettings = {
+  open_with: {
+    label: "Open with",
+    hint: "Choose a control that publishes a record. Closing this drawer clears its selection.",
+    unset: "Initially open setting",
+  },
+  record_from: {
+    label: "Record from",
+    hint: "Choose a control that selects a record. This block then shows that record.",
+    unset: "The page's record",
+  },
+} as const;
+
+/**
+ * A drawer's Open with and a Record detail's Record from pick a control on the page that publishes
+ * one kind of record, from the same controls a record query input offers.
+ */
+export function StudioSelectionControlBinding({
+  setting,
+  value,
+  facts,
+  disabled,
+  onChange,
+}: Readonly<{
+  setting: keyof typeof selectionSettings;
+  value: Value | undefined;
+  facts: QueryBindingPageFacts;
+  disabled: boolean;
+  onChange: (value: Value | undefined) => void;
+}>) {
+  const words = selectionSettings[setting];
+  const controls = facts.controls.filter((control) =>
+    facts.parameters.some(
+      (parameter) =>
+        parameter.name === control.parameter &&
+        parameter.type.kind === "record" &&
+        parameter.type.recordTypes.length === 1,
+    ),
+  );
+  return (
+    <>
+      <StudioField label={words.label} hint={words.hint} optional>
+        {(control) => (
+          <StudioReferencePicker
+            {...control}
+            aria-label={words.label}
+            value={value?.kind === "text" ? value.value : ""}
+            options={controls.map((entry) => ({ value: entry.placement, label: entry.label }))}
+            unset={words.unset}
+            disabled={disabled}
+            onChange={(next) => onChange(next === "" ? undefined : text(next))}
+          />
+        )}
+      </StudioField>
+      {facts.pageProblems.map((problem) => (
+        <p key={problem.sentence} role="alert" className="text-sm text-destructive">
+          {problem.sentence}
+        </p>
+      ))}
+    </>
+  );
+}
+
 const partLabels: Record<CurrentPersonPart, string> = {
   person: "Person",
   organisation: "Organisation",

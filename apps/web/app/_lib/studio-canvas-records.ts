@@ -387,6 +387,7 @@ export const readStudioCanvasRecords = async (
         resolveRecordLinks: services.recordLinkResolver(context),
         readCalendarSettings: services.readCalendarSettings,
         readSubject,
+        records: services.subjects,
         launcherValues: applicationLauncherQueryRowsToListValues,
         boardData: (values) => parseDisplayData({ status: "ready", values }, parseBoardPayload),
       },

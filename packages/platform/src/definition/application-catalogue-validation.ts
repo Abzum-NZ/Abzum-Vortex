@@ -11,6 +11,7 @@ import {
   type JsonValue,
   sourceItemChildSlots,
   sourcePageDataOf,
+  sourcePageItems,
   sourcePageRootSlots,
   type ApplicationSourceDocument,
   type BlockPropertySchemaContract,
@@ -145,6 +146,35 @@ export function validateApplicationSourceCatalogue(
   // so this source-only check cannot read its fields. The compiler resolves the reference against
   // the exact bound Module release and refuses an unknown one.
   let pageRecordType: string | undefined;
+  // The one record type each control of the page selects: a table selecting on row click, or a
+  // link input naming one record type. A Record detail with Record from shows that type's fields.
+  let pageSelections = new Map<string, string>();
+  const selectionsOf = (page: Body["pages"][number]): Map<string, string> => {
+    const selections = new Map<string, string>();
+    for (const item of sourcePageItems(page.composition)) {
+      const { row_click: rowClick, record_types: recordTypes } = item.props;
+      const query = item.props.vortex.query;
+      if (
+        typeof rowClick === "object" &&
+        rowClick !== null &&
+        "mode" in rowClick &&
+        rowClick.mode === "select" &&
+        query !== undefined
+      ) {
+        const [moduleKey, queryKey] = query.split(":");
+        const recordType = source.body.modules
+          .find((module) => module.key === moduleKey)
+          ?.queries.find((candidate) => candidate.key === queryKey)?.record_type;
+        if (recordType !== undefined) selections.set(item.props.id, `${moduleKey}:${recordType}`);
+      } else if (
+        Array.isArray(recordTypes) &&
+        recordTypes.length === 1 &&
+        typeof recordTypes[0] === "string"
+      )
+        selections.set(item.props.id, recordTypes[0]);
+    }
+    return selections;
+  };
 
   // Flow bindings are matched by the placement alias and the event identity the setting declares,
   // exactly as the compiler keys them; a flow is resolved by either its alias or its key.
@@ -214,9 +244,17 @@ export function validateApplicationSourceCatalogue(
     // With a bound Module query the mapped fields are the query's own record's, which this
     // source-only check cannot read and the Query engine enforces; without one they must belong
     // to the page's record type.
+    // A Record detail with Record from maps the fields of the record type its control selects; a
+    // control whose type lives in another document is checked when the record is read.
+    const recordFrom = settings.record_from;
+    if (recordFrom?.kind === "text" && placement.query !== undefined)
+      report("vortex.definition.application_block_settings", "invalid_value", at("record_from"));
+    const recordType =
+      recordFrom?.kind === "text" ? pageSelections.get(recordFrom.value) : pageRecordType;
     const mapped = (field: string): boolean =>
       placement.query !== undefined ||
-      (pageRecordType !== undefined && field.startsWith(`${pageRecordType}.`));
+      (recordFrom?.kind === "text" && recordType === undefined) ||
+      (recordType !== undefined && field.startsWith(`${recordType}.`));
 
     const checkFields = (
       key: string,
@@ -710,6 +748,7 @@ export function validateApplicationSourceCatalogue(
 
   for (const page of source.body.pages) {
     pageRecordType = "record_type" in page ? page.record_type : undefined;
+    pageSelections = selectionsOf(page);
     const scope = keySegment("page", page.key);
     const publicSurface = page.type === "public";
     for (const data of sourcePageDataOf(page.composition)) {

@@ -1,6 +1,14 @@
 "use client";
 
-import { useContext, type CSSProperties, type ReactElement, type ReactNode } from "react";
+import {
+  createContext,
+  Suspense,
+  use,
+  useContext,
+  type CSSProperties,
+  type ReactElement,
+  type ReactNode,
+} from "react";
 import type { ApplicationPuckRootShell } from "@vortex/platform/schema";
 import {
   Breadcrumb,
@@ -35,13 +43,25 @@ export type ApplicationWebMcpRuntime = Readonly<{
   working?: string;
 }>;
 
+export type ApplicationSwitcherData = Readonly<{
+  state: "available" | "unavailable" | "temporarily_unavailable";
+  applications: readonly Readonly<{ key: string; name: string; href: string }>[];
+}>;
+
+/**
+ * The application switcher's applications, resolved or as a server-started read that streams in.
+ * It travels in a context, not in Puck metadata: Puck copies metadata, and a copied streamed read
+ * is no longer a promise.
+ */
+export const ApplicationSwitcherContext = createContext<
+  ApplicationSwitcherData | Promise<ApplicationSwitcherData> | undefined
+>(undefined);
+
 export type ApplicationShellRuntime = Readonly<{
   applicationName: string;
   applicationHref: string;
   organizationName: string;
   pageName: string;
-  applicationSwitcherState: "available" | "unavailable" | "temporarily_unavailable";
-  applications: readonly Readonly<{ key: string; name: string; href: string }>[];
   /** Page agent-tool state supplied through Puck metadata to the definition-selected shell. */
   webMcp?: ApplicationWebMcpRuntime;
 }>;
@@ -193,8 +213,34 @@ function ApplicationSwitcher({
   shellName,
   runtime,
 }: Readonly<{ shellName: string; runtime: ApplicationShellRuntime | undefined }>): ReactElement {
+  const applicationName = runtime?.applicationName ?? shellName;
+  return (
+    <Suspense
+      fallback={
+        <Button
+          variant="ghost"
+          size="sm"
+          disabled
+          aria-busy="true"
+          aria-label={`Loading applications: ${applicationName}`}
+          className="max-w-56 max-sm:min-h-11 max-sm:min-w-11 animate-pulse"
+        >
+          <SwitcherButton icon="grid" label={applicationName} />
+        </Button>
+      }
+    >
+      <ResolvedApplicationSwitcher applicationName={applicationName} />
+    </Suspense>
+  );
+}
+
+function ResolvedApplicationSwitcher({
+  applicationName,
+}: Readonly<{ applicationName: string }>): ReactElement {
   const actions = useApplicationAccountActions();
-  if (runtime?.applicationSwitcherState === "temporarily_unavailable")
+  const read = useContext(ApplicationSwitcherContext);
+  const switcher = read !== undefined && "then" in read ? use(read) : read;
+  if (switcher?.state === "temporarily_unavailable")
     return (
       <span
         role="status"
@@ -205,7 +251,7 @@ function ApplicationSwitcher({
         <span className="truncate max-sm:sr-only">Applications temporarily unavailable</span>
       </span>
     );
-  if (runtime?.applicationSwitcherState === "unavailable")
+  if (switcher?.state === "unavailable")
     return (
       <span
         role="status"
@@ -216,11 +262,10 @@ function ApplicationSwitcher({
         <span className="truncate max-sm:sr-only">Applications unavailable</span>
       </span>
     );
-  const applicationName = runtime?.applicationName ?? shellName;
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
-        disabled={runtime === undefined || runtime.applications.length === 0 || actions === null}
+        disabled={switcher === undefined || switcher.applications.length === 0 || actions === null}
         aria-label={`Application: ${applicationName}`}
         render={
           <Button variant="ghost" size="sm" className="max-w-56 max-sm:min-h-11 max-sm:min-w-11" />
@@ -233,7 +278,7 @@ function ApplicationSwitcher({
           <DropdownMenuLabel>Applications</DropdownMenuLabel>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
-        {(runtime?.applications ?? []).map((application) => (
+        {(switcher?.applications ?? []).map((application) => (
           <DropdownMenuItem
             key={application.key}
             onClick={() => void actions?.openApplication(application.href)}

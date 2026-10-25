@@ -67,6 +67,7 @@ export type PlacementFailureReason =
   | "summary_query_threw"
   | "subject_unavailable"
   | "detail_record_type_unavailable"
+  | "detail_selection_unbound"
   | "detail_command_invalid"
   | "detail_query_unavailable"
   | "detail_query_refused"
