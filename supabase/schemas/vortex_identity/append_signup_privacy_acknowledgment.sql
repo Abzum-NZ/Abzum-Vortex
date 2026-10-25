@@ -18,9 +18,12 @@ begin
   end if;
   notice_version := vortex_identity.validate_privacy_notice_internal(new.raw_user_meta_data);
   insert into vortex_identity.privacy_notice_acknowledgments (
-    identity_id, notice_version_id, acknowledged_at, correlation_id
+    identity_id, notice_version_id, acknowledged_at, channel, correlation_id
   ) values (
-    new.id, notice_version, pg_catalog.clock_timestamp(), pg_catalog.gen_random_uuid()
+    new.id, notice_version, pg_catalog.clock_timestamp(),
+    case when new.raw_app_meta_data ->> 'provider' = 'email'
+      then 'email_registration' else 'identity_registration' end,
+    pg_catalog.gen_random_uuid()
   );
   return new;
 end

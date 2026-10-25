@@ -19,6 +19,7 @@ create table if not exists vortex_identity.privacy_notice_acknowledgments (
   identity_id uuid not null,
   notice_version_id uuid not null references vortex_identity.privacy_notice_versions(id),
   acknowledged_at timestamptz not null,
+  channel text not null check (channel in ('email_registration', 'identity_registration')),
   correlation_id uuid not null unique,
   primary key (identity_id, notice_version_id)
 );
@@ -194,9 +195,12 @@ begin
   end if;
   notice_version := vortex_identity.validate_privacy_notice_internal(new.raw_user_meta_data);
   insert into vortex_identity.privacy_notice_acknowledgments (
-    identity_id, notice_version_id, acknowledged_at, correlation_id
+    identity_id, notice_version_id, acknowledged_at, channel, correlation_id
   ) values (
-    new.id, notice_version, pg_catalog.clock_timestamp(), pg_catalog.gen_random_uuid()
+    new.id, notice_version, pg_catalog.clock_timestamp(),
+    case when new.raw_app_meta_data ->> 'provider' = 'email'
+      then 'email_registration' else 'identity_registration' end,
+    pg_catalog.gen_random_uuid()
   );
   return new;
 end
@@ -232,11 +236,14 @@ for each row execute function vortex_identity.refuse_privacy_notice_mutation();
 reset role;
 -- GoTrue v2.196.0 refuses hook calls inside a transaction, so before_user_created alone cannot
 -- write evidence atomically with the account; this trigger appends it in the insert transaction.
--- Rollback (operational role, evidence tables retained), after disabling the hook configuration:
+-- Rollback in one transaction as postgres, evidence tables retained, after disabling the hook
+-- configuration:
 --   drop trigger if exists vortex_signup_privacy_acknowledgment on auth.users;
+--   set local role vortex_owner;
 --   drop function if exists vortex_identity.append_signup_privacy_acknowledgment();
 --   revoke execute on function vortex_identity.before_user_created(jsonb) from supabase_auth_admin;
 --   drop function if exists vortex_identity.before_user_created(jsonb);
+--   reset role;
 --   revoke usage on schema vortex_identity from supabase_auth_admin;
 -- guard-allow: migration-owner-role The GoTrue-owned auth table requires postgres to attach this approved integration trigger.
 drop trigger if exists vortex_signup_privacy_acknowledgment on auth.users;
