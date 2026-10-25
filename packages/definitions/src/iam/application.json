@@ -147,6 +147,26 @@
         }
       },
       {
+        "id": "perm_app_iam_group_choose",
+        "key": "application.iam.directory.group.choose",
+        "label": "Choose a group",
+        "description": "See the names of the organisation's active groups when choosing a group for an access request.",
+        "record_type": "vortex.system_directory:group",
+        "action_kind": "read",
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": ["label"],
+          "changeable_fields": []
+        }
+      },
+      {
         "id": "perm_app_iam_group_membership_read",
         "key": "application.iam.directory.group_membership.read",
         "label": "Read IAM group memberships",
@@ -324,7 +344,8 @@
           "vortex.iam.core.access_request.update_own",
           "vortex.iam.core.access_request.soft_delete_own",
           "vortex.iam.core.access_request_item.create_own",
-          "vortex.iam.core.access_request_item.read_own"
+          "vortex.iam.core.access_request_item.read_own",
+          "application.iam.directory.group.choose"
         ]
       },
       {
