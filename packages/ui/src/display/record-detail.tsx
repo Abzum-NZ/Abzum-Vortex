@@ -78,7 +78,11 @@ export function RecordDetailDisplay(props: DisplayRenderProps<RecordDetailPayloa
           aria-label={accessibleName}
         >
           {hasHeader ? (
-            <CardHeader className="*:mb-0">
+            <CardHeader
+              className="*:mb-0"
+              // The heading shows a field's value, so a projection refresh can find it on screen.
+              data-vortex-field-key={contract?.headingField}
+            >
               <DisplayHeader title={title} accessibleName={accessibleName} events={events} />
             </CardHeader>
           ) : null}

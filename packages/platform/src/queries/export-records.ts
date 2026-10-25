@@ -501,6 +501,12 @@ export const prepareRecordsExport = async (
   if (request.signal.aborted) onAbort();
 
   const throwIfAborted = (): void => abort.signal.throwIfAborted();
+  // Settles only by rejecting when the export is cancelled.
+  const abandoned = new Promise<never>((_, reject) => {
+    if (abort.signal.aborted) reject(abort.signal.reason);
+    else abort.signal.addEventListener("abort", () => reject(abort.signal.reason), { once: true });
+  });
+  abandoned.catch(() => {});
   const validatePage = (page: RecordsExportPage): void => {
     if (page.length > 200) throw exportError("page_limit_exceeded");
     if (exported + page.length > request.maxRows)
@@ -529,7 +535,8 @@ export const prepareRecordsExport = async (
     filename = exportFilename(request.name, request.format.extension);
     iterator = request.pages(abort.signal)[Symbol.asyncIterator]();
     // Read AND validate the first page before the route can send successful download headers.
-    page = await iterator.next();
+    // A cancelled request stops waiting at once; the in-flight read is left to finish on its own.
+    page = await Promise.race([iterator.next(), abandoned]);
     throwIfAborted();
     if (!page.done) validatePage(page.value);
     header = request.format.header(request.labels);
@@ -560,7 +567,7 @@ export const prepareRecordsExport = async (
       }
       // A new page is requested only after downstream consumes all rows of the current one.
       page = { done: true, value: undefined };
-      page = await iterator!.next();
+      page = await Promise.race([iterator!.next(), abandoned]);
       throwIfAborted();
       if (!page.done) validatePage(page.value);
     }
