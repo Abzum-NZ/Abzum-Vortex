@@ -7,6 +7,7 @@ import {
   changeOrganizationAdministrationRoleAuthorityCommandSchema,
   organizationSelectionCandidateSchema,
   prepareOrganizationAdministrationRoleChangeCommandSchema,
+  prepareOrganizationAdministrationRoleRevisionAcceptanceCommandSchema,
   type IdentityAuthorityId,
   type OrganizationAdministrationApplicationRoleTemplate,
   type OrganizationAdministrationPermission,
@@ -139,6 +140,35 @@ const hasAdministrativePermission = (
       sameId(permission.reference.applicationRootId, template.reference.applicationRootId) &&
       template.publishedPermissionKeys.includes(permission.key),
   );
+
+/** An upgrade that changes a shipped role template leaves the accepted role to accept again. */
+const acceptedRevision = async (
+  administration: AccessAdministration,
+  session: OwnerSession,
+  selection: OrganizationSelection,
+  role: OrganizationAdministrationRoleSummary,
+): Promise<OrganizationAdministrationRoleSummary> => {
+  const prepared = await administration.prepareApplicationRoleRevisionAcceptance(
+    session,
+    selection,
+    prepareOrganizationAdministrationRoleRevisionAcceptanceCommandSchema.parse({
+      operation: "accept_application_role_revision",
+      roleId: role.roleId,
+      expectedRoleRevision: role.liveRevision,
+      acceptBroadenedAuthority: "accept",
+    }),
+  );
+  if (prepared.kind !== "available")
+    throw new Error(`Role revision of ${role.key} could not be prepared (${prepared.kind})`);
+  const result = await administration.acceptApplicationRoleRevision(
+    session,
+    selection,
+    changeOrganizationAdministrationRoleAuthorityCommandSchema.parse({ evidence: prepared.value }),
+  );
+  if (result.kind !== "available" || result.value.role.lifecycle !== "active")
+    throw new Error(`Role revision of ${role.key} could not be accepted (${result.kind})`);
+  return result.value.role;
+};
 
 const acceptedRole = async (
   administration: AccessAdministration,
@@ -277,6 +307,11 @@ export const grantFirstOwnerApplicationRoles = async (
         applicationKeyByRootId.get(template.reference.applicationRootId.toLowerCase()) ??
         template.reference.applicationRootId;
       log(`accepted ${applicationName} role template ${template.key}`);
+    }
+    if (role.lifecycle === "acceptance_required") {
+      role = await acceptedRevision(administration, session, selection, role);
+      rolesByTemplate.set(identity, role);
+      log(`accepted the revised role template ${template.key}`);
     }
     if (role.lifecycle !== "active")
       throw new Error(`Accepted role ${role.key} from template ${template.key} is ${role.lifecycle}`);
