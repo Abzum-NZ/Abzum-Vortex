@@ -24,6 +24,7 @@ import {
   filterInputRefusal,
   readInputs,
   normalizeConditionFieldIdentifiers,
+  sqlArray,
 } from "./protected-query-helpers";
 import { pageReadSchema, boardColumnPagesReadSchema } from "./protected-query-read-schemas";
 import {
@@ -60,26 +61,19 @@ const readBoardMemberPage = async (
   after: QueryContinuation | undefined,
 ) => {
   const rows = await transaction.query<ResultRow>`
-    select vortex_record.run_module_query(
+    select vortex_record.run_module_query_board_column(
       ${command.moduleRootId}::uuid,
       ${command.queryId}::uuid,
       ${releaseRevision}::bigint,
       ${JSON.stringify(inputValues)}::text::jsonb,
-      ${JSON.stringify(command.requestedFieldIds)}::text::jsonb,
+      ${sqlArray(command.requestedFieldIds)}::text::uuid[],
+      ${sqlArray(command.requestedSystemFieldKeys)}::text::text[],
+      ${command.filter === undefined ? null : JSON.stringify(command.filter)}::text::jsonb,
+      ${sqlArray(command.filterableFieldIds)}::text::uuid[],
+      ${command.selector.choiceFieldId}::uuid,
+      ${JSON.stringify(command.selector.column)}::text::jsonb,
       ${command.pageSize}::integer,
-      ${after === undefined ? null : JSON.stringify({ sort: after.sort, sortKey: after.sortKey, phase: after.phase, recordId: after.recordId })}::text::jsonb,
-      ${JSON.stringify(command.requestedSystemFieldKeys)}::text::jsonb,
-      ${JSON.stringify({
-        sort: [],
-        filter: command.filter ?? null,
-        search: null,
-        sortableFieldIds: [],
-        filterableFieldIds: command.filterableFieldIds,
-        searchableFieldIds: [],
-        boardMember: command.selector,
-      })}::text::jsonb,
-      ${"forward"}::text,
-      ${null}::uuid[]
+      ${after === undefined ? null : JSON.stringify({ sort: after.sort, sortKey: after.sortKey, phase: after.phase, recordId: after.recordId })}::text::jsonb
     ) as result
   `;
   return pageReadSchema.parse(one(rows));
@@ -236,29 +230,18 @@ const readBoardColumnPages = async (
   inputValues: Readonly<Record<string, JsonValue>>,
 ) => {
   const rows = await transaction.query<ResultRow>`
-    select vortex_record.run_module_query(
+    select vortex_record.run_module_query_board_columns(
       ${command.moduleRootId}::uuid,
       ${command.queryId}::uuid,
       ${releaseRevision}::bigint,
       ${JSON.stringify(inputValues)}::text::jsonb,
-      ${JSON.stringify(command.requestedFieldIds)}::text::jsonb,
-      ${command.pageSize}::integer,
-      ${null}::text::jsonb,
-      ${JSON.stringify(command.requestedSystemFieldKeys)}::text::jsonb,
-      ${JSON.stringify({
-        sort: [],
-        filter: command.filter ?? null,
-        search: null,
-        sortableFieldIds: [],
-        filterableFieldIds: command.filterableFieldIds,
-        searchableFieldIds: [],
-        boardColumns: {
-          choiceFieldId: command.selectors[0]!.choiceFieldId,
-          columns: command.selectors.map((selector) => selector.column),
-        },
-      })}::text::jsonb,
-      ${"forward"}::text,
-      ${null}::uuid[]
+      ${sqlArray(command.requestedFieldIds)}::text::uuid[],
+      ${sqlArray(command.requestedSystemFieldKeys)}::text::text[],
+      ${command.filter === undefined ? null : JSON.stringify(command.filter)}::text::jsonb,
+      ${sqlArray(command.filterableFieldIds)}::text::uuid[],
+      ${command.selectors[0]!.choiceFieldId}::uuid,
+      ${JSON.stringify(command.selectors.map((selector) => selector.column))}::text::jsonb,
+      ${command.pageSize}::integer
     ) as result
   `;
   return boardColumnPagesReadSchema.parse(one(rows));
