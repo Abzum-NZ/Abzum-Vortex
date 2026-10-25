@@ -6,11 +6,8 @@ import {
 } from "@vortex/platform/schema";
 import type { DisplaySemanticEvent, TablePayload } from "@vortex/ui";
 import type { ApplicationPageModel } from "../../../../../../_lib/application-page";
+import type { PageAddress } from "./page-address";
 import { recordsTableAddress } from "./records-table-address";
-
-/** The page position of a table's placement in the address: where the shown page was read from. */
-const pagePositionOf = (placementId: string) =>
-  readRecordsTablePagePosition(placementId, new URLSearchParams(window.location.search));
 
 /**
  * The totals behind a Records table's spreadsheet status bar: one request per settled range. The
@@ -18,7 +15,10 @@ const pagePositionOf = (placementId: string) =>
  * selected identities and columns; the server reads that page once and answers. The browser sends
  * no value and totals nothing. An abort ends the request in flight.
  */
-export function useRangeSummary({ model }: Readonly<{ model: ApplicationPageModel }>) {
+export function useRangeSummary({
+  model,
+  address,
+}: Readonly<{ model: ApplicationPageModel; address: PageAddress }>) {
   const eventsFor = useCallback(
     (placementId: string, table: TablePayload) => ({
       range_summary_requested: async (
@@ -26,7 +26,11 @@ export function useRangeSummary({ model }: Readonly<{ model: ApplicationPageMode
       ): Promise<RecordsRangeSummaryResult> => {
         if (event.event !== "range_summary_requested" || table.selectionToken === undefined)
           return { kind: "refused", reason: "not_available" };
-        const page = pagePositionOf(placementId);
+        // The page position of the table in the address: where the shown page was read from.
+        const page = readRecordsTablePagePosition(
+          placementId,
+          new URLSearchParams(address.search()),
+        );
         const response = await fetch("/api/records-table/range-summary", {
           method: "POST",
           headers: { "content-type": "application/json" },
@@ -61,7 +65,7 @@ export function useRangeSummary({ model }: Readonly<{ model: ApplicationPageMode
         return { kind: "refused", reason: "not_available" };
       },
     }),
-    [model],
+    [address, model],
   );
   return useMemo(() => ({ eventsFor }), [eventsFor]);
 }

@@ -18,6 +18,7 @@ import type { ApplicationPageModel } from "../../../../../../_lib/application-pa
 import { commitGridLayout, commitGridView } from "../../grid-layout-action";
 import { tablePayloadFor } from "./placement-helpers";
 import type { RefreshedPlacementData } from "./types";
+import type { PageAddress } from "./page-address";
 
 const UNAVAILABLE: GridLayoutCommitResult = Object.freeze({ outcome: "unavailable" });
 const VIEW_UNAVAILABLE: GridViewCommandResult = Object.freeze({ outcome: "unavailable" });
@@ -42,6 +43,7 @@ export function useGridLayout({
   openTableView,
   selectTableViewInPlace,
   refreshPlacements,
+  pageAddress,
 }: Readonly<{
   model: ApplicationPageModel;
   currentData: ApplicationPageModel["data"];
@@ -54,6 +56,7 @@ export function useGridLayout({
     document?: GridViewDocument,
   ) => void;
   refreshPlacements: (placementIds: readonly string[]) => Promise<void>;
+  pageAddress: PageAddress;
 }>) {
   const { tenantShortName, organizationShortName, applicationKey, pageKey } = model.invocation;
   const address = useRef({ tenantShortName, organizationShortName, applicationKey, pageKey });
@@ -503,7 +506,7 @@ export function useGridLayout({
                         // Only while the address still names the new view: the person may move on.
                         selected:
                           readRecordsTableView(placementId, [
-                            ...new URLSearchParams(window.location.search),
+                            ...new URLSearchParams(pageAddress.search()),
                           ])?.viewId === item.viewId
                             ? {
                                 ...item,

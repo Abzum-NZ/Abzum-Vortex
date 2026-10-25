@@ -2,20 +2,29 @@ import { useCallback, useEffect, useMemo, useRef, type Dispatch, type SetStateAc
 import { applyRecordsTableQueryChange } from "@vortex/platform/schema";
 import type { ControlSemanticEvent } from "@vortex/ui";
 import type { ApplicationPageModel } from "../../../../../../_lib/application-page";
+import type { PageAddress } from "./page-address";
 import type { PageSelection } from "./types";
 
-/** Published control values use shallow history, preserving unrelated placement data. */
+/**
+ * Published control values join the page address in place (no history entry), preserving unrelated
+ * placement data: each dependent table starts again at page one and is read once, and every other
+ * dependent placement is read again.
+ */
 export function usePageParameters({
   model,
+  address,
   currentSearch,
   navigationKey,
   refreshPlacements,
+  rereadTables,
   setSelection,
 }: Readonly<{
   model: ApplicationPageModel;
+  address: PageAddress;
   currentSearch: string;
   navigationKey: string;
   refreshPlacements: (ids: readonly string[]) => Promise<void>;
+  rereadTables: (placementIds: readonly string[]) => void;
   setSelection: Dispatch<SetStateAction<PageSelection>>;
 }>) {
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
@@ -65,28 +74,25 @@ export function usePageParameters({
       clearTimeout(timers.current.get(parameter));
       const commit = () => {
         timers.current.delete(parameter);
-        const address = new URLSearchParams(window.location.search);
-        if ((address.get(parameter) ?? "") === value) return;
-        if (value === "") address.delete(parameter);
-        else address.set(parameter, value);
-        for (const id of (model.pageParameters.dependents[parameter] ?? []).filter((id) =>
+        const tables = (model.pageParameters.dependents[parameter] ?? []).filter((id) =>
           model.pageParameters.tableIds.includes(id),
-        ))
-          applyRecordsTableQueryChange(address, id, {
-            kind: "page",
-            request: { page: 1, pageDirection: "forward" },
-          });
-        const query = address.toString();
-        window.history.replaceState(
-          null,
-          "",
-          query === "" ? window.location.pathname : `?${query}`,
         );
+        const changed = address.write((parameters) => {
+          if ((parameters.get(parameter) ?? "") === value) return;
+          if (value === "") parameters.delete(parameter);
+          else parameters.set(parameter, value);
+          for (const id of tables)
+            applyRecordsTableQueryChange(parameters, id, {
+              kind: "page",
+              request: { page: 1, pageDirection: "forward" },
+            });
+        }, "replace");
+        if (changed) rereadTables(tables);
       };
       if (debounce) timers.current.set(parameter, setTimeout(commit, 300));
       else commit();
     },
-    [model.pageParameters],
+    [address, model.pageParameters, rereadTables],
   );
   const change = useCallback(
     (placementId: string, event: ControlSemanticEvent) => {

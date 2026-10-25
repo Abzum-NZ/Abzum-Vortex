@@ -441,19 +441,11 @@ export function RecordsGrid({
       }),
     [columns, sort],
   );
-  // The sort a gesture asked for, until the page read in it replaces `sort`. A second gesture
-  // before that read lands (Shift+click straight after a click) builds on what was asked, so the
-  // first key is not dropped. A page shown in another sort (its read, Back) supersedes it.
-  const [requestedSort, setRequestedSort] =
-    useState<
-      Readonly<{ shown: RecordsTableSortState | undefined; state: RecordsTableSortState }>
-    >();
-  const latestSort =
-    requestedSort !== undefined && requestedSort.shown === sort ? requestedSort.state : sort;
+  // `sort` is the order the host's page address asks for: while a read is on its way the host shows
+  // the requested order, so a second gesture (Shift+click straight after a click) builds on it.
   const requestSort = (keys: readonly RecordsTableSortKey[]): void => {
     const onSort = events?.sort_changed;
     if (onSort === undefined) return;
-    setRequestedSort({ shown: sort, state: { keys, explicit: true } });
     void onSort({ event: "sort_changed", sort: keys });
   };
   const rowSelection = useMemo<RowSelectionState>(
@@ -725,7 +717,7 @@ export function RecordsGrid({
   const sortBy = (columnId: string, additive: boolean): void => {
     const column = columnsById.get(columnId);
     if (column === undefined || !column.sortable) return;
-    requestSort(nextRecordsTableSort(latestSort, column.key, additive));
+    requestSort(nextRecordsTableSort(sort, column.key, additive));
   };
 
   // Each gesture selects only its drawn row, at the revision the person saw.
@@ -1132,7 +1124,7 @@ export function RecordsGrid({
                 returnFocus={() =>
                   cellElement(-1, slot.id) ?? cellElement(-1, activeColumnIdRef.current)
                 }
-                sort={latestSort}
+                sort={sort}
                 sortable={sortable}
                 onSort={requestSort}
                 position={layout.state.order.indexOf(slot.id) + 1}

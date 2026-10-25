@@ -208,6 +208,12 @@ export type TablePayload = Readonly<{
    */
   sort?: RecordsTableSortState;
   /**
+   * The order the page address asks for while the page read in it is still on its way; the sort
+   * controls show it and a next sort gesture builds on it. Absent once the rows read in that order
+   * are shown, so `sort` alone names the order of the rows on screen.
+   */
+  requestedSort?: RecordsTableSortState;
+  /**
    * The search and filters the page was read with; the table shows them in its controls and tells
    * a page that matched nothing apart from a table with no records.
    */
@@ -1014,6 +1020,31 @@ export const parseLauncherRowsPayload = (
   });
 };
 
+/** The order of a table's rows: one to twenty distinct fields, each ascending or descending. */
+const parseTableSort = (
+  value: unknown,
+  location: DefinitionRenderErrorLocation,
+): RecordsTableSortState => {
+  const sortRecord = requireRecord(value, "Projected sort is invalid", location);
+  requireExactKeys(sortRecord, ["keys", "explicit"], location);
+  if (typeof sortRecord.explicit !== "boolean")
+    fail("A projected sort must say whether the viewer chose it", location);
+  const items = requireArray(sortRecord.keys, "Projected sort keys must be an array", location);
+  if (items.length === 0 || items.length > RECORDS_TABLE_MAXIMUM_SORT_KEYS)
+    fail("A projected sort holds between one and twenty keys", location);
+  const keys = items.map((item): RecordsTableSortKey => {
+    const key = requireRecord(item, "A projected sort key must be an object", location);
+    requireExactKeys(key, ["fieldId", "direction"], location);
+    const fieldId = requireFieldKey(key.fieldId, "A projected sort key requires a field", location);
+    if (key.direction !== "ascending" && key.direction !== "descending")
+      fail("A projected sort direction must be ascending or descending", location);
+    return Object.freeze({ fieldId, direction: key.direction });
+  });
+  if (new Set(keys.map((key) => key.fieldId.toLowerCase())).size !== keys.length)
+    fail("A projected sort names each field once", location);
+  return Object.freeze({ keys: Object.freeze(keys), explicit: sortRecord.explicit });
+};
+
 /** The ready values a table block accepts. */
 export const parseTablePayload = (
   value: unknown,
@@ -1035,6 +1066,7 @@ export const parseTablePayload = (
       "features",
       "selectedRecordIds",
       "sort",
+      "requestedSort",
       "narrowing",
       "page",
       "pageCount",
@@ -1116,31 +1148,9 @@ export const parseTablePayload = (
   }
   if ((hasPreviousPage === true) !== (previousContinuationToken !== undefined))
     fail("Table previous state is incomplete", location);
-  let sort: RecordsTableSortState | undefined;
-  if (record.sort !== undefined) {
-    const sortRecord = requireRecord(record.sort, "Projected sort is invalid", location);
-    requireExactKeys(sortRecord, ["keys", "explicit"], location);
-    if (typeof sortRecord.explicit !== "boolean")
-      fail("A projected sort must say whether the viewer chose it", location);
-    const items = requireArray(sortRecord.keys, "Projected sort keys must be an array", location);
-    if (items.length === 0 || items.length > RECORDS_TABLE_MAXIMUM_SORT_KEYS)
-      fail("A projected sort holds between one and twenty keys", location);
-    const keys = items.map((item): RecordsTableSortKey => {
-      const key = requireRecord(item, "A projected sort key must be an object", location);
-      requireExactKeys(key, ["fieldId", "direction"], location);
-      const fieldId = requireFieldKey(
-        key.fieldId,
-        "A projected sort key requires a field",
-        location,
-      );
-      if (key.direction !== "ascending" && key.direction !== "descending")
-        fail("A projected sort direction must be ascending or descending", location);
-      return Object.freeze({ fieldId, direction: key.direction });
-    });
-    if (new Set(keys.map((key) => key.fieldId.toLowerCase())).size !== keys.length)
-      fail("A projected sort names each field once", location);
-    sort = Object.freeze({ keys: Object.freeze(keys), explicit: sortRecord.explicit });
-  }
+  const sort = record.sort === undefined ? undefined : parseTableSort(record.sort, location);
+  const requestedSort =
+    record.requestedSort === undefined ? undefined : parseTableSort(record.requestedSort, location);
   const narrowing =
     record.narrowing === undefined ? undefined : parseTableNarrowing(record.narrowing, location);
   const features =
@@ -1176,6 +1186,7 @@ export const parseTablePayload = (
     ...selectionParts,
     ...(selection === undefined ? {} : { selectedRecordIds: selection }),
     ...(sort === undefined ? {} : { sort }),
+    ...(requestedSort === undefined ? {} : { requestedSort }),
     ...(narrowing === undefined ? {} : { narrowing }),
     ...(page === undefined ? {} : { page }),
     ...(pageCount === undefined ? {} : { pageCount }),

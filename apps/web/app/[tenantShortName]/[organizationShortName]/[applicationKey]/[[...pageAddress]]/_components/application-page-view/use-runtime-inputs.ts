@@ -49,6 +49,7 @@ import {
   type PublishedRecordTitles,
 } from "./published-control-data";
 import { usePageParameters } from "./use-page-parameters";
+import type { PageAddress } from "./page-address";
 import { useBulkSelection } from "./use-bulk-selection";
 import { useBatchUndo } from "./use-batch-undo";
 import { useRangeSummary } from "./use-range-summary";
@@ -104,6 +105,8 @@ export function useRuntimeInputs({
   currentPageKey,
   currentBusyRef,
   currentSearch,
+  address,
+  rereadTables,
   router,
   requestChoicePage,
   runtimeInputsRef,
@@ -215,6 +218,8 @@ export function useRuntimeInputs({
   currentPageKey: string | undefined;
   currentBusyRef: RefObject<boolean>;
   currentSearch: string;
+  address: PageAddress;
+  rereadTables: (placementIds: readonly string[]) => void;
   router: ReturnType<typeof useRouter>;
   requestChoicePage: (
     placementId: string,
@@ -225,9 +230,11 @@ export function useRuntimeInputs({
 }>) {
   const pageParameters = usePageParameters({
     model,
+    address,
     currentSearch,
     navigationKey,
     refreshPlacements,
+    rereadTables,
     setSelection,
   });
   // Bulk actions: every matching record of a table, and the runs over a selection.
@@ -242,9 +249,9 @@ export function useRuntimeInputs({
   // Export: the file of the records a person selected, streamed by the server.
   const exported = useRecordsExport({ model, navigationKey, matchingOf: bulk.matchingOf });
   // The spreadsheet status bar's totals of a selected range, read from the server per settled range.
-  const rangeSummary = useRangeSummary({ model });
+  const rangeSummary = useRangeSummary({ model, address });
   // Paste, Fill and Undo: one validated batch per gesture, and the session's stack of batches.
-  const batchEdit = useBatchUndo({ model, navigationKey });
+  const batchEdit = useBatchUndo({ model, navigationKey, address });
   const titles = useRef<{ scope: string; values: PublishedRecordTitles }>({
     scope: navigationKey,
     values: new Map(),
