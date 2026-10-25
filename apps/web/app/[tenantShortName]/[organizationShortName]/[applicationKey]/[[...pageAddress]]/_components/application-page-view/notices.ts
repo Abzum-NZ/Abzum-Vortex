@@ -62,7 +62,7 @@ export const refusalNotices: Readonly<
   stale_revision: { tone: "problem", text: "This item changed. Refresh and try again." },
   recent_authentication_required: {
     tone: "problem",
-    text: "This action needs a recent sign-in. Sign in again to continue.",
+    text: "This action needs a sign-in within the last 15 minutes. Sign in again to continue.",
     link: { label: "Sign in again", href: "/auth/session-ended" },
   },
   role_acceptance_required: {
