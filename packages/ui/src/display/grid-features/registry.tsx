@@ -163,7 +163,7 @@ export type GridCellDecorationToken = keyof typeof gridCellDecorationClasses;
  * The grid features that fill extension points of the table. Board is not one: it replaces the
  * table with the board view as a whole, which the Data grid draws itself.
  */
-type GridExtensionKey = Exclude<RecordsTableFeatureKey, "board">;
+type GridExtensionKey = Exclude<RecordsTableFeatureKey, typeof recordsTableBoardFeature.key>;
 
 /** Whole-grid views share the lazy registry but do not fill table extension points. */
 const viewLoaders = {

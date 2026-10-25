@@ -530,6 +530,8 @@ export const prepareRecordsExport = async (
     iterator = request.pages(abort.signal)[Symbol.asyncIterator]();
     // Read AND validate the first page before the route can send successful download headers. The
     // read races the abort signal, so a cancelled export returns without waiting for the database.
+    // The statement already sent is not cancelled: it holds its pooled connection until it returns,
+    // at most the request transaction's 60 s statement timeout, and its page is then discarded.
     const cancelled = new Promise<never>((_, reject) =>
       abort.signal.addEventListener(
         "abort",

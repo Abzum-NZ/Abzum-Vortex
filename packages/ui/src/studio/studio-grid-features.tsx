@@ -444,7 +444,7 @@ export function StudioGridFeatures({
                   onChange={(next) => write(key, next)}
                 />
               ) : null}
-              {enabled && key === "board" ? (
+              {enabled && key === recordsTableBoardFeature.key ? (
                 <StudioBoardEditor
                   idPrefix={`${switchId}-editor`}
                   value={current}
