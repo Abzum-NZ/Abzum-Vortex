@@ -363,8 +363,12 @@ export function applicationPageRules(scope: ApplicationScope): void {
         ),
       );
     // A dependent field input offers choices only for what its form's draft holds in the field it
-    // depends on, so that field must be placed in the same form (a guided form is one form).
-    const formInputs = new Map<string, { names: Set<string>; dependents: [string, string][] }>();
+    // depends on, so that field must be placed in the same form (a guided form is one form). One
+    // form holds one input per field: the form keeps one draft value per field.
+    const formInputs = new Map<
+      string,
+      { names: Set<string>; repeated: Set<string>; dependents: [string, string][] }
+    >();
     walkPageComposition<string>(
       page.composition,
       ({ placementId, props, vortex }, owner) => {
@@ -375,9 +379,16 @@ export function applicationPageRules(scope: ApplicationScope): void {
         const settings = placementSettings(props);
         const name = object(settings.name ?? {});
         const dependsOn = object(object(settings.depends_on ?? {}).properties ?? {});
-        const entry = formInputs.get(owner) ?? { names: new Set<string>(), dependents: [] };
+        const entry = formInputs.get(owner) ?? {
+          names: new Set<string>(),
+          repeated: new Set<string>(),
+          dependents: [],
+        };
         formInputs.set(owner, entry);
-        if (name.kind === "text") entry.names.add(String(name.value));
+        if (name.kind === "text") {
+          if (entry.names.has(String(name.value))) entry.repeated.add(String(name.value));
+          entry.names.add(String(name.value));
+        }
         const parent = object(dependsOn.field ?? {});
         const label = object(dependsOn.label ?? {});
         if (parent.kind === "text")
@@ -386,7 +397,18 @@ export function applicationPageRules(scope: ApplicationScope): void {
       },
       "page",
     );
-    for (const { names, dependents } of formInputs.values())
+    for (const { names, repeated, dependents } of formInputs.values()) {
+      for (const fieldKey of repeated)
+        failures.push(
+          failure(
+            output,
+            "vortex.definition.application_block_settings",
+            "invalid_value",
+            { kind: "page", key: String(page.key) },
+            "definition_form_field_duplicate",
+            `A form on this page shows the field ${fieldKey} twice`,
+          ),
+        );
       for (const [parentKey, parentLabel] of dependents)
         if (!names.has(parentKey))
           failures.push(
@@ -399,6 +421,7 @@ export function applicationPageRules(scope: ApplicationScope): void {
               `A field on this page offers choices that depend on ${parentLabel}, which is not in the same form`,
             ),
           );
+    }
     // A Records table or Record detail may map only fields its bound Module query selects, and
     // may order only by fields the query can order (a grouped or aggregating query orders by its
     // grouping fields). The default sort must be the query's leading sort, the order the Query

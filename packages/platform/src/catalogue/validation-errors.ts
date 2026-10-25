@@ -64,6 +64,7 @@ export const definitionValidationErrorCodes = [
   "definition_runtime_not_supported",
   "definition_query_binding_choice",
   "definition_form_field_dependency",
+  "definition_form_field_duplicate",
   "definition_unknown_property",
   "definition_too_few_items",
   "definition_too_many_items",
@@ -163,6 +164,12 @@ const definitionValidationErrorCatalogueSource = {
     order: 39,
     message: "A form shows a field without the field its choices depend on.",
     guidance: "Add the field it depends on to the same form, or remove the dependent field.",
+  },
+  // The sentence names the field shown twice.
+  definition_form_field_duplicate: {
+    order: 39,
+    message: "A form shows the same field twice.",
+    guidance: "Remove one of the two inputs, or point it at another field.",
   },
   definition_unknown_property: {
     order: 40,
