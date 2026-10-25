@@ -352,12 +352,13 @@ function BoardColumn({
                         </p>
                       ) : null}
                       {details.map((field) => (
-                        <p key={field.key} className="m-0 flex min-w-0 justify-between gap-2">
+                        <div key={field.key} className="flex min-w-0 justify-between gap-2">
                           <span className="min-w-0 text-muted-foreground">{field.label}</span>
-                          <span className="shrink-0 whitespace-nowrap text-right">
+                          {/* A formatted text value is block content, so its container is too. */}
+                          <div className="shrink-0 whitespace-nowrap text-right">
                             <DisplayCellView value={field.value} />
-                          </span>
-                        </p>
+                          </div>
+                        </div>
                       ))}
                     </CardContent>
                   ) : null}
