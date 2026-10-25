@@ -148,6 +148,7 @@ export function ApplicationPageViewContent({
     [],
   );
   const applicationFrame = useApplicationFrame();
+  const navigation = model.navigation ?? applicationFrame?.navigation;
   // A page rendered without its frame (the layout found none for the address it first loaded)
   // asks the server once for the frame of the address it shows now.
   const frameRequested = useRef(false);
@@ -656,7 +657,7 @@ export function ApplicationPageViewContent({
           applicationSearchPageSubject={applicationFrame?.applicationSearchPageSubject}
           pageId={model.pageId}
           theme={model.theme}
-          projectedNavigation={model.navigation}
+          {...(navigation === undefined ? {} : { projectedNavigation: navigation })}
           resolvePageHref={resolvePageHref}
           {...(applicationFrame === null
             ? {}

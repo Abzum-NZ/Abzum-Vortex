@@ -249,7 +249,6 @@ const gridViewsStateSchema = z
   .object({
     /** The viewer holds the permission that lets them share table views. */
     canShare: z.boolean(),
-    items: z.array(gridViewItemSchema).max(220),
     /** The view the viewer's own stored layout derives from, when it does. */
     basedOnViewId: fieldIdSchema.nullable(),
     selected: selectedGridViewSchema.nullable(),
@@ -478,6 +477,8 @@ export const gridViewLayout = (document: GridViewDocument): GridLayout => ({
 
 /** One change a person asks of the saved views of a grid, as the grid reports it to its host. */
 export type GridViewCommand =
+  /** Reads the current picker list for this placement, only when opened. */
+  | Readonly<{ kind: "list" }>
   /** Opens a view (null leaves it); the host changes the address, nothing is stored. */
   | Readonly<{ kind: "select"; viewId: string | null }>
   /** Saves the grid as it is now (layout and query state) as a new personal view. */
@@ -515,6 +516,7 @@ export type GridViewShareTargets = Readonly<{
 
 /** What the host did with a view command, so the grid can close its dialog or say why not. */
 export type GridViewCommandResult =
+  | Readonly<{ outcome: "listed"; items: readonly GridViewItem[]; canShare: boolean }>
   | Readonly<{ outcome: "done"; viewId?: string; revision?: number }>
   | Readonly<{ outcome: "targets"; targets: GridViewShareTargets }>
   | Readonly<{ outcome: "selected"; selected: SelectedGridView; canShare: boolean }>
@@ -539,11 +541,16 @@ export const addressedDefaultGridViews = (
       hiddenFormatting: number;
     }>
   >,
+  selection: Readonly<{ viewId: string | undefined; automatic: boolean }>,
 ) =>
-  views
-    .filter((view) => view.role === "*" || roleKeys.has(view.role))
-    // A role-specific default takes precedence over the application's default.
-    .sort((left, right) => Number(left.role === "*") - Number(right.role === "*"))
+  eligibleDefaultGridViews(views, roleKeys)
+    .filter((view, index, eligible) =>
+      selection.viewId === undefined
+        ? selection.automatic &&
+          view.isDefault &&
+          eligible.findIndex((item) => item.isDefault) === index
+        : view.viewId.toLowerCase() === selection.viewId.toLowerCase(),
+    )
     .map((view) => {
       const sanitized = defaultDocuments.get(view.viewId.toLowerCase());
       if (sanitized === undefined) throw new Error("GRID_DEFAULT_VIEW_DOCUMENT_MISSING");
@@ -563,3 +570,13 @@ export const addressedDefaultGridViews = (
         sharing: null,
       };
     });
+
+/** Eligible authored defaults in automatic-selection order, also used by the on-open picker. */
+export const eligibleDefaultGridViews = (
+  views: readonly AuthoredGridView[],
+  roleKeys: ReadonlySet<string>,
+) =>
+  views
+    .filter((view) => view.role === "*" || roleKeys.has(view.role))
+    // A role-specific default takes precedence over the application's default.
+    .sort((left, right) => Number(left.role === "*") - Number(right.role === "*"));

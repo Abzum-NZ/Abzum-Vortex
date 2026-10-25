@@ -170,7 +170,9 @@ export function useFlowRuntime({
       ),
     };
   }, [application, formCancelledRef, subject, unsavedWorkRegistry]);
-  const startPageChange = useApplicationFrame()?.startPageChange;
+  const applicationFrame = useApplicationFrame();
+  const startPageChange = applicationFrame?.startPageChange;
+  const navigation = model.navigation ?? applicationFrame?.navigation;
   const navigationEnvironment = useMemo<LinkNavigationEnvironment>(
     () => ({
       unsavedWork,
@@ -324,7 +326,7 @@ export function useFlowRuntime({
                   platformThemeTokens={platformThemeTokens}
                   pageId={model.pageId}
                   theme={model.theme}
-                  projectedNavigation={model.navigation}
+                  {...(navigation === undefined ? {} : { projectedNavigation: navigation })}
                   resolvePageHref={resolvePageHref}
                   currentPageId={model.pageId}
                   runtimeInputs={scopedInputs}
@@ -346,7 +348,7 @@ export function useFlowRuntime({
         ),
       };
     },
-    [choiceEvidenceFor, choicePayloadFor, currentData, model, resolvePageHref, router],
+    [choiceEvidenceFor, choicePayloadFor, currentData, model, navigation, resolvePageHref, router],
   );
   const { host, element: intentHostElement } = useFlowIntentHost({
     renderForm,

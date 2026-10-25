@@ -2,6 +2,7 @@ import "server-only";
 import { withPageReadAttribution } from "../../../../_lib/page-read-attribution";
 
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import { splitProjectedPage } from "@vortex/platform/schema";
 import type { ApplicationAccount, DisplaySemanticEvent } from "@vortex/ui";
@@ -294,7 +295,11 @@ async function readApplicationAddressPage({ params, searchParams }: ApplicationA
         : { installedContext: resolved.installedContext }),
     },
     parameters,
-    { streamPlacementReads: true },
+    {
+      streamPlacementReads: true,
+      // Client page changes reuse the layout; a document already receives the frame's copy.
+      includeNavigation: (await headers()).get("rsc") === "1",
+    },
   );
   if (page.kind === "temporarily_unavailable")
     return (
