@@ -160,6 +160,7 @@ export const readBoard = async (
     inputValues,
     queries: read.services.queries,
     board,
+    resolveRecordLinks: read.services.resolveRecordLinks,
     ...(filters === undefined ? {} : { filters }),
     ...(formatting === undefined ? {} : { formatting }),
     ...(columnRead === undefined ? {} : { read: columnRead }),
