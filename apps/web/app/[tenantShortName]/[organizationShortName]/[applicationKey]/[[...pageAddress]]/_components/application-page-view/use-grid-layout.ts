@@ -297,12 +297,16 @@ export function useGridLayout({
     [layoutOf],
   );
 
-  /** Removes the person's own arrangement, so the view (or the authored layout) shows as it is. */
+  /**
+   * Removes the person's own arrangement, so the view (or the authored layout) shows as it is.
+   * False when the stored arrangement could not be removed: the caller then changes nothing.
+   */
   const dropOwnLayout = useCallback(
-    async (placementId: string): Promise<void> => {
-      await writeOwnLayout(placementId, (expectedRevision) =>
+    async (placementId: string): Promise<boolean> => {
+      const result = await writeOwnLayout(placementId, (expectedRevision) =>
         expectedRevision === null ? undefined : { kind: "reset", expectedRevision },
       );
+      return result.outcome === "reset";
     },
     [writeOwnLayout],
   );
@@ -397,7 +401,10 @@ export function useGridLayout({
           return send({ kind: "list" });
         case "select": {
           if (command.viewId === null) {
-            await dropOwnLayout(placementId);
+            if (!(await dropOwnLayout(placementId))) {
+              toast.error("Your arrangement could not be reset. Try again.");
+              return VIEW_UNAVAILABLE;
+            }
             openTableView(placementId, null);
             return { outcome: "done" };
           }
@@ -445,13 +452,22 @@ export function useGridLayout({
                   },
             );
           } else {
-            if (state.views.basedOnViewId === command.viewId) await dropOwnLayout(placementId);
+            if (
+              state.views.basedOnViewId === command.viewId &&
+              !(await dropOwnLayout(placementId))
+            ) {
+              toast.error("Your arrangement could not be reset. Try again.");
+              return VIEW_UNAVAILABLE;
+            }
             openTableView(placementId, command.viewId);
           }
           return { outcome: "done" };
         }
         case "reset":
-          await dropOwnLayout(placementId);
+          if (!(await dropOwnLayout(placementId))) {
+            toast.error("Your arrangement could not be reset. Try again.");
+            return VIEW_UNAVAILABLE;
+          }
           openTableView(placementId, null);
           return { outcome: "done" };
         case "create": {
