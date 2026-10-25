@@ -1,5 +1,7 @@
 import {
   sourcePageDataOf,
+  sourceItemTree,
+  sourcePageItems,
   sourcePageShell,
   sourceSlotBreakpointOrders,
   type SourceItem,
@@ -7,6 +9,7 @@ import {
   type SourceSlotOrders,
   type PageSlotAddress,
 } from "@vortex/platform/schema";
+import { storedItemRelease } from "./stored-composition";
 import {
   judged,
   quoted,
@@ -206,6 +209,21 @@ export const movePage = (
   if (page === undefined) return refuse("That page is no longer in the draft.");
   if (sourcePageShell(page.composition) === command.shellAlias)
     return refuse(`${quoted(page.name)} already uses that layout.`);
+  if (page.type === "public") {
+    const target = candidate.body.shells.find((entry) => entry.id === command.shellAlias);
+    const items = [
+      ...sourceItemTree(target?.layout.content ?? []),
+      ...sourcePageItems(page.composition),
+    ];
+    const unsafe = items.find(
+      (item) =>
+        storedItemRelease(context.catalogue, item)?.capabilities.publicSurface !== "allowed",
+    );
+    if (unsafe !== undefined)
+      return refuse(
+        `${quoted(page.name)} cannot use that layout because it contains a block that is not allowed on public pages. Nothing was changed.`,
+      );
+  }
   // Validate the layout even when the page is empty.
   areasOf(context.source, command.shellAlias);
   page.composition =

@@ -650,7 +650,7 @@
         },
         "starts_at": {
           "type": "text",
-          "required": true
+          "required": false
         },
         "expires_at": {
           "type": "text",
@@ -732,7 +732,7 @@
         },
         "starts_at": {
           "type": "text",
-          "required": true
+          "required": false
         },
         "expires_at": {
           "type": "text",

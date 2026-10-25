@@ -559,6 +559,10 @@
           "type": "link",
           "settings": {
             "target": "vortex.hr:leave_entitlement",
+            "depends_on": {
+              "parent_field": "employee",
+              "filter_field": "employee"
+            },
             "reverse_key": "leave_requests",
             "reverse_name": "Leave requests",
             "on_parent_delete": "refuse"
