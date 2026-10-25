@@ -319,7 +319,6 @@
         "permissions": [
           "application.iam.open",
           "application.iam.request",
-          "application.iam.directory.group.read",
           "vortex.iam.core.access_request.create_own",
           "vortex.iam.core.access_request.read_own",
           "vortex.iam.core.access_request.update_own",
