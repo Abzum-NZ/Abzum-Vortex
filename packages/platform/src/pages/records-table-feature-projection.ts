@@ -335,6 +335,7 @@ const rowActionSchema = z
 export const recordsTableFeatureProjectionSchema = z
   .object({
     pinning: onlyTrue.optional(),
+    totals: onlyTrue.optional(),
     spreadsheet: spreadsheetSchema.optional(),
     /** Present when the viewer can read some field the record type marks searchable. */
     search: onlyTrue.optional(),

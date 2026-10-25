@@ -151,6 +151,33 @@ begin
       return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
     end if;
   end if;
+  -- Grid totals name selected visible columns only; the ordinary summary engine owns every
+  -- calculation and every field-policy check, including per-bucket withholding.
+  if p_user_inputs ? 'totals' or p_user_inputs #> '{grouping,aggregates}' is not null then
+    aggregate_items := coalesce(p_user_inputs -> 'totals', p_user_inputs #> '{grouping,aggregates}');
+    if pg_catalog.jsonb_typeof(aggregate_items) is distinct from 'array' then
+      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
+    end if;
+    if pg_catalog.jsonb_array_length(aggregate_items) not between 1 and 6 then
+      return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
+    end if;
+    for aggregate_item in select item.value from pg_catalog.jsonb_array_elements(aggregate_items) as item(value) loop
+      if pg_catalog.jsonb_typeof(aggregate_item) is distinct from 'object' then
+        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
+      end if;
+      if aggregate_item - array['fieldId', 'operation', 'alias']::text[] <> '{}'::jsonb
+        or pg_catalog.jsonb_typeof(aggregate_item -> 'fieldId') is distinct from 'string'
+        or pg_catalog.jsonb_typeof(aggregate_item -> 'operation') is distinct from 'string'
+        or pg_catalog.jsonb_typeof(aggregate_item -> 'alias') is distinct from 'string'
+        or aggregate_item ->> 'operation' not in ('count', 'sum', 'average', 'minimum', 'maximum', 'distinct_count')
+        or not exists (select 1 from pg_catalog.jsonb_array_elements_text(query_item -> 'selectedFieldIds') as selected(id)
+          where pg_catalog.lower(selected.id) = pg_catalog.lower(aggregate_item ->> 'fieldId')) then
+        return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
+      end if;
+    end loop;
+    query_item := query_item || pg_catalog.jsonb_build_object('aggregates', aggregate_items,
+      'groupByFieldIds', case when p_user_inputs ? 'grouping' then query_item -> 'groupByFieldIds' else '[]'::jsonb end);
+  end if;
   pivot_mode := p_user_inputs ? 'pivot';
   if pivot_mode then
     query_item := vortex_record.pivot_query_internal(
@@ -319,7 +346,7 @@ begin
       or aggregate_alias = any (aggregate_aliases)
       or (aggregate_item ? 'fieldId' and aggregate_field_id is null)
       or (aggregate_operation <> 'count' and aggregate_field_id is null)
-      or (aggregate_operation = 'count' and aggregate_field_id is not null) then
+      or (aggregate_operation = 'count' and aggregate_field_id is not null and not (p_user_inputs ? 'totals' or p_user_inputs #> '{grouping,aggregates}' is not null)) then
       return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'descriptor_invalid');
     end if;
     aggregate_aliases := pg_catalog.array_append(aggregate_aliases, aggregate_alias);

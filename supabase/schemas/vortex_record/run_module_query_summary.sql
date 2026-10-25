@@ -33,7 +33,7 @@ begin
   if pg_catalog.jsonb_typeof(p_user_inputs) <> 'object'
     or exists (
       select 1 from pg_catalog.jsonb_object_keys(p_user_inputs) as supplied(key)
-      where supplied.key not in ('filter', 'filterableFieldIds', 'boardSummary', 'grouping', 'pivot', 'groupLimit', 'groupAfter', 'search', 'searchableFieldIds')
+      where supplied.key not in ('filter', 'filterableFieldIds', 'boardSummary', 'grouping', 'pivot', 'groupLimit', 'groupAfter', 'search', 'searchableFieldIds', 'totals')
     ) then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
   end if;
@@ -52,6 +52,9 @@ begin
     or (p_user_inputs ? 'grouping' and p_user_inputs ? 'pivot')
     or (p_user_inputs ? 'search' and pg_catalog.jsonb_typeof(p_user_inputs -> 'search') not in ('string', 'null'))
     or pg_catalog.length(pg_catalog.btrim(p_user_inputs ->> 'search')) > 200 then
+    return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
+  end if;
+  if p_user_inputs ? 'totals' and (board_summary_mode or p_user_inputs ? 'pivot') then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'request_invalid');
   end if;
   if board_summary_mode then

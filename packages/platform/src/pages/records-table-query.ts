@@ -70,6 +70,7 @@ import {
   recordsTableSummaryGroupKeys,
   type RecordsTableGroupRead,
 } from "./records-table-features/grouping";
+import { recordsTableTotalReads, projectRecordsTableTotals } from "./records-table-features/totals";
 import { CalendarEndpointError, calendarAddDays, calendarStartOfDay } from "./calendar-date";
 import { recordLinkLabelKey } from "../definition/app-index";
 
@@ -724,11 +725,15 @@ const readGrouped = async (
     ...(isDate ? { dateBucket: { unit: group.dateUnit, timeZone: group.timeZone } } : {}),
   };
   if (!group.membersOnly) {
+    const totals = recordsTableTotalReads(request.settings, built.fieldIds);
     const summaryCommand = protectedQuerySummaryCommandSchema.safeParse({
       moduleRootId: request.moduleRootId,
       queryId: request.queryId,
       inputValues: request.inputValues,
-      grouping,
+      grouping: {
+        ...grouping,
+        ...(totals.length === 0 ? {} : { aggregates: totals }),
+      },
       ...(group.after === null ? {} : { groupAfter: group.after }),
       ...(built.command.search === undefined ? {} : { search: built.command.search }),
       searchableFieldIds: built.command.searchableFieldIds,
@@ -943,6 +948,44 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
               }
             : undefined;
       if (read === undefined) return refusedBecause("columns", "read_not_completed");
+      const totalReads =
+        request.group?.membersOnly === true || request.tree?.parentRecordId != null
+          ? []
+          : recordsTableTotalReads(request.settings, built.fieldIds);
+      let totalAggregates = grouped?.kind === "read" ? grouped.summary?.aggregates : undefined;
+      // Serve the visible row demand first. A flat page adds one bounded summary, independent of
+      // its page position; grouped pages already have the same full-filter summary. A fallback
+      // after a refused grouped summary never attempts another summary.
+      if (totalReads.length > 0 && request.group === undefined) {
+        const summary = await runner.summarise(
+          session,
+          selection,
+          protectedQuerySummaryCommandSchema.parse({
+            moduleRootId: request.moduleRootId,
+            queryId: request.queryId,
+            inputValues: request.inputValues,
+            totals: totalReads,
+            search: built.command.search,
+            searchableFieldIds: built.command.searchableFieldIds,
+            filter: built.command.filter,
+            filterableFieldIds: built.command.filterableFieldIds,
+          }),
+        );
+        if (summary.kind === "available" && summary.value.outcome === "completed")
+          totalAggregates = summary.value.aggregates;
+        else
+          logRecordsTableRequestRefusal(
+            recordsTableRequestRefusal(
+              "columns",
+              `totals_${summary.kind === "available" ? (summary.value.outcome === "refused" ? summary.value.reasonCode : "invalid") : summary.kind}`,
+            ),
+            "table_totals",
+          );
+      }
+      const totals =
+        totalReads.length === 0
+          ? undefined
+          : projectRecordsTableTotals(totalReads, totalAggregates);
       const projectedRows = visibleRows(read.rows, built.fieldIds);
       // The records a link filter names are titled in the same batched read as the page's links.
       const filterLinks = built.narrowing.filters.flatMap(({ fieldId, filter }) => {
@@ -974,6 +1017,7 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
                 options: request.fieldChoiceLabels?.[request.group.fieldId] ?? [],
               },
               recordLinks,
+              totalReads,
             );
       if (groupSummary !== undefined && groups === undefined)
         throw new Error("PROTECTED_QUERY_RESULT_INVALID");
@@ -1016,6 +1060,7 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
             : { exportAllowed: decisions.exportAllowed }),
           ...(request.state.pivot === undefined ? {} : { pivotView: request.state.pivot }),
           ...(groups === undefined ? {} : { groups }),
+          ...(totals === undefined ? {} : { totals }),
         },
         read.rows,
         read.fieldBounds,
