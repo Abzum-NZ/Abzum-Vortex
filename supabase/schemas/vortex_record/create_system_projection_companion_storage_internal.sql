@@ -3,6 +3,7 @@ create or replace function vortex_record.create_system_projection_companion_stor
   p_target_module_root_id uuid,
   p_record_type_id uuid,
   p_contributor_module_root_id uuid,
+  p_contributor_release_revision bigint,
   p_field_definition jsonb,
   p_validate_only boolean
 )
@@ -15,6 +16,7 @@ as $function$
 declare
   catalogue_row vortex_record.storage_catalogue%rowtype;
   mapping_row vortex_record.field_storage_mappings%rowtype;
+  contributor_revision bigint;
   field_id_value uuid;
   database_type text;
   sql_type text;
@@ -39,6 +41,8 @@ begin
     or not vortex_platform.is_non_nil_uuid(p_target_module_root_id::text)
     or not vortex_platform.is_non_nil_uuid(p_record_type_id::text)
     or not vortex_platform.is_non_nil_uuid(p_contributor_module_root_id::text)
+    or p_contributor_release_revision is null
+    or p_contributor_release_revision not between 1 and 9007199254740991
     or p_target_module_root_id = p_contributor_module_root_id
     or pg_catalog.jsonb_typeof(p_field_definition) is distinct from 'object'
     or p_validate_only is null then
@@ -119,12 +123,17 @@ begin
   for update;
   has_mapping := found;
   if has_mapping then
+    select pg_catalog.max(provision.release_revision) into contributor_revision
+    from vortex_record.release_provisions as provision
+    where provision.module_root_id = p_contributor_module_root_id;
     if mapping_row.introduced_by_module_root_id <> p_contributor_module_root_id
       or mapping_row.physical_column_token <> column_token
       or mapping_row.database_value_type <> database_type
       or mapping_row.state not in ('active', 'retired')
-      or vortex_record.field_storage_meaning(mapping_row.field_definition)
-        is distinct from vortex_record.field_storage_meaning(p_field_definition) then
+      or not vortex_record.field_storage_compatible(
+        mapping_row.field_definition, p_field_definition,
+        p_contributor_release_revision < contributor_revision
+      ) then
       raise exception using errcode = '55000',
         message = 'Existing contributed field storage is incompatible';
     end if;
@@ -421,15 +430,12 @@ begin
   end if;
 end
 $function$;
-alter function vortex_record.create_system_projection_companion_storage_internal(uuid,uuid,uuid,uuid,jsonb,boolean) owner to vortex_owner;
-
-
-alter function vortex_record.create_system_projection_companion_storage_internal(uuid,uuid,uuid,uuid,jsonb,boolean)
+alter function vortex_record.create_system_projection_companion_storage_internal(uuid,uuid,uuid,uuid,bigint,jsonb,boolean)
   owner to vortex_owner;
 
-revoke all on function vortex_record.create_system_projection_companion_storage_internal(uuid, uuid, uuid, uuid, jsonb, boolean)
+revoke all on function vortex_record.create_system_projection_companion_storage_internal(uuid, uuid, uuid, uuid, bigint, jsonb, boolean)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
-grant execute on function vortex_record.create_system_projection_companion_storage_internal(uuid, uuid, uuid, uuid, jsonb, boolean)
+grant execute on function vortex_record.create_system_projection_companion_storage_internal(uuid, uuid, uuid, uuid, bigint, jsonb, boolean)
   to vortex_owner;
-comment on function vortex_record.create_system_projection_companion_storage_internal(uuid, uuid, uuid, uuid, jsonb, boolean) is
+comment on function vortex_record.create_system_projection_companion_storage_internal(uuid, uuid, uuid, uuid, bigint, jsonb, boolean) is
   'Privately preflights or provisions one optional unindexed companion field for an exact system-projection storage contract. Companion rows are organisation-scoped and are never written by a separate Record command.';

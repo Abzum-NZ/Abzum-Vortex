@@ -42,10 +42,6 @@ declare
   requested_sql_type text;
   stored_expression jsonb;
   requested_expression jsonb;
-  stored_field_meaning jsonb;
-  requested_field_meaning jsonb;
-  earlier_options jsonb;
-  later_options jsonb;
   shape_fingerprint text;
   scope_index_columns text;
   result_storage_ids uuid[] := array[]::uuid[];
@@ -364,38 +360,13 @@ begin
       where mapping.storage_contract_id = storage_id and mapping.field_id = field_id_value
       for update;
       if found then
-        stored_field_meaning := vortex_record.field_storage_meaning(stored_field.field_definition);
-        requested_field_meaning := vortex_record.field_storage_meaning(field_value);
-        if field_value ->> 'type' in ('choice', 'several_choices') then
-          -- Shared storage retains the newest shape, even when an older exact
-          -- release is checked again. Only additions preserve every option's
-          -- stored value, label and permission; all other settings stay exact.
-          if p_module_release_revision < stored_catalogue.last_compatible_release_revision then
-            earlier_options := field_value #> '{settings,options}';
-            later_options := stored_field.field_definition #> '{settings,options}';
-          else
-            earlier_options := stored_field.field_definition #> '{settings,options}';
-            later_options := field_value #> '{settings,options}';
-          end if;
-          if pg_catalog.jsonb_typeof(earlier_options) is distinct from 'array'
-            or pg_catalog.jsonb_typeof(later_options) is distinct from 'array'
-            or exists (
-              select 1 from pg_catalog.jsonb_array_elements(earlier_options) as earlier(value)
-              where not exists (
-                select 1 from pg_catalog.jsonb_array_elements(later_options) as later(value)
-                where later.value = earlier.value
-              )
-            ) then
-            raise exception using errcode = '55000',
-              message = 'Choice storage upgrades must preserve existing options unchanged';
-          end if;
-          stored_field_meaning := stored_field_meaning #- '{settings,options}';
-          requested_field_meaning := requested_field_meaning #- '{settings,options}';
-        end if;
         if stored_field.physical_column_token <> column_token
           or stored_field.database_value_type <> database_type
           or stored_field.state <> 'active'
-          or stored_field_meaning is distinct from requested_field_meaning
+          or not vortex_record.field_storage_compatible(
+            stored_field.field_definition, field_value,
+            p_module_release_revision < stored_catalogue.last_compatible_release_revision
+          )
           or (not is_projection and not exists (
             select 1
             from pg_catalog.pg_attribute as attribute

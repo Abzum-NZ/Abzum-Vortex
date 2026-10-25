@@ -35,6 +35,7 @@ declare
   target_point jsonb;
   stored_catalogue vortex_record.storage_catalogue%rowtype;
   stored_field vortex_record.field_storage_mappings%rowtype;
+  contributor_revision bigint;
   table_token text;
   column_token text;
   storage_scope_value text;
@@ -293,7 +294,7 @@ begin
     end if;
     perform vortex_record.create_system_projection_companion_storage_internal(
       storage_id, target_module_root_id, target_record_type_id,
-      p_module_root_id, source_field, true
+      p_module_root_id, p_module_release_revision, source_field, true
     );
   end loop;
 
@@ -456,6 +457,37 @@ begin
       raise exception using errcode = '23514', message = 'Contributed field type is unsupported';
     end if;
 
+    select mapping.* into stored_field
+    from vortex_record.field_storage_mappings as mapping
+    where mapping.storage_contract_id = stored_catalogue.storage_contract_id
+      and mapping.field_id = field_id_value
+    for update;
+    if found then
+      select pg_catalog.max(provision.release_revision) into contributor_revision
+      from vortex_record.release_provisions as provision
+      where provision.module_root_id = p_module_root_id;
+      if stored_field.physical_column_token <> column_token
+        or stored_field.database_value_type <> database_type
+        or stored_field.introduced_by_module_root_id <> p_module_root_id
+        or not vortex_record.field_storage_compatible(
+          stored_field.field_definition, source_field,
+          p_module_release_revision < contributor_revision
+        )
+        or stored_field.state not in ('active', 'retired') then
+        raise exception using errcode = '55000',
+          message = 'Existing contributed field storage is incompatible';
+      end if;
+      if source_field ->> 'type' in ('choice', 'several_choices')
+        and p_module_release_revision >= contributor_revision
+        and stored_field.field_definition is distinct from source_field then
+        update vortex_record.field_storage_mappings as mapping
+        set field_definition = source_field
+        where mapping.storage_contract_id = stored_catalogue.storage_contract_id
+          and mapping.field_id = field_id_value;
+        any_change := true;
+      end if;
+    end if;
+
     if is_projection then
       begin
         storage_id := (target_record_type ->> 'storageContractId')::uuid;
@@ -475,7 +507,7 @@ begin
       end if;
       perform vortex_record.create_system_projection_companion_storage_internal(
         stored_catalogue.storage_contract_id, target_module_root_id,
-        target_record_type_id, p_module_root_id, source_field, false
+        target_record_type_id, p_module_root_id, p_module_release_revision, source_field, false
       );
       select mapping.* into stored_field
       from vortex_record.field_storage_mappings as mapping
@@ -486,8 +518,6 @@ begin
         if stored_field.physical_column_token <> column_token
           or stored_field.database_value_type <> database_type
           or stored_field.introduced_by_module_root_id <> p_module_root_id
-          or vortex_record.field_storage_meaning(stored_field.field_definition)
-            is distinct from vortex_record.field_storage_meaning(source_field)
           or stored_field.state not in ('active', 'retired') then
           raise exception using errcode = '55000',
             message = 'Existing contributed field storage is incompatible';
@@ -526,8 +556,6 @@ begin
         if stored_field.physical_column_token <> column_token
           or stored_field.database_value_type <> database_type
           or stored_field.introduced_by_module_root_id <> p_module_root_id
-          or vortex_record.field_storage_meaning(stored_field.field_definition)
-            is distinct from vortex_record.field_storage_meaning(source_field)
           or not exists (
             select 1
             from pg_catalog.pg_attribute as attribute
