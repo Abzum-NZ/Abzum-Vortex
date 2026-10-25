@@ -31,8 +31,8 @@ const VIEW_UNAVAILABLE: GridViewCommandResult = Object.freeze({ outcome: "unavai
  *
  * Saved views are opened by the address (the table rereads once on the server, because the view
  * changes the query or the projection), and created, replaced, renamed, shared and deleted through
- * one scoped write each. None of those reads records: the page's own copy of the views list is
- * updated from what the write answered.
+ * one scoped write each. None of those reads records: the selected view is updated from the write's
+ * answer, and the picker reads its own fresh list only when opened.
  */
 export function useGridLayout({
   model,
@@ -70,7 +70,7 @@ export function useGridLayout({
   }, []);
 
   /**
-   * Changes the grid's layout state in the page's own copy of its data, so the views list, the
+   * Changes the grid's layout state in the page's own copy of its data, so the
    * selected view and the stored layout's revision follow a write without reading any record.
    */
   const patchLayoutState = useCallback(
@@ -108,8 +108,8 @@ export function useGridLayout({
   );
 
   /**
-   * A write's change to the views list, applied now and kept for a few seconds: a grid read that
-   * was already under way when the write answered lands with the views it read before the write,
+   * A write's change to the selected view, applied now and kept for a few seconds: a grid read that
+   * was already under way when the write answered lands with the view it read before the write,
    * and would otherwise undo the change on screen. Whenever the page's data changes and no longer
    * shows the change, it is applied again.
    */
@@ -343,14 +343,13 @@ export function useGridLayout({
     [layoutOf, patchLayoutState, writeOwnLayout],
   );
 
-  /** Applies a view's new revision (and changes) to its list entry and, if open, to the selected view. */
+  /** Applies a view's new revision and changes while that view is selected. */
   const patchViewState = useCallback(
     (
       placementId: string,
       viewId: string,
       revision: number,
       selectedChange: (selected: SelectedGridView) => SelectedGridView,
-      itemChange: Partial<GridViewItem> = {},
     ): void =>
       patchViews(
         placementId,
@@ -362,11 +361,6 @@ export function useGridLayout({
             ...layout,
             views: {
               ...layout.views,
-              items: layout.views.items.map((item) =>
-                item.viewId === viewId && item.revision < revision
-                  ? { ...item, ...itemChange, revision }
-                  : item,
-              ),
               selected:
                 selected !== null && selected.viewId === viewId && selected.revision < revision
                   ? { ...selectedChange(selected), revision }
@@ -375,7 +369,8 @@ export function useGridLayout({
           };
         },
         (layout) =>
-          (layout.views?.items.find((item) => item.viewId === viewId)?.revision ?? 0) >= revision,
+          (layout.views?.selected?.viewId === viewId ? layout.views.selected.revision : 0) >=
+          revision,
       ),
     [patchViews],
   );
@@ -398,6 +393,8 @@ export function useGridLayout({
           return VIEW_UNAVAILABLE;
         });
       switch (command.kind) {
+        case "list":
+          return send({ kind: "list" });
         case "select": {
           if (command.viewId === null) {
             await dropOwnLayout(placementId);
@@ -487,9 +484,6 @@ export function useGridLayout({
                       ...layout,
                       views: {
                         ...layout.views,
-                        items: layout.views.items.some((held) => held.viewId === item.viewId)
-                          ? layout.views.items
-                          : [...layout.views.items, item],
                         // Only while the address still names the new view: the person may move on.
                         selected:
                           readRecordsTableView(placementId, [
@@ -505,7 +499,7 @@ export function useGridLayout({
                         notice: null,
                       },
                     },
-              (layout) => layout.views?.items.some((held) => held.viewId === item.viewId) === true,
+              (layout) => layout.views?.selected?.viewId === item.viewId,
             );
           }
           return result;
@@ -545,13 +539,10 @@ export function useGridLayout({
           });
           tellOutcome(result, "View renamed.");
           if (result.outcome === "done" && result.revision !== undefined)
-            patchViewState(
-              placementId,
-              command.viewId,
-              result.revision,
-              (selected) => ({ ...selected, name: command.name }),
-              { name: command.name },
-            );
+            patchViewState(placementId, command.viewId, result.revision, (selected) => ({
+              ...selected,
+              name: command.name,
+            }));
           else if (result.outcome === "conflict") reopenAfterConflict(placementId);
           return result;
         }
@@ -570,13 +561,11 @@ export function useGridLayout({
               command.sharing.groupIds.length > 0
                 ? ("shared" as const)
                 : ("personal" as const);
-            patchViewState(
-              placementId,
-              command.viewId,
-              result.revision,
-              (selected) => ({ ...selected, scope, sharing: command.sharing }),
-              { scope },
-            );
+            patchViewState(placementId, command.viewId, result.revision, (selected) => ({
+              ...selected,
+              scope,
+              sharing: command.sharing,
+            }));
           } else if (result.outcome === "conflict") reopenAfterConflict(placementId);
           return result;
         }
@@ -603,7 +592,6 @@ export function useGridLayout({
                       ...layout,
                       views: {
                         ...layout.views,
-                        items: layout.views.items.filter((item) => item.viewId !== command.viewId),
                         selected:
                           layout.views.selected?.viewId === command.viewId
                             ? null
@@ -614,7 +602,7 @@ export function useGridLayout({
                             : layout.views.basedOnViewId,
                       },
                     },
-              (layout) => !layout.views?.items.some((item) => item.viewId === command.viewId),
+              (layout) => layout.views?.selected?.viewId !== command.viewId,
             );
           } else if (result.outcome === "conflict") reopenAfterConflict(placementId);
           return result;

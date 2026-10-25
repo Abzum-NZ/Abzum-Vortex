@@ -2,6 +2,7 @@
 
 import {
   addressedDefaultGridViews,
+  eligibleDefaultGridViews,
   authoredGridLayout,
   resolveSelectedGridView,
   containedComponentIdSchema,
@@ -24,6 +25,7 @@ import {
   deleteGridView,
   gridViewPlacement,
   listGridViewShareTargets,
+  listGridViews,
   personalFormattingAllowed,
   resetGridView,
   saveGridView,
@@ -73,6 +75,7 @@ const gridLayoutChangeSchema = z.discriminatedUnion("kind", [
 ]);
 
 const gridViewChangeSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("list"), placementId: containedComponentIdSchema }).strict(),
   z
     .object({
       kind: z.literal("create"),
@@ -299,6 +302,35 @@ export async function commitGridView(
 
   const result = await opened.run(async (transaction): Promise<GridViewCommandResult> => {
     switch (requested.kind) {
+      case "list": {
+        if (!placement.contract.features.savedViews.enabled) return { outcome: "unavailable" };
+        const listed = await listGridViews(transaction, pageId, requested.placementId);
+        return {
+          outcome: "listed",
+          canShare: listed.canShare,
+          items: [
+            ...eligibleDefaultGridViews(
+              placement.contract.features.savedViews.defaultViews,
+              listed.roleKeys,
+            ).map(({ viewId, name }) => ({
+              viewId,
+              name,
+              scope: "default" as const,
+              mine: false,
+              revision: 1,
+            })),
+            ...listed.views
+              .filter((view) => view.queryId === queryId)
+              .map(({ viewId, name, scope, mine, revision }) => ({
+                viewId,
+                name,
+                scope,
+                mine,
+                revision,
+              })),
+          ],
+        };
+      }
       case "open": {
         const query = opened.context.releaseSet.modules
           .flatMap((module) => module.content.queries)
@@ -313,6 +345,10 @@ export async function commitGridView(
           [String(query.recordType.recordTypeId)],
           placement.contract.features.savedViews.defaultViews.map((view) => ({
             viewId: view.viewId,
+            placementId: requested.placementId,
+            role: view.role,
+            isDefault: view.isDefault,
+            selectedViewId: requested.viewId,
             queryId,
             document: view.document,
           })),
@@ -331,6 +367,7 @@ export async function commitGridView(
           placement.contract.features.savedViews.defaultViews,
           stored.roleKeys,
           stored.defaultDocuments,
+          { viewId: requested.viewId, automatic: false },
         );
         const addressed =
           defaults.find((view) => view.viewId === requested.viewId) ??

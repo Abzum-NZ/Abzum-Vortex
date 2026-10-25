@@ -76,7 +76,7 @@ const storedViewRowsSchema = z
       })
       .strict(),
   )
-  .max(100_000);
+  .max(500);
 
 const storedReadSchema = z
   .object({
@@ -145,11 +145,11 @@ export type StoredNamedGridView = Readonly<{
   hiddenFormatting: number;
 }>;
 
-/** Everything one page read returns of the store: layouts keyed by placement, views by placement. */
+/** The page's current layouts and selected named views, keyed by placement. */
 export type StoredGridViews = Readonly<{
   /** The columns the person may read, by access route, per requested record type (lower-cased). */
   readable: ReadonlyMap<string, ReadonlySet<string>>;
-  /** Authored documents narrowed by the same current field bounds as stored shared views. */
+  /** Selected/automatic authored documents narrowed by the same bounds as stored shared views. */
   defaultDocuments: ReadonlyMap<
     string,
     Readonly<{
@@ -216,36 +216,9 @@ const conflictOf = (
         },
 });
 
-/**
- * Reads the person's current layouts and every named view they may see for the named placements of
- * one page in one call, keyed by lower-cased placement identity. Only the views named in
- * `selectedViewIds` (the page address) carry their document. The database checks the fixed platform
- * sharing permission for the current person.
- */
-export const readGridViews = async (
-  transaction: RequestDatabaseTransaction,
-  pageId: string,
-  placementIds: readonly string[],
-  selectedViewIds: readonly string[],
-  recordTypeIds: readonly string[],
-  defaultViews: readonly Readonly<{
-    viewId: string;
-    queryId: string;
-    document: GridViewDocument;
-  }>[] = [],
-): Promise<StoredGridViews> => {
-  const rows = await transaction.query<ResultRow>`
-    select vortex_platform.read_grid_views(
-      ${pageId}::uuid,
-      array(select pg_catalog.jsonb_array_elements_text(${JSON.stringify(placementIds)}::text::jsonb)::uuid),
-      array(select pg_catalog.jsonb_array_elements_text(${JSON.stringify(selectedViewIds)}::text::jsonb)::uuid),
-      ${JSON.stringify(defaultViews)}::text::jsonb,
-      array(select pg_catalog.jsonb_array_elements_text(${JSON.stringify(recordTypeIds)}::text::jsonb)::uuid)
-    ) as result
-  `;
-  const read = stored("read", pageId, storedReadSchema, only(rows));
+const namedViews = (rows: z.infer<typeof storedViewRowsSchema>) => {
   const views = new Map<string, StoredNamedGridView[]>();
-  for (const row of read.views) {
+  for (const row of rows) {
     const placementId = row.placementId.toLowerCase();
     const named: StoredNamedGridView = {
       viewId: row.viewId.toLowerCase(),
@@ -270,6 +243,70 @@ export const readGridViews = async (
     };
     views.set(placementId, [...(views.get(placementId) ?? []), named]);
   }
+  return views;
+};
+
+/** Fresh picker inventory for one placement; authorization is evaluated inside this request. */
+export const listGridViews = async (
+  transaction: RequestDatabaseTransaction,
+  pageId: string,
+  placementId: string,
+) => {
+  const rows = await transaction.query<ResultRow>`
+    select vortex_platform.list_grid_views(${pageId}::uuid, ${placementId}::uuid) as result
+  `;
+  const read = stored(
+    "list",
+    placementId,
+    z
+      .object({
+        roleKeys: z.array(z.string()),
+        canShare: z.boolean(),
+        views: storedViewRowsSchema.max(200),
+      })
+      .strict(),
+    only(rows),
+  );
+  return {
+    roleKeys: new Set(read.roleKeys),
+    canShare: read.canShare,
+    views: namedViews(read.views).get(placementId.toLowerCase()) ?? [],
+  };
+};
+
+/**
+ * Reads the person's current layouts and selected named views for the named placements of
+ * one page in one call, keyed by lower-cased placement identity. Only the views named in
+ * `selectedViewIds` (the page address) carry their document. The database checks the fixed platform
+ * sharing permission for the current person.
+ */
+export const readGridViews = async (
+  transaction: RequestDatabaseTransaction,
+  pageId: string,
+  placementIds: readonly string[],
+  selectedViewIds: readonly string[],
+  recordTypeIds: readonly string[],
+  defaultViews: readonly Readonly<{
+    viewId: string;
+    placementId: string;
+    role: string;
+    isDefault: boolean;
+    selectedViewId: string | null;
+    queryId: string;
+    document: GridViewDocument;
+  }>[] = [],
+): Promise<StoredGridViews> => {
+  const rows = await transaction.query<ResultRow>`
+    select vortex_platform.read_grid_views(
+      ${pageId}::uuid,
+      array(select pg_catalog.jsonb_array_elements_text(${JSON.stringify(placementIds)}::text::jsonb)::uuid),
+      array(select pg_catalog.jsonb_array_elements_text(${JSON.stringify(selectedViewIds)}::text::jsonb)::uuid),
+      ${JSON.stringify(defaultViews)}::text::jsonb,
+      array(select pg_catalog.jsonb_array_elements_text(${JSON.stringify(recordTypeIds)}::text::jsonb)::uuid)
+    ) as result
+  `;
+  const read = stored("read", pageId, storedReadSchema, only(rows));
+  const views = namedViews(read.views);
   return {
     readable: new Map(
       Object.entries(read.visibleFields).map(([recordTypeId, ids]) => [
