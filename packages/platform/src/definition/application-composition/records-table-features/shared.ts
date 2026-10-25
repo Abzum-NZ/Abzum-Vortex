@@ -440,6 +440,8 @@ export type GridFeatureProjectionContext = Readonly<{
   searchable: boolean;
   /** The filter control of each filterable field, by lower-cased field identity. */
   filterFields: Readonly<Record<string, object>> | undefined;
+  features: RecordsTableFeatures;
+  columns: readonly Readonly<{ field: string }>[];
   rowBehaviours: Readonly<{ rowActions: readonly RecordsTableActionContract[] }>;
   rows: readonly ProtectedQueryRow[];
   editors: Readonly<Record<string, RecordsTableInlineEditor>> | undefined;

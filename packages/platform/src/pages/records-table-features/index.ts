@@ -105,6 +105,8 @@ export const projectRecordsTableFeatures = (
     readable,
     searchable: bounds.searchable,
     filterFields,
+    features,
+    columns: contract.columns,
     rows,
     editors,
     rowBehaviours: contract.rowBehaviours,
@@ -116,8 +118,6 @@ export const projectRecordsTableFeatures = (
       return part === undefined ? [] : [[definition.property, part]];
     }),
   ) as Partial<RecordsTableFeatureProjection>;
-  const inlineEdit = features.inlineEdit;
-  const editableFields = declared.inlineEdit?.fields ?? [];
   // Every expanded row is read again under the viewer's current access: the projection only says
   // rows expand; a viewer who cannot read the related records sees the panel's neutral refusal.
   const masterDetail = features.masterDetail;
@@ -158,26 +158,6 @@ export const projectRecordsTableFeatures = (
         }
       : undefined;
   const exportSettings = features.export;
-  // A status bar total names only fields the table shows as columns; with none left it is omitted.
-  const statusBarFields = features.spreadsheet.enabled
-    ? features.spreadsheet.statusBarFields.filter((field) =>
-        contract.columns.some((column) => sameField(column.field, field)),
-      )
-    : [];
-  const batchEditable =
-    features.spreadsheet.enabled &&
-    features.spreadsheet.rangeSelect === true &&
-    editableFields.length > 0 &&
-    inlineEdit.enabled &&
-    inlineEdit.eventId !== undefined;
-  const pasteUsable =
-    batchEditable && features.spreadsheet.enabled && features.spreadsheet.paste === true;
-  const fillUsable =
-    batchEditable && features.spreadsheet.enabled && features.spreadsheet.fill === true;
-  const undoUsable =
-    (pasteUsable || fillUsable) &&
-    features.spreadsheet.enabled &&
-    features.spreadsheet.undo === true;
   const projection: RecordsTableFeatureProjection = {
     ...(exportSettings.enabled &&
     exportAllowed === true &&
@@ -185,30 +165,6 @@ export const projectRecordsTableFeatures = (
     exportSettings.formats.length > 0 &&
     contract.columns.some((column) => readable(column.field))
       ? { export: { maxRows: exportSettings.maxRows, formats: exportSettings.formats } }
-      : {}),
-    ...(features.spreadsheet.enabled &&
-    typeof features.spreadsheet.rangeSelect === "boolean" &&
-    typeof features.spreadsheet.find === "boolean" &&
-    contract.columns.some((column) => readable(column.field))
-      ? {
-          spreadsheet: {
-            rangeSelect: features.spreadsheet.rangeSelect,
-            find: features.spreadsheet.find,
-            ...(pasteUsable ? { paste: true as const } : {}),
-            ...(fillUsable ? { fill: true as const } : {}),
-            ...(undoUsable ? { undo: true as const } : {}),
-            ...(features.spreadsheet.rangeSelect &&
-            statusBarFields.length > 0 &&
-            features.spreadsheet.statusBarOperations.length > 0
-              ? {
-                  statusBar: {
-                    fields: statusBarFields,
-                    operations: features.spreadsheet.statusBarOperations,
-                  },
-                }
-              : {}),
-          },
-        }
       : {}),
     ...declared,
     ...(masterDetail.enabled && masterDetail.childPageSize !== undefined
