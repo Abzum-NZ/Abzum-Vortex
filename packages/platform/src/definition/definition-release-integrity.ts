@@ -1,16 +1,14 @@
+import type { Fingerprint, OrganizationId, SemanticVersion } from "../catalogue/identifiers";
+import type { FlowDefinition } from "../workflows/flow-contracts";
+import { selectApplicationContractPair } from "./application-contract-versions";
+import type { ApplicationDraft } from "./application-contracts";
 import {
-  assertModuleContractPair,
-  selectApplicationContractPair,
   applicationCompilationOutputSchema,
   type DefinitionCompilationOutput,
-  type ApplicationDraft,
   type DefinitionResolutionSnapshot,
-  type ExactDefinitionDependency,
-  type FlowDefinition,
-  type Fingerprint,
-  type OrganizationId,
-  type SemanticVersion,
-} from "../schema";
+} from "./definition-compilation-contracts";
+import { assertModuleContractPair } from "./definition-source";
+import type { ExactDefinitionDependency } from "./definition-store-contracts";
 import { fingerprintCanonicalValue } from "./canonical-json-definition";
 import { flowOperationNodeDescriptors, platformOperationsCalledBy } from "./flow-operation-calls";
 import { describeFailure } from "../catalogue/runtime-primitives";

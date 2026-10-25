@@ -1,9 +1,9 @@
-import type { definitionCompilationRequestSchema } from "../../schema";
+import type { definitionCompilationRequestSchema } from "../definition-compilation-contracts";
+import { connectionTypeSchema } from "../../connections/integration-contracts";
 import {
-  connectionTypeSchema,
   definitionCompilationOutputSchema,
   type DefinitionCompilationOutput,
-} from "../../schema";
+} from "../definition-compilation-contracts";
 import { fingerprintCanonicalValue } from "../canonical-json-definition";
 import { DefinitionCompilationError } from "../compilation-error";
 import { dependencyOrder, resolvedDependencies } from "./dependencies";

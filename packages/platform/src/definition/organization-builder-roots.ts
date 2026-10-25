@@ -1,13 +1,13 @@
 import "server-only";
 
 import { z } from "zod";
-import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
 import {
   applicationRootIdSchema,
-  databaseRevision,
   namespacedKeySchema,
   revisionSchema,
-} from "../schema";
+} from "../catalogue/identifiers";
+import { databaseRevision } from "../catalogue/runtime-primitives";
 
 const rowSchema = z
   .object({

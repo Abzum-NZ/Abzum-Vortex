@@ -1,18 +1,15 @@
 import "server-only";
 
-import {
-  describeFailure,
-  exactDecimalTextSchema,
-  moneyValueSchema,
-  queryTotalLabel,
-  type BlockPropertyValueContract,
-  type JsonValue,
-} from "../../schema";
+import type { JsonValue } from "../../catalogue/common";
+import { describeFailure } from "../../catalogue/runtime-primitives";
+import type { BlockPropertyValueContract } from "../../definition/application-composition/block-property-values";
+import { queryTotalLabel } from "../../definition/module-query-edit";
+import { exactDecimalTextSchema, moneyValueSchema } from "../../records/module-field-values";
 import {
   protectedQuerySummaryCommandSchema,
   type ProtectedQuerySummaryAggregateResult,
   type ProtectedQuerySummaryCompleted,
-} from "../../queries/index";
+} from "../../queries/protected-query-contracts";
 import {
   collectRecordLinkValues,
   recordLinkPlainText,

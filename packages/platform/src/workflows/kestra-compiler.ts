@@ -2,39 +2,19 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 
-import type {
-  flowControlTaskTypeKeys} from "../schema";
-import {
-  isRecord,
-  applicationRootIdSchema,
-  canonicalJson,
-  flowTaskChildLists,
-  flowSchema,
-  flowTaskRegistry,
-  protectedOperationReferenceSetSchema,
-  isFlowControlTask,
-  isUuidText,
-  organizationIdSchema,
-  platformOperationKey,
-  PLATFORM_SERVICE_OPERATIONS,
-  revisionSchema,
-  stableDefinitionReleaseVersionSchema,
-  builderKeySchema,
-  type ApplicationRootId,
-  type FlowDefinition,
-  type FlowFormula,
-  type FlowLiteral,
-  type FlowReference,
-  type FlowTask,
-  type FlowTaskTypeKey,
-  type FlowTrigger,
-  type FlowValue,
-  type JsonValue,
-  type OrganizationId,
-  type ProtectedOperationReference,
-  type ProtectedOperationRequest,
-  type SemanticVersion,
-} from "../schema";
+import type { flowControlTaskTypeKeys } from "./flow-contracts";
+import type { JsonValue } from "../catalogue/common";
+import { applicationRootIdSchema, organizationIdSchema, revisionSchema, builderKeySchema, type ApplicationRootId, type OrganizationId, type SemanticVersion } from "../catalogue/identifiers";
+import { PLATFORM_SERVICE_OPERATIONS } from "../catalogue/platform-service-operation-catalogue";
+import { isRecord, isUuidText } from "../catalogue/runtime-primitives";
+import { protectedOperationReferenceSetSchema, type ProtectedOperationReference } from "../definition/application-flow-bindings";
+import { canonicalJson } from "../definition/canonical-json";
+import { stableDefinitionReleaseVersionSchema } from "../definition/version-impact";
+import type { ProtectedOperationRequest } from "../rules/automation-contracts";
+import { platformOperationKey } from "./default-flow-sources";
+import { flowTaskChildLists, flowSchema, isFlowControlTask, type FlowDefinition, type FlowTask, type FlowTrigger } from "./flow-contracts";
+import { flowTaskRegistry, type FlowTaskTypeKey } from "./flow-task-registry";
+import type { FlowFormula, FlowLiteral, FlowReference, FlowValue } from "./flow-values";
 
 /**
  * The permanent environment a candidate flow is scoped to. The generated

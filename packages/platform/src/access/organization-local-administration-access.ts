@@ -1,12 +1,15 @@
 import "server-only";
 
 import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { activityIdSchema } from "../catalogue/identifiers";
 import {
   unavailableError,
   databaseTimestamp,
   databaseRevision,
   sameId,
-  activityIdSchema,
+} from "../catalogue/runtime-primitives";
+import type { IdentitySession, OrganizationSelectionCandidate } from "./identity-access";
+import {
   closeOrganizationAccountCommandSchema,
   closeOrganizationAccountResultSchema,
   createOrganizationInvitationForAdministrationCommandSchema,
@@ -15,7 +18,6 @@ import {
   listOrganizationAccountsResultSchema,
   listOrganizationInvitationsCommandSchema,
   listOrganizationInvitationsResultSchema,
-  organizationRuntimeSettingsSchema,
   reactivateOrganizationAccountCommandSchema,
   reactivateOrganizationAccountResultSchema,
   readOwnProfileResultSchema,
@@ -35,12 +37,10 @@ import {
   type CloseOrganizationAccountResult,
   type CreateOrganizationInvitationForAdministrationCommand,
   type CreateOrganizationInvitationForAdministrationResult,
-  type IdentitySession,
   type ListOrganizationAccountsCommand,
   type ListOrganizationAccountsResult,
   type ListOrganizationInvitationsCommand,
   type ListOrganizationInvitationsResult,
-  type OrganizationSelectionCandidate,
   type ReactivateOrganizationAccountCommand,
   type ReactivateOrganizationAccountResult,
   type ReadOwnProfileResult,
@@ -56,8 +56,9 @@ import {
   type SuspendOrganizationAccountResult,
   type UpdateOwnProfileCommand,
   type UpdateOwnProfileResult,
-} from "../schema";
-import type { DatabaseRow } from "../db/index";
+} from "./organization-local-administration";
+import { organizationRuntimeSettingsSchema } from "./organization-runtime-settings-schema";
+import type { DatabaseRow } from "../db/request-transaction";
 import {
   createHumanOrganizationRequestService,
   type HumanOrganizationRequestDependencies,

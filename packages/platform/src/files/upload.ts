@@ -1,34 +1,36 @@
 import "server-only";
 
 import { createHash, randomUUID } from "node:crypto";
+import type { SessionContext } from "../access/identity-access";
+import type { CorrelationId } from "../catalogue/common";
 import {
-  sameId,
-  MAXIMUM_FILE_STORAGE_OPERATION_SECONDS,
-  PRIVATE_FILE_BUCKET,
   fileIdSchema,
-  fileRecordSchema,
   fingerprintSchema,
   platformIdSchema,
-  trustedFileInspectionSchema,
-  uploadGrantSchema,
   type ApplicationRootId,
-  type CorrelationId,
   type FieldId,
   type FileId,
-  type FileRecord,
-  type FileUploadAdmissionRefusalReason,
-  type FileUploadCompletionRefusalReason,
-  type FileUploadRenewalRefusalReason,
   type Fingerprint,
   type OrganizationId,
   type PlatformId,
   type RecordId,
   type RecordTypeId,
-  type SessionContext,
+} from "../catalogue/identifiers";
+import { sameId } from "../catalogue/runtime-primitives";
+import {
+  MAXIMUM_FILE_STORAGE_OPERATION_SECONDS,
+  PRIVATE_FILE_BUCKET,
+  fileRecordSchema,
+  trustedFileInspectionSchema,
+  uploadGrantSchema,
+  type FileRecord,
+  type FileUploadAdmissionRefusalReason,
+  type FileUploadCompletionRefusalReason,
+  type FileUploadRenewalRefusalReason,
   type TrustedFileInspection,
   type UploadGrant,
   type VerifiedFileActor,
-} from "../schema";
+} from "./file-contracts";
 import { createUnguessableStorageKey } from "./storage-policy";
 import {
   expectedContentKindsForExtension,

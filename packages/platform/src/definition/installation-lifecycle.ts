@@ -1,19 +1,21 @@
 import "server-only";
 
+import { sameId } from "../catalogue/runtime-primitives";
 import {
-  sameId,
   applicationInstallationActivationCommandSchema,
   applicationInstallationDetachCommandSchema,
   applicationInstallationLifecycleResultSchema,
-  applicationLifecyclePolicyReadinessSchema,
-  indexReadinessSchema,
-  validateRecordTypeLifecyclePolicy,
   type ApplicationInstallationActivationCommand,
   type ApplicationInstallationDetachCommand,
   type ApplicationInstallationLifecycleErrorCode,
   type ApplicationInstallationLifecycleResult,
-} from "../schema";
-import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
+} from "../files/storage";
+import { indexReadinessSchema } from "../queries/index-readiness";
+import {
+  applicationLifecyclePolicyReadinessSchema,
+  validateRecordTypeLifecyclePolicy,
+} from "../records/record-lifecycle-policy";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
 import {
   DefinitionError,
   classifyDatabaseError,

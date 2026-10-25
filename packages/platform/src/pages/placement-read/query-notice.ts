@@ -1,7 +1,7 @@
 import "server-only";
 
-import type { JsonValue } from "../../schema";
-import { QUERY_NOTICE_BLOCK_RELEASE } from "../../definition/index";
+import type { JsonValue } from "../../catalogue/common";
+import { QUERY_NOTICE_BLOCK_RELEASE } from "../../definition/application-composition-catalogue";
 import { placementReleaseVersion, placementSettingsOf, type PlacementReadEntry } from "./shared";
 import type { PlacementReadInput } from "./types";
 

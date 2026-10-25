@@ -1,4 +1,5 @@
-import type { ModuleContent, VersionImpactReason } from "../../schema";
+import type { ModuleContent } from "../module-contracts";
+import type { VersionImpactReason } from "../version-impact";
 import { compareCanonicalStrings } from "../canonical-json-definition";
 import {
   type RecordValue,
@@ -16,7 +17,7 @@ import {
   finaliseReasons,
   sorted,
 } from "./shared";
-import { compareSharingCondition, comparePermissions } from "./application-shared-contents";
+import { compareSharingCondition, comparePermissions } from "./permission-contents";
 import { currencyConfiguration } from "./normalisation";
 
 const compareFieldSettings = (

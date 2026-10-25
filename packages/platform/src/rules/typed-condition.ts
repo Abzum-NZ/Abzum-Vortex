@@ -1,15 +1,12 @@
+import { jsonValueSchema, type JsonValue } from "../catalogue/common";
 import {
-  isRecord,
   builderKeySchema,
-  conditionNodeSchema,
   fieldIdSchema,
-  jsonValueSchema,
-  moduleFieldSchema,
   organizationAccountIdSchema,
-  type ConditionNode,
-  type JsonValue,
-  type ModuleField,
-} from "../schema";
+} from "../catalogue/identifiers";
+import { isRecord } from "../catalogue/runtime-primitives";
+import { moduleFieldSchema, type ModuleField } from "../definition/module-contracts";
+import { conditionNodeSchema, type ConditionNode } from "../definition/module-foundation-contracts";
 import {
   TypedConditionEvaluationError,
   type TypedConditionEvaluationErrorReason,

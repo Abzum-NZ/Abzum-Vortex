@@ -1,15 +1,16 @@
 import "server-only";
 
+import type { NamespacedKey, PlatformId } from "../catalogue/identifiers";
 import type {
-  ApplicationContent,
   DefinitionValidationLocation,
   DefinitionRuleFailure,
   DefinitionRuleFailureFamily,
-  NamespacedKey,
-  PlatformId,
+} from "../catalogue/validation-errors";
+import type {
   PlatformThemeRelease as ContractPlatformThemeRelease,
   ThemeColorRole,
-} from "../schema";
+} from "../definition/application-composition/theme";
+import type { ApplicationContent } from "../definition/application-contracts";
 
 export type { ThemeColorRole };
 

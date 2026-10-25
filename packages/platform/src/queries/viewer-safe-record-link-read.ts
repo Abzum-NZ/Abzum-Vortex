@@ -2,19 +2,19 @@ import "server-only";
 
 import { z } from "zod";
 import {
-  activeApplicationInstallationEvidenceSchema,
-  fieldIdSchema,
-  jsonValueSchema,
-  recordIdSchema,
-  revisionSchema,
-  sameId,
   selectedOrganizationScopeSchema,
+  type SelectedOrganizationScope,
+} from "../access/identity-access";
+import { jsonValueSchema } from "../catalogue/common";
+import { fieldIdSchema, recordIdSchema, revisionSchema } from "../catalogue/identifiers";
+import { sameId } from "../catalogue/runtime-primitives";
+import { activeApplicationInstallationEvidenceSchema } from "../files/storage";
+import {
   viewerSafeRecordLinkIdentitySchema,
   viewerSafeRecordLinkTitleSchema,
-  type SelectedOrganizationScope,
   type ViewerSafeRecordLinkIdentity,
-} from "../schema";
-import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
+} from "../records/record-links";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
 import { protectedQueryRowCapabilitiesSchema } from "./protected-query-contracts";
 
 const unavailable = { outcome: "unavailable" } as const;

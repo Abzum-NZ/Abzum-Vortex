@@ -8,22 +8,23 @@ import {
   calendarStartOfDay,
 } from "./calendar-date";
 
+import type { IdentitySession, OrganizationSelectionCandidate } from "../access/identity-access";
+import type { JsonValue } from "../catalogue/common";
+import { isRecord, sameId, logRefusal } from "../catalogue/runtime-primitives";
+import type { BlockPropertyValueContract } from "../definition/application-composition/block-property-values";
 import {
   type CalendarMapping,
-  type BlockPropertyValueContract,
   calendarMappingSchema,
-  type JsonValue,
   calendarBlockSourceIsSupported,
-  type IdentitySession,
-  type OrganizationSelectionCandidate,
-  isRecord,
-  sameId,
-  logRefusal,
-} from "../schema";
-import type { HumanOrganizationRequestResult } from "../access/index";
-import { arrangeDataset, protectedQueryCommandSchema } from "../queries/index";
-import type { ProtectedQueryCommand, ProtectedQueryResult } from "../queries/index";
-import type { InstalledRuntimeContext } from "../definition/index";
+} from "../definition/application-contracts";
+import type { HumanOrganizationRequestResult } from "../access/human-organization-request";
+import { arrangeDataset } from "../queries/arrangements";
+import { protectedQueryCommandSchema } from "../queries/protected-query-contracts";
+import type {
+  ProtectedQueryCommand,
+  ProtectedQueryResult,
+} from "../queries/protected-query-contracts";
+import type { InstalledRuntimeContext } from "../definition/installed-runtime-context";
 import {
   collectRecordLinkValues,
   recordLinkPlainText,

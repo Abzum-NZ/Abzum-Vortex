@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { RecordsTableContract } from "../../schema";
+import type { RecordsTableContract } from "../../definition/application-composition/records-display";
 import {
   decodeRecordsTableFieldFilter,
   readRecordsTableView,

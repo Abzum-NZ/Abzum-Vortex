@@ -6,7 +6,7 @@ import {
   type AlertRecord,
   type ServiceTelemetryPort,
   type TelemetryInput,
-} from "../schema";
+} from "../events/telemetry";
 
 type AppTelemetryCollectorDependencies = Readonly<{
   downstream?: ServiceTelemetryPort;

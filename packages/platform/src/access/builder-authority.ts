@@ -1,12 +1,12 @@
 import type { PlatformPermissionSource } from "./platform-permissions";
 import "server-only";
 
+import { unavailableError } from "../catalogue/runtime-primitives";
+import type { SelectedOrganizationScope } from "./identity-access";
 import {
-  unavailableError,
   organizationAccessDeclarationSchema,
   type OrganizationAccessDeclaration,
-  type SelectedOrganizationScope,
-} from "../schema";
+} from "./organization-access-decision";
 import {
   builderRecentAuthentication,
   deriveBuilderRequirements,
@@ -16,8 +16,8 @@ import {
   type BuilderOperation,
   type BuilderPermissionKey,
   type BuilderTargetFacts,
-} from "../definition/definition-index";
-import type { RequestDatabaseTransaction } from "../db/index";
+} from "../definition/builder-authority";
+import type { RequestDatabaseTransaction } from "../db/request-transaction";
 import { runOrganizationAccessOperation } from "./organization-access-decision-access";
 
 /**

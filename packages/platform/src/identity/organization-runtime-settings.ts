@@ -1,15 +1,15 @@
 import "server-only";
 
 import {
-  databaseRevision,
   organizationRuntimeSettingsSchema,
   type OrganizationRuntimeSettings,
-} from "../schema";
+} from "../access/organization-runtime-settings-schema";
+import { databaseRevision } from "../catalogue/runtime-primitives";
 import {
   withRuntimeTransaction,
   type DatabaseRow,
   type RequestDatabaseTransaction,
-} from "../db/index";
+} from "../db/request-transaction";
 
 export const organizationRuntimeSettingsErrorCodes = [
   "INVALID_ORGANIZATION_RUNTIME_SETTINGS",

@@ -1,4 +1,5 @@
-import type { ApplicationContent, VersionImpactReason } from "../../schema";
+import type { ApplicationContent } from "../application-contracts";
+import type { VersionImpactReason } from "../version-impact";
 import { placementBlockRelease, placementSettings } from "../application-composition-catalogue";
 import { releaseSettingDeclarations } from "../application-composition/platform-block-release";
 import type { BlockPropertySchemaContract } from "../application-composition/block-property-schema";

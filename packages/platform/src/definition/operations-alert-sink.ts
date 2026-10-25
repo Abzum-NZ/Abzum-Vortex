@@ -1,7 +1,11 @@
 import "server-only";
 
-import { alertRecordSchema, type AlertRecord, type ServiceTelemetryPort } from "../schema";
-import { withRuntimeTransaction, type RequestDatabaseTransaction } from "../db/index";
+import {
+  alertRecordSchema,
+  type AlertRecord,
+  type ServiceTelemetryPort,
+} from "../events/telemetry";
+import { withRuntimeTransaction, type RequestDatabaseTransaction } from "../db/request-transaction";
 
 type RuntimeTransactionRunner = <Result>(
   operation: (transaction: RequestDatabaseTransaction) => Promise<Result>,
@@ -73,4 +77,3 @@ export const createOperationsAlertSink = (
     },
   });
 };
-

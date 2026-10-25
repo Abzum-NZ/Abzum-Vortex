@@ -1,19 +1,14 @@
 import "server-only";
 
 import { z } from "zod";
-import type { RequestDatabaseTransaction } from "../db/index";
-import { DefinitionError } from "../definition/definition-index";
-import { createActiveApplicationInstallationRepository } from "../definition/module-index";
-import {
-  describeFailure,
-  fieldIdSchema,
-  type SelectedOrganizationScope,
-  type ActiveApplicationInstallationEvidence,
-  sameId,
-  recordTypeIdSchema,
-  revisionSchema,
-  jsonValueSchema,
-} from "../schema";
+import type { RequestDatabaseTransaction } from "../db/request-transaction";
+import { DefinitionError } from "../definition/definition-error";
+import { createActiveApplicationInstallationRepository } from "../definition/installation-binding-reader";
+import type { SelectedOrganizationScope } from "../access/identity-access";
+import { jsonValueSchema } from "../catalogue/common";
+import { fieldIdSchema, recordTypeIdSchema, revisionSchema } from "../catalogue/identifiers";
+import { describeFailure, sameId } from "../catalogue/runtime-primitives";
+import type { ActiveApplicationInstallationEvidence } from "../files/storage";
 import {
   type QueryCacheDecision,
   queryCacheMaxEvaluatedFields,

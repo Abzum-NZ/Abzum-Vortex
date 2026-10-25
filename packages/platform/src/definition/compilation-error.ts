@@ -2,7 +2,7 @@ import type {
   DefinitionRuleFailure,
   DefinitionRuleFailureFamily,
   DefinitionValidationLocation,
-} from "../schema";
+} from "../catalogue/validation-errors";
 
 export const definitionCompilerRefusalCodes = Object.freeze([
   "vortex.definition.ambiguous_definition",

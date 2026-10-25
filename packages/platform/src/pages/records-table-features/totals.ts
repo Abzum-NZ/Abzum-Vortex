@@ -1,12 +1,12 @@
 import "server-only";
 
-import {
-  recordsTableContractOrLog,
-  type BlockPropertyValueContract,
-  type RecordsTableTotal,
-  type RecordsTableAggregateOperation,
-} from "../../schema";
-import type { ProtectedQuerySummaryAggregateResult } from "../../queries/index";
+import type { BlockPropertyValueContract } from "../../definition/application-composition/block-property-values";
+import { recordsTableContractOrLog } from "../../definition/application-composition/records-display";
+import type {
+  RecordsTableTotal,
+  RecordsTableAggregateOperation,
+} from "../../definition/application-composition/records-table-totals";
+import type { ProtectedQuerySummaryAggregateResult } from "../../queries/protected-query-contracts";
 import { formatDecimal, formatMoney, isExactDecimal } from "../value-format";
 
 export type RecordsTableTotalRead = Readonly<{

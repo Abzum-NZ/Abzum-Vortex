@@ -1,4 +1,5 @@
-import type { BlockId, PlatformBlockRelease, SemanticVersion } from "../schema";
+import type { BlockId, SemanticVersion } from "../catalogue/identifiers";
+import type { PlatformBlockRelease } from "./application-composition/platform-block-release";
 
 const textKeys = ["label", "name", "singularLabel"] as const;
 const identityKeyPattern = /^(?:[a-z]+(?:[A-Z][a-z]*)*)Id$/;

@@ -1,14 +1,16 @@
 import "server-only";
 
-import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
 import type { PlatformPermissionSource } from "../access/platform-permissions";
+import type { SessionContext } from "../access/identity-access";
 import {
   organizationAccessDeclarationSchema,
-  storedDefinitionDraftSchema,
   type OrganizationAccessDeclaration,
-  type SessionContext,
+} from "../access/organization-access-decision";
+import {
+  storedDefinitionDraftSchema,
   type StoredDefinitionDraft,
-} from "../schema";
+} from "./definition-store-contracts";
 import { canonicalJson } from "./canonical-json-definition";
 import type { DefinitionHistoryRepository } from "./definition-history";
 import { DefinitionError, unexpectedDefinitionFailure } from "./definition-error";
@@ -291,7 +293,8 @@ export const createDatabaseDefinitionHistoryRepository = (
     const restored = one(restoredRows, "DEFINITION_RESTORE_STORAGE_INVALID").restored_draft;
     if (restored === null) return { outcome: "stale" } as const;
     if (verifyRestored === undefined) return { outcome: "restored", draft: restored } as const;
-    if (!isHumanOrganizationOnlyContext(context)) throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
+    if (!isHumanOrganizationOnlyContext(context))
+      throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
 
     const verifiedDraft = await verifyRestored(restored);
     const currentEvidenceRows = await transaction.query<RestoreEvidenceRow>`

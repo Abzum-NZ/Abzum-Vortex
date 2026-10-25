@@ -1,7 +1,12 @@
 import "server-only";
 
-import { isRecord, type BlockPropertyValueContract, type JsonValue } from "../../schema";
-import { protectedQueryCommandSchema, type ProtectedQueryRow } from "../../queries/index";
+import type { JsonValue } from "../../catalogue/common";
+import { isRecord } from "../../catalogue/runtime-primitives";
+import type { BlockPropertyValueContract } from "../../definition/application-composition/block-property-values";
+import {
+  protectedQueryCommandSchema,
+  type ProtectedQueryRow,
+} from "../../queries/protected-query-contracts";
 import {
   logPlacementFailure,
   placementSettingsOf,

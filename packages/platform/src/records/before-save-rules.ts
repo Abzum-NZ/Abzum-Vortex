@@ -1,19 +1,16 @@
 import "server-only";
 import { z } from "zod";
 
-import {
-  describeFailure,
-  flowSchema,
-  type FlowDefinition,
-  type JsonValue,
-  type RecordTypeDefinition,
-} from "../schema";
+import type { JsonValue } from "../catalogue/common";
+import { describeFailure } from "../catalogue/runtime-primitives";
+import type { RecordTypeDefinition } from "../definition/module-contracts";
+import { flowSchema, type FlowDefinition } from "../workflows/flow-contracts";
 import {
   BeforeSaveFlowEvaluationError,
   evaluateBeforeSaveFlows,
   type BeforeSaveRuleRequirement,
   type BeforeSaveRuleWarning,
-} from "../rules/index";
+} from "../rules/before-save-flow-run";
 import {
   prepareInitialRecordFieldCandidate,
   type InitialRecordFieldCandidate,

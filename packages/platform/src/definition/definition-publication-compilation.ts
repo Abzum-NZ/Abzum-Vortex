@@ -1,17 +1,19 @@
 import "server-only";
 
+import type { SessionContext } from "../access/identity-access";
 import {
   applicationCompilationRequestSchema,
   moduleCompilationRequestSchema,
   savedConditionRevisionAssignmentSchema,
-  storedDefinitionDraftSchema,
   type DefinitionCompilationOutput,
   type DefinitionPublicationHistoryEvidence,
-  type PrepareDefinitionPublicationCommand,
   type SavedConditionRevisionAssignment,
-  type SessionContext,
+} from "./definition-compilation-contracts";
+import {
+  storedDefinitionDraftSchema,
+  type PrepareDefinitionPublicationCommand,
   type StoredDefinitionDraft,
-} from "../schema";
+} from "./definition-store-contracts";
 import { APPLICATION_PLATFORM_COMPATIBILITY_VERSION } from "./platform-compatibility";
 import {
   applicationSourceContractVersion,

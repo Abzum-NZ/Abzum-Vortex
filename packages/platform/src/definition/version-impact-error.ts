@@ -1,5 +1,5 @@
 import { DefinitionError } from "./definition-error";
-import type { DefinitionVersionImpactFailureCode } from "../schema";
+import type { DefinitionVersionImpactFailureCode } from "./version-impact";
 
 const safeMessageByCode = {
   invalid_request: "The version-impact request is invalid.",

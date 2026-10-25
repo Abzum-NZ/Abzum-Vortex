@@ -1,27 +1,26 @@
 import "server-only";
 
 import { createHash, randomUUID } from "node:crypto";
+import type { IdentitySession, OrganizationSelectionCandidate } from "../access/identity-access";
+import type { JsonValue } from "../catalogue/common";
+import { activityIdSchema, eventOccurrenceIdSchema } from "../catalogue/identifiers";
+import { describeFailure } from "../catalogue/runtime-primitives";
+import { recordLinkValueSchema } from "./module-field-values";
 import {
-  describeFailure,
-  activityIdSchema,
-  eventOccurrenceIdSchema,
   executeNamedActionCommandSchema,
   executeNamedActionResultSchema,
-  recordLinkValueSchema,
-  saveRecordCommandSchema,
   type ExecuteNamedActionCommand,
   type ExecuteNamedActionResult,
-  type IdentitySession,
-  type JsonValue,
-  type OrganizationSelectionCandidate,
-} from "../schema";
+} from "./named-actions";
+import { saveRecordCommandSchema } from "./records";
 import {
   createHumanOrganizationRequestService,
   type HumanOrganizationRequestDependencies,
   type HumanOrganizationRequestResult,
-} from "../access/index";
-import type { RequestDatabaseTransaction } from "../db/index";
-import type { ActionFlowRunner, BeforeSaveRuleWarning } from "../rules/index";
+} from "../access/human-organization-request";
+import type { RequestDatabaseTransaction } from "../db/request-transaction";
+import type { ActionFlowRunner } from "../rules/action-flow-run";
+import type { BeforeSaveRuleWarning } from "../rules/before-save-flow-run";
 import {
   actionFlowSeed,
   composeFlowEffects,

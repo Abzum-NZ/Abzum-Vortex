@@ -2,24 +2,18 @@ import "server-only";
 
 import { createHash, randomUUID } from "node:crypto";
 import {
+  identitySessionSchema,
+  organizationSelectionCandidateSchema,
+  type IdentitySession,
+  type OrganizationSelectionCandidate,
+} from "../access/identity-access";
+import {
   addOrganizationAdministrationMembershipCommandSchema,
-  logRefusal,
-  applicationRootIdSchema,
   assignOrganizationAdministrationRoleAssignmentCommandSchema,
   changeOrganizationAdministrationRoleAuthorityCommandSchema,
-  closeOrganizationAccountCommandSchema,
   createOrganizationAdministrationGroupCommandSchema,
-  createOrganizationInvitationForAdministrationCommandSchema,
-  createTenantOrganizationCommandSchema,
   deactivateOrganizationAdministrationRoleActivationCommandSchema,
-  findPlatformServiceOperation,
-  flowRefusalFeedbackSchema,
-  identitySessionSchema,
-  jsonValueSchema,
-  organizationSelectionCandidateSchema,
-  organizationStewardshipAppointmentCommandSchema,
   prepareOrganizationAdministrationRoleChangeCommandSchema,
-  reactivateOrganizationAccountCommandSchema,
   removeOrganizationAdministrationMembershipCommandSchema,
   renameOrganizationAdministrationGroupCommandSchema,
   retireOrganizationAdministrationGroupCommandSchema,
@@ -27,31 +21,40 @@ import {
   revokeOrganizationAdministrationDelegationAuthorityCommandSchema,
   grantOrganizationAdministrationDelegationAuthorityCommandSchema,
   revokeOrganizationAdministrationRoleAssignmentCommandSchema,
-  revokeOrganizationInvitationForAdministrationCommandSchema,
   reviseOrganizationAdministrationRoleMetadataCommandSchema,
-  stableDefinitionReleaseVersionSchema,
-  reactivateTenantOrganizationCommandSchema,
-  renameTenantOrganizationCommandSchema,
-  reparentTenantOrganizationCommandSchema,
+} from "../access/organization-access-administration";
+import {
+  closeOrganizationAccountCommandSchema,
+  createOrganizationInvitationForAdministrationCommandSchema,
+  reactivateOrganizationAccountCommandSchema,
+  revokeOrganizationInvitationForAdministrationCommandSchema,
   suspendOrganizationAccountCommandSchema,
-  suspendTenantOrganizationCommandSchema,
   updateOwnProfileCommandSchema,
-  duplicateProtectionKeySchema,
-  flowTaskRegistry,
+} from "../access/organization-local-administration";
+import { organizationStewardshipAppointmentCommandSchema } from "../access/organization-stewardship";
+import { jsonValueSchema, duplicateProtectionKeySchema, type JsonValue } from "../catalogue/common";
+import {
+  applicationRootIdSchema,
   workflowNodeIdSchema,
   workflowRunIdSchema,
   workflowIdSchema,
   organizationIdSchema,
   revisionSchema,
+  type TenantId,
+} from "../catalogue/identifiers";
+import {
+  findPlatformServiceOperation,
+  type PlatformServiceOperationKey,
+} from "../catalogue/platform-service-operation-catalogue";
+import { logRefusal } from "../catalogue/runtime-primitives";
+import {
+  createTenantOrganizationCommandSchema,
+  reactivateTenantOrganizationCommandSchema,
+  renameTenantOrganizationCommandSchema,
+  reparentTenantOrganizationCommandSchema,
+  suspendTenantOrganizationCommandSchema,
   type CreateTenantOrganizationCommand,
   type CreateTenantOrganizationResult,
-  type FlowRefusalFeedback,
-  type IdentitySession,
-  type ExecutionAuthorityContext,
-  type JsonValue,
-  type OrganizationSelectionCandidate,
-  type PlatformServiceOperationKey,
-  type ProtectedOperationDescriptor,
   type ReactivateTenantOrganizationCommand,
   type ReactivateTenantOrganizationResult,
   type RenameTenantOrganizationCommand,
@@ -60,21 +63,29 @@ import {
   type ReparentTenantOrganizationResult,
   type SuspendTenantOrganizationCommand,
   type SuspendTenantOrganizationResult,
-  type TenantId,
-} from "../schema";
-import type {
-  createDurableActorRequestService,
-  createOrganizationAccessAdministrationService,
-  HumanOrganizationRequestResult,
-} from "../access/index";
-import { verifiedDurableActorContextSchema } from "../access/index";
-import type { DurableActorRequestScope } from "../access/index";
-import type { RequestDatabaseTransaction } from "../db/index";
+} from "../identity/tenant-governance";
+import type { ExecutionAuthorityContext } from "../workflows/flow-contracts";
+import {
+  flowRefusalFeedbackSchema,
+  type FlowRefusalFeedback,
+} from "../workflows/flow-refusal-feedback";
+import { flowTaskRegistry } from "../workflows/flow-task-registry";
+import type { ProtectedOperationDescriptor } from "./application-flow-bindings";
+import { stableDefinitionReleaseVersionSchema } from "./version-impact";
+import type { createDurableActorRequestService } from "../access/durable-actor-request";
+import type { HumanOrganizationRequestResult } from "../access/human-organization-request";
+import type { createOrganizationAccessAdministrationService } from "../access/organization-access-administration-access";
+import { verifiedDurableActorContextSchema } from "../access/durable-actor-request";
+import type { DurableActorRequestScope } from "../access/durable-actor-request";
+import type { RequestDatabaseTransaction } from "../db/request-transaction";
 import type { ApplicationStoreService } from "./installation-application-store";
 import { z } from "zod";
 import {
-  durableRecordUpdateSchema, prepareDurableRecordUpdate, executeDurableRecordUpdate,
-  type DurableRecordUpdate, type DurableRecordSave,
+  durableRecordUpdateSchema,
+  prepareDurableRecordUpdate,
+  executeDurableRecordUpdate,
+  type DurableRecordUpdate,
+  type DurableRecordSave,
 } from "./durable-record-update";
 import { effectCommandId } from "./flow-orchestrator-support";
 
@@ -131,10 +142,11 @@ type ProtectedOperationExecutionRequest =
 type DurableProtectedOperationExecutionRequest = Readonly<{
   actorContext: unknown;
   inputs: Readonly<Record<string, unknown>>;
-}> & (
-  | Readonly<{ operation: ProtectedOperationIdentity; recordUpdate?: never }>
-  | Readonly<{ operation?: never; recordUpdate: DurableRecordUpdate }>
-);
+}> &
+  (
+    | Readonly<{ operation: ProtectedOperationIdentity; recordUpdate?: never }>
+    | Readonly<{ operation?: never; recordUpdate: DurableRecordUpdate }>
+  );
 
 /** A value a descriptor can declare for an input or output of a registered operation. */
 type ProtectedOperationValue = JsonValue;
@@ -169,7 +181,11 @@ const durableActorOperationPurposeSchema = z
     workflowRevision: revisionSchema,
     nodeId: workflowNodeIdSchema,
     attempt: z.number().int().positive(),
-    operationKey: z.string().min(1).max(128).regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/),
+    operationKey: z
+      .string()
+      .min(1)
+      .max(128)
+      .regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/),
     duplicateProtectionKey: duplicateProtectionKeySchema,
   })
   .passthrough();
@@ -252,15 +268,16 @@ type ProtectedOperationServices = Readonly<{
   applicationStore?: ApplicationStoreService;
 }>;
 
-type ProtectedOperationExecutorDependencies = ProtectedOperationServices & Readonly<{
-  /** Services bound to the actor's one request transaction and resolved scope. */
-  durableOperations?: (
-    transaction: RequestDatabaseTransaction,
-    scope: DurableActorRequestScope,
-  ) => ProtectedOperationServices;
-  /** Access service used to re-resolve the durable run actor and current grants. */
-  durableActorRequest?: Pick<ReturnType<typeof createDurableActorRequestService>, "run">;
-}>;
+type ProtectedOperationExecutorDependencies = ProtectedOperationServices &
+  Readonly<{
+    /** Services bound to the actor's one request transaction and resolved scope. */
+    durableOperations?: (
+      transaction: RequestDatabaseTransaction,
+      scope: DurableActorRequestScope,
+    ) => ProtectedOperationServices;
+    /** Access service used to re-resolve the durable run actor and current grants. */
+    durableActorRequest?: Pick<ReturnType<typeof createDurableActorRequestService>, "run">;
+  }>;
 
 type ProtectedOperationCaller = Readonly<{
   session: IdentitySession;
@@ -281,10 +298,7 @@ type ConfirmedOperationFailure = Readonly<{
 }>;
 
 type OperationResult =
-  | HumanOrganizationRequestResult<Outputs>
-  | "validation"
-  | "conflict"
-  | ConfirmedOperationFailure;
+  HumanOrganizationRequestResult<Outputs> | "validation" | "conflict" | ConfirmedOperationFailure;
 
 type OperationRunner = (
   services: ProtectedOperationExecutorDependencies,
@@ -322,8 +336,8 @@ const duplicateKeyFor = (
  * typed inputs onto that command's fields and the schema rejects anything it does not accept, so an
  * invalid value is a validation result and never reaches the protected wrapper.
  */
-const operation =
-  <Schema extends z.ZodType>(definition: {
+const operation = <Schema extends z.ZodType>(
+  definition: {
     schema: Schema;
     inputAliases?: Readonly<Record<string, string>>;
     command: (
@@ -336,40 +350,42 @@ const operation =
       caller: ProtectedOperationCaller,
       command: z.output<Schema>,
     ) => Promise<OperationResult>;
-  }, authorityKind: Operation["authorityKind"] = "permission"): Operation =>
-    Object.freeze({
-      authorityKind,
-      execute: async (services, caller, inputs) => {
-        const command = definition.schema.safeParse(
-          definition.command(inputs, caller.selection, caller.effectKey),
-        );
-        if (!command.success) {
-          const issue = command.error.issues.length === 1 ? command.error.issues[0] : undefined;
-          const structuralIssueCodes: ReadonlySet<string> = new Set([
-            "invalid_type",
-            "too_small",
-            "too_big",
-            "invalid_format",
-            "not_multiple_of",
-            "invalid_value",
-          ]);
-          const issuePath = issue?.path;
-          const operationInput =
-            issue !== undefined &&
-            structuralIssueCodes.has(issue.code) &&
-            issuePath?.length === 1 &&
-            typeof issuePath[0] === "string"
-              ? definition.inputAliases?.[issuePath[0]]
-              : undefined;
-          return {
-            kind: "confirmed_failure",
-            outcome: "validation",
-            diagnostic: invalidCommandFeedback(operationInput),
-          };
-        }
-        return definition.run(services, caller, command.data);
-      },
-    });
+  },
+  authorityKind: Operation["authorityKind"] = "permission",
+): Operation =>
+  Object.freeze({
+    authorityKind,
+    execute: async (services, caller, inputs) => {
+      const command = definition.schema.safeParse(
+        definition.command(inputs, caller.selection, caller.effectKey),
+      );
+      if (!command.success) {
+        const issue = command.error.issues.length === 1 ? command.error.issues[0] : undefined;
+        const structuralIssueCodes: ReadonlySet<string> = new Set([
+          "invalid_type",
+          "too_small",
+          "too_big",
+          "invalid_format",
+          "not_multiple_of",
+          "invalid_value",
+        ]);
+        const issuePath = issue?.path;
+        const operationInput =
+          issue !== undefined &&
+          structuralIssueCodes.has(issue.code) &&
+          issuePath?.length === 1 &&
+          typeof issuePath[0] === "string"
+            ? definition.inputAliases?.[issuePath[0]]
+            : undefined;
+        return {
+          kind: "confirmed_failure",
+          outcome: "validation",
+          diagnostic: invalidCommandFeedback(operationInput),
+        };
+      }
+      return definition.run(services, caller, command.data);
+    },
+  });
 
 /** One application catalogue journey, run by the installation service under the person's own authority. */
 const applicationStoreOperation = (journey: keyof ApplicationStoreService): Operation =>
@@ -864,75 +880,87 @@ const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Obj
         }),
       ),
   }),
-  rename_tenant_organization: operation({
-    schema: renameTenantOrganizationCommandSchema.omit({ tenantId: true, operation: true }),
-    command: (inputs, _selection, effectKey) => ({
-      duplicateKey: duplicateKeyFor(effectKey, randomUUID),
-      organizationId: inputs.organization_id,
-      expectedRevision: inputs.expected_revision,
-      displayName: inputs.display_name,
-    }),
-    run: async (services, caller, command) =>
-      runTenantOrganizationMutation(services, caller, ({ tenantId, operations }) =>
-        operations.renameOrganization(caller.session, {
-          ...command,
-          operation: "rename_tenant_organization",
-          tenantId,
-        }),
-      ),
-  }, "tenant_capability"),
-  reparent_tenant_organization: operation({
-    schema: reparentTenantOrganizationCommandSchema
-      .omit({ tenantId: true, operation: true })
-      .extend({ parentOrganizationId: organizationIdSchema }),
-    inputAliases: { parentOrganizationId: "parent_organization_id" },
-    command: (inputs, _selection, effectKey) => ({
-      duplicateKey: duplicateKeyFor(effectKey, randomUUID),
-      organizationId: inputs.organization_id,
-      expectedRevision: inputs.expected_revision,
-      parentOrganizationId: inputs.parent_organization_id,
-    }),
-    run: async (services, caller, command) =>
-      runTenantOrganizationMutation(services, caller, ({ tenantId, operations }) =>
-        operations.reparentOrganization(caller.session, {
-          ...command,
-          operation: "reparent_tenant_organization",
-          tenantId,
-        }),
-      ),
-  }, "tenant_capability"),
-  suspend_tenant_organization: operation({
-    schema: suspendTenantOrganizationCommandSchema.omit({ tenantId: true, operation: true }),
-    command: (inputs, _selection, effectKey) => ({
-      duplicateKey: duplicateKeyFor(effectKey, randomUUID),
-      organizationId: inputs.organization_id,
-      expectedRevision: inputs.expected_revision,
-    }),
-    run: async (services, caller, command) =>
-      runTenantOrganizationMutation(services, caller, ({ tenantId, operations }) =>
-        operations.suspendOrganization(caller.session, {
-          ...command,
-          operation: "suspend_tenant_organization",
-          tenantId,
-        }),
-      ),
-  }, "tenant_capability"),
-  reactivate_tenant_organization: operation({
-    schema: reactivateTenantOrganizationCommandSchema.omit({ tenantId: true, operation: true }),
-    command: (inputs, _selection, effectKey) => ({
-      duplicateKey: duplicateKeyFor(effectKey, randomUUID),
-      organizationId: inputs.organization_id,
-      expectedRevision: inputs.expected_revision,
-    }),
-    run: async (services, caller, command) =>
-      runTenantOrganizationMutation(services, caller, ({ tenantId, operations }) =>
-        operations.reactivateOrganization(caller.session, {
-          ...command,
-          operation: "reactivate_tenant_organization",
-          tenantId,
-        }),
-      ),
-  }, "tenant_capability"),
+  rename_tenant_organization: operation(
+    {
+      schema: renameTenantOrganizationCommandSchema.omit({ tenantId: true, operation: true }),
+      command: (inputs, _selection, effectKey) => ({
+        duplicateKey: duplicateKeyFor(effectKey, randomUUID),
+        organizationId: inputs.organization_id,
+        expectedRevision: inputs.expected_revision,
+        displayName: inputs.display_name,
+      }),
+      run: async (services, caller, command) =>
+        runTenantOrganizationMutation(services, caller, ({ tenantId, operations }) =>
+          operations.renameOrganization(caller.session, {
+            ...command,
+            operation: "rename_tenant_organization",
+            tenantId,
+          }),
+        ),
+    },
+    "tenant_capability",
+  ),
+  reparent_tenant_organization: operation(
+    {
+      schema: reparentTenantOrganizationCommandSchema
+        .omit({ tenantId: true, operation: true })
+        .extend({ parentOrganizationId: organizationIdSchema }),
+      inputAliases: { parentOrganizationId: "parent_organization_id" },
+      command: (inputs, _selection, effectKey) => ({
+        duplicateKey: duplicateKeyFor(effectKey, randomUUID),
+        organizationId: inputs.organization_id,
+        expectedRevision: inputs.expected_revision,
+        parentOrganizationId: inputs.parent_organization_id,
+      }),
+      run: async (services, caller, command) =>
+        runTenantOrganizationMutation(services, caller, ({ tenantId, operations }) =>
+          operations.reparentOrganization(caller.session, {
+            ...command,
+            operation: "reparent_tenant_organization",
+            tenantId,
+          }),
+        ),
+    },
+    "tenant_capability",
+  ),
+  suspend_tenant_organization: operation(
+    {
+      schema: suspendTenantOrganizationCommandSchema.omit({ tenantId: true, operation: true }),
+      command: (inputs, _selection, effectKey) => ({
+        duplicateKey: duplicateKeyFor(effectKey, randomUUID),
+        organizationId: inputs.organization_id,
+        expectedRevision: inputs.expected_revision,
+      }),
+      run: async (services, caller, command) =>
+        runTenantOrganizationMutation(services, caller, ({ tenantId, operations }) =>
+          operations.suspendOrganization(caller.session, {
+            ...command,
+            operation: "suspend_tenant_organization",
+            tenantId,
+          }),
+        ),
+    },
+    "tenant_capability",
+  ),
+  reactivate_tenant_organization: operation(
+    {
+      schema: reactivateTenantOrganizationCommandSchema.omit({ tenantId: true, operation: true }),
+      command: (inputs, _selection, effectKey) => ({
+        duplicateKey: duplicateKeyFor(effectKey, randomUUID),
+        organizationId: inputs.organization_id,
+        expectedRevision: inputs.expected_revision,
+      }),
+      run: async (services, caller, command) =>
+        runTenantOrganizationMutation(services, caller, ({ tenantId, operations }) =>
+          operations.reactivateOrganization(caller.session, {
+            ...command,
+            operation: "reactivate_tenant_organization",
+            tenantId,
+          }),
+        ),
+    },
+    "tenant_capability",
+  ),
   suspend_organization_account: operation({
     schema: suspendOrganizationAccountCommandSchema,
     command: (inputs, _selection, effectKey) => ({
@@ -1131,8 +1159,7 @@ const valueMatches = (type: string, value: unknown): value is ProtectedOperation
 };
 
 type DeclaredInputResult =
-  | Readonly<{ inputs: Inputs }>
-  | Readonly<{ diagnostic: FlowRefusalFeedback }>;
+  Readonly<{ inputs: Inputs }> | Readonly<{ diagnostic: FlowRefusalFeedback }>;
 
 /**
  * The declared inputs only: every declared required input present, no undeclared input and every
@@ -1276,8 +1303,9 @@ export const createProtectedOperationExecutor = (
       return { outcome: "failed" };
     }
   };
-  const execute = (request: ProtectedOperationExecutionRequest): Promise<ProtectedOperationExecution> =>
-    executeWith(dependencies, request);
+  const execute = (
+    request: ProtectedOperationExecutionRequest,
+  ): Promise<ProtectedOperationExecution> => executeWith(dependencies, request);
 
   return Object.freeze({
     /**
@@ -1293,13 +1321,16 @@ export const createProtectedOperationExecutor = (
      * remain person-owned; a system actor is refused rather than converted into a person.
      */
     async executeDurableActor<Result>(
-      request: DurableProtectedOperationExecutionRequest & Readonly<{
-        effect: (
-          transaction: RequestDatabaseTransaction,
-          executeOperation: () => Promise<DurableProtectedOperationExecution>,
-        ) => Promise<Result>;
-      }>,
-    ): Promise<Readonly<{ kind: "available"; value: Result }> | Readonly<{ kind: "refused" | "failed" }>> {
+      request: DurableProtectedOperationExecutionRequest &
+        Readonly<{
+          effect: (
+            transaction: RequestDatabaseTransaction,
+            executeOperation: () => Promise<DurableProtectedOperationExecution>,
+          ) => Promise<Result>;
+        }>,
+    ): Promise<
+      Readonly<{ kind: "available"; value: Result }> | Readonly<{ kind: "refused" | "failed" }>
+    > {
       const refuse = (code: string, cause?: unknown): Readonly<{ kind: "refused" }> => {
         logRefusal("protected-operation", "durable actor execution", code, cause);
         return { kind: "refused" };
@@ -1354,10 +1385,12 @@ export const createProtectedOperationExecutor = (
             : "access_change",
           async (transaction, scope) => {
             const policy = context.data.policy;
-            if (policy.kind !== "initiating_person" ||
-                scope.actor.kind !== "organization_account" ||
-                scope.actor.organizationAccountId.toLowerCase() !==
-                  policy.initiator.organizationAccountId.toLowerCase())
+            if (
+              policy.kind !== "initiating_person" ||
+              scope.actor.kind !== "organization_account" ||
+              scope.actor.organizationAccountId.toLowerCase() !==
+                policy.initiator.organizationAccountId.toLowerCase()
+            )
               throw Object.assign(new Error("DURABLE_OPERATION_ACTOR_MISMATCH"), { code: "42501" });
             const session = identitySessionSchema.parse({
               identityId: policy.initiator.identityId,

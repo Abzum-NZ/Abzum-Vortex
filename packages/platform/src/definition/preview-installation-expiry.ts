@@ -1,7 +1,7 @@
 import "server-only";
 
-import { describeFailure } from "../schema";
-import { withRuntimeTransaction, type DatabaseRow } from "../db/index";
+import { describeFailure } from "../catalogue/runtime-primitives";
+import { withRuntimeTransaction, type DatabaseRow } from "../db/request-transaction";
 import { DefinitionError, databaseErrorCode } from "./definition-error";
 
 const previewExpiryLimits = Object.freeze({ batchSize: 100, maximumBatches: 100 });

@@ -1,10 +1,8 @@
-import type {
-  ApplicationDraft,
-  CompiledFlowSet,
-  ApplicationSourceDocument,
-  DefinitionProvenanceEntry,
-  PlatformBlockRelease,
-} from "../../schema";
+import type { CompiledFlowSet } from "../../workflows/flow-source-contracts";
+import type { PlatformBlockRelease } from "../application-composition/platform-block-release";
+import type { ApplicationDraft } from "../application-contracts";
+import type { DefinitionProvenanceEntry } from "../definition-provenance";
+import type { ApplicationSourceDocument } from "../definition-source";
 import { sameCanonicalValue } from "../canonical-json-definition";
 import { peopleDirectory } from "../module-links";
 import { explicitSourceTargets } from "./explicit-source-targets";

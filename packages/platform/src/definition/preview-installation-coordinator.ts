@@ -1,29 +1,31 @@
 import "server-only";
 
+import type { createHumanOrganizationRequestService } from "../access/human-organization-request";
 import {
   BuilderAuthorityError,
   requireBuilderAuthority,
   type BuilderAuthority,
-  type createHumanOrganizationRequestService,
-} from "../access/index";
+} from "./builder-authority";
 import {
   identitySessionSchema,
+  type IdentitySession,
+  type OrganizationSelectionCandidate,
+  type SelectedOrganizationScope,
+  type SessionContext,
+} from "../access/identity-access";
+import { sameId } from "../catalogue/runtime-primitives";
+import {
   previewInstallationCreateRequestSchema,
   previewInstallationMaterializeRequestSchema,
   previewInstallationRefreshRequestSchema,
-  type IdentitySession,
-  type OrganizationSelectionCandidate,
   type PreviewInstallation,
   type PreviewInstallationCreateRequest,
   type PreviewInstallationMaterializeRequest,
   type PreviewInstallationRefreshRequest,
   type PreviewSeedResult,
-  type SelectedOrganizationScope,
-  type SessionContext,
-  sameId,
-} from "../schema";
+} from "./preview-installation-contracts";
 import { readLiveHumanContext } from "../access/live-context";
-import { createPreviewInstallationRepository } from "./module-index";
+import { createPreviewInstallationRepository } from "./preview-installation-repository";
 import type { PreviewReleasePlan } from "./preview-release-plan";
 import {
   addressPreviewInstallation,
@@ -31,7 +33,7 @@ import {
 } from "./preview-runtime-context";
 import { backfillDerivedFields } from "../records/derived-field-backfill";
 import type { ImmutableDefinitionPublicationCatalogueDefinition } from "./publication/read";
-import type { RequestDatabaseTransaction } from "../db/index";
+import type { RequestDatabaseTransaction } from "../db/request-transaction";
 import {
   DefinitionError,
   classifyDatabaseError,

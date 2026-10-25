@@ -1,7 +1,8 @@
 import "server-only";
 
-import { withRuntimeTransaction } from "../db/index";
-import { describeFailure, privacyNoticeSchema, type PrivacyNotice } from "../schema";
+import { withRuntimeTransaction } from "../db/request-transaction";
+import { describeFailure } from "../catalogue/runtime-primitives";
+import { privacyNoticeSchema, type PrivacyNotice } from "./privacy-notice-schema";
 
 /** Public notice content only; this function never exposes acknowledgement evidence. */
 export const readPrivacyNotice = async (versionId?: string): Promise<PrivacyNotice> => {

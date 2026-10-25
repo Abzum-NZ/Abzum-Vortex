@@ -1,32 +1,30 @@
 import "server-only";
 
-import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
+import { createBuilderAuthority } from "../access/builder-authority";
+import { runOrganizationAccessOperation } from "../access/organization-access-decision-access";
 import {
   BuilderAuthorityError,
-  createBuilderAuthority,
   requireBuilderAuthority,
-  runOrganizationAccessOperation,
   type BuilderAuthority,
   type BuilderConferredPermission,
   type BuilderOperation,
-} from "../access/index";
+} from "./builder-authority";
 import {
   LiveContextRefused,
   readLiveHumanContext,
   type LiveHumanContext,
 } from "../access/live-context";
 import type { PlatformPermissionSource } from "../access/platform-permissions";
+import type { IdentitySession, SelectedOrganizationScope } from "../access/identity-access";
+import { projectLiveApplicationRolePermissions } from "../access/organization-access-catalogue";
 import {
-  databaseTimestamp,
   organizationAccessDeclarationSchema,
   organizationPermissionEligibilitySchema,
-  projectLiveApplicationRolePermissions,
-  sameId,
-  timestampSchema,
-  type IdentitySession,
   type OrganizationAccessDeclaration,
-  type SelectedOrganizationScope,
-} from "../schema";
+} from "../access/organization-access-decision";
+import { timestampSchema } from "../catalogue/identifiers";
+import { databaseTimestamp, sameId } from "../catalogue/runtime-primitives";
 import {
   builderPermissionKeys,
   builderRecentAuthentication,

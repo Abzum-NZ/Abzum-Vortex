@@ -1,13 +1,10 @@
 import "server-only";
 
 import type { z } from "zod";
-import {
-  compareExactDecimals,
-  moduleFieldValueSchemas,
-  parseExactDecimal,
-  type JsonValue,
-} from "../schema";
-import type { HumanOrganizationRequestResult } from "../access/index";
+import type { JsonValue } from "../catalogue/common";
+import { compareExactDecimals, parseExactDecimal } from "../records/exact-decimal";
+import { moduleFieldValueSchemas } from "../records/module-field-values";
+import type { HumanOrganizationRequestResult } from "../access/human-organization-request";
 import {
   arrangementCommandSchema,
   arrangementRowLimit,

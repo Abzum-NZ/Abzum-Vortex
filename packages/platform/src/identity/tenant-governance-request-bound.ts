@@ -2,21 +2,23 @@ import "server-only";
 
 import {
   identitySessionSchema,
-  protectedOperationChannelSchema,
   selectedOrganizationScopeSchema,
   sessionContextSchema,
   type IdentitySession,
-  type ProtectedOperationChannel,
   type SessionContext,
   type SelectedOrganizationScope,
-} from "../schema";
+} from "../access/identity-access";
+import {
+  protectedOperationChannelSchema,
+  type ProtectedOperationChannel,
+} from "../definition/application-flow-bindings";
 import {
   requireRequestSavepoint,
   type DatabaseRow,
   type DatabaseValue,
   type RequestDatabaseTransaction,
   type SavepointRequestDatabaseTransaction,
-} from "../db/index";
+} from "../db/request-transaction";
 import {
   createTenantGovernanceService,
   transactionPoisonErrorName,

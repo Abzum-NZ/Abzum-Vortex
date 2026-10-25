@@ -1,10 +1,13 @@
 import "server-only";
 
 import { createHash } from "node:crypto";
+import { identitySessionSchema, type IdentitySession } from "../access/identity-access";
 import {
   databaseTimestamp,
   databaseRevision,
   describeFailure,
+} from "../catalogue/runtime-primitives";
+import {
   archiveTenantOrganizationCommandSchema,
   archiveTenantOrganizationResultSchema,
   changeTenantAdministratorCommandSchema,
@@ -13,7 +16,6 @@ import {
   createTenantOrganizationResultSchema,
   grantTenantAdministratorCommandSchema,
   grantTenantAdministratorResultSchema,
-  identitySessionSchema,
   reactivateTenantOrganizationCommandSchema,
   reactivateTenantOrganizationResultSchema,
   renameTenantOrganizationCommandSchema,
@@ -40,7 +42,6 @@ import {
   type CreateTenantOrganizationResult,
   type GrantTenantAdministratorCommand,
   type GrantTenantAdministratorResult,
-  type IdentitySession,
   type ReactivateTenantOrganizationCommand,
   type ReactivateTenantOrganizationResult,
   type RenameTenantOrganizationCommand,
@@ -59,12 +60,12 @@ import {
   type TenantLauncherResult,
   type TenantOrganizationQuery,
   type TenantOrganizationResult,
-} from "../schema";
+} from "./tenant-governance";
 import {
   withRuntimeTransaction,
   type DatabaseRow,
   type RequestDatabaseTransaction,
-} from "../db/index";
+} from "../db/request-transaction";
 import { logRefusedOperations } from "./log-refused-operations";
 
 type Runner = <Result>(

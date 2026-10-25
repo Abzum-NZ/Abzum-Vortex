@@ -5,45 +5,48 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import {
   createHumanOrganizationRequestService,
   type HumanOrganizationRequestResult,
-} from "../access/index";
-import type { RequestDatabaseTransaction } from "../db/index";
+} from "../access/human-organization-request";
+import type { RequestDatabaseTransaction } from "../db/request-transaction";
 import {
   FIELD_INPUT_BLOCK_RELEASE,
   FIELD_INPUT_CONTROL_RELEASES,
   FORM_CONTAINER_BLOCK_RELEASE,
   placementSettings,
-  type InstalledRuntimeContext,
-} from "../definition/index";
-import type { QueryContinuationKey } from "../queries/index";
-import { decideChoiceOptionPermission, prepareRecordFieldValues } from "../records/index";
+} from "../definition/application-composition-catalogue";
+import type { InstalledRuntimeContext } from "../definition/installed-runtime-context";
+import type { QueryContinuationKey } from "../queries/continuation-token";
+import { decideChoiceOptionPermission } from "../records/choice-option-permission";
+import { prepareRecordFieldValues } from "../records/field-values";
+import type {
+  IdentitySession,
+  OrganizationSelectionCandidate,
+  SelectedOrganizationScope,
+} from "../access/identity-access";
 import {
   organizationAccessDeclarationSchema,
+  type OrganizationAccessDeclaration,
+} from "../access/organization-access-decision";
+import type { PermissionDeclaration } from "../access/permissions";
+import { jsonValueSchema, type JsonValue } from "../catalogue/common";
+import {
   builderKeySchema,
   containedComponentIdSchema,
-  jsonValueSchema,
-  richTextDocumentSchema,
-  moduleFieldValueSchemas,
   recordIdSchema,
   ruleIdSchema,
   timestampSchema,
-  type IdentitySession,
-  type JsonValue,
-  type ModuleField,
-  type OrganizationAccessDeclaration,
-  type OrganizationSelectionCandidate,
-  type PageDefinition,
-  type PermissionDeclaration,
   type PlatformId,
-  type RecordTypeDefinition,
-  type SelectedOrganizationScope,
-  isRecord,
-  itemPropSlots,
-  sameId,
-  walkPlacementData,
-  resolveShellLayout,
-  type ApplicationShell,
-  type PageComposition,
-} from "../schema";
+} from "../catalogue/identifiers";
+import { isRecord, sameId } from "../catalogue/runtime-primitives";
+import type {
+  ApplicationShell,
+  PageComposition,
+} from "../definition/application-composition/page-composition";
+import type { PageDefinition } from "../definition/application-contracts";
+import type { ModuleField, RecordTypeDefinition } from "../definition/module-contracts";
+import { moduleFieldValueSchemas } from "../records/module-field-values";
+import { richTextDocumentSchema } from "../records/rich-text";
+import { resolveShellLayout } from "./page-composition-resolution";
+import { itemPropSlots, walkPlacementData } from "./placement-walk";
 import {
   createPrivateFormDraftService,
   privateFormDraftLimits,

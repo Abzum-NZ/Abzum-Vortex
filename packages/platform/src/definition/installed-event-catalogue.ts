@@ -1,13 +1,17 @@
 import {
-  applicationDefinitionConsumerReadResultSchema,
   activeApplicationInstallationEvidenceSchema,
-  installedEventDescriptorSchema,
+  type ModuleInstallationBindingEvidence,
+} from "../files/storage";
+import {
+  applicationDefinitionConsumerReadResultSchema,
   moduleDefinitionConsumerReadResultSchema,
   systemApplicationBoundReleaseSetResultSchema,
   type DefinitionConsumerReadResult,
+} from "./definition-consumer-read";
+import {
+  installedEventDescriptorSchema,
   type InstalledEventDescriptor,
-  type ModuleInstallationBindingEvidence,
-} from "../schema";
+} from "./module-foundation-contracts";
 import { z } from "zod";
 import {
   canonicalJson,

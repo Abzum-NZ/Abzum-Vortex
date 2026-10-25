@@ -1,22 +1,24 @@
 import "server-only";
 
+import type { PreparedApplicationPermissionRegistration } from "../access/permission-registry";
+import { jsonValueSchema } from "../catalogue/common";
+import type { ResolvedPageComposition } from "../pages/page-composition-resolution";
+import { canonicalJson } from "./canonical-json";
 import {
-  canonicalJson,
+  systemApplicationBoundReleaseSetResultSchema,
+  type SystemApplicationBoundReleaseSetResult,
+} from "./definition-consumer-read";
+import {
   installationRuntimeBundlePagesSectionSchema,
   type installationRuntimeBundleSections,
-  jsonValueSchema,
   type InstallationRuntimeBundleSourceManifest,
-  type PreparedApplicationPermissionRegistration,
-  systemApplicationBoundReleaseSetResultSchema,
-  type ResolvedPageComposition,
-  type SystemApplicationBoundReleaseSetResult,
-} from "../schema";
-import type { RequestDatabaseTransaction } from "../db/index";
+} from "./installation-runtime-bundle";
+import type { RequestDatabaseTransaction } from "../db/request-transaction";
 import {
   createActiveInstallationBundleRepository,
   activeInstallationBundleStateSchema,
   type ActiveInstallationBundleState,
-} from "./module-index";
+} from "./active-installation-bundle-repository";
 import { z } from "zod";
 import {
   assembleHumanInstalledRuntimeContext,
@@ -46,10 +48,17 @@ type InstalledPageBundle = Readonly<{
 
 /** Retained size of the cache, counted as the stored section text each parsed bundle came from. */
 const installedPageBundleCacheBudget = 256 * 1024 * 1024;
-const installedPageBundles = new Map<string, Readonly<{ bundle: InstalledPageBundle; size: number }>>();
+const installedPageBundles = new Map<
+  string,
+  Readonly<{ bundle: InstalledPageBundle; size: number }>
+>();
 let installedPageBundlesSize = 0;
 
-const retainInstalledPageBundle = (key: string, bundle: InstalledPageBundle, size: number): void => {
+const retainInstalledPageBundle = (
+  key: string,
+  bundle: InstalledPageBundle,
+  size: number,
+): void => {
   const previous = installedPageBundles.get(key);
   if (previous !== undefined) {
     installedPageBundles.delete(key);
@@ -95,8 +104,12 @@ const bundleFromSections = (
   sections: Readonly<Partial<Record<(typeof installationRuntimeBundleSections)[number], unknown>>>,
   correlationId: ActiveInstallationBundleState["identity"]["correlationId"],
 ): InstalledPageBundle => {
-  const pages = installationRuntimeBundlePagesSectionSchema.parse(requireSection(sections, "pages"));
-  const flows = z.object({ flows: z.array(z.unknown()), flowBindings: z.array(z.unknown()) }).strict()
+  const pages = installationRuntimeBundlePagesSectionSchema.parse(
+    requireSection(sections, "pages"),
+  );
+  const flows = z
+    .object({ flows: z.array(z.unknown()), flowBindings: z.array(z.unknown()) })
+    .strict()
     .parse(requireSection(sections, "flows"));
   const applicationContent = {
     ...pages.application.content,
@@ -108,19 +121,21 @@ const bundleFromSections = (
     theme: requireSection(sections, "theme"),
     platformBlockDependencies: requireSection(sections, "component_registry"),
   };
-  const releaseSet = deepFreeze(systemApplicationBoundReleaseSetResultSchema.parse({
-    application: {
-      ...pages.application.identity,
-      correlationId,
-      content: applicationContent,
-      toolBundle: requireSection(sections, "tool_bundle"),
-    },
-    modules: pages.modules.map((module) => ({
-      ...module.identity,
-      correlationId,
-      content: module.content,
-    })),
-  }));
+  const releaseSet = deepFreeze(
+    systemApplicationBoundReleaseSetResultSchema.parse({
+      application: {
+        ...pages.application.identity,
+        correlationId,
+        content: applicationContent,
+        toolBundle: requireSection(sections, "tool_bundle"),
+      },
+      modules: pages.modules.map((module) => ({
+        ...module.identity,
+        correlationId,
+        content: module.content,
+      })),
+    }),
+  );
   const application = releaseSet.application;
   if (pages.resolvedCompositions.length !== application.content.pages.length)
     throw new Error("INSTALLED_PAGE_BUNDLE_COMPOSITION_UNAVAILABLE");
@@ -200,13 +215,18 @@ const identityMatchesReleaseSet = (
     application.correlationId !== identity.correlationId ||
     application.definitionKey !== identity.registeredApplication.definitionKey ||
     application.releaseVersion !== identity.registeredApplication.releaseVersion ||
-    application.validationContractVersion !== identity.registeredApplication.validationContractVersion ||
+    application.validationContractVersion !==
+      identity.registeredApplication.validationContractVersion ||
     application.contentFingerprint !== identity.registeredApplication.contentFingerprint ||
     application.resolutionFingerprint !== identity.registeredApplication.resolutionFingerprint
-  ) throw new Error("INSTALLED_PAGE_BUNDLE_SOURCE_MISMATCH");
+  )
+    throw new Error("INSTALLED_PAGE_BUNDLE_SOURCE_MISMATCH");
   const modules = [...releaseSet.modules].sort((left, right) =>
-    left.rootId.toLowerCase() < right.rootId.toLowerCase() ? -1
-      : left.rootId.toLowerCase() > right.rootId.toLowerCase() ? 1 : 0,
+    left.rootId.toLowerCase() < right.rootId.toLowerCase()
+      ? -1
+      : left.rootId.toLowerCase() > right.rootId.toLowerCase()
+        ? 1
+        : 0,
   );
   if (modules.length !== identity.moduleBindings.length)
     throw new Error("INSTALLED_PAGE_BUNDLE_SOURCE_MISMATCH");
@@ -214,7 +234,8 @@ const identityMatchesReleaseSet = (
     const binding = identity.moduleBindings[index];
     const pin = identity.pinFacts[index];
     if (
-      binding === undefined || pin === undefined ||
+      binding === undefined ||
+      pin === undefined ||
       module.organizationId !== identity.organizationId ||
       module.correlationId !== identity.correlationId ||
       module.rootId !== binding.moduleRootId ||
@@ -223,7 +244,8 @@ const identityMatchesReleaseSet = (
       module.releaseRevision !== pin.moduleReleaseRevision ||
       module.contentFingerprint !== pin.contentFingerprint ||
       module.resolutionFingerprint !== pin.resolutionFingerprint
-    ) throw new Error("INSTALLED_PAGE_BUNDLE_SOURCE_MISMATCH");
+    )
+      throw new Error("INSTALLED_PAGE_BUNDLE_SOURCE_MISMATCH");
   }
 };
 
@@ -275,20 +297,27 @@ export const createHumanInstalledPageBundleContextLoader = (
         (validated, prepare) => preparedRegistrationFor(bundle, validated, prepare),
         contributions,
       );
-      return retainPageCompositions(context, bundle.compositions, deepFreeze({
-        organizationId: state.identity.organizationId,
-        applicationRootId: state.identity.applicationRootId,
-        applicationReleaseRevision: state.identity.applicationReleaseRevision,
-        pinFingerprint: state.identity.pinFingerprint,
-        moduleBindings: state.identity.moduleBindings,
-        pinFacts: state.identity.pinFacts,
-        sourceManifest: bundleIndex.sourceManifest,
-      }));
+      return retainPageCompositions(
+        context,
+        bundle.compositions,
+        deepFreeze({
+          organizationId: state.identity.organizationId,
+          applicationRootId: state.identity.applicationRootId,
+          applicationReleaseRevision: state.identity.applicationReleaseRevision,
+          pinFingerprint: state.identity.pinFingerprint,
+          moduleBindings: state.identity.moduleBindings,
+          pinFacts: state.identity.pinFacts,
+          sourceManifest: bundleIndex.sourceManifest,
+        }),
+      );
     },
   });
 };
 
-const installedPageCompositions = new WeakMap<object, ReadonlyMap<string, ResolvedPageComposition>>();
+const installedPageCompositions = new WeakMap<
+  object,
+  ReadonlyMap<string, ResolvedPageComposition>
+>();
 const installedPageBundleIdentities = new WeakMap<object, InstalledPageBundleIdentityEvidence>();
 
 const retainPageCompositions = <Context extends InstalledRuntimeContext>(
@@ -335,8 +364,10 @@ export const isTrustedInstalledPageComposition = (
   try {
     const context = requireInstalledRuntimeContext(contextCandidate);
     const compositions = installedPageCompositions.get(context);
-    return compositions !== undefined &&
-      [...compositions.values()].some((composition) => composition === compositionCandidate);
+    return (
+      compositions !== undefined &&
+      [...compositions.values()].some((composition) => composition === compositionCandidate)
+    );
   } catch {
     return false;
   }
@@ -374,28 +405,37 @@ export const matchesInstalledPageBundleIdentity = (
       application.releaseRevision !== state.identity.applicationReleaseRevision ||
       application.definitionKey !== state.identity.registeredApplication.definitionKey ||
       application.releaseVersion !== state.identity.registeredApplication.releaseVersion ||
-      application.validationContractVersion !== state.identity.registeredApplication.validationContractVersion ||
+      application.validationContractVersion !==
+        state.identity.registeredApplication.validationContractVersion ||
       application.contentFingerprint !== state.identity.registeredApplication.contentFingerprint ||
-      application.resolutionFingerprint !== state.identity.registeredApplication.resolutionFingerprint ||
+      application.resolutionFingerprint !==
+        state.identity.registeredApplication.resolutionFingerprint ||
       canonicalJson(state.identity.moduleBindings) !== canonicalJson(expected.moduleBindings) ||
       canonicalJson(state.identity.pinFacts) !== canonicalJson(expected.pinFacts)
-    ) return false;
+    )
+      return false;
     const modules = [...context.releaseSet.modules].sort((left, right) =>
-      left.rootId.toLowerCase() < right.rootId.toLowerCase() ? -1
-        : left.rootId.toLowerCase() > right.rootId.toLowerCase() ? 1 : 0,
+      left.rootId.toLowerCase() < right.rootId.toLowerCase()
+        ? -1
+        : left.rootId.toLowerCase() > right.rootId.toLowerCase()
+          ? 1
+          : 0,
     );
     if (modules.length !== state.identity.pinFacts.length) return false;
     return modules.every((module, index) => {
       const binding = state.identity.moduleBindings[index];
       const pin = state.identity.pinFacts[index];
-      return binding !== undefined && pin !== undefined &&
+      return (
+        binding !== undefined &&
+        pin !== undefined &&
         module.organizationId === state.identity.organizationId &&
         module.rootId === binding.moduleRootId &&
         module.releaseRevision === binding.moduleReleaseRevision &&
         module.rootId === pin.moduleRootId &&
         module.releaseRevision === pin.moduleReleaseRevision &&
         module.contentFingerprint === pin.contentFingerprint &&
-        module.resolutionFingerprint === pin.resolutionFingerprint;
+        module.resolutionFingerprint === pin.resolutionFingerprint
+      );
     });
   } catch {
     return false;

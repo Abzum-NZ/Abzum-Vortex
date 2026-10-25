@@ -1,13 +1,9 @@
 import "server-only";
 
-import {
-  dispatchOccurrenceSchema,
-  eventOccurrenceIdSchema,
-  isNonNilUuidText,
-  timestampSchema,
-  type DispatchOccurrence,
-} from "../schema";
-import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
+import { eventOccurrenceIdSchema, timestampSchema } from "../catalogue/identifiers";
+import { isNonNilUuidText } from "../catalogue/runtime-primitives";
+import { dispatchOccurrenceSchema, type DispatchOccurrence } from "./occurrence-contracts";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
 
 export const eventConsumerProgressLimits = Object.freeze({
   maximumBatchSize: 100,

@@ -2,32 +2,31 @@ import "server-only";
 
 import {
   applicationRootIdSchema,
-  canonicalJson,
-  databaseTimestamp,
   moduleRootIdSchema,
   organizationIdSchema,
+  timestampSchema,
+} from "../catalogue/identifiers";
+import { databaseTimestamp, sameId } from "../catalogue/runtime-primitives";
+import { canonicalJson } from "../definition/canonical-json";
+import {
   prepareDefinitionPublicationCommandSchema,
   prepareDefinitionPublicationResultSchema,
   publishDefinitionCommandSchema,
   publishDefinitionResultSchema,
-  sameId,
-  timestampSchema,
-  type IdentitySession,
   type PrepareDefinitionPublicationResult,
   type PublishDefinitionResult,
-  type SelectedOrganizationScope,
-} from "../schema";
-import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
+} from "../definition/definition-store-contracts";
+import type { IdentitySession, SelectedOrganizationScope } from "./identity-access";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
+import { BuilderAuthorityError, requireBuilderAuthority } from "../definition/builder-authority";
 import {
-  BuilderAuthorityError,
-  createDatabaseDefinitionPublicationService,
   readApplicationDefinitionDraft,
   readModuleDefinitionDraft,
-  requireBuilderAuthority,
-  type ImmutableDefinitionPublicationCatalogueDefinition,
   type StoredApplicationDefinitionDraft,
   type StoredModuleDefinitionDraft,
-} from "../definition/definition-index";
+} from "../definition/definition-draft-read";
+import { createDatabaseDefinitionPublicationService } from "../definition/publication/publish";
+import type { ImmutableDefinitionPublicationCatalogueDefinition } from "../definition/publication/read";
 import {
   assertBeforeLiveDeadline,
   assertLivePermission,
@@ -43,11 +42,9 @@ import {
 } from "./builder-authority";
 import type { PlatformPermissionSource } from "./platform-permissions";
 import type { createHumanOrganizationRequestService } from "./human-organization-request";
-import {
-  DefinitionCompilationError,
-  DefinitionError,
-  isVersionImpactRefusal,
-} from "../definition/definition-index";
+import { DefinitionCompilationError } from "../definition/compilation-error";
+import { DefinitionError } from "../definition/definition-error";
+import { isVersionImpactRefusal } from "../definition/version-impact-error";
 import { definitionValidationMessage } from "../catalogue/validation-errors";
 
 /** `reason` is the stable code logged on the server and mapped to a message for the person. */

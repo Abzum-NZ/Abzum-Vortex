@@ -1,15 +1,17 @@
 import "server-only";
 
 import { compare } from "semver";
+import type { ApplicationCompositionCatalogueSnapshot } from "./application-composition/catalogue-snapshot";
 import {
   applicationCompilationRequestSchema,
-  applicationSourceDocumentSchema,
   definitionCompilationOutputSchema,
-  type ApplicationCompositionCatalogueSnapshot,
-  type ApplicationSourceDocument,
   type DefinitionCompilationOutput,
-  type StoredDefinitionSource,
-} from "../schema";
+} from "./definition-compilation-contracts";
+import {
+  applicationSourceDocumentSchema,
+  type ApplicationSourceDocument,
+} from "./definition-source";
+import type { StoredDefinitionSource } from "./definition-store-contracts";
 import type { PlatformPermissionSource } from "../access/platform-permissions";
 import { applicationModuleKeys } from "./application-module-sources";
 import { applicationModuleSources } from "./application-module-lowering";

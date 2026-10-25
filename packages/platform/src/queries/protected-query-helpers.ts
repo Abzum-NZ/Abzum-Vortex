@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { z, ZodError } from "zod";
-import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
 import type {
   ProtectedQueryRefusalReasonCode,
   ProtectedQueryResult,
@@ -14,7 +14,7 @@ import {
   QueryInputRefusalError,
   validateQueryInputValues,
 } from "./typed-input-validation";
-import type { JsonValue } from "../schema";
+import type { JsonValue } from "../catalogue/common";
 
 export type ResolvedInputs = Extract<z.infer<typeof inputsReadSchema>, { outcome: "resolved" }>;
 

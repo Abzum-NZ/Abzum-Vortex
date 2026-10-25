@@ -1,6 +1,12 @@
 import "server-only";
 
-import { projectNavigation, revisionSchema, type NavigationItem, type NavigationPermissionDecisions, type ProjectedNavigation } from "../schema";
+import { revisionSchema } from "../catalogue/identifiers";
+import type { NavigationItem } from "../definition/application-contracts";
+import {
+  projectNavigation,
+  type NavigationPermissionDecisions,
+  type ProjectedNavigation,
+} from "./projected-navigation";
 import type { ResolvedPageComposition } from "./page-composition-resolution";
 import {
   projectPageCapability,

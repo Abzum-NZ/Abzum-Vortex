@@ -1,33 +1,35 @@
 import "server-only";
 
 import { z } from "zod";
+import { correlationIdSchema } from "../catalogue/common";
 import {
   activityIdSchema,
   administrationDuplicateKeySchema,
   builderKeySchema,
-  configuredTenantAdministrationOperatorContextSchema,
-  correlationIdSchema,
-  databaseRevision,
-  databaseTimestamp,
-  entitlementCheckRequestSchema,
-  identitySessionSchema,
   namespacedKeySchema,
   organizationIdSchema,
-  organizationSelectionCandidateSchema,
   platformIdSchema,
   revisionSchema,
   tenantIdSchema,
   timestampSchema,
+} from "../catalogue/identifiers";
+import { databaseRevision, databaseTimestamp } from "../catalogue/runtime-primitives";
+import {
+  configuredTenantAdministrationOperatorContextSchema,
   type ConfiguredTenantAdministrationOperatorContext,
-  type EntitlementCheckRequest,
+} from "../identity/tenant-provisioning";
+import {
+  identitySessionSchema,
+  organizationSelectionCandidateSchema,
   type IdentitySession,
   type OrganizationSelectionCandidate,
-} from "../schema";
+} from "./identity-access";
+import { entitlementCheckRequestSchema, type EntitlementCheckRequest } from "./metering-contracts";
 import {
   withRuntimeTransaction,
   type DatabaseRow,
   type RequestDatabaseTransaction,
-} from "../db/index";
+} from "../db/request-transaction";
 import {
   createHumanOrganizationRequestService,
   type HumanOrganizationRequestDependencies,

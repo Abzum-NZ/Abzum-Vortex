@@ -4,13 +4,13 @@ import { z } from "zod";
 import {
   applicationRootIdSchema,
   containedComponentIdSchema,
-  flowRunAsPrincipalSchema,
   organizationIdSchema,
   ruleIdSchema,
-  stableDefinitionReleaseVersionSchema,
-} from "../schema";
-import type { FlowRunAsPrincipal } from "../schema";
-import type { DatabaseRow, RuntimeDatabaseTransaction } from "../db/index";
+} from "../catalogue/identifiers";
+import { stableDefinitionReleaseVersionSchema } from "../definition/version-impact";
+import { flowRunAsPrincipalSchema } from "../workflows/flow-run-as-principal";
+import type { FlowRunAsPrincipal } from "../workflows/flow-run-as-principal";
+import type { DatabaseRow, RuntimeDatabaseTransaction } from "../db/request-transaction";
 
 const flowRunAsPrincipalScopeShape = {
   organizationId: organizationIdSchema,

@@ -8,7 +8,7 @@ import {
   operatorAcceptsOperands,
   type OperandInfo,
 } from "../../rules/condition-types";
-import { jsonValueSchema, type JsonValue } from "../../schema";
+import { jsonValueSchema, type JsonValue } from "../../catalogue/common";
 import type { JsonObject } from "./context";
 import { object, array } from "./helpers";
 

@@ -1,17 +1,15 @@
 import "server-only";
 import { z } from "zod";
+import { correlationIdSchema } from "../catalogue/common";
+import { platformIdSchema, fileIdSchema, timestampSchema } from "../catalogue/identifiers";
 import {
   fileRecordSchema,
   verifiedFileActorSchema,
   uploadGrantSchema,
-  correlationIdSchema,
-  platformIdSchema,
-  fileIdSchema,
-  timestampSchema,
   fileUploadRenewalRefusalReasonSchema,
   fileUploadCompletionRefusalReasonSchema,
-} from "../schema";
-import type { RequestDatabaseTransaction } from "../db/index";
+} from "./file-contracts";
+import type { RequestDatabaseTransaction } from "../db/request-transaction";
 import type { FileUploadRepository } from "./upload";
 
 const pendingSchema = z

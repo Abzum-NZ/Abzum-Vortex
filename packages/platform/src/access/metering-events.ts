@@ -6,8 +6,8 @@ import {
   recordMeteringEventCommandSchema,
   type MeteringEvent,
   type RecordMeteringEventCommand,
-} from "../schema";
-import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
+} from "./metering-contracts";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
 
 /**
  * Exactly one immutable MeteringEvent per accepted command. A replayed duplicate

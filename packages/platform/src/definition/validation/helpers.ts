@@ -1,4 +1,7 @@
-import type { DefinitionValidationLocation, DefinitionRuleFailure } from "../../schema";
+import type {
+  DefinitionValidationLocation,
+  DefinitionRuleFailure,
+} from "../../catalogue/validation-errors";
 import type { Output, JsonObject, DefinitionPath } from "./context";
 
 export const rootLocation = (output: Output): DefinitionValidationLocation => {

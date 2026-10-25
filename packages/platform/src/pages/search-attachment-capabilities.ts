@@ -2,17 +2,18 @@ import "server-only";
 
 import {
   applicationRootIdSchema,
-  attachmentListPayloadSchema,
-  attachmentValueSchema,
   fieldIdSchema,
   fileIdSchema,
   organizationIdSchema,
   recordIdSchema,
   recordTypeIdSchema,
+} from "../catalogue/identifiers";
+import { isRecord, sameId } from "../catalogue/runtime-primitives";
+import {
+  attachmentListPayloadSchema,
   type AttachmentListPayload,
-  isRecord,
-  sameId,
-} from "../schema";
+} from "../files/application-attachment-blocks";
+import { attachmentValueSchema } from "../records/module-field-values";
 import { describeFailure } from "../catalogue/runtime-primitives";
 
 export type ReadOnlyAttachmentOwner = Readonly<{

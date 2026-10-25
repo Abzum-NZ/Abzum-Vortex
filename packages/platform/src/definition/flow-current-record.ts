@@ -1,17 +1,16 @@
 import "server-only";
 
-import {
-  recordIdSchema,
-  recordTypeIdSchema,
-  sameId,
-  type IdentitySession,
-  type OrganizationSelectionCandidate,
-  type SelectedOrganizationScope,
-} from "../schema";
-import type { HumanOrganizationRequestResult } from "../access/index";
-import type { RequestDatabaseTransaction } from "../db/index";
+import type {
+  IdentitySession,
+  OrganizationSelectionCandidate,
+  SelectedOrganizationScope,
+} from "../access/identity-access";
+import { recordIdSchema, recordTypeIdSchema } from "../catalogue/identifiers";
+import { sameId } from "../catalogue/runtime-primitives";
+import type { HumanOrganizationRequestResult } from "../access/human-organization-request";
+import type { RequestDatabaseTransaction } from "../db/request-transaction";
 import type { ViewerSafeRecordLinkReadService } from "../queries/viewer-safe-record-link-read";
-import { flowRuntimeValueOf } from "../rules/index";
+import { flowRuntimeValueOf } from "../rules/action-flow-run";
 import type { InstalledFlowBindings } from "./flow-binding-endpoint";
 import type { FlowCurrentRecordRead } from "./flow-orchestrator-types";
 

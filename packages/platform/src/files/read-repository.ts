@@ -2,23 +2,21 @@ import "server-only";
 
 import { z } from "zod";
 
+import { correlationIdSchema } from "../catalogue/common";
 import {
   applicationRootIdSchema,
-  correlationIdSchema,
-  downloadGrantSchema,
   fieldIdSchema,
-  fileRecordSchema,
   organizationIdSchema,
   recordIdSchema,
   recordTypeIdSchema,
   type ApplicationRootId,
   type FieldId,
   type FileId,
-  type FileRecord,
   type OrganizationId,
   type RecordId,
   type RecordTypeId,
-} from "../schema";
+} from "../catalogue/identifiers";
+import { downloadGrantSchema, fileRecordSchema, type FileRecord } from "./file-contracts";
 import type { ClaimedDownloadGrant, FileReadRepository } from "./read";
 
 type SqlValue = string | number | boolean | Date | Uint8Array | null;

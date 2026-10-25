@@ -4,11 +4,11 @@ import {
   applicationRootIdSchema,
   organizationIdSchema,
   revisionSchema,
-  stableDefinitionReleaseVersionSchema,
   type ApplicationRootId,
   type OrganizationId,
-} from "../schema";
-import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
+} from "../catalogue/identifiers";
+import { stableDefinitionReleaseVersionSchema } from "./version-impact";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
 import { z } from "zod";
 import { DefinitionError, unexpectedDefinitionFailure } from "./definition-error";
 
@@ -122,4 +122,3 @@ export const createDatabaseApplicationReleaseAdoptionTargetService = (
   createApplicationReleaseAdoptionTargetService(
     createDatabaseApplicationReleaseAdoptionTargetRepository(transaction),
   );
-

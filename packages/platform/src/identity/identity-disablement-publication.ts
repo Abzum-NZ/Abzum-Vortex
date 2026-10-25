@@ -1,7 +1,7 @@
 import "server-only";
 
-import { identityIdSchema } from "../schema";
-import type { RequestDatabaseTransaction } from "../db/index";
+import { identityIdSchema } from "../catalogue/identifiers";
+import type { RequestDatabaseTransaction } from "../db/request-transaction";
 
 /**
  * Live disablement checks for named sensitive operations.

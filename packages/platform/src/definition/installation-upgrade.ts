@@ -1,25 +1,24 @@
 import "server-only";
 
 import { createHash } from "node:crypto";
-import type { RequestDatabaseTransaction } from "../db/index";
-import {
-  createBuilderAuthority,
-  prepareApplicationRoleTemplatesForHumanRequest,
-  type createHumanOrganizationRequestService,
-  type HumanOrganizationRequestResult,
-} from "../access/index";
+import type { RequestDatabaseTransaction } from "../db/request-transaction";
+import { prepareApplicationRoleTemplatesForHumanRequest } from "../access/application-role-template-adapter";
+import { createBuilderAuthority } from "../access/builder-authority";
+import type {
+  createHumanOrganizationRequestService,
+  HumanOrganizationRequestResult,
+} from "../access/human-organization-request";
 import type { PlatformPermissionSource } from "../access/platform-permissions";
-import {
-  canonicalJson,
-  sameId,
-  type ActiveApplicationInstallationEvidence,
-  type ApplicationRootId,
-  type IdentitySession,
-  type OrganizationId,
-  type OrganizationSelectionCandidate,
-  type SelectedOrganizationScope,
-  type SystemApplicationBoundReleaseSetResult,
-} from "../schema";
+import type {
+  IdentitySession,
+  OrganizationSelectionCandidate,
+  SelectedOrganizationScope,
+} from "../access/identity-access";
+import type { ApplicationRootId, OrganizationId } from "../catalogue/identifiers";
+import { sameId } from "../catalogue/runtime-primitives";
+import type { ActiveApplicationInstallationEvidence } from "../files/storage";
+import { canonicalJson } from "./canonical-json";
+import type { SystemApplicationBoundReleaseSetResult } from "./definition-consumer-read";
 import { createDatabaseApplicationReleaseAdoptionReleaseSetService } from "./application-bound-release-set";
 import { DefinitionError } from "./definition-error";
 import { resolveModuleContributions } from "./extension-contributions";

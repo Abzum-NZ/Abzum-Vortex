@@ -1,9 +1,10 @@
-import { type ModuleField, type ConditionNode, savedSharingConditionSchema } from "../../schema";
+import { type ModuleField, savedSharingConditionSchema } from "../module-contracts";
+import type { ConditionNode } from "../module-foundation-contracts";
 import {
   evaluateTypedCondition,
   type TypedConditionParameterDeclaration,
-  TypedConditionEvaluationError,
-} from "../../rules/index";
+} from "../../rules/typed-condition";
+import { TypedConditionEvaluationError } from "../../rules/typed-condition-error";
 import { DefinitionCompilationError } from "../compilation-error";
 import { object } from "./helpers";
 

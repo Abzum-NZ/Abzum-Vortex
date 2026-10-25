@@ -1,4 +1,7 @@
-import type { DefinitionRuleFailure, DefinitionValidationLocation } from "../../schema";
+import type {
+  DefinitionRuleFailure,
+  DefinitionValidationLocation,
+} from "../../catalogue/validation-errors";
 import type { DefinitionSetValidationContext } from "./context";
 import { array, failure, object } from "./helpers";
 

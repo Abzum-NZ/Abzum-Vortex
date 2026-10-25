@@ -1,38 +1,39 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
-import {
-  authoredGridLayout,
-  sameId,
-  type ExecuteNamedActionResult,
-  type IdentitySession,
-  type JsonValue,
-  type OrganizationSelectionCandidate,
-  type RecordsSelectionCountRequest,
-  type RecordsSelectionCountResult,
-  type RecordsTableBulkActionContract,
-  type RecordsTableBulkActionRequest,
-  type RecordsTableBulkRefusalReason,
-  type RecordsTableBulkRunLine,
-  type RecordsTableFilterValue,
-  type RecordsTableSortKey,
-} from "../../schema";
+import type { IdentitySession, OrganizationSelectionCandidate } from "../../access/identity-access";
+import type { JsonValue } from "../../catalogue/common";
+import { sameId } from "../../catalogue/runtime-primitives";
+import type { RecordsTableBulkActionContract } from "../../definition/application-composition/records-table-features/bulk-actions";
+import type { ExecuteNamedActionResult } from "../../records/named-actions";
+import { authoredGridLayout } from "../grid-view-state";
+import type {
+  RecordsSelectionCountRequest,
+  RecordsSelectionCountResult,
+  RecordsTableBulkActionRequest,
+  RecordsTableBulkRefusalReason,
+  RecordsTableBulkRunLine,
+} from "../records-selection";
+import type { RecordsTableFilterValue } from "../records-table-filters";
+import type { RecordsTableSortKey } from "../records-table-state";
 import {
   createHumanOrganizationRequestService,
   type HumanOrganizationRequestDependencies,
-} from "../../access/index";
+} from "../../access/human-organization-request";
 import { installedNamedActions } from "../../definition/installed-named-actions";
-import {
-  createProtectedQueryService,
-  tableReadCandidatesPerRequest,
-  type QueryContinuationKey,
-} from "../../queries/index";
+import type { QueryContinuationKey } from "../../queries/continuation-token";
+import { createProtectedQueryService } from "../../queries/protected-query-service";
+import { tableReadCandidatesPerRequest } from "../../queries/protected-query-table";
+import type { NamedActionEligibility } from "../../records/action-record-availability";
 import {
   createNamedActionRecordPort,
   namedActionBatchMaximum,
-  type NamedActionEligibility,
-} from "../../records/index";
-import { collectActionFlowTasks, flowLibraryOf, type ActionFlowRunner } from "../../rules/index";
+} from "../../records/action-record-port";
+import {
+  collectActionFlowTasks,
+  flowLibraryOf,
+  type ActionFlowRunner,
+} from "../../rules/action-flow-run";
 import {
   fieldChoiceLabelsOf,
   fieldDateTypesOf,

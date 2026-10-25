@@ -1,9 +1,11 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
-import { isRecord, recordsTableContractOrLog, sameId, type IdentitySession } from "../../schema";
-import { createHumanOrganizationRequestService } from "../../access/index";
-import type { RequestDatabaseTransaction } from "../../db/index";
+import type { IdentitySession } from "../../access/identity-access";
+import { isRecord, sameId } from "../../catalogue/runtime-primitives";
+import { recordsTableContractOrLog } from "../../definition/application-composition/records-display";
+import { createHumanOrganizationRequestService } from "../../access/human-organization-request";
+import type { RequestDatabaseTransaction } from "../../db/request-transaction";
 import {
   placementSettings,
   TABLE_BLOCK_RELEASE,
@@ -11,7 +13,7 @@ import {
 import { createHumanInstalledPageBundleContextLoader } from "../../definition/installed-page-bundle-context";
 import { installedNamedActions } from "../../definition/installed-named-actions";
 import { recordsTableBulkActions } from "../../definition/application-composition/records-table-features/bulk-actions";
-import { collectActionFlowTasks, flowLibraryOf } from "../../rules/index";
+import { collectActionFlowTasks, flowLibraryOf } from "../../rules/action-flow-run";
 import type {
   NamedActionAvailability,
   NamedActionAvailabilityRequest,
@@ -19,7 +21,7 @@ import type {
 } from "../named-action-availability-schema";
 import { logRecordsTableRequestRefusal, recordsTableRequestRefusal } from ".";
 import type { RecordsTableBulkAddress, RecordsTableBulkDependencies } from "./bulk-run";
-import { installedPlacementProps } from "./flow-dispatch";
+import { installedPlacementProps } from "./placement";
 import {
   readNamedActionEligibility,
   type NamedActionEligibilityAction,

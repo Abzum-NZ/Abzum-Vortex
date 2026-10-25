@@ -1,4 +1,4 @@
-import type { DefinitionCompilationOutput } from "../../schema";
+import type { DefinitionCompilationOutput } from "../definition-compilation-contracts";
 import type { Resolution } from "./resolution";
 import { applicationModuleKeysOf, asObject, fail, type JsonObject } from "./shared";
 import { moduleDependencies } from "../module-dependencies";
@@ -6,10 +6,7 @@ import { moduleDependencies } from "../module-dependencies";
 export function dependencyOrder(source: JsonObject): string[] {
   const body = asObject(source.body);
   if (source.kind === "module")
-    return [
-      ...moduleDependencies(source).map((entry) => entry.module),
-      String(source.key),
-    ];
+    return [...moduleDependencies(source).map((entry) => entry.module), String(source.key)];
   if (source.kind === "application")
     return [
       ...applicationModuleKeysOf(body),

@@ -1,5 +1,5 @@
+import type { DefinitionRuleFailureFamily } from "../catalogue/validation-errors";
 import {
-  flowLiteralSchema,
   flowMaximumForEachItemsDurable,
   flowMaximumForEachItemsOther,
   flowMaximumServerSeconds,
@@ -7,10 +7,10 @@ import {
   flowMaximumTaskNestingDepth,
   flowTaskChildLists,
   flowTriggerExecutionKinds,
-  type DefinitionRuleFailureFamily,
   type FlowSource,
   type FlowTask,
-} from "../schema";
+} from "../workflows/flow-contracts";
+import { flowLiteralSchema } from "../workflows/flow-values";
 import type { DefinitionCompilerRefusalCode } from "./compilation-error";
 import type { Path } from "./flow-validation";
 

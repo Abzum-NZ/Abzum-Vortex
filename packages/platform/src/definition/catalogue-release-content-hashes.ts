@@ -1,5 +1,5 @@
 import { fingerprintCanonicalValue } from "./canonical-json-definition";
-import type { ConnectionTypeSourceDocument } from "../schema";
+import type { ConnectionTypeSourceDocument } from "./definition-source";
 
 /**
  * The one derivation of each platform catalogue release content hash. The publication catalogue

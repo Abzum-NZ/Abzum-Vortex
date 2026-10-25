@@ -7,7 +7,7 @@ import {
   verifiedIdentitySchema,
   type IdentityAuthority,
   type VerifiedIdentity,
-} from "../schema";
+} from "../access/identity-access";
 import {
   IdentityVerificationError,
   type IdentityVerificationRefusalCode,

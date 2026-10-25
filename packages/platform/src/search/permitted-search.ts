@@ -1,18 +1,19 @@
 import "server-only";
 
 import {
-  isRecord,
-  sameId,
+  selectedOrganizationScopeSchema,
+  type SelectedOrganizationScope,
+} from "../access/identity-access";
+import { searchPrioritySchema } from "../catalogue/catalogues";
+import {
   applicationRootIdSchema,
   fieldIdSchema,
   fingerprintSchema,
   organizationIdSchema,
   recordIdSchema,
   recordTypeIdSchema,
-  searchPrioritySchema,
-  selectedOrganizationScopeSchema,
-  type SelectedOrganizationScope,
-} from "../schema";
+} from "../catalogue/identifiers";
+import { isRecord, sameId } from "../catalogue/runtime-primitives";
 import {
   searchDocumentLimits,
   searchDocumentSchemaVersion,

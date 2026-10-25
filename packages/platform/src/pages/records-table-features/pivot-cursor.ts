@@ -2,7 +2,7 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 import { z } from "zod";
-import type { QueryContinuationKey } from "../../queries/index";
+import type { QueryContinuationKey } from "../../queries/continuation-token";
 import { openToken, sealToken } from "../../queries/sealed-token";
 import { canonicalJson } from "../../definition/canonical-json";
 import {

@@ -9,17 +9,16 @@ import {
   type ConditionValueType,
   type OperandInfo,
 } from "./condition-types";
+import type { JsonValue } from "../catalogue/common";
+import { organizationAccountIdSchema } from "../catalogue/identifiers";
+import type { ModuleField } from "../definition/module-contracts";
+import { parseExactDecimal, type ExactDecimal } from "../records/exact-decimal";
 import {
   exactDecimalTextSchema,
   moneyValueSchema,
-  organizationAccountIdSchema,
-  parseExactDecimal,
   recordLinkValueSchema,
-  type ExactDecimal,
-  type FlowFormula,
-  type JsonValue,
-  type ModuleField,
-} from "../schema";
+} from "../records/module-field-values";
+import type { FlowFormula } from "../workflows/flow-values";
 import {
   TypedConditionEvaluationError,
   type TypedConditionEvaluationErrorReason,

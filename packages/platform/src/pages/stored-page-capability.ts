@@ -3,41 +3,42 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 import {
-  databaseTimestamp,
-  sameId,
-  describeFailure,
-  conditionNodeSchema,
-  applicationRootIdSchema,
-  installedNamedActionReferenceSchema,
+  sessionContextSchema,
+  type IdentitySession,
+  type OrganizationSelectionCandidate,
+} from "../access/identity-access";
+import {
   organizationRecordAccessDeclarationSchema,
+  type OrganizationAccessDeclaration,
+} from "../access/organization-access-decision";
+import type { PermissionRegistryEntryCandidate } from "../access/permission-registry";
+import type { PermissionDeclaration } from "../access/permissions";
+import { safeHttpsUrlSchema, type JsonValue } from "../catalogue/common";
+import {
+  applicationRootIdSchema,
   pageIdSchema,
   revisionSchema,
-  sessionContextSchema,
-  safeHttpsUrlSchema,
-  type IdentitySession,
   type ApplicationRootId,
-  type OrganizationAccessDeclaration,
-  type OrganizationSelectionCandidate,
-  type PermissionDeclaration,
-  type PermissionRegistryEntryCandidate,
-  PLATFORM_SERVICE_OPERATIONS,
-  flowTaskChildLists,
-  flowTaskRegistry,
-  platformOperationKey,
-  type FlowDefinition,
-  type FlowTask,
-  type ConditionNode,
-  type JsonValue,
   type PlatformId,
+} from "../catalogue/identifiers";
+import { PLATFORM_SERVICE_OPERATIONS } from "../catalogue/platform-service-operation-catalogue";
+import { databaseTimestamp, sameId, describeFailure } from "../catalogue/runtime-primitives";
+import {
   type CompiledLayout,
   compiledItemTree,
-} from "../schema";
+} from "../definition/application-composition/page-composition";
+import { conditionNodeSchema, type ConditionNode } from "../definition/module-foundation-contracts";
+import { installedNamedActionReferenceSchema } from "../records/named-actions";
+import { platformOperationKey } from "../workflows/default-flow-sources";
 import {
-  collectActionFlowTasks,
-  evaluateTypedCondition,
-  flowLibraryOf,
-  TypedConditionEvaluationError,
-} from "../rules/index";
+  flowTaskChildLists,
+  type FlowDefinition,
+  type FlowTask,
+} from "../workflows/flow-contracts";
+import { flowTaskRegistry } from "../workflows/flow-task-registry";
+import { collectActionFlowTasks, flowLibraryOf } from "../rules/action-flow-run";
+import { evaluateTypedCondition } from "../rules/typed-condition";
+import { TypedConditionEvaluationError } from "../rules/typed-condition-error";
 import {
   readSubjectWithNamedActionAvailability,
   type NamedActionAvailability,
@@ -48,15 +49,17 @@ import {
   createHumanOrganizationRequestService,
   type HumanOrganizationRequestDependencies,
   type HumanOrganizationRequestResult,
-} from "../access/index";
+} from "../access/human-organization-request";
 import {
   isTrustedInstalledPageBundleContext,
-  requireInstalledRuntimeContext,
   matchesInstalledPageBundleIdentity,
   readInstalledPageComposition,
-  resolveInstalledPageIdentity,
+} from "../definition/installed-page-bundle-context";
+import {
+  requireInstalledRuntimeContext,
   type InstalledRuntimeContext,
-} from "../definition/app-index";
+} from "../definition/installed-runtime-context";
+import { resolveInstalledPageIdentity } from "../definition/standard-page-resolution";
 import {
   createAuthenticatedPageCapabilityService,
   type FixedAuthenticatedPageCapability,
@@ -69,7 +72,7 @@ import {
 import { resolvePageComposition } from "./page-composition-resolution";
 import { pageSubjectFromRead, type PageSubjectReadResult } from "./page-subject-read";
 import { activeInstallationBundleStateSchema } from "../definition/active-installation-bundle-repository";
-import type { RequestDatabaseTransaction } from "../db/index";
+import type { RequestDatabaseTransaction } from "../db/request-transaction";
 
 /** The page subject and, when it is readable, its bound named actions' availability by action id. */
 type SubjectWithAvailability = Readonly<{

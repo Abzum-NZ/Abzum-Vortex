@@ -1,4 +1,4 @@
-import type { SessionContext } from "../schema";
+import type { SessionContext } from "./identity-access";
 
 /** Package-private check for immutable Definition preparation paths. */
 export const isLiveSystemContext = (context: SessionContext): boolean => {

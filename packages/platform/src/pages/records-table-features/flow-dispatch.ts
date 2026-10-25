@@ -1,17 +1,13 @@
 import "server-only";
 
-import {
-  isRecord,
-  recordsTableContractOrLog,
-  recordIdSchema,
-  fieldIdSchema,
-  sameId,
-  recordsTableInlineEditEvent,
-  recordsTableRowEditEvent,
-} from "../../schema";
-import type { ComponentFlowBinding } from "../../schema";
-import type { RequestDatabaseTransaction } from "../../db";
-import type { HumanOrganizationRequestResult } from "../../access";
+import { recordIdSchema, fieldIdSchema } from "../../catalogue/identifiers";
+import { isRecord, sameId } from "../../catalogue/runtime-primitives";
+import { recordsTableContractOrLog } from "../../definition/application-composition/records-display";
+import { recordsTableInlineEditEvent } from "../../definition/application-composition/records-table-features/inline-edit";
+import { recordsTableRowEditEvent } from "../../definition/application-composition/records-table-features/row-edit";
+import type { ComponentFlowBinding } from "../../definition/application-flow-bindings";
+import type { RequestDatabaseTransaction } from "../../db/request-transaction";
+import type { HumanOrganizationRequestResult } from "../../access/human-organization-request";
 import type { InstalledFlowBindings } from "../../definition/flow-binding-endpoint";
 import {
   placementSettings,
@@ -26,32 +22,7 @@ import {
   projectRecordsTableFeatures,
   type RecordsTableRequestRefusal,
 } from ".";
-
-/** Locate the exact compiled placement; bindings of other block types keep their own gates. */
-export const installedPlacementProps = (
-  content: unknown,
-  placementId: string,
-): Record<string, unknown> | undefined => {
-  if (Array.isArray(content)) {
-    for (const entry of content) {
-      const found = installedPlacementProps(entry, placementId);
-      if (found !== undefined) return found;
-    }
-  } else if (isRecord(content)) {
-    if (
-      typeof content.type === "string" &&
-      isRecord(content.props) &&
-      typeof content.props.id === "string" &&
-      sameId(content.props.id, placementId)
-    )
-      return content.props;
-    for (const nested of Object.values(content)) {
-      const found = installedPlacementProps(nested, placementId);
-      if (found !== undefined) return found;
-    }
-  }
-  return undefined;
-};
+import { installedPlacementProps } from "./placement";
 
 /**
  * Why one inline-edited cell may not be written now, or undefined when it may: the field must be

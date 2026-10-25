@@ -2,27 +2,27 @@ import "server-only";
 
 import {
   applicationRootIdSchema,
-  permissionRegistryDefinitionReleaseSchema,
   platformIdSchema,
-  preparedApplicationPermissionRegistrationSchema,
   revisionSchema,
-  sessionContextSchema,
-  type DefinitionConsumerReadResult,
   type ApplicationRootId,
-  type PermissionDeclaration,
-  type PermissionRegistryDefinitionRelease,
-  type PermissionRegistryEntryCandidate,
-  type PreparedApplicationPermissionRegistration,
-  type SessionContext,
+} from "../catalogue/identifiers";
+import {
+  type DefinitionConsumerReadResult,
   type SystemApplicationBoundReleaseSetCommand,
   type SystemApplicationBoundReleaseSetResult,
   systemApplicationBoundReleaseSetResultSchema,
-} from "../schema";
+} from "../definition/definition-consumer-read";
+import { sessionContextSchema, type SessionContext } from "./identity-access";
 import {
-  canonicalJson,
-  compareCanonicalStrings,
-  fingerprintCanonicalValue,
-} from "../definition/definition-index";
+  permissionRegistryDefinitionReleaseSchema,
+  preparedApplicationPermissionRegistrationSchema,
+  type PermissionRegistryDefinitionRelease,
+  type PermissionRegistryEntryCandidate,
+  type PreparedApplicationPermissionRegistration,
+} from "./permission-registry";
+import type { PermissionDeclaration } from "./permissions";
+import { canonicalJson, compareCanonicalStrings } from "../definition/canonical-json";
+import { fingerprintCanonicalValue } from "../definition/canonical-json-definition";
 import { fingerprintPermissionMeaning } from "./permission-fingerprints";
 import { isLiveSystemContext } from "./private-system-context";
 

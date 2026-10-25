@@ -1,12 +1,13 @@
 import "server-only";
 
 import { createHash, timingSafeEqual } from "node:crypto";
-import { actorIdSchema, type DispatchOccurrence } from "../schema";
+import { actorIdSchema } from "../catalogue/identifiers";
+import type { DispatchOccurrence } from "./occurrence-contracts";
 import {
   withRuntimeTransaction,
   type DatabaseRow,
   type RequestDatabaseTransaction,
-} from "../db/index";
+} from "../db/request-transaction";
 import {
   createEventConsumerProgressRepository,
   eventConsumerProgressLimits,

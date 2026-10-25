@@ -1,34 +1,31 @@
 import { z } from "zod";
+import type { IdentitySession, OrganizationSelectionCandidate } from "../access/identity-access";
+import { jsonValueSchema, type JsonValue } from "../catalogue/common";
+import { groupIdSchema, recordIdSchema, recordTypeIdSchema } from "../catalogue/identifiers";
+import { PLATFORM_SERVICE_OPERATIONS } from "../catalogue/platform-service-operation-catalogue";
+import { describeFailure, isRecord, sameId } from "../catalogue/runtime-primitives";
 import {
-  PLATFORM_SERVICE_OPERATIONS,
-  describeFailure,
   executeNamedActionCommandSchema,
-  flowRefusalFeedbackSchema,
-  flowRefusalPresentationSchema,
-  groupIdSchema,
-  isRecord,
-  jsonValueSchema,
-  platformOperationKey,
-  recordIdSchema,
-  recordTypeIdSchema,
-  sameId,
-  saveRecordCommandSchema,
-  unlocatedCorrectionsRefusal,
+  type ExecuteNamedActionCommand,
+} from "../records/named-actions";
+import {
   viewerSafeRecordPinAcquisitionResultSchema,
   viewerSafeRecordPinSelectorSchema,
-  type ExecuteNamedActionCommand,
+} from "../records/record-links";
+import { saveRecordCommandSchema, type SaveRecordCommand } from "../records/records";
+import { platformOperationKey } from "../workflows/default-flow-sources";
+import {
+  flowRefusalFeedbackSchema,
+  flowRefusalPresentationSchema,
+  unlocatedCorrectionsRefusal,
   type FlowRefusalFeedback,
-  type IdentitySession,
-  type JsonValue,
-  type OrganizationSelectionCandidate,
-  type SaveRecordCommand,
-} from "../schema";
+} from "../workflows/flow-refusal-feedback";
+import type { BeforeSaveRuleWarning } from "../rules/before-save-flow-run";
 import type {
-  BeforeSaveRuleWarning,
   FlowProtectedTaskCall,
   FlowRunState,
   FlowTaskOutcome,
-} from "../rules/index";
+} from "../rules/flow-interpreter";
 import type { FlowEffectLedger, FlowEffectPrincipal } from "./flow-continuation-store";
 import { reportUnexpectedFailure } from "./definition-error";
 import {

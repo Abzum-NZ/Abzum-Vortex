@@ -1,12 +1,13 @@
 import "server-only";
 
-import type { BoardColumnReadRequest, PageDefinition } from "../../schema";
 import type {
-  HumanOrganizationRequestResult,
-  readCurrentOrganizationRuntimeSettingsAfterAuthorization,
-} from "../../access/index";
-import type { InstalledRuntimeContext } from "../../definition/index";
-import type { createProtectedQueryService } from "../../queries/index";
+  BoardColumnReadRequest,
+  PageDefinition,
+} from "../../definition/application-contracts";
+import type { HumanOrganizationRequestResult } from "../../access/human-organization-request";
+import type { readCurrentOrganizationRuntimeSettingsAfterAuthorization } from "../../access/organization-runtime-settings-administration";
+import type { InstalledRuntimeContext } from "../../definition/installed-runtime-context";
+import type { createProtectedQueryService } from "../../queries/protected-query-service";
 import type { RecordLinkResolver } from "../component-data-projection";
 import type { createLinkTilesQueryResolver } from "../link-tiles-query";
 import type { createQueryNoticeQueryResolver } from "../notice-query-projection";

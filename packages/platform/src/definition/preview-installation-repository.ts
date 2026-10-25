@@ -12,8 +12,8 @@ import {
   type PreviewInstallationCreateRequest,
   type PreviewInstallationRefreshRequest,
   type PreviewSeedResult,
-} from "../schema";
-import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
+} from "./preview-installation-contracts";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
 import {
   DefinitionError,
   classifyDatabaseError,

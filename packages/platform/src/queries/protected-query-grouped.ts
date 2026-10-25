@@ -1,15 +1,12 @@
 import "server-only";
 
 import type { z } from "zod";
-import type { RequestDatabaseTransaction } from "../db/index";
-import {
-  type JsonValue,
-  type SelectedOrganizationScope,
-  type IdentitySession,
-  sameId,
-  fieldIdSchema,
-  canonicalJson,
-} from "../schema";
+import type { RequestDatabaseTransaction } from "../db/request-transaction";
+import type { SelectedOrganizationScope, IdentitySession } from "../access/identity-access";
+import type { JsonValue } from "../catalogue/common";
+import { fieldIdSchema } from "../catalogue/identifiers";
+import { sameId } from "../catalogue/runtime-primitives";
+import { canonicalJson } from "../definition/canonical-json";
 import {
   type QueryContinuation,
   type QueryContinuationKey,

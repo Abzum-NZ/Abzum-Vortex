@@ -2,9 +2,17 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 import {
+  bootstrapVortexSuperAdministratorCommandSchema,
+  vortexSuperAdministratorAssignmentMutationResultSchema,
+  type BootstrapVortexSuperAdministratorCommand,
+  type VortexSuperAdministratorAssignmentMutationResult,
+} from "../access/super-administrator-governance";
+import {
   databaseTimestamp,
   databaseRevision,
   describeFailure,
+} from "../catalogue/runtime-primitives";
+import {
   adoptOrganizationCommandSchema,
   adoptOrganizationResultSchema,
   adoptTenantCommandSchema,
@@ -12,8 +20,6 @@ import {
   closeClusterIdentityCommandSchema,
   closeClusterIdentityResultSchema,
   configuredTenantAdministrationOperatorContextSchema,
-  bootstrapVortexSuperAdministratorCommandSchema,
-  vortexSuperAdministratorAssignmentMutationResultSchema,
   provisionTenantCommandSchema,
   provisionTenantResultSchema,
   reactivateClusterIdentityCommandSchema,
@@ -28,7 +34,6 @@ import {
   type AdoptOrganizationResult,
   type AdoptTenantCommand,
   type AdoptTenantResult,
-  type BootstrapVortexSuperAdministratorCommand,
   type CloseClusterIdentityCommand,
   type CloseClusterIdentityResult,
   type ConfiguredTenantAdministrationOperatorContext,
@@ -42,13 +47,12 @@ import {
   type SuspendClusterIdentityResult,
   type SuspendTenantCommand,
   type SuspendTenantResult,
-  type VortexSuperAdministratorAssignmentMutationResult,
-} from "../schema";
+} from "./tenant-provisioning";
 import {
   withRuntimeTransaction,
   type DatabaseRow,
   type RequestDatabaseTransaction,
-} from "../db/index";
+} from "../db/request-transaction";
 import { resolveFileStorageDestination } from "../files/storage-destination";
 import { logRefusedOperations } from "./log-refused-operations";
 

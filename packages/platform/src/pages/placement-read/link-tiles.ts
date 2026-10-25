@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { JsonValue } from "../../schema";
+import type { JsonValue } from "../../catalogue/common";
 import { placementSettingsOf, type PlacementReadEntry } from "./shared";
 import type { PlacementReadInput } from "./types";
 

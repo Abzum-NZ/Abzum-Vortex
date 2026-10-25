@@ -1,16 +1,15 @@
 import "server-only";
 
 import { createHash } from "node:crypto";
+import type { DefinitionValidationLocation } from "../catalogue/validation-errors";
 import {
   definitionCompilationOutputSchema,
   moduleCompilationRequestSchema,
-  moduleSourceDocumentSchema,
   type DefinitionCompilationOutput,
   type DefinitionResolutionSnapshot,
-  type DefinitionValidationLocation,
-  type ModuleSourceDocument,
-  type StoredDefinitionSource,
-} from "../schema";
+} from "./definition-compilation-contracts";
+import { moduleSourceDocumentSchema, type ModuleSourceDocument } from "./definition-source";
+import type { StoredDefinitionSource } from "./definition-store-contracts";
 import { describeFailure } from "../catalogue/runtime-primitives";
 import type { PlatformPermissionSource } from "../access/platform-permissions";
 import { compareCanonicalStrings, fingerprintCanonicalValue } from "./canonical-json-definition";

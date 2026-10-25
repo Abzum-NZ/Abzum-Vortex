@@ -1,15 +1,14 @@
 import "server-only";
 
+import type { PreparedApplicationPermissionRegistration } from "../access/permission-registry";
+import type { ApplicationRootId, OrganizationId } from "../catalogue/identifiers";
+import { sameId } from "../catalogue/runtime-primitives";
 import {
-  sameId,
   activeApplicationInstallationEvidenceSchema,
   type ActiveApplicationInstallationEvidence,
-  type ApplicationRootId,
-  type OrganizationId,
-  type PreparedApplicationPermissionRegistration,
-  type SystemApplicationBoundReleaseSetResult,
-} from "../schema";
-import { prepareApplicationPermissionRegistrationForHumanRequest } from "../access/index";
+} from "../files/storage";
+import type { SystemApplicationBoundReleaseSetResult } from "./definition-consumer-read";
+import { prepareApplicationPermissionRegistrationForHumanRequest } from "../access/permission-registry-definition-adapter";
 import {
   DefinitionError,
   databaseErrorCode,

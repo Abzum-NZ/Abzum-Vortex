@@ -1,23 +1,27 @@
 import "server-only";
 
+import type { SessionContext } from "../access/identity-access";
 import {
-  definitionCompilationOutputSchema,
-  definitionConsumerReadDependencyManifestSchema,
-  definitionConsumerReadResultSchema,
-  definitionResolutionSnapshotSchema,
   fingerprintSchema,
   moduleRootIdSchema,
   organizationIdSchema,
   platformIdSchema,
   revisionSchema,
-  assertModuleContractPair,
-  selectApplicationContractPair,
   semanticVersionSchema,
-  stableDefinitionReleaseVersionSchema,
+} from "../catalogue/identifiers";
+import { selectApplicationContractPair } from "./application-contract-versions";
+import {
+  definitionCompilationOutputSchema,
+  definitionResolutionSnapshotSchema,
+} from "./definition-compilation-contracts";
+import {
+  definitionConsumerReadDependencyManifestSchema,
+  definitionConsumerReadResultSchema,
   type DefinitionConsumerReadResult,
-  type ExactDefinitionDependency,
-  type SessionContext,
-} from "../schema";
+} from "./definition-consumer-read";
+import { assertModuleContractPair } from "./definition-source";
+import type { ExactDefinitionDependency } from "./definition-store-contracts";
+import { stableDefinitionReleaseVersionSchema } from "./version-impact";
 import { z } from "zod";
 import type { DefinitionPublicationCatalogue } from "./definition-publication-contracts";
 import {

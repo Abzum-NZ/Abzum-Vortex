@@ -2,40 +2,42 @@ import type { PlatformPermissionSource } from "../access/platform-permissions";
 import "server-only";
 
 import {
-  canonicalJson,
-  describeFailure,
-  recordIdSchema,
-  sameId,
-  type RecordId,
   organizationSelectionCandidateSchema,
+  type IdentitySession,
+  type OrganizationSelectionCandidate,
+  type SelectedOrganizationScope,
+} from "../access/identity-access";
+import type { OrganizationAccessDeclaration } from "../access/organization-access-decision";
+import type { PermissionDeclaration } from "../access/permissions";
+import { recordIdSchema, type RecordId } from "../catalogue/identifiers";
+import { describeFailure, sameId } from "../catalogue/runtime-primitives";
+import {
   viewerSafeRecordLinkIdentitySchema,
   viewerSafeRecordLinkResultSchema,
   viewerSafeRecordPinSelectorSchema,
   viewerSafeRecordPinAcquisitionResultSchema,
-  type IdentitySession,
-  type OrganizationAccessDeclaration,
-  type OrganizationSelectionCandidate,
-  type PageDefinition,
-  type PermissionDeclaration,
-  type SelectedOrganizationScope,
   type ViewerSafeRecordLinkIdentity,
   type ViewerSafeRecordLinkResult,
   type ViewerSafeRecordPinAcquisitionResult,
-} from "../schema";
+} from "../records/record-links";
+import type { PageDefinition } from "./application-contracts";
+import { canonicalJson } from "./canonical-json";
 import {
   createHumanOrganizationRequestService,
+  type HumanOrganizationRequestDependencies,
+} from "../access/human-organization-request";
+import {
   decideOrganizationAccessBatch,
   runOrganizationAccessOperation,
-  type HumanOrganizationRequestDependencies,
-} from "../access/index";
-import type { RequestDatabaseTransaction } from "../db/index";
-import type { ViewerSafeRecordLinkTitle } from "../schema";
+} from "../access/organization-access-decision-access";
+import type { RequestDatabaseTransaction } from "../db/request-transaction";
+import type { ViewerSafeRecordLinkTitle } from "../records/record-links";
 import {
   createViewerSafeRecordLinkReadService,
   viewerSafeRecordLinkTitleKey,
   viewerSafeRecordLinkTitleRecordLimit,
   viewerSafeRecordLinkTitleTypeLimit,
-} from "../queries/index";
+} from "../queries/viewer-safe-record-link-read";
 import {
   requireInstalledRuntimeContext,
   type InstalledRuntimeContext,

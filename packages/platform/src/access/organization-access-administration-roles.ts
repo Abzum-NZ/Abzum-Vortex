@@ -4,11 +4,10 @@ import { z } from "zod";
 import { maximumApplicationRoles } from "../definition/application-contracts";
 
 import { randomUUID } from "node:crypto";
+import { activityIdSchema, roleIdSchema } from "../catalogue/identifiers";
+import { databaseRevision, sameId } from "../catalogue/runtime-primitives";
+import type { IdentitySession, OrganizationSelectionCandidate } from "./identity-access";
 import {
-  databaseRevision,
-  sameId,
-  activityIdSchema,
-  affectedRoleAssignmentSchema,
   changeOrganizationAdministrationRoleAuthorityCommandSchema,
   changeOrganizationAdministrationRoleResultSchema,
   listOrganizationAdministrationApplicationRoleTemplatesCommandSchema,
@@ -25,23 +24,16 @@ import {
   readOrganizationAdministrationRoleResultSchema,
   prepareOrganizationAdministrationRoleChangeCommandSchema,
   prepareOrganizationAdministrationRoleRevisionAcceptanceCommandSchema,
-  organizationRoleChangeCandidateSchema,
-  roleIdSchema,
   retireOrganizationAdministrationRoleCommandSchema,
   reviseOrganizationAdministrationRoleMetadataCommandSchema,
-  type AffectedRoleAssignment,
   type ChangeOrganizationAdministrationRoleAuthorityCommand,
   type ChangeOrganizationAdministrationRoleResult,
-  type IdentitySession,
   type ListOrganizationAdministrationApplicationRoleTemplatesCommand,
   type ListOrganizationAdministrationApplicationRoleTemplatesResult,
   type ListOrganizationAdministrationPermissionsCommand,
   type ListOrganizationAdministrationPermissionsResult,
   type ListOrganizationAdministrationRolesCommand,
   type ListOrganizationAdministrationRolesResult,
-  type OrganizationRoleChangeCandidate,
-  type OrganizationSelectionCandidate,
-  type PreparedOrganizationRoleChange,
   type PrepareOrganizationAdministrationRoleChangeCommand,
   type PrepareOrganizationAdministrationRoleRevisionAcceptanceCommand,
   type ReadOrganizationAdministrationApplicationRoleTemplateCommand,
@@ -52,8 +44,17 @@ import {
   type ReadOrganizationAdministrationRoleResult,
   type RetireOrganizationAdministrationRoleCommand,
   type ReviseOrganizationAdministrationRoleMetadataCommand,
+} from "./organization-access-administration";
+import {
+  affectedRoleAssignmentSchema,
+  type AffectedRoleAssignment,
   type RolePermissionEntry,
-} from "../schema";
+} from "./organization-access-catalogue";
+import {
+  organizationRoleChangeCandidateSchema,
+  type OrganizationRoleChangeCandidate,
+  type PreparedOrganizationRoleChange,
+} from "./organization-role-changes";
 import type { HumanOrganizationRequestResult } from "./human-organization-request";
 import {
   prepareOrganizationRoleChangeEvidence,

@@ -3,21 +3,18 @@ import "server-only";
 import {
   requireInstalledRuntimeContext,
   type InstalledRuntimeContext,
-} from "../definition/app-index";
-import {
-  sameId,
-  validateComponentSettings,
-  type BlockPropertyValueContract,
-  type IdentitySession,
-  type JsonValue,
-  type OrganizationSelectionCandidate,
-} from "../schema";
+} from "../definition/installed-runtime-context";
+import type { IdentitySession, OrganizationSelectionCandidate } from "../access/identity-access";
+import type { JsonValue } from "../catalogue/common";
+import { sameId } from "../catalogue/runtime-primitives";
+import { validateComponentSettings } from "../definition/application-composition/block-property-schema";
+import type { BlockPropertyValueContract } from "../definition/application-composition/block-property-values";
 import { QUERY_NOTICE_BLOCK_RELEASE } from "../definition/application-composition-catalogue";
 import {
   protectedQueryCommandSchema,
   protectedQueryPageSchema,
   type ProtectedQueryCommand,
-} from "../queries/index";
+} from "../queries/protected-query-contracts";
 import type { RecordsTableQueryRunner } from "./records-table-query";
 import { describeFailure } from "../catalogue/runtime-primitives";
 

@@ -5,16 +5,17 @@ import {
   databaseTimestamp,
   sameId,
   unavailableError,
+} from "../catalogue/runtime-primitives";
+import { selectedOrganizationScopeSchema, type SelectedOrganizationScope } from "./identity-access";
+import {
   organizationRecordAccessDeclarationSchema,
   organizationRecordPermissionEligibilitySchema,
   safeOrganizationAccessRefusal,
-  selectedOrganizationScopeSchema,
   type OrganizationRecordAccessDeclaration,
   type OrganizationRecordPermissionEligibility,
   type SafeOrganizationAccessRefusal,
-  type SelectedOrganizationScope,
-} from "../schema";
-import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
+} from "./organization-access-decision";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
 
 const unavailableCode = "ORGANIZATION_RECORD_PERMISSION_AVAILABILITY_UNAVAILABLE";
 

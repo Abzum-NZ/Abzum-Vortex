@@ -1,9 +1,9 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
-import type { ExecuteNamedActionCommand } from "../schema";
-import type { RequestDatabaseTransaction } from "../db/index";
-import type { ActionFlowRunner } from "../rules/index";
+import type { ExecuteNamedActionCommand } from "./named-actions";
+import type { RequestDatabaseTransaction } from "../db/request-transaction";
+import type { ActionFlowRunner } from "../rules/action-flow-run";
 import { actionFlowSeed } from "./action-flow-effects";
 import {
   one,

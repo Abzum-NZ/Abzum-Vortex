@@ -1,9 +1,8 @@
 import "server-only";
 
 import { createHash } from "node:crypto";
+import { databaseTimestamp, databaseRevision } from "../catalogue/runtime-primitives";
 import {
-  databaseTimestamp,
-  databaseRevision,
   acceptOrganizationInvitationCommandSchema,
   invitationAcceptanceWithAccessVersionSchema,
   organizationAccountSchema,
@@ -12,12 +11,12 @@ import {
   type InvitationAcceptanceWithAccessVersion,
   type OrganizationAccount,
   type VerifiedIdentity,
-} from "../schema";
+} from "./identity-access";
 import {
   withRuntimeTransaction,
   type DatabaseRow,
   type RequestDatabaseTransaction,
-} from "../db/index";
+} from "../db/request-transaction";
 
 export const accessVersionErrorCodes = [
   "INVALID_ACCESS_VERSION_COMMAND",

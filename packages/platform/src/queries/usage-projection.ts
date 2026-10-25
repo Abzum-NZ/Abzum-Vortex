@@ -1,17 +1,13 @@
 import "server-only";
 
 import { z } from "zod";
-import {
-  identitySessionSchema,
-  organizationIdSchema,
-  tenantIdSchema,
-  type IdentitySession,
-} from "../schema";
+import { identitySessionSchema, type IdentitySession } from "../access/identity-access";
+import { organizationIdSchema, tenantIdSchema } from "../catalogue/identifiers";
 import {
   withRuntimeTransaction,
   type DatabaseRow,
   type RequestDatabaseTransaction,
-} from "../db/index";
+} from "../db/request-transaction";
 import { describeFailure } from "../catalogue/runtime-primitives";
 
 const periodSchema = z

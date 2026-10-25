@@ -1,14 +1,14 @@
+import { jsonValueSchema, type JsonValue } from "../catalogue/common";
 import {
-  jsonValueSchema,
-  moneyValueSchema,
   recordTypeDefinitionSchema,
-  type ConditionNode,
-  type FlowFormula,
-  type JsonValue,
   type ModuleField,
   type RecordTypeDefinition,
-} from "../schema";
-import { compareFlowText, evaluateFlowFormula, evaluateTypedCondition } from "../rules/index";
+} from "../definition/module-contracts";
+import type { ConditionNode } from "../definition/module-foundation-contracts";
+import type { FlowFormula } from "../workflows/flow-values";
+import { moneyValueSchema } from "./module-field-values";
+import { compareFlowText, evaluateFlowFormula } from "../rules/flow-formula";
+import { evaluateTypedCondition } from "../rules/typed-condition";
 import { persistedRecordFieldValueMatches } from "./field-values";
 
 type TotalField = Extract<ModuleField, { type: "total" }>;

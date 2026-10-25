@@ -1,11 +1,11 @@
 import { satisfies } from "semver";
+import type { DefinitionValidationLocation } from "../../catalogue/validation-errors";
+import type { DefinitionResolutionSnapshot } from "../definition-compilation-contracts";
 import type {
   ModuleSourceDocument,
   ApplicationSourceDocument,
-  DefinitionResolutionSnapshot,
   DefinitionSourceDocument,
-  DefinitionValidationLocation,
-} from "../../schema";
+} from "../definition-source";
 import { fingerprintCanonicalValue } from "../canonical-json-definition";
 import {
   DefinitionCompilationError,

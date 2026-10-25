@@ -1,12 +1,12 @@
 import "server-only";
 
+import type { JsonValue } from "../../catalogue/common";
+import type { RecordsTableGroupingFieldType } from "../../definition/application-composition/records-table-features/grouping";
 import {
   UnreadableSettingError,
-  type JsonValue,
-  type RecordsTableGroupingFieldType,
   type RecordsTablePivotDateUnit,
-} from "../../schema";
-import type { ProtectedQuerySummaryCompleted } from "../../queries/index";
+} from "../../definition/application-composition/records-table-features/shared";
+import type { ProtectedQuerySummaryCompleted } from "../../queries/protected-query-contracts";
 import {
   collectRecordLinkValues,
   recordLinkPlainText,

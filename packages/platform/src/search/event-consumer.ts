@@ -1,14 +1,16 @@
 import "server-only";
 
 import {
-  eventOccurrenceEnvelopeSchema,
   organizationIdSchema,
   recordIdSchema,
   recordTypeIdSchema,
   timestampSchema,
+} from "../catalogue/identifiers";
+import type { RecordTypeDefinition } from "../definition/module-contracts";
+import {
+  eventOccurrenceEnvelopeSchema,
   type EventOccurrenceEnvelope,
-  type RecordTypeDefinition,
-} from "../schema";
+} from "../events/occurrence-contracts";
 import {
   buildSearchDocument,
   searchDocumentStoreCommand,
