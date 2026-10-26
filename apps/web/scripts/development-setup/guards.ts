@@ -53,11 +53,10 @@ export type DevelopmentSetupArguments = Readonly<{
   firstOwner: FirstOwnerNomination;
   tenantShortName: string;
   organizationShortName: string;
-  seedDemo: boolean;
 }>;
 
 const usage =
-  "Usage: pnpm setup:local -- --local-development (--first-owner-email <email> | --first-owner-identity-id <uuid>) [--tenant-short-name <key>] [--organization-short-name <key>] [--seed-demo]";
+  "Usage: pnpm setup:local -- --local-development (--first-owner-email <email> | --first-owner-identity-id <uuid>) [--tenant-short-name <key>] [--organization-short-name <key>]";
 
 /** Parses exactly the supported flags; anything else is refused. */
 export const parseSetupArguments = (argv: readonly string[]): DevelopmentSetupArguments => {
@@ -66,16 +65,11 @@ export const parseSetupArguments = (argv: readonly string[]): DevelopmentSetupAr
   let identityId: string | undefined;
   let tenantShortName: string | undefined;
   let organizationShortName: string | undefined;
-  let seedDemo = false;
   for (let index = 0; index < argv.length; index += 1) {
     const flag = argv[index];
     if (flag === "--") continue;
     if (flag === "--local-development") {
       localDevelopment = true;
-      continue;
-    }
-    if (flag === "--seed-demo") {
-      seedDemo = true;
       continue;
     }
     if (
@@ -111,7 +105,6 @@ export const parseSetupArguments = (argv: readonly string[]): DevelopmentSetupAr
     return {
       firstOwner: { kind: "identity", identityId: parsed.data },
       ...parsedOrganizationNames(tenantShortName, organizationShortName),
-      seedDemo,
     };
   }
   const trimmed = email!.trim().toLowerCase();
@@ -120,7 +113,6 @@ export const parseSetupArguments = (argv: readonly string[]): DevelopmentSetupAr
   return {
     firstOwner: { kind: "email", email: trimmed },
     ...parsedOrganizationNames(tenantShortName, organizationShortName),
-    seedDemo,
   };
 };
 
