@@ -6,7 +6,7 @@ import type { JsonValue } from "../../catalogue/common";
 import { sameId } from "../../catalogue/runtime-primitives";
 import type { RecordsTableBulkActionContract } from "../../definition/application-composition/records-table-features/bulk-actions";
 import type { ExecuteNamedActionResult } from "../../records/named-actions";
-import { authoredGridLayout } from "../grid-view-state";
+import { authoredGridLayout } from "../grid-layout-resolution";
 import type {
   RecordsSelectionCountRequest,
   RecordsSelectionCountResult,

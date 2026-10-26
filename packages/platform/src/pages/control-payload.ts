@@ -7,7 +7,7 @@ import {
   sourceModuleFieldValueSchemas,
 } from "../records/module-field-values";
 import { richTextDocumentSchema } from "../records/rich-text";
-import { referenceChoiceSelectionEvidenceMapSchema } from "../workflows/form-continuation-contracts";
+import { referenceChoiceSelectionEvidenceMapSchema } from "../workflows/form-continuation-answer";
 import {
   flowFieldCorrectionSchema,
   flowRefusalFeedbackCodeSchema,

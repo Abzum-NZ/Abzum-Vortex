@@ -1,5 +1,4 @@
-import { recordsTableInlineEditEvent } from "./application-composition/records-table-features/inline-edit";
-import { recordsTableRowEditEvent } from "./application-composition/records-table-features/row-edit";
+import { componentSemanticEventKindSchema } from "./component-semantic-events";
 import { z } from "zod";
 import { workflowValueTypeSchema } from "../catalogue/catalogues";
 import { sourceAliasSchema } from "./definition-source-common";
@@ -59,32 +58,6 @@ export const flowValueDeclarationSchema = z
         message: "Record-reference values require their allowed record types",
       });
   });
-
-export const componentSemanticEventKindSchema = z.enum([
-  "action",
-  "row_clicked",
-  "row_action",
-  "bulk_action",
-  recordsTableInlineEditEvent,
-  recordsTableRowEditEvent,
-  "card_moved",
-  "card_added",
-  "load",
-  "refresh",
-  "filter_changed",
-  "search_changed",
-  "sort_changed",
-  "columns_changed",
-  "row_expanded",
-  "page_changed",
-  "selection_changed",
-  "field_changed",
-  "form_ready",
-  "form_reset",
-  "form_submit",
-  "tab_changed",
-  "guided_step_changed",
-]);
 
 export const flowEffectKindSchema = z.enum([
   "pure",
@@ -700,7 +673,6 @@ export const sourceComponentFlowBindingSchema = z
   })
   .strict();
 
-export type ComponentSemanticEventKind = z.infer<typeof componentSemanticEventKindSchema>;
 export type FlowEffectKind = z.infer<typeof flowEffectKindSchema>;
 export type ProtectedOperationEffectKind = z.infer<typeof protectedOperationEffectKindSchema>;
 export type ComponentFlowBinding = z.infer<typeof componentFlowBindingSchema>;

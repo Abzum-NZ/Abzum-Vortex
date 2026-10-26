@@ -3,7 +3,9 @@
  * (for example TENANT_ADMIN_PROVISION_TENANT_INVALID_COMMAND, the prefix being the caller's area), so a refusal that reaches the
  * operator is never silent. The database cause, where there is one, is logged where it is mapped.
  */
-export const logRefusedOperations = <Operations extends Record<string, (...args: never[]) => Promise<unknown>>>(
+export const logRefusedOperations = <
+  Operations extends Record<string, (...args: never[]) => Promise<unknown>>,
+>(
   prefix: string,
   operations: Operations,
 ): Operations => {
@@ -26,4 +28,3 @@ export const logRefusedOperations = <Operations extends Record<string, (...args:
     };
   return wrapped as Operations;
 };
-

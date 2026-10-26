@@ -1,7 +1,7 @@
 import { useCallback, type Dispatch, type SetStateAction, type RefObject } from "react";
 import type { useRouter } from "next/navigation";
 import type { createFlowRuntime, DisplayTablePayload } from "@vortex/ui";
-import type { DisplaySemanticEvent, FlowDispatchResult } from "@vortex/ui";
+import type { DisplaySemanticEvent, ServerDrivenResult } from "@vortex/ui";
 import {
   type ComponentRequestGeneration,
   containedComponentIdSchema,
@@ -42,7 +42,7 @@ export function usePlacementActions({
   tableQueryPending,
 }: Readonly<{
   applyDispatch: (
-    dispatch: Promise<FlowDispatchResult | undefined>,
+    dispatch: Promise<ServerDrivenResult | undefined>,
     formPlacementId?: string,
     afterAccepted?: () => Promise<Notice | undefined>,
     sourceBindingId?: string,

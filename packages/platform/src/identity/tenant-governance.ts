@@ -16,6 +16,10 @@ import {
   organizationRuntimeSettingsSchema,
 } from "../access/organization-runtime-settings-schema";
 import type { tenantStructuralCapabilitySchema } from "../access/identity-access";
+import {
+  tenantAdministratorMutationRefusalCodeSchema,
+  tenantOrganizationMutationRefusalCodeSchema,
+} from "./tenant-mutation-refusal-codes";
 
 const pageLimitSchema = z.number().int().min(1).max(100);
 const pageFor = <Cursor extends z.ZodType>(cursor: Cursor) =>
@@ -211,14 +215,6 @@ export const createTenantOrganizationCommandSchema = z
   })
   .strict();
 
-export const tenantAdministratorMutationRefusalCodeSchema = z.enum([
-  "invalid_command",
-  "duplicate_conflict",
-  "stale_revision",
-  "unavailable",
-  "last_manager",
-  "operation_unavailable",
-]);
 const acceptedMutation = {
   outcome: z.enum(["accepted", "replayed"]),
   assignmentId: tenantAdministratorAssignmentIdSchema,
@@ -246,13 +242,6 @@ export const grantTenantAdministratorResultSchema = mutationResult("grant_tenant
 export const changeTenantAdministratorResultSchema = mutationResult("change_tenant_administrator");
 export const revokeTenantAdministratorResultSchema = mutationResult("revoke_tenant_administrator");
 
-export const tenantOrganizationMutationRefusalCodeSchema = z.enum([
-  "invalid_command",
-  "duplicate_conflict",
-  "stale_revision",
-  "unavailable",
-  "operation_unavailable",
-]);
 const acceptedOrganizationMutation = {
   outcome: z.enum(["accepted", "replayed"]),
   organizationId: organizationIdSchema,
