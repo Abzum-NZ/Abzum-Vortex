@@ -186,6 +186,42 @@ export const displayDetailCellSchema = z.discriminatedUnion("kind", [
 ]);
 export type DisplayDetailCell = z.output<typeof displayDetailCellSchema>;
 
+const refineFieldKeys = (
+  fields: readonly Readonly<{ key: string }>[],
+  context: z.RefinementCtx,
+): void => refineUniqueKeys(fields, (field) => field.key, context, "Each field key appears once");
+
+/** Labelled fields with scalar values, each key once, as a card or detail panel shows them. */
+export const displayFieldsSchema = z
+  .array(
+    z
+      .object({
+        key: displayFieldKeySchema,
+        label: displayTextSchema,
+        value: displayScalarCellSchema,
+      })
+      .strict()
+      .readonly(),
+  )
+  .readonly()
+  .superRefine(refineFieldKeys);
+
+/** A record detail's labelled fields, each key once; a field may hold a table field's rows. */
+export const displayDetailFieldsSchema = z
+  .array(
+    z
+      .object({
+        key: displayFieldKeySchema,
+        label: displayTextSchema,
+        value: displayDetailCellSchema,
+      })
+      .strict()
+      .readonly(),
+  )
+  .readonly()
+  .superRefine(refineFieldKeys);
+export type DisplayDetailField = z.output<typeof displayDetailFieldsSchema>[number];
+
 /** Fixed, data-free refusal reasons; a refused state never carries a value. */
 export const displayRefusalReasons = [
   "not_permitted",

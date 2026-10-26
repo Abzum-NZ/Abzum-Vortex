@@ -29,10 +29,13 @@ import {
   type DisplaySummaryMetric,
   type SummaryPayload,
   displayDataStateSchema,
-  displayDetailCellSchema,
+  displayFieldsSchema,
   displayScalarCellSchema,
+  recordDetailPayloadSchema,
+  type RecordDetailPayload,
   type DisplayDataState,
   type DisplayDetailCell,
+  type DisplayDetailField,
   type DisplayScalarCell,
   type DisplayTableField,
   type BlockPropertyValueContract,
@@ -77,7 +80,13 @@ export {
   type CalendarView,
   type DisplayRefusalReason,
 } from "@vortex/platform/schema";
-export type { DisplaySummaryMetric, RichTextPayload, SummaryPayload, TextPayload };
+export type {
+  DisplaySummaryMetric,
+  RecordDetailPayload,
+  RichTextPayload,
+  SummaryPayload,
+  TextPayload,
+};
 
 /**
  * Validated structured rich-text document from the shared closed rich-text contract.
@@ -158,7 +167,7 @@ export type DisplayRow = Readonly<{
 export type DisplayColumn = Readonly<{ key: string; label: string }>;
 
 /** One labelled record-detail field. */
-export type DisplayField = Readonly<{ key: string; label: string; value: DisplayCellValue }>;
+export type DisplayField = DisplayDetailField;
 
 /** The ready rows a launcher or link-tile block renders. */
 export type LauncherRowsPayload = Readonly<{
@@ -229,14 +238,6 @@ export type TablePayload = Readonly<{
   previousContinuationToken?: string;
 }> &
   TableSelectionParts;
-
-/** The ready values a record-detail block renders. */
-export type RecordDetailPayload = Readonly<{
-  kind: "record_detail";
-  recordId: string;
-  fields: readonly DisplayField[];
-  heading?: DisplayCellValue;
-}>;
 
 /** One fetched page of cards in a protected board bucket. */
 export type BoardPage = Readonly<{
@@ -379,18 +380,6 @@ const parseCellValue = (
     displayScalarCellSchema,
     value,
     "A projected display value is invalid",
-    location,
-  );
-
-/** A record-detail field value: a scalar value, or a table field's rows. */
-const parseDetailFieldValue = (
-  value: unknown,
-  location: DefinitionRenderErrorLocation,
-): DisplayCellValue =>
-  parseProjectedPart(
-    displayDetailCellSchema,
-    value,
-    "A projected detail value is invalid",
     location,
   );
 
@@ -598,43 +587,14 @@ export const parseSummaryMetrics = (
   );
 
 /**
- * @internal Shared with the board payload parser. A board card's fields are scalar; only a record
- * detail passes the detail value parser that also accepts a table field's rows.
+ * @internal Shared with the board payload parser and the master-detail panel: labelled fields with
+ * scalar values. Only a record detail accepts a table field's rows.
  */
 export const parseFields = (
   value: unknown,
   location: DefinitionRenderErrorLocation,
-  parseValue: (
-    value: unknown,
-    location: DefinitionRenderErrorLocation,
-  ) => DisplayCellValue = parseCellValue,
-): readonly DisplayField[] => {
-  const items = requireArray(value, "Projected detail fields must be an array", location);
-  const seen = new Set<string>();
-  return Object.freeze(
-    items.map((item, index) => {
-      const fieldLocation = { ...location, propertyPath: [`fields[${index}]`] };
-      const record = requireRecord(item, "A detail field must be an object", fieldLocation);
-      requireExactKeys(record, ["key", "label", "value"], fieldLocation);
-      const key = requireFieldKey(
-        record.key,
-        "A detail field requires a stable key",
-        fieldLocation,
-      );
-      if (seen.has(key)) fail(`Duplicate detail field key '${key}'`, fieldLocation);
-      seen.add(key);
-      return Object.freeze({
-        key,
-        label: requireNonEmptyString(
-          record.label,
-          "A detail field requires a label",
-          fieldLocation,
-        ),
-        value: parseValue(record.value, fieldLocation),
-      });
-    }),
-  );
-};
+): readonly DisplayField[] =>
+  parseProjectedPart(displayFieldsSchema, value, "Projected fields are invalid", location);
 
 /** The ready values a plain-text block accepts. */
 export const parseTextPayload = projectedValuesParser(
@@ -869,28 +829,10 @@ export const parseTablePayload = (
 };
 
 /** The ready values a record-detail block accepts. */
-export const parseRecordDetailPayload = (
-  value: unknown,
-  location: DefinitionRenderErrorLocation = {},
-): RecordDetailPayload => {
-  const record = requireRecord(value, "Projected display values must be an object", location);
-  if (record.kind !== "record_detail")
-    return fail(
-      `Expected 'record_detail' projected values, got '${String(record.kind)}'`,
-      location,
-    );
-  requireExactKeys(record, ["kind", "recordId", "fields", "heading"], location);
-  return Object.freeze({
-    kind: "record_detail",
-    recordId: requireNonEmptyString(
-      record.recordId,
-      "A projected record detail requires a stable record identity",
-      location,
-    ),
-    fields: parseFields(record.fields, location, parseDetailFieldValue),
-    ...(record.heading === undefined ? {} : { heading: parseCellValue(record.heading, location) }),
-  });
-};
+export const parseRecordDetailPayload = projectedValuesParser(
+  recordDetailPayloadSchema,
+  "Projected record detail values are invalid",
+);
 
 /** The ready values a summary-values block accepts. */
 export const parseSummaryPayload = projectedValuesParser(

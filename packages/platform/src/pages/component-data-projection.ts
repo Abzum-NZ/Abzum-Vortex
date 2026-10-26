@@ -21,6 +21,7 @@ import type {
   ProtectedQueryRow,
 } from "../queries/protected-query-contracts";
 import type { displayDetailCellSchema, displayTableFieldSchema } from "./display-payload-parts";
+import type { recordDetailPayloadSchema } from "./display-payload-record-detail";
 import { isExactDecimal } from "./value-format";
 import {
   asRecordLink,
@@ -221,12 +222,7 @@ export type RecordsTableNarrowing = Readonly<{
   recordTitles?: Readonly<Record<string, string>>;
 }>;
 
-export type ProjectedRecordDetailValues = Readonly<{
-  kind: "record_detail";
-  recordId: string;
-  fields: readonly Readonly<{ key: string; label: string; value: ProjectedCellValue }>[];
-  heading?: ProjectedScalarCellValue;
-}>;
+export type ProjectedRecordDetailValues = z.infer<typeof recordDetailPayloadSchema>;
 
 /**
  * The display payload for one placement. Only `ready` carries values; a refusal never does, so a

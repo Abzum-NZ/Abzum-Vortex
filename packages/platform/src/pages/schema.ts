@@ -22,3 +22,4 @@ export * from "./display-payload-parts";
 export * from "./display-payload-text";
 export * from "./display-payload-summary";
 export * from "./display-payload-calendar";
+export * from "./display-payload-record-detail";
