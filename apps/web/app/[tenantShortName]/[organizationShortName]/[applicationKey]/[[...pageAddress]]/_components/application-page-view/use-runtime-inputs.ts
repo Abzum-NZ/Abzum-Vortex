@@ -12,6 +12,7 @@ import {
   type FormFlowFeedback,
 } from "@vortex/ui";
 import {
+  isRecord,
   projectedLinkTilesSchema,
   mountedRecordPinFrameSchema,
   recordsSelectionMaximumIds,
@@ -66,6 +67,7 @@ export function useRuntimeInputs({
   guidedFormCompleted,
   placementEventNames,
   formOwners,
+  recordDetailOwners,
   launcherPlacements,
   busy,
   unsavedWork,
@@ -121,6 +123,8 @@ export function useRuntimeInputs({
   guidedFormCompleted: boolean;
   placementEventNames: ReturnType<typeof placementEventNamesByPage>;
   formOwners: Readonly<Record<string, string>>;
+  /** The Record detail each placement sits in, whose record an action in its header acts on. */
+  recordDetailOwners: Readonly<Record<string, string>>;
   launcherPlacements: ReturnType<typeof applicationLauncherPlacementIds>;
   busy: boolean;
   unsavedWork: ReturnType<typeof useUnsavedWorkGuard>["guard"];
@@ -685,18 +689,26 @@ export function useRuntimeInputs({
       // An action button runs its bound flow through the same path as a display event. Inside a
       // form it reports the form's current values. A record page also supplies its verified page
       // subject for declared navigation bindings; the binding receives only the inputs it declares.
+      // An action inside a Record detail (its header actions) acts on the record that detail shows,
+      // which is the page subject on a record page and the selected record in a panel.
       const actionBinding = bindingOfEvent(bindings, "action");
       if (actionBinding !== undefined && model.guidedForm === undefined)
         events.action = (event: ControlSemanticEvent) => {
           if (event.event !== "action" || event.intent !== "activate" || busy) return;
+          const detailOwner = recordDetailOwners[placementId];
+          const detail = detailOwner === undefined ? undefined : currentData[detailOwner];
+          const recordId =
+            detail?.status === "ready" &&
+            isRecord(detail.values) &&
+            detail.values.kind === "record_detail" &&
+            typeof detail.values.recordId === "string"
+              ? detail.values.recordId
+              : subject?.recordId;
           return runBinding(
             placementId,
             actionBinding,
-            {
-              ...(event.values ?? {}),
-              ...(subject === undefined ? {} : { record_id: subject.recordId }),
-            },
-            subject?.recordId,
+            { ...(event.values ?? {}), ...(recordId === undefined ? {} : { record_id: recordId }) },
+            recordId,
           );
         };
       // A drawer opened by a control's selection closes by clearing that selection.
@@ -986,6 +998,7 @@ export function useRuntimeInputs({
     formCancelledRef,
     formFeedback,
     formOwners,
+    recordDetailOwners,
     launcherPlacements,
     choiceEvidenceFor,
     activeChoicePages,

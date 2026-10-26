@@ -57,25 +57,21 @@ export const isPlatformRelease = (
   return release?.key === identity.key && release.releaseVersion === identity.releaseVersion;
 };
 
-export const formOwnersByPlacement = (
+/**
+ * The nearest ancestor of each placement (itself included) that is a placement of one block
+ * release: the form that owns a field, or the Record detail whose record a header action acts on.
+ */
+export const ownersByPlacement = (
   page: Readonly<Record<string, unknown>>,
   registry: ReturnType<typeof createPlatformComponentRegistryForReleases>,
+  identity: Readonly<{ key: string; releaseVersion: string }>,
 ): Readonly<Record<string, string>> => {
   const owners: Record<string, string> = {};
-  walkPageComposition(
-    page.composition,
-    ({ placementId, vortex }, formOwner: string | undefined) => {
-      const owner = isPlatformRelease(
-        registry,
-        vortex.block,
-        PLATFORM_BLOCK_RELEASE_IDENTITIES.FORM_CONTAINER_BLOCK_RELEASE,
-      )
-        ? placementId
-        : formOwner;
-      if (owner !== undefined) owners[placementId] = owner;
-      return owner;
-    },
-  );
+  walkPageComposition(page.composition, ({ placementId, vortex }, ancestor: string | undefined) => {
+    const owner = isPlatformRelease(registry, vortex.block, identity) ? placementId : ancestor;
+    if (owner !== undefined) owners[placementId] = owner;
+    return owner;
+  });
   return owners;
 };
 
