@@ -547,15 +547,61 @@ function RecordsTableView(props: DisplayRenderProps<DisplayTablePayload>): React
         };
   const allowFullScreen = contract.allowFullScreen;
   const toolbar =
-    gridFeatures.keys.length === 0 && layoutControls === undefined && !allowFullScreen ? null : (
+    gridFeatures.keys.length === 0 &&
+    layoutControls === undefined &&
+    !allowFullScreen &&
+    events?.refresh === undefined ? null : (
       <GridToolbar
         key={controlsKey}
         accessibleName={accessibleName}
         featureItems={state.status === "empty" ? null : gridFeatures.toolbarItems()}
+        overflowItems={gridFeatures.toolbarOverflowItems()}
+        refresh={
+          events?.refresh === undefined || state.status === "empty"
+            ? undefined
+            : () => events.refresh?.({ event: "refresh" })
+        }
+        selectionActive={
+          selectedRecordIds.length > 0 || selectionScope !== undefined || bulkRun !== undefined
+        }
         selectionBanner={
-          selectable && (layoutControls !== undefined || bulkRun !== undefined)
-            ? gridFeatures.selectionBanner()
-            : null
+          selectable && (layoutControls !== undefined || bulkRun !== undefined) ? (
+            <>
+              {(values?.features?.bulkActions ?? []).length > 0 ? null : (
+                <>
+                  <span role="status" className="text-sm">
+                    {selectedRecordIds.length} records selected
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      if (events?.selection_scope_changed !== undefined)
+                        void events.selection_scope_changed({
+                          event: "selection_scope_changed",
+                          scope: "cleared",
+                        });
+                      else
+                        for (const row of rows)
+                          if (
+                            selectedRecordIds.includes(row.recordId) &&
+                            row.revision !== undefined
+                          )
+                            void events?.selection_changed?.({
+                              event: "selection_changed",
+                              recordId: row.recordId,
+                              revision: row.revision,
+                              selected: false,
+                            });
+                    }}
+                  >
+                    Clear selection
+                  </Button>
+                </>
+              )}
+              {gridFeatures.selectionBanner()}
+            </>
+          ) : null
         }
         layoutControls={layoutControls}
         fullScreen={allowFullScreen ? fullScreen : undefined}
@@ -606,7 +652,32 @@ function RecordsTableView(props: DisplayRenderProps<DisplayTablePayload>): React
         pinning={features?.pinning === true}
         layout={layout}
         rows={rows}
-        totals={grouped === undefined ? values?.totals : undefined}
+        totals={values?.totals}
+        groups={
+          grouped === undefined
+            ? undefined
+            : {
+                count: grouped.groups.groups.length,
+                rowOffset: Math.max(
+                  0,
+                  grouped.groups.groups.findIndex((group) => group.key === grouped.expanded) + 1,
+                ),
+                render: (members, cells) => (
+                  <Suspense fallback={loading}>
+                    <GroupedBody
+                      placementId={placementId}
+                      accessibleName={accessibleName}
+                      grouped={grouped}
+                      loading={loading}
+                      members={() => members}
+                      columns={layout.shown}
+                      cells={cells}
+                      memberRows={lines.length}
+                    />
+                  </Suspense>
+                ),
+              }
+        }
         lines={lines}
         sort={values?.requestedSort ?? values?.sort}
         selection={selectable ? "multiple" : undefined}
@@ -706,18 +777,20 @@ function RecordsTableView(props: DisplayRenderProps<DisplayTablePayload>): React
     // skeleton stands in until the one presentation that fits is known.
     if (presentation === undefined) return loading;
     if (grouped !== undefined)
-      return (
-        <Suspense fallback={loading}>
-          <GroupedBody
-            placementId={placementId}
-            accessibleName={accessibleName}
-            grouped={grouped}
-            loading={loading}
-            members={membersView}
-            columns={layout.shown}
-          />
-        </Suspense>
-      );
+      if (presentation === "grid") return membersView();
+      else
+        return (
+          <Suspense fallback={loading}>
+            <GroupedBody
+              placementId={placementId}
+              accessibleName={accessibleName}
+              grouped={grouped}
+              loading={loading}
+              members={membersView}
+              columns={layout.shown}
+            />
+          </Suspense>
+        );
     return values.groups?.status === "too_many" ? (
       <div className="flex flex-col gap-2">
         <Alert>
@@ -746,11 +819,7 @@ function RecordsTableView(props: DisplayRenderProps<DisplayTablePayload>): React
           className={cn(fullScreen.active && FULL_SCREEN_CLASS)}
           {...(revealed ? { "data-vortex-display-revealed": "" } : {})}
         >
-          <DisplayHeader
-            title={title}
-            accessibleName={accessibleName}
-            events={state.status === "empty" ? undefined : events}
-          />
+          <DisplayHeader title={title} accessibleName={accessibleName} events={undefined} />
           {state.status === "refused" ||
           state.status === "error" ||
           state.status === "awaiting_input"
@@ -775,14 +844,23 @@ function RecordsTableView(props: DisplayRenderProps<DisplayTablePayload>): React
           {ready &&
           !pivotOpen &&
           values?.totals !== undefined &&
-          (grouped !== undefined || presentation === "cards" || rows.length === 0) ? (
+          (presentation === "cards" || (grouped === undefined && rows.length === 0)) ? (
             <TableTotals
               totals={values.totals}
               columns={layout.shown}
               label="Totals for all matching records"
             />
           ) : null}
-          {!ready || values === undefined || pivotOpen || grouped !== undefined ? null : (
+          {!ready ||
+          values === undefined ||
+          pivotOpen ||
+          grouped !== undefined ||
+          !(
+            (values.pageCount !== undefined && values.pageCount > 1) ||
+            values.hasNextPage === true ||
+            values.hasPreviousPage === true ||
+            (values.page !== undefined && values.page > 1)
+          ) ? null : (
             <div className="mt-2 flex shrink-0 flex-wrap items-center justify-between gap-2">
               <p className="m-0 text-xs text-muted-foreground tabular-nums">
                 {/* A keyset table marks every later page as page 2 (it never counts rows), so only

@@ -14,7 +14,10 @@ import type { DisplayBatchEditAnswer } from "../projected-data";
  * changed since, naming the records: nothing is ever overwritten silently. The stack is forgotten
  * when the person leaves the page or changes the query.
  */
-export default function Undo({ context, surface }: GridFeatureInteractionProps): ReactElement {
+export default function Undo({
+  context,
+  surface,
+}: GridFeatureInteractionProps): ReactElement | null {
   const batch = useBatchEdit(context, surface);
   const [depth, setDepth] = useState<Readonly<{ undo: number; redo: number }>>({
     undo: 0,
@@ -74,9 +77,11 @@ export default function Undo({ context, surface }: GridFeatureInteractionProps):
     return () => root.removeEventListener("keydown", keydown, true);
   }, [surface.rootRef, step]);
 
+  if (depth.undo === 0 && depth.redo === 0) return null;
+
   return (
-    <div className="sticky left-0 flex flex-col gap-2 px-2" aria-busy={batch.busy || undefined}>
-      <div className="flex flex-wrap items-center gap-2">
+    <div className="flex items-center gap-2" aria-busy={batch.busy || undefined}>
+      <div className="flex items-center gap-2">
         <Button
           type="button"
           variant="outline"
@@ -99,10 +104,8 @@ export default function Undo({ context, surface }: GridFeatureInteractionProps):
           <Icon name="redo" data-icon="inline-start" aria-hidden="true" />
           Redo
         </Button>
-        <span className="text-xs text-muted-foreground">
-          {depth.undo === 0
-            ? "Nothing to undo"
-            : `${depth.undo} ${depth.undo === 1 ? "change" : "changes"} to undo`}
+        <span className="sr-only">
+          {`${depth.undo} ${depth.undo === 1 ? "change" : "changes"} to undo`}
         </span>
       </div>
       {batch.notice}

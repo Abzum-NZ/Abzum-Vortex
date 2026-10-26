@@ -1,11 +1,16 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactElement } from "react";
-import { recordsTablePivotFeature } from "@vortex/platform/schema";
+import {
+  pivotResultSchema,
+  recordsTablePivotFeature,
+  type PivotPage,
+} from "@vortex/platform/schema";
 import { Alert, AlertDescription } from "../../components/alert";
 import { Button } from "../../components/button";
 import { Empty, EmptyHeader, EmptyTitle } from "../../components/empty";
 import { Skeleton } from "../../components/skeleton";
+import { ToggleGroup, ToggleGroupItem } from "../../components/toggle-group";
 import {
   Table,
   TableBody,
@@ -16,34 +21,15 @@ import {
   TableRow,
 } from "../../components/table";
 import { cn } from "../../lib/utils";
-import { DisplayCellView } from "../cell";
-import {
-  fail,
-  requireArray,
-  requireExactKeys,
-  requireNonEmptyString,
-  requireRecord,
-} from "../payload-parse";
-import { parseSummaryValue, type DisplaySummaryMetric } from "../projected-data";
+import { cellValueToText, DisplayCellView } from "../cell";
+import { useDateFormatOptions } from "../date-format-context";
+import { parseProjectedPart } from "../projected-data";
 import type { GridFeatureModule, GridFeaturePointProps } from "./registry";
 
-type Cell = DisplaySummaryMetric["value"];
-type Drill = Readonly<{ fieldId: string; filter: string }>;
-type Axis = Readonly<{ key: string; label: string; drill?: Drill }>;
-type PivotRowView = Axis &
-  Readonly<{ count: number; cells: readonly (Cell | null)[]; total?: Cell }>;
-type Page = Readonly<{
-  rowLabel: string;
-  columnLabel: string;
-  measureLabel: string;
-  columns: readonly Axis[];
-  rows: readonly PivotRowView[];
-  columnTotals?: readonly Cell[];
-  grandTotal?: Cell;
-  totalRecords: number;
-  rowGroupCount: number;
-  nextCursor?: string;
-}>;
+type Page = PivotPage;
+type Axis = Page["columns"][number];
+type Drill = NonNullable<Axis["drill"]>;
+type Cell = NonNullable<Page["grandTotal"]>;
 type Outcome =
   | Readonly<{ status: "ready"; page: Page }>
   | Readonly<{ status: "empty" | "error" }>
@@ -57,30 +43,6 @@ type BodyState =
 
 const location = { propertyPath: [recordsTablePivotFeature.property] };
 
-const parseDrill = (value: unknown): Drill => {
-  const record = requireRecord(value, "A pivot drill-down must be an object", location);
-  requireExactKeys(record, ["fieldId", "filter"], location);
-  return {
-    fieldId: requireNonEmptyString(record.fieldId, "A pivot drill-down needs its field", location),
-    filter: requireNonEmptyString(record.filter, "A pivot drill-down needs its filter", location),
-  };
-};
-
-const parseAxis = (value: unknown, extra: readonly string[]): Axis => {
-  const record = requireRecord(value, "A pivot heading must be an object", location);
-  requireExactKeys(record, ["key", "label", "drill", ...extra], location);
-  return {
-    key: requireNonEmptyString(record.key, "A pivot heading needs its key", location),
-    label: requireNonEmptyString(record.label, "A pivot heading needs its label", location),
-    ...(record.drill === undefined ? {} : { drill: parseDrill(record.drill) }),
-  };
-};
-
-const nonNegativeInteger = (value: unknown, message: string): number =>
-  typeof value === "number" && Number.isInteger(value) && value >= 0
-    ? value
-    : fail(message, location);
-
 /**
  * One page of the pivot as the host's read returned it. A reply the host dropped (a later read for
  * the same table already started) is undefined; anything else that is not a page fails loudly, as
@@ -88,105 +50,10 @@ const nonNegativeInteger = (value: unknown, message: string): number =>
  */
 const parseOutcome = (value: unknown): Outcome | undefined => {
   if (value === undefined) return undefined;
-  const record = requireRecord(value, "A pivot must be an object", location);
-  switch (record.status) {
-    case "empty":
-    case "error":
-      requireExactKeys(record, ["status"], location);
-      return { status: record.status };
-    case "refused":
-      requireExactKeys(record, ["status", "message"], location);
-      return {
-        status: "refused",
-        message: requireNonEmptyString(
-          record.message,
-          "A refused pivot needs its reason",
-          location,
-        ),
-      };
-    case "ready": {
-      requireExactKeys(
-        record,
-        [
-          "status",
-          "rowLabel",
-          "columnLabel",
-          "measureLabel",
-          "columns",
-          "rows",
-          "columnTotals",
-          "grandTotal",
-          "totalRecords",
-          "rowGroupCount",
-          "nextCursor",
-        ],
-        location,
-      );
-      const columns = requireArray(record.columns, "Pivot columns must be a list", location).map(
-        (column) => parseAxis(column, []),
-      );
-      const rows = requireArray(record.rows, "Pivot rows must be a list", location).map(
-        (entry): PivotRowView => {
-          const heading = parseAxis(entry, ["count", "cells", "total"]);
-          const held = entry as Record<string, unknown>;
-          const cells = requireArray(held["cells"], "A pivot row needs its cells", location);
-          if (cells.length !== columns.length) fail("A pivot row has a cell per column", location);
-          return {
-            ...heading,
-            count: nonNegativeInteger(held["count"], "A pivot row needs its record count"),
-            cells: cells.map((cell) => (cell === null ? null : parseSummaryValue(cell, location))),
-            ...(held["total"] === undefined
-              ? {}
-              : { total: parseSummaryValue(held["total"], location) }),
-          };
-        },
-      );
-      const columnTotals =
-        record.columnTotals === undefined
-          ? undefined
-          : requireArray(record.columnTotals, "Pivot column totals must be a list", location).map(
-              (cell) => parseSummaryValue(cell, location),
-            );
-      if (columnTotals !== undefined && columnTotals.length !== columns.length)
-        fail("A pivot has a total per column", location);
-      const next = record.nextCursor;
-      return {
-        status: "ready",
-        page: {
-          rowLabel: requireNonEmptyString(record.rowLabel, "A pivot needs its rows", location),
-          columnLabel: requireNonEmptyString(
-            record.columnLabel,
-            "A pivot needs its columns",
-            location,
-          ),
-          measureLabel: requireNonEmptyString(
-            record.measureLabel,
-            "A pivot needs its measure",
-            location,
-          ),
-          columns,
-          rows,
-          ...(columnTotals === undefined ? {} : { columnTotals }),
-          ...(record.grandTotal === undefined
-            ? {}
-            : { grandTotal: parseSummaryValue(record.grandTotal, location) }),
-          totalRecords: nonNegativeInteger(record.totalRecords, "A pivot needs its record total"),
-          rowGroupCount: nonNegativeInteger(record.rowGroupCount, "A pivot needs its row total"),
-          ...(next === undefined
-            ? {}
-            : {
-                nextCursor: requireNonEmptyString(
-                  next,
-                  "The next rows need their position",
-                  location,
-                ),
-              }),
-        },
-      };
-    }
-    default:
-      return fail("A pivot has an unknown status", location);
-  }
+  const result = parseProjectedPart(pivotResultSchema, value, "A pivot is invalid", location);
+  if (result.status !== "ready") return result;
+  const { status, ...page } = result;
+  return { status, page };
 };
 
 /** The toolbar switch between the ordinary grid and the pivot of the same records. */
@@ -195,15 +62,19 @@ function PivotToggle({ context }: GridFeaturePointProps): ReactElement | null {
   if (pivot === undefined || context.events?.pivot_requested === undefined) return null;
   const open = pivot.view !== undefined;
   return (
-    <Button
-      type="button"
+    <ToggleGroup
+      aria-label={`View of ${context.accessibleName}`}
+      variant="outline"
       size="sm"
-      variant={open ? "default" : "outline"}
-      aria-pressed={open}
-      onClick={() => pivot.setView(open ? undefined : {})}
+      value={[open ? "pivot" : "records"]}
+      onValueChange={(values: unknown[]) => {
+        if (values[0] === "records") pivot.setView(undefined);
+        else if (values[0] === "pivot") pivot.setView({});
+      }}
     >
-      {open ? "Show records" : "Pivot"}
-    </Button>
+      <ToggleGroupItem value="records">Records</ToggleGroupItem>
+      <ToggleGroupItem value="pivot">Pivot</ToggleGroupItem>
+    </ToggleGroup>
   );
 }
 
@@ -225,6 +96,7 @@ function Value({ cell }: Readonly<{ cell: Cell | null }>): ReactElement {
  * refused and failed reads each have their own state. The pivot keeps its position in the address.
  */
 function PivotBody({ context }: GridFeaturePointProps): ReactElement | null {
+  const dateFormat = useDateFormatOptions();
   const pivot = context.pivot;
   const read = context.events?.pivot_requested;
   const drill = context.events?.pivot_drilled;
@@ -343,7 +215,8 @@ function PivotBody({ context }: GridFeaturePointProps): ReactElement | null {
       <button
         type="button"
         className="text-left font-medium underline-offset-4 hover:underline focus-visible:underline focus-visible:outline-none"
-        aria-label={`Open the records for ${axis.label}${recordCount === undefined ? "" : ` (${recordCount})`}`}
+        aria-label={`${axis.label}${recordCount === undefined ? "" : `, ${recordCount} records`}`}
+        aria-description="Open records"
         onClick={open2(filters)}
       >
         {axis.label}
@@ -397,7 +270,8 @@ function PivotBody({ context }: GridFeaturePointProps): ReactElement | null {
                       <button
                         type="button"
                         className="w-full text-right underline-offset-4 hover:underline focus-visible:underline focus-visible:outline-none"
-                        aria-label={`Open the records for ${row.label} and ${column.label}`}
+                        aria-label={`${cell.kind === "unavailable" ? "Mixed currencies" : cellValueToText(cell, dateFormat)}, ${row.label}, ${column.label}`}
+                        aria-description="Open records"
                         onClick={open2(both)}
                       >
                         <Value cell={cell} />
@@ -442,11 +316,22 @@ function PivotBody({ context }: GridFeaturePointProps): ReactElement | null {
             size="sm"
             disabled={cursor === undefined || refreshing}
             onClick={() => {
+              trail.current = [];
+              pivot?.setView({});
+            }}
+          >
+            First
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={cursor === undefined || refreshing}
+            onClick={() => {
               const previous = trail.current.pop();
               pivot?.setView(previous === undefined ? {} : { cursor: previous });
             }}
           >
-            Previous rows
+            Previous
           </Button>
           <Button
             variant="outline"
@@ -458,7 +343,7 @@ function PivotBody({ context }: GridFeaturePointProps): ReactElement | null {
               pivot?.setView({ cursor: page.nextCursor });
             }}
           >
-            Next rows
+            Next
           </Button>
         </div>
       </div>

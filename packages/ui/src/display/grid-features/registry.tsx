@@ -46,6 +46,7 @@ import type {
 import type { RowExpansionKind } from "../row-expansion";
 import type { RowLine, SubRowsKind, SubRowsOpen } from "../sub-rows";
 import type { GridColumn, GridLayoutControls } from "../table-layout";
+import { GridToolbarScope } from "./toolbar";
 
 /**
  * What every extension point of a grid feature receives: the viewer's feature projection for this
@@ -197,6 +198,7 @@ export type GridFeatureModule = Readonly<{
   RowEditor?: ComponentType<GridFeatureCommandProps>;
   GridInteraction?: ComponentType<GridFeatureInteractionProps>;
   ToolbarItems?: ComponentType<GridFeaturePointProps>;
+  OverflowItems?: ComponentType<GridFeaturePointProps>;
   ColumnMenuItems?: ComponentType<GridFeatureColumnProps>;
   HeaderAdornment?: ComponentType<GridFeatureColumnProps>;
   cellDecoration?: (
@@ -265,12 +267,12 @@ const gridFeatureViews: readonly GridFeatureView[] = [
   {
     definition: recordsTableInlineEditFeature,
     load: () => import("./inline-edit"),
-    points: ["CellEditor"],
+    points: ["CellEditor", "GridInteraction"],
   },
   {
     definition: recordsTableRowEditFeature,
     load: () => import("./row-editor"),
-    points: ["Scope", "CellEditor", "RowCommands", "RowEditor", "ToolbarItems"],
+    points: ["Scope", "CellEditor", "RowCommands", "RowEditor"],
   },
   {
     definition: recordsTableRowActionsFeature,
@@ -305,7 +307,7 @@ const gridFeatureViews: readonly GridFeatureView[] = [
   {
     definition: recordsTableConditionalFormattingFeature,
     load: () => import("./conditional-format"),
-    points: ["CellAdornment", "HeaderAdornment"],
+    points: ["CellAdornment", "HeaderAdornment", "ColumnMenuItems"],
   },
   {
     definition: recordsTablePivotFeature,
@@ -315,7 +317,7 @@ const gridFeatureViews: readonly GridFeatureView[] = [
   {
     definition: recordsTableExportFeature,
     load: () => import("./export"),
-    points: ["ToolbarItems", "SelectionBanner"],
+    points: ["Scope", "OverflowItems", "SelectionBanner"],
   },
 ];
 
@@ -429,6 +431,7 @@ export function useGridFeatures(context: GridFeatureContext | undefined): Readon
   /** The controller of the sub-rows, drawn once; it draws nothing and reports through `publish`. */
   subRowsController: (open: SubRowsOpen) => ReactNode;
   toolbarItems: () => ReactNode;
+  toolbarOverflowItems: () => ReactNode;
   interaction: (surface: GridInteractionSurface) => ReactNode;
   selectionBanner: () => ReactNode;
   headerAdornment: (column: GridColumn) => ReactNode;
@@ -567,27 +570,51 @@ export function useGridFeatures(context: GridFeatureContext | undefined): Readon
   return {
     keys: active,
     retainedRecordIds: retainedRow === undefined ? [] : [retainedRow],
-    scope: (children) =>
-      context === undefined
-        ? children
-        : active
-            .filter((key) => featurePoints[key].includes("Scope"))
-            .reduce<ReactNode>((inner, key) => {
-              const Scope = featurePoint<GridFeatureScopeProps>(key, "Scope");
-              return (
-                <Suspense key={key} fallback={inner}>
-                  <Scope context={context} retainRow={retainRow}>
-                    {inner}
-                  </Scope>
-                </Suspense>
-              );
-            }, children),
+    scope: (children) => (
+      <GridToolbarScope>
+        {context === undefined
+          ? children
+          : active
+              .filter((key) => featurePoints[key].includes("Scope"))
+              .reduce<ReactNode>((inner, key) => {
+                const Scope = featurePoint<GridFeatureScopeProps>(key, "Scope");
+                return (
+                  <Suspense key={key} fallback={inner}>
+                    <Scope context={context} retainRow={retainRow}>
+                      {inner}
+                    </Scope>
+                  </Suspense>
+                );
+              }, children)}
+      </GridToolbarScope>
+    ),
     expands: active.some((key) => featurePoints[key].includes("RowExpansion")),
     expansionKind: active
       .map((key) => viewOf.get(key)?.expansion)
       .find((kind) => kind !== undefined),
     toolbarItems: () =>
-      context === undefined ? null : drawPoint(active, "ToolbarItems", context, {}),
+      context === undefined ? null : (
+        <>
+          <div className="min-w-0 flex-1">
+            {drawPoint(
+              active.filter((key) => key === recordsTableSearchFeature.key),
+              "ToolbarItems",
+              context,
+              {},
+            )}
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            {drawPoint(
+              active.filter((key) => key !== recordsTableSearchFeature.key),
+              "ToolbarItems",
+              context,
+              {},
+            )}
+          </div>
+        </>
+      ),
+    toolbarOverflowItems: () =>
+      context === undefined ? null : drawPoint(active, "OverflowItems", context, {}),
     selectionBanner: () =>
       context === undefined ? null : drawPoint(active, "SelectionBanner", context, {}),
     viewBody: () => (context === undefined ? null : drawPoint(active, "ViewBody", context, {})),
