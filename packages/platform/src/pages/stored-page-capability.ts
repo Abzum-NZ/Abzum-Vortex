@@ -66,11 +66,6 @@ import {
   type FixedAuthenticatedPageCapability,
 } from "./authenticated-page-capability";
 import {
-  loadStoredNavigationProjection,
-  type StoredNavigationProjection,
-} from "./navigation-projection";
-import type { ProjectedNavigation } from "./projected-navigation";
-import {
   projectUnavailableLinkDestination,
   type ProjectedLinkDestination,
   type ProjectedPageCapability,
@@ -584,12 +579,7 @@ export const createStoredPageCapabilityService = (
     session: IdentitySession,
     candidate: OrganizationSelectionCandidate,
     stored: FixedAuthenticatedPageCapability,
-    navigation: StoredNavigationProjection | undefined,
-  ): Promise<
-    HumanOrganizationRequestResult<
-      Readonly<{ page: ProjectedPageCapability | undefined; navigation?: ProjectedNavigation }>
-    >
-  > => {
+  ): Promise<HumanOrganizationRequestResult<ProjectedPageCapability>> => {
     // This cache belongs to one projection transaction, never another page, actor or release.
     let subjectRead:
       | Readonly<{
@@ -915,33 +905,14 @@ export const createStoredPageCapabilityService = (
         !sameId(scope.applicationRootId, applicationRootId)
       )
         throw new Error("STORED_PAGE_HUMAN_SCOPE_UNAVAILABLE");
-      // The application navigation is decided in the page's own batch: one request and one
-      // decision statement serve the menu and the page.
-      const projected = await projectAuthenticatedPageCapability(
-        transaction,
-        scope,
-        stored,
-        evaluators,
-        navigation?.declarations ?? [],
-      );
-      return {
-        page: projected.page,
-        ...(navigation === undefined
-          ? {}
-          : { navigation: navigation.project(projected.alongside) }),
-      };
+      return projectAuthenticatedPageCapability(transaction, scope, stored, evaluators);
     });
   };
 
   const project = async (
     session: IdentitySession,
     candidate: OrganizationSelectionCandidate,
-    withNavigation: boolean,
-  ): Promise<
-    HumanOrganizationRequestResult<
-      Readonly<{ page: ProjectedPageCapability | undefined; navigation?: ProjectedNavigation }>
-    >
-  > => {
+  ): Promise<HumanOrganizationRequestResult<ProjectedPageCapability>> => {
     if (
       !sameId(candidate.organizationId, context.organizationId) ||
       candidate.applicationRootId === undefined ||
@@ -957,12 +928,8 @@ export const createStoredPageCapabilityService = (
       return verified.kind === "available" ? undefined : verified;
     };
     let fixed: FixedAuthenticatedPageCapability | undefined;
-    let navigation: StoredNavigationProjection | undefined;
     try {
       fixed = await load(selectedPageId);
-      navigation = withNavigation
-        ? loadStoredNavigationProjection({ context, permissions: dependencies.permissions })
-        : undefined;
     } catch (error) {
       const refusal = await verifiedRefusal();
       if (refusal !== undefined) return refusal;
@@ -975,7 +942,7 @@ export const createStoredPageCapabilityService = (
       return { kind: "temporarily_unavailable", cause };
     }
     if (fixed === undefined) return (await verifiedRefusal()) ?? { kind: "unavailable" };
-    return projectStored(session, candidate, fixed, navigation);
+    return projectStored(session, candidate, fixed);
   };
 
   /**
@@ -999,42 +966,17 @@ export const createStoredPageCapabilityService = (
       throw failure;
     }
     if (fixed === undefined) return false;
-    const projected = await projectStored(session, candidate, fixed, undefined);
+    const projected = await projectStored(session, candidate, fixed);
     if (projected.kind === "temporarily_unavailable")
       throw new StoredPageCapabilityFailure("STORED_PAGE_TARGET_AUTHORIZATION_FAILED", {
         cause: new Error(projected.cause ?? "STORED_PAGE_TARGET_AUTHORIZATION_UNAVAILABLE"),
       });
-    return projected.kind === "available" && projected.value.page !== undefined;
+    return projected.kind === "available" && projected.value !== undefined;
   };
 
   return Object.freeze({
-    project: async (
-      session: IdentitySession,
-      candidate: OrganizationSelectionCandidate,
-    ): Promise<HumanOrganizationRequestResult<ProjectedPageCapability>> => {
-      const projected = await project(session, candidate, false);
-      return projected.kind === "available"
-        ? { kind: "available", value: projected.value.page }
-        : projected;
-    },
-    /**
-     * The page projection together with the application navigation, decided in the page's own
-     * request: the menu's permissions join the page's single batch of access decisions.
-     */
-    projectWithNavigation: async (
-      session: IdentitySession,
-      candidate: OrganizationSelectionCandidate,
-    ): Promise<
-      HumanOrganizationRequestResult<
-        Readonly<{ page: ProjectedPageCapability | undefined; navigation: ProjectedNavigation }>
-      >
-    > => {
-      const projected = await project(session, candidate, true);
-      if (projected.kind !== "available") return projected;
-      const { navigation } = projected.value;
-      if (navigation === undefined) throw new Error("STORED_NAVIGATION_NOT_PROJECTED");
-      return { kind: "available", value: { page: projected.value.page, navigation } };
-    },
+    project: (session: IdentitySession, candidate: OrganizationSelectionCandidate) =>
+      project(session, candidate),
     /**
      * Re-checks one declared link target against the viewer's current access at navigation time.
      * The target is definition or record data and grants nothing. An external address is available

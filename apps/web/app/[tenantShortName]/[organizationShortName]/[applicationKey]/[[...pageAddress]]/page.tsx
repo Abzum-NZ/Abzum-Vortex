@@ -318,6 +318,7 @@ async function readApplicationAddressPage({ params, searchParams }: ApplicationA
       ...(resolved.installedContext === undefined
         ? {}
         : { installedContext: resolved.installedContext }),
+      ...(resolved.navigation === undefined ? {} : { navigation: resolved.navigation }),
     },
     parameters,
     {

@@ -55,6 +55,11 @@ import { z } from "zod";
 import { createHumanInstalledPageBundleContextLoader } from "./installed-page-bundle-context";
 import type { InstalledRuntimeContext } from "./installed-runtime-context";
 import {
+  loadStoredNavigationProjection,
+  type StoredNavigationProjection,
+} from "../pages/navigation-projection";
+import type { ProjectedNavigation } from "../pages/projected-navigation";
+import {
   previewApplicationKey,
   previewInstallationIdOfApplicationKey,
 } from "./preview-application-key";
@@ -203,6 +208,12 @@ export type AddressedApplicationBundleRead = Readonly<{
   experiences: readonly ApplicationExperience[];
   context?: InstalledRuntimeContext;
   identity?: AddressedActiveApplicationIdentity;
+  /**
+   * The application navigation the viewer may see, decided in the same batch as the addressed
+   * page's access. Present with an available whole-application read; a placement refresh (an
+   * addressed page key) projects none.
+   */
+  navigation?: ProjectedNavigation;
 }>;
 
 /**
@@ -477,9 +488,11 @@ const projectPermittedApplication = async (
   refused?: (reasonCodes: readonly string[]) => void,
   addressedPageKey?: string,
   launcher = false,
+  navigation?: StoredNavigationProjection,
 ): Promise<Readonly<{
   application: PermittedApplication;
   experiences: ApplicationExperience[];
+  navigation?: ProjectedNavigation;
 }> | null> => {
   const releaseRows = await transaction.query<CurrentReleaseRow>`
     select vortex_definition.is_current_application_address_release(
@@ -509,23 +522,31 @@ const projectPermittedApplication = async (
     string,
     Awaited<ReturnType<typeof decideOrganizationAccessBatch>>[number]
   >();
+  // The navigation's permissions ride on the first batch, so the menu takes no request or
+  // statement of its own.
+  let undecidedNavigation = navigation;
+  let projectedNavigation: ProjectedNavigation | undefined;
   const decidePages = async (pages: readonly ApplicationCandidate["pages"][number][]) => {
     const requirements = new Map(
       pages
         .filter((page) => !decisions.has(page.accessPermissionKey))
         .map((page) => [page.accessPermissionKey, page]),
     );
-    if (requirements.size === 0) return;
-    const results = await decideOrganizationAccessBatch(
-      transaction,
-      scope,
-      [...requirements.values()].map((page) =>
+    const alongside = undecidedNavigation?.declarations ?? [];
+    if (requirements.size === 0 && undecidedNavigation === undefined) return;
+    const results = await decideOrganizationAccessBatch(transaction, scope, [
+      ...[...requirements.values()].map((page) =>
         pageDiscoveryDeclaration(permissions, candidate, page),
       ),
-    );
+      ...alongside,
+    ]);
     [...requirements.keys()].forEach((key, index) => {
       decisions.set(key, results[index]!);
     });
+    if (undecidedNavigation !== undefined) {
+      projectedNavigation = undecidedNavigation.project(results.slice(requirements.size));
+      undecidedNavigation = undefined;
+    }
   };
   await decidePages(
     launcher
@@ -642,7 +663,11 @@ const projectPermittedApplication = async (
     pageKeys: [...allowedPageKeys].sort(),
   });
   if (rememberable) remember?.(application, validUntil);
-  return { application, experiences };
+  return {
+    application,
+    experiences,
+    ...(projectedNavigation === undefined ? {} : { navigation: projectedNavigation }),
+  };
 };
 
 const permittedApplication = async (
@@ -863,6 +888,12 @@ export const readAddressedApplicationFromInstalledBundleAtAddress = async (
           undefined,
           (reasonCodes) => logApplicationRefusal(application.definitionKey, reasonCodes),
           addressedPageKeyCandidate,
+          false,
+          // A whole-application read also decides the navigation the frame shows; a placement
+          // refresh shows none.
+          addressedPageKeyCandidate === undefined
+            ? loadStoredNavigationProjection({ context, permissions })
+            : undefined,
         );
         return permitted === null ? undefined : { context, permitted };
       },
@@ -899,6 +930,7 @@ export const readAddressedApplicationFromInstalledBundleAtAddress = async (
       experiences: permitted.experiences,
       context,
       identity: addressedIdentity.identity,
+      ...(permitted.navigation === undefined ? {} : { navigation: permitted.navigation }),
     };
   } catch (error) {
     return temporarilyUnavailable(describeApplicationAddressFailure(error));

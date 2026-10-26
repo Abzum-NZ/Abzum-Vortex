@@ -154,9 +154,6 @@ type GateDecision = Readonly<{
   validUntil?: string;
 }>;
 
-/** One access decision of `decideOrganizationAccessBatch`, as a page projection returns it. */
-export type PageAccessDecision = Awaited<ReturnType<typeof decideOrganizationAccessBatch>>[number];
-
 /** Record placement availability carries no row decision and invokes no operation callback. */
 const evaluateRecordGate = async (
   transaction: RequestDatabaseTransaction,
@@ -173,7 +170,9 @@ const evaluateRecordGate = async (
     : { allowed: false, correlationId: result.correlationId };
 };
 
-const gateDecision = (decision: PageAccessDecision): GateDecision => ({
+const gateDecision = (
+  decision: Awaited<ReturnType<typeof decideOrganizationAccessBatch>>[number],
+): GateDecision => ({
   allowed: decision.allowed,
   correlationId: decision.correlationId,
   ...(decision.validUntil === undefined ? {} : { validUntil: decision.validUntil }),
@@ -184,23 +183,16 @@ const sameKey = (left: string, right: string): boolean => left === right;
 /**
  * Projects one loaded page capability for the viewer: the page gate, then each placement's view and
  * use gates, visibility condition and bound action, all decided in this one verified transaction.
- * The page gate, every placement's permission gate and the declarations the caller decides
- * `alongside` (the application navigation's) are decided together in one batch statement; a record
- * placement gate keeps its own availability read. `page` is undefined when the page is not the
- * viewer's to open; `alongside` holds the caller's decisions in its order either way.
+ * The page gate and every placement's permission gate are decided together in one batch
+ * statement; a record placement gate keeps its own availability read. Undefined when the page is
+ * not the viewer's to open.
  */
 export const projectAuthenticatedPageCapability = async (
   transaction: RequestDatabaseTransaction,
   scope: SelectedOrganizationScope,
   loaded: FixedAuthenticatedPageCapability,
   evaluators: PageCapabilityEvaluators,
-  alongside: readonly OrganizationAccessDeclaration[],
-): Promise<
-  Readonly<{
-    page: ProjectedPageCapability | undefined;
-    alongside: readonly PageAccessDecision[];
-  }>
-> => {
+): Promise<ProjectedPageCapability | undefined> => {
   const page = pageDefinitionSchema.parse(loaded.page);
   if (
     loaded.resolvedComposition !== undefined &&
@@ -245,14 +237,12 @@ export const projectAuthenticatedPageCapability = async (
     if (!isRecordPlacementBinding(gate)) batched.set(keyOf(gate), gate.declaration);
   const batchDecisions = await decideOrganizationAccessBatch(transaction, scope, [
     ...batched.values(),
-    ...alongside,
   ]);
-  if (batchDecisions.length !== batched.size + alongside.length)
+  if (batchDecisions.length !== batched.size)
     throw new Error("PAGE_CAPABILITY_EVIDENCE_UNAVAILABLE");
   [...batched.keys()].forEach((key, index) => {
     decided.set(key, gateDecision(batchDecisions[index]!));
   });
-  const alongsideDecisions = batchDecisions.slice(batched.size);
   const decide = async (binding: PermissionBinding | PlacementPermissionBinding) => {
     const key = keyOf(binding);
     let decision = decided.get(key);
@@ -265,7 +255,7 @@ export const projectAuthenticatedPageCapability = async (
     return decision;
   };
   const pageAccess = await decide(loaded.pagePermission);
-  if (!pageAccess.allowed) return { page: undefined, alongside: alongsideDecisions };
+  if (!pageAccess.allowed) return undefined;
   const correlations = new Set([
     pageAccess.correlationId.toLowerCase(),
     ...(loaded.sourceCorrelationId === undefined ? [] : [loaded.sourceCorrelationId.toLowerCase()]),
@@ -362,7 +352,7 @@ export const projectAuthenticatedPageCapability = async (
         earliestAccessEligibilityUntil,
       ))
     )
-      return { page: undefined, alongside: alongsideDecisions };
+      return undefined;
   }
-  return { page: projected, alongside: alongsideDecisions };
+  return projected;
 };
