@@ -115,6 +115,8 @@ export type ProjectedTableRow = Readonly<{
   recordId: string;
   revision: number;
   capabilities: NonNullable<ProtectedQueryRow["capabilities"]>;
+  /** The record type's title, independent of column order and visibility, under the same access. */
+  title: Readonly<{ fieldId: string; value: ProjectedScalarCellValue }>;
   cells: Readonly<Record<string, ProjectedScalarCellValue>>;
   /**
    * The stored value of each inline-editable field this row lets the viewer change (null when
@@ -382,7 +384,7 @@ const exactValuesOf = (
  */
 export const projectRecordsTableData = (
   layout: GridLayoutState,
-  input: ComponentDataProjectionInput,
+  input: ComponentDataProjectionInput & Readonly<{ titleFieldId: string }>,
   rows: readonly TableSourceRow[],
   fieldBounds: ProtectedQueryFieldBounds,
 ): ProjectedComponentData<ProjectedTableValues> | undefined => {
@@ -467,6 +469,9 @@ export const projectRecordsTableData = (
       ...(features === undefined ? {} : { features }),
       rows: completeRows.map((row) => {
         const format = formatting?.rows.get(row.recordId);
+        const title = isReadable(input.titleFieldId, input)
+          ? valueOf(row, input.titleFieldId)
+          : undefined;
         const cells = Object.fromEntries(
           columns.map((column) => {
             const stored = isReadable(column.key, input) ? valueOf(row, column.key) : undefined;
@@ -488,6 +493,20 @@ export const projectRecordsTableData = (
         return {
           recordId: row.recordId,
           revision: row.revision,
+          title: {
+            fieldId: input.titleFieldId,
+            value:
+              title === undefined
+                ? RESTRICTED_CELL
+                : projectCell(
+                    title.value,
+                    "automatic",
+                    input.fieldChoiceLabels?.[input.titleFieldId.toLowerCase()],
+                    input.fieldDateTypes?.[input.titleFieldId.toLowerCase()],
+                    recordLinkIn(input.recordLinks),
+                    input.fieldLinkTypes?.[input.titleFieldId.toLowerCase()],
+                  ),
+          },
           capabilities: {
             ...row.capabilities,
             changeableFieldIds: row.capabilities.changeableFieldIds.filter((fieldId) =>

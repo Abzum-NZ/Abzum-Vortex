@@ -317,15 +317,17 @@ export async function commitGridView(
               name,
               scope: "default" as const,
               mine: false,
+              personalDefault: false,
               revision: 1,
             })),
             ...listed.views
               .filter((view) => view.queryId === queryId)
-              .map(({ viewId, name, scope, mine, revision }) => ({
+              .map(({ viewId, name, scope, mine, personalDefault, revision }) => ({
                 viewId,
                 name,
                 scope,
                 mine,
+                personalDefault,
                 revision,
               })),
           ],

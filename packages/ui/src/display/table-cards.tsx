@@ -39,7 +39,7 @@ export type CardRenderers = Readonly<{
 
 /**
  * The List preset and phone cards: one card per record of the same page, built from the columns the
- * page carries. The first shown column is the card's heading; the others follow as labelled values,
+ * page carries. The record type title is the heading; the other columns follow as labelled values,
  * essential and high priority first. A card opens through the same declared row click, and its
  * selection and row commands send the same events as the grid's. A card that expands shows its
  * related records below it, or the cards of the records beneath it, indented. Only this
@@ -78,8 +78,7 @@ export function RecordsCards({
   bounded: boolean;
   density: RecordsTableDensity;
 }>): ReactElement {
-  const [heading, ...rest] = columns;
-  const details = rest
+  const details = columns
     .map((column, order) => ({ column, order }))
     .sort(
       (left, right) =>
@@ -130,14 +129,17 @@ export function RecordsCards({
           );
         }
         const row = line.row;
+        if (row.title === undefined) throw new Error("RECORDS_TABLE_ROW_TITLE_MISSING");
+        const titleFieldId = row.title.fieldId;
+        const title = cellValueToText(row.title.value);
+        const rowDetails = details.filter(
+          (column) => column.key.toLowerCase() !== titleFieldId.toLowerCase(),
+        );
         const selected = selectedRecordIds.includes(row.recordId);
         const headingId = `record-${row.recordId}-heading`;
         const expanded = expansion?.isExpanded(row.recordId) === true;
         const expandable = expansion?.isExpandable(row) === true;
-        const name =
-          heading === undefined
-            ? "this record"
-            : cellValueToText(row.cells[heading.key] ?? { kind: "empty" });
+        const name = title;
         return (
           <li
             key={row.recordId}
@@ -188,20 +190,18 @@ export function RecordsCards({
                 {selectable ? renderers.select(row, selected) : null}
                 <h3
                   id={headingId}
-                  data-vortex-field-key={heading?.key}
+                  data-vortex-field-key={titleFieldId}
                   className="m-0 min-w-0 flex-1 truncate text-sm font-medium"
                 >
-                  {activateRow === undefined || heading === undefined ? (
-                    heading === undefined ? null : (
-                      renderers.value(row, heading)
-                    )
+                  {activateRow === undefined ? (
+                    title
                   ) : (
                     <button
                       type="button"
                       className="max-w-full truncate text-start font-medium underline-offset-4 hover:underline focus-visible:underline focus-visible:outline-none"
                       onClick={() => activate(row.recordId)}
                     >
-                      {renderers.heading(row, heading)}
+                      {title}
                     </button>
                   )}
                 </h3>
@@ -224,9 +224,9 @@ export function RecordsCards({
                   />
                 )}
               </div>
-              {details.length === 0 ? null : (
+              {rowDetails.length === 0 ? null : (
                 <dl className="m-0 grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-x-3 gap-y-1">
-                  {details.map((column) => (
+                  {rowDetails.map((column) => (
                     <div key={column.key} className="contents">
                       <dt className="break-words whitespace-normal text-muted-foreground">
                         {column.label}

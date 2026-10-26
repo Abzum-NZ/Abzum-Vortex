@@ -320,6 +320,7 @@ const tableReadShape = {
 /** The table payload rules that join its parts: columns, layout and paging agree. */
 const refineTablePayload = (
   table: Readonly<{
+    rows: readonly Readonly<{ title?: unknown }>[];
     columns: readonly Readonly<{ key: string }>[];
     hiddenColumns: readonly Readonly<{ key: string }>[];
     layout: z.output<typeof gridLayoutStateSchema>;
@@ -335,6 +336,11 @@ const refineTablePayload = (
 ): void => {
   const issue = (message: string, path: readonly PropertyKey[] = []) =>
     context.addIssue({ code: "custom", path: [...path], message });
+  // Every table row carries its record type title; only launcher rows go without one.
+  table.rows.forEach((row, index) => {
+    if (row.title === undefined)
+      issue("A projected table row requires its record type title", ["rows", index, "title"]);
+  });
   // A column is either shown or hidden, never both.
   refineUniqueKeys(
     [...table.columns, ...table.hiddenColumns],
