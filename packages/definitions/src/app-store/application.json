@@ -82,6 +82,22 @@
         "record_type": "vortex.app_store:store_application",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "event_install_application",
+        "key": "vortex.app.app_store.install_application",
+        "label": "Install",
+        "record_type": "vortex.app_store:store_application",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
+      },
+      {
+        "id": "event_upgrade_application",
+        "key": "vortex.app.app_store.upgrade_application",
+        "label": "Upgrade",
+        "record_type": "vortex.app_store:store_application",
+        "carries": [],
+        "personal_or_sensitive_values_allowed": false
       }
     ],
     "public_addresses": [],
@@ -329,16 +345,30 @@
                     ],
                     "row_actions": [
                       {
-                        "event_id": "event_install_or_upgrade",
-                        "label": "Install or upgrade",
+                        "event_id": "event_install_application",
+                        "label": "Install",
                         "icon": "plus",
-                        "placement": "inline"
+                        "placement": "inline",
+                        "when_field": "vortex.app_store:store_application.status",
+                        "when_equals": "available",
+                        "show_label": true
+                      },
+                      {
+                        "event_id": "event_upgrade_application",
+                        "label": "Upgrade",
+                        "icon": "plus",
+                        "placement": "inline",
+                        "when_field": "vortex.app_store:store_application.status",
+                        "when_equals": "update_available",
+                        "show_label": true
                       },
                       {
                         "event_id": "event_remove_application",
                         "label": "Remove",
                         "icon": "minus",
-                        "placement": "menu"
+                        "placement": "menu",
+                        "when_field": "vortex.app_store:store_application.status",
+                        "when_not_equals": "available"
                       }
                     ],
                     "vortex": {
@@ -2304,9 +2334,22 @@
     ],
     "flow_bindings": [
       {
-        "id": "binding_install_or_upgrade",
+        "id": "binding_install_application",
         "control": "store_applications_region",
-        "event_id": "event_install_or_upgrade",
+        "event_id": "event_install_application",
+        "event": "row_action",
+        "flow": "flow_install_or_upgrade_application",
+        "inputs": {
+          "application_root_id": {
+            "kind": "caller",
+            "name": "record_id"
+          }
+        }
+      },
+      {
+        "id": "binding_upgrade_application",
+        "control": "store_applications_region",
+        "event_id": "event_upgrade_application",
         "event": "row_action",
         "flow": "flow_install_or_upgrade_application",
         "inputs": {

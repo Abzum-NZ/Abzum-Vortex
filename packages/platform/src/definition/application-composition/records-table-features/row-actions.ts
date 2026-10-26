@@ -7,6 +7,9 @@ import {
   featureEnabled,
   featureNotPossible,
   optionalChoice,
+  optionalField,
+  optionalText,
+  requiredBoolean,
   requiredChoice,
   requiredGroup,
   requiredItems,
@@ -88,6 +91,16 @@ const rowActionSchema = z
     icon: z.enum(recordsTableRowActionIcons),
     placement: z.enum(["inline", "menu"]),
     capability: z.enum(recordsTableActionCapabilities).optional(),
+    showWhen: z
+      .object({
+        field: textSchema,
+        equals: textSchema.optional(),
+        notEquals: textSchema.optional(),
+      })
+      .strict()
+      .readonly()
+      .optional(),
+    showLabel: z.boolean().optional(),
   })
   .strict()
   .readonly();
@@ -142,7 +155,8 @@ export const recordsTableRowActionsFeature: RecordsTableFeatureDefinition<object
  * exactly one flow. `capability`, when declared, names the record action the command needs: the
  * server disables it for a row whose per-row capabilities do not include that kind. A workflow that
  * declares no capability (an open, read or custom command) stays offered, and the server still
- * re-checks every action it runs.
+ * re-checks every action it runs. `showWhen` offers the command only on rows whose choice column
+ * holds (or does not hold) the named key, and `showLabel` draws it as a text button.
  */
 export type RecordsTableActionContract = Readonly<{
   eventId: string;
@@ -150,6 +164,10 @@ export type RecordsTableActionContract = Readonly<{
   capability?: RecordsTableActionCapability | undefined;
   icon: (typeof recordsTableRowActionIcons)[number];
   placement: "inline" | "menu";
+  showWhen?:
+    | Readonly<{ field: string; equals?: string | undefined; notEquals?: string | undefined }>
+    | undefined;
+  showLabel?: boolean | undefined;
 }>;
 
 /** Reads the whole declaration or refuses it; a partial entry must never disappear on publish. */
@@ -168,6 +186,15 @@ export const readRecordsTableRowActions = (
       recordsTableActionCapabilities,
       `${at}.capability`,
     );
+    const whenField = optionalField(action["when_field"], `${at}.when_field`);
+    const whenEquals = optionalText(action["when_equals"], `${at}.when_equals`);
+    const whenNotEquals = optionalText(action["when_not_equals"], `${at}.when_not_equals`);
+    if (whenField === undefined && (whenEquals !== undefined || whenNotEquals !== undefined))
+      return unreadable(`${at}.when_field`);
+    const showLabel =
+      action["show_label"] === undefined
+        ? undefined
+        : requiredBoolean(action["show_label"], `${at}.show_label`);
     actions.push({
       eventId,
       label: requiredText(action["label"], `${at}.label`),
@@ -178,6 +205,16 @@ export const readRecordsTableRowActions = (
         `${at}.placement`,
       ),
       ...(capability === undefined ? {} : { capability }),
+      ...(whenField === undefined
+        ? {}
+        : {
+            showWhen: {
+              field: whenField,
+              ...(whenEquals === undefined ? {} : { equals: whenEquals }),
+              ...(whenNotEquals === undefined ? {} : { notEquals: whenNotEquals }),
+            },
+          }),
+      ...(showLabel === undefined ? {} : { showLabel }),
     });
   }
   return actions;

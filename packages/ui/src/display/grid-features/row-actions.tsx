@@ -19,6 +19,7 @@ import { toast } from "../../components/sonner";
 import { Icon } from "../../icons/icon";
 import { usePendingGesture } from "../../controls/pending-gesture";
 import { rowName } from "../context";
+import type { DisplayRow } from "../projected-data";
 import type {
   GridFeatureCommandProps,
   GridFeatureInteractionProps,
@@ -33,6 +34,18 @@ const reasons: Readonly<Record<RecordsTableBulkRefusalReason, string>> = {
   refused: "This action cannot run on this record.",
 };
 
+/** Whether a row offers an action that declares a choice column it depends on. */
+const offeredOnRow = (action: RecordsTableActionContract, row: DisplayRow): boolean => {
+  const when = action.showWhen;
+  if (when === undefined) return true;
+  const cell = row.cells[when.field];
+  if (cell === undefined || cell.kind !== "choice") return false;
+  return (
+    (when.equals === undefined || cell.key === when.equals) &&
+    (when.notEquals === undefined || cell.key !== when.notEquals)
+  );
+};
+
 /** One control set shared by desktop rows and phone cards, using only the server's decisions. */
 function RowCommands({ context, row }: GridFeatureCommandProps): ReactElement | null {
   const gesture = usePendingGesture();
@@ -45,18 +58,21 @@ function RowCommands({ context, row }: GridFeatureCommandProps): ReactElement | 
   const current = projection.availability.find(
     (item) => item.recordId === row.recordId && item.revision === row.revision,
   );
-  const commands = projection.actions.map((action) => {
-    const decision = current?.actions.find((item) => item.action === action.eventId);
-    return {
-      action,
-      reason:
-        decision?.eligible === true
-          ? undefined
-          : decision?.eligible === false
-            ? reasons[decision.reason]
-            : "Refresh to check whether this action is available.",
-    };
-  });
+  const commands = projection.actions
+    .filter((action) => offeredOnRow(action, row))
+    .map((action) => {
+      const decision = current?.actions.find((item) => item.action === action.eventId);
+      return {
+        action,
+        reason:
+          decision?.eligible === true
+            ? undefined
+            : decision?.eligible === false
+              ? reasons[decision.reason]
+              : "Refresh to check whether this action is available.",
+      };
+    });
+  if (commands.length === 0) return null;
   const inline =
     context.presentation === "cards"
       ? []
@@ -102,14 +118,20 @@ function RowCommands({ context, row }: GridFeatureCommandProps): ReactElement | 
           <TooltipTrigger render={<span className="inline-flex" />}>
             <Button
               type="button"
-              variant="ghost"
-              size="icon-sm"
+              variant={action.showLabel === true ? "outline" : "ghost"}
+              size={action.showLabel === true ? "sm" : "icon-sm"}
               aria-label={`${action.label}: ${name}`}
               disabled={gesture.pending || reason !== undefined}
               aria-busy={gesture.pending}
               onClick={() => run(action)}
             >
-              {gesture.pending ? <Spinner aria-hidden="true" /> : <Icon name={action.icon} />}
+              {gesture.pending ? (
+                <Spinner aria-hidden="true" />
+              ) : action.showLabel === true ? (
+                action.label
+              ) : (
+                <Icon name={action.icon} />
+              )}
             </Button>
           </TooltipTrigger>
           <TooltipContent>

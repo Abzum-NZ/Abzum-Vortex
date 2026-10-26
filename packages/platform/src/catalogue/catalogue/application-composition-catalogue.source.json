@@ -3290,6 +3290,38 @@
                   "label": "Row menu"
                 }
               ]
+            },
+            {
+              "kind": "field_reference",
+              "key": "when_field",
+              "label": "Show only when column",
+              "help": "A choice column of the query; the command appears only on rows whose value for it matches",
+              "required": false
+            },
+            {
+              "kind": "text",
+              "key": "when_equals",
+              "label": "Column equals",
+              "help": "Choice key the column must hold for the command to appear",
+              "required": false,
+              "minLength": 1,
+              "maxLength": 60
+            },
+            {
+              "kind": "text",
+              "key": "when_not_equals",
+              "label": "Column differs from",
+              "help": "Choice key the column must not hold for the command to appear",
+              "required": false,
+              "minLength": 1,
+              "maxLength": 60
+            },
+            {
+              "kind": "boolean",
+              "key": "show_label",
+              "label": "Show text",
+              "help": "Draw the command as a button with its label instead of an icon",
+              "required": false
             }
           ]
         }
