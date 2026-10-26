@@ -37,9 +37,6 @@ import { z } from "zod";
 import { pageCompiledSlotsFor } from "./studio-application-draft";
 import { collectPlacements, pageSubjectParameter } from "./application-page/placement-helpers";
 import { findModuleQuery, pageQueryBindingContext } from "@vortex/platform/server";
-import { applicationLauncherQueryRowsToListValues } from "@vortex/ui/launcher/bindings";
-import { parseBoardPayload } from "@vortex/ui/display/board-payload";
-import { parseDisplayData } from "@vortex/ui/display/projected-data";
 import {
   isStreamablePlacement,
   readPlacement,
@@ -381,18 +378,7 @@ export const readStudioCanvasRecords = async (
       }),
       dependencies,
       subjectId: subjectId.success ? subjectId.data : undefined,
-      services: {
-        queries: services.queries,
-        linkTiles: services.linkTiles,
-        queryNotices: services.queryNotices,
-        tables: services.tables,
-        resolveRecordLinks: services.recordLinkResolver(context),
-        readCalendarSettings: services.readCalendarSettings,
-        readSubject,
-        records: services.subjects,
-        launcherValues: applicationLauncherQueryRowsToListValues,
-        boardData: (values) => parseDisplayData({ status: "ready", values }, parseBoardPayload),
-      },
+      services: services.placementServices(context, readSubject),
       permittedApplicationKeys: undefined,
       permittedApplicationsUnavailable: false,
       // The Studio canvas shows the authored layout and reports arrangements for capture; a

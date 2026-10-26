@@ -15,7 +15,9 @@ import {
   type InstalledRuntimeContext,
   type PlacementReadInput,
   type ProjectedRecordLink,
+  type RecordLinkLabelsResult,
   type RecordLinkResolver,
+  type RecordLinkTitler,
 } from "@vortex/platform/server";
 import { applicationLauncherQueryRowsToListValues } from "@vortex/ui/launcher/bindings";
 import { parseBoardPayload } from "@vortex/ui/display/board-payload";
@@ -161,6 +163,25 @@ export const createPlacementReadServices = (
   const subjects = createPageSubjectReader(dependencies);
   // One labelled read per page and link target: a link shows its target's name as the viewer may
   // read it, and a detail address only where the viewer may open that page.
+  const projectLinks = (
+    labels: Extract<RecordLinkLabelsResult, { outcome: "read" }>["labels"],
+  ): ReadonlyMap<string, ProjectedRecordLink> =>
+    new Map(
+      [...labels].map(([key, label]): [string, ProjectedRecordLink] => [
+        key,
+        label.outcome === "restricted"
+          ? { kind: "restricted" }
+          : {
+              kind: "record_link",
+              label: label.label,
+              ...(label.detail === undefined
+                ? {}
+                : {
+                    href: `/${encodeURIComponent(input.tenantShortName)}/${encodeURIComponent(input.organizationShortName)}/${encodeURIComponent(label.detail.applicationKey)}/${encodeURIComponent(label.detail.pageKey)}?${new URLSearchParams({ record_id: label.detail.recordId })}`,
+                  }),
+            },
+      ]),
+    );
   const recordLinkResolver =
     (context: InstalledRuntimeContext): RecordLinkResolver =>
     async (links) => {
@@ -169,33 +190,26 @@ export const createPlacementReadServices = (
         console.error(`[page] link titles unavailable: outcome=${read.outcome}`);
         return undefined;
       }
-      return new Map(
-        [...read.labels].map(([key, label]): [string, ProjectedRecordLink] => [
-          key,
-          label.outcome === "restricted"
-            ? { kind: "restricted" }
-            : {
-                kind: "record_link",
-                label: label.label,
-                ...(label.detail === undefined
-                  ? {}
-                  : {
-                      href: `/${encodeURIComponent(input.tenantShortName)}/${encodeURIComponent(input.organizationShortName)}/${encodeURIComponent(label.detail.applicationKey)}/${encodeURIComponent(label.detail.pageKey)}?${new URLSearchParams({ record_id: label.detail.recordId })}`,
-                    }),
-              },
-        ]),
-      );
+      return projectLinks(read.labels);
     };
+  // A Records table titles the links a read returned inside that read's own request transaction.
+  const recordLinkTitler =
+    (context: InstalledRuntimeContext): RecordLinkTitler =>
+    async (transaction, scope, links) =>
+      projectLinks(
+        (await recordLinks.readLabelsInRequest(transaction, scope, context, links)).labels,
+      );
   // The readers one placement read takes: the page load and a tree level's read share them.
   const placementServices = (
-    resolveRecordLinks: RecordLinkResolver,
+    context: InstalledRuntimeContext,
     readSubject: PlacementReadInput["services"]["readSubject"],
   ): PlacementReadInput["services"] => ({
     queries,
     linkTiles,
     queryNotices,
     tables,
-    resolveRecordLinks,
+    resolveRecordLinks: recordLinkResolver(context),
+    titleRecordLinks: recordLinkTitler(context),
     readCalendarSettings,
     readSubject,
     records: subjects,

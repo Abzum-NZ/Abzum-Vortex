@@ -140,7 +140,7 @@ export const loadApplicationRowDetail = async (
         parameters,
         bindings,
         data: {},
-        services: services.placementServices(services.recordLinkResolver(context), readSubject),
+        services: services.placementServices(context, readSubject),
         permittedApplicationKeys: undefined,
         permittedApplicationsUnavailable: false,
         gridLayouts: await readPageGridLayouts(

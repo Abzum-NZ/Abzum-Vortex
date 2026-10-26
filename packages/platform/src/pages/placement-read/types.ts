@@ -9,7 +9,7 @@ import type { HumanOrganizationRequestResult } from "../../access/human-organiza
 import type { readCurrentOrganizationRuntimeSettingsAfterAuthorization } from "../../access/organization-runtime-settings-administration";
 import type { InstalledRuntimeContext } from "../../definition/installed-runtime-context";
 import type { createProtectedQueryService } from "../../queries/protected-query-service";
-import type { RecordLinkResolver } from "../component-data-projection";
+import type { RecordLinkResolver, RecordLinkTitler } from "../component-data-projection";
 import type { launcherRowsPayloadSchema } from "../display-payload-launcher";
 import type { createLinkTilesQueryResolver } from "../link-tiles-query";
 import type { createQueryNoticeQueryResolver } from "../notice-query-projection";
@@ -65,6 +65,8 @@ export type PlacementReadServices = Readonly<{
       sealSelection?: RecordsSelectionSealer;
     }>;
   resolveRecordLinks: RecordLinkResolver;
+  /** Titles the links a Records table read returned, inside that read's own request transaction. */
+  titleRecordLinks: RecordLinkTitler;
   readCalendarSettings: () => Promise<
     HumanOrganizationRequestResult<{
       settings: Awaited<

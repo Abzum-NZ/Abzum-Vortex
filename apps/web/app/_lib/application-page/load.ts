@@ -5,7 +5,6 @@ import {
   DRAWER_BLOCK_RELEASE,
   type InstalledRuntimeContext,
   createStoredPageCapabilityService,
-  createStoredNavigationProjectionService,
   type PageSubjectReadResult,
   type RecordLinkResolver,
   pageSubjectFieldIds,
@@ -96,11 +95,12 @@ import { loadInstalledContext, requestDependencies } from "./installed-context";
 /**
  * The viewer's projection of one page and of the application menu, read once per server render:
  * the application frame layout and the page of one request share them instead of deciding the same
- * access twice. The next request reads again, so no access decision outlives its request. React's
- * `cache` keys on the number of arguments as well as their values, so every caller passes all six
- * (the selected placements are required, `undefined` for a whole page; `navigation` says whether
- * the caller shows the menu): a call with fewer would miss the shared read and project the page and
- * the menu a second time.
+ * access twice. The page and the menu are decided in one HUMAN request, their permissions in one
+ * batch statement. The next request reads again, so no access decision outlives its request.
+ * React's `cache` keys on the number of arguments as well as their values, so every caller passes
+ * all six (the selected placements are required, `undefined` for a whole page; `navigation` says
+ * whether the caller shows the menu): a call with fewer would miss the shared read and project the
+ * page and the menu a second time.
  */
 export const readPageProjections = cache(
   (
@@ -127,20 +127,32 @@ export const readPageProjections = cache(
       definition,
       subjectRecordId !== undefined,
     );
-    const projectedPageRead = subjectReady.then(async (ready) => {
+    const projectionRead = subjectReady.then(async (ready) => {
       if (ready.kind === "not_runnable") return ready;
       if (ready.kind !== "ready")
         return {
           kind:
             ready.kind === "temporarily_unavailable" ? "temporarily_unavailable" : "unavailable",
         } as const;
-      const projected = await createStoredPageCapabilityService({
+      const pages = createStoredPageCapabilityService({
         ...dependencies,
         context,
         permissions: platformPermissionSource,
         selection: { pageId, ...(subjectRecordId === undefined ? {} : { subjectRecordId }) },
-      }).project(session, selection);
-      if (projected.kind !== "available" || projected.value === undefined) return projected;
+      });
+      // A read of selected placements shows no menu, so it projects none.
+      if (!navigation) {
+        const projected = await pages.project(session, selection);
+        return projected.kind === "available"
+          ? ({ kind: "available", value: { page: projected.value } } as const)
+          : projected;
+      }
+      return pages.projectWithNavigation(session, selection);
+    });
+    const projectedPageRead = projectionRead.then(async (projection) => {
+      if (projection.kind !== "available") return projection;
+      const projected = { kind: "available", value: projection.value.page } as const;
+      if (projected.value === undefined) return projected;
       const demand = await prepareRuntimePreviewPage(
         session,
         context,
@@ -157,21 +169,15 @@ export const readPageProjections = cache(
         } as const;
       return projected;
     });
-    // A read of selected placements shows no menu, so it projects none.
     const navigationRead = navigation
-      ? subjectReady.then((ready) =>
-          ready.kind === "ready"
-            ? createStoredNavigationProjectionService({
-                ...dependencies,
-                context,
-                permissions: platformPermissionSource,
-              }).project(session, selection)
-            : ({
-                kind:
-                  ready.kind === "temporarily_unavailable"
-                    ? "temporarily_unavailable"
-                    : "unavailable",
-              } as const),
+      ? projectionRead.then((projection) =>
+          projection.kind === "available"
+            ? projection.value.navigation === undefined
+              ? Promise.reject(new Error("PAGE_NAVIGATION_NOT_PROJECTED"))
+              : ({ kind: "available", value: projection.value.navigation } as const)
+            : projection.kind === "not_runnable"
+              ? ({ kind: "unavailable" } as const)
+              : projection,
         )
       : undefined;
     // A failure is rethrown where its result is consulted, never left unobserved meanwhile, and
@@ -280,8 +286,7 @@ const loadApplicationPageJoined = async (
   }
 
   const conditionSubjectId = first(parameters[pageSubjectParameter]);
-  // The page projection and the navigation projection are independent reads of
-  // the same installed context, each under its own HUMAN request; they run together and their
+  // The page and the navigation are projected in one HUMAN request of the installed context; their
   // results are still consulted in the original order.
   const { projectedPageRead, navigationRead } = readPageProjections(
     session,
@@ -683,7 +688,7 @@ const loadApplicationPageJoined = async (
     parameters,
     bindings: bindingContext,
     data,
-    services: services.placementServices(resolveRecordLinks, readSubject),
+    services: services.placementServices(context, readSubject),
     permittedApplicationKeys,
     permittedApplicationsUnavailable: permittedApplicationsRead?.kind === "temporarily_unavailable",
     ...(boardReads === undefined ? {} : { boardReads }),

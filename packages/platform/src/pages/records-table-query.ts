@@ -50,7 +50,7 @@ import {
   type ProjectedComponentData,
   type ProjectedTableGroups,
   type ProjectedTableValues,
-  type RecordLinkResolver,
+  type RecordLinkTitler,
   type RecordsTableNarrowing,
 } from "./component-data-projection";
 import type { LinkFieldType } from "./cell-projection";
@@ -74,7 +74,11 @@ import {
 } from "./records-table-features/grouping";
 import { recordsTableTotalReads, projectRecordsTableTotals } from "./records-table-features/totals";
 import { CalendarEndpointError, calendarAddDays, calendarStartOfDay } from "./calendar-date";
-import { recordLinkLabelKey } from "../definition/viewer-safe-record-link";
+import {
+  recordLinkLabelKey,
+  type RecordLinkReference,
+} from "../definition/viewer-safe-record-link";
+import type { ProjectedRecordLink } from "./cell-projection";
 
 /**
  * The one Query engine entry point a Records table reads through. The composition root supplies
@@ -156,8 +160,11 @@ export type RecordsTableQueryRequest = Readonly<{
   fieldDateTypes?: Readonly<Record<string, "date" | "date_time">>;
   /** The web, email and phone fields of the installed definition (field identity to field type). */
   fieldLinkTypes?: Readonly<Record<string, LinkFieldType>>;
-  /** Reads the labels of the linked records the page's rows carry, once per page. */
-  resolveRecordLinks?: RecordLinkResolver;
+  /**
+   * Reads the labels of the linked records a read returned (its rows, its groups and the records
+   * the filter names) inside that read's own request transaction.
+   */
+  titleRecordLinks?: RecordLinkTitler;
   /** What the table's formatting rules are evaluated with; supplied only when they are on. */
   formatting?: ConditionalFormattingContext;
   /** How a cell edits each field of the installed definition; supplied only when inline editing is on. */
@@ -714,6 +721,7 @@ const readGrouped = async (
   group: RecordsTableGroupRead,
   built: RecordsTableQueryCommand,
   decide: ProtectedReadDecider | undefined,
+  titleOnly: ProtectedReadDecider | undefined,
 ): Promise<GroupedRead> => {
   let summaryRead: ProtectedQuerySummaryCompleted | undefined;
   let groupKeys: readonly string[] | undefined;
@@ -757,12 +765,12 @@ const readGrouped = async (
       return { kind: "resolution", resolution: refused };
     }
     // A closed table reads no member, so its summary carries the decisions; an open group's
-    // members carry them.
+    // members carry them, and the summary still titles its own groups' links.
     const summary = await runner.summarise(
       session,
       selection,
       summaryCommand.data,
-      group.expanded === null ? decide : undefined,
+      group.expanded === null ? decide : titleOnly,
     );
     if (summary.kind === "temporarily_unavailable")
       return { kind: "resolution", resolution: unavailableResult };
@@ -872,11 +880,40 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
     // table with several reads (a grouped one) decides on the read that carries its rows.
     let decisions: RecordsTableReadDecisions | undefined;
     const requestDecide = request.decide;
+    // The records a link filter names are titled with the page's links.
+    const filterLinks = built.narrowing.filters.flatMap(({ fieldId, filter }) => {
+      const recordTypeId = request.filterTargets?.[fieldId]?.recordTypeId;
+      return filter.kind !== "link" || recordTypeId === undefined
+        ? []
+        : filter.recordIds.map((recordId) => ({ recordTypeId, recordId }));
+    });
+    // Every read titles the links it returned in its own request transaction, so the titles take no
+    // request of their own: its visible rows' links, its groups' links and the filter's records.
+    const recordLinkTitles = new Map<string, ProjectedRecordLink>();
+    const titleRecordLinks = request.titleRecordLinks;
+    const titleReadLinks = async (
+      ...[transaction, scope, , rows, summary]: Parameters<ProtectedReadDecider>
+    ): Promise<void> => {
+      if (titleRecordLinks === undefined) return;
+      const links: RecordLinkReference[] = [
+        ...collectRecordLinks(visibleRows(rows, built.fieldIds)),
+        ...filterLinks,
+        ...(summary === undefined || request.group === undefined
+          ? []
+          : recordsTableGroupLinks(summary, request.group)),
+      ];
+      if (links.length === 0) return;
+      for (const [key, link] of await titleRecordLinks(transaction, scope, links))
+        recordLinkTitles.set(key, link);
+    };
+    const titleOnly: ProtectedReadDecider | undefined =
+      titleRecordLinks === undefined ? undefined : titleReadLinks;
     const decide: ProtectedReadDecider | undefined =
       requestDecide === undefined
-        ? undefined
+        ? titleOnly
         : async (...decided) => {
             decisions = await requestDecide(...decided);
+            await titleReadLinks(...decided);
           };
     try {
       // The tree level reads honour the query's filter and the viewer's own search and filters at
@@ -907,7 +944,16 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
       const grouped =
         request.group === undefined
           ? undefined
-          : await readGrouped(runner, session, selection, request, request.group, built, decide);
+          : await readGrouped(
+              runner,
+              session,
+              selection,
+              request,
+              request.group,
+              built,
+              decide,
+              titleOnly,
+            );
       if (grouped?.kind === "resolution") return grouped.resolution;
       let result:
         | HumanOrganizationRequestResult<ProtectedQueryResult | ProtectedQueryTreeLevelResult>
@@ -1003,24 +1049,8 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
           ? undefined
           : projectRecordsTableTotals(totalReads, totalAggregates);
       const projectedRows = visibleRows(read.rows, built.fieldIds);
-      // The records a link filter names are titled in the same batched read as the page's links.
-      const filterLinks = built.narrowing.filters.flatMap(({ fieldId, filter }) => {
-        const recordTypeId = request.filterTargets?.[fieldId]?.recordTypeId;
-        return filter.kind !== "link" || recordTypeId === undefined
-          ? []
-          : filter.recordIds.map((recordId) => ({ recordTypeId, recordId }));
-      });
-      // A link group is titled by the same batched read as the page's own links.
       const groupSummary = grouped?.kind === "read" ? grouped.summary : undefined;
-      const groupLinks =
-        groupSummary === undefined || request.group === undefined
-          ? []
-          : recordsTableGroupLinks(groupSummary, request.group);
-      const links = [...collectRecordLinks(projectedRows), ...filterLinks, ...groupLinks];
-      const recordLinks =
-        links.length === 0 || request.resolveRecordLinks === undefined
-          ? undefined
-          : await request.resolveRecordLinks(links);
+      const recordLinks = recordLinkTitles.size === 0 ? undefined : recordLinkTitles;
       const groups =
         groupSummary === undefined || request.group === undefined
           ? grouped?.kind === "flat"

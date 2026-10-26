@@ -16,7 +16,7 @@ import type { ConditionNode } from "../definition/module-foundation-contracts";
 import { isTrustedInstalledPageComposition } from "../definition/installed-page-bundle-context";
 import type { InstalledRuntimeContext } from "../definition/installed-runtime-context";
 import type { RequestDatabaseTransaction } from "../db/request-transaction";
-import { runOrganizationAccessOperation } from "../access/organization-access-decision-access";
+import { decideOrganizationAccessBatch } from "../access/organization-access-decision-access";
 import { evaluateOrganizationRecordPermissionAvailability } from "../access/organization-record-permission-availability";
 import {
   projectPageCapability,
@@ -148,60 +148,59 @@ const isRecordPlacementBinding = (
 ): binding is Extract<PlacementPermissionBinding, Readonly<{ kind: "record" }>> =>
   "kind" in binding && binding.kind === "record";
 
-const evaluate = async (
+type GateDecision = Readonly<{
+  allowed: boolean;
+  correlationId: string;
+  validUntil?: string;
+}>;
+
+/** One access decision of `decideOrganizationAccessBatch`, as a page projection returns it. */
+export type PageAccessDecision = Awaited<ReturnType<typeof decideOrganizationAccessBatch>>[number];
+
+/** Record placement availability carries no row decision and invokes no operation callback. */
+const evaluateRecordGate = async (
   transaction: RequestDatabaseTransaction,
   scope: SelectedOrganizationScope,
-  binding: PermissionBinding | PlacementPermissionBinding,
-): Promise<
-  Readonly<{
-    allowed: boolean;
-    correlationId: string;
-    validUntil?: string;
-  }>
-> => {
-  // Record placement availability carries no row decision and invokes no operation callback.
-  // Page-level and non-record gates still use their original generic permission operation.
-  const result = isRecordPlacementBinding(binding)
-    ? await evaluateOrganizationRecordPermissionAvailability(
-        transaction,
-        scope,
-        binding.declaration,
-      )
-    : await runOrganizationAccessOperation(
-        transaction,
-        scope,
-        binding.declaration,
-        async (decision) => ({
-          correlationId: decision.correlationId,
-          validUntil: decision.validUntil,
-        }),
-      );
-  const evaluated =
-    result.outcome === "completed"
-      ? { allowed: true, correlationId: result.value.correlationId }
-      : { allowed: result.outcome === "eligible", correlationId: result.correlationId };
-  const validUntil =
-    result.outcome === "eligible"
-      ? result.validUntil
-      : result.outcome === "completed"
-        ? result.value.validUntil
-        : undefined;
-  return { ...evaluated, ...(validUntil === undefined ? {} : { validUntil }) };
+  binding: Extract<PlacementPermissionBinding, Readonly<{ kind: "record" }>>,
+): Promise<GateDecision> => {
+  const result = await evaluateOrganizationRecordPermissionAvailability(
+    transaction,
+    scope,
+    binding.declaration,
+  );
+  return result.outcome === "eligible"
+    ? { allowed: true, correlationId: result.correlationId, validUntil: result.validUntil }
+    : { allowed: false, correlationId: result.correlationId };
 };
+
+const gateDecision = (decision: PageAccessDecision): GateDecision => ({
+  allowed: decision.allowed,
+  correlationId: decision.correlationId,
+  ...(decision.validUntil === undefined ? {} : { validUntil: decision.validUntil }),
+});
 
 const sameKey = (left: string, right: string): boolean => left === right;
 
 /**
  * Projects one loaded page capability for the viewer: the page gate, then each placement's view and
  * use gates, visibility condition and bound action, all decided in this one verified transaction.
- * Undefined when the page is not the viewer's to open.
+ * The page gate, every placement's permission gate and the declarations the caller decides
+ * `alongside` (the application navigation's) are decided together in one batch statement; a record
+ * placement gate keeps its own availability read. `page` is undefined when the page is not the
+ * viewer's to open; `alongside` holds the caller's decisions in its order either way.
  */
 export const projectAuthenticatedPageCapability = async (
   transaction: RequestDatabaseTransaction,
   scope: SelectedOrganizationScope,
   loaded: FixedAuthenticatedPageCapability,
   evaluators: PageCapabilityEvaluators,
-): Promise<ProjectedPageCapability | undefined> => {
+  alongside: readonly OrganizationAccessDeclaration[],
+): Promise<
+  Readonly<{
+    page: ProjectedPageCapability | undefined;
+    alongside: readonly PageAccessDecision[];
+  }>
+> => {
   const page = pageDefinitionSchema.parse(loaded.page);
   if (
     loaded.resolvedComposition !== undefined &&
@@ -220,21 +219,53 @@ export const projectAuthenticatedPageCapability = async (
 
   // One projection transaction decides each exact declaration once; repeated declarations
   // reuse the decision and its validity deadline.
-  const decided = new Map<string, Awaited<ReturnType<typeof evaluate>>>();
-  const decide = async (binding: PermissionBinding | PlacementPermissionBinding) => {
-    const key = canonicalJson({
+  const decided = new Map<string, GateDecision>();
+  const keyOf = (binding: PermissionBinding | PlacementPermissionBinding) =>
+    canonicalJson({
       kind: isRecordPlacementBinding(binding) ? "record" : "permission",
       declaration: binding.declaration,
     });
+  const placementGates = requiredPlacements(resolved).flatMap((required) => {
+    const binding = loaded.placements[required.placementId];
+    return [
+      required.viewPermissionKey !== undefined &&
+      binding?.viewPermission !== undefined &&
+      sameKey(binding.viewPermission.permissionKey, required.viewPermissionKey)
+        ? binding.viewPermission
+        : undefined,
+      required.usePermissionKey !== undefined &&
+      binding?.usePermission !== undefined &&
+      sameKey(binding.usePermission.permissionKey, required.usePermissionKey)
+        ? binding.usePermission
+        : undefined,
+    ].filter((gate) => gate !== undefined);
+  });
+  const batched = new Map<string, OrganizationAccessDeclaration>();
+  for (const gate of [loaded.pagePermission, ...placementGates])
+    if (!isRecordPlacementBinding(gate)) batched.set(keyOf(gate), gate.declaration);
+  const batchDecisions = await decideOrganizationAccessBatch(transaction, scope, [
+    ...batched.values(),
+    ...alongside,
+  ]);
+  if (batchDecisions.length !== batched.size + alongside.length)
+    throw new Error("PAGE_CAPABILITY_EVIDENCE_UNAVAILABLE");
+  [...batched.keys()].forEach((key, index) => {
+    decided.set(key, gateDecision(batchDecisions[index]!));
+  });
+  const alongsideDecisions = batchDecisions.slice(batched.size);
+  const decide = async (binding: PermissionBinding | PlacementPermissionBinding) => {
+    const key = keyOf(binding);
     let decision = decided.get(key);
     if (decision === undefined) {
-      decision = await evaluate(transaction, scope, binding);
+      if (!isRecordPlacementBinding(binding))
+        throw new Error("PAGE_CAPABILITY_BINDING_UNAVAILABLE");
+      decision = await evaluateRecordGate(transaction, scope, binding);
       decided.set(key, decision);
     }
     return decision;
   };
   const pageAccess = await decide(loaded.pagePermission);
-  if (!pageAccess.allowed) return undefined;
+  if (!pageAccess.allowed) return { page: undefined, alongside: alongsideDecisions };
   const correlations = new Set([
     pageAccess.correlationId.toLowerCase(),
     ...(loaded.sourceCorrelationId === undefined ? [] : [loaded.sourceCorrelationId.toLowerCase()]),
@@ -331,7 +362,7 @@ export const projectAuthenticatedPageCapability = async (
         earliestAccessEligibilityUntil,
       ))
     )
-      return undefined;
+      return { page: undefined, alongside: alongsideDecisions };
   }
-  return projected;
+  return { page: projected, alongside: alongsideDecisions };
 };

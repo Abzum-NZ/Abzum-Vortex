@@ -1,11 +1,6 @@
 import type { PlatformPermissionSource } from "../access/platform-permissions";
 import "server-only";
 
-import type {
-  IdentitySession,
-  OrganizationSelectionCandidate,
-  SelectedOrganizationScope,
-} from "../access/identity-access";
 import type { OrganizationAccessDeclaration } from "../access/organization-access-decision";
 import type { PermissionRegistryEntryCandidate } from "../access/permission-registry";
 import type { PermissionDeclaration } from "../access/permissions";
@@ -22,18 +17,11 @@ import {
   collectNavigationPermissionKeys,
   projectNavigation,
 } from "./projected-navigation";
-import type { RequestDatabaseTransaction } from "../db/request-transaction";
-import {
-  createHumanOrganizationRequestService,
-  type HumanOrganizationRequestDependencies,
-  type HumanOrganizationRequestResult,
-} from "../access/human-organization-request";
-import { decideOrganizationAccessBatch } from "../access/organization-access-decision-access";
+import type { decideOrganizationAccessBatch } from "../access/organization-access-decision-access";
 import {
   requireInstalledRuntimeContext,
   type InstalledRuntimeContext,
 } from "../definition/installed-runtime-context";
-import { describeFailure } from "../catalogue/runtime-primitives";
 
 export type NavigationPermissionBinding = Readonly<{
   permissionKey: string;
@@ -51,32 +39,22 @@ export type FixedAuthenticatedNavigationProjection = Readonly<{
   sourceCorrelationId: string;
 }>;
 
+/** One decision of the batch a navigation projection's declarations were decided in. */
+type NavigationDecision = Awaited<ReturnType<typeof decideOrganizationAccessBatch>>[number];
+
 /**
- * Evaluates each distinct navigation permission through the same live Access decision path as
- * page capability, then projects the ordered tree. Every item the viewer does not currently
- * hold is dropped with its heading when that leaves the heading empty. Missing evidence is a
- * refusal to project, never a silently visible item.
+ * Projects the ordered tree from the live Access decisions of each distinct navigation permission,
+ * decided through the same eligibility evaluation as page capability, in the page projection's own
+ * request. Every item the viewer does not currently hold is dropped with its heading when that
+ * leaves the heading empty. Missing evidence is a refusal to project, never a silently visible item.
  */
-const projectDecidedNavigation = async (
-  transaction: RequestDatabaseTransaction,
-  scope: SelectedOrganizationScope,
+const projectDecidedNavigation = (
   loaded: FixedAuthenticatedNavigationProjection,
-): Promise<ProjectedNavigation> => {
-  const bindings = loaded.permissionBindings;
+  permissionKeys: readonly string[],
+  evaluated: readonly NavigationDecision[],
+): ProjectedNavigation => {
   const correlations = new Set([loaded.sourceCorrelationId.toLowerCase()]);
   const decisions: Record<string, boolean> = {};
-  const permissionKeys = collectNavigationPermissionKeys(loaded.navigation);
-  const declarations = permissionKeys.map((permissionKey) => {
-    const binding = Object.hasOwn(bindings, permissionKey) ? bindings[permissionKey] : undefined;
-    if (binding === undefined || binding.permissionKey !== permissionKey)
-      throw new Error("NAVIGATION_PERMISSION_BINDING_UNAVAILABLE");
-    return binding.declaration;
-  });
-  // Every distinct permission is decided through the same live eligibility evaluation, all in
-  // one statement of this request instead of one round trip each. Each decision is still
-  // bound to this request's scope and access version, and its correlation must be this one
-  // request's.
-  const evaluated = await decideOrganizationAccessBatch(transaction, scope, declarations);
   if (evaluated.length !== permissionKeys.length)
     throw new Error("NAVIGATION_PERMISSION_EVIDENCE_UNAVAILABLE");
   for (const [index, permissionKey] of permissionKeys.entries()) {
@@ -85,6 +63,8 @@ const projectDecidedNavigation = async (
     correlations.add(decision.correlationId.toLowerCase());
     decisions[permissionKey] = decision.allowed;
   }
+  // Each decision is bound to the request's scope and access version, and its correlation must
+  // be this one request's.
   if (correlations.size !== 1) throw new Error("NAVIGATION_PERMISSION_EVIDENCE_UNAVAILABLE");
   return projectNavigation(loaded.navigation, decisions);
 };
@@ -141,26 +121,35 @@ const declaration = (
         authority: { kind: "permission" },
       };
 
-export type StoredNavigationProjectionDependencies = HumanOrganizationRequestDependencies &
-  Readonly<{
-    /**
-     * The single trusted installed context assembled by App. Navigation projects only from this
-     * exact release set and never re-reads or rebuilds organisation, release or permission
-     * authority.
-     */
-    context: InstalledRuntimeContext;
-    /** The shipped platform permission catalogue navigation requirements may name. */
-    permissions: PlatformPermissionSource;
-  }>;
+export type StoredNavigationProjectionDependencies = Readonly<{
+  /**
+   * The single trusted installed context assembled by App. Navigation projects only from this
+   * exact release set and never re-reads or rebuilds organisation, release or permission
+   * authority.
+   */
+  context: InstalledRuntimeContext;
+  /** The shipped platform permission catalogue navigation requirements may name. */
+  permissions: PlatformPermissionSource;
+}>;
 
 /**
- * Projects navigation for the exact application release the installed context names. The
- * permission declarations are read from that release's prepared registration, so a navigation
- * key the release does not publish fails the projection closed instead of granting visibility.
+ * The navigation of the exact application release the installed context names, ready to be
+ * decided in the page projection's request: the declaration of each distinct navigation permission
+ * (in the order `project` takes their decisions) and the projection of the tree from them.
  */
-export const createStoredNavigationProjectionService = (
+export type StoredNavigationProjection = Readonly<{
+  declarations: readonly OrganizationAccessDeclaration[];
+  project: (decisions: readonly NavigationDecision[]) => ProjectedNavigation;
+}>;
+
+/**
+ * Loads the navigation of the exact application release the installed context names. The
+ * permission declarations are read from that release's prepared registration, so a navigation key
+ * the release does not publish fails the load closed instead of granting visibility.
+ */
+export const loadStoredNavigationProjection = (
   dependencies: StoredNavigationProjectionDependencies,
-) => {
+): StoredNavigationProjection => {
   const context = requireInstalledRuntimeContext(dependencies.context);
   const applicationRootId = applicationRootIdSchema.parse(context.applicationRootId);
   const releaseRevision = revisionSchema
@@ -181,27 +170,22 @@ export const createStoredNavigationProjectionService = (
   )
     throw new Error("STORED_NAVIGATION_TRUSTED_CONTEXT_UNAVAILABLE");
 
-  const requestDependencies = {
-    ...dependencies,
-    correlationId: () => context.correlationId,
+  const permission = (key: string): NavigationPermissionBindingValue => {
+    const platform = dependencies.permissions.forKey(key);
+    if (platform !== undefined)
+      return {
+        kind: "platform",
+        ownerId: dependencies.permissions.ownerId,
+        permission: platform,
+      };
+    const matches = registration.entries.filter((entry) => entry.permission.key === key);
+    if (matches.length !== 1 || matches[0] === undefined)
+      throw new Error("STORED_NAVIGATION_PERMISSION_BINDING_UNAVAILABLE");
+    return { kind: "definition", entry: matches[0] };
   };
-  const requests = createHumanOrganizationRequestService(requestDependencies);
-
-  const load = (): FixedAuthenticatedNavigationProjection => {
-    const permission = (key: string): NavigationPermissionBindingValue => {
-      const platform = dependencies.permissions.forKey(key);
-      if (platform !== undefined)
-        return {
-          kind: "platform",
-          ownerId: dependencies.permissions.ownerId,
-          permission: platform,
-        };
-      const matches = registration.entries.filter((entry) => entry.permission.key === key);
-      if (matches.length !== 1 || matches[0] === undefined)
-        throw new Error("STORED_NAVIGATION_PERMISSION_BINDING_UNAVAILABLE");
-      return { kind: "definition", entry: matches[0] };
-    };
-    const permissionBindings = Object.fromEntries(
+  const loaded: FixedAuthenticatedNavigationProjection = {
+    navigation: applicationRelease.content.navigation,
+    permissionBindings: Object.fromEntries(
       collectNavigationPermissionKeys(applicationRelease.content.navigation).map(
         (permissionKey) => [
           permissionKey,
@@ -215,48 +199,21 @@ export const createStoredNavigationProjectionService = (
           },
         ],
       ),
-    );
-    return {
-      navigation: applicationRelease.content.navigation,
-      permissionBindings,
-      sourceCorrelationId: applicationRelease.correlationId,
-    };
+    ),
+    sourceCorrelationId: applicationRelease.correlationId,
   };
-
-  const project = async (
-    session: IdentitySession,
-    candidate: OrganizationSelectionCandidate,
-  ): Promise<HumanOrganizationRequestResult<ProjectedNavigation>> => {
-    if (
-      !sameId(candidate.organizationId, context.organizationId) ||
-      candidate.applicationRootId === undefined ||
-      !sameId(candidate.applicationRootId, applicationRootId)
-    )
-      return { kind: "unavailable" };
-    // An unauthorised caller gets the same answer whatever the release declares. The projection
-    // below runs the same HUMAN request over this exact application scope, so it proves the
-    // person's current authority itself; only a release that cannot be projected proves that
-    // authority first, on its own.
-    let fixed: FixedAuthenticatedNavigationProjection;
-    try {
-      fixed = load();
-    } catch (error) {
-      console.error(`[page] NAVIGATION_PROJECTION_LOAD_FAILED: ${describeFailure(error)}`);
-      const verified = await requests.run(session, candidate, async () => undefined);
-      if (verified.kind !== "available") return verified;
-      return { kind: "temporarily_unavailable" };
-    }
-    const stored = fixed;
-    return requests.run(session, candidate, async (transaction, scope) => {
-      if (
-        scope.applicationRootId === undefined ||
-        !sameId(scope.organizationId, context.organizationId) ||
-        !sameId(scope.applicationRootId, applicationRootId)
-      )
-        throw new Error("STORED_NAVIGATION_HUMAN_SCOPE_UNAVAILABLE");
-      return projectDecidedNavigation(transaction, scope, stored);
-    });
-  };
-
-  return Object.freeze({ project });
+  const permissionKeys = collectNavigationPermissionKeys(loaded.navigation);
+  const declarations = permissionKeys.map((permissionKey) => {
+    const binding = Object.hasOwn(loaded.permissionBindings, permissionKey)
+      ? loaded.permissionBindings[permissionKey]
+      : undefined;
+    if (binding === undefined || binding.permissionKey !== permissionKey)
+      throw new Error("NAVIGATION_PERMISSION_BINDING_UNAVAILABLE");
+    return binding.declaration;
+  });
+  return Object.freeze({
+    declarations,
+    project: (decisions: readonly NavigationDecision[]) =>
+      projectDecidedNavigation(loaded, permissionKeys, decisions),
+  });
 };
