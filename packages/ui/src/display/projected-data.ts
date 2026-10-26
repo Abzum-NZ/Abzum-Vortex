@@ -20,7 +20,10 @@ import {
   type RecordsTableTotal,
   type JsonValue,
   fieldIdSchema,
-  richTextDocumentSchema,
+  richTextPayloadSchema,
+  textPayloadSchema,
+  type RichTextPayload,
+  type TextPayload,
   displayDataStateSchema,
   displayDetailCellSchema,
   displayScalarCellSchema,
@@ -68,6 +71,7 @@ export {
   type DisplayDataState,
   type DisplayRefusalReason,
 } from "@vortex/platform/schema";
+export type { RichTextPayload, TextPayload };
 
 /**
  * Validated structured rich-text document from the shared closed rich-text contract.
@@ -156,12 +160,6 @@ export type DisplaySummaryMetric = Readonly<{
   label: string;
   value: DisplayCellValue | Readonly<{ kind: "unavailable" }>;
 }>;
-
-/** The ready values a plain-text block renders. */
-export type TextPayload = Readonly<{ kind: "text"; value: DisplayCellValue }>;
-
-/** The ready values a structured rich-text block renders. */
-export type RichTextPayload = Readonly<{ kind: "rich_text"; document: DisplayRichTextDocument }>;
 
 /** The ready rows a launcher or link-tile block renders. */
 export type LauncherRowsPayload = Readonly<{
@@ -394,15 +392,11 @@ export const parseProjectedPart = <Output>(
   );
 };
 
-const parseRichTextDocument = (
-  value: unknown,
-  location: DefinitionRenderErrorLocation,
-): DisplayRichTextDocument => {
-  const parsed = richTextDocumentSchema.safeParse(value);
-  return parsed.success
-    ? (parsed.data as DisplayRichTextDocument)
-    : fail("Projected rich text must satisfy the structured rich-text contract", location);
-};
+/** A block's ready values parser: its platform payload schema, refused with a located error. */
+const projectedValuesParser =
+  <Output>(schema: Parameters<typeof parseProjectedPart<Output>>[0], message: string) =>
+  (value: unknown, location: DefinitionRenderErrorLocation = {}): Output =>
+    parseProjectedPart(schema, value, message, location);
 
 const parseCellValue = (
   value: unknown,
@@ -696,31 +690,16 @@ export const parseFields = (
 };
 
 /** The ready values a plain-text block accepts. */
-export const parseTextPayload = (
-  value: unknown,
-  location: DefinitionRenderErrorLocation = {},
-): TextPayload => {
-  const record = requireRecord(value, "Projected display values must be an object", location);
-  if (record.kind !== "text")
-    return fail(`Expected 'text' projected values, got '${String(record.kind)}'`, location);
-  requireExactKeys(record, ["kind", "value"], location);
-  return Object.freeze({ kind: "text", value: parseCellValue(record.value, location) });
-};
+export const parseTextPayload = projectedValuesParser(
+  textPayloadSchema,
+  "Projected text values are invalid",
+);
 
 /** The ready values a structured rich-text block accepts. */
-export const parseRichTextPayload = (
-  value: unknown,
-  location: DefinitionRenderErrorLocation = {},
-): RichTextPayload => {
-  const record = requireRecord(value, "Projected display values must be an object", location);
-  if (record.kind !== "rich_text")
-    return fail(`Expected 'rich_text' projected values, got '${String(record.kind)}'`, location);
-  requireExactKeys(record, ["kind", "document"], location);
-  return Object.freeze({
-    kind: "rich_text",
-    document: parseRichTextDocument(record.document, location),
-  });
-};
+export const parseRichTextPayload = projectedValuesParser(
+  richTextPayloadSchema,
+  "Projected rich text values are invalid",
+);
 
 /** The ready rows a launcher or link-tile block accepts. */
 export const parseLauncherRowsPayload = (
