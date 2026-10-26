@@ -113,6 +113,7 @@ export const useBoundedGridViewport = <Element extends HTMLElement>(
     window.addEventListener("resize", schedule);
     window.visualViewport?.addEventListener("resize", schedule);
     element.addEventListener("scroll", updateFade, { passive: true });
+    element.addEventListener("vortex-row-settled", schedule);
     measure();
     return () => {
       observer.disconnect();
@@ -121,6 +122,7 @@ export const useBoundedGridViewport = <Element extends HTMLElement>(
       window.removeEventListener("resize", schedule);
       window.visualViewport?.removeEventListener("resize", schedule);
       element.removeEventListener("scroll", updateFade);
+      element.removeEventListener("vortex-row-settled", schedule);
       element.style.removeProperty("--grid-available-height");
       element.style.removeProperty("mask-image");
     };
