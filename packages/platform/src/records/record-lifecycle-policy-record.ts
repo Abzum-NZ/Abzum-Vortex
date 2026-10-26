@@ -14,7 +14,7 @@ import {
   type OrganizationId,
   type StorageContractId,
 } from "../catalogue/identifiers";
-import { describeFailure, sameId } from "../catalogue/runtime-primitives";
+import { describeFailure, sameId, isRecord } from "../catalogue/runtime-primitives";
 import {
   archiveDestinationReferenceSchema,
   maximumRecoveryWindowDays,
@@ -85,9 +85,6 @@ export interface SaveRecordTypeLifecyclePolicyCommand {
   readonly policy: RecordTypeLifecyclePolicyActionInput;
 }
 
-const isPlainObject = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
 const parseSafeRevision = (value: unknown) => revisionSchema.safeParse(value);
 
 const parseNullablePositiveInteger = (value: unknown): number | null | undefined => {
@@ -154,7 +151,7 @@ const saveCommandKeys = [
 const parseRecordTypeLifecyclePolicyActionInput = (
   candidate: unknown,
 ): RecordTypeLifecyclePolicyActionInput | undefined => {
-  if (!isPlainObject(candidate)) return undefined;
+  if (!isRecord(candidate)) return undefined;
   const action = recordLifecycleActionSchema.safeParse(candidate.action);
   if (!action.success) return undefined;
   const common = parseCommonLifecycleFields(candidate);
@@ -216,7 +213,7 @@ const parseRecordTypeLifecyclePolicyActionInput = (
 const parseSaveRecordTypeLifecyclePolicyCommand = (
   candidate: unknown,
 ): SaveRecordTypeLifecyclePolicyCommand | undefined => {
-  if (!isPlainObject(candidate) || !hasOnlyKeys(candidate, saveCommandKeys)) return undefined;
+  if (!isRecord(candidate) || !hasOnlyKeys(candidate, saveCommandKeys)) return undefined;
   const organizationId = organizationIdSchema.safeParse(candidate.organizationId);
   const storageContractId = storageContractIdSchema.safeParse(candidate.storageContractId);
   const applicationRootId =

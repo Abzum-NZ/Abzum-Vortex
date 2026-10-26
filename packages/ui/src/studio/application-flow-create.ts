@@ -2,6 +2,7 @@ import {
   recordsTableInlineEditEvent,
   recordsTableRowActionsFeature,
   recordsTableRowEditEvent,
+  isRecord,
 } from "@vortex/platform/schema";
 import {
   applicationSourceDocumentSchema,
@@ -283,9 +284,6 @@ const keyFrom = (name: string, taken: ReadonlySet<string>): string | undefined =
   return undefined;
 };
 
-const isPlainRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
 const message = (value: string) => ({
   kind: "literal" as const,
   literal: { type: "text" as const, value },
@@ -429,12 +427,12 @@ const bindControl = (
     if (item === undefined) return refuse("The table is no longer on the page.");
     // The table names the action that saves a change in its Inline editing feature.
     const props = item.props as Record<string, unknown>;
-    const features = isPlainRecord(props.features) ? props.features : {};
-    const feature = isPlainRecord(features[event]) ? features[event] : {};
+    const features = isRecord(props.features) ? props.features : {};
+    const feature = isRecord(features[event]) ? features[event] : {};
     props.features = { ...features, [event]: { ...feature, event_id: eventId } };
   }
   if (rowActionMenu && item !== undefined) {
-    const features = isPlainRecord(item.props.features) ? item.props.features : {};
+    const features = isRecord(item.props.features) ? item.props.features : {};
     item.props.features = { ...features, [recordsTableRowActionsFeature.key]: { enabled: true } };
     item.props.row_actions = [
       ...(Array.isArray(item.props.row_actions) ? item.props.row_actions : []),

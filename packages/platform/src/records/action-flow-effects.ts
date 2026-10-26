@@ -21,6 +21,7 @@ import {
   type ActionFlowSeed,
 } from "../rules/action-flow-run";
 import type { FlowProtectedTaskCall } from "../rules/flow-interpreter";
+import { isRecord } from "../catalogue/runtime-primitives";
 
 /**
  * What the record service owns about running a named action as a flow (#1063): checking the action's
@@ -99,9 +100,6 @@ export type NamedActionComposition = Readonly<{
 
 const hasOwn = (value: object, key: string): boolean =>
   Object.prototype.hasOwnProperty.call(value, key);
-
-const isPlainObject = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 // ─── The action's typed inputs ────────────────────────────────────────────────────────────────
 
@@ -293,10 +291,10 @@ type FlowValueJson = Readonly<
  * map as a field value, so this is the fail-closed backstop, never a path a published action takes.
  */
 const isFlowValue = (candidate: unknown): candidate is FlowValueJson => {
-  if (!isPlainObject(candidate)) return false;
+  if (!isRecord(candidate)) return false;
   if (candidate.kind === "literal")
-    return isPlainObject(candidate.literal) && hasOwn(candidate.literal, "value");
-  return candidate.kind === "reference" && isPlainObject(candidate.reference);
+    return isRecord(candidate.literal) && hasOwn(candidate.literal, "value");
+  return candidate.kind === "reference" && isRecord(candidate.reference);
 };
 
 /**
@@ -355,7 +353,7 @@ const valueMap = (
   property: string,
 ): Readonly<Record<string, unknown>> | undefined => {
   const carried = call.properties[property]?.value;
-  return isPlainObject(carried) ? carried : undefined;
+  return isRecord(carried) ? carried : undefined;
 };
 
 const textProperty = (call: FlowProtectedTaskCall, property: string): string | undefined => {
@@ -513,7 +511,7 @@ export const composeFlowEffects = (
       for (const [index, authoredChange] of authoredChanges.entries()) {
         const change = changes[index];
         if (
-          !isPlainObject(change) ||
+          !isRecord(change) ||
           change.kind !== "copy_relationships" ||
           !Array.isArray(change.relationshipIds) ||
           !sameKeys(

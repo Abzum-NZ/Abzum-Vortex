@@ -5,6 +5,7 @@ import {
   type RecordTypeDefinition,
 } from "../definition/module-contracts";
 import { compareInstants, exactInstant, type ExactInstant } from "./exact-instant";
+import { isRecord } from "../catalogue/runtime-primitives";
 
 export type DeriveEarliestPendingDeadlineTransitionInput = Readonly<{
   recordType: RecordTypeDefinition;
@@ -17,9 +18,6 @@ export type PendingDeadlineTransition = Readonly<{
   calculationFieldId: string;
   transitionAt: string;
 }>;
-
-const isValueMap = (value: unknown): value is Readonly<Record<string, unknown>> =>
-  value !== null && typeof value === "object" && !Array.isArray(value);
 
 const fieldResultType = (field: ModuleField): string =>
   field.type === "calculation" || field.type === "total" ? field.settings.resultType : field.type;
@@ -116,7 +114,7 @@ export const deriveEarliestPendingDeadlineTransition = (
   const recordType = recordTypeDefinitionSchema.safeParse(input.recordType);
   if (
     !recordType.success ||
-    !isValueMap(input.finalAuthoritativeFieldValues) ||
+    !isRecord(input.finalAuthoritativeFieldValues) ||
     typeof input.organizationTimeZone !== "string"
   )
     return undefined;

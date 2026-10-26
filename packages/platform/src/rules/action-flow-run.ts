@@ -10,6 +10,7 @@ import {
   type FlowProtectedTaskCall,
   type FlowRuntimeValues,
 } from "./flow-interpreter";
+import { isRecord } from "../catalogue/runtime-primitives";
 
 /**
  * Runs the compiled `transaction` flow of a named action (#1062) for the record it acts on and
@@ -79,9 +80,6 @@ export const flowLibraryOf = (flows: ReadonlyMap<string, unknown>): FlowLibrary 
 
 // ─── The flow's typed view of stored values ──────────────────────────────────────────────────
 
-const isPlainObject = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
 const typedValue = (type: string, value: JsonValue | null): FlowRuntimeValue => ({
   type,
   value: value as JsonValue,
@@ -124,7 +122,7 @@ export const flowRuntimeValueOf = (type: string, value: unknown): FlowRuntimeVal
       );
     case "money":
       return mapped("money", (candidate) =>
-        isPlainObject(candidate) &&
+        isRecord(candidate) &&
         typeof candidate.amount === "string" &&
         parseExactDecimal(candidate.amount) !== undefined
           ? candidate.amount
@@ -148,7 +146,7 @@ export const flowRuntimeValueOf = (type: string, value: unknown): FlowRuntimeVal
     case "link_to_one_of_several":
     case "record_reference":
       return mapped("record_reference", (candidate) =>
-        isPlainObject(candidate) && typeof candidate.recordId === "string"
+        isRecord(candidate) && typeof candidate.recordId === "string"
           ? candidate.recordId
           : undefined,
       );
@@ -158,7 +156,7 @@ export const flowRuntimeValueOf = (type: string, value: unknown): FlowRuntimeVal
     // typed by the shape it was stored with.
     case "calculation":
     case "total":
-      if (isPlainObject(value) && typeof value.amount === "string")
+      if (isRecord(value) && typeof value.amount === "string")
         return flowRuntimeValueOf("money", value);
       if (typeof value === "number")
         return Number.isSafeInteger(value)

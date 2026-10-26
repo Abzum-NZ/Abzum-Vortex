@@ -1,6 +1,7 @@
 import "server-only";
 
 import { personalDataClassSchema, type PersonalDataClass } from "../catalogue/catalogues";
+import { isRecord } from "../catalogue/runtime-primitives";
 
 /**
  * Shared derived-data exclusion policy for the organisation search index (#95).
@@ -59,9 +60,6 @@ export type SearchIndexShareMetadata = Readonly<{
 /** Field types whose value is derived from other fields of the same record type. */
 const derivedFieldTypes: ReadonlySet<string> = new Set(["calculation", "total"]);
 
-const isPlainObject = (value: unknown): value is Readonly<Record<string, unknown>> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
 /**
  * Every field identifier a derived field's published settings read, direct or
  * nested. The walk is deliberately broad: a reference it discovers only makes
@@ -77,7 +75,7 @@ export const derivedFieldInputIds = (settings: unknown): readonly string[] => {
       for (const item of value) visit(item);
       return;
     }
-    if (!isPlainObject(value)) return;
+    if (!isRecord(value)) return;
     for (const [key, entry] of Object.entries(value)) {
       if ((key === "fieldId" || key.endsWith("FieldId")) && typeof entry === "string") {
         found.add(entry);
