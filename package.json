@@ -16,7 +16,6 @@
     "db:new": "pnpm auth:local:prepare && supabase migration new",
     "setup:local": "pnpm --filter @vortex/web setup:local",
     "demo:setup": "pnpm --filter @vortex/web demo:setup",
-    "demo:seed": "pnpm --filter @vortex/web demo:seed",
     "demo:owner": "pnpm --filter @vortex/web demo:owner",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

@@ -7,8 +7,7 @@ distinguishes that baseline from the subsequent reviewer correction.
 
 ## Application and method
 
-Created **Validation Workshop** (`val.workshop2897`) in Studio, rather than using
-the shipped CRM. Its owned module contains a Job record type with these fields:
+Created **Validation Workshop** (`val.workshop2897`) in Studio. Its owned module contains a Job record type with these fields:
 
 | Field         | Type             | Configuration                         |
 | ------------- | ---------------- | ------------------------------------- |
