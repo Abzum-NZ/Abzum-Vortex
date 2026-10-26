@@ -815,14 +815,42 @@
             "props": {
               "slot_primary": [
                 {
-                  "type": "platform.renderer.text",
+                  "type": "platform.renderer.heading",
                   "props": {
                     "id": "iam_profile_heading",
-                    "title": "My profile",
-                    "text": "Change your own display name, language and time zone. Changing another person's profile needs account management access.",
+                    "text": "My profile",
+                    "level": "two",
+                    "actions": [
+                      {
+                        "type": "platform.renderer.button",
+                        "props": {
+                          "id": "button_update_own_profile",
+                          "label": "Update profile",
+                          "action_kind": "action",
+                          "variant": "primary",
+                          "vortex": {
+                            "block": {
+                              "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                              "release_version": "1.0.0"
+                            },
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    ],
                     "vortex": {
                       "block": {
-                        "block_id": "addfad00-1b11-4674-83fa-913667f87e79",
+                        "block_id": "78bfeead-a38d-424a-81b9-7cd553b92bcc",
                         "release_version": "1.1.0"
                       },
                       "responsive": {
@@ -840,16 +868,14 @@
                   }
                 },
                 {
-                  "type": "platform.renderer.button",
+                  "type": "platform.renderer.text",
                   "props": {
-                    "id": "button_update_own_profile",
-                    "label": "Update profile",
-                    "action_kind": "action",
-                    "variant": "primary",
+                    "id": "iam_profile_heading_description",
+                    "text": "Change your own display name, language and time zone. Changing another person's profile needs account management access.",
                     "vortex": {
                       "block": {
-                        "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
-                        "release_version": "1.0.0"
+                        "block_id": "addfad00-1b11-4674-83fa-913667f87e79",
+                        "release_version": "1.1.0"
                       },
                       "responsive": {
                         "desktop": {
@@ -990,10 +1016,34 @@
             "props": {
               "slot_primary": [
                 {
-                  "type": "platform.renderer.text",
+                  "type": "platform.renderer.heading",
                   "props": {
                     "id": "iam_overview_heading",
-                    "title": "IAM overview",
+                    "text": "IAM overview",
+                    "level": "two",
+                    "vortex": {
+                      "block": {
+                        "block_id": "78bfeead-a38d-424a-81b9-7cd553b92bcc",
+                        "release_version": "1.1.0"
+                      },
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "type": "platform.renderer.text",
+                  "props": {
+                    "id": "iam_overview_heading_description",
                     "text": "People, roles, Groups and assignments in this organisation. Requests for access are decided through approval workflows.",
                     "vortex": {
                       "block": {
@@ -1037,10 +1087,34 @@
             "props": {
               "slot_primary": [
                 {
-                  "type": "platform.renderer.text",
+                  "type": "platform.renderer.heading",
                   "props": {
                     "id": "iam_people_heading",
-                    "title": "People",
+                    "text": "People",
+                    "level": "two",
+                    "vortex": {
+                      "block": {
+                        "block_id": "78bfeead-a38d-424a-81b9-7cd553b92bcc",
+                        "release_version": "1.1.0"
+                      },
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "type": "platform.renderer.text",
+                  "props": {
+                    "id": "iam_people_heading_description",
                     "text": "People in this organisation and their access.",
                     "vortex": {
                       "block": {
@@ -1170,7 +1244,8 @@
                   "type": "platform.renderer.record_detail",
                   "props": {
                     "id": "iam_person_detail",
-                    "heading_source": "title",
+                    "heading_source": "field",
+                    "heading_field": "vortex.system_directory:person.display_name",
                     "title": "Person detail",
                     "detail_fields": [
                       {
@@ -1231,10 +1306,34 @@
             "props": {
               "slot_primary": [
                 {
-                  "type": "platform.renderer.text",
+                  "type": "platform.renderer.heading",
                   "props": {
                     "id": "iam_roles_groups_heading",
-                    "title": "Roles and Groups",
+                    "text": "Roles and Groups",
+                    "level": "two",
+                    "vortex": {
+                      "block": {
+                        "block_id": "78bfeead-a38d-424a-81b9-7cd553b92bcc",
+                        "release_version": "1.1.0"
+                      },
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "type": "platform.renderer.text",
+                  "props": {
+                    "id": "iam_roles_groups_heading_description",
                     "text": "Roles and Groups available in this organisation.",
                     "vortex": {
                       "block": {
@@ -2151,10 +2250,34 @@
             "props": {
               "slot_primary": [
                 {
-                  "type": "platform.renderer.text",
+                  "type": "platform.renderer.heading",
                   "props": {
                     "id": "iam_assignments_heading",
-                    "title": "Assignments",
+                    "text": "Assignments",
+                    "level": "two",
+                    "vortex": {
+                      "block": {
+                        "block_id": "78bfeead-a38d-424a-81b9-7cd553b92bcc",
+                        "release_version": "1.1.0"
+                      },
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "type": "platform.renderer.text",
+                  "props": {
+                    "id": "iam_assignments_heading_description",
                     "text": "Who holds which role, and for how long.",
                     "vortex": {
                       "block": {
@@ -2398,10 +2521,34 @@
             "props": {
               "slot_primary": [
                 {
-                  "type": "platform.renderer.text",
+                  "type": "platform.renderer.heading",
                   "props": {
                     "id": "iam_manage_roles_groups_heading",
-                    "title": "Manage roles and Groups",
+                    "text": "Manage roles and Groups",
+                    "level": "two",
+                    "vortex": {
+                      "block": {
+                        "block_id": "78bfeead-a38d-424a-81b9-7cd553b92bcc",
+                        "release_version": "1.1.0"
+                      },
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "type": "platform.renderer.text",
+                  "props": {
+                    "id": "iam_manage_roles_groups_heading_description",
                     "text": "Create an empty Group or a custom role. Install or upgrade applications in App Store to accept their roles. To revise a role, rename a Group, change who is in a Group or end a role, Group or membership, use the row actions on Roles and Groups. A change is refused if you lack the authority or if it exceeds your delegated scope.",
                     "vortex": {
                       "block": {
@@ -2733,10 +2880,34 @@
             "props": {
               "slot_primary": [
                 {
-                  "type": "platform.renderer.text",
+                  "type": "platform.renderer.heading",
                   "props": {
                     "id": "iam_privileged_active_heading",
-                    "title": "Active roles",
+                    "text": "Active roles",
+                    "level": "two",
+                    "vortex": {
+                      "block": {
+                        "block_id": "78bfeead-a38d-424a-81b9-7cd553b92bcc",
+                        "release_version": "1.1.0"
+                      },
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "type": "platform.renderer.text",
+                  "props": {
+                    "id": "iam_privileged_active_heading_description",
                     "text": "Review active privileged roles. Use a row action to deactivate one.",
                     "vortex": {
                       "block": {
@@ -2860,6 +3031,60 @@
             "props": {
               "slot_primary": [
                 {
+                  "type": "platform.renderer.heading",
+                  "props": {
+                    "id": "iam_access_requests_heading",
+                    "text": "Access requests",
+                    "level": "two",
+                    "actions": [
+                      {
+                        "type": "platform.renderer.button",
+                        "props": {
+                          "id": "button_new_access_request",
+                          "label": "New access request",
+                          "action_kind": "action",
+                          "variant": "primary",
+                          "vortex": {
+                            "block": {
+                              "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                              "release_version": "1.0.0"
+                            },
+                            "view_permission": "application.iam.request",
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    ],
+                    "vortex": {
+                      "block": {
+                        "block_id": "78bfeead-a38d-424a-81b9-7cd553b92bcc",
+                        "release_version": "1.1.0"
+                      },
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
                   "type": "platform.renderer.table",
                   "props": {
                     "presentation": "grid",
@@ -2906,7 +3131,6 @@
                         "pin": "unpinned"
                       }
                     ],
-                    "title": "Access Requests",
                     "vortex": {
                       "block": {
                         "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
@@ -2937,33 +3161,6 @@
                       }
                     }
                   }
-                },
-                {
-                  "type": "platform.renderer.button",
-                  "props": {
-                    "id": "button_new_access_request",
-                    "label": "New access request",
-                    "action_kind": "action",
-                    "variant": "secondary",
-                    "vortex": {
-                      "block": {
-                        "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
-                        "release_version": "1.0.0"
-                      },
-                      "view_permission": "application.iam.request",
-                      "responsive": {
-                        "desktop": {
-                          "visible": true,
-                          "width": {
-                            "kind": "fill"
-                          },
-                          "height": {
-                            "kind": "content"
-                          }
-                        }
-                      }
-                    }
-                  }
                 }
               ],
               "vortex": {
@@ -2987,10 +3184,65 @@
             "props": {
               "slot_primary": [
                 {
+                  "type": "platform.renderer.heading",
+                  "props": {
+                    "id": "iam_access_request_detail_heading",
+                    "text": "Access request",
+                    "level": "two",
+                    "actions": [
+                      {
+                        "type": "platform.renderer.button",
+                        "props": {
+                          "id": "button_edit_access_request",
+                          "label": "Edit",
+                          "action_kind": "action",
+                          "variant": "secondary",
+                          "vortex": {
+                            "block": {
+                              "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                              "release_version": "1.0.0"
+                            },
+                            "view_permission": "application.iam.request",
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    ],
+                    "vortex": {
+                      "block": {
+                        "block_id": "78bfeead-a38d-424a-81b9-7cd553b92bcc",
+                        "release_version": "1.1.0"
+                      },
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
                   "type": "platform.renderer.record_detail",
                   "props": {
                     "id": "iam_access_request_detail_body",
-                    "heading_source": "title",
+                    "heading_source": "field",
+                    "heading_field": "vortex.iam.core:access_request.title",
                     "detail_fields": [
                       {
                         "field": "vortex.iam.core:access_request.request_number",
@@ -3068,33 +3320,6 @@
                       }
                     },
                     "row_action_event_id": "row_action_iam_access_request_detail_body"
-                  }
-                },
-                {
-                  "type": "platform.renderer.button",
-                  "props": {
-                    "id": "button_edit_access_request",
-                    "label": "Edit",
-                    "action_kind": "action",
-                    "variant": "secondary",
-                    "vortex": {
-                      "block": {
-                        "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
-                        "release_version": "1.0.0"
-                      },
-                      "view_permission": "application.iam.request",
-                      "responsive": {
-                        "desktop": {
-                          "visible": true,
-                          "width": {
-                            "kind": "fill"
-                          },
-                          "height": {
-                            "kind": "content"
-                          }
-                        }
-                      }
-                    }
                   }
                 }
               ],

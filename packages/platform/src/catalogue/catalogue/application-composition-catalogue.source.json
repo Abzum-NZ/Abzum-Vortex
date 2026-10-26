@@ -4151,7 +4151,7 @@
     "key": "platform.layout.heading",
     "releaseVersion": "1.1.0",
     "name": "Heading",
-    "description": "A section title for the page.",
+    "description": "A title for the page or a section, with the actions that belong to it beside the title.",
     "icon": "heading",
     "paletteGroup": "layout",
     "rendererKey": "platform.renderer.heading",
@@ -4199,7 +4199,14 @@
         ]
       }
     ],
-    "slots": [],
+    "slots": [
+      {
+        "key": "actions",
+        "label": "Header actions",
+        "required": false,
+        "allowedChildCategories": ["actions"]
+      }
+    ],
     "capabilities": {
       "responsiveVisibility": true,
       "responsiveOrder": true,

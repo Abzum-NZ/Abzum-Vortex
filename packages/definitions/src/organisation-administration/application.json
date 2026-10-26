@@ -586,10 +586,34 @@
             "props": {
               "slot_primary": [
                 {
-                  "type": "platform.renderer.text",
+                  "type": "platform.renderer.heading",
                   "props": {
                     "id": "overview_text",
-                    "title": "Organisation overview",
+                    "text": "Organisation overview",
+                    "level": "two",
+                    "vortex": {
+                      "block": {
+                        "block_id": "78bfeead-a38d-424a-81b9-7cd553b92bcc",
+                        "release_version": "1.1.0"
+                      },
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "type": "platform.renderer.text",
+                  "props": {
+                    "id": "overview_text_description",
                     "text": "Review organisation accounts, invitations, runtime settings, notices and privacy request cases. Role grants, Group membership and assignments are managed in the IAM application.",
                     "vortex": {
                       "block": {
@@ -631,10 +655,34 @@
             "props": {
               "slot_primary": [
                 {
-                  "type": "platform.renderer.text",
+                  "type": "platform.renderer.heading",
                   "props": {
                     "id": "accounts_text",
-                    "title": "Organisation accounts",
+                    "text": "Organisation accounts",
+                    "level": "two",
+                    "vortex": {
+                      "block": {
+                        "block_id": "78bfeead-a38d-424a-81b9-7cd553b92bcc",
+                        "release_version": "1.1.0"
+                      },
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "type": "platform.renderer.text",
+                  "props": {
+                    "id": "accounts_text_description",
                     "text": "People with an account in this organisation. Roles are granted in the IAM application.",
                     "vortex": {
                       "block": {
@@ -762,10 +810,34 @@
             "props": {
               "slot_primary": [
                 {
-                  "type": "platform.renderer.text",
+                  "type": "platform.renderer.heading",
                   "props": {
                     "id": "invitations_text",
-                    "title": "Invitations",
+                    "text": "Invitations",
+                    "level": "two",
+                    "vortex": {
+                      "block": {
+                        "block_id": "78bfeead-a38d-424a-81b9-7cd553b92bcc",
+                        "release_version": "1.1.0"
+                      },
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "type": "platform.renderer.text",
+                  "props": {
+                    "id": "invitations_text_description",
                     "text": "Pending and past invitations. To give an invited person roles, use the IAM application.",
                     "vortex": {
                       "block": {
@@ -985,10 +1057,34 @@
             "props": {
               "slot_primary": [
                 {
-                  "type": "platform.renderer.text",
+                  "type": "platform.renderer.heading",
                   "props": {
                     "id": "settings_text",
-                    "title": "Runtime settings",
+                    "text": "Runtime settings",
+                    "level": "two",
+                    "vortex": {
+                      "block": {
+                        "block_id": "78bfeead-a38d-424a-81b9-7cd553b92bcc",
+                        "release_version": "1.1.0"
+                      },
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "type": "platform.renderer.text",
+                  "props": {
+                    "id": "settings_text_description",
                     "text": "View the organisation's runtime settings. Select the settings record to change it.",
                     "vortex": {
                       "block": {
@@ -1359,6 +1455,60 @@
             "props": {
               "slot_primary": [
                 {
+                  "type": "platform.renderer.heading",
+                  "props": {
+                    "id": "notices_heading",
+                    "text": "Notices",
+                    "level": "two",
+                    "actions": [
+                      {
+                        "type": "platform.renderer.button",
+                        "props": {
+                          "id": "button_new_notice",
+                          "label": "New notice",
+                          "action_kind": "action",
+                          "variant": "primary",
+                          "vortex": {
+                            "block": {
+                              "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                              "release_version": "1.0.0"
+                            },
+                            "view_permission": "application.organisation_administration.organisation_notice.record_notice",
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    ],
+                    "vortex": {
+                      "block": {
+                        "block_id": "78bfeead-a38d-424a-81b9-7cd553b92bcc",
+                        "release_version": "1.1.0"
+                      },
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
                   "type": "platform.renderer.table",
                   "props": {
                     "presentation": "grid",
@@ -1389,7 +1539,6 @@
                         "pin": "unpinned"
                       }
                     ],
-                    "title": "Organisation notices",
                     "vortex": {
                       "block": {
                         "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
@@ -1417,33 +1566,6 @@
                       },
                       "spreadsheet": {
                         "enabled": false
-                      }
-                    }
-                  }
-                },
-                {
-                  "type": "platform.renderer.button",
-                  "props": {
-                    "id": "button_new_notice",
-                    "label": "New notice",
-                    "action_kind": "action",
-                    "variant": "secondary",
-                    "vortex": {
-                      "block": {
-                        "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
-                        "release_version": "1.0.0"
-                      },
-                      "view_permission": "application.organisation_administration.organisation_notice.record_notice",
-                      "responsive": {
-                        "desktop": {
-                          "visible": true,
-                          "width": {
-                            "kind": "fill"
-                          },
-                          "height": {
-                            "kind": "content"
-                          }
-                        }
                       }
                     }
                   }
@@ -1595,6 +1717,60 @@
             "props": {
               "slot_primary": [
                 {
+                  "type": "platform.renderer.heading",
+                  "props": {
+                    "id": "privacy_cases_heading",
+                    "text": "Privacy requests",
+                    "level": "two",
+                    "actions": [
+                      {
+                        "type": "platform.renderer.button",
+                        "props": {
+                          "id": "button_new_privacy_request",
+                          "label": "New privacy request",
+                          "action_kind": "action",
+                          "variant": "primary",
+                          "vortex": {
+                            "block": {
+                              "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                              "release_version": "1.0.0"
+                            },
+                            "view_permission": "application.organisation_administration.privacy_request_case.record_privacy_request",
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    ],
+                    "vortex": {
+                      "block": {
+                        "block_id": "78bfeead-a38d-424a-81b9-7cd553b92bcc",
+                        "release_version": "1.1.0"
+                      },
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
                   "type": "platform.renderer.table",
                   "props": {
                     "presentation": "grid",
@@ -1631,7 +1807,6 @@
                         "pin": "unpinned"
                       }
                     ],
-                    "title": "Privacy request cases",
                     "vortex": {
                       "block": {
                         "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
@@ -1659,33 +1834,6 @@
                       },
                       "spreadsheet": {
                         "enabled": false
-                      }
-                    }
-                  }
-                },
-                {
-                  "type": "platform.renderer.button",
-                  "props": {
-                    "id": "button_new_privacy_request",
-                    "label": "New privacy request",
-                    "action_kind": "action",
-                    "variant": "secondary",
-                    "vortex": {
-                      "block": {
-                        "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
-                        "release_version": "1.0.0"
-                      },
-                      "view_permission": "application.organisation_administration.privacy_request_case.record_privacy_request",
-                      "responsive": {
-                        "desktop": {
-                          "visible": true,
-                          "width": {
-                            "kind": "fill"
-                          },
-                          "height": {
-                            "kind": "content"
-                          }
-                        }
                       }
                     }
                   }

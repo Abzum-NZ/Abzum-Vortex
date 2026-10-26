@@ -370,10 +370,34 @@
             "props": {
               "slot_primary": [
                 {
-                  "type": "platform.renderer.text",
+                  "type": "platform.renderer.heading",
                   "props": {
                     "id": "overview_text",
-                    "title": "Tenant overview",
+                    "text": "Tenant overview",
+                    "level": "two",
+                    "vortex": {
+                      "block": {
+                        "block_id": "78bfeead-a38d-424a-81b9-7cd553b92bcc",
+                        "release_version": "1.1.0"
+                      },
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "type": "platform.renderer.text",
+                  "props": {
+                    "id": "overview_text_description",
                     "text": "Review the organisations in this tenant. Select an organisation to see its details, or use Tenant structure to add or move organisations. Tenant administrators are listed on their own page.",
                     "vortex": {
                       "block": {
@@ -1017,7 +1041,8 @@
                   "type": "platform.renderer.record_detail",
                   "props": {
                     "id": "tenant_organization_detail",
-                    "heading_source": "title",
+                    "heading_source": "field",
+                    "heading_field": "vortex.system_directory:organization.display_name",
                     "title": "Organisation details",
                     "detail_fields": [
                       {
@@ -1082,10 +1107,34 @@
             "props": {
               "slot_primary": [
                 {
-                  "type": "platform.renderer.text",
+                  "type": "platform.renderer.heading",
                   "props": {
                     "id": "administrators_text",
-                    "title": "Tenant administrators",
+                    "text": "Tenant administrators",
+                    "level": "two",
+                    "vortex": {
+                      "block": {
+                        "block_id": "78bfeead-a38d-424a-81b9-7cd553b92bcc",
+                        "release_version": "1.1.0"
+                      },
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "type": "platform.renderer.text",
+                  "props": {
+                    "id": "administrators_text_description",
                     "text": "People who administer this tenant. Tenant administrator access is granted and revoked in IAM.",
                     "vortex": {
                       "block": {

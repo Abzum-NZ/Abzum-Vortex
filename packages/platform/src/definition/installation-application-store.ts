@@ -243,7 +243,9 @@ const roleSummary = (role: ApplicationRoleTemplate): string => {
   for (const permission of role.permissions) {
     const separator = permission.key.lastIndexOf(".");
     const verb = standardActionVerbs[permission.key.slice(separator + 1)];
-    const plural = /^Allows the standard .+ operation for (.+)\.$/.exec(permission.description)?.[1];
+    const plural = /^Allows the standard .+ operation for (.+)\.$/.exec(
+      permission.description,
+    )?.[1];
     if (verb === undefined || plural === undefined) {
       others.push(permission.label.charAt(0).toLowerCase() + permission.label.slice(1));
       continue;

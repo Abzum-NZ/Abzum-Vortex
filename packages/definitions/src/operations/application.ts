@@ -25,6 +25,7 @@ const {
   CHOICE_INPUT_BLOCK_RELEASE,
   CONTAINER_BLOCK_RELEASE,
   FORM_CONTAINER_BLOCK_RELEASE,
+  HEADING_BLOCK_RELEASE,
   RECORD_DETAIL_BLOCK_RELEASE,
   RICH_TEXT_INPUT_BLOCK_RELEASE,
   TABLE_BLOCK_RELEASE,
@@ -275,10 +276,13 @@ const pages = [
     permission: readIncidentsPage,
     query: openIncidentsQuery,
     blocks: slot({
+      operations_incidents_heading: placement(HEADING_BLOCK_RELEASE, {
+        text: "Open incidents",
+        level: "two",
+      }),
       operations_incidents_table: placement(
         TABLE_BLOCK_RELEASE,
         {
-          title: "Open incidents",
           features: { pinning: { enabled: true }, spreadsheet: { enabled: false } },
           columns: incidentColumns.map(([field, label], index) => ({
             field: `${incidentRecordType}.${field}`,
@@ -302,8 +306,26 @@ const pages = [
     record_type: incidentRecordType,
     permission: readIncidentsPage,
     blocks: slot({
+      // The bounded operator actions run on the open incident as their subject. Each button is
+      // shown only to its own permission holder, and every action refuses a resolved or closed
+      // incident in the module.
+      operations_incident_heading: placement(
+        HEADING_BLOCK_RELEASE,
+        { text: "Incident", level: "two" },
+        {
+          actions: slot(
+            Object.fromEntries(
+              incidentOperations.map((operation) => [
+                operation.button,
+                actionButton(operation.label, operation.variant, operation.viewPermission),
+              ]),
+            ),
+          ),
+        },
+      ),
       operations_incident_detail_body: placement(RECORD_DETAIL_BLOCK_RELEASE, {
-        heading_source: "title",
+        heading_source: "field",
+        heading_field: `${incidentRecordType}.incident_number`,
         title: "Incident",
         row_action_event_id: "row_action_operations_incident_detail_body",
         detail_fields: incidentColumns.map(([field, label]) => ({
@@ -329,15 +351,6 @@ const pages = [
           submit_operations_incident_attach: submitButton("Attach signal"),
         },
         { view_permission: attachIncidentView },
-      ),
-      // The bounded operator actions run on the open incident as their subject. Each button is
-      // shown only to its own permission holder, and every action refuses a resolved or closed
-      // incident in the module.
-      ...Object.fromEntries(
-        incidentOperations.map((operation) => [
-          operation.button,
-          actionButton(operation.label, operation.variant, operation.viewPermission),
-        ]),
       ),
     }),
   },

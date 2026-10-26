@@ -30,7 +30,9 @@ const HEADING_LEVEL_CLASSES: Readonly<Record<HeadingLevel, string>> = Object.fre
  * Accessible heading whose text is the authored, required accessible name. It renders the
  * semantic heading element for its declared level with the shadcn typography classes, so a
  * shell header or a page section is real content rather than a styled paragraph. It carries no
- * data and emits no events; its registration refuses every supplied runtime input.
+ * data and emits no events; its registration refuses every supplied runtime input. Its optional
+ * actions slot places the actions that belong to the title (for example "New asset") at the right
+ * of the title row.
  */
 export function Heading(props: HeadingProps): ReactElement {
   const location: DefinitionRenderErrorLocation = {
@@ -49,7 +51,7 @@ export function Heading(props: HeadingProps): ReactElement {
 
   const level = readControlSettings(props, location).explicitChoice<HeadingLevel>("level");
   const Element = HEADING_LEVEL_ELEMENTS[level];
-  return (
+  const heading = (
     <Element
       data-vortex-control="heading"
       data-vortex-placement-id={props.placementId}
@@ -58,5 +60,19 @@ export function Heading(props: HeadingProps): ReactElement {
     >
       {text}
     </Element>
+  );
+  const actions = props.slots.actions;
+  if (actions === undefined || actions === null) return heading;
+  // The title stays on the left and the actions that belong to it sit at the right of the same row.
+  return (
+    <div
+      data-vortex-control="heading-row"
+      className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-2"
+    >
+      {heading}
+      <div data-vortex-heading-actions="" className="flex flex-wrap items-center gap-2">
+        {actions}
+      </div>
+    </div>
   );
 }
