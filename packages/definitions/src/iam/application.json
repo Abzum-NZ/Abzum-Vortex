@@ -85,6 +85,7 @@
           "readable_fields": [
             "key",
             "label",
+            "application_name",
             "lifecycle",
             "role_kind",
             "privilege_classification",
@@ -160,6 +161,7 @@
         "field_policy": {
           "readable_fields": [
             "role_label",
+            "assignee_display_name",
             "assignee_kind",
             "assignment_kind",
             "starts_at",
@@ -1313,6 +1315,13 @@
                         "pin": "start"
                       },
                       {
+                        "field": "vortex.system_directory:role.application_name",
+                        "label": "Application",
+                        "format": "text",
+                        "visible": true,
+                        "pin": "unpinned"
+                      },
+                      {
                         "field": "vortex.system_directory:role.lifecycle",
                         "label": "Lifecycle",
                         "visible": true,
@@ -2258,6 +2267,13 @@
                         "label": "Role",
                         "visible": true,
                         "pin": "start"
+                      },
+                      {
+                        "field": "vortex.system_directory:role_assignment.assignee_display_name",
+                        "label": "Assignee",
+                        "format": "text",
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.system_directory:role_assignment.assignee_kind",
