@@ -753,6 +753,12 @@ function ApplicationPageSlotPuckEditor({
   return (
     <section className="space-y-3" aria-label="Page canvas" aria-busy={disabled}>
       {/* The screen size is chosen in Studio's canvas toolbar. */}
+      {slot.items.length === 0 && (
+        <CanvasEmpty
+          title="Build this page"
+          description="Add a block from Blocks, or add a record type in Data and its List page in Structure. This guidance only appears in Studio."
+        />
+      )}
       <div className="flex flex-wrap items-center gap-2">
         <p className="px-4 text-sm text-muted-foreground">
           {readOnlyCause !== undefined
