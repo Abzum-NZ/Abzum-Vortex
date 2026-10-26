@@ -34,28 +34,11 @@ export {
 export * from "./storage-credentials";
 export { resolveFileStorageDestination, type FileStorageDestination } from "./storage-destination";
 export { createStoredUploadInspection } from "./upload-inspection";
-export {
-  createFileRemovalEligibilityService,
-  matchesProtectedLegalHold,
-  type FileHoldEvaluationScope,
-  type FileRemovalAuthorityResolution,
-  type FileRemovalEligibilityService,
-  type ResolveCurrentFileRemovalAuthority,
-} from "./removal-eligibility";
 export type {
   FileRemovalEligibilityDecision,
   FileRemovalEligibilityRequest,
   FileRemovalRefusalReason,
 } from "./file-contracts";
-export {
-  createFileRemovalCoordinator,
-  type FilePreviewDeleter,
-  type FileRemovalCoordinator,
-  type FileRemovalCoordinatorDependencies,
-  type FileRemovalRepository,
-  type FileRemovalResult,
-  type FileStorageDeleter,
-} from "./object-removal";
 export {
   PENDING_UPLOAD_WINDOW_SECONDS,
   completeFileUpload,
@@ -116,10 +99,6 @@ export {
   type FileReadDecision,
   type FileReadSqlTransaction,
 } from "./read";
-export {
-  createSqlVersionedFileMetadataRepository,
-  type VersionedFileMetadataRepository,
-} from "./versioned-metadata-repository";
 export {
   COMPONENT_BUNDLE_BUCKET,
   COMPONENT_BUNDLE_CONTENT_ADDRESS_LENGTH,

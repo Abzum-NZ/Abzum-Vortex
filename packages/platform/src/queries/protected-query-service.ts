@@ -29,15 +29,12 @@ import { treeLevelCommand } from "./protected-query-tree";
 import { refuseInvalidCommand } from "./protected-query-helpers";
 import { summariseCommand, boardSummaryCommand } from "./protected-query-summary";
 import { runCommand } from "./protected-query-table";
-import type { ProtectedQueryServiceDependencies, QueryCache } from "./protected-query-types";
+import type { ProtectedQueryServiceDependencies } from "./protected-query-types";
 import type { ProtectedQueryRow } from "./protected-query-contracts";
 import type { RequestDatabaseTransaction } from "../db/request-transaction";
 import type { SelectedOrganizationScope } from "../access/identity-access";
 
-export type {
-  ProtectedQueryCacheContext,
-  ProtectedQueryServiceDependencies,
-} from "./protected-query-types";
+export type { ProtectedQueryServiceDependencies } from "./protected-query-types";
 
 /**
  * A decision the caller takes inside the read's own request transaction, after a completed read
@@ -60,8 +57,7 @@ export type ProtectedReadDecider = (
  */
 export const createProtectedQueryService = (dependencies: ProtectedQueryServiceDependencies) => {
   const requests = createHumanOrganizationRequestService(dependencies);
-  const { continuationKey, sharedCacheStore, resolveQueryCacheContext } = dependencies;
-  const now = dependencies.clock ?? (() => new Date());
+  const { continuationKey } = dependencies;
 
   /**
    * The one validation and cache wiring of a protected read. A refusal is the final result; a
@@ -93,21 +89,10 @@ export const createProtectedQueryService = (dependencies: ProtectedQueryServiceD
       };
     if (selection.applicationRootId === undefined)
       return { kind: "final", result: { kind: "unavailable" } };
-    const cache: QueryCache | undefined =
-      sharedCacheStore === undefined || resolveQueryCacheContext === undefined
-        ? undefined
-        : {
-            store: sharedCacheStore,
-            resolveContext: resolveQueryCacheContext,
-            now,
-            // Verified by the request service before this operation runs.
-            sessionExpiresAt: caller.accessTokenExpiresAt,
-          };
     return {
       kind: "ready",
       person: caller,
-      read: (transaction, scope) =>
-        runCommand(transaction, scope, command.data, continuationKey, cache),
+      read: (transaction, scope) => runCommand(transaction, scope, command.data, continuationKey),
     };
   };
 

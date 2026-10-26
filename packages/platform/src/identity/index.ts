@@ -88,11 +88,6 @@ export {
   type OrganizationLauncherServiceDependencies,
 } from "./organization-launcher";
 export {
-  createOrganizationSetupReceiptReader,
-  readOrganizationSetupReceipt,
-  type OrganizationSetupReceiptReaderDependencies,
-} from "./organization-setup-receipt-identity";
-export {
   createOrganizationRuntimeSettingsStore,
   initializeOrganizationRuntimeSettings,
   OrganizationRuntimeSettingsError,
