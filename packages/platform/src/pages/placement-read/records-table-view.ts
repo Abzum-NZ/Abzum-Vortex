@@ -78,10 +78,19 @@ export const resolveRecordsTableView = ({
       },
     );
     const addressedView = readRecordsTableView(placementId, addressEntries);
+    // With no view named in the address, the person's own arrangement reopens on the default
+    // view it was arranged from (its sort and filters apply, its columns are theirs); with no
+    // arrangement, the role's default view applies.
     const automatic =
-      stored === undefined && addressedView === undefined
-        ? defaults.find((view) => view.isDefault)
-        : undefined;
+      addressedView !== undefined
+        ? undefined
+        : stored === undefined
+          ? defaults.find((view) => view.isDefault)
+          : defaults.find(
+              (view) =>
+                stored.basedOnViewId !== null &&
+                view.viewId.toLowerCase() === stored.basedOnViewId.toLowerCase(),
+            );
     const view =
       addressedView ??
       (automatic === undefined ? undefined : { viewId: automatic.viewId, cleared: false });
