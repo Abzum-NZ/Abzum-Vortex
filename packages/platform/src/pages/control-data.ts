@@ -42,6 +42,12 @@ const CONTROL_PAYLOAD_CONTRACTS = Object.freeze({
   validation: validationPayloadSchema,
 });
 
+/** Whether a ready payload is a control's: it names one of the control kinds. */
+export const isControlPayload = (values: unknown): boolean =>
+  isRecord(values) &&
+  typeof values.kind === "string" &&
+  Object.hasOwn(CONTROL_PAYLOAD_CONTRACTS, values.kind);
+
 /** A control's ready state, or why its payload was not published. */
 export type ControlDataPublication =
   Readonly<{ status: "ready"; values: unknown }> | Readonly<{ status: "disabled"; reason: string }>;
