@@ -6,7 +6,7 @@ import { displayTextSchema, refineUniqueKeys } from "./display-payload-parts";
 const isoCalendarDatePattern = /^\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])$/;
 
 /** A real ISO calendar date: its day exists in its month. */
-const isIsoCalendarDate = (text: string): boolean => {
+export const isIsoCalendarDate = (text: string): boolean => {
   if (!isoCalendarDatePattern.test(text)) return false;
   const [year, month, day] = text.split("-").map(Number) as [number, number, number];
   const date = new Date(0);

@@ -16,7 +16,7 @@ import {
 import {
   flowRefusalFeedbackSentences,
   type FlowFieldCorrection,
-  type FlowRefusalFeedback,
+  type FormFlowFeedback,
 } from "@vortex/platform/schema";
 import { DefinitionRenderError } from "../definition-error";
 import { FlowSurfaceContext } from "../flow-runtime/flow-surface-context";
@@ -62,17 +62,7 @@ export type FormContainerProps = ControlRenderProps<FormPayload> &
   }>;
 
 /** A safe, final result returned by the form's bound flow. */
-export type FormFlowFeedback =
-  | Readonly<{ kind: "message"; tone: "success" | "problem"; text: string }>
-  | Readonly<{
-      kind: "refusal";
-      code: FlowRefusalFeedback["code"];
-      fieldLabel?: string;
-      corrections?: readonly FlowFieldCorrection[];
-      /** The individually bounded authored messages of the rules that refused the change. */
-      ruleMessages?: readonly string[];
-      recovery?: "partial" | "uncertain";
-    }>;
+export type { FormFlowFeedback };
 
 const fieldCorrectionText: Readonly<Record<FlowFieldCorrection["code"], string>> = {
   required_value: "This field is required.",
