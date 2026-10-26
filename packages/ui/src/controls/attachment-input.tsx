@@ -43,6 +43,7 @@ export function AttachmentInput(props: ControlRenderProps<AttachmentInputPayload
   const files = JSON.parse(serialized) as { fileId: string; name: string }[];
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
+  const fileInput = useRef<HTMLInputElement>(null);
   const [failure, setFailure] = useState<string>();
   useFormField(
     fieldKey,
@@ -147,6 +148,8 @@ export function AttachmentInput(props: ControlRenderProps<AttachmentInputPayload
       setBusy(false);
     }
   };
+  const chooseDisabled =
+    disabled || readOnly || busy || (files.length >= maximum && maximum !== 1);
   return (
     <Field
       data-vortex-control="attachment-input"
@@ -174,19 +177,39 @@ export function AttachmentInput(props: ControlRenderProps<AttachmentInputPayload
           </li>
         ))}
       </ul>
-      <Input
-        id={ids.control}
-        type="file"
-        multiple={settings.boolean("multiple")}
-        accept={settings.text("accepted_extensions")}
-        disabled={disabled || readOnly || busy || (files.length >= maximum && maximum !== 1)}
-        aria-invalid={error !== undefined}
-        {...describedBy(ids, help, error, note, feedback)}
-        onChange={(event) => {
-          void upload(event.target.files);
-          event.target.value = "";
-        }}
-      />
+      {/* The native file input stays the labelled control, visually hidden; the themed button opens it. */}
+      <div className="flex items-center gap-3">
+        <Input
+          ref={fileInput}
+          id={ids.control}
+          type="file"
+          className="peer sr-only"
+          multiple={settings.boolean("multiple")}
+          accept={settings.text("accepted_extensions")}
+          disabled={chooseDisabled}
+          aria-invalid={error !== undefined}
+          {...describedBy(ids, help, error, note, feedback)}
+          onChange={(event) => {
+            void upload(event.target.files);
+            event.target.value = "";
+          }}
+        />
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="peer-focus-visible:ring-2 peer-focus-visible:ring-ring"
+          disabled={chooseDisabled}
+          aria-hidden="true"
+          tabIndex={-1}
+          onClick={() => fileInput.current?.click()}
+        >
+          {settings.boolean("multiple") ? "Choose files" : "Choose file"}
+        </Button>
+        <span className="text-sm text-muted-foreground">
+          {files.length === 0 ? "No file chosen" : null}
+        </span>
+      </div>
       {busy ? <p role="status">Uploading…</p> : null}
       <FieldMessages ids={ids} help={help} error={error} note={note} draftFeedback={feedback} />
     </Field>
