@@ -1,8 +1,6 @@
 import {
   acceptedApplicationRoleKey,
-  createHumanOrganizationRequestService,
   createOrganizationAccessAdministrationService,
-  readInstallationRoles,
   releaseRoleTemplates,
 } from "@vortex/platform/server";
 import {
@@ -15,8 +13,6 @@ import {
   type OrganizationAdministrationRoleSummary,
   sameId,
 } from "@vortex/platform/schema";
-import { releaseSetContainsCustomComponents } from "../../app/_lib/definition-catalogue";
-import { platformPermissionSource } from "../../app/_lib/platform-permission-source";
 import { nominatedOwnerSession, type SystemContextFacts } from "./development-authority";
 import { readActiveReleaseRevision, readReleaseSet } from "./install";
 import type { PublishedRelease } from "./state";
@@ -25,11 +21,18 @@ type AccessAdministration = ReturnType<typeof createOrganizationAccessAdministra
 type OwnerSession = ReturnType<typeof nominatedOwnerSession>;
 type OrganizationSelection = ReturnType<typeof organizationSelectionCandidateSchema.parse>;
 type RoleTemplate = ReturnType<typeof releaseRoleTemplates>[number];
-type InstalledRole = Awaited<ReturnType<typeof readInstallationRoles>>["roles"][number];
+type ProjectedRole = Extract<
+  Awaited<ReturnType<AccessAdministration["listRoles"]>>,
+  { kind: "available" }
+>["value"][number];
+type ProjectedAssignment = Extract<
+  Awaited<ReturnType<AccessAdministration["listRoleAssignments"]>>,
+  { kind: "available" }
+>["value"][number];
 
 /** The accepted role a grant needs: its identity, live revision, lifecycle and assignment policy. */
 type GrantableRole = Pick<
-  InstalledRole,
+  ProjectedRole,
   "roleId" | "label" | "liveRevision" | "lifecycle" | "assignmentPolicy"
 >;
 
@@ -49,6 +52,42 @@ const grantable = (role: OrganizationAdministrationRoleSummary): GrantableRole =
   lifecycle: role.lifecycle,
   assignmentPolicy: role.assignmentPolicy.kind,
 });
+
+/** Every page of the organisation's roles, through the protected roles projection. */
+const listRoles = async (
+  administration: AccessAdministration,
+  session: OwnerSession,
+  selection: OrganizationSelection,
+): Promise<ProjectedRole[]> => {
+  const roles: ProjectedRole[] = [];
+  for (;;) {
+    const page = await administration.listRoles(session, selection, roles.at(-1)?.roleId);
+    if (page.kind !== "available")
+      throw new Error(`Accepted application roles could not be read (${page.kind})`);
+    roles.push(...page.value);
+    if (page.value.length < 200) return roles;
+  }
+};
+
+/** Every page of the organisation's role assignments, through the protected assignments projection. */
+const listAssignments = async (
+  administration: AccessAdministration,
+  session: OwnerSession,
+  selection: OrganizationSelection,
+): Promise<ProjectedAssignment[]> => {
+  const assignments: ProjectedAssignment[] = [];
+  for (;;) {
+    const page = await administration.listRoleAssignments(
+      session,
+      selection,
+      assignments.at(-1)?.roleAssignmentId,
+    );
+    if (page.kind !== "available")
+      throw new Error(`Current role assignments could not be read (${page.kind})`);
+    assignments.push(...page.value);
+    if (page.value.length < 200) return assignments;
+  }
+};
 
 /** An upgrade that changes a shipped role template leaves the accepted role to accept again. */
 const acceptedRevision = async (
@@ -126,8 +165,8 @@ const acceptedRole = async (
 /**
  * Accepts every role template of each installed application and gives the first owner a standing
  * assignment of each. The templates come from the release the application runs, exactly as an App
- * Store install derives them, and the accepted roles with the owner's own live standing assignment
- * come from the App Store's installer role read.
+ * Store install derives them; the accepted roles and assignments are read through the protected
+ * roles and role assignments projections, and an accepted role is found by its derived role key.
  */
 export const grantFirstOwnerApplicationRoles = async (
   facts: FirstOwnerApplicationRoleFacts,
@@ -136,12 +175,6 @@ export const grantFirstOwnerApplicationRoles = async (
   const administration = createOrganizationAccessAdministrationService({
     identityAuthorityId: facts.identityAuthorityId,
   });
-  const installerEnvironment = {
-    requests: createHumanOrganizationRequestService({
-      identityAuthorityId: facts.identityAuthorityId,
-    }),
-    permissions: platformPermissionSource,
-  };
   const session = nominatedOwnerSession(facts.stewardIdentityId);
   const selection = organizationSelectionCandidateSchema.parse({
     organizationId: facts.system.organizationId,
@@ -157,6 +190,22 @@ export const grantFirstOwnerApplicationRoles = async (
     applicationKeyByRootId.set(rootId, applicationKey);
   }
 
+  const [currentRoles, assignments] = await Promise.all([
+    listRoles(administration, session, selection),
+    listAssignments(administration, session, selection),
+  ]);
+  const rolesByKey = new Map(currentRoles.map((role) => [role.key, role]));
+  const ownerHolds = (roleId: string): boolean =>
+    assignments.some(
+      (assignment) =>
+        sameId(assignment.roleId, roleId) &&
+        assignment.organizationAccountId !== null &&
+        sameId(assignment.organizationAccountId, facts.stewardOrganizationAccountId) &&
+        assignment.state === "live" &&
+        assignment.temporalState === "active" &&
+        assignment.assignmentKind === "standing",
+    );
+
   let ensuredGrants = 0;
   for (const [rootId, applicationName] of applicationKeyByRootId) {
     const revision = await readActiveReleaseRevision(facts, applicationName, rootId);
@@ -168,16 +217,10 @@ export const grantFirstOwnerApplicationRoles = async (
       throw new Error(
         `No registered role templates were available for installed application ${applicationName}`,
       );
-    const installed = await readInstallationRoles(
-      installerEnvironment,
-      session,
-      { organizationId: facts.system.organizationId, rootId },
-      releaseSetContainsCustomComponents(releaseSet),
-    );
 
     for (const template of templates) {
-      const current = installed.roles.find((role) =>
-        sameId(role.sourceRoleId, template.sourceRoleId),
+      const current = rolesByKey.get(
+        acceptedApplicationRoleKey(rootId, template.sourceRoleId, template.key),
       );
       let role: GrantableRole;
       if (current === undefined) {
@@ -197,7 +240,7 @@ export const grantFirstOwnerApplicationRoles = async (
           `Role ${role.label} from template ${template.key} requires activation and cannot open an application immediately`,
         );
 
-      if (current?.installerAssignment != null && sameId(current.roleId, role.roleId)) {
+      if (ownerHolds(role.roleId)) {
         log(`first owner already holds ${applicationName} role ${role.label}`);
         ensuredGrants += 1;
         continue;

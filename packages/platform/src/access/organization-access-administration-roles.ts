@@ -57,6 +57,32 @@ import type {
   AccessAdministrationContext,
 } from "./organization-access-administration-shared";
 
+/** One role as the protected roles projection shows it, with the facts a grant needs. */
+const projectedRoleSchema = z.object({
+  organization_id: z.string(),
+  record_id: roleIdSchema,
+  revision: z.preprocess(databaseRevision, z.number().int().min(1)),
+  attribute_values: z
+    .object({
+      key: z.string(),
+      label: z.string(),
+      lifecycle: z.enum(["active", "acceptance_required", "unavailable", "retired"]),
+      assignment_policy: z.enum(["standing", "activation_required"]),
+    })
+    .loose(),
+});
+
+type ProjectedOrganizationRole = Readonly<{
+  roleId: string;
+  key: string;
+  label: string;
+  liveRevision: number;
+  lifecycle: z.infer<typeof projectedRoleSchema>["attribute_values"]["lifecycle"];
+  assignmentPolicy: z.infer<typeof projectedRoleSchema>["attribute_values"]["assignment_policy"];
+}>;
+
+const projectedPageSize = 200;
+
 export const createAccessAdministrationRoleOperations = ({
   requests,
   newActivityId,
@@ -573,6 +599,39 @@ export const createAccessAdministrationRoleOperations = ({
         candidate,
         commandCandidate,
       ),
+
+    /**
+     * One keyset page (at most 200, in role id order) of the organisation's roles, read through the
+     * protected roles projection under the same role administration scope.
+     */
+    listRoles: async (
+      session: IdentitySession,
+      candidate: OrganizationSelectionCandidate,
+      afterRoleId: string | undefined,
+    ): Promise<HumanOrganizationRequestResult<readonly ProjectedOrganizationRole[]>> =>
+      requests.run(session, candidate, async (transaction, scope) => {
+        const rows = await transaction.query`
+          select organization_id, record_id, revision, attribute_values
+          from vortex_access.list_organization_roles_projection(
+            null, 'record_id', 'ascending',
+            ${afterRoleId === undefined ? null : JSON.stringify({ recordId: afterRoleId })}::jsonb,
+            ${projectedPageSize}::integer, null
+          )
+        `;
+        return rows.map((row) => {
+          const parsed = projectedRoleSchema.parse(row);
+          if (!sameId(parsed.organization_id, scope.organizationId))
+            throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
+          return {
+            roleId: parsed.record_id,
+            key: parsed.attribute_values.key,
+            label: parsed.attribute_values.label,
+            liveRevision: parsed.revision,
+            lifecycle: parsed.attribute_values.lifecycle,
+            assignmentPolicy: parsed.attribute_values.assignment_policy,
+          };
+        });
+      }),
 
     readRole: async (
       session: IdentitySession,

@@ -1,5 +1,7 @@
 import "server-only";
 
+import { z } from "zod";
+
 import {
   activityIdSchema,
   delegationAuthorityIdSchema,
@@ -52,6 +54,33 @@ import type {
   AccessAdministrationContext,
 } from "./organization-access-administration-shared";
 
+/** One role assignment as the protected role assignments projection shows it. */
+const projectedAssignmentSchema = z.object({
+  organization_id: z.string(),
+  record_id: roleAssignmentIdSchema,
+  attribute_values: z
+    .object({
+      role_id: z.string(),
+      assignee_kind: z.enum(["organization_account", "group"]),
+      organization_account_id: z.string().nullable(),
+      assignment_kind: z.string(),
+      state: z.string(),
+      temporal_state: z.enum(["active", "scheduled", "expired", "revoked"]),
+    })
+    .loose(),
+});
+
+type ProjectedRoleAssignment = Readonly<{
+  roleAssignmentId: string;
+  roleId: string;
+  organizationAccountId: string | null;
+  assignmentKind: string;
+  state: string;
+  temporalState: z.infer<typeof projectedAssignmentSchema>["attribute_values"]["temporal_state"];
+}>;
+
+const projectedPageSize = 200;
+
 export const createAccessAdministrationAssignmentOperations = ({
   requests,
   newRoleAssignmentId,
@@ -59,6 +88,43 @@ export const createAccessAdministrationAssignmentOperations = ({
   newActivityId,
 }: AccessAdministrationContext) => {
   return {
+    /**
+     * One keyset page (at most 200, in assignment id order) of the organisation's role assignments,
+     * read through the protected role assignments projection under the assignment ledger scope.
+     */
+    listRoleAssignments: async (
+      session: IdentitySession,
+      candidate: OrganizationSelectionCandidate,
+      afterRoleAssignmentId: string | undefined,
+    ): Promise<HumanOrganizationRequestResult<readonly ProjectedRoleAssignment[]>> =>
+      requests.run(session, candidate, async (transaction, scope) => {
+        const rows = await transaction.query`
+          select organization_id, record_id, attribute_values
+          from vortex_access.list_organization_role_assignments_projection(
+            null, 'record_id', 'ascending',
+            ${
+              afterRoleAssignmentId === undefined
+                ? null
+                : JSON.stringify({ recordId: afterRoleAssignmentId })
+            }::jsonb,
+            ${projectedPageSize}::integer, null
+          )
+        `;
+        return rows.map((row) => {
+          const parsed = projectedAssignmentSchema.parse(row);
+          if (!sameId(parsed.organization_id, scope.organizationId))
+            throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
+          return {
+            roleAssignmentId: parsed.record_id,
+            roleId: parsed.attribute_values.role_id,
+            organizationAccountId: parsed.attribute_values.organization_account_id,
+            assignmentKind: parsed.attribute_values.assignment_kind,
+            state: parsed.attribute_values.state,
+            temporalState: parsed.attribute_values.temporal_state,
+          };
+        });
+      }),
+
     assignRoleAssignment: async (
       session: IdentitySession,
       candidate: OrganizationSelectionCandidate,
