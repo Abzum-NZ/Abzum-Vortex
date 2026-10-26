@@ -7,14 +7,13 @@ import {
   type RecordsTableQueryState,
 } from "../records-table-state";
 import {
-  authoredGridLayout,
   addressedDefaultGridViews,
   gridViewLayout,
-  resolveGridLayout,
   resolveSelectedGridView,
   type GridLayoutState,
   type GridViewsState,
 } from "../grid-view-state";
+import { authoredGridLayout, resolveGridLayout } from "../grid-layout-resolution";
 import { addressedGridView, gridViewPlacement } from "../grid-views";
 import { personalFormattingAllowed } from "../records-table-features";
 import type { PlacementModule, PlacementQuery } from "./shared";

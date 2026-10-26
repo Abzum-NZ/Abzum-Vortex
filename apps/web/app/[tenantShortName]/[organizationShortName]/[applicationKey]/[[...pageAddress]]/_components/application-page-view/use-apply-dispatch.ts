@@ -3,7 +3,7 @@ import { toast } from "@vortex/ui/components/sonner";
 import type { useRouter } from "next/navigation";
 import type {
   createPlatformComponentRegistryForReleases,
-  FlowDispatchResult,
+  ServerDrivenResult,
   FormFlowFeedback,
 } from "@vortex/ui";
 import type { ApplicationPageModel } from "../../../../../../_lib/application-page";
@@ -61,7 +61,7 @@ export function useApplyDispatch({
    */
   const applyDispatch = useCallback(
     async (
-      dispatch: Promise<FlowDispatchResult | undefined>,
+      dispatch: Promise<ServerDrivenResult | undefined>,
       formPlacementId?: string,
       afterAccepted?: () => Promise<Notice | undefined>,
       sourceBindingId?: string,
@@ -129,17 +129,12 @@ export function useApplyDispatch({
       };
       let settles = true;
       try {
-        const result = await dispatch;
+        const server = await dispatch;
         if (!isCurrentNavigation()) return outcome;
-        if (result === undefined) {
+        if (server === undefined) {
           settles = false;
           return outcome;
         }
-        if (result.ranIn === "browser") {
-          showResult(unavailableNotice);
-          return outcome;
-        }
-        const server = result.result;
         if (server.kind === "reload") {
           router.refresh();
           return outcome;

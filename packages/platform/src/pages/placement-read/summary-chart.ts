@@ -4,7 +4,7 @@ import type { z } from "zod";
 import type { JsonValue } from "../../catalogue/common";
 import { describeFailure } from "../../catalogue/runtime-primitives";
 import type { BlockPropertyValueContract } from "../../definition/application-composition/block-property-values";
-import { queryTotalLabel } from "../../definition/module-query-edit";
+import { queryTotalLabel } from "../../definition/module-query-totals";
 import { exactDecimalTextSchema, moneyValueSchema } from "../../records/module-field-values";
 import {
   protectedQuerySummaryCommandSchema,

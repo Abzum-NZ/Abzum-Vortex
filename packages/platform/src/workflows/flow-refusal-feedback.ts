@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { tenantOrganizationMutationRefusalCodeSchema } from "../identity/tenant-governance";
+import { tenantOrganizationMutationRefusalCodeSchema } from "../identity/tenant-mutation-refusal-codes";
 import { builderKeySchema, fieldIdSchema, namespacedKeySchema } from "../catalogue/identifiers";
 
 /** Stable, public reasons a protected operation can confirm. */

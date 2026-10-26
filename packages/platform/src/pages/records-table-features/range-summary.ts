@@ -3,7 +3,7 @@ import "server-only";
 import type { IdentitySession } from "../../access/identity-access";
 import type { JsonValue } from "../../catalogue/common";
 import { sameId } from "../../catalogue/runtime-primitives";
-import { authoredGridLayout } from "../grid-view-state";
+import { authoredGridLayout } from "../grid-layout-resolution";
 import type {
   RecordsRangeSummaryField,
   RecordsRangeSummaryRequest,

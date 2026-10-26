@@ -1,5 +1,5 @@
 import type { BlockPaletteGroup } from "../../catalogue/catalogues";
-import type { ComponentSemanticEventKind } from "../application-flow-bindings";
+import type { ComponentSemanticEventKind } from "../component-semantic-events";
 import type { BlockPropertySchemaContract } from "./block-property-schema";
 import type {
   PlatformBlockRelease,
