@@ -1,7 +1,14 @@
 "use client";
 
 import { Puck, createUsePuck, useGetPuck, type Content, type Data } from "@puckeditor/core";
-import { useEffect, useRef, type MouseEvent, type ReactNode, type SyntheticEvent } from "react";
+import {
+  useEffect,
+  useRef,
+  type MouseEvent,
+  type ReactNode,
+  type RefObject,
+  type SyntheticEvent,
+} from "react";
 import type {
   ApplicationShell,
   ProjectedApplicationFrame,
@@ -84,39 +91,6 @@ export const puckDataForBreakpoint = (
 const sameContent = (left: Data, right: Data): boolean =>
   JSON.stringify(left.content) === JSON.stringify(right.content);
 
-type CanvasBlock = Readonly<{ type: string; props: Readonly<Record<string, unknown>> }>;
-
-const isCanvasBlock = (value: unknown): value is CanvasBlock =>
-  typeof value === "object" &&
-  value !== null &&
-  typeof (value as CanvasBlock).type === "string" &&
-  typeof (value as CanvasBlock).props === "object" &&
-  typeof (value as CanvasBlock).props?.id === "string";
-
-/**
- * Every block of a canvas by id with its own settings (not the blocks inside it), and the shape of
- * the tree: which block sits where. Two drafts of the same shape differ only in settings.
- */
-const canvasBlocks = (content: unknown) => {
-  const blocks = new Map<string, Readonly<{ block: CanvasBlock; own: string }>>();
-  const shape: string[] = [];
-  const visit = (value: unknown, path: string) => {
-    if (!Array.isArray(value)) return;
-    value.forEach((child, index) => {
-      if (!isCanvasBlock(child)) return;
-      const id = String(child.props.id);
-      const own = Object.entries(child.props).filter(
-        ([, prop]) => !(Array.isArray(prop) && prop.some(isCanvasBlock)),
-      );
-      blocks.set(id, { block: child, own: JSON.stringify([child.type, own]) });
-      shape.push(`${path}[${index}]=${id}`);
-      for (const [key, prop] of Object.entries(child.props)) visit(prop, `${id}.${key}`);
-    });
-  };
-  visit(content, "content");
-  return { blocks, shape: shape.join("|") };
-};
-
 /**
  * Runs inside Puck: keeps Puck's private state in step with the workspace draft and its shared
  * selection, and draws Puck's canvas in the application's frame. The workspace draft is the
@@ -126,6 +100,7 @@ export function StudioCanvasBridge({
   arrangeGrid,
   data,
   resync,
+  synchronizing,
   selectedAlias,
   onSelect,
   frame,
@@ -138,6 +113,8 @@ export function StudioCanvasBridge({
   data: Data;
   /** Changes when Puck holds a change the draft refused, so the draft is shown again. */
   resync: number;
+  /** Prevents Puck's synchronous change callbacks from echoing intermediate draft updates. */
+  synchronizing: RefObject<boolean>;
   selectedAlias: string | null;
   /** Reports a canvas selection; `false` means the workspace kept its own selection. */
   onSelect: (alias: string | null) => Promise<boolean>;
@@ -183,40 +160,57 @@ export function StudioCanvasBridge({
 
   // The workspace draft changed (an edit, Undo, Redo, a save or Revert): show exactly that draft,
   // keeping the selected block selected while it is still on the canvas.
-  // A settings edit of one block (the inspector's usual change) replaces just that block; any
-  // other change (blocks added, moved or removed, Undo across several) replaces the whole canvas.
+  // Reconcile the root items with atomic actions. Replacing a changed item includes its slots,
+  // so nested edits and structural changes update only their owning subtree. These actions are
+  // draft synchronization, not palette drops or entries in Puck's separate history.
   useEffect(() => {
-    const { appState, dispatch, getSelectorForId } = getPuck();
+    const { appState, dispatch } = getPuck();
     const rootChanged = JSON.stringify(appState.data.root) !== JSON.stringify(data.root);
     if (sameContent(appState.data, data) && !rootChanged) return;
     const kept = puckSelection();
-    const before = canvasBlocks(appState.data.content);
-    const after = canvasBlocks(data.content);
-    const edited =
-      before.shape === after.shape
-        ? [...after.blocks].filter(([id, entry]) => before.blocks.get(id)?.own !== entry.own)
-        : undefined;
-    const selectors =
-      edited === undefined || edited.length > 1 || (edited.length === 0 && !rootChanged)
-        ? undefined
-        : edited.map(([id, entry]) => ({ selector: getSelectorForId(id), block: entry.block }));
-    if (selectors === undefined || selectors.some(({ selector }) => selector === undefined))
-      dispatch({
-        type: "setData",
-        data: { ...appState.data, root: data.root, content: data.content },
-      });
-    else {
-      if (rootChanged) dispatch({ type: "replaceRoot", root: data.root });
-      for (const { selector, block } of selectors)
-        if (selector !== undefined)
+    synchronizing.current = true;
+    try {
+      const current = [...appState.data.content];
+      const zone = "root:default-zone";
+      if (rootChanged) dispatch({ type: "replaceRoot", root: data.root, recordHistory: false });
+      for (const [index, block] of data.content.entries()) {
+        const previous = current.findIndex((item) => item.props.id === block.props.id);
+        if (previous === -1) {
+          dispatch({
+            type: "insert",
+            componentType: block.type,
+            id: block.props.id,
+            destinationIndex: index,
+            destinationZone: zone,
+            recordHistory: false,
+          });
+          current.splice(index, 0, block);
+        } else if (previous !== index) {
+          dispatch({
+            type: "move",
+            sourceIndex: previous,
+            sourceZone: zone,
+            destinationIndex: index,
+            destinationZone: zone,
+            recordHistory: false,
+          });
+          current.splice(index, 0, current.splice(previous, 1)[0]!);
+        }
+        if (previous === -1 || JSON.stringify(current[index]) !== JSON.stringify(block))
           dispatch({
             type: "replace",
-            destinationIndex: selector.index,
-            destinationZone: selector.zone,
-            data: block as Content[number],
+            destinationIndex: index,
+            destinationZone: zone,
+            data: block,
+            recordHistory: false,
           });
+      }
+      for (let index = current.length - 1; index >= data.content.length; index -= 1)
+        dispatch({ type: "remove", index, zone, recordHistory: false });
+      showSelection(kept);
+    } finally {
+      synchronizing.current = false;
     }
-    showSelection(kept);
   }, [data, resync]);
 
   // The outline or the inspector selected something: select it on the canvas too.

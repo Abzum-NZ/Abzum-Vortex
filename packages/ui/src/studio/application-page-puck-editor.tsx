@@ -449,6 +449,7 @@ function ApplicationPageSlotPuckEditor({
   const compiledSlot = compiledSlots?.[at.key];
   const [message, setMessage] = useState("");
   const [resync, setResync] = useState(0);
+  const synchronizing = useRef(false);
   const sourceRef = useRef(source);
   sourceRef.current = source;
   const page = source.body.pages.find((candidate) => candidate.id === pageAlias);
@@ -630,7 +631,7 @@ function ApplicationPageSlotPuckEditor({
   // Every canvas change goes back through the definition: Puck's data is converted to the
   // authored content area, placed in the current draft and validated before the history takes it.
   const change = (candidate: Data) => {
-    if (!editable) return;
+    if (!editable || synchronizing.current) return;
     // A block dropped from the palette is added by Studio's add command, not by this edit.
     if (holdsDroppedBlock(candidate.content as unknown[])) return;
     try {
@@ -705,7 +706,7 @@ function ApplicationPageSlotPuckEditor({
 
   // A drop from the palette: Puck has put a bare block in its own data; Studio adds the real one.
   const dropped = (action: PuckAction) => {
-    if (action.type !== "insert") return;
+    if (action.type !== "insert" || synchronizing.current) return;
     const request: StudioCanvasAddRequest = {
       area: at.key,
       destination: destinationOfZone(action.destinationZone),
@@ -842,6 +843,7 @@ function ApplicationPageSlotPuckEditor({
                         arrangeGrid={arrangeGrid === true}
                         data={shown}
                         resync={resync}
+                        synchronizing={synchronizing}
                         selectedAlias={selectedPlacementAlias}
                         onSelect={onSelectPlacement}
                         frame={frame}
