@@ -10,8 +10,7 @@ import {
 import { AppearanceProvider } from "@vortex/ui/appearance";
 import { Toaster } from "@vortex/ui/components/sonner";
 import { loadDocumentTheme } from "./_lib/document-theme";
-import { documentStylesheetHref, STYLE_STYLESHEET_HREFS } from "./_lib/document-styles";
-import { VortexStyleSheetsProvider } from "@vortex/ui/theme";
+import { documentStylesheetHref } from "./_lib/document-styles";
 import "@vortex/ui/styles/globals.css";
 import { HistoryRefresh } from "./_components/history-refresh";
 
@@ -26,7 +25,6 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   const appearanceRoot = createAppearanceRootProps(appearance);
   // The addressed application's theme, or the platform default, so the first paint is already right.
   const documentTheme = await loadDocumentTheme();
-  const styleStylesheet = STYLE_STYLESHEET_HREFS[documentTheme.attributes["data-vortex-style"]];
   return (
     <html
       lang="en"
@@ -44,13 +42,8 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         />
         {/* The one delivery of the shared component styles: a cached asset, never inlined. */}
         <link rel="stylesheet" href={documentStylesheetHref("components")} precedence="default" />
-        {/* The document style's own component rules; a style root below loads any other it uses. */}
-        {styleStylesheet === undefined ? null : (
-          <link rel="stylesheet" href={styleStylesheet} precedence="style" />
-        )}
       </head>
       <body>
-        <VortexStyleSheetsProvider hrefs={STYLE_STYLESHEET_HREFS}>
         <AppearanceProvider initial={appearance}>
           <HistoryRefresh />
           {children}
@@ -58,7 +51,6 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
               application. The document root carries the on-screen application's theme. */}
           <Toaster position="bottom-right" visibleToasts={3} closeButton />
         </AppearanceProvider>
-        </VortexStyleSheetsProvider>
       </body>
     </html>
   );
