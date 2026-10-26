@@ -139,7 +139,7 @@ begin
       );
     end if;
   elsif p_after is not null then
-    -- Only the delegating old signature uses this order without a cursor.
+    -- The application root order has no cursor form.
     raise exception using errcode = '22023',
       message = 'Application role template projection cursor is invalid';
   end if;
@@ -157,9 +157,9 @@ begin
       case when p_direction = 'ascending' then 'asc' else 'desc' end,
       case when p_direction = 'ascending' then 'asc' else 'desc' end)
     end;
-  -- No limit in the scan: a candidate whose release roles fail validation is skipped, as the
-  -- legacy reader skipped it, so the loop reads on until the page is full (the scan is an
-  -- ordered index walk, so only the rows consumed are read).
+  -- No limit in the scan: a candidate whose release roles fail validation is skipped, so the
+  -- loop reads on until the page is full (the scan is an ordered index walk, so only the rows
+  -- consumed are read).
 
   for candidate in execute scan_sql using scope_row.organization_id, p_record_ids,
     after_record_id, after_text, p_limit, predicate_plan -> 'parameters'
