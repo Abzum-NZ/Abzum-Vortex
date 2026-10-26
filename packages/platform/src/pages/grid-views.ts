@@ -1,7 +1,7 @@
 import "server-only";
 
 import { z } from "zod";
-import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
 import {
   gridLayoutSchema,
   gridViewDocumentSchema,
@@ -25,7 +25,7 @@ import {
 import type { ModuleField } from "../definition/module-contracts";
 import { placementSettings } from "../definition/application-composition-catalogue";
 import { walkPageComposition } from "./placement-walk";
-import type { PageDefinition } from "../schema";
+import type { PageDefinition } from "../definition/application-contracts";
 
 /**
  * The stored grid layouts and named views of the current person. Each operation runs inside the
@@ -400,14 +400,17 @@ export const gridViewPlacement = (
   return found;
 };
 
-/** True when the page declares the placement's bound query and every column of the layout. */
-const layoutFitsPlacement = (
+/**
+ * The placement's authored default views when a layout with these columns fits it (the named
+ * query and only its declared columns), or undefined when it does not.
+ */
+const placementForLayout = (
   page: PageDefinition,
   placementId: string,
   queryId: string,
   fieldIds: readonly string[],
-): boolean => {
-  let permitted = false;
+): readonly string[] | undefined => {
+  let defaultViewIds: readonly string[] | undefined;
   walkPageComposition(page.composition, (placement) => {
     if (placement.placementId.toLowerCase() !== placementId.toLowerCase()) return;
     const contract = recordsTableContractOrLog(placementSettings(placement.props), "grid views");
@@ -418,9 +421,12 @@ const layoutFitsPlacement = (
     )
       return;
     const fields = new Set(contract.columns.map((column) => column.field.toLowerCase()));
-    permitted = fieldIds.every((fieldId) => fields.has(fieldId));
+    if (!fieldIds.every((fieldId) => fields.has(fieldId))) return;
+    defaultViewIds = contract.features.savedViews.enabled
+      ? contract.features.savedViews.defaultViews.map((view) => view.viewId.toLowerCase())
+      : [];
   });
-  return permitted;
+  return defaultViewIds;
 };
 
 /**
@@ -442,22 +448,25 @@ export const writeGridView = async (
   const layout = gridLayoutSchema.parse(write.layout);
   // The page is resolved from the installed release by the server. A forged client cannot
   // invent a placement, switch its query or persist undeclared columns.
-  if (
-    !layoutFitsPlacement(
-      write.page,
-      write.placementId,
-      write.queryId,
-      layout.columns.map((column) => column.fieldId),
-    )
-  )
-    throw new Error("GRID_LAYOUT_PLACEMENT_INVALID");
+  const defaultViewIds = placementForLayout(
+    write.page,
+    write.placementId,
+    write.queryId,
+    layout.columns.map((column) => column.fieldId),
+  );
+  if (defaultViewIds === undefined) throw new Error("GRID_LAYOUT_PLACEMENT_INVALID");
+  // A layout arranged from an authored default view notes that view; one arranged from a saved
+  // view notes the saved view.
+  const fromDefault =
+    write.basedOnViewId !== null && defaultViewIds.includes(write.basedOnViewId.toLowerCase());
   const rows = await transaction.query<ResultRow>`
     select vortex_platform.write_grid_view(
       ${write.page.pageId}::uuid,
       ${write.placementId}::uuid,
       ${write.queryId}::uuid,
       ${write.expectedRevision}::bigint,
-      ${write.basedOnViewId}::uuid,
+      ${fromDefault ? null : write.basedOnViewId}::uuid,
+      ${fromDefault ? write.basedOnViewId : null}::uuid,
       ${JSON.stringify(layout)}::text::jsonb
     ) as result
   `;
@@ -559,12 +568,12 @@ export const saveGridView = async (
   const name = save.name === null ? null : gridViewNameSchema.parse(save.name);
   if (
     document !== null &&
-    !layoutFitsPlacement(
+    placementForLayout(
       save.page,
       save.placementId,
       save.queryId,
       document.columns.map((column) => column.fieldId),
-    )
+    ) === undefined
   )
     throw new Error("GRID_VIEW_PLACEMENT_INVALID");
   // Every document carries a rule list; only a view that holds rules needs personal formatting.

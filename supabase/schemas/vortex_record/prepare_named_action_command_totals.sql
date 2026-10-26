@@ -104,9 +104,7 @@ begin
     access_loaded -> 'declaration', p_record_id, access_loaded -> 'facts'
   );
   if access_decision ->> 'outcome' <> 'allowed' then
-    perform vortex_record.append_named_action_activity_internal(
-      p_activity_id, p_record_id, array[]::uuid[], 'refused'
-    );
+    perform vortex_record.append_record_activity_internal(p_activity_id, 'execute_named_action', array[p_record_id]::uuid[], array[]::uuid[], 'refused');
     return pg_catalog.jsonb_build_object('outcome', 'refused_recorded');
   end if;
   access_bounds := vortex_record.decide_record_field_bounds_internal(access_decision);
@@ -489,7 +487,7 @@ revoke all on function vortex_record.prepare_named_action_command_totals(
 ) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_record.prepare_named_action_command_totals(
   uuid, uuid, uuid, bigint, jsonb, jsonb, uuid, text, uuid, bigint, uuid
-) to vortex_runtime;
+) to vortex_request;
 comment on function vortex_record.prepare_named_action_command_totals(
   uuid, uuid, uuid, bigint, jsonb, jsonb, uuid, text, uuid, bigint, uuid
 ) is

@@ -1,23 +1,24 @@
 import "server-only";
 
+import type { JsonValue } from "../catalogue/common";
+import type { BlockPropertyValueContract } from "../definition/application-composition/block-property-values";
 import {
-  gridLayoutVisibleFieldIds,
   readRecordDetailContract,
   recordsTableContractOrLog,
-  type BlockPropertyValueContract,
-  type GridLayoutState,
-  type JsonValue,
   type RecordsDisplayFormat,
-  type RecordsTableTotal,
-  type RecordsTableFeatureProjection,
-  type RecordsTableFilterField,
-  type RecordsTableInlineEditor,
-  type RecordsTablePivotView,
-  type RecordsTableFilterValue,
-  type RecordsTableSortState,
-  type tableCellTypeKeys,
-} from "../schema";
-import type { ProtectedQueryFieldBounds, ProtectedQueryRow } from "../queries/index";
+} from "../definition/application-composition/records-display";
+import type { RecordsTableFilterField } from "../definition/application-composition/records-table-features/column-filters";
+import type { RecordsTableInlineEditor } from "../definition/application-composition/records-table-features/inline-edit";
+import type { RecordsTableTotal } from "../definition/application-composition/records-table-totals";
+import type { tableCellTypeKeys } from "../records/module-field-values";
+import { gridLayoutVisibleFieldIds, type GridLayoutState } from "./grid-view-state";
+import type { RecordsTableFeatureProjection } from "./records-table-feature-projection";
+import type { RecordsTableFilterValue } from "./records-table-filters";
+import type { RecordsTablePivotView, RecordsTableSortState } from "./records-table-state";
+import type {
+  ProtectedQueryFieldBounds,
+  ProtectedQueryRow,
+} from "../queries/protected-query-contracts";
 import { isExactDecimal } from "./value-format";
 import {
   asRecordLink,
@@ -27,7 +28,10 @@ import {
   type ProjectedRecordLink,
   type ProjectedScalarCellValue,
 } from "./cell-projection";
-import { recordLinkLabelKey, type RecordLinkReference } from "../definition/app-index";
+import {
+  recordLinkLabelKey,
+  type RecordLinkReference,
+} from "../definition/viewer-safe-record-link";
 import { defaultQueryPageSize } from "../definition/module-query-edit";
 import {
   evaluateConditionalFormatting,

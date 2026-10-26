@@ -1,29 +1,34 @@
 import "server-only";
 
+import type { PreparedApplicationRoleTemplates } from "../access/organization-access-catalogue";
+import type {
+  PermissionRegistryDefinitionRelease,
+  PermissionRegistryEntryCandidate,
+} from "../access/permission-registry";
 import {
-  sameId,
   applicationRootIdSchema,
-  moduleInstallationBindingEvidenceSchema,
   moduleRootIdSchema,
   organizationIdSchema,
   revisionSchema,
-  type ApplicationInstallationLifecycleResult,
   type ApplicationRootId,
-  type ModuleInstallationBindingEvidence,
-  type ModuleInstallationStorageResult,
   type ModuleRootId,
   type OrganizationId,
-  type PermissionRegistryDefinitionRelease,
-  type PermissionRegistryEntryCandidate,
-  type PreparedApplicationRoleTemplates,
-  type SystemApplicationBoundReleaseSetResult,
-} from "../schema";
-import { BuilderAuthorityError, fingerprintPermissionMeaning } from "../access/index";
+} from "../catalogue/identifiers";
+import { sameId } from "../catalogue/runtime-primitives";
+import {
+  moduleInstallationBindingEvidenceSchema,
+  type ApplicationInstallationLifecycleResult,
+  type ModuleInstallationBindingEvidence,
+  type ModuleInstallationStorageResult,
+} from "../files/storage";
+import type { SystemApplicationBoundReleaseSetResult } from "./definition-consumer-read";
+import { fingerprintPermissionMeaning } from "../access/permission-fingerprints";
+import { BuilderAuthorityError } from "./builder-authority";
 import { InstallationProblem } from "./installation-authority";
 import {
   createModuleInstallationStorageRepository,
   type ResolvedContributionBinding,
-} from "./module-index";
+} from "./storage-provisioning";
 import { z } from "zod";
 import {
   DefinitionError,

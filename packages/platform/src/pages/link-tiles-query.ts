@@ -3,35 +3,36 @@ import "server-only";
 import {
   requireInstalledRuntimeContext,
   type InstalledRuntimeContext,
-} from "../definition/app-index";
+} from "../definition/installed-runtime-context";
+import type { IdentitySession, OrganizationSelectionCandidate } from "../access/identity-access";
+import { safeHttpsUrlSchema, type JsonValue } from "../catalogue/common";
+import { builderKeySchema } from "../catalogue/identifiers";
+import { describeFailure, sameId } from "../catalogue/runtime-primitives";
+import { validateComponentSettings } from "../definition/application-composition/block-property-schema";
+import type { BlockPropertyValueContract } from "../definition/application-composition/block-property-values";
+import {
+  viewerSafeRecordLinkIdentitySchema,
+  viewerSafeRecordLinkResultSchema,
+  type ViewerSafeRecordLinkIdentity,
+  type ViewerSafeRecordLinkResult,
+} from "../records/record-links";
+import {
+  projectedLinkTilesSchema,
+  type ProjectedLinkTileTarget,
+  type ProjectedLinkTiles,
+} from "./application-page-link-tiles";
 import {
   applicationPageLinkResultSchema,
   applicationPageLinkSelectorSchema,
-  projectedLinkTilesSchema,
   type ApplicationPageLinkSelector,
   type ApplicationPageLinkResult,
-  type ProjectedLinkTileTarget,
-  type ProjectedLinkTiles,
-  viewerSafeRecordLinkIdentitySchema,
-  viewerSafeRecordLinkResultSchema,
-  builderKeySchema,
-  describeFailure,
-  safeHttpsUrlSchema,
-  sameId,
-  validateComponentSettings,
-  type BlockPropertyValueContract,
-  type IdentitySession,
-  type JsonValue,
-  type OrganizationSelectionCandidate,
-  type ViewerSafeRecordLinkIdentity,
-  type ViewerSafeRecordLinkResult,
-} from "../schema";
+} from "./application-page-links";
 import { LINK_TILES_BLOCK_RELEASE } from "../definition/application-composition-catalogue";
 import {
   protectedQueryCommandSchema,
   protectedQueryPageSchema,
   type ProtectedQueryCommand,
-} from "../queries/index";
+} from "../queries/protected-query-contracts";
 import type { RecordsTableQueryRunner } from "./records-table-query";
 
 type Settings = Readonly<Record<string, BlockPropertyValueContract>>;

@@ -238,9 +238,7 @@ begin
     end;
   end if;
 
-  perform vortex_record.append_lifecycle_policy_activity_internal(
-    p_activity_id, next_policy_id
-  );
+  perform vortex_record.append_record_activity_internal(p_activity_id, 'manage_record_lifecycle_policy', array[next_policy_id]::uuid[], array[]::uuid[], 'completed');
 
   return full_policy;
 end
@@ -251,4 +249,4 @@ alter function vortex_record.save_record_type_lifecycle_policy_for_administratio
 COMMENT ON FUNCTION vortex_record.save_record_type_lifecycle_policy_for_administration(p_storage_contract_id uuid, p_application_root_id uuid, p_expected_settings_revision bigint, p_expected_policy_revision bigint, p_activity_id uuid, p_policy jsonb) IS 'Protected administrator save (create or update) of one record type''s current lifecycle policy within current organisation limits; stale organisation-limits/policy revisions, uninstalled or unknown targets, unready archive bindings and disallowed actions/destinations are refused. policyId is server-assigned and immutable; successful Activity commits atomically.';
 
 REVOKE ALL ON FUNCTION vortex_record.save_record_type_lifecycle_policy_for_administration(p_storage_contract_id uuid, p_application_root_id uuid, p_expected_settings_revision bigint, p_expected_policy_revision bigint, p_activity_id uuid, p_policy jsonb) FROM PUBLIC;
-GRANT ALL ON FUNCTION vortex_record.save_record_type_lifecycle_policy_for_administration(p_storage_contract_id uuid, p_application_root_id uuid, p_expected_settings_revision bigint, p_expected_policy_revision bigint, p_activity_id uuid, p_policy jsonb) TO vortex_runtime;
+GRANT ALL ON FUNCTION vortex_record.save_record_type_lifecycle_policy_for_administration(p_storage_contract_id uuid, p_application_root_id uuid, p_expected_settings_revision bigint, p_expected_policy_revision bigint, p_activity_id uuid, p_policy jsonb) TO vortex_request;

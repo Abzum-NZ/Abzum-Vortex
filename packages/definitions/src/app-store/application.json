@@ -82,22 +82,6 @@
         "record_type": "vortex.app_store:store_application",
         "carries": [],
         "personal_or_sensitive_values_allowed": false
-      },
-      {
-        "id": "event_install_application",
-        "key": "vortex.app.app_store.install_application",
-        "label": "Install",
-        "record_type": "vortex.app_store:store_application",
-        "carries": [],
-        "personal_or_sensitive_values_allowed": false
-      },
-      {
-        "id": "event_upgrade_application",
-        "key": "vortex.app.app_store.upgrade_application",
-        "label": "Upgrade",
-        "record_type": "vortex.app_store:store_application",
-        "carries": [],
-        "personal_or_sensitive_values_allowed": false
       }
     ],
     "public_addresses": [],
@@ -147,7 +131,6 @@
                       "gap": "medium",
                       "menu_width": 16,
                       "menu_placement": "sticky",
-                      "content_landmark": true,
                       "tablet_menu_width": 14,
                       "phone_direction": "column",
                       "phone_menu_placement": "flow",
@@ -325,6 +308,18 @@
                         "pin": "unpinned"
                       },
                       {
+                        "field": "vortex.app_store:store_application.record_update_status",
+                        "label": "Existing records",
+                        "visible": false,
+                        "pin": "unpinned"
+                      },
+                      {
+                        "field": "vortex.app_store:store_application.records_processed",
+                        "label": "Records processed",
+                        "visible": false,
+                        "pin": "unpinned"
+                      },
+                      {
                         "field": "vortex.app_store:store_application.installed_version",
                         "label": "Installed version",
                         "visible": true,
@@ -345,30 +340,16 @@
                     ],
                     "row_actions": [
                       {
-                        "event_id": "event_install_application",
-                        "label": "Install",
+                        "event_id": "event_install_or_upgrade",
+                        "label": "Install or upgrade",
                         "icon": "plus",
-                        "placement": "inline",
-                        "when_field": "vortex.app_store:store_application.status",
-                        "when_equals": "available",
-                        "show_label": true
-                      },
-                      {
-                        "event_id": "event_upgrade_application",
-                        "label": "Upgrade",
-                        "icon": "plus",
-                        "placement": "inline",
-                        "when_field": "vortex.app_store:store_application.status",
-                        "when_equals": "update_available",
-                        "show_label": true
+                        "placement": "inline"
                       },
                       {
                         "event_id": "event_remove_application",
                         "label": "Remove",
                         "icon": "minus",
-                        "placement": "menu",
-                        "when_field": "vortex.app_store:store_application.status",
-                        "when_not_equals": "available"
+                        "placement": "menu"
                       }
                     ],
                     "vortex": {
@@ -502,11 +483,11 @@
                       },
                       {
                         "field": "vortex.app_store:store_application.record_update_status",
-                        "label": "Record update"
+                        "label": "Existing records"
                       },
                       {
                         "field": "vortex.app_store:store_application.records_processed",
-                        "label": "Records updated"
+                        "label": "Records processed"
                       },
                       {
                         "field": "vortex.app_store:store_application.installed_version",
@@ -884,28 +865,6 @@
                                     "type": "interface.show_message",
                                     "version": "1.0.0",
                                     "properties": {
-                                      "title": {
-                                        "kind": "formula",
-                                        "formula": {
-                                          "op": "join",
-                                          "parts": [
-                                            {
-                                              "op": "reference",
-                                              "reference": {
-                                                "source": "task_output",
-                                                "task": "install",
-                                                "key": "result",
-                                                "path": ["application_name"]
-                                              }
-                                            },
-                                            {
-                                              "op": "literal",
-                                              "type": "text",
-                                              "value": " installed"
-                                            }
-                                          ]
-                                        }
-                                      },
                                       "message": {
                                         "kind": "formula",
                                         "formula": {
@@ -935,19 +894,13 @@
                                               }
                                             },
                                             {
-                                              "op": "literal",
-                                              "type": "text",
-                                              "value": " is installed."
-                                            },
-                                            {
                                               "op": "if",
                                               "condition": {
                                                 "op": "reference",
                                                 "reference": {
                                                   "source": "task_output",
-                                                  "task": "install",
-                                                  "key": "result",
-                                                  "path": ["member_role_granted"]
+                                                  "task": "confirm_install",
+                                                  "key": "choice"
                                                 }
                                               },
                                               "then": {
@@ -956,7 +909,7 @@
                                                   {
                                                     "op": "literal",
                                                     "type": "text",
-                                                    "value": " You now have the "
+                                                    "value": " is installed and you now have the role "
                                                   },
                                                   {
                                                     "op": "reference",
@@ -970,39 +923,24 @@
                                                   {
                                                     "op": "literal",
                                                     "type": "text",
-                                                    "value": " role."
+                                                    "value": ". Find it in the launcher; give other people their roles in IAM."
                                                   }
                                                 ]
                                               },
                                               "else": {
                                                 "op": "literal",
                                                 "type": "text",
-                                                "value": ""
-                                              }
-                                            },
-                                            {
-                                              "op": "if",
-                                              "condition": {
-                                                "op": "reference",
-                                                "reference": {
-                                                  "source": "task_output",
-                                                  "task": "install",
-                                                  "key": "result",
-                                                  "path": ["member_role_granted"]
-                                                }
-                                              },
-                                              "then": {
-                                                "op": "literal",
-                                                "type": "text",
-                                                "value": " Give other people their roles in IAM; people with a role find the application in the launcher."
-                                              },
-                                              "else": {
-                                                "op": "literal",
-                                                "type": "text",
-                                                "value": " Give people their roles in IAM; people with a role find the application in the launcher."
+                                                "value": " is installed with its roles. Give people their roles in IAM; people with a role find the application in the launcher."
                                               }
                                             }
                                           ]
+                                        }
+                                      },
+                                      "title": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "Install or upgrade"
                                         }
                                       }
                                     }
@@ -1021,18 +959,18 @@
                                     "type": "interface.show_message",
                                     "version": "1.0.0",
                                     "properties": {
-                                      "title": {
-                                        "kind": "literal",
-                                        "literal": {
-                                          "type": "text",
-                                          "value": "Install"
-                                        }
-                                      },
                                       "message": {
                                         "kind": "literal",
                                         "literal": {
                                           "type": "text",
                                           "value": "This application changed while you were reviewing it. Choose Install or upgrade again to see its current state."
+                                        }
+                                      },
+                                      "title": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "Install or upgrade"
                                         }
                                       }
                                     }
@@ -1051,18 +989,18 @@
                                     "type": "interface.show_message",
                                     "version": "1.0.0",
                                     "properties": {
-                                      "title": {
-                                        "kind": "literal",
-                                        "literal": {
-                                          "type": "text",
-                                          "value": "Install"
-                                        }
-                                      },
                                       "message": {
                                         "kind": "literal",
                                         "literal": {
                                           "type": "text",
                                           "value": "You cannot install or upgrade this application with your current access. Your organisation steward can review your access in IAM."
+                                        }
+                                      },
+                                      "title": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "Install or upgrade"
                                         }
                                       }
                                     }
@@ -1076,18 +1014,18 @@
                                 "type": "interface.show_message",
                                 "version": "1.0.0",
                                 "properties": {
-                                  "title": {
-                                    "kind": "literal",
-                                    "literal": {
-                                      "type": "text",
-                                      "value": "Install"
-                                    }
-                                  },
                                   "message": {
                                     "kind": "literal",
                                     "literal": {
                                       "type": "text",
                                       "value": "The result could not be confirmed. Refresh the App Store before trying again."
+                                    }
+                                  },
+                                  "title": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "Install or upgrade"
                                     }
                                   }
                                 }
@@ -1319,28 +1257,6 @@
                                     "type": "interface.show_message",
                                     "version": "1.0.0",
                                     "properties": {
-                                      "title": {
-                                        "kind": "formula",
-                                        "formula": {
-                                          "op": "join",
-                                          "parts": [
-                                            {
-                                              "op": "reference",
-                                              "reference": {
-                                                "source": "task_output",
-                                                "task": "upgrade",
-                                                "key": "result",
-                                                "path": ["application_name"]
-                                              }
-                                            },
-                                            {
-                                              "op": "literal",
-                                              "type": "text",
-                                              "value": " upgraded"
-                                            }
-                                          ]
-                                        }
-                                      },
                                       "message": {
                                         "kind": "formula",
                                         "formula": {
@@ -1436,6 +1352,13 @@
                                             }
                                           ]
                                         }
+                                      },
+                                      "title": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "Install or upgrade"
+                                        }
                                       }
                                     }
                                   }
@@ -1453,18 +1376,18 @@
                                     "type": "interface.show_message",
                                     "version": "1.0.0",
                                     "properties": {
-                                      "title": {
-                                        "kind": "literal",
-                                        "literal": {
-                                          "type": "text",
-                                          "value": "Upgrade"
-                                        }
-                                      },
                                       "message": {
                                         "kind": "literal",
                                         "literal": {
                                           "type": "text",
                                           "value": "This application changed while you were reviewing it. Choose Install or upgrade again to see its current state."
+                                        }
+                                      },
+                                      "title": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "Install or upgrade"
                                         }
                                       }
                                     }
@@ -1483,18 +1406,18 @@
                                     "type": "interface.show_message",
                                     "version": "1.0.0",
                                     "properties": {
-                                      "title": {
-                                        "kind": "literal",
-                                        "literal": {
-                                          "type": "text",
-                                          "value": "Upgrade"
-                                        }
-                                      },
                                       "message": {
                                         "kind": "literal",
                                         "literal": {
                                           "type": "text",
                                           "value": "You cannot install or upgrade this application with your current access. Your organisation steward can review your access in IAM."
+                                        }
+                                      },
+                                      "title": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "Install or upgrade"
                                         }
                                       }
                                     }
@@ -1513,6 +1436,13 @@
                                     "literal": {
                                       "type": "text",
                                       "value": "The result could not be confirmed. Refresh the App Store before trying again."
+                                    }
+                                  },
+                                  "title": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "Install or upgrade"
                                     }
                                   }
                                 }
@@ -1696,13 +1626,6 @@
                                     "type": "interface.show_message",
                                     "version": "1.0.0",
                                     "properties": {
-                                      "title": {
-                                        "kind": "literal",
-                                        "literal": {
-                                          "type": "text",
-                                          "value": "Role changes accepted"
-                                        }
-                                      },
                                       "message": {
                                         "kind": "formula",
                                         "formula": {
@@ -1759,6 +1682,13 @@
                                             }
                                           ]
                                         }
+                                      },
+                                      "title": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "Install or upgrade"
+                                        }
                                       }
                                     }
                                   }
@@ -1776,18 +1706,18 @@
                                     "type": "interface.show_message",
                                     "version": "1.0.0",
                                     "properties": {
-                                      "title": {
-                                        "kind": "literal",
-                                        "literal": {
-                                          "type": "text",
-                                          "value": "Accept role changes"
-                                        }
-                                      },
                                       "message": {
                                         "kind": "literal",
                                         "literal": {
                                           "type": "text",
                                           "value": "This application changed while you were reviewing it. Choose Install or upgrade again to see its current state."
+                                        }
+                                      },
+                                      "title": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "Install or upgrade"
                                         }
                                       }
                                     }
@@ -1806,18 +1736,18 @@
                                     "type": "interface.show_message",
                                     "version": "1.0.0",
                                     "properties": {
-                                      "title": {
-                                        "kind": "literal",
-                                        "literal": {
-                                          "type": "text",
-                                          "value": "Accept role changes"
-                                        }
-                                      },
                                       "message": {
                                         "kind": "literal",
                                         "literal": {
                                           "type": "text",
                                           "value": "You cannot install or upgrade this application with your current access. Your organisation steward can review your access in IAM."
+                                        }
+                                      },
+                                      "title": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "Install or upgrade"
                                         }
                                       }
                                     }
@@ -1837,6 +1767,13 @@
                                       "type": "text",
                                       "value": "The result could not be confirmed. Refresh the App Store before trying again."
                                     }
+                                  },
+                                  "title": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "Install or upgrade"
+                                    }
                                   }
                                 }
                               }
@@ -1852,10 +1789,54 @@
                         },
                         "tasks": [
                           {
-                            "id": "show_current_state",
-                            "type": "interface.refresh",
+                            "id": "up_to_date",
+                            "type": "interface.show_message",
                             "version": "1.0.0",
-                            "properties": {}
+                            "properties": {
+                              "message": {
+                                "kind": "formula",
+                                "formula": {
+                                  "op": "join",
+                                  "parts": [
+                                    {
+                                      "op": "reference",
+                                      "reference": {
+                                        "source": "task_output",
+                                        "task": "review",
+                                        "key": "result",
+                                        "path": ["application_name"]
+                                      }
+                                    },
+                                    {
+                                      "op": "literal",
+                                      "type": "text",
+                                      "value": " is up to date: version "
+                                    },
+                                    {
+                                      "op": "reference",
+                                      "reference": {
+                                        "source": "task_output",
+                                        "task": "review",
+                                        "key": "result",
+                                        "path": ["installed_version"]
+                                      }
+                                    },
+                                    {
+                                      "op": "literal",
+                                      "type": "text",
+                                      "value": " is in use."
+                                    }
+                                  ]
+                                }
+                              },
+                              "title": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "Install or upgrade"
+                                }
+                              }
+                            }
                           }
                         ]
                       },
@@ -1891,18 +1872,18 @@
                                     "type": "interface.show_message",
                                     "version": "1.0.0",
                                     "properties": {
-                                      "title": {
-                                        "kind": "literal",
-                                        "literal": {
-                                          "type": "text",
-                                          "value": "Install or upgrade"
-                                        }
-                                      },
                                       "message": {
                                         "kind": "literal",
                                         "literal": {
                                           "type": "text",
                                           "value": "This application has no published version yet. Publish it in Studio first."
+                                        }
+                                      },
+                                      "title": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "Install or upgrade"
                                         }
                                       }
                                     }
@@ -1921,18 +1902,18 @@
                                     "type": "interface.show_message",
                                     "version": "1.0.0",
                                     "properties": {
-                                      "title": {
-                                        "kind": "literal",
-                                        "literal": {
-                                          "type": "text",
-                                          "value": "Upgrade"
-                                        }
-                                      },
                                       "message": {
                                         "kind": "literal",
                                         "literal": {
                                           "type": "text",
                                           "value": "The latest version adds or removes modules, so it cannot be upgraded to here."
+                                        }
+                                      },
+                                      "title": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "Install or upgrade"
                                         }
                                       }
                                     }
@@ -1951,18 +1932,18 @@
                                     "type": "interface.show_message",
                                     "version": "1.0.0",
                                     "properties": {
-                                      "title": {
-                                        "kind": "literal",
-                                        "literal": {
-                                          "type": "text",
-                                          "value": "Install or upgrade"
-                                        }
-                                      },
                                       "message": {
                                         "kind": "literal",
                                         "literal": {
                                           "type": "text",
                                           "value": "The current installation of this application is incomplete, so it cannot be changed here."
+                                        }
+                                      },
+                                      "title": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "Install or upgrade"
                                         }
                                       }
                                     }
@@ -1981,18 +1962,18 @@
                                     "type": "interface.show_message",
                                     "version": "1.0.0",
                                     "properties": {
-                                      "title": {
-                                        "kind": "literal",
-                                        "literal": {
-                                          "type": "text",
-                                          "value": "Install or upgrade"
-                                        }
-                                      },
                                       "message": {
                                         "kind": "literal",
                                         "literal": {
                                           "type": "text",
                                           "value": "The current installation does not match the version it says it uses, so it cannot be changed here."
+                                        }
+                                      },
+                                      "title": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "Install or upgrade"
                                         }
                                       }
                                     }
@@ -2011,6 +1992,13 @@
                                     "literal": {
                                       "type": "text",
                                       "value": "This application cannot be installed or upgraded here."
+                                    }
+                                  },
+                                  "title": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "Install or upgrade"
                                     }
                                   }
                                 }
@@ -2032,6 +2020,13 @@
                               "type": "text",
                               "value": "The result could not be confirmed. Refresh the App Store before trying again."
                             }
+                          },
+                          "title": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "Install or upgrade"
+                            }
                           }
                         }
                       }
@@ -2051,18 +2046,18 @@
                     "type": "interface.show_message",
                     "version": "1.0.0",
                     "properties": {
-                      "title": {
-                        "kind": "literal",
-                        "literal": {
-                          "type": "text",
-                          "value": "Install or upgrade"
-                        }
-                      },
                       "message": {
                         "kind": "literal",
                         "literal": {
                           "type": "text",
                           "value": "You cannot install or upgrade this application with your current access. Your organisation steward can review your access in IAM."
+                        }
+                      },
+                      "title": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "Install or upgrade"
                         }
                       }
                     }
@@ -2081,6 +2076,13 @@
                     "literal": {
                       "type": "text",
                       "value": "The result could not be confirmed. Refresh the App Store before trying again."
+                    }
+                  },
+                  "title": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "Install or upgrade"
                     }
                   }
                 }
@@ -2349,6 +2351,13 @@
                                   "type": "text",
                                   "value": "The application has been removed. Its records are kept. Refresh the App Store to reinstall it."
                                 }
+                              },
+                              "title": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "Remove application"
+                                }
                               }
                             }
                           }
@@ -2371,6 +2380,13 @@
                                 "literal": {
                                   "type": "text",
                                   "value": "The installation changed while you were reviewing it. Refresh the App Store and choose Remove again."
+                                }
+                              },
+                              "title": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "Remove application"
                                 }
                               }
                             }
@@ -2395,6 +2411,13 @@
                                   "type": "text",
                                   "value": "You cannot remove this application with your current authority."
                                 }
+                              },
+                              "title": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "Remove application"
+                                }
                               }
                             }
                           }
@@ -2412,6 +2435,13 @@
                             "literal": {
                               "type": "text",
                               "value": "The removal could not be confirmed. Refresh the App Store before trying again."
+                            }
+                          },
+                          "title": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "Remove application"
                             }
                           }
                         }
@@ -2438,6 +2468,13 @@
                           "type": "text",
                           "value": "Only installed ordinary applications can be removed. You need the current installation authority for this organisation."
                         }
+                      },
+                      "title": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "Remove application"
+                        }
                       }
                     }
                   }
@@ -2456,6 +2493,13 @@
                       "type": "text",
                       "value": "The installed application could not be read. Refresh the App Store before trying again."
                     }
+                  },
+                  "title": {
+                    "kind": "literal",
+                    "literal": {
+                      "type": "text",
+                      "value": "Remove application"
+                    }
                   }
                 }
               }
@@ -2469,22 +2513,9 @@
     ],
     "flow_bindings": [
       {
-        "id": "binding_install_application",
+        "id": "binding_install_or_upgrade",
         "control": "store_applications_region",
-        "event_id": "event_install_application",
-        "event": "row_action",
-        "flow": "flow_install_or_upgrade_application",
-        "inputs": {
-          "application_root_id": {
-            "kind": "caller",
-            "name": "record_id"
-          }
-        }
-      },
-      {
-        "id": "binding_upgrade_application",
-        "control": "store_applications_region",
-        "event_id": "event_upgrade_application",
+        "event_id": "event_install_or_upgrade",
         "event": "row_action",
         "flow": "flow_install_or_upgrade_application",
         "inputs": {

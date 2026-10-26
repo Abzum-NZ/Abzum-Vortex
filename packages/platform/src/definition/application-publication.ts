@@ -1,19 +1,19 @@
 import "server-only";
 
+import type { SessionContext } from "../access/identity-access";
 import {
   definitionPublicationConfirmationSchema,
   prepareDefinitionPublicationCommandSchema,
   type ExactDefinitionDependency,
   type PrepareDefinitionPublicationCommand,
-  type SessionContext,
-  type VersionImpact,
-  type VersionImpactReason,
-} from "../schema";
+} from "./definition-store-contracts";
+import type { VersionImpact, VersionImpactReason } from "./version-impact";
 import { applicationValidationContractVersion } from "./application-contract-versions";
 import type { ModuleSourceDocument } from "./module-source-contracts";
 import { applicationModuleSources } from "./application-module-lowering";
 import { readRetainedApplicationModule } from "./application-draft-compilation-cache";
 import { canonicalJson, fingerprintCanonicalValue } from "./canonical-json-definition";
+import { platformPins } from "./platform-pins";
 import {
   assertReleasable,
   compileApplicationCandidate,
@@ -386,10 +386,24 @@ const publicationReasons = (
           },
         ];
   });
+  // A platform operation or connection type the release pins was republished by the platform: the
+  // application is released again against it, or its bound controls stop resolving.
+  const platformChanges: VersionImpactReason[] =
+    canonicalJson(candidate.latestPlatformPins) ===
+    canonicalJson(platformPins(application.manifest))
+      ? []
+      : [
+          {
+            impact: "minor",
+            code: "dependency_requirement_changed",
+            location: { componentKind: "dependency", property: "version_requirement" },
+          },
+        ];
   return [
     ...(own.outcome === "release_required" ? own.reasons : []),
     ...modules.flatMap((module) => module.reasons),
     ...usedChanges,
+    ...platformChanges,
   ].sort((left, right) => (canonicalJson(left) < canonicalJson(right) ? -1 : 1));
 };
 

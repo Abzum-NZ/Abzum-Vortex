@@ -6,8 +6,7 @@ import { URL } from "node:url";
 import { ensureLocalSigningKey } from "./ensure-local-signing-key.mjs";
 
 /**
- * Local database lanes: extra, lighter Local Supabase stacks that workers reset independently while
- * the main stack (`supabase/config.toml`, project `Abzum-Vortex`) stays the owner's demo. A lane is
+ * Local database lanes: lighter Local Supabase stacks, one per worker, each reset independently. A lane is
  * a Supabase project directory outside the repository whose config is generated from the
  * repository's config with its own project id and every port shifted by 1000 per lane. Every CLI
  * call passes `--workdir <lane>`, so no command here can reach the main stack.

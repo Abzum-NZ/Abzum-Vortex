@@ -1,30 +1,32 @@
 import "server-only";
+import { describeFailure } from "../catalogue/runtime-primitives";
 
 import { createHash, randomUUID } from "node:crypto";
 import {
-  PRIVATE_FILE_BUCKET,
-  MAXIMUM_FILE_STORAGE_OPERATION_SECONDS,
-  STRUCTURED_RECORD_IMPORT_FORMAT,
-  STRUCTURED_RECORD_IMPORT_MAXIMUM_SOURCE_BYTES,
-  correlationIdSchema,
-  downloadGrantSchema,
-  fileIdSchema,
-  fileRecordSchema,
-  fingerprintSchema,
   identitySessionSchema,
   organizationSelectionCandidateSchema,
-  platformIdSchema,
-  type CorrelationId,
-  type FileRecord,
   type IdentitySession,
   type OrganizationSelectionCandidate,
+} from "../access/identity-access";
+import { correlationIdSchema, type CorrelationId } from "../catalogue/common";
+import { fileIdSchema, fingerprintSchema, platformIdSchema } from "../catalogue/identifiers";
+import {
+  PRIVATE_FILE_BUCKET,
+  MAXIMUM_FILE_STORAGE_OPERATION_SECONDS,
+  downloadGrantSchema,
+  fileRecordSchema,
+  type FileRecord,
+} from "./file-contracts";
+import {
+  STRUCTURED_RECORD_IMPORT_FORMAT,
+  STRUCTURED_RECORD_IMPORT_MAXIMUM_SOURCE_BYTES,
   type RecordImportSourceRefusalReason,
   type RecordImportSourceResult,
-} from "../schema";
+} from "./file-import";
 import {
   createHumanOrganizationRequestService,
   type HumanOrganizationRequestDependencies,
-} from "../access/index";
+} from "../access/human-organization-request";
 import {
   createStorageCredentialBridge,
   type StorageCredentialBridgeConfig,
@@ -417,7 +419,10 @@ export const createFileRecordImportSourceService = (
     let correlationId: CorrelationId;
     try {
       correlationId = correlationIdSchema.parse(randomUUID());
-    } catch {
+    } catch (error) {
+      console.error(
+        `[files] import correlation id unavailable FILE_IMPORT_CORRELATION_FAILED: ${describeFailure(error)}`,
+      );
       return sourceRefusal("storage_unavailable");
     }
     const protectedRequests = createHumanOrganizationRequestService({

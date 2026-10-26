@@ -1,17 +1,18 @@
+import type { JsonValue } from "../catalogue/common";
 import {
   compareExactDecimals,
   formatExactDecimal,
-  moneyValueSchema,
   parseExactDecimal,
   powerOfTen,
-  recordLinkValueSchema,
   type ExactDecimal,
-  type FlowDateUnit,
-  type FlowFormula,
-  type FlowReference,
-  type FlowRoundingMode,
-  type JsonValue,
-} from "../schema";
+} from "../records/exact-decimal";
+import { moneyValueSchema, recordLinkValueSchema } from "../records/module-field-values";
+import type {
+  FlowDateUnit,
+  FlowFormula,
+  FlowReference,
+  FlowRoundingMode,
+} from "../workflows/flow-values";
 import { flowInstantMicros } from "./flow-instant";
 
 /**

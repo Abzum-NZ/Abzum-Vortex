@@ -1,15 +1,17 @@
 import { Temporal } from "@js-temporal/polyfill";
 import { CalendarEndpointError, calendarStartOfDay } from "./calendar-date";
 import {
-  defaultAwaitingMessage,
   parseQueryBindingText,
   queryInputValueType,
   queryBindingTypesFit,
+  type QueryBindingValueType,
+} from "../definition/application-composition/query-binding-values";
+import {
+  defaultAwaitingMessage,
   type QueryBinding,
   type QueryBindings,
-  type QueryBindingValueType,
   type RelativeDateAnchor,
-} from "../definition/schema";
+} from "../definition/application-composition/query-bindings";
 import type { JsonValue } from "../catalogue/common";
 import type { InstalledRuntimeContext } from "../definition/installed-runtime-context";
 import { recordIdSchema } from "../catalogue/identifiers";

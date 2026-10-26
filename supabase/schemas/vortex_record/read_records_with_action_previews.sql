@@ -226,7 +226,7 @@ alter function vortex_record.read_records_with_action_previews(uuid,jsonb) owner
 
 revoke all on function vortex_record.read_records_with_action_previews(uuid, jsonb)
   from public, anon, authenticated, service_role, vortex_request;
-grant execute on function vortex_record.read_records_with_action_previews(uuid, jsonb) to vortex_runtime;
+grant execute on function vortex_record.read_records_with_action_previews(uuid, jsonb) to vortex_request;
 
 comment on function vortex_record.read_records_with_action_previews(uuid, jsonb) is
   'Fixed record adapter for a grid page of records and the named actions bound to each: reads every target through the page read pass the list read uses (the first readable record decided exactly, the others together, any record the pass does not decide by the exact single-record path), and, only for a readable record, returns each action''s preview exactly as vortex_record.preview_named_action_set_announce returns it for the record''s current concurrency number and no inputs (previews, in the order given), under the caller''s current authority and writing nothing; a readable record is reported by its recordId and concurrencyNumber, an unreadable one as refused.';

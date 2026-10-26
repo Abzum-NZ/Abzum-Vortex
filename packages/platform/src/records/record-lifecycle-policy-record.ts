@@ -1,40 +1,40 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
+import type { IdentitySession, OrganizationSelectionCandidate } from "../access/identity-access";
 import {
-  describeFailure,
-  sameId,
   activityIdSchema,
   applicationRootIdSchema,
-  archiveDestinationReferenceSchema,
   connectionInstanceIdSchema,
-  maximumRecoveryWindowDays,
   organizationIdSchema,
-  organizationLifecycleLimitsSchema,
-  initialRecordLifecyclePolicySchema,
-  recordLifecycleActionSchema,
-  recordTypeLifecyclePolicySchema,
   revisionSchema,
   storageContractIdSchema,
   workflowIdSchema,
   type ApplicationRootId,
-  type IdentitySession,
   type OrganizationId,
   type StorageContractId,
+} from "../catalogue/identifiers";
+import { describeFailure, sameId } from "../catalogue/runtime-primitives";
+import {
+  archiveDestinationReferenceSchema,
+  maximumRecoveryWindowDays,
+  organizationLifecycleLimitsSchema,
+  initialRecordLifecyclePolicySchema,
+  recordLifecycleActionSchema,
+  recordTypeLifecyclePolicySchema,
   type OrganizationLifecycleLimits,
-  type OrganizationSelectionCandidate,
   type RecordTypeLifecyclePolicy,
-} from "../schema";
+} from "./record-lifecycle-policy";
 import {
   createHumanOrganizationRequestService,
   type HumanOrganizationRequestDependencies,
   type HumanOrganizationRequestResult,
-} from "../access/index";
+} from "../access/human-organization-request";
 import {
   withRuntimeTransaction,
   type DatabaseRow,
   type RequestDatabaseTransaction,
-} from "../db/index";
+} from "../db/request-transaction";
 
 /**
  * Common age/count fields shared by every record-type lifecycle policy
@@ -405,12 +405,6 @@ export const createRecordTypeLifecyclePolicyService = (
             };
 
       return requests.runChange(session, selection, async (transaction, scope) => {
-        // Every vortex_record write entry (apply_lifecycle_record_changes for
-        // delete, restore and ownership transfer, save-record, named-action
-        // storage) is granted execute only to vortex_runtime; the request-role
-        // transaction re-elevates to it immediately before the call, the same
-        // as those existing callers.
-        await transaction.query`set local role vortex_runtime`;
         const rows = await transaction.query<PolicyRow>`
           select vortex_record.save_record_type_lifecycle_policy_for_administration(
             ${command.storageContractId}::uuid,

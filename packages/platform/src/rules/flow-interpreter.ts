@@ -1,26 +1,31 @@
+import { describeFailure } from "../catalogue/runtime-primitives";
 import { typedValueMatchesType } from "./condition-types";
+import type { JsonValue } from "../catalogue/common";
+import { PLATFORM_SERVICE_OPERATIONS } from "../catalogue/platform-service-operation-catalogue";
+import { recordLinkValueSchema } from "../records/module-field-values";
+import { platformOperationKey } from "../workflows/default-flow-sources";
 import {
-  PLATFORM_SERVICE_OPERATIONS,
   flowMaximumForEachItemsOther,
   flowMaximumProtectedOperations,
   flowMaximumRunFlowDepth,
-  flowMaximumTaskOutputPathDepth,
   flowReadFieldsProjectionSchema,
   flowReadFieldsTypeMapSchema,
   flowTaskChildLists,
-  flowTaskRegistry,
-  platformOperationKey,
-  recordLinkValueSchema,
-  refusalKeepsPlatformGuidance,
   type FlowDefinition,
   type FlowExecutionKind,
-  type FormContinuationAnswer,
-  type FlowRefusalFeedback,
-  type FlowReference,
   type FlowTask,
+} from "../workflows/flow-contracts";
+import {
+  refusalKeepsPlatformGuidance,
+  type FlowRefusalFeedback,
+} from "../workflows/flow-refusal-feedback";
+import { flowTaskRegistry } from "../workflows/flow-task-registry";
+import {
+  flowMaximumTaskOutputPathDepth,
+  type FlowReference,
   type FlowValue,
-  type JsonValue,
-} from "../schema";
+} from "../workflows/flow-values";
+import type { FormContinuationAnswer } from "../workflows/form-continuation-contracts";
 import {
   evaluateFlowFormula,
   flowRuntimeValuesEqual,
@@ -965,7 +970,10 @@ const observe = (
 ): void => {
   try {
     observer?.(observation);
-  } catch {
+  } catch (error) {
+    console.error(
+      `[flows] trace observer failed FLOW_TRACE_OBSERVER_FAILED: ${describeFailure(error)}`,
+    );
     // Diagnostics must never change a flow result.
   }
 };

@@ -1,16 +1,15 @@
 import "server-only";
 
+import type { AffectedRoleAssignment, RolePermissionEntry } from "./organization-access-catalogue";
 import {
   organizationRoleChangePreparationSchema,
   preparedOrganizationRoleChangeSchema,
-  type AffectedRoleAssignment,
   type OrganizationRoleChangeCandidate,
   type OrganizationRoleChangePreparation,
   type OrganizationRolePolicyChoice,
   type PreparedOrganizationRoleChange,
-  type RolePermissionEntry,
-} from "../schema";
-import { canonicalJson } from "../definition/definition-index";
+} from "./organization-role-changes";
+import { canonicalJson } from "../definition/canonical-json";
 
 export const organizationRoleChangeEvidenceErrorCodes = [
   "INVALID_ORGANIZATION_ROLE_CHANGE_PREPARATION",

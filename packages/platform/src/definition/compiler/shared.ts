@@ -1,4 +1,4 @@
-import type { DefinitionValidationLocation } from "../../schema";
+import type { DefinitionValidationLocation } from "../../catalogue/validation-errors";
 import {
   DefinitionCompilationError,
   type DefinitionCompilerRefusalCode,

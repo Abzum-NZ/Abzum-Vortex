@@ -5,7 +5,7 @@ import { createImmutableDefinitionPublicationCatalogue } from "./publication/rea
 import type { BuilderAuthority } from "./builder-authority";
 import { createDefinitionHistoryService } from "./definition-history";
 import { createDatabaseDefinitionHistoryRepository } from "./definition-history-repository";
-import type { RequestDatabaseTransaction } from "../db/index";
+import type { RequestDatabaseTransaction } from "../db/request-transaction";
 
 /** Builds the production history and restore service from the private database and immutable catalogue. */
 export const createDatabaseDefinitionHistoryService = (

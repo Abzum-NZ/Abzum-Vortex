@@ -1,4 +1,4 @@
-import type { DefinitionRuleFailure } from "../../schema";
+import type { DefinitionRuleFailure } from "../../catalogue/validation-errors";
 import {
   type PreparedValidationContext,
   editSaveSources,

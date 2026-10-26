@@ -1,7 +1,7 @@
 import {
   savedConditionRevisionAssignmentSchema,
   type SavedConditionRevisionAssignment,
-} from "../schema";
+} from "./definition-compilation-contracts";
 import { canonicalJson, compareCanonicalStrings } from "./canonical-json-definition";
 import { refuseVersionImpact } from "./version-impact-error";
 

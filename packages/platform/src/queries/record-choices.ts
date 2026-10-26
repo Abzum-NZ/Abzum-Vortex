@@ -1,18 +1,17 @@
 import "server-only";
 
 import { z } from "zod";
-import type { HumanOrganizationRequestResult } from "../access/index";
+import type { HumanOrganizationRequestResult } from "../access/human-organization-request";
+import type { IdentitySession, OrganizationSelectionCandidate } from "../access/identity-access";
+import type { JsonValue } from "../catalogue/common";
 import {
   fieldIdSchema,
   moduleRootIdSchema,
   queryIdSchema,
   recordIdSchema,
   recordTypeIdSchema,
-  sameId,
-  type IdentitySession,
-  type JsonValue,
-  type OrganizationSelectionCandidate,
-} from "../schema";
+} from "../catalogue/identifiers";
+import { sameId } from "../catalogue/runtime-primitives";
 import type {
   ProtectedQueryCommand,
   ProtectedQueryRefusalReasonCode,

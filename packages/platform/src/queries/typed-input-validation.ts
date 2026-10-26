@@ -1,17 +1,19 @@
 import "server-only";
 
 import { z } from "zod";
+import type { JsonValue } from "../catalogue/common";
+import { isUuidText } from "../catalogue/runtime-primitives";
 import {
   actionInputDefinitionSchema,
+  type ActionInputDefinition,
+} from "../definition/module-contracts";
+import { compileTextInputPattern } from "../pages/text-input-pattern";
+import {
   compareExactDecimals,
-  isUuidText,
-  compileTextInputPattern,
   normalizeExactDecimal,
   parseExactDecimal,
-  recordRichTextDocumentSchema,
-  type ActionInputDefinition,
-  type JsonValue,
-} from "../schema";
+} from "../records/exact-decimal";
+import { recordRichTextDocumentSchema } from "../records/module-field-values";
 
 export class QueryInputRefusalError extends Error {
   constructor() {

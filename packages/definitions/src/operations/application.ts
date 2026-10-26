@@ -10,12 +10,7 @@ import {
   type SourceItemVortex,
 } from "@vortex/platform/schema";
 import { operationsModules } from "./module";
-import {
-  operationsRunbooks,
-  runbookPageKey,
-  runbookPageText,
-  runbookTechnicalDetails,
-} from "./runbooks";
+import { operationsRunbooks, runbookPageKey, runbookPageText } from "./runbooks";
 
 type JsonObject = Record<string, unknown>;
 
@@ -29,7 +24,6 @@ const {
   RECORD_DETAIL_BLOCK_RELEASE,
   RICH_TEXT_INPUT_BLOCK_RELEASE,
   TABLE_BLOCK_RELEASE,
-  TABS_BLOCK_RELEASE,
   TEXT_BLOCK_RELEASE,
   TEXT_INPUT_BLOCK_RELEASE,
 } = PLATFORM_BLOCK_RELEASE_IDENTITIES;
@@ -240,27 +234,7 @@ const runbookPages = operationsRunbooks.map((runbook) => {
     type: "dashboard",
     permission: "application.operations.open",
     blocks: slot({
-      [`${pageKey}_tabs`]: placement(
-        TABS_BLOCK_RELEASE,
-        {
-          title: runbook.title,
-          items: [
-            { key: "runbook", label: "Runbook" },
-            { key: "technical_details", label: "Technical details" },
-          ],
-        },
-        {
-          tab_runbook: slot({
-            [`${pageKey}_text`]: textBlock(runbook.title, runbookPageText(runbook)),
-          }),
-          tab_technical_details: slot({
-            [`${pageKey}_technical`]: textBlock(
-              "Technical details",
-              runbookTechnicalDetails(runbook),
-            ),
-          }),
-        },
-      ),
+      [`${pageKey}_text`]: textBlock(runbook.title, runbookPageText(runbook)),
     }),
   };
 });
@@ -418,7 +392,6 @@ const applicationShell = {
                 gap: "medium",
                 menu_width: 16,
                 menu_placement: "sticky",
-                content_landmark: true,
                 tablet_menu_width: 14,
                 phone_direction: "column",
                 phone_menu_placement: "flow",

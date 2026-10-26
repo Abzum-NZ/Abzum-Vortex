@@ -117,6 +117,26 @@
         }
       },
       {
+        "id": "perm_app_iam_group_choose",
+        "key": "application.iam.directory.group.choose",
+        "label": "Choose a group",
+        "description": "See the names of the organisation's active groups when choosing a group for an access request.",
+        "record_type": "vortex.system_directory:group",
+        "action_kind": "read",
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": ["label"],
+          "changeable_fields": []
+        }
+      },
+      {
         "id": "perm_app_iam_group_membership_read",
         "key": "application.iam.directory.group_membership.read",
         "label": "Read IAM group memberships",
@@ -295,7 +315,8 @@
           "vortex.iam.core.access_request.update_own",
           "vortex.iam.core.access_request.soft_delete_own",
           "vortex.iam.core.access_request_item.create_own",
-          "vortex.iam.core.access_request_item.read_own"
+          "vortex.iam.core.access_request_item.read_own",
+          "application.iam.directory.group.choose"
         ]
       },
       {
@@ -655,7 +676,6 @@
                       "gap": "medium",
                       "menu_width": 16,
                       "menu_placement": "sticky",
-                      "content_landmark": true,
                       "tablet_menu_width": 14,
                       "phone_direction": "column",
                       "phone_menu_placement": "flow",
@@ -816,7 +836,7 @@
                   "type": "platform.renderer.text",
                   "props": {
                     "id": "iam_profile_heading_description",
-                    "text": "Change your own display name, language and time zone. Changing another person's profile needs account management access.",
+                    "text": "Change your own display name, language and time zone. Changing someone else's profile needs the Manage accounts permission.",
                     "vortex": {
                       "block": {
                         "block_id": "addfad00-1b11-4674-83fa-913667f87e79",
@@ -989,7 +1009,7 @@
                   "type": "platform.renderer.text",
                   "props": {
                     "id": "iam_overview_heading_description",
-                    "text": "People, roles, Groups and assignments in this organisation. Requests for access are decided through approval workflows.",
+                    "text": "Ask for the access you need here; your request goes to the people who approve it. People, Roles and Groups and Assignments show who has access now.",
                     "vortex": {
                       "block": {
                         "block_id": "addfad00-1b11-4674-83fa-913667f87e79",
@@ -1280,7 +1300,7 @@
                   "type": "platform.renderer.text",
                   "props": {
                     "id": "iam_roles_groups_heading_description",
-                    "text": "Roles and Groups available in this organisation.",
+                    "text": "The roles this organisation grants and the groups that hold them.",
                     "vortex": {
                       "block": {
                         "block_id": "addfad00-1b11-4674-83fa-913667f87e79",
@@ -2234,7 +2254,7 @@
                   "type": "platform.renderer.text",
                   "props": {
                     "id": "iam_assignments_heading_description",
-                    "text": "Who holds which role, and for how long.",
+                    "text": "Who holds each role, and through which group.",
                     "vortex": {
                       "block": {
                         "block_id": "addfad00-1b11-4674-83fa-913667f87e79",
@@ -2514,7 +2534,7 @@
                   "type": "platform.renderer.text",
                   "props": {
                     "id": "iam_manage_roles_groups_heading_description",
-                    "text": "Create an empty Group or a custom role. Install or upgrade applications in App Store to accept their roles. To revise a role, rename a Group, change who is in a Group or end a role, Group or membership, use the row actions on Roles and Groups. A change is refused if you lack the authority or if it exceeds your delegated scope.",
+                    "text": "Create a Group or a custom role. Applications bring their own roles when they are installed from the App Store. Change, rename or end a role or Group, and change who is in a Group, from its row on Roles and Groups.",
                     "vortex": {
                       "block": {
                         "block_id": "addfad00-1b11-4674-83fa-913667f87e79",
@@ -4630,6 +4650,13 @@
                                           "type": "text",
                                           "value": "The selected person was made an organisation steward."
                                         }
+                                      },
+                                      "title": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "Make organisation steward"
+                                        }
                                       }
                                     }
                                   }
@@ -4653,6 +4680,13 @@
                                           "type": "text",
                                           "value": "The selected person is already an organisation steward."
                                         }
+                                      },
+                                      "title": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "Make organisation steward"
+                                        }
                                       }
                                     }
                                   }
@@ -4670,6 +4704,13 @@
                                     "literal": {
                                       "type": "text",
                                       "value": "The appointment result could not be confirmed. Refresh People before taking further action."
+                                    }
+                                  },
+                                  "title": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "Make organisation steward"
                                     }
                                   }
                                 }
@@ -4696,6 +4737,13 @@
                                   "type": "text",
                                   "value": "The steward appointment was refused. No access was granted."
                                 }
+                              },
+                              "title": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "Make organisation steward"
+                                }
                               }
                             }
                           }
@@ -4718,6 +4766,13 @@
                                 "literal": {
                                   "type": "text",
                                   "value": "The person changed since this row was loaded. Refresh People before trying again."
+                                }
+                              },
+                              "title": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "Make organisation steward"
                                 }
                               }
                             }
@@ -4742,6 +4797,13 @@
                                   "type": "text",
                                   "value": "The steward appointment could not be applied because its input was invalid. Refresh People and try again."
                                 }
+                              },
+                              "title": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "Make organisation steward"
+                                }
                               }
                             }
                           }
@@ -4759,6 +4821,13 @@
                             "literal": {
                               "type": "text",
                               "value": "The appointment did not return a confirmed result. Refresh People before trying again."
+                            }
+                          },
+                          "title": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "Make organisation steward"
                             }
                           }
                         }
@@ -5140,6 +5209,13 @@
                 "literal": {
                   "type": "text",
                   "value": "success"
+                }
+              },
+              "title": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "Add member"
                 }
               }
             }
@@ -5523,6 +5599,13 @@
                           "type": "text",
                           "value": "success"
                         }
+                      },
+                      "title": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "Assign role"
+                        }
                       }
                     }
                   }
@@ -5819,6 +5902,13 @@
                         "literal": {
                           "type": "text",
                           "value": "success"
+                        }
+                      },
+                      "title": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "Assign role"
                         }
                       }
                     }
@@ -6447,6 +6537,13 @@
                                   "type": "text",
                                   "value": "App-installation authority granted. Manage applications permission is assigned separately through Roles."
                                 }
+                              },
+                              "title": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "Grant app installation"
+                                }
                               }
                             }
                           }
@@ -6469,6 +6566,13 @@
                                 "literal": {
                                   "type": "text",
                                   "value": "The grant was refused. You need assignment management permission and current organisation-catalogue delegation, and you cannot grant it to yourself."
+                                }
+                              },
+                              "title": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "Grant app installation"
                                 }
                               }
                             }
@@ -6493,6 +6597,13 @@
                                   "type": "text",
                                   "value": "The selected holder changed or already has catalogue delegation. Refresh before trying again."
                                 }
+                              },
+                              "title": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "Grant app installation"
+                                }
                               }
                             }
                           }
@@ -6516,6 +6627,13 @@
                                   "type": "text",
                                   "value": "The grant input was invalid. Refresh before trying again."
                                 }
+                              },
+                              "title": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "Grant app installation"
+                                }
                               }
                             }
                           }
@@ -6533,6 +6651,13 @@
                             "literal": {
                               "type": "text",
                               "value": "The grant could not be confirmed. Refresh Assignments before trying again."
+                            }
+                          },
+                          "title": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "Grant app installation"
                             }
                           }
                         }
@@ -6687,6 +6812,13 @@
                                   "type": "text",
                                   "value": "App-installation authority granted. Manage applications permission is assigned separately through Roles."
                                 }
+                              },
+                              "title": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "Grant app installation"
+                                }
                               }
                             }
                           }
@@ -6709,6 +6841,13 @@
                                 "literal": {
                                   "type": "text",
                                   "value": "The grant was refused. You need assignment management permission and current organisation-catalogue delegation."
+                                }
+                              },
+                              "title": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "Grant app installation"
                                 }
                               }
                             }
@@ -6733,6 +6872,13 @@
                                   "type": "text",
                                   "value": "The selected holder changed or already has catalogue delegation. Refresh before trying again."
                                 }
+                              },
+                              "title": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "Grant app installation"
+                                }
                               }
                             }
                           }
@@ -6756,6 +6902,13 @@
                                   "type": "text",
                                   "value": "The grant input was invalid. Refresh before trying again."
                                 }
+                              },
+                              "title": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "Grant app installation"
+                                }
                               }
                             }
                           }
@@ -6773,6 +6926,13 @@
                             "literal": {
                               "type": "text",
                               "value": "The grant could not be confirmed. Refresh Assignments before trying again."
+                            }
+                          },
+                          "title": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "Grant app installation"
                             }
                           }
                         }

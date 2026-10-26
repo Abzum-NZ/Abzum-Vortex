@@ -1,17 +1,17 @@
 import "server-only";
 
+import { recordIdSchema } from "../catalogue/identifiers";
+import { sameId } from "../catalogue/runtime-primitives";
 import {
   recordsTableContractOrLog,
-  recordIdSchema,
-  sameId,
-  type PageDefinition,
   type RecordsTableContract,
-} from "../schema";
+} from "../definition/application-composition/records-display";
+import type { PageDefinition } from "../definition/application-contracts";
 import {
   placementSettings,
   TABLE_BLOCK_RELEASE,
-  type InstalledRuntimeContext,
-} from "../definition/index";
+} from "../definition/application-composition-catalogue";
+import type { InstalledRuntimeContext } from "../definition/installed-runtime-context";
 import { isRecord } from "../catalogue/runtime-primitives";
 import {
   requireProjectedPlacement,

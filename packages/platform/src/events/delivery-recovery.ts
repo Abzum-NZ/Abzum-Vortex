@@ -1,12 +1,8 @@
 import "server-only";
 
-import {
-  actorIdSchema,
-  eventOccurrenceIdSchema,
-  isNonNilUuidText,
-  timestampSchema,
-} from "../schema";
-import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
+import { actorIdSchema, eventOccurrenceIdSchema, timestampSchema } from "../catalogue/identifiers";
+import { databaseCode, isNonNilUuidText } from "../catalogue/runtime-primitives";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
 
 export const eventDeliveryRecoveryLimits = Object.freeze({
   maximumConsumerKeyLength: 128,
@@ -355,11 +351,6 @@ const parseTerminallyFailedList = (
     }),
   );
 };
-
-const databaseCode = (error: unknown): string | undefined =>
-  typeof error === "object" && error !== null && "code" in error
-    ? String((error as { readonly code?: unknown }).code)
-    : undefined;
 
 const mapFailure = (error: unknown): EventDeliveryRecoveryError => {
   if (error instanceof EventDeliveryRecoveryError) return error;

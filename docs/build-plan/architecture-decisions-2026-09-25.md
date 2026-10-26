@@ -7,7 +7,6 @@
 **Goal:** Vortex is an application builder in which everything a customer uses is a definition that generic engines render or execute. This includes Vortex's own administration, identity and access applications. A person with the right permissions, or an agent acting for them through the API or MCP, can create, change, install and uninstall a complete application without code changes or redeployment.
 
 **Evidence:**
-- the [architecture review of 21 September](architecture-review-2026-09-21.md);
 - the five-part modularisation review of 24–25 September against main `05a2bdf`;
 - implementation issues #976–#1104 and the package issues created with this document.
 

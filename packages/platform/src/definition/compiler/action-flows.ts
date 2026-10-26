@@ -1,15 +1,15 @@
+import type { JsonValue } from "../../catalogue/common";
 import {
   PLATFORM_SERVICE_OPERATIONS,
-  flowContractVersion,
   type PlatformServiceOperationKey,
+} from "../../catalogue/platform-service-operation-catalogue";
+import {
+  flowContractVersion,
   type FlowDefinition,
-  type FlowFormula,
-  type FlowReference,
   type FlowInputDeclaration,
   type FlowTask,
-  type FlowValue,
-  type JsonValue,
-} from "../../schema";
+} from "../../workflows/flow-contracts";
+import type { FlowFormula, FlowReference, FlowValue } from "../../workflows/flow-values";
 import { asObject, fail, type JsonObject } from "./shared";
 
 /**

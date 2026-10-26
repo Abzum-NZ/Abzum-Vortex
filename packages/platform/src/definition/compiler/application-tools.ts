@@ -1,19 +1,20 @@
+import { descriptionSchema } from "../../catalogue/common";
+import { ruleIdSchema } from "../../catalogue/identifiers";
+import type { BlockPropertyValueContract } from "../application-composition/block-property-values";
 import {
-  applicationToolBundleSchema,
   compiledItemSettings,
   compiledPageItems,
-  descriptionSchema,
-  ruleIdSchema,
-  type ApplicationDraft,
+} from "../application-composition/page-composition";
+import type { PlatformBlockRelease } from "../application-composition/platform-block-release";
+import type { ApplicationDraft, NavigationItem } from "../application-contracts";
+import {
+  applicationToolBundleSchema,
   type ApplicationToolBundleInput,
   type ApplicationToolOperationReference,
   type ApplicationToolBundle,
-  type NavigationItem,
   type ModuleCompilationOutput,
   type DefinitionCompilationOutput,
-  type BlockPropertyValueContract,
-  type PlatformBlockRelease,
-} from "../../schema";
+} from "../definition-compilation-contracts";
 import { compareCanonicalStrings } from "../canonical-json-definition";
 import { deriveFormCommitActionKeys } from "../form-commit";
 import { standardRecordActions } from "./module";

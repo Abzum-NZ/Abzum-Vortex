@@ -1,22 +1,12 @@
 import "server-only";
 
 import { createHmac, timingSafeEqual } from "node:crypto";
-import {
-  sameId,
-  applicationRootIdSchema,
-  canonicalJson,
-  correlationIdSchema,
-  identityIdSchema,
-  organizationAccountIdSchema,
-  organizationIdSchema,
-  protectedOperationRequestSchema,
-  revisionSchema,
-  stableDefinitionReleaseVersionSchema,
-  workflowIdSchema,
-  workflowNodeIdSchema,
-  workflowRunIdSchema,
-  type ProtectedOperationRequest,
-} from "../schema";
+import { correlationIdSchema } from "../catalogue/common";
+import { applicationRootIdSchema, identityIdSchema, organizationAccountIdSchema, organizationIdSchema, revisionSchema, workflowIdSchema, workflowNodeIdSchema, workflowRunIdSchema } from "../catalogue/identifiers";
+import { sameId } from "../catalogue/runtime-primitives";
+import { canonicalJson } from "../definition/canonical-json";
+import { stableDefinitionReleaseVersionSchema } from "../definition/version-impact";
+import { protectedOperationRequestSchema, type ProtectedOperationRequest } from "../rules/automation-contracts";
 import { z } from "zod";
 import { kestraProtectedOperationContractVersion } from "./kestra-compiler";
 

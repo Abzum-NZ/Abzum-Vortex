@@ -1,31 +1,31 @@
 import "server-only";
 
 import { createPrivateKey, sign, type KeyObject } from "node:crypto";
+import { correlationIdSchema } from "../catalogue/common";
+import {
+  fileIdSchema,
+  timestampSchema,
+  type FileId,
+  type OrganizationId,
+} from "../catalogue/identifiers";
 import {
   MAXIMUM_FILE_STORAGE_OPERATION_SECONDS,
   PRIVATE_FILE_BUCKET,
-  correlationIdSchema,
   downloadGrantSchema,
-  fileIdSchema,
   fileRecordSchema,
-  timestampSchema,
   uploadGrantSchema,
   verifiedFileActorSchema,
   type DownloadGrant,
-  type FileId,
   type FileRecord,
   type FileStorageOperation,
-  type OrganizationId,
   type UploadGrant,
   type VerifiedFileActor,
-} from "../schema";
-import { createSignedStorageOperationClaims, validateStorageKey } from "./storage-policy";
-import { resolveFileStorageDestination, type FileStorageDestination } from "./storage-destination";
-import {
-  evaluateResolvedFileRemovalAuthority,
   type FileRemovalAuthoritySnapshot,
   type FileRemovalOwnerBinding,
-} from "./removal-eligibility";
+} from "./file-contracts";
+import { createSignedStorageOperationClaims, validateStorageKey } from "./storage-policy";
+import { resolveFileStorageDestination, type FileStorageDestination } from "./storage-destination";
+import { evaluateResolvedFileRemovalAuthority } from "./removal-eligibility";
 
 /**
  * The request presented to the trusted, server-injected authority resolver.

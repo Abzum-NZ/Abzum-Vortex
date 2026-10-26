@@ -773,9 +773,10 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
     runLocations: ["browser"],
     effect: "interface",
     properties: {
-      title: optional("message_text"),
       message: required("message_text"),
       tone: optional("builder_key"),
+      /** The dialog's heading: what the person was doing ("Install or upgrade"). */
+      title: required("message_text"),
     },
     kestra: "not_compiled",
   },

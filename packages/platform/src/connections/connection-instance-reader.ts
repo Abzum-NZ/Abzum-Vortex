@@ -2,15 +2,16 @@ import "server-only";
 
 import {
   connectionInstanceIdSchema,
-  connectionInstanceStatusSchema,
-  logRefusal,
   organizationIdSchema,
-  sameId,
   type ConnectionInstanceId,
-  type ConnectionInstanceStatus,
   type OrganizationId,
-} from "../schema";
-import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
+} from "../catalogue/identifiers";
+import { logRefusal, sameId } from "../catalogue/runtime-primitives";
+import {
+  connectionInstanceStatusSchema,
+  type ConnectionInstanceStatus,
+} from "./integration-contracts";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
 
 /**
  * The protected read side of connection administration.

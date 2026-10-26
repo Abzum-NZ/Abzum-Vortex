@@ -1,9 +1,7 @@
 import "server-only";
 
-import {
-  applicationThemeSchema,
-  type DefinitionRuleFailure,
-} from "../schema";
+import type { DefinitionRuleFailure } from "../catalogue/validation-errors";
+import { applicationThemeSchema } from "../definition/application-composition/theme";
 import { validatePublicPlatformAssets } from "./assets";
 import { validateThemeContrast } from "./contrast";
 import { createLocatedFailure } from "./errors";

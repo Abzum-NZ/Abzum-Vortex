@@ -7,6 +7,7 @@ export {
 } from "./board-source";
 export * from "./discovery-adapter";
 export * from "./semantic-selection";
+export * from "./semantic-outline";
 export * from "./application-draft-history";
 export * from "./selection-inspector";
 export type {

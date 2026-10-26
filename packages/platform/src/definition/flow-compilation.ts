@@ -1,20 +1,21 @@
+import type { JsonValue } from "../catalogue/common";
+import type { DefinitionValidationLocation } from "../catalogue/validation-errors";
 import {
-  compiledFlowSetSchema,
   flowReadFieldsProjectionSchema,
   flowReadFieldsScalarTypeSchema,
   flowSchema,
-  flowTaskRegistry,
-  type CompiledFlowSet,
-  type DefinitionProvenanceEntry,
-  type DefinitionValidationLocation,
   type FlowDefinition,
   type FlowReadFieldsScalarType,
-  type FlowTaskTypeKey,
-  type FlowValue,
-  type JsonValue,
+} from "../workflows/flow-contracts";
+import {
+  compiledFlowSetSchema,
+  type CompiledFlowSet,
   type SourceFlow,
   type SourceFlowTask,
-} from "../schema";
+} from "../workflows/flow-source-contracts";
+import { flowTaskRegistry, type FlowTaskTypeKey } from "../workflows/flow-task-registry";
+import type { FlowValue } from "../workflows/flow-values";
+import type { DefinitionProvenanceEntry } from "./definition-provenance";
 import { canonicalJson, compareCanonicalStrings } from "./canonical-json-definition";
 import {
   DefinitionCompilationError,

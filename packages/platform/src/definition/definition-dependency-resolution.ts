@@ -1,27 +1,31 @@
 import "server-only";
 
+import type { ModuleRootId, Revision } from "../catalogue/identifiers";
+import type { FlowDefinition } from "../workflows/flow-contracts";
 import {
   applicationCompositionCatalogueSnapshotSchema,
-  assertModuleContractPair,
+  type ApplicationCompositionCatalogueSnapshot,
+} from "./application-composition/catalogue-snapshot";
+import { customComponentPlacementAllowed } from "./application-composition/custom-components";
+import {
   protectedOperationReferenceSchema,
-  customComponentPlacementAllowed,
+  type PlatformServiceOperationRelease,
+  type ProtectedOperationReference,
+} from "./application-flow-bindings";
+import {
   definitionCompilationOutputSchema,
   definitionResolutionSnapshotSchema,
-  stableDefinitionReleaseVersionSchema,
   moduleCompilationOutputSchema,
   type DefinitionCompilationOutput,
   type DefinitionResolutionSnapshot,
-  type ApplicationCompositionCatalogueSnapshot,
-  type ApplicationSourceDocument,
-  type ExactDefinitionDependency,
-  type StoredDefinitionDraft,
-  type VersionRequirement,
-  type FlowDefinition,
-  type ModuleRootId,
-  type PlatformServiceOperationRelease,
-  type ProtectedOperationReference,
-  type Revision,
-} from "../schema";
+} from "./definition-compilation-contracts";
+import { assertModuleContractPair, type ApplicationSourceDocument } from "./definition-source";
+import type {
+  ExactDefinitionDependency,
+  StoredDefinitionDraft,
+} from "./definition-store-contracts";
+import type { VersionRequirement } from "./definitions";
+import { stableDefinitionReleaseVersionSchema } from "./version-impact";
 import { compare, satisfies } from "semver";
 import { compareCanonicalStrings, fingerprintCanonicalValue } from "./canonical-json-definition";
 import { applicationModuleKeys } from "./application-module-sources";

@@ -7,7 +7,7 @@ enforced by the platform and the database.
 
 ## One way only
 
-Vortex is a fresh project with no backward compatibility. Every concern has exactly one format, one contract and one code path. Replace contracts and formats in place, convert shipped definitions in the same change, and rebuild existing data with a forward migration. Destructive reset/demo:setup is permitted only when the authoritative slot record explicitly identifies the data as ABANDONED by its responsible owner, or retained data has an explicit owner disposition AND verified recoverability (export plus tested restore), or the user approved abandonment. Owning or acquiring a lane alone does not authorize resetting retained data. Do not add converters, upgraders, dual readers, compatibility branches, legacy mirrors, or a second way of doing something that already has one. When you find two ways, remove one.
+Vortex is a fresh project with no backward compatibility. Every concern has exactly one format, one contract and one code path. Replace contracts and formats in place, convert shipped definitions in the same change, and rebuild existing data with a forward migration. Do not add converters, upgraders, dual readers, compatibility branches, legacy mirrors, or a second way of doing something that already has one. When you find two ways, remove one.
 
 ## Layout
 
@@ -38,22 +38,19 @@ Environment variables are described in `README.md` and `apps/web/.env.example`.
 
 ## Local database lanes
 
-The main Local Supabase stack (`supabase/config.toml`, ports 543xx) is the owner's demo and the
-lead's walks: workers never reset or stop it. Workers use lanes db3, db4, db5, db7 and db8, lighter
-stacks (no Studio, logs or edge runtime) under `VORTEX_LANES_ROOT` (default `A:/Apps/vortex-lanes`)
-with every port shifted by 1000 per lane (db3 API 56321, database 56322; db4 57321/57322;
-db5 58321/58322; db7 60321/60322; db8 61321/61322). Lane db2 is blocked on this Windows host by
-dynamic port exclusion 55262–55361. Lane db9 is unsupported by `tooling/supabase/lane.mjs`.
-Lanes db7 and db8 were adopted on 24 October 2026. The coordinator grants a lane by its exact
-number through `lane-take.sh <tag> <N>`; do not choose or take a different lane. Every grant names
-the exact lane and its data disposition. The worker holds its own `.claude/orchestrator/db<N>.lock`
-while using the lane, then releases it by removing that lock and telling the coordinator the data
-disposition: `ABANDON`, `EXPORTED+VERIFIED`, or `RETAIN`. Lane data survives lock and process
-release. Destructive reset/demo:setup is permitted only when the authoritative slot record explicitly identifies the data as ABANDONED by its responsible owner, or retained data has an explicit owner disposition AND verified recoverability (export plus tested restore), or the user approved abandonment. Owning or acquiring a lane alone does not authorize resetting retained data. The same applies to cleanup or regrant of a lane
-holding retained data. Silence and “reset unless KEEP” are not consent. When `main` moves, forward
-migrate and rebuild the lane rather than resetting it. `pnpm demo:setup` always resets its target
-database (see `apps/web/scripts/demo-setup/demo-setup.ts`), so it is a reset. To set up without a
-reset, run `pnpm --filter @vortex/web demo:owner` and then `pnpm setup:local -- --local-development
+Local development runs on lanes: lighter Local Supabase stacks (no Studio, logs or edge runtime)
+under `VORTEX_LANES_ROOT` (default `A:/Apps/vortex-lanes`), each with every port of
+`supabase/config.toml` shifted by 1000 per lane (db3 API 56321, database 56322; db4 57321/57322;
+db5 58321/58322; db7 60321/60322; db8 61321/61322). `tooling/supabase/lane.mjs` lists the lanes it
+supports; lane 2 is blocked on this Windows host by dynamic port exclusion 55262–55361. Use only
+the lane you were given.
+
+Lane data is retained by default. A destructive reset (`lane.mjs reset`, `pnpm db:reset` or
+`pnpm demo:setup`, which always resets its target database) is permitted only when the data's
+responsible owner has abandoned it, or it has been exported and a restore tested, or the user
+approved abandonment. Holding a lane does not authorize resetting its data. When `main` moves,
+forward migrate and rebuild the lane instead of resetting it. To set up without a reset, run
+`pnpm --filter @vortex/web demo:owner` and then `pnpm setup:local -- --local-development
 --first-owner-identity-id <uuid>` with the printed identity and without `--seed-demo`.
 
 ```
@@ -67,8 +64,9 @@ VORTEX_SUPABASE_WORKDIR=<lane directory> pnpm demo:setup  # destructive: resets,
 ```
 
 `env` prints `VORTEX_SUPABASE_URL`, `VORTEX_SUPABASE_PUBLISHABLE_KEY`,
-`VORTEX_RUNTIME_DATABASE_URL`, `VORTEX_DEV_SERVICE_ROLE_KEY`, `VORTEX_SUPABASE_WORKDIR` and `VORTEX_EVENT_DELIVERY_MODE=in_process`; put them
-in the worktree's ignored `apps/web/.env.development.local`, never in a tracked file or a log. With
+`VORTEX_RUNTIME_DATABASE_URL`, `VORTEX_DEV_SERVICE_ROLE_KEY`, `VORTEX_SUPABASE_WORKDIR` and
+`VORTEX_EVENT_DELIVERY_MODE=in_process`; put them in the worktree's ignored
+`apps/web/.env.development.local`, never in a tracked file or a log. With
 `VORTEX_SUPABASE_WORKDIR` set, the demo and development setup scripts pass `--workdir` to every
 Supabase CLI call. `status <n>` shows the lane's URLs and keys.
 
@@ -104,13 +102,25 @@ The [target architecture](docs/build-plan/target-architecture.md) is binding: re
 - Fail loudly on platform-produced data: never turn a parse failure or database error into a silent
   `null`/"unavailable"; log the cause.
 - No layers without two implementations; no source file over 1,500 lines (TypeScript and canonical `supabase/schemas/` files; migrations are exempt because they carry full function bodies, one per PR).
-- Every behaviour change is walked through in the running app on a local database before merge. A
-  fresh reset for that walk follows the lane rule: Destructive reset/demo:setup is permitted only when the authoritative slot record explicitly identifies the data as ABANDONED by its responsible owner, or retained data has an explicit owner disposition AND verified recoverability (export plus tested restore), or the user approved abandonment. Owning or acquiring a lane alone does not authorize resetting retained data.
-  Visible changes include screenshots in the pull request.
+- Every behaviour change is walked through in the running app on a local database lane before
+  merge; a reset for that walk follows the lane data rule above. Visible changes include
+  screenshots in the pull request.
 
 ## Guardrails
 
-`pnpm guard` has two tiers. Blocking rules protect business-name boundaries, package layering, migration parity, canonical coverage and owner roles, SQL identifier length, duplicate migration versions, new migration versions not above the highest on `origin/main`, function UUIDs, versioned names and offline definition validation; any blocking finding fails the run (there is no baseline). File size is a warning. Unused code is `pnpm knip`'s job, not the guard's.
+`pnpm guard` has two tiers; `tooling/guard/config.ts` is the list of rules, each with an owner and a
+review-by date. Any blocking finding fails the run (there is no baseline):
+
+- Boundaries: `business-name`, `layering`, `ui-literal-style`, `query-input-name-matching`.
+- Contracts: `versioned-export`, `versioned-file`, `contract-version-parity`, `derived-id-parity`,
+  `definition-validation`, `grid-feature-definition`.
+- Database: `migration-mismatch`, `migration-orphan`, `migration-owner-role`,
+  `migration-version-duplicate`, `migration-version-order`, `sql-identifier-length`,
+  `sql-overload`, `function-uuid`.
+- Directives: `invalid-guard-allow`.
+
+Warnings: `file-size`, `silent-catch`, `catalogue-release-superseded`, `unused-guard-allow`. Unused
+code is `pnpm knip`'s job, not the guard's.
 
 Use `// guard-allow: <rule> <reason>` on the offending line or the line directly above it. SQL supports `-- guard-allow: <rule> <reason>`, and block comments support `/* guard-allow: <rule> <reason> */`. The rule must be a real guard rule and the reason must contain at least 10 characters. Each directive covers one occurrence; the guard counts used exceptions per rule. An exception is appropriate only when the finding is intentional and a direct fix is not suitable; the reviewer must agree with the stated reason. Unmatched directives warn, while an unknown rule or short reason blocks the run.
 

@@ -1,21 +1,19 @@
 import "server-only";
 
 import { z } from "zod";
+import type { IdentitySession, OrganizationSelectionCandidate } from "../access/identity-access";
+import { jsonValueSchema, type JsonValue } from "../catalogue/common";
 import {
   applicationRootIdSchema,
   identityIdSchema,
-  jsonValueSchema,
   moduleRootIdSchema,
   organizationIdSchema,
   queryIdSchema,
   revisionSchema,
-  sameId,
-  type IdentitySession,
-  type JsonValue,
-  type OrganizationSelectionCandidate,
-  type RecordsTableQueryState,
-} from "../schema";
-import type { QueryContinuationKey } from "../queries/index";
+} from "../catalogue/identifiers";
+import { sameId } from "../catalogue/runtime-primitives";
+import type { RecordsTableQueryState } from "./records-table-state";
+import type { QueryContinuationKey } from "../queries/continuation-token";
 import { openToken, sealToken } from "../queries/sealed-token";
 
 /** Who reads a placement-bound sealed token, and the release, page and placement it addresses. */

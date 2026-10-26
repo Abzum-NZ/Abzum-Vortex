@@ -1,10 +1,9 @@
+import { walkPageComposition, walkPlacementData } from "../pages/placement-walk";
 import {
   flowTaskChildLists,
-  walkPageComposition,
-  walkPlacementData,
   type FlowDefinition,
   type FlowTask,
-} from "../schema";
+} from "../workflows/flow-contracts";
 
 /**
  * A form page declares no commit of its own: it commits what the flows bound to its controls'

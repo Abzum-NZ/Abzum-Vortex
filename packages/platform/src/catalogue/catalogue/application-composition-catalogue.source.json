@@ -126,6 +126,7 @@
       {
         "kind": "text",
         "key": "text",
+        "presentation": true,
         "label": "Text",
         "help": "Literal text shown when no projected value is supplied",
         "required": false,
@@ -2353,7 +2354,7 @@
         "key": "maximum_size_mb",
         "label": "Maximum size (MiB)",
         "required": true,
-        "minimum": 0.000001,
+        "minimum": 1e-6,
         "maximum": 5000,
         "integer": false
       },
@@ -2425,6 +2426,34 @@
         "required": false,
         "minLength": 1,
         "maxLength": 40
+      },
+      {
+        "kind": "text",
+        "key": "action_label",
+        "presentation": true,
+        "label": "Tile action",
+        "help": "The word on each tile's button",
+        "required": true,
+        "minLength": 1,
+        "maxLength": 30,
+        "defaultValue": {
+          "kind": "text",
+          "value": "Open"
+        }
+      },
+      {
+        "kind": "text",
+        "key": "empty_message",
+        "presentation": true,
+        "label": "Empty message",
+        "help": "Shown when there are no tiles",
+        "required": true,
+        "minLength": 1,
+        "maxLength": 200,
+        "defaultValue": {
+          "kind": "text",
+          "value": "No applications to show"
+        }
       },
       {
         "shared": "query_parameters"
@@ -3290,38 +3319,6 @@
                   "label": "Row menu"
                 }
               ]
-            },
-            {
-              "kind": "field_reference",
-              "key": "when_field",
-              "label": "Show only when column",
-              "help": "A choice column of the query; the command appears only on rows whose value for it matches",
-              "required": false
-            },
-            {
-              "kind": "text",
-              "key": "when_equals",
-              "label": "Column equals",
-              "help": "Choice key the column must hold for the command to appear",
-              "required": false,
-              "minLength": 1,
-              "maxLength": 60
-            },
-            {
-              "kind": "text",
-              "key": "when_not_equals",
-              "label": "Column differs from",
-              "help": "Choice key the column must not hold for the command to appear",
-              "required": false,
-              "minLength": 1,
-              "maxLength": 60
-            },
-            {
-              "kind": "boolean",
-              "key": "show_label",
-              "label": "Show text",
-              "help": "Draw the command as a button with its label instead of an icon",
-              "required": false
             }
           ]
         }
@@ -3755,13 +3752,6 @@
         ]
       },
       {
-        "kind": "boolean",
-        "key": "content_landmark",
-        "label": "Main content landmark",
-        "help": "Render the content region as the page main landmark",
-        "required": false
-      },
-      {
         "required": false,
         "defaultValue": {
           "kind": "choice",
@@ -4191,6 +4181,7 @@
       {
         "kind": "text",
         "key": "text",
+        "presentation": true,
         "label": "Text",
         "help": "Heading text shown to people",
         "required": true,
@@ -4205,17 +4196,13 @@
         "kind": "choice",
         "key": "level",
         "label": "Level",
-        "help": "Heading importance: one is the most important, four is the least",
+        "help": "Heading importance: two is the most important, four is the least; the page name is its one level-1 heading",
         "required": false,
         "defaultValue": {
           "kind": "choice",
           "value": "two"
         },
         "options": [
-          {
-            "key": "one",
-            "label": "1"
-          },
           {
             "key": "two",
             "label": "2"
@@ -4558,7 +4545,7 @@
         "key": "maximum_size_mb",
         "label": "Maximum size (MiB)",
         "required": true,
-        "minimum": 0.000001,
+        "minimum": 1e-6,
         "maximum": 5000,
         "integer": false
       },

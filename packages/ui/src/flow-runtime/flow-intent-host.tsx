@@ -70,16 +70,6 @@ export type FlowIntentHostOptions = Readonly<{
   setFilter?: FlowIntentHost["setFilter"];
 }>;
 
-/** A message dialog is named for its outcome, never "Message". */
-const messageTitle = (tone: string | undefined): string =>
-  tone === "success"
-    ? "Done"
-    : tone === "warning"
-      ? "Check this"
-      : tone === "error"
-        ? "Could not complete"
-        : "Notice";
-
 /** Flow surface width, the same 36rem the theme's medium dialog scale used. */
 const FLOW_SURFACE_CLASS = "max-h-[calc(100%-2rem)] overflow-y-auto sm:max-w-xl";
 
@@ -269,7 +259,7 @@ export function useFlowIntentHost(
     element = (
       <FlowDialog
         key={current.id}
-        title={message.title ?? messageTitle(message.tone)}
+        title={message.title}
         onDismiss={() => settle()}
         actions={
           <Button type="button" onClick={() => settle()}>

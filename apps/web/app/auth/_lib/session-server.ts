@@ -5,6 +5,7 @@ import {
   correlationIdSchema,
   identitySessionResolutionSchema,
   type IdentitySessionResolution,
+  type VerifiedIdentity,
 } from "@vortex/platform/schema";
 import {
   createDefaultIdentitySessionService,
@@ -158,8 +159,8 @@ type RequestIdentityResolution = Readonly<{
   resolution: IdentitySessionResolution;
   /** Present only when this exact token passed Identity resolution. Server request only. */
   accessToken?: string;
-  /** The verified primary email of the identity that passed resolution; present with `accessToken`. */
-  email?: string;
+  /** The identity that passed resolution; present with `accessToken`. Server request only. */
+  verified?: VerifiedIdentity;
 }>;
 
 const resolveRequestIdentity = async (
@@ -206,11 +207,10 @@ const resolveRequestIdentity = async (
   const staged = boundary.stage.snapshot();
   if (staged.refused || staged.mutations.length > 0) return { resolution: unavailable() };
   const accessToken = current.data.session.access_token;
-  const { resolution, verifiedPrimaryEmail } =
-    await sessionService(execution).resolveVerified(accessToken);
+  const { resolution, identity } = await sessionService(execution).resolveVerified(accessToken);
   execution?.checkpoint();
-  if (resolution.kind !== "active" || verifiedPrimaryEmail === undefined) return { resolution };
-  return { resolution, accessToken, email: verifiedPrimaryEmail };
+  if (resolution.kind !== "active" || identity === undefined) return { resolution };
+  return { resolution, accessToken, verified: identity };
 };
 
 /**
@@ -250,9 +250,18 @@ export const refreshIdentitySession = async (): Promise<IdentitySessionResolutio
 export const resolveIdentitySessionWithEmail = async (): Promise<
   Readonly<{ resolution: IdentitySessionResolution; email?: string }>
 > => {
-  const { resolution, email } = await resolveRenderIdentity();
-  return email === undefined ? { resolution } : { resolution, email };
+  const { resolution, verified } = await resolveRenderIdentity();
+  return verified === undefined
+    ? { resolution }
+    : { resolution, email: verified.verifiedPrimaryEmail };
 };
+
+/**
+ * The verified identity of this request's active session, for actions a person takes before they
+ * have an organisation (listing and accepting invitations). Never serialize or cache it.
+ */
+export const resolveVerifiedIdentity = async (): Promise<VerifiedIdentity | undefined> =>
+  (await resolveRenderIdentity()).verified;
 
 /**
  * Private delivery composition only. This shares every ordinary resolution guard

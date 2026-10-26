@@ -1,31 +1,33 @@
 import "server-only";
 
+import { correlationIdSchema } from "../catalogue/common";
 import {
-  databaseRevision,
-  logRefusal,
-  sameId,
   actorIdSchema,
   applicationRootIdSchema,
-  correlationIdSchema,
   identityAuthorityIdSchema,
   identityIdSchema,
   organizationAccountIdSchema,
   organizationIdSchema,
   revisionSchema,
-  sessionContextSchema,
   sessionIdSchema,
   tenantIdSchema,
   workflowIdSchema,
   workflowRunIdSchema,
   type IdentityAuthorityId,
-  type SessionContext,
-} from "../schema";
+} from "../catalogue/identifiers";
+import {
+  databaseCode,
+  databaseRevision,
+  logRefusal,
+  sameId,
+} from "../catalogue/runtime-primitives";
+import { sessionContextSchema, type SessionContext } from "./identity-access";
 import {
   withResolvedRequestTransaction,
   type DatabaseRow,
   type RequestDatabaseTransaction,
   type ResolvedRequestContext,
-} from "../db/index";
+} from "../db/request-transaction";
 import { z } from "zod";
 
 /**
@@ -153,11 +155,6 @@ type SystemScopeRow = DatabaseRow & {
   application_root_id: unknown;
   access_version: unknown;
 };
-
-const databaseCode = (error: unknown): string | undefined =>
-  typeof error === "object" && error !== null && "code" in error
-    ? String((error as { readonly code?: unknown }).code)
-    : undefined;
 
 class DurableActorRefusal extends Error {
   constructor() {
@@ -321,7 +318,12 @@ export const createDurableActorRequestService = (dependencies: DurableActorReque
         return { kind: "available", value };
       } catch (error) {
         const refused = error instanceof DurableActorRefusal || databaseCode(error) === "42501";
-        logRefusal("access", "durable actor request", refused ? "scope_unavailable" : "temporarily_unavailable", error);
+        logRefusal(
+          "access",
+          "durable actor request",
+          refused ? "scope_unavailable" : "temporarily_unavailable",
+          error,
+        );
         return refused ? { kind: "unavailable" } : { kind: "temporarily_unavailable" };
       }
     },

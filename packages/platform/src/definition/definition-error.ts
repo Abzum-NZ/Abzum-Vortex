@@ -71,6 +71,16 @@ const describeCause = (cause: unknown): string => {
   return databaseCode === undefined ? message : `database ${databaseCode}: ${message}`;
 };
 
+/** A definition rule refusing the draft (a validation answer) somewhere in this cause chain. */
+const isValidationRefusal = (cause: unknown): boolean => {
+  let current: unknown = cause;
+  for (let depth = 0; depth < 8 && current instanceof Error; depth += 1) {
+    if (current.name === "DefinitionCompilationError") return true;
+    current = current.cause;
+  }
+  return false;
+};
+
 /**
  * Builds a DefinitionError for an unexpected failure and logs the real cause (database code and
  * message, or Zod issues) on the server. Expected refusals are constructed directly instead.
@@ -81,7 +91,10 @@ export const unexpectedDefinitionFailure = <Code extends string>(
   context: string,
 ): DefinitionError<Code> => {
   const error = new DefinitionError(code, { cause });
-  console.error(`[definition] ${context} failed (${code}): ${describeCause(cause)}`, error);
+  // A rule refusing the draft is an answer the author sees, not a fault: one line, no stack.
+  if (isValidationRefusal(cause))
+    console.info(`[definition] ${context} refused (${code}): ${describeCause(cause)}`);
+  else console.error(`[definition] ${context} failed (${code}): ${describeCause(cause)}`, error);
   return error;
 };
 

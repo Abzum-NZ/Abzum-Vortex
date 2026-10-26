@@ -6,21 +6,23 @@ import { openToken, sealToken } from "./sealed-token";
 import {
   createHumanOrganizationRequestService,
   type HumanOrganizationRequestResult,
-} from "../access/index";
+} from "../access/human-organization-request";
+import type {
+  IdentitySession,
+  OrganizationSelectionCandidate,
+  SelectedOrganizationScope,
+} from "../access/identity-access";
+import type { JsonValue } from "../catalogue/common";
 import {
-  sameId,
   organizationAccountIdSchema,
   organizationIdSchema,
   type FieldId,
-  type IdentitySession,
-  type JsonValue,
-  type OrganizationSelectionCandidate,
-  type ReferenceChoiceSelectionEvidence,
   type RecordTypeId,
-  type RecordTypeReference,
-  type SelectedOrganizationScope,
-} from "../schema";
-import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
+} from "../catalogue/identifiers";
+import { sameId } from "../catalogue/runtime-primitives";
+import type { RecordTypeReference } from "../definition/definitions";
+import type { ReferenceChoiceSelectionEvidence } from "../workflows/form-continuation-contracts";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
 import type { QueryContinuationKey } from "./continuation-token";
 import type { ProtectedQueryRow } from "./protected-query-contracts";
 import {

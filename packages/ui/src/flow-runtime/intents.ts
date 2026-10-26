@@ -47,9 +47,9 @@ export const isSurfaceCancellation = (error: unknown): boolean =>
   error instanceof Error && error.name === "AbortError";
 
 export type FlowMessageIntent = Readonly<{
-  title: string | undefined;
   text: string;
   tone: string | undefined;
+  title: string;
 }>;
 /**
  * A confirmation: its question, what it covers line by line, and one optional opt-in that goes with
@@ -93,12 +93,13 @@ export const isFlowIntent = (candidate: unknown): candidate is FlowIntent => {
   );
 };
 
-/** Undefined when the intent lacks its required, bounded message text. */
+/** Undefined when the intent lacks its required, bounded message text or title. */
 export const readMessageIntent = (intent: FlowIntent): FlowMessageIntent | undefined => {
   const message = text(intent.properties.message);
-  return message === undefined
+  const title = text(intent.properties.title);
+  return message === undefined || title === undefined
     ? undefined
-    : { title: text(intent.properties.title), text: message, tone: text(intent.properties.tone) };
+    : { text: message, tone: text(intent.properties.tone), title };
 };
 
 /**

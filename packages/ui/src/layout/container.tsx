@@ -82,7 +82,6 @@ export function Container(props: ContainerProps): ReactElement {
   const gap = settings.explicitChoice<ContainerGap>("gap");
   const declared = new Set(props.metadata.properties.map((property) => property.key));
   const menuGeometryDeclared = declared.has("menu_width");
-  const contentLandmark = declared.has("content_landmark") && settings.boolean("content_landmark");
   const readWidth = (key: string): number | undefined =>
     declared.has(key) ? settings.number(key) : undefined;
   // Geometry a release does not declare does not exist. Every declared one is written explicitly
@@ -96,15 +95,19 @@ export function Container(props: ContainerProps): ReactElement {
     menuWidth: readWidth("menu_width"),
     menuPlacement: readExplicit<MenuPlacement>("menu_placement") ?? "flow",
   };
-  const tabletDirection = readExplicit<ContainerDirection | "inherit">("tablet_direction") ?? "inherit";
-  const tabletPlacement = readExplicit<MenuPlacement | "inherit">("tablet_menu_placement") ?? "inherit";
+  const tabletDirection =
+    readExplicit<ContainerDirection | "inherit">("tablet_direction") ?? "inherit";
+  const tabletPlacement =
+    readExplicit<MenuPlacement | "inherit">("tablet_menu_placement") ?? "inherit";
   const tablet: ContainerGeometry = {
     direction: tabletDirection === "inherit" ? desktop.direction : tabletDirection,
     menuWidth: readWidth("tablet_menu_width") ?? desktop.menuWidth,
     menuPlacement: tabletPlacement === "inherit" ? desktop.menuPlacement : tabletPlacement,
   };
-  const phoneDirection = readExplicit<ContainerDirection | "inherit">("phone_direction") ?? "inherit";
-  const phonePlacement = readExplicit<MenuPlacement | "inherit">("phone_menu_placement") ?? "inherit";
+  const phoneDirection =
+    readExplicit<ContainerDirection | "inherit">("phone_direction") ?? "inherit";
+  const phonePlacement =
+    readExplicit<MenuPlacement | "inherit">("phone_menu_placement") ?? "inherit";
   const phone: ContainerGeometry = {
     direction: phoneDirection === "inherit" ? tablet.direction : phoneDirection,
     menuWidth: readWidth("phone_menu_width") ?? tablet.menuWidth,
@@ -125,11 +128,11 @@ export function Container(props: ContainerProps): ReactElement {
   for (const region of CONTAINER_REGIONS) {
     const child = props.slots[region];
     if (child === undefined || child === null) continue;
-    const Region = region === "content" && contentLandmark ? "main" : "div";
+    // The application shell draws the page's one main landmark around the whole composition.
     regions.push(
-      <Region key={region} data-vortex-container-region={region} className={regionClassName(region)}>
+      <div key={region} data-vortex-container-region={region} className={regionClassName(region)}>
         {child}
-      </Region>,
+      </div>,
     );
   }
 

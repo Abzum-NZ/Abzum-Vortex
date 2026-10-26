@@ -2,18 +2,16 @@ import "server-only";
 
 import { z } from "zod";
 import { openToken, sealToken } from "./sealed-token";
+import type {
+  IdentitySession,
+  OrganizationSelectionCandidate,
+  SelectedOrganizationScope,
+} from "../access/identity-access";
+import { correlationIdSchema } from "../catalogue/common";
 import {
-  sameId,
-  activityActorKindSchema,
-  activityAggregateDimensionSchema,
-  activityHistoryFilterSchema,
   activityIdSchema,
-  activityOutcomeSchema,
-  activityProjectionSchema,
-  activitySourceSchema,
   actorIdSchema,
   builderKeySchema,
-  correlationIdSchema,
   fieldIdSchema,
   identityIdSchema,
   organizationAccountIdSchema,
@@ -22,16 +20,22 @@ import {
   timestampSchema,
   vortexSuperAdministratorAssignmentIdSchema,
   type IdentityId,
-  type IdentitySession,
-  type OrganizationSelectionCandidate,
-  type SelectedOrganizationScope,
-} from "../schema";
+} from "../catalogue/identifiers";
+import { sameId } from "../catalogue/runtime-primitives";
+import {
+  activityActorKindSchema,
+  activityAggregateDimensionSchema,
+  activityHistoryFilterSchema,
+  activityOutcomeSchema,
+  activityProjectionSchema,
+  activitySourceSchema,
+} from "./activity-contracts";
 import {
   createHumanOrganizationRequestService,
   type HumanOrganizationRequestDependencies,
   type HumanOrganizationRequestResult,
-} from "../access/index";
-import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
+} from "../access/human-organization-request";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
 import {
   fingerprintQueryInputs,
   QueryContinuationTokenError,

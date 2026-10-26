@@ -2,24 +2,26 @@ import "server-only";
 
 import { z } from "zod";
 import {
-  describeFailure,
-  applicationSourceDocumentSchema,
   applicationRootIdSchema,
-  canonicalJson,
   fingerprintSchema,
   pageIdSchema,
-  createDefinitionRootCommandSchema,
   organizationIdSchema,
   platformIdSchema,
   revisionSchema,
-  sameId,
-  saveDefinitionDraftCommandSchema,
+} from "../catalogue/identifiers";
+import { describeFailure, sameId } from "../catalogue/runtime-primitives";
+import { canonicalJson } from "../definition/canonical-json";
+import {
+  applicationSourceDocumentSchema,
   type ApplicationSourceDocument,
-  type IdentitySession,
-  type SelectedOrganizationScope,
+} from "../definition/definition-source";
+import {
+  createDefinitionRootCommandSchema,
+  saveDefinitionDraftCommandSchema,
   type StoredDefinitionDraft,
-} from "../schema";
-import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
+} from "../definition/definition-store-contracts";
+import type { IdentitySession, SelectedOrganizationScope } from "./identity-access";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
 import type { PlatformPermissionSource } from "./platform-permissions";
 import {
   assertBeforeLiveDeadline,
@@ -29,17 +31,20 @@ import {
   readDatabaseClock,
   readLiveHumanContext,
 } from "./live-context";
+import { BuilderAuthorityError, requireBuilderAuthority } from "../definition/builder-authority";
 import {
-  BuilderAuthorityError,
-  createDefinitionStore,
   readApplicationDefinitionDraft,
-  requireBuilderAuthority,
-  extractApplicationSourceIdentityRequirements,
   type StoredApplicationDefinitionDraft,
-} from "../definition/definition-index";
-import { createBuilderAuthority, type BuilderTargetFactsReader } from "./builder-authority";
+} from "../definition/definition-draft-read";
+import { createDefinitionStore } from "../definition/definition-store";
+import { extractApplicationSourceIdentityRequirements } from "../definition/source-identities";
+import {
+  createBuilderAuthority,
+  type BuilderTargetFactsReader,
+  readBuilderApplicationOrigin,
+} from "./builder-authority";
 import type { createHumanOrganizationRequestService } from "./human-organization-request";
-import { DefinitionError, classifyDatabaseError } from "../definition/definition-index";
+import { DefinitionError, classifyDatabaseError } from "../definition/definition-error";
 
 /** Why a draft write was refused, in terms the person can act on. */
 export type HumanApplicationDraftRefusalReason =
@@ -69,26 +74,12 @@ function invalidResult(): never {
   throw new DefinitionError("INVALID_DEFINITION_STORAGE_RESULT");
 }
 
-type ClassificationRow = DatabaseRow & { outcome: unknown; application_origin_kind: unknown };
-
 /** Unknown, missing, foreign and wrong-kind roots share one neutral conflict. */
 const targetFacts: BuilderTargetFactsReader = async (transaction, _scope, rootId) => {
   if (rootId === undefined) return { isSystemApplication: false };
-  const rows = await transaction.query<ClassificationRow>`
-    select outcome, application_origin_kind
-    from vortex_definition.read_builder_application_root_classification(${rootId}::uuid)
-  `;
-  const row = rows[0];
-  if (rows.length !== 1 || row === undefined) invalidResult();
-  if (row.outcome === "unavailable" && row.application_origin_kind === null)
-    throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING");
-  if (
-    row.outcome !== "available" ||
-    (row.application_origin_kind !== "ordinary" &&
-      row.application_origin_kind !== "platform_system_application")
-  )
-    invalidResult();
-  return { isSystemApplication: row.application_origin_kind === "platform_system_application" };
+  const origin = await readBuilderApplicationOrigin(transaction, rootId);
+  if (origin === undefined) throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING");
+  return { isSystemApplication: origin === "platform_system_application" };
 };
 
 const derivedDraftCommandSchema = z
@@ -384,7 +375,7 @@ export const createHumanApplicationDraftWriter = (
           let locked: readonly DatabaseRow[];
           try {
             locked = await transaction.query<DatabaseRow>`
-              select vortex_definition.lock_application_page_adoption_draft_internal(
+              select vortex_definition.lock_application_page_adoption_draft(
                 ${command.data.rootId}::uuid,
                 ${command.data.expectedDraftRevision},
                 ${command.data.expectedPublicationAnchor}

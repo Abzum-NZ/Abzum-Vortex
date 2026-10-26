@@ -2,35 +2,34 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 import {
-  sameId,
   identitySessionSchema,
-  logRefusal,
-  projectLiveApplicationRolePermissions,
   sessionContextSchema,
-  type ApplicationRootId,
   type IdentitySession,
-  type ModuleRootId,
-  type ModuleContribution,
-  type OrganizationId,
-  type PreparedApplicationRoleTemplates,
   type SelectedOrganizationScope,
   type SessionContext,
-  type SystemApplicationBoundReleaseSetResult,
-} from "../schema";
+} from "../access/identity-access";
+import {
+  projectLiveApplicationRolePermissions,
+  type PreparedApplicationRoleTemplates,
+} from "../access/organization-access-catalogue";
+import type { ApplicationRootId, ModuleRootId, OrganizationId } from "../catalogue/identifiers";
+import { sameId, logRefusal } from "../catalogue/runtime-primitives";
+import type { SystemApplicationBoundReleaseSetResult } from "./definition-consumer-read";
+import type { ModuleContribution } from "./module-contracts";
 import {
   createApplicationRoleTemplateAdapter,
   prepareApplicationRoleTemplatesForHumanRequest,
-  requireBuilderAuthority,
   verifyPreparedApplicationRoleTemplates,
+} from "../access/application-role-template-adapter";
+import {
+  requireBuilderAuthority,
   type BuilderAuthority,
   type BuilderConferredPermission,
   type BuilderOperation,
-} from "../access/index";
-import {
-  createApplicationInstallationLifecycleRepository,
-  createInstallationRuntimeBundleCleanupRepository,
-  type ResolvedContributionBinding,
-} from "./module-index";
+} from "./builder-authority";
+import { createApplicationInstallationLifecycleRepository } from "./installation-lifecycle";
+import { createInstallationRuntimeBundleCleanupRepository } from "./runtime-bundle-cleanup";
+import type { ResolvedContributionBinding } from "./storage-provisioning";
 import { canonicalJson } from "./canonical-json-definition";
 import {
   assertPreparedInstallationRuntimeBundleMatches,

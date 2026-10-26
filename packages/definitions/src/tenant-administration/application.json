@@ -265,7 +265,6 @@
                       "gap": "medium",
                       "menu_width": 16,
                       "menu_placement": "sticky",
-                      "content_landmark": true,
                       "tablet_menu_width": 14,
                       "phone_direction": "column",
                       "phone_menu_placement": "flow",
@@ -1937,6 +1936,13 @@
                           "value": "The organisation was moved."
                         }
                       },
+                      "title": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "Move organisation"
+                        }
+                      },
                       "tone": {
                         "kind": "literal",
                         "literal": {
@@ -1965,6 +1971,13 @@
                         "literal": {
                           "type": "text",
                           "value": "The organisation changed since this row was shown. Refresh the page and choose Move organisation again."
+                        }
+                      },
+                      "title": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "Move organisation"
                         }
                       },
                       "tone": {
@@ -1997,6 +2010,13 @@
                           "value": "The organisation could not be moved with your current access and the selected parent."
                         }
                       },
+                      "title": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "Move organisation"
+                        }
+                      },
                       "tone": {
                         "kind": "literal",
                         "literal": {
@@ -2025,6 +2045,13 @@
                         "literal": {
                           "type": "text",
                           "value": "The organisation move is invalid. Refresh the page and select a permitted parent organisation."
+                        }
+                      },
+                      "title": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "Move organisation"
                         }
                       },
                       "tone": {

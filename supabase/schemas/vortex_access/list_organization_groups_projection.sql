@@ -26,6 +26,9 @@ declare
   after_record_id uuid;
   scan_sql text;
   predicate_plan jsonb;
+  context_value jsonb;
+  visible_organization_id uuid;
+  names_only boolean := false;
 begin
   if p_sort_key not in ('record_id', 'key', 'label', 'state')
     or p_direction not in ('ascending', 'descending')
@@ -73,37 +76,62 @@ begin
       sort_column, case when p_direction = 'ascending' then 'asc' else 'desc' end,
       case when p_direction = 'ascending' then 'asc' else 'desc' end) end;
 
-  predicate_plan := vortex_record.compile_projection_predicate_internal(
-    p_predicate,
-    $declared${
-      "state": {"sql": "organization_group.state", "database": "text", "filter": true},
-      "key": {"sql": "organization_group.group_key", "database": "text", "search": true},
-      "label": {"sql": "organization_group.label", "database": "text", "filter": true, "search": true}
-    }$declared$::jsonb,
-    6
-  );
-
+  -- A viewer the groups administration scope admits sees every group of the organisation. Any
+  -- other viewer whose human request context is live sees only the names of the organisation's
+  -- active groups, the group chooser's choices: no key or state, and only the name to filter,
+  -- search or sort by. A viewer neither rule admits sees no rows.
   begin
     select authorized.* into strict scope_row
     from vortex_access.organization_groups_administration_scope() as authorized;
+    visible_organization_id := scope_row.organization_id;
   exception when insufficient_privilege then
-    return;
+    visible_organization_id := null;
   end;
+  if visible_organization_id is null then
+    begin
+      context_value := vortex_access.validated_human_request_context();
+    exception when insufficient_privilege then
+      return;
+    end;
+    visible_organization_id := (context_value ->> 'organizationId')::uuid;
+    names_only := true;
+    if p_sort_key in ('key', 'state') then
+      return;
+    end if;
+  end if;
+
+  predicate_plan := vortex_record.compile_projection_predicate_internal(
+    p_predicate,
+    case when names_only then
+      $names${
+        "label": {"sql": "organization_group.label", "database": "text", "filter": true, "search": true}
+      }$names$::jsonb
+    else
+      $declared${
+        "state": {"sql": "organization_group.state", "database": "text", "filter": true},
+        "key": {"sql": "organization_group.group_key", "database": "text", "search": true},
+        "label": {"sql": "organization_group.label", "database": "text", "filter": true, "search": true}
+      }$declared$::jsonb
+    end,
+    6
+  );
   scan_sql := $scan$
     select organization_group.organization_id,
       organization_group.group_id,
       organization_group.revision,
-      pg_catalog.jsonb_build_object(
+      case when $7 then pg_catalog.jsonb_build_object('label', organization_group.label)
+      else pg_catalog.jsonb_build_object(
         'key', organization_group.group_key,
         'label', organization_group.label,
         'state', organization_group.state
-      )
+      ) end
     from vortex_access.organization_groups as organization_group
     where organization_group.organization_id = $1
       and ($2 is null or organization_group.group_id = any($2))
+      and (not $7 or organization_group.state = 'active')
   $scan$ || coalesce(' and ' || (predicate_plan ->> 'predicate'), '') || keyset_sql || pg_catalog.format(' order by %s limit $5', order_sql);
-  return query execute scan_sql using scope_row.organization_id, p_record_ids,
-    after_value, after_record_id, p_limit, predicate_plan -> 'parameters';
+  return query execute scan_sql using visible_organization_id, p_record_ids,
+    after_value, after_record_id, p_limit, predicate_plan -> 'parameters', names_only;
 end
 $function$;
 

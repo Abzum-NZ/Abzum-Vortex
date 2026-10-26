@@ -5,16 +5,18 @@ import { formatDecimal, formatMoney } from "./value-format";
 import {
   requireInstalledRuntimeContext,
   type InstalledRuntimeContext,
-} from "../definition/app-index";
-import {
-  arrangeProtectedBoard,
-  type createProtectedQueryService,
-  type ProtectedBoardArrangementPage,
-  type ProtectedBoardArrangementCommand,
-  type ProtectedBoardArrangementResult,
-  type ProtectedQueryPageRow,
-  type ProtectedQuerySummaryAggregateResult,
-} from "../queries/index";
+} from "../definition/installed-runtime-context";
+import type {
+  ProtectedBoardArrangementPage,
+  ProtectedBoardArrangementCommand,
+  ProtectedBoardArrangementResult,
+} from "../queries/arrangement-contracts";
+import { arrangeProtectedBoard } from "../queries/arrangements";
+import type {
+  ProtectedQueryPageRow,
+  ProtectedQuerySummaryAggregateResult,
+} from "../queries/protected-query-contracts";
+import type { createProtectedQueryService } from "../queries/protected-query-service";
 import {
   collectRecordLinkValues,
   recordLinkPlainText,
@@ -26,28 +28,26 @@ import {
   evaluateConditionalFormatting,
   type ConditionalFormattingContext,
 } from "./records-table-features";
+import type { IdentitySession, OrganizationSelectionCandidate } from "../access/identity-access";
+import type { JsonValue } from "../catalogue/common";
+import { describeFailure, sameId } from "../catalogue/runtime-primitives";
+import type { ProjectedItem } from "../definition/application-composition/page-composition";
+import type { RecordsTableContract } from "../definition/application-composition/records-display";
+import type { RecordsTableBoardMode } from "../definition/application-composition/records-table-features";
 import {
-  boardColumnReadRequestSchema,
-  boardFilterProblem,
   boardProblem,
-  describeFailure,
-  exactDecimalTextSchema,
-  moneyValueSchema,
-  pipelineMovesFrom,
   recordsTableBoardFactsOf,
-  richTextDocumentSchema,
-  sameId,
-  type ProjectedItem,
-  type ConditionalFormatStyle,
-  type RecordsTableBoardMode,
-  type RecordsTableContract,
+} from "../definition/application-composition/records-table-features/board";
+import {
+  boardFilterProblem,
   type RecordsTableFilterField,
-  type RecordsTableFilterValue,
-  type IdentitySession,
-  type JsonValue,
-  type OrganizationSelectionCandidate,
-  type PipelineStageTone,
-} from "../schema";
+} from "../definition/application-composition/records-table-features/column-filters";
+import type { ConditionalFormatStyle } from "../definition/application-composition/records-table-features/conditional-formatting";
+import { boardColumnReadRequestSchema } from "../definition/application-contracts";
+import { pipelineMovesFrom, type PipelineStageTone } from "../definition/record-type-pipelines";
+import { exactDecimalTextSchema, moneyValueSchema } from "../records/module-field-values";
+import { richTextDocumentSchema } from "../records/rich-text";
+import type { RecordsTableFilterValue } from "./records-table-filters";
 
 type ModuleRelease = InstalledRuntimeContext["releaseSet"]["modules"][number];
 type ModuleRecordType = ModuleRelease["content"]["recordTypes"][number];

@@ -1,22 +1,45 @@
 import "server-only";
 
+import type { IdentitySession, OrganizationSelectionCandidate } from "../../access/identity-access";
+import { isRecord, sameId } from "../../catalogue/runtime-primitives";
 import {
-  isRecord,
   recordsTableContractOrLog,
-  sameId,
-  type IdentitySession,
-  type OrganizationSelectionCandidate,
   type RecordsTableContract,
-} from "../../schema";
-import type { createHumanOrganizationRequestService } from "../../access/index";
+} from "../../definition/application-composition/records-display";
+import type { createHumanOrganizationRequestService } from "../../access/human-organization-request";
 import {
   placementSettings,
   TABLE_BLOCK_RELEASE,
 } from "../../definition/application-composition-catalogue";
 import { createHumanInstalledPageBundleContextLoader } from "../../definition/installed-page-bundle-context";
-import type { InstalledRuntimeContext } from "../../definition/index";
+import type { InstalledRuntimeContext } from "../../definition/installed-runtime-context";
 import type { PlacementModule, PlacementQuery } from "../placement-read/shared";
-import { installedPlacementProps } from "./flow-dispatch";
+
+/** Locate the exact compiled placement; bindings of other block types keep their own gates. */
+export const installedPlacementProps = (
+  content: unknown,
+  placementId: string,
+): Record<string, unknown> | undefined => {
+  if (Array.isArray(content)) {
+    for (const entry of content) {
+      const found = installedPlacementProps(entry, placementId);
+      if (found !== undefined) return found;
+    }
+  } else if (isRecord(content)) {
+    if (
+      typeof content.type === "string" &&
+      isRecord(content.props) &&
+      typeof content.props.id === "string" &&
+      sameId(content.props.id, placementId)
+    )
+      return content.props;
+    for (const nested of Object.values(content)) {
+      const found = installedPlacementProps(nested, placementId);
+      if (found !== undefined) return found;
+    }
+  }
+  return undefined;
+};
 
 /**
  * The application the request's own address resolved, the installed context it read, and the page

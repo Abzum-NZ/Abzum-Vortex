@@ -1,4 +1,5 @@
 import "server-only";
+import { describeFailure } from "../catalogue/runtime-primitives";
 
 import { createClient, isAuthRetryableFetchError } from "@supabase/supabase-js";
 import {
@@ -7,7 +8,7 @@ import {
   verifiedIdentitySchema,
   type IdentityAuthority,
   type VerifiedIdentity,
-} from "../schema";
+} from "../access/identity-access";
 import {
   IdentityVerificationError,
   type IdentityVerificationRefusalCode,
@@ -150,7 +151,10 @@ const projectVerifiedIdentity = (
   let nowSeconds: number;
   try {
     nowSeconds = clock().getTime() / 1_000;
-  } catch {
+  } catch (error) {
+    console.error(
+      `[identity] token verification clock unavailable IDENTITY_CLOCK_FAILED: ${describeFailure(error)}`,
+    );
     return refuse("vortex.identity.token_verification_failed");
   }
   if (!Number.isFinite(nowSeconds)) return refuse("vortex.identity.token_verification_failed");

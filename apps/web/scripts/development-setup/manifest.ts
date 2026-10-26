@@ -44,6 +44,11 @@ export const developmentSetupManifestSchema = z
     operator: z.object({ clusterId: clusterIdSchema, systemActorId: actorIdSchema }).strict(),
     /** The system actor that authors and publishes the shipped definitions. */
     definitionActorId: actorIdSchema,
+    /**
+     * The platform-wide replay key of the first super-administrator bootstrap: the first owner
+     * becomes the local platform's super-administrator, who publishes the shipped privacy notice.
+     */
+    superAdministratorDuplicateKey: administrationDuplicateKeySchema,
     provisioning: z
       .object({
         duplicateKey: administrationDuplicateKeySchema,
@@ -112,6 +117,7 @@ export const developmentSetupManifestFor = (
       systemActorId: "6d1f0c52-3b7a-4c4e-8a51-0e1a7b0c9d02",
     },
     definitionActorId: "6d1f0c52-3b7a-4c4e-8a51-0e1a7b0c9d03",
+    superAdministratorDuplicateKey: "6d1f0c52-3b7a-4c4e-8a51-0e1a7b0c9d10",
     provisioning: {
       duplicateKey: defaultOrganization
         ? "6d1f0c52-3b7a-4c4e-8a51-0e1a7b0c9d04"

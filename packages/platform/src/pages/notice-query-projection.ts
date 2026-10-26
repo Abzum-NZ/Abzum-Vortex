@@ -1,21 +1,22 @@
 import "server-only";
 
-import { requireInstalledRuntimeContext, type InstalledRuntimeContext } from "../definition/app-index";
 import {
-  sameId,
-  validateComponentSettings,
-  type BlockPropertyValueContract,
-  type IdentitySession,
-  type JsonValue,
-  type OrganizationSelectionCandidate,
-} from "../schema";
+  requireInstalledRuntimeContext,
+  type InstalledRuntimeContext,
+} from "../definition/installed-runtime-context";
+import type { IdentitySession, OrganizationSelectionCandidate } from "../access/identity-access";
+import type { JsonValue } from "../catalogue/common";
+import { sameId } from "../catalogue/runtime-primitives";
+import { validateComponentSettings } from "../definition/application-composition/block-property-schema";
+import type { BlockPropertyValueContract } from "../definition/application-composition/block-property-values";
 import { QUERY_NOTICE_BLOCK_RELEASE } from "../definition/application-composition-catalogue";
 import {
   protectedQueryCommandSchema,
   protectedQueryPageSchema,
   type ProtectedQueryCommand,
-} from "../queries/index";
+} from "../queries/protected-query-contracts";
 import type { RecordsTableQueryRunner } from "./records-table-query";
+import { describeFailure } from "../catalogue/runtime-primitives";
 
 export type QueryNoticeSeverity = "info" | "success" | "warning" | "critical";
 export type ProjectedQueryNotice = Readonly<{
@@ -73,13 +74,19 @@ export const buildQueryNoticeQueryBinding = (
   if (validateComponentSettings(settings, QUERY_NOTICE_BLOCK_RELEASE.properties).length !== 0)
     return undefined;
   const matches = context.releaseSet.modules.flatMap((module) =>
-    module.content.queries.flatMap((query) => sameId(query.queryId, queryId) ? [{ module, query }] : []),
+    module.content.queries.flatMap((query) =>
+      sameId(query.queryId, queryId) ? [{ module, query }] : [],
+    ),
   );
   const bound = matches[0];
   if (matches.length !== 1 || bound === undefined) return undefined;
   const query = bound.query;
   const target = query.recordType;
-  if (target.state !== "resolved" || query.groupByFieldIds.length !== 0 || query.aggregates.length !== 0)
+  if (
+    target.state !== "resolved" ||
+    query.groupByFieldIds.length !== 0 ||
+    query.aggregates.length !== 0
+  )
     return undefined;
   const targetModule: InstalledModule | undefined = context.releaseSet.modules.find((module) =>
     sameId(module.rootId, target.moduleRootId),
@@ -95,12 +102,15 @@ export const buildQueryNoticeQueryBinding = (
   const linkLabel = fieldReference(settings, "link_label_field");
   const linkHref = fieldReference(settings, "link_href_field");
   const authoredSeverity = settings.severity;
-  const severityDeclaration = QUERY_NOTICE_BLOCK_RELEASE.properties.find((property) => property.key === "severity");
-  const defaultSeverity = authoredSeverity?.kind === "choice"
-    ? authoredSeverity.value
-    : severityDeclaration?.defaultValue?.kind === "choice"
-      ? severityDeclaration.defaultValue.value
-      : undefined;
+  const severityDeclaration = QUERY_NOTICE_BLOCK_RELEASE.properties.find(
+    (property) => property.key === "severity",
+  );
+  const defaultSeverity =
+    authoredSeverity?.kind === "choice"
+      ? authoredSeverity.value
+      : severityDeclaration?.defaultValue?.kind === "choice"
+        ? severityDeclaration.defaultValue.value
+        : undefined;
   if (!isSeverity(defaultSeverity)) return undefined;
   const roles = [
     { id: message, role: "text" },
@@ -114,7 +124,10 @@ export const buildQueryNoticeQueryBinding = (
     const field = recordType.fields.find((field) => sameId(field.fieldId, role.id));
     if (field === undefined || !selected.has(role.id.toLowerCase())) return undefined;
     if (role.role === "severity") {
-      if (field.type !== "choice" || !field.settings.options.every((option) => isSeverity(option.value)))
+      if (
+        field.type !== "choice" ||
+        !field.settings.options.every((option) => isSeverity(option.value))
+      )
         return undefined;
     } else if (role.role === "href") {
       if (field.type !== "text" && field.type !== "web_address") return undefined;
@@ -164,7 +177,8 @@ export const createQueryNoticeQueryResolver = (runner: RecordsTableQueryRunner) 
         !sameId(selection.organizationId, context.organizationId) ||
         selection.applicationRootId === undefined ||
         !sameId(selection.applicationRootId, context.applicationRootId)
-      ) return REFUSED;
+      )
+        return REFUSED;
       const binding = buildQueryNoticeQueryBinding(context, queryId, settings, inputValues);
       if (binding === undefined) return REFUSED;
       const result = await runner.run(session, selection, binding.command);
@@ -180,35 +194,42 @@ export const createQueryNoticeQueryResolver = (runner: RecordsTableQueryRunner) 
         page.moduleReleaseVersion !== binding.moduleReleaseVersion ||
         page.rows.length > binding.command.pageSize ||
         new Set(page.rows.map((row) => row.recordId.toLowerCase())).size !== page.rows.length ||
-        page.rows.some((row) =>
-          Object.keys(row.values).some((id) => !requested.has(id.toLowerCase())) ||
-          new Set(Object.keys(row.values).map((id) => id.toLowerCase())).size !== Object.keys(row.values).length ||
-          Object.keys(row.systemValues ?? {}).length !== 0,
+        page.rows.some(
+          (row) =>
+            Object.keys(row.values).some((id) => !requested.has(id.toLowerCase())) ||
+            new Set(Object.keys(row.values).map((id) => id.toLowerCase())).size !==
+              Object.keys(row.values).length ||
+            Object.keys(row.systemValues ?? {}).length !== 0,
         )
-      ) return REFUSED;
+      )
+        return REFUSED;
       const mapping = binding.mapping;
       const items: ProjectedQueryNotice[] = [];
       for (const row of page.rows) {
-        const value = (id: string | undefined): JsonValue | undefined => id === undefined
-          ? undefined
-          : Object.entries(row.values).find(([key]) => sameId(key, id))?.[1];
+        const value = (id: string | undefined): JsonValue | undefined =>
+          id === undefined
+            ? undefined
+            : Object.entries(row.values).find(([key]) => sameId(key, id))?.[1];
         const message = value(mapping.message);
-        const severity = mapping.severity === undefined ? mapping.defaultSeverity : value(mapping.severity);
+        const severity =
+          mapping.severity === undefined ? mapping.defaultSeverity : value(mapping.severity);
         // Hidden/null or unsupported required content never borrows an authored fallback.
         if (typeof message !== "string" || !isSeverity(severity)) continue;
         const title = value(mapping.title);
         const linkLabel = value(mapping.linkLabel);
         const linkHref = value(mapping.linkHref);
-        items.push(Object.freeze({
-          recordId: row.recordId,
-          revision: row.revision,
-          message,
-          severity,
-          ...(typeof title === "string" ? { title } : {}),
-          ...(typeof linkLabel === "string" && typeof linkHref === "string"
-            ? { link: Object.freeze({ label: linkLabel, href: linkHref }) }
-            : {}),
-        }));
+        items.push(
+          Object.freeze({
+            recordId: row.recordId,
+            revision: row.revision,
+            message,
+            severity,
+            ...(typeof title === "string" ? { title } : {}),
+            ...(typeof linkLabel === "string" && typeof linkHref === "string"
+              ? { link: Object.freeze({ label: linkLabel, href: linkHref }) }
+              : {}),
+          }),
+        );
       }
       return Object.freeze({
         status: "ready",
@@ -218,7 +239,8 @@ export const createQueryNoticeQueryResolver = (runner: RecordsTableQueryRunner) 
           truncated: page.nextContinuationToken !== undefined,
         }),
       });
-    } catch {
+    } catch (error) {
+      console.error(`[page] NOTICE_QUERY_PROJECTION_FAILED: ${describeFailure(error)}`);
       return ERROR;
     }
   },

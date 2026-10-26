@@ -1,9 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { fail, requireExactKeys, requireRecord } from "./payload-parse";
 import {
-  fail,
   parseTablePayload,
-  requireExactKeys,
-  requireRecord,
   type DisplayEventHandlers,
   type DisplayRow,
   type TablePayload,

@@ -1,8 +1,9 @@
-import type { ApplicationContent, ModuleContent } from "../../schema";
+import type { ApplicationContent } from "../application-contracts";
+import type { ModuleContent } from "../module-contracts";
 import { canonicalJson } from "../canonical-json-definition";
 import { refuseVersionImpact } from "../version-impact-error";
 import { type RecordValue, asRecord, sorted } from "./shared";
-import { flattenNavigation } from "./application-shared-contents";
+import { flattenNavigation } from "./permission-contents";
 
 export const blockDependencyIdentity = (item: RecordValue): string =>
   `${String(item.blockId)}@${String(item.releaseVersion)}`;

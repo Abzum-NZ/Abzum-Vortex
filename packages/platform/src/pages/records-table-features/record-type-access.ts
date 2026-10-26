@@ -1,15 +1,12 @@
 import "server-only";
 
-import {
-  organizationRecordAccessDeclarationSchema,
-  permissionActionKindSchema,
-  sameId,
-  type PermissionActionKind,
-  type SelectedOrganizationScope,
-} from "../../schema";
-import type { RequestDatabaseTransaction } from "../../db";
-import { evaluateOrganizationRecordPermissionAvailability } from "../../access/index";
-import type { InstalledRuntimeContext } from "../../definition/index";
+import type { SelectedOrganizationScope } from "../../access/identity-access";
+import { organizationRecordAccessDeclarationSchema } from "../../access/organization-access-decision";
+import { permissionActionKindSchema, type PermissionActionKind } from "../../access/permissions";
+import { sameId } from "../../catalogue/runtime-primitives";
+import type { RequestDatabaseTransaction } from "../../db/request-transaction";
+import { evaluateOrganizationRecordPermissionAvailability } from "../../access/organization-record-permission-availability";
+import type { InstalledRuntimeContext } from "../../definition/installed-runtime-context";
 
 /** A standard record permission the decision reads; the feature keys are never permission actions. */
 type AccessAction = PermissionActionKind;

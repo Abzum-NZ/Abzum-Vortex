@@ -35,6 +35,7 @@ import type {
 import { studioViewRequest, type StudioViewRequest } from "../_lib/studio-view-request";
 import { summarizeSourceChange, type SourceChangeRow } from "../_lib/source-change-summary";
 import { conflictMessage, refusalMessage } from "./studio-refusal-messages";
+import { useLeaveWarning } from "./use-leave-warning";
 import { useStudioSession } from "./use-studio-session";
 
 /** How long Studio waits after the last edit of a batch before it saves the batch. */
@@ -734,15 +735,7 @@ export function useStudioDraft({
   }, [requestKey, view.request, state.isDirty, state.isSaving, refreshCompiled]);
 
   // Leaving the page while a batch is waiting to be saved is confirmed by the browser.
-  const unsaved = state.isDirty || state.isSaving;
-  useEffect(() => {
-    if (!unsaved) return;
-    const warn = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
-    };
-    window.addEventListener("beforeunload", warn);
-    return () => window.removeEventListener("beforeunload", warn);
-  }, [unsaved]);
+  useLeaveWarning(state.isDirty || state.isSaving);
 
   const hold = useCallback((key: StudioDraftHold, on: boolean) => {
     if (holds.current.has(key) === on) return;

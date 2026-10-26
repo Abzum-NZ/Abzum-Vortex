@@ -1,22 +1,18 @@
 import "server-only";
 
-import {
-  isRecord,
-  recordsTableContractOrLog,
-  sameId,
-  tableColumnLabel,
-  type BlockPropertyValueContract,
-  type IdentitySession,
-  type OrganizationSelectionCandidate,
-  type PageDefinition,
-  type RecordsTableInlineEditor,
-} from "../../schema";
+import type { IdentitySession, OrganizationSelectionCandidate } from "../../access/identity-access";
+import { isRecord, sameId } from "../../catalogue/runtime-primitives";
+import type { BlockPropertyValueContract } from "../../definition/application-composition/block-property-values";
+import { recordsTableContractOrLog } from "../../definition/application-composition/records-display";
+import type { RecordsTableInlineEditor } from "../../definition/application-composition/records-table-features/inline-edit";
+import type { PageDefinition } from "../../definition/application-contracts";
+import { tableColumnLabel } from "../../records/module-field-values";
 import {
   APPLICATION_LAUNCHER_BLOCK_RELEASE,
   TABLE_BLOCK_RELEASE,
-  type InstalledRuntimeContext,
-} from "../../definition/index";
-import type { ProtectedQueryRow } from "../../queries/index";
+} from "../../definition/application-composition-catalogue";
+import type { InstalledRuntimeContext } from "../../definition/installed-runtime-context";
+import type { ProtectedQueryRow } from "../../queries/protected-query-contracts";
 import {
   collectRecordLinks,
   type RecordLinkResolver,

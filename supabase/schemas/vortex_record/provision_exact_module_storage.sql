@@ -379,12 +379,12 @@ begin
           )) then
           raise exception using errcode = '55000', message = 'Existing record field storage is incompatible';
         end if;
-        if field_value ->> 'type' in ('choice', 'several_choices')
-          and p_module_release_revision > stored_catalogue.last_compatible_release_revision
+        if p_module_release_revision > stored_catalogue.last_compatible_release_revision
           and stored_field.field_definition is distinct from field_value then
-          update vortex_record.field_storage_mappings
-          set field_definition = field_value
-          where storage_contract_id = storage_id and field_id = field_id_value;
+          perform vortex_record.evolve_field_storage_internal(
+            storage_id, field_id_value, field_value, storage_scope_value, table_token,
+            column_token, is_projection
+          );
           any_change := true;
         end if;
       else

@@ -1,44 +1,53 @@
 import { z } from "zod";
 import {
-  applicationRootIdSchema,
-  correlationIdSchema,
-  flowIdSchema,
-  flowLiteralSchema,
-  formContinuationAnswerSchema,
   identitySessionSchema,
+  organizationSelectionCandidateSchema,
+  type IdentitySession,
+  type OrganizationSelectionCandidate,
+} from "../access/identity-access";
+import { correlationIdSchema, type JsonValue } from "../catalogue/common";
+import {
+  applicationRootIdSchema,
   moduleRootIdSchema,
   organizationIdSchema,
-  organizationSelectionCandidateSchema,
   recordIdSchema,
   revisionSchema,
-  stableDefinitionReleaseVersionSchema,
   timestampSchema,
-  type ExecuteNamedActionResult,
+} from "../catalogue/identifiers";
+import type {
+  ExecuteNamedActionResult,
+  InstalledNamedActionReference,
+} from "../records/named-actions";
+import type {
+  ViewerSafeRecordPinAcquisitionResult,
+  ViewerSafeRecordPinSelector,
+} from "../records/record-links";
+import type { SaveRecordCommand } from "../records/records";
+import {
+  flowIdSchema,
   type ExecutionAuthorityContext,
   type FlowDefinition,
   type FlowReadFieldsScalarType,
-  type FlowRefusalFeedback,
   type FlowTriggerOrigin,
+} from "../workflows/flow-contracts";
+import type { FlowRefusalFeedback } from "../workflows/flow-refusal-feedback";
+import { flowLiteralSchema } from "../workflows/flow-values";
+import {
+  formContinuationAnswerSchema,
   type FlowWarningNotice,
-  type IdentitySession,
-  type InstalledNamedActionReference,
-  type JsonValue,
-  type OrganizationSelectionCandidate,
-  type SaveRecordCommand,
-  type ViewerSafeRecordPinAcquisitionResult,
-  type ViewerSafeRecordPinSelector,
-} from "../schema";
+} from "../workflows/form-continuation-contracts";
+import { stableDefinitionReleaseVersionSchema } from "./version-impact";
 import type { RecordSaveServiceResult } from "../records/save-record";
-import type { HumanOrganizationRequestResult } from "../access/index";
+import type { HumanOrganizationRequestResult } from "../access/human-organization-request";
+import type { ActionFlowRunner } from "../rules/action-flow-run";
+import type { BeforeSaveRuleWarning } from "../rules/before-save-flow-run";
 import type {
-  ActionFlowRunner,
-  BeforeSaveRuleWarning,
   FlowFailureCode,
   FlowFailureOutcome,
   FlowInterfaceIntent,
   FlowLibrary,
   FlowRuntimeValues,
-} from "../rules/index";
+} from "../rules/flow-interpreter";
 import type { FlowContinuationStore, FlowEffectLedger } from "./flow-continuation-store";
 import type { ProtectedOperationExecutor } from "./protected-operation-executor";
 

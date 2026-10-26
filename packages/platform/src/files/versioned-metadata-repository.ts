@@ -1,7 +1,8 @@
 import "server-only";
 
-import { fileIdSchema, fileRecordSchema, revisionSchema } from "../schema";
-import type { FileId } from "../schema";
+import { fileIdSchema, revisionSchema } from "../catalogue/identifiers";
+import { fileRecordSchema } from "./file-contracts";
+import type { FileId } from "../catalogue/identifiers";
 import { z } from "zod";
 import type { FileRemovalRepository } from "./object-removal";
 import type { FileReadSqlTransaction } from "./read-repository";
@@ -25,10 +26,7 @@ const isObject = (value: unknown): value is SqlRow =>
  * transaction. This adapter exposes only the snapshot port consumed by File
  * removal coordination; it does not establish removal eligibility or authority.
  */
-export type VersionedFileMetadataRepository = Pick<
-  FileRemovalRepository,
-  "readFileSnapshot"
->;
+export type VersionedFileMetadataRepository = Pick<FileRemovalRepository, "readFileSnapshot">;
 
 export const createSqlVersionedFileMetadataRepository = (
   transaction: FileReadSqlTransaction,
@@ -56,8 +54,7 @@ export const createSqlVersionedFileMetadataRepository = (
       const parsedSnapshot = versionedFileMetadataSnapshotSchema.safeParse(row.result);
       if (
         !parsedSnapshot.success ||
-        parsedSnapshot.data.fileRecord.fileId.toLowerCase() !==
-          parsedFileId.data.toLowerCase()
+        parsedSnapshot.data.fileRecord.fileId.toLowerCase() !== parsedFileId.data.toLowerCase()
       ) {
         throw invalidSnapshot();
       }

@@ -1,12 +1,12 @@
+import { builderKeySchema } from "../../catalogue/identifiers";
+import type { DefinitionRuleFailure } from "../../catalogue/validation-errors";
 import {
-  type DefinitionRuleFailure,
-  type ApplicationSourceDocument,
   type SourceItem,
-  builderKeySchema,
   sourceItemChildSlots,
   sourceItemTree,
   sourcePageItems,
-} from "../../schema";
+} from "../application-composition/source-composition";
+import type { ApplicationSourceDocument } from "../definition-source";
 import {
   type PreparedValidationContext,
   editSaveSources,
@@ -87,11 +87,7 @@ const actionButtonBlockKey = "platform.action.button";
  * of any other type is not that setting, so a button's action kind falls back to its `action`
  * default.
  */
-const sourceBlockSetting = (
-  item: SourceItem,
-  key: string,
-  type: "string" | "boolean",
-): unknown => {
+const sourceBlockSetting = (item: SourceItem, key: string, type: "string" | "boolean"): unknown => {
   const setting: unknown = item.props[key];
   return typeof setting === type ? setting : undefined;
 };

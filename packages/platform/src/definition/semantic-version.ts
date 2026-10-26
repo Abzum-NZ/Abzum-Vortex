@@ -1,4 +1,4 @@
-import { stableDefinitionReleaseVersionSchema, type VersionImpact } from "../schema";
+import { stableDefinitionReleaseVersionSchema, type VersionImpact } from "./version-impact";
 
 type Version = readonly [major: bigint, minor: bigint, patch: bigint];
 

@@ -1,12 +1,11 @@
 import "server-only";
 
+import { sessionContextSchema, type SessionContext } from "../access/identity-access";
 import {
-  isLoopbackHostname,
   protectedOperationChannelSchema,
-  sessionContextSchema,
   type ProtectedOperationChannel,
-  type SessionContext,
-} from "../schema";
+} from "../definition/application-flow-bindings";
+import { isLoopbackHostname } from "../identity/loopback-hostname";
 import postgres, { type Row, type Sql, type TransactionSql } from "postgres";
 import { AsyncLocalStorage } from "node:async_hooks";
 

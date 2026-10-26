@@ -2,9 +2,23 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 import {
+  bootstrapVortexSuperAdministratorCommandSchema,
+  vortexSuperAdministratorAssignmentMutationResultSchema,
+  type BootstrapVortexSuperAdministratorCommand,
+  type VortexSuperAdministratorAssignmentMutationResult,
+} from "../access/super-administrator-governance";
+import {
+  databaseCode,
   databaseTimestamp,
   databaseRevision,
   describeFailure,
+} from "../catalogue/runtime-primitives";
+import {
+  publishPrivacyNoticeCommandSchema,
+  type PublishPrivacyNoticeCommand,
+  type PublishPrivacyNoticeResult,
+} from "./privacy-notice-schema";
+import {
   adoptOrganizationCommandSchema,
   adoptOrganizationResultSchema,
   adoptTenantCommandSchema,
@@ -12,8 +26,6 @@ import {
   closeClusterIdentityCommandSchema,
   closeClusterIdentityResultSchema,
   configuredTenantAdministrationOperatorContextSchema,
-  bootstrapVortexSuperAdministratorCommandSchema,
-  vortexSuperAdministratorAssignmentMutationResultSchema,
   provisionTenantCommandSchema,
   provisionTenantResultSchema,
   reactivateClusterIdentityCommandSchema,
@@ -28,7 +40,6 @@ import {
   type AdoptOrganizationResult,
   type AdoptTenantCommand,
   type AdoptTenantResult,
-  type BootstrapVortexSuperAdministratorCommand,
   type CloseClusterIdentityCommand,
   type CloseClusterIdentityResult,
   type ConfiguredTenantAdministrationOperatorContext,
@@ -42,13 +53,12 @@ import {
   type SuspendClusterIdentityResult,
   type SuspendTenantCommand,
   type SuspendTenantResult,
-  type VortexSuperAdministratorAssignmentMutationResult,
-} from "../schema";
+} from "./tenant-provisioning";
 import {
   withRuntimeTransaction,
   type DatabaseRow,
   type RequestDatabaseTransaction,
-} from "../db/index";
+} from "../db/request-transaction";
 import { resolveFileStorageDestination } from "../files/storage-destination";
 import { logRefusedOperations } from "./log-refused-operations";
 
@@ -120,11 +130,6 @@ type SuperAdministratorBootstrapRow = DatabaseRow & {
 
 const fingerprint = (command: object): string =>
   `sha256:${createHash("sha256").update(JSON.stringify(command), "utf8").digest("hex")}`;
-const databaseCode = (error: unknown): string | undefined =>
-  typeof error === "object" && error !== null && "code" in error
-    ? String((error as { readonly code?: unknown }).code)
-    : undefined;
-
 const configuredContext = (
   environment: Readonly<Record<string, string | undefined>>,
 ): ConfiguredTenantAdministrationOperatorContext | undefined => {
@@ -254,6 +259,49 @@ export const createConfiguredTenantAdministrationService = (
           outcome: "refused",
           operation: "bootstrap_vortex_super_administrator",
           code: superAdministratorBootstrapCode(error),
+        };
+      }
+    },
+
+    /** Publishes a privacy notice version; the latest effective version is the one signup shows. */
+    async publishPrivacyNotice(
+      candidate: PublishPrivacyNoticeCommand,
+    ): Promise<PublishPrivacyNoticeResult> {
+      const command = publishPrivacyNoticeCommandSchema.safeParse(candidate);
+      if (!command.success)
+        return { outcome: "refused", operation: "publish_privacy_notice", code: "invalid_command" };
+      if (!operator)
+        return {
+          outcome: "refused",
+          operation: "publish_privacy_notice",
+          code: "operator_not_configured",
+        };
+      try {
+        const value = command.data;
+        const rows = await run(
+          (transaction) => transaction.query<{ notice_version_id: string }>`
+          select vortex_identity.publish_privacy_notice_version(
+            ${operator.systemActorId}::uuid, ${value.publisherIdentityId}::uuid,
+            ${value.versionLabel}::text, ${value.effectiveAt}::timestamptz,
+            ${JSON.stringify(value.content)}::text::jsonb
+          ) as notice_version_id
+        `,
+        );
+        const row = one(rows);
+        if (row === undefined)
+          return {
+            outcome: "refused",
+            operation: "publish_privacy_notice",
+            code: "operation_unavailable",
+          };
+        return { outcome: "published", noticeVersionId: row.notice_version_id };
+      } catch (error) {
+        console.error(`[identity] privacy notice publication refused: ${describeFailure(error)}`);
+        return {
+          outcome: "refused",
+          operation: "publish_privacy_notice",
+          code:
+            databaseCode(error) === "42501" ? "publisher_not_permitted" : "operation_unavailable",
         };
       }
     },

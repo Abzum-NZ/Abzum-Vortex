@@ -1,10 +1,10 @@
 import { flowFormulaSchema, flowFormulaUsesNow } from "../../workflows/flow-values";
 import { calculationFormulaDependencies } from "../module-calculation-formula";
+import type { DefinitionValidationLocation } from "../../catalogue/validation-errors";
 import type {
   ModuleCompilationOutput,
   DefinitionCompilationOutput,
-  DefinitionValidationLocation,
-} from "../../schema";
+} from "../definition-compilation-contracts";
 import { fingerprintCanonicalValue } from "../canonical-json-definition";
 import { DefinitionCompilationError } from "../compilation-error";
 import type { Resolution } from "./resolution";

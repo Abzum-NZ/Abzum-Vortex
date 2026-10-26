@@ -1,4 +1,4 @@
-import { valueTypesCompatible } from "../../schema";
+import { valueTypesCompatible } from "../../catalogue/catalogues";
 import type { JsonObject } from "./context";
 import { object, array } from "./helpers";
 import {

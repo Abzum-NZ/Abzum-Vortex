@@ -1,14 +1,14 @@
 import "server-only";
 
 import { z } from "zod";
+import { canonicalJson } from "./canonical-json";
 import {
-  canonicalJson,
   createDefinitionRootCommandSchema,
   saveDefinitionDraftCommandSchema,
   storedDefinitionDraftSchema,
   type StoredDefinitionDraft,
-} from "../schema";
-import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
+} from "./definition-store-contracts";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
 import { requireBuilderAuthority, type BuilderAuthority } from "./builder-authority";
 import { fingerprintCanonicalJson } from "./canonical-json-definition";
 import { extractStoredSourceIdentityRequirements } from "./source-identities";

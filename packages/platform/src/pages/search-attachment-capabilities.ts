@@ -2,17 +2,19 @@ import "server-only";
 
 import {
   applicationRootIdSchema,
-  attachmentListPayloadSchema,
-  attachmentValueSchema,
   fieldIdSchema,
   fileIdSchema,
   organizationIdSchema,
   recordIdSchema,
   recordTypeIdSchema,
+} from "../catalogue/identifiers";
+import { isRecord, sameId } from "../catalogue/runtime-primitives";
+import {
+  attachmentListPayloadSchema,
   type AttachmentListPayload,
-  isRecord,
-  sameId,
-} from "../schema";
+} from "../files/application-attachment-blocks";
+import { attachmentValueSchema } from "../records/module-field-values";
+import { describeFailure } from "../catalogue/runtime-primitives";
 
 export type ReadOnlyAttachmentOwner = Readonly<{
   organizationId: string;
@@ -75,12 +77,14 @@ export type ReadOnlyAttachmentListProjection =
  * Projects one protected attachment field only after each current File decision and metadata read
  * agree with the exact installed subject tuple. A failed item discards the whole list.
  */
-export const projectReadOnlyAttachmentList = async (input: Readonly<{
-  owner: ReadOnlyAttachmentOwner;
-  subjectValues: unknown;
-  maximumFiles: number;
-  readFile: (fileId: string) => Promise<ReadOnlyAttachmentFileEvidence>;
-}>): Promise<ReadOnlyAttachmentListProjection> => {
+export const projectReadOnlyAttachmentList = async (
+  input: Readonly<{
+    owner: ReadOnlyAttachmentOwner;
+    subjectValues: unknown;
+    maximumFiles: number;
+    readFile: (fileId: string) => Promise<ReadOnlyAttachmentFileEvidence>;
+  }>,
+): Promise<ReadOnlyAttachmentListProjection> => {
   const organizationId = organizationIdSchema.safeParse(input.owner.organizationId);
   const applicationRootId = applicationRootIdSchema.safeParse(input.owner.applicationRootId);
   const recordTypeId = recordTypeIdSchema.safeParse(input.owner.recordTypeId);
@@ -149,7 +153,8 @@ export const projectReadOnlyAttachmentList = async (input: Readonly<{
         downloadHref: `/api/files/${organizationId.data}/${parsedId.data}`,
       });
     }
-  } catch {
+  } catch (error) {
+    console.error(`[page] SEARCH_ATTACHMENT_READ_FAILED: ${describeFailure(error)}`);
     return { kind: "unavailable" };
   }
 

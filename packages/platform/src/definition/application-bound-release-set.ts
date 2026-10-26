@@ -1,24 +1,21 @@
 import "server-only";
 
+import { sessionContextSchema, type SessionContext } from "../access/identity-access";
+import { correlationIdSchema } from "../catalogue/common";
+import { applicationRootIdSchema, revisionSchema } from "../catalogue/identifiers";
+import { isRecord, sameId } from "../catalogue/runtime-primitives";
+import { protectedOperationChannelSchema } from "./application-flow-bindings";
+import { canonicalJson } from "./canonical-json";
 import {
-  canonicalJson,
-  isRecord,
-  sameId,
   applicationBoundReleaseSetCommandSchema,
-  applicationRootIdSchema,
-  correlationIdSchema,
-  revisionSchema,
-  protectedOperationChannelSchema,
-  sessionContextSchema,
   systemApplicationBoundReleaseSetCommandSchema,
   type ApplicationBoundReleaseSetCommand,
   type ApplicationBoundReleaseSetResult,
   type DefinitionConsumerReadResult,
-  type SessionContext,
   type SystemApplicationBoundReleaseSetCommand,
   type SystemApplicationBoundReleaseSetResult,
-} from "../schema";
-import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
+} from "./definition-consumer-read";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
 import { z } from "zod";
 import {
   isDefinitionContextFailure,

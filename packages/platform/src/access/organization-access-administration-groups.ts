@@ -1,15 +1,13 @@
 import "server-only";
 
+import { activityIdSchema, groupIdSchema, membershipIdSchema } from "../catalogue/identifiers";
+import { databaseRevision, sameId } from "../catalogue/runtime-primitives";
+import type { IdentitySession, OrganizationSelectionCandidate } from "./identity-access";
 import {
-  databaseRevision,
-  sameId,
-  activityIdSchema,
   addOrganizationAdministrationMembershipCommandSchema,
   changeOrganizationAdministrationMembershipResultSchema,
   changeOrganizationAdministrationGroupResultSchema,
   createOrganizationAdministrationGroupCommandSchema,
-  groupIdSchema,
-  membershipIdSchema,
   listOrganizationAdministrationGroupsCommandSchema,
   listOrganizationAdministrationGroupsResultSchema,
   listOrganizationAdministrationMembershipsCommandSchema,
@@ -25,12 +23,10 @@ import {
   type ChangeOrganizationAdministrationGroupResult,
   type ChangeOrganizationAdministrationMembershipResult,
   type CreateOrganizationAdministrationGroupCommand,
-  type IdentitySession,
   type ListOrganizationAdministrationGroupsCommand,
   type ListOrganizationAdministrationGroupsResult,
   type ListOrganizationAdministrationMembershipsCommand,
   type ListOrganizationAdministrationMembershipsResult,
-  type OrganizationSelectionCandidate,
   type ReadOrganizationAdministrationGroupCommand,
   type ReadOrganizationAdministrationGroupResult,
   type ReadOrganizationAdministrationMembershipCommand,
@@ -38,7 +34,7 @@ import {
   type RenameOrganizationAdministrationGroupCommand,
   type RemoveOrganizationAdministrationMembershipCommand,
   type RetireOrganizationAdministrationGroupCommand,
-} from "../schema";
+} from "./organization-access-administration";
 import type { HumanOrganizationRequestResult } from "./human-organization-request";
 import {
   normalizeGroup,

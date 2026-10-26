@@ -200,7 +200,7 @@
           "public_display": "refused",
           "id": "fld_store_application_record_update_status",
           "key": "record_update_status",
-          "label": "Record update",
+          "label": "Existing records",
           "type": "choice",
           "settings": {
             "options": [
@@ -240,7 +240,7 @@
           "public_display": "refused",
           "id": "fld_store_application_records_processed",
           "key": "records_processed",
-          "label": "Records updated",
+          "label": "Records processed",
           "type": "whole_number",
           "settings": {
             "minimum": 0

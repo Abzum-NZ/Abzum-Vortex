@@ -1,16 +1,15 @@
 import "server-only";
 
+import { permissionIdSchema } from "../catalogue/identifiers";
 import {
   actionDefinitionSchema,
-  executeNamedActionResultSchema,
-  type ExecuteNamedActionResult,
   moduleValidationContractVersion,
-  permissionIdSchema,
   recordTypeDefinitionSchema,
-} from "../schema";
+} from "../definition/module-contracts";
+import { executeNamedActionResultSchema, type ExecuteNamedActionResult } from "./named-actions";
 import { revision } from "./save-record";
 import type { NamedActionCreateTarget, PreparedNamedAction } from "./action-flow-effects";
-import type { DatabaseRow } from "../db/index";
+import type { DatabaseRow } from "../db/request-transaction";
 
 export type ResultRow = DatabaseRow & { readonly value: unknown };
 

@@ -1,20 +1,22 @@
 import "server-only";
 
+import type {
+  ApplicationRootId,
+  FieldId,
+  FileId,
+  Fingerprint,
+  OrganizationId,
+  PlatformId,
+  RecordId,
+  RecordTypeId,
+} from "../catalogue/identifiers";
 import {
   fileRecordSchema,
-  type ApplicationRootId,
-  type FieldId,
-  type FileId,
   type FileLegalHoldProjection,
   type FileLifecycleState,
   type FileRecord,
-  type Fingerprint,
-  type OrganizationId,
-  type PlatformId,
-  type RecordId,
-  type RecordTypeId,
   type VerifiedFileActor,
-} from "../schema";
+} from "./file-contracts";
 import type { ContentKind } from "./content-safety";
 
 /** The stored-content safety inspection used by upload completion. */

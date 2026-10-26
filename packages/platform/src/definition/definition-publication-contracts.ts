@@ -1,32 +1,36 @@
 import "server-only";
 
+import type { SessionContext } from "../access/identity-access";
 import type {
-  DefinitionCompilationOutput,
-  ApplicationCompilationOutput,
-  DefinitionPublicationConfirmation,
-  DefinitionPublicationHistoryEvidence,
-  DefinitionResolutionSnapshot,
-  ApplicationCompositionCatalogueSnapshot,
   BlockId,
-  ExactDefinitionDependency,
-  PrepareDefinitionPublicationResult,
-  ModuleVersionImpactHistoryEntry,
-  ModuleCompilationOutput,
-  PublishDefinitionResult,
-  SessionContext,
-  ModuleSourceDocument,
-  StoredDefinitionDraft,
   ConnectionTypeId,
   Fingerprint,
   ModuleRootId,
   OrganizationId,
-  PlatformBlockRelease,
   PlatformId,
-  PlatformThemeRelease,
-  PlatformServiceOperationRelease,
   Revision,
   SemanticVersion,
-} from "../schema";
+} from "../catalogue/identifiers";
+import type { ApplicationCompositionCatalogueSnapshot } from "./application-composition/catalogue-snapshot";
+import type { PlatformBlockRelease } from "./application-composition/platform-block-release";
+import type { PlatformThemeRelease } from "./application-composition/theme";
+import type { PlatformServiceOperationRelease } from "./application-flow-bindings";
+import type {
+  DefinitionCompilationOutput,
+  ApplicationCompilationOutput,
+  DefinitionPublicationHistoryEvidence,
+  DefinitionResolutionSnapshot,
+  ModuleCompilationOutput,
+} from "./definition-compilation-contracts";
+import type { ModuleSourceDocument } from "./definition-source";
+import type {
+  DefinitionPublicationConfirmation,
+  ExactDefinitionDependency,
+  PrepareDefinitionPublicationResult,
+  PublishDefinitionResult,
+  StoredDefinitionDraft,
+} from "./definition-store-contracts";
+import type { ModuleVersionImpactHistoryEntry } from "./version-impact";
 import type { PlatformPermissionSource } from "../access/platform-permissions";
 import type { SavedConditionLike } from "./saved-condition-revisions";
 import { DefinitionError } from "./definition-error";
@@ -84,6 +88,11 @@ export type DefinitionPublicationCandidate = DefinitionCandidateDraft &
   Readonly<{
     historyEvidence: DefinitionPublicationHistoryEvidence;
     savedConditionHistory: readonly SavedConditionLike[];
+    /**
+     * The platform service operations and connection types the latest release pins, exactly as it
+     * stored them. A platform release changing under an unchanged draft still needs a new release.
+     */
+    latestPlatformPins: readonly ExactDefinitionDependency[];
   }>;
 
 /** Immutable organization-owned module release made available to a dependency compilation. */

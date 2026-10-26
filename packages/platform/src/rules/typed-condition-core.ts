@@ -1,4 +1,4 @@
-import type { JsonValue } from "../schema";
+import type { JsonValue } from "../catalogue/common";
 
 export type ResolvedTypedConditionOperand<TType extends string> = Readonly<{
   type?: TType;

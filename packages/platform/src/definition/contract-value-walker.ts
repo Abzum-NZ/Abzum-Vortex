@@ -1,4 +1,5 @@
-import { jsonValueSchema, walkDefinitionContract } from "../schema";
+import { jsonValueSchema } from "../catalogue/common";
+import { walkDefinitionContract } from "./definitions";
 import type { z } from "zod";
 
 type JsonObject = Record<string, unknown>;

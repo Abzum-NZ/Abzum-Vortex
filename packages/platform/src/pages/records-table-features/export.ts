@@ -1,39 +1,37 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
-import {
-  authoredGridLayout,
-  isRecord,
-  sameId,
-  recordsTableColumnWidth,
-  recordsTableExportFeature,
-  type GridLayout,
-  type IdentitySession,
-  type JsonValue,
-  type RecordsTableExportRefusal,
-  type RecordsTableExportRequest,
-  type RecordsTableFilterValue,
-  type RecordsTableSortKey,
-} from "../../schema";
+import type { IdentitySession } from "../../access/identity-access";
+import type { JsonValue } from "../../catalogue/common";
+import { isRecord, sameId } from "../../catalogue/runtime-primitives";
+import { recordsTableColumnWidth } from "../../definition/application-composition/records-display";
+import { recordsTableExportFeature } from "../../definition/application-composition/records-table-features";
+import { authoredGridLayout, type GridLayout } from "../grid-view-state";
+import type {
+  RecordsTableExportRefusal,
+  RecordsTableExportRequest,
+} from "../records-table-export-request";
+import type { RecordsTableFilterValue } from "../records-table-filters";
+import type { RecordsTableSortKey } from "../records-table-state";
 import {
   createHumanOrganizationRequestService,
-  readCurrentOrganizationRuntimeSettingsAfterAuthorization,
   type HumanOrganizationRequestDependencies,
-} from "../../access/index";
+} from "../../access/human-organization-request";
+import { readCurrentOrganizationRuntimeSettingsAfterAuthorization } from "../../access/organization-runtime-settings-administration";
+import type { QueryContinuationKey } from "../../queries/continuation-token";
 import {
-  createProtectedQueryService,
   prepareRecordsExport,
   recordsCsvFormat,
   recordsXlsxFormat,
-  type QueryContinuationKey,
   type RecordsExportCell,
   type RecordsExportFormat,
   type RecordsExportOutcome,
   type RecordsExportPage,
   type RecordsXlsxColumn,
-} from "../../queries/index";
+} from "../../queries/export-records";
+import { createProtectedQueryService } from "../../queries/protected-query-service";
 import type { ProtectedQueryRow } from "../../queries/protected-query-contracts";
-import { recordLinkLabelKey } from "../../definition/app-index";
+import { recordLinkLabelKey } from "../../definition/viewer-safe-record-link";
 import {
   addressedDefaultGridViews,
   gridLayoutVisibleFieldIds,
@@ -62,8 +60,8 @@ import {
 } from "./placement";
 import { decideRecordTypeExport } from "./record-type-access";
 import { personalFormattingAllowed } from "./conditional-formatting";
-import type { InstalledRuntimeContext } from "../../definition/index";
-import { withPooledRequestLifetime } from "../../db";
+import type { InstalledRuntimeContext } from "../../definition/installed-runtime-context";
+import { withPooledRequestLifetime } from "../../db/request-transaction";
 
 /**
  * The one authority behind a Records table export. It re-reads the installed placement and

@@ -1,19 +1,17 @@
 import "server-only";
 
 import { z } from "zod";
+import type { OrganizationSelectionCandidate } from "../access/identity-access";
+import { correlationIdSchema } from "../catalogue/common";
+import { recordTypeIdSchema, revisionSchema, timestampSchema } from "../catalogue/identifiers";
+import { sameId } from "../catalogue/runtime-primitives";
+import { activeApplicationInstallationEvidenceSchema } from "../files/storage";
 import {
-  activeApplicationInstallationEvidenceSchema,
-  correlationIdSchema,
-  recordTypeIdSchema,
-  revisionSchema,
-  sameId,
   systemApplicationBoundReleaseSetResultSchema,
-  timestampSchema,
-  type OrganizationSelectionCandidate,
   type SystemApplicationBoundReleaseSetResult,
-} from "../schema";
-import type { PreparedApplicationPermissionRegistration } from "../schema";
-import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
+} from "./definition-consumer-read";
+import type { PreparedApplicationPermissionRegistration } from "../access/permission-registry";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
 import {
   assembleHumanInstalledRuntimeContext,
   requireInstalledRuntimeContext,

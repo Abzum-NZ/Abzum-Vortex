@@ -153,30 +153,26 @@ export const runbookPageKey = (runbook: OperationsRunbook): string =>
   `runbook_${referenceTail(runbook.runbookReference)}`;
 
 /** A role key as people read it: "security_operator" is "Security operator". */
-const roleDisplayName = (roleKey: string): string => {
-  const words = roleKey.split("_").join(" ");
+const roleName = (key: string): string => {
+  const words = key.replaceAll("_", " ");
   return words.charAt(0).toUpperCase() + words.slice(1);
 };
 
-/** The page text for one runbook: owner, summary, concrete operator steps and the action set. */
+/**
+ * The page text for one runbook: what happened and who handles it, the steps, what can be done on
+ * the incident, and last the alert code and runbook reference an alert carries.
+ */
 export const runbookPageText = (runbook: OperationsRunbook): string =>
   [
-    `Owned by: ${roleDisplayName(runbook.owningRole)}`,
-    "",
     runbook.summary,
+    `Handled by: ${roleName(runbook.owningRole)}.`,
     "",
-    "Operator steps:",
+    "Steps:",
     ...runbook.steps.map((step, index) => `${index + 1}. ${step}`),
     "",
-    `Actions on the incident: ${operationsRunbookActionSet.join(", ")}.`,
-    "Attach a repeated signal to the open incident with the same deduplication key: it updates that incident and never creates another.",
-    "No action reads customer content and no action approves itself.",
-  ].join("\n");
-
-/** The internal identities of one runbook, shown only under the page's Technical details tab. */
-export const runbookTechnicalDetails = (runbook: OperationsRunbook): string =>
-  [
-    `Alert code: ${runbook.code}`,
-    `Runbook reference: ${runbook.runbookReference}`,
-    `Owning role key: ${runbook.owningRole}`,
+    `On the incident you can ${operationsRunbookActionSet.map((action) => action.toLowerCase()).join(", ")} it.`,
+    "When the same alert repeats, attach it to the open incident: it updates that incident instead of creating another.",
+    "No step needs customer content, and nobody approves their own action.",
+    "",
+    `Technical details: alert ${runbook.code}, runbook ${runbook.runbookReference}.`,
   ].join("\n");

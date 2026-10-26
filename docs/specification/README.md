@@ -36,7 +36,7 @@ This document is the approved product contract for the current build scope. The 
 - [IAM application](appendices/iam-application.md): all role grants use user-linked requests, reviews and workflows in an ordinary Vortex application, with protected effective assignment and no parallel granting surface.
 - [One organisation-managed role and permission catalogue](04-access-and-permissions.md#one-organisation-managed-catalogue): application registration supplies permission declarations and role templates; explicit organisation assignments control access, and application updates never silently broaden grants.
 - [Page-builder contracts and Fluid adaptation](appendices/page-builder-contracts.md): shells, slots, typed settings/data/forms, responsive layout, operation parity and one current application representation.
-- [Architecture review of 21 September](../build-plan/architecture-review-2026-09-21.md), partly superseded by the [architecture decisions](../build-plan/architecture-decisions-2026-09-25.md).
+- [Architecture decisions](../build-plan/architecture-decisions-2026-09-25.md), with the [target architecture](../build-plan/target-architecture.md) winning where they differ.
 - [HR example and workflow-only approvals](appendices/page-builder-contracts.md#hr-example-policy), approved by the owner in this review. This is a normal Vortex application, never hardcoded runtime behavior.
 
 ## How to read this specification

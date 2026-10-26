@@ -1,7 +1,8 @@
 import "server-only";
 
-import { sameId, type RecordTypeDefinition } from "../schema";
-import type { RequestDatabaseTransaction } from "../db/index";
+import { sameId } from "../catalogue/runtime-primitives";
+import type { RecordTypeDefinition } from "../definition/module-contracts";
+import type { RequestDatabaseTransaction } from "../db/request-transaction";
 
 /**
  * The write-time rule behind a declared field dependency, the same for a record save, a named
@@ -84,16 +85,10 @@ export const firstFieldDependencyRefusal = async (
     const { filterFieldId } = field.settings.dependsOn;
     const parent = linkValue(effective(String(parentFieldId)));
     if (parent === undefined) return refusal("parent_empty");
-    // The child is read as the saver reads it: the request role, then back to the save's role.
-    await transaction.query`set local role vortex_request`;
-    let rows: readonly { record: unknown }[];
-    try {
-      rows = await transaction.query<{ record: unknown }>`
-        select vortex_record.read_record(${child.recordTypeId}::uuid, ${child.recordId}::uuid) -> 'record' as record
-      `;
-    } finally {
-      await transaction.query`set local role vortex_runtime`;
-    }
+    // The child is read as the saver reads it.
+    const rows = await transaction.query<{ record: unknown }>`
+      select vortex_record.read_record(${child.recordTypeId}::uuid, ${child.recordId}::uuid) -> 'record' as record
+    `;
     const read = rows[0]?.record;
     const values =
       typeof read === "object" &&

@@ -13,7 +13,7 @@ import {
   type DecodedRecordImportRow,
   type RecordImportSourceRefusalReason,
   type StructuredRecordImportColumn,
-} from "../schema";
+} from "./file-import";
 
 export const STRUCTURED_RECORD_IMPORT_FORMAT_VERSION = STRUCTURED_RECORD_IMPORT_FORMAT;
 

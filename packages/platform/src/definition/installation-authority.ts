@@ -1,38 +1,37 @@
 import "server-only";
 
-import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
+import { createBuilderAuthority } from "../access/builder-authority";
+import { runOrganizationAccessOperation } from "../access/organization-access-decision-access";
 import {
   BuilderAuthorityError,
-  createBuilderAuthority,
   requireBuilderAuthority,
-  runOrganizationAccessOperation,
   type BuilderAuthority,
   type BuilderConferredPermission,
   type BuilderOperation,
-} from "../access/index";
+} from "./builder-authority";
 import {
   LiveContextRefused,
   readLiveHumanContext,
   type LiveHumanContext,
 } from "../access/live-context";
 import type { PlatformPermissionSource } from "../access/platform-permissions";
+import type { IdentitySession, SelectedOrganizationScope } from "../access/identity-access";
+import { projectLiveApplicationRolePermissions } from "../access/organization-access-catalogue";
 import {
-  databaseTimestamp,
   organizationAccessDeclarationSchema,
   organizationPermissionEligibilitySchema,
-  projectLiveApplicationRolePermissions,
-  sameId,
-  timestampSchema,
-  type IdentitySession,
   type OrganizationAccessDeclaration,
-  type SelectedOrganizationScope,
-} from "../schema";
+} from "../access/organization-access-decision";
+import { timestampSchema } from "../catalogue/identifiers";
+import { databaseTimestamp, sameId } from "../catalogue/runtime-primitives";
 import {
   builderPermissionKeys,
   builderRecentAuthentication,
   deriveBuilderRequirements,
 } from "./builder-authority";
 import type { prepareApplicationRoleTemplatesForHumanRequest } from "../access/application-role-template-adapter";
+import { readBuilderApplicationOrigin } from "../access/builder-authority";
 
 type InstallationProblemKind =
   "conflict" | "refused" | "authentication_required" | "temporarily_unavailable" | "failed";
@@ -144,13 +143,10 @@ export const readInstallationOrdinaryRoot = async (
   transaction: RequestDatabaseTransaction,
   rootId: string,
 ): Promise<Readonly<{ isSystemApplication: false }>> => {
-  const rows = await transaction.query<DatabaseRow>`
-    select outcome, application_origin_kind
-    from vortex_definition.read_builder_application_root_classification(${rootId}::uuid)
-  `;
-  if (rows.length !== 1 || rows[0]?.outcome !== "available")
+  const origin = await readBuilderApplicationOrigin(transaction, rootId);
+  if (origin === undefined)
     installationProblem("application_root_unavailable", "refused", "unsupported_root");
-  if (rows[0]?.application_origin_kind !== "ordinary")
+  if (origin !== "ordinary")
     installationProblem("application_root_not_ordinary", "refused", "unsupported_root");
   return { isSystemApplication: false };
 };

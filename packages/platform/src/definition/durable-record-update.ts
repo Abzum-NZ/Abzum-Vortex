@@ -1,19 +1,18 @@
 import "server-only";
 
 import { z } from "zod";
+import type { IdentitySession, OrganizationSelectionCandidate } from "../access/identity-access";
+import { jsonValueSchema } from "../catalogue/common";
 import {
-  databaseRevision,
   fieldIdSchema,
-  jsonValueSchema,
   recordIdSchema,
   recordTypeIdSchema,
   moduleRootIdSchema,
   revisionSchema,
-  saveRecordCommandSchema,
-  type IdentitySession,
-  type OrganizationSelectionCandidate,
-} from "../schema";
-import type { RequestDatabaseTransaction } from "../db/index";
+} from "../catalogue/identifiers";
+import { databaseRevision } from "../catalogue/runtime-primitives";
+import { saveRecordCommandSchema } from "../records/records";
+import type { RequestDatabaseTransaction } from "../db/request-transaction";
 import type { createRecordSaveService } from "../records/save-record";
 
 /** The exact published Record target and evaluated values of one durable update. */
@@ -46,7 +45,6 @@ export const prepareDurableRecordUpdate = async (
   commandId: string,
   update: DurableRecordUpdate,
 ) => {
-  await transaction.query`set local role vortex_request`;
   const rows = await transaction.query<{ preparation: unknown }>`
     select vortex_record.prepare_flow_record_update(
       ${update.recordTypeId}::uuid, ${update.recordId}::uuid,
@@ -81,14 +79,12 @@ export const prepareDurableRecordUpdate = async (
 };
 
 export const executeDurableRecordUpdate = async (
-  transaction: RequestDatabaseTransaction,
   records: DurableRecordSave,
   session: IdentitySession,
   selection: OrganizationSelectionCandidate,
   command: ReturnType<typeof saveRecordCommandSchema.parse>,
 ) => {
   const saved = await records.save(session, selection, command);
-  await transaction.query`set local role vortex_request`;
   if (saved.kind === "temporarily_unavailable") throw new Error("DURABLE_RECORD_SAVE_FAILED");
   if (saved.kind !== "available") return { outcome: "refused" as const };
   if (saved.value.outcome === "saved")

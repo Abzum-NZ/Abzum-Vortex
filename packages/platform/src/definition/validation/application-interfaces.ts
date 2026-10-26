@@ -1,6 +1,7 @@
 import { array, failure, object } from "./helpers";
 import type { JsonObject } from "./context";
-import { type FlowTask, flowTaskChildLists, flowTaskRegistry } from "../../schema";
+import { type FlowTask, flowTaskChildLists } from "../../workflows/flow-contracts";
+import { flowTaskRegistry } from "../../workflows/flow-task-registry";
 import { applicationInterfaceFieldType } from "./action-values";
 import type { ApplicationScope } from "./application-scope";
 

@@ -1,11 +1,8 @@
 import "server-only";
 
-import type {
-  FieldId,
-  OrganizationId,
-  SessionContext,
-  VerifiedFileActor,
-} from "../schema";
+import type { SessionContext } from "../access/identity-access";
+import type { FieldId, OrganizationId } from "../catalogue/identifiers";
+import type { VerifiedFileActor } from "./file-contracts";
 
 export type ResolveVerifiedFileActorResult =
   | Readonly<{ authorized: true; actor: VerifiedFileActor }>
@@ -71,8 +68,7 @@ export type VerifyAttachmentFieldAuthorityInput = Readonly<{
 }>;
 
 export type AttachmentFieldAuthorityResult =
-  | Readonly<{ authorized: true }>
-  | Readonly<{ authorized: false; reason: string }>;
+  Readonly<{ authorized: true }> | Readonly<{ authorized: false; reason: string }>;
 
 /**
  * Applies the current record and field authority to one attachment field. File

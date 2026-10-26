@@ -1,6 +1,10 @@
 import "server-only";
 
-import { createBuilderAuthority, type BuilderTargetFactsReader } from "@vortex/platform/server";
+import {
+  createBuilderAuthority,
+  type BuilderTargetFactsReader,
+  readBuilderApplicationOrigin,
+} from "@vortex/platform/server";
 import { organizationIdSchema, sameId, type StoredDefinitionDraft } from "@vortex/platform/schema";
 import {
   BuilderAuthorityError,
@@ -9,7 +13,6 @@ import {
   requireBuilderAuthority,
   type LiveHumanContext,
 } from "@vortex/platform/server";
-import type { DatabaseRow } from "@vortex/platform/server";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
 import { getIdentityAuthorityConfiguration } from "../auth/_lib/authority-configuration";
 import { installedReleaseCatalogue } from "./definition-catalogue";
@@ -26,6 +29,7 @@ import {
 import { DefinitionError, classifyDatabaseError } from "@vortex/platform/server";
 import { platformPermissionSource } from "./platform-permission-source";
 import { readStudioPersonLabel } from "./studio-person-labels";
+import { describeFailure } from "@vortex/platform/schema";
 
 type ApplicationDraft = Extract<StoredDefinitionDraft, { kind: "application" }>;
 type FailureKind = StudioApplicationRestoreFailure["kind"];
@@ -35,15 +39,7 @@ class RestoreUnavailable extends Error {}
 
 const targetFacts: BuilderTargetFactsReader = async (transaction, _scope, rootId) => {
   if (rootId === undefined) throw new RestoreRefused();
-  const rows = await transaction.query<DatabaseRow>`
-    select outcome, application_origin_kind
-    from vortex_definition.read_builder_application_root_classification(${rootId}::uuid)
-  `;
-  if (
-    rows.length !== 1 ||
-    rows[0]?.outcome !== "available" ||
-    rows[0]?.application_origin_kind !== "ordinary"
-  )
+  if ((await readBuilderApplicationOrigin(transaction, rootId)) !== "ordinary")
     throw new RestoreRefused();
   return { isSystemApplication: false };
 };
@@ -157,7 +153,8 @@ export async function restoreStudioApplicationDraft(
   let resolved: Awaited<ReturnType<typeof resolveIdentitySession>>;
   try {
     resolved = await resolveIdentitySession();
-  } catch {
+  } catch (error) {
+    console.error(`[studio] STUDIO_RESTORE_SESSION_UNAVAILABLE: ${describeFailure(error)}`);
     return failedCommand("temporarily_unavailable", false);
   }
   if (resolved.kind !== "active")

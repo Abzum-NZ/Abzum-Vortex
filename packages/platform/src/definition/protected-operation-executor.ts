@@ -2,24 +2,18 @@ import "server-only";
 
 import { createHash, randomUUID } from "node:crypto";
 import {
+  identitySessionSchema,
+  organizationSelectionCandidateSchema,
+  type IdentitySession,
+  type OrganizationSelectionCandidate,
+} from "../access/identity-access";
+import {
   addOrganizationAdministrationMembershipCommandSchema,
-  logRefusal,
-  applicationRootIdSchema,
   assignOrganizationAdministrationRoleAssignmentCommandSchema,
   changeOrganizationAdministrationRoleAuthorityCommandSchema,
-  closeOrganizationAccountCommandSchema,
   createOrganizationAdministrationGroupCommandSchema,
-  createOrganizationInvitationForAdministrationCommandSchema,
-  createTenantOrganizationCommandSchema,
   deactivateOrganizationAdministrationRoleActivationCommandSchema,
-  findPlatformServiceOperation,
-  flowRefusalFeedbackSchema,
-  identitySessionSchema,
-  jsonValueSchema,
-  organizationSelectionCandidateSchema,
-  organizationStewardshipAppointmentCommandSchema,
   prepareOrganizationAdministrationRoleChangeCommandSchema,
-  reactivateOrganizationAccountCommandSchema,
   removeOrganizationAdministrationMembershipCommandSchema,
   renameOrganizationAdministrationGroupCommandSchema,
   retireOrganizationAdministrationGroupCommandSchema,
@@ -27,31 +21,40 @@ import {
   revokeOrganizationAdministrationDelegationAuthorityCommandSchema,
   grantOrganizationAdministrationDelegationAuthorityCommandSchema,
   revokeOrganizationAdministrationRoleAssignmentCommandSchema,
-  revokeOrganizationInvitationForAdministrationCommandSchema,
   reviseOrganizationAdministrationRoleMetadataCommandSchema,
-  stableDefinitionReleaseVersionSchema,
-  reactivateTenantOrganizationCommandSchema,
-  renameTenantOrganizationCommandSchema,
-  reparentTenantOrganizationCommandSchema,
+} from "../access/organization-access-administration";
+import {
+  closeOrganizationAccountCommandSchema,
+  createOrganizationInvitationForAdministrationCommandSchema,
+  reactivateOrganizationAccountCommandSchema,
+  revokeOrganizationInvitationForAdministrationCommandSchema,
   suspendOrganizationAccountCommandSchema,
-  suspendTenantOrganizationCommandSchema,
   updateOwnProfileCommandSchema,
-  duplicateProtectionKeySchema,
-  flowTaskRegistry,
+} from "../access/organization-local-administration";
+import { organizationStewardshipAppointmentCommandSchema } from "../access/organization-stewardship";
+import { jsonValueSchema, duplicateProtectionKeySchema, type JsonValue } from "../catalogue/common";
+import {
+  applicationRootIdSchema,
   workflowNodeIdSchema,
   workflowRunIdSchema,
   workflowIdSchema,
   organizationIdSchema,
   revisionSchema,
+  type TenantId,
+} from "../catalogue/identifiers";
+import {
+  findPlatformServiceOperation,
+  type PlatformServiceOperationKey,
+} from "../catalogue/platform-service-operation-catalogue";
+import { logRefusal } from "../catalogue/runtime-primitives";
+import {
+  createTenantOrganizationCommandSchema,
+  reactivateTenantOrganizationCommandSchema,
+  renameTenantOrganizationCommandSchema,
+  reparentTenantOrganizationCommandSchema,
+  suspendTenantOrganizationCommandSchema,
   type CreateTenantOrganizationCommand,
   type CreateTenantOrganizationResult,
-  type FlowRefusalFeedback,
-  type IdentitySession,
-  type ExecutionAuthorityContext,
-  type JsonValue,
-  type OrganizationSelectionCandidate,
-  type PlatformServiceOperationKey,
-  type ProtectedOperationDescriptor,
   type ReactivateTenantOrganizationCommand,
   type ReactivateTenantOrganizationResult,
   type RenameTenantOrganizationCommand,
@@ -60,16 +63,21 @@ import {
   type ReparentTenantOrganizationResult,
   type SuspendTenantOrganizationCommand,
   type SuspendTenantOrganizationResult,
-  type TenantId,
-} from "../schema";
-import type {
-  createDurableActorRequestService,
-  createOrganizationAccessAdministrationService,
-  HumanOrganizationRequestResult,
-} from "../access/index";
-import { verifiedDurableActorContextSchema } from "../access/index";
-import type { DurableActorRequestScope } from "../access/index";
-import type { RequestDatabaseTransaction } from "../db/index";
+} from "../identity/tenant-governance";
+import type { ExecutionAuthorityContext } from "../workflows/flow-contracts";
+import {
+  flowRefusalFeedbackSchema,
+  type FlowRefusalFeedback,
+} from "../workflows/flow-refusal-feedback";
+import { flowTaskRegistry } from "../workflows/flow-task-registry";
+import type { ProtectedOperationDescriptor } from "./application-flow-bindings";
+import { stableDefinitionReleaseVersionSchema } from "./version-impact";
+import type { createDurableActorRequestService } from "../access/durable-actor-request";
+import type { HumanOrganizationRequestResult } from "../access/human-organization-request";
+import type { createOrganizationAccessAdministrationService } from "../access/organization-access-administration-access";
+import { verifiedDurableActorContextSchema } from "../access/durable-actor-request";
+import type { DurableActorRequestScope } from "../access/durable-actor-request";
+import type { RequestDatabaseTransaction } from "../db/request-transaction";
 import type { ApplicationStoreService } from "./installation-application-store";
 import { z } from "zod";
 import {
@@ -1078,20 +1086,29 @@ const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Obj
       invitedEmail: inputs.invited_email,
       expiresAt: inputs.expires_at,
     }),
-    run: async (services, caller, command) =>
-      mapAvailable(
-        await services.accessAdministration.createOrganizationInvitation(
-          caller.session,
-          caller.selection,
-          command,
-        ),
-        (value) => ({
+    run: async (services, caller, command) => {
+      const result = await services.accessAdministration.createOrganizationInvitation(
+        caller.session,
+        caller.selection,
+        command,
+      );
+      if (result.kind !== "available") return result;
+      const value = result.value;
+      if (value.outcome === "already_pending")
+        return {
+          kind: "confirmed_failure",
+          outcome: "refused",
+          diagnostic: flowRefusalFeedbackSchema.parse({ code: "invitation_already_pending" }),
+        } as const;
+      return {
+        kind: "available",
+        value: {
           invitation_id: value.invitationId,
           revision: value.revision,
           access_version: value.accessVersion,
-          ...(value.outcome === "accepted" ? { invitation_secret: value.invitationSecret } : {}),
-        }),
-      ),
+        },
+      };
+    },
   }),
   revoke_organization_invitation: operation({
     schema: revokeOrganizationInvitationForAdministrationCommandSchema,
@@ -1428,7 +1445,6 @@ export const createProtectedOperationExecutor = (
                   if (services.records === undefined)
                     throw new Error("DURABLE_RECORD_SAVE_UNAVAILABLE");
                   return executeDurableRecordUpdate(
-                    transaction,
                     services.records,
                     session,
                     selection,

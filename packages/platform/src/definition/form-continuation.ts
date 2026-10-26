@@ -1,11 +1,11 @@
 import "server-only";
 
+import type { IdentitySession, OrganizationSelectionCandidate } from "../access/identity-access";
+import { logRefusal } from "../catalogue/runtime-primitives";
 import {
   formContinuationOutcomeSchema,
   formContinuationRequestSchema,
   formContinuationStartRequestSchema,
-  logRefusal,
-  safeFlowResultDescriptors,
   type FormContinuationInstallation,
   type FormContinuationOutcome,
   type FormContinuationRefusalReason,
@@ -13,10 +13,8 @@ import {
   type FormContinuationService,
   type FormContinuationStartRequest,
   type FormContinuationTarget,
-  type IdentitySession,
-  type OrganizationSelectionCandidate,
-  type SafeFlowResultKind,
-} from "../schema";
+} from "../workflows/form-continuation-contracts";
+import { safeFlowResultDescriptors, type SafeFlowResultKind } from "./application-flow-bindings";
 import type { FlowOrchestrator } from "./flow-orchestrator";
 import type { FlowOrchestratorResponse } from "./flow-orchestrator-types";
 

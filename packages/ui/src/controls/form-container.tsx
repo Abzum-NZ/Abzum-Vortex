@@ -11,8 +11,13 @@ import {
   type FormEvent,
   type KeyboardEvent,
   type ReactElement,
+  type RefObject,
 } from "react";
-import type { FlowFieldCorrection, FlowRefusalFeedback } from "@vortex/platform/schema";
+import {
+  flowRefusalFeedbackSentences,
+  type FlowFieldCorrection,
+  type FlowRefusalFeedback,
+} from "@vortex/platform/schema";
 import { DefinitionRenderError } from "../definition-error";
 import { FlowSurfaceContext } from "../flow-runtime/flow-surface-context";
 import { resolveControlContext, type ControlRenderProps } from "./control-context";
@@ -77,30 +82,9 @@ const fieldCorrectionText: Readonly<Record<FlowFieldCorrection["code"], string>>
 
 const refusalFeedbackText = (feedback: Extract<FormFlowFeedback, { kind: "refusal" }>): string => {
   if (feedback.ruleMessages !== undefined) return feedback.ruleMessages.join(" ");
-  switch (feedback.code) {
-    case "invalid_command":
-      return feedback.fieldLabel === undefined
-        ? "The supplied inputs are invalid."
-        : `Check the ${feedback.fieldLabel} field and try again.`;
-    case "duplicate_conflict":
-      return "A conflicting item already exists.";
-    case "stale_revision":
-      return "This item changed. Refresh and try again.";
-    case "recent_authentication_required":
-      return "To protect your organisation, this change needs a sign-in within the last 15 minutes. Sign in again, then retry the change.";
-    case "role_settings_change_required":
-      return "Accepting application role changes keeps the role settings. Use Manage roles to change its name, description, classification or assignment and activation settings.";
-    case "application_storage_incompatible":
-      return "This version changes stored fields in a way existing records cannot accept. Keep existing choice options unchanged when adding options, and preserve field types, storage and ownership settings.";
-    case "applications_manage_required":
-      return "Installing or upgrading applications needs the Manage applications permission. An organisation steward can give you a role that has it in IAM.";
-    case "installation_delegation_required":
-      return "Installing this application needs app-installation authority over the permissions its roles grant. An organisation steward can grant it in IAM > People with Grant app-installation authority.";
-    case "assignments_manage_required":
-      return "Taking this application's role yourself needs the Manage access assignments permission. Install without taking the role, or ask an organisation steward for that permission in IAM.";
-    default:
-      return "The supplied inputs are invalid.";
-  }
+  if (feedback.code === "invalid_command" && feedback.fieldLabel !== undefined)
+    return `Check the ${feedback.fieldLabel} field and try again.`;
+  return flowRefusalFeedbackSentences[feedback.code];
 };
 
 const refusalRecoveryText = {
@@ -133,6 +117,63 @@ const NON_SUBMITTING_INPUT_TYPES = new Set([
 
 const FIRST_FIELD_SELECTOR =
   "input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled])";
+
+/**
+ * Focuses the control of one field of the form, by its field key: the control its label names
+ * (a file field's chooser, not a listed file's Remove button), else its first enabled control.
+ */
+const focusField = (form: HTMLFormElement | null, fieldKey: string | undefined): void => {
+  if (form === null || fieldKey === undefined) return;
+  const field = form.querySelector<HTMLElement>(
+    `[data-vortex-field-key="${CSS.escape(fieldKey)}"]`,
+  );
+  if (field === null) return;
+  const labelled = field.querySelector<HTMLLabelElement>("label[for]")?.htmlFor;
+  const named =
+    labelled === undefined ? null : field.querySelector<HTMLElement>(`#${CSS.escape(labelled)}`);
+  const control =
+    named !== null && !named.matches(":disabled")
+      ? named
+      : field.querySelector<HTMLElement>(
+          ':is(input, select, textarea, button):not([disabled], [type="hidden"])',
+        );
+  control?.focus();
+};
+
+/**
+ * The form's error summary: when a submission is refused with two or more fields to fix, one
+ * announced list at the top of the form names each problem, and choosing one moves to its field.
+ */
+function FormErrorSummary({
+  form,
+  errors,
+}: Readonly<{
+  form: RefObject<HTMLFormElement | null>;
+  errors: Readonly<Record<string, string>>;
+}>): ReactElement | null {
+  const entries = Object.entries(errors);
+  if (entries.length < 2) return null;
+  return (
+    <Alert variant="destructive" role="alert" data-vortex-form-error-summary="">
+      <AlertDescription>
+        <p className="font-medium">Fix these {entries.length} fields to continue:</p>
+        <ul className="mt-1 list-disc ps-5">
+          {entries.map(([fieldKey, message]) => (
+            <li key={fieldKey}>
+              <button
+                type="button"
+                className="text-start underline underline-offset-4"
+                onClick={() => focusField(form.current, fieldKey)}
+              >
+                {message}
+              </button>
+            </li>
+          ))}
+        </ul>
+      </AlertDescription>
+    </Alert>
+  );
+}
 
 /**
  * Accessible form boundary. It emits `form_ready` once when mounted, and one `form_submit` with
@@ -298,13 +339,30 @@ export function FormContainer(props: FormContainerProps): ReactElement {
     formRef.current?.querySelector<HTMLElement>(FIRST_FIELD_SELECTOR)?.focus();
   }, [generation]);
 
+  // A refused submission moves focus to the first field it names, so a keyboard or screen-reader
+  // user lands on what to fix instead of staying on the button.
+  const focusFirstInvalidRef = useRef(false);
+  useEffect(() => {
+    if (!focusFirstInvalidRef.current) return;
+    focusFirstInvalidRef.current = false;
+    focusField(formRef.current, Object.keys(validationErrors)[0]);
+  }, [validationErrors]);
+  useEffect(() => {
+    const refused = props.flowFeedback;
+    if (refused?.kind !== "refusal" || refused.corrections === undefined) return;
+    focusField(formRef.current, refused.corrections[0]?.field);
+  }, [props.flowFeedback]);
+
   const onSubmit = (event: FormEvent<HTMLFormElement>): void => {
     event.preventDefault();
     if (context.inactive || submission.running()) return;
     validationAttemptedRef.current = true;
     const nextValidationErrors = registry.validationErrors();
     setValidationErrors(nextValidationErrors);
-    if (Object.keys(nextValidationErrors).length > 0) return;
+    if (Object.keys(nextValidationErrors).length > 0) {
+      focusFirstInvalidRef.current = true;
+      return;
+    }
     if (ownerGroups !== undefined && selectedOwnerGroupId === undefined) {
       setOwnerGroupError(true);
       return;
@@ -379,6 +437,7 @@ export function FormContainer(props: FormContainerProps): ReactElement {
         data-vortex-placement-id={props.placementId}
         className="flex flex-col gap-4"
       >
+        <FormErrorSummary form={formRef} errors={validationErrors} />
         {ownerGroups === undefined ? null : ownerGroups.length === 0 ? (
           <p role="alert" className="text-sm text-muted-foreground">
             You need current membership in an active Group before you can create this record.

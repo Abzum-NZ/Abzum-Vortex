@@ -1,8 +1,8 @@
 import "server-only";
 
 import { createHash } from "node:crypto";
+import { describeFailure, sameId } from "../catalogue/runtime-primitives";
 import {
-  sameId,
   fileRemovalAuthoritySnapshotSchema,
   fileRemovalEligibilityDecisionSchema,
   fileRemovalEligibilityRequestSchema,
@@ -12,15 +12,7 @@ import {
   type FileRemovalOwnerBinding,
   type FileRemovalRefusalReason,
   type ProtectedLegalHoldReference,
-} from "../schema";
-
-export {
-  type FileRemovalAuthoritySnapshot,
-  type FileRemovalEligibilityDecision,
-  type FileRemovalEligibilityRequest,
-  type FileRemovalOwnerBinding,
-  type FileRemovalRefusalReason,
-} from "../schema";
+} from "./file-contracts";
 
 export type FileHoldEvaluationScope = Readonly<{
   tenantId: string;
@@ -318,7 +310,8 @@ export const createFileRemovalEligibilityService = (
       let now: Date;
       try {
         now = clock();
-      } catch {
+      } catch (error) {
+        console.error(`[files] FILE_REMOVAL_CLOCK_UNAVAILABLE: ${describeFailure(error)}`);
         return refused("authority_unavailable", new Date().toISOString());
       }
       const nowMilliseconds = now.getTime();
@@ -335,7 +328,8 @@ export const createFileRemovalEligibilityService = (
       let resolution: FileRemovalAuthorityResolution;
       try {
         resolution = await dependencies.resolveCurrentAuthority(request.data);
-      } catch {
+      } catch (error) {
+        console.error(`[files] FILE_REMOVAL_AUTHORITY_UNAVAILABLE: ${describeFailure(error)}`);
         return refused("authority_unavailable", decidedAt);
       }
       if (!resolution.available) return refused("authority_unavailable", decidedAt);

@@ -2,13 +2,11 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 import { z } from "zod";
-import {
-  componentFlowBindingSchema,
-  flowSchema,
-  sameId,
-  type SystemApplicationBoundReleaseSetResult,
-} from "../schema";
-import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
+import { sameId } from "../catalogue/runtime-primitives";
+import { flowSchema } from "../workflows/flow-contracts";
+import { componentFlowBindingSchema } from "./application-flow-bindings";
+import type { SystemApplicationBoundReleaseSetResult } from "./definition-consumer-read";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
 import { DefinitionError } from "./definition-error";
 import { contributedActionKey } from "./installed-named-actions";
 import { actionDefinitionSchema, moduleFieldSchema } from "./module-contracts";

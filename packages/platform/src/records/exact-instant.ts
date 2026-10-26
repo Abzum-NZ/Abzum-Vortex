@@ -1,4 +1,4 @@
-import { timestampSchema } from "../schema";
+import { timestampSchema } from "../catalogue/identifiers";
 
 export type ExactInstant = Readonly<{ epochSecond: bigint; fraction: string }>;
 

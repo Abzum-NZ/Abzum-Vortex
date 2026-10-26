@@ -1,18 +1,18 @@
 import "server-only";
 
 import { z } from "zod";
+import { correlationIdSchema } from "../catalogue/common";
 import {
-  databaseRevision,
   builderKeySchema,
-  correlationIdSchema,
   namespacedKeySchema,
   organizationIdSchema,
   platformIdSchema,
   revisionSchema,
   tenantIdSchema,
   timestampSchema,
-} from "../schema";
-import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
+} from "../catalogue/identifiers";
+import { databaseCode, databaseRevision } from "../catalogue/runtime-primitives";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
 import {
   capabilityPolicyAppliedScopeSchema,
   capabilityPolicyQuantitySchema,
@@ -347,11 +347,6 @@ const parseResult = <Result>(
   if (!parsed.success) throw new Error(errorCode);
   return parsed.data;
 };
-
-const databaseCode = (error: unknown): string | undefined =>
-  typeof error === "object" && error !== null && "code" in error
-    ? String((error as { readonly code?: unknown }).code)
-    : undefined;
 
 const runCommand = async <Result>(
   operation: () => Promise<readonly ResultRow[]>,

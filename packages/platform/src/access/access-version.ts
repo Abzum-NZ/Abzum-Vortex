@@ -1,9 +1,9 @@
 import "server-only";
 
-import { createHash } from "node:crypto";
+import { z } from "zod";
+import { databaseTimestamp, databaseRevision } from "../catalogue/runtime-primitives";
+import { invitationIdSchema, organizationIdSchema } from "../catalogue/identifiers";
 import {
-  databaseTimestamp,
-  databaseRevision,
   acceptOrganizationInvitationCommandSchema,
   invitationAcceptanceWithAccessVersionSchema,
   organizationAccountSchema,
@@ -12,12 +12,12 @@ import {
   type InvitationAcceptanceWithAccessVersion,
   type OrganizationAccount,
   type VerifiedIdentity,
-} from "../schema";
+} from "./identity-access";
 import {
   withRuntimeTransaction,
   type DatabaseRow,
   type RequestDatabaseTransaction,
-} from "../db/index";
+} from "../db/request-transaction";
 
 export const accessVersionErrorCodes = [
   "INVALID_ACCESS_VERSION_COMMAND",
@@ -115,6 +115,19 @@ const parseAcceptance = (row: AcceptanceRow): InvitationAcceptanceWithAccessVers
   return parsed.data;
 };
 
+/** An invitation the signed-in person may accept: sent to their verified email and still pending. */
+export const pendingInvitationSchema = z
+  .object({
+    invitationId: invitationIdSchema,
+    organizationId: organizationIdSchema,
+    organizationName: z.string().min(1),
+    tenantName: z.string().min(1),
+    expiresAt: z.string().min(1),
+  })
+  .strict();
+
+export type PendingInvitation = z.infer<typeof pendingInvitationSchema>;
+
 const mapStorageFailure = (error: unknown): AccessVersionError => {
   const databaseCode =
     typeof error === "object" && error !== null && "code" in error
@@ -129,15 +142,47 @@ const mapStorageFailure = (error: unknown): AccessVersionError => {
   return new AccessVersionError("ACCESS_VERSION_OPERATION_FAILED");
 };
 
-const fingerprintSecret = (secret: string): string =>
-  `sha256:${createHash("sha256").update(secret, "utf8").digest("hex")}`;
-
 const normalizeEmail = (email: string): string => email.trim().toLowerCase();
 
 export const createAccessVersionStore = (dependencies: AccessVersionStoreDependencies = {}) => {
   const runtimeTransaction = dependencies.runtimeTransaction ?? withRuntimeTransaction;
 
   return Object.freeze({
+    /** The invitations waiting for the verified email of the signed-in person (at most 20). */
+    async listPendingInvitations(
+      verifiedIdentity: VerifiedIdentity,
+    ): Promise<readonly PendingInvitation[]> {
+      const verified = verifiedIdentitySchema.safeParse(verifiedIdentity);
+      if (!verified.success) throw new AccessVersionError("INVALID_ACCESS_VERSION_COMMAND");
+      try {
+        return await runtimeTransaction(async (transaction) => {
+          const rows = await transaction.query`
+            select invitation_id, organization_id, organization_display_name,
+              tenant_display_name, expires_at
+            from vortex_access.list_pending_invitations_for_identity(
+              ${verified.data.identityId}::uuid,
+              ${normalizeEmail(verified.data.verifiedPrimaryEmail)}::text
+            )
+          `;
+          return rows.map((row) => {
+            const parsed = pendingInvitationSchema.safeParse({
+              invitationId: row.invitation_id,
+              organizationId: row.organization_id,
+              organizationName: row.organization_display_name,
+              tenantName: row.tenant_display_name,
+              expiresAt: databaseTimestamp(row.expires_at),
+            });
+            if (!parsed.success)
+              throw new AccessVersionError("INVALID_ACCESS_VERSION_STORAGE_RESULT");
+            return parsed.data;
+          });
+        });
+      } catch (error) {
+        if (error instanceof AccessVersionError) throw error;
+        throw mapStorageFailure(error);
+      }
+    },
+
     async acceptOrganizationInvitation(
       verifiedIdentity: VerifiedIdentity,
       command: AcceptOrganizationInvitationCommand,
@@ -147,7 +192,6 @@ export const createAccessVersionStore = (dependencies: AccessVersionStoreDepende
       if (!verified.success || !parsed.success)
         throw new AccessVersionError("INVALID_ACCESS_VERSION_COMMAND");
 
-      const tokenFingerprint = fingerprintSecret(parsed.data.invitationSecret);
       const verifiedEmail = normalizeEmail(verified.data.verifiedPrimaryEmail);
 
       try {
@@ -155,7 +199,7 @@ export const createAccessVersionStore = (dependencies: AccessVersionStoreDepende
           const rows = await transaction.query<AcceptanceRow>`
             select *
             from vortex_access.accept_organization_invitation(
-              ${tokenFingerprint}::text,
+              ${parsed.data.invitationId}::uuid,
               ${verified.data.identityId}::uuid,
               ${verifiedEmail}::text,
               ${parsed.data.displayName ?? null}::text,
@@ -175,3 +219,4 @@ export const createAccessVersionStore = (dependencies: AccessVersionStoreDepende
 const defaultStore = createAccessVersionStore();
 
 export const acceptOrganizationInvitation = defaultStore.acceptOrganizationInvitation;
+export const listPendingInvitations = defaultStore.listPendingInvitations;

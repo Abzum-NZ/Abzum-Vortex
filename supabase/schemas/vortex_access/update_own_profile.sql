@@ -80,10 +80,8 @@ begin
         'target', pg_catalog.jsonb_build_object('kind', 'organization'),
         'requiredPermission', pg_catalog.jsonb_build_object(
           'ownerKind', 'platform',
-          -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
-          'ownerId', 'cabe121e-0baf-4084-9471-cce915d460a8',
-          -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
-          'permissionId', '630a980c-0ff5-40b1-a329-7326a2122395'
+          'ownerId', vortex_access.platform_permission_owner_id(),
+          'permissionId', vortex_access.platform_permission_id('platform.organization.accounts.manage')
         ),
         'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
         'authority', pg_catalog.jsonb_build_object('kind', 'permission')

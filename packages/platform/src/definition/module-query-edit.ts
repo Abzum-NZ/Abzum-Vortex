@@ -1,6 +1,7 @@
 import { builderKeySchema } from "../catalogue/identifiers";
 import type { ModuleQueryExposure } from "./module-query-exposure";
 import { readTimeCalculations } from "./module-field-formulas";
+import { queryTotalAccepts, queryTotalOperationLabels } from "./module-query-totals";
 import {
   applicationSourceDocumentSchema,
   type ApplicationSourceDocument,
@@ -43,36 +44,6 @@ export const queryGroupFieldTypes: ReadonlySet<string> = new Set([
   "web_address",
   "link",
 ]);
-/** Field types a sum or an average adds up. */
-export const queryNumericTotalFieldTypes: ReadonlySet<string> = new Set([
-  "whole_number",
-  "decimal_number",
-  "money",
-]);
-/** Field types a lowest or highest value is taken of. */
-export const queryExtremeTotalFieldTypes: ReadonlySet<string> = new Set([
-  "text",
-  "whole_number",
-  "decimal_number",
-  "yes_no",
-  "money",
-  "date",
-  "date_time",
-]);
-
-/** The fields of a total's operation it can be taken of; a count takes none. */
-export const queryTotalAccepts = (
-  operation: InlineQueryAggregate["operation"],
-  fieldType: string,
-): boolean =>
-  operation === "count"
-    ? false
-    : operation === "distinct_count"
-      ? fieldType !== "total" && fieldType !== "calculation"
-      : operation === "sum" || operation === "average"
-        ? queryNumericTotalFieldTypes.has(fieldType)
-        : queryExtremeTotalFieldTypes.has(fieldType);
-
 /** A distinct count reads a filterable stored value, including stored numeric calculations. */
 export const queryDistinctFieldAccepts = (field: Field, readTime: ReadonlySet<string>): boolean =>
   field.filterable &&
@@ -82,15 +53,6 @@ export const queryDistinctFieldAccepts = (field: Field, readTime: ReadonlySet<st
       !readTime.has(field.key) &&
       (field.settings.result_type === "whole_number" ||
         field.settings.result_type === "decimal_number")));
-
-export const queryTotalOperationLabels = {
-  count: "Number of records",
-  sum: "Sum",
-  average: "Average",
-  minimum: "Lowest",
-  maximum: "Highest",
-  distinct_count: "Number of different values",
-} as const satisfies Record<InlineQueryAggregate["operation"], string>;
 
 /** The business name of a query total, shared by its editor, pickers and charts. */
 export const queryTotalLabel = (operation: string, fieldLabel: string | undefined): string => {

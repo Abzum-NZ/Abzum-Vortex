@@ -1,4 +1,7 @@
-import type { DefinitionRuleFailure, DefinitionValidationLocation } from "../schema";
+import type {
+  DefinitionRuleFailure,
+  DefinitionValidationLocation,
+} from "../catalogue/validation-errors";
 import { compareCanonicalStrings } from "./canonical-json-definition";
 
 const safeLocationKey = (location: DefinitionValidationLocation | undefined) =>

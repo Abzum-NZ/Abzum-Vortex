@@ -1,13 +1,9 @@
 import "server-only";
 
-import {
-  dispatchOccurrenceSchema,
-  eventOccurrenceIdSchema,
-  isNonNilUuidText,
-  timestampSchema,
-  type DispatchOccurrence,
-} from "../schema";
-import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
+import { eventOccurrenceIdSchema, timestampSchema } from "../catalogue/identifiers";
+import { databaseCode, isNonNilUuidText } from "../catalogue/runtime-primitives";
+import { dispatchOccurrenceSchema, type DispatchOccurrence } from "./occurrence-contracts";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
 
 export const eventConsumerProgressLimits = Object.freeze({
   maximumBatchSize: 100,
@@ -241,11 +237,6 @@ const parseAcknowledgementResult = (candidate: unknown): EventConsumerAcknowledg
     return { outcome: value.outcome };
   throw new EventConsumerProgressError("EVENT_CONSUMER_PROGRESS_STORAGE_UNAVAILABLE");
 };
-
-const databaseCode = (error: unknown): string | undefined =>
-  typeof error === "object" && error !== null && "code" in error
-    ? String((error as { readonly code?: unknown }).code)
-    : undefined;
 
 const mapFailure = (error: unknown): EventConsumerProgressError => {
   if (error instanceof EventConsumerProgressError) return error;

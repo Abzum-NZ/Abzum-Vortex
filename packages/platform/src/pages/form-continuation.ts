@@ -1,14 +1,13 @@
 import "server-only";
 
-import type { HumanOrganizationRequestResult } from "../access/index";
+import type { HumanOrganizationRequestResult } from "../access/human-organization-request";
+import type { IdentitySession, OrganizationSelectionCandidate } from "../access/identity-access";
 import type {
   FormContinuationOutcome,
   FormContinuationRequest,
   FormContinuationService,
   FormContinuationStartRequest,
-  IdentitySession,
-  OrganizationSelectionCandidate,
-} from "../schema";
+} from "../workflows/form-continuation-contracts";
 import type {
   AbandonPrivateFormDraftCommand,
   PrivateFormDraftAbandonResult,
@@ -16,6 +15,7 @@ import type {
   PrivateFormDraftScope,
   ReadPrivateFormDraftCommand,
 } from "./form-drafts";
+import { describeFailure } from "../catalogue/runtime-primitives";
 
 /**
  * #544: the Page side of the private form continuation. Page calls the form request and
@@ -86,8 +86,7 @@ const sameScope = (
 
 /** The flow reported the submission final: nothing is left to review, reconcile or retry. */
 const isFinalSubmission = (outcome: FormContinuationOutcome): boolean =>
-  outcome.kind === "finished" &&
-  (outcome.result === "committed" || outcome.result === "completed");
+  outcome.kind === "finished" && (outcome.result === "committed" || outcome.result === "completed");
 
 export const createPrivateFormContinuationAdapter = (
   dependencies: PrivateFormContinuationDependencies,
@@ -105,7 +104,8 @@ export const createPrivateFormContinuationAdapter = (
       return abandoned.kind === "available" && abandoned.value.outcome === "abandoned"
         ? "discarded"
         : "discard_failed";
-    } catch {
+    } catch (error) {
+      console.error(`[page] FORM_CONTINUATION_DISCARD_FAILED: ${describeFailure(error)}`);
       return "discard_failed";
     }
   };
