@@ -30,7 +30,10 @@ import { refuseInvalidCommand } from "./protected-query-helpers";
 import { summariseCommand, boardSummaryCommand } from "./protected-query-summary";
 import { runCommand } from "./protected-query-table";
 import type { ProtectedQueryServiceDependencies } from "./protected-query-types";
-import type { ProtectedQueryRow } from "./protected-query-contracts";
+import type {
+  ProtectedQueryRow,
+  ProtectedQuerySummaryCompleted,
+} from "./protected-query-contracts";
 import type { RequestDatabaseTransaction } from "../db/request-transaction";
 import type { SelectedOrganizationScope } from "../access/identity-access";
 
@@ -38,14 +41,16 @@ export type { ProtectedQueryServiceDependencies } from "./protected-query-types"
 
 /**
  * A decision the caller takes inside the read's own request transaction, after a completed read
- * and from the rows it returned (none for a summary): one protected request carries the read and
- * every viewer decision the page shows beside it. The caller keeps what it decides.
+ * and from the rows it returned (none for a summary, which passes its completed summary instead):
+ * one protected request carries the read and every viewer decision the page shows beside it. The
+ * caller keeps what it decides.
  */
 export type ProtectedReadDecider = (
   transaction: RequestDatabaseTransaction,
   scope: SelectedOrganizationScope,
   issuedAt: string,
   rows: readonly ProtectedQueryRow[],
+  summary?: ProtectedQuerySummaryCompleted,
 ) => Promise<void>;
 
 /**
@@ -216,7 +221,7 @@ export const createProtectedQueryService = (dependencies: ProtectedQueryServiceD
       return requests.run(caller, selection, async (transaction, scope, issuedAt) => {
         const result = await summariseCommand(transaction, scope, command.data);
         if (decide !== undefined && result.outcome === "completed")
-          await decide(transaction, scope, issuedAt, []);
+          await decide(transaction, scope, issuedAt, [], result);
         return result;
       });
     },

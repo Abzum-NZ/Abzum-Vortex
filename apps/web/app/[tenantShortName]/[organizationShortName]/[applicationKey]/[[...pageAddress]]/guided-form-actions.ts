@@ -118,6 +118,7 @@ const loadActionPage = async (addressCandidate: unknown) => {
       read: resolved.read,
       application: resolved.application,
       pageKey: resolved.pageKey,
+      ...(resolved.navigation === undefined ? {} : { navigation: resolved.navigation }),
     },
     address.subjectRecordId === undefined ? {} : { record_id: address.subjectRecordId },
   );

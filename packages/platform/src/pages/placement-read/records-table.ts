@@ -351,7 +351,7 @@ export const readRecordsTable = async (
         : {}),
       ...(decide === undefined ? {} : { decide }),
       ...(timeZone === undefined ? {} : { timeZone }),
-      resolveRecordLinks: read.services.resolveRecordLinks,
+      titleRecordLinks: read.services.titleRecordLinks,
       state: { ...effectiveState, page },
       layout,
       ...(formatting === undefined ? {} : { formatting }),
