@@ -128,7 +128,7 @@ begin
     p_runtime_language, p_runtime_time_zone, p_runtime_currency,
     p_runtime_date_format, p_runtime_number_format
   );
-  -- Reuse the same #430 language/time-zone validators for account preferences.
+  -- Reuse the organisation runtime settings language/time-zone validators for account preferences.
   perform vortex_identity.assert_organization_runtime_settings_values(
     p_account_language, p_account_time_zone, p_runtime_currency,
     p_runtime_date_format, p_runtime_number_format

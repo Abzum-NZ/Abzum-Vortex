@@ -461,6 +461,7 @@ const decodeCursor = (after: unknown): OffboardingInventoryCursor | undefined =>
     let decoded: unknown;
     try {
       decoded = JSON.parse(Buffer.from(trimmed, "base64url").toString("utf8"));
+      // guard-allow: silent-catch A cursor that is not base64url JSON is refused as an invalid command.
     } catch {
       return invalidCommand();
     }

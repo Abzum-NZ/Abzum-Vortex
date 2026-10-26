@@ -59,8 +59,8 @@ begin
     policies := policies || pg_catalog.jsonb_build_array(policy_row.policy_body);
 
     if policy_row.action = 'archive_workflow' then
-      -- An archive policy always carries a permanent Application scope; #566
-      -- refuses to store an organisation-shared one.
+      -- An archive policy always carries a permanent Application scope; the policy
+      -- save refuses to store an organisation-shared one.
       if policy_row.application_root_id is distinct from p_application_root_id then
         raise exception using errcode = '23514',
           message = 'Record-type lifecycle archive policy scope is unavailable';
@@ -86,7 +86,7 @@ begin
         policy_row.policy_body ->> 'expectedDestinationFingerprint'
       );
       -- Every returned fact is checked against the stored policy, exactly as
-      -- the #566 save does: a 'ready' outcome alone is not evidence that the
+      -- the policy save does: a 'ready' outcome alone is not evidence that the
       -- readiness answers the policy this activation is gating on.
       if connection_readiness ->> 'outcome' is distinct from 'ready'
         or pg_catalog.lower(connection_readiness ->> 'connectionInstanceId')

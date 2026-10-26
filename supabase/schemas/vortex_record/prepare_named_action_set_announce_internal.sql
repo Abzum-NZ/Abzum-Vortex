@@ -69,7 +69,7 @@ begin
       p_action_owner_kind, p_action_owner_id, p_action_release_revision,
       p_action_id, p_record_type_id, p_record_id
     );
-    -- #571: a deleting action's subject is soft-deleted, so it cannot be
+    -- A deleting action's subject is soft-deleted, so it cannot be
     -- projected; its replay is the delete's own stored outcome.
     if projection ->> 'outcome' <> 'completed' then
       projection := coalesce(
@@ -269,7 +269,7 @@ begin
     'action', action_context -> 'action',
     'validationContractVersion', action_context -> 'validationContractVersion',
     'recordType', action_context -> 'recordType',
-    -- #578: the owning Module release's rules for the subject, evaluated by Record.
+    -- The owning Module release's rules for the subject, evaluated by Record.
     'beforeSaveFlows', vortex_record.before_save_flows_for_record_type_internal(
       (action_context ->> 'moduleRootId')::uuid,
       (action_context ->> 'moduleReleaseRevision')::bigint,
