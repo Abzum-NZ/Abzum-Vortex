@@ -27,6 +27,7 @@ export function OrganizationLauncherPage({
   placementId,
   values,
   organizationName,
+  organizationShortName,
   account,
   openApplication,
   openEventId,
@@ -40,7 +41,9 @@ export function OrganizationLauncherPage({
   shell: ApplicationShell;
   placementId: string;
   values: ReturnType<typeof permittedApplicationsToListValues>;
+  /** The organisation's display name; its short name is the address segment shown beside it. */
   organizationName: string;
+  organizationShortName: string;
   account: ApplicationAccount;
   openApplication: (event: DisplaySemanticEvent) => Promise<void>;
   openEventId: string;
@@ -61,6 +64,7 @@ export function OrganizationLauncherPage({
       actions={{
         account,
         organizationName,
+        organizationShortName,
         chooseOrganization: () => router.push("/signed-in"),
         signOut,
         openApplication: (href) => router.push(href),
@@ -78,6 +82,7 @@ export function OrganizationLauncherPage({
           applicationName: shell.name,
           applicationHref: launcherHref,
           organizationName,
+          organizationShortName,
           pageName: page.name,
         }}
         runtimeInputs={{

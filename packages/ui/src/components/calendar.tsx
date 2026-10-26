@@ -28,11 +28,11 @@ const calendarLabel = (
  */
 const firstWeekday = (locale: string | undefined): 0 | 1 | 2 | 3 | 4 | 5 | 6 | undefined => {
   if (locale === undefined) return undefined;
-  // `getWeekInfo` is in every supported browser but not yet in TypeScript's library typings.
-  const { firstDay } = (
-    new Intl.Locale(locale) as Intl.Locale & { getWeekInfo(): { firstDay: number } }
-  ).getWeekInfo();
-  return (firstDay % 7) as 0 | 1 | 2 | 3 | 4 | 5 | 6;
+  // `getWeekInfo` is not yet in TypeScript's library typings, and not every browser has it.
+  const firstDay = (
+    new Intl.Locale(locale) as Intl.Locale & { getWeekInfo?: () => { firstDay: number } }
+  ).getWeekInfo?.().firstDay;
+  return firstDay === undefined ? undefined : ((firstDay % 7) as 0 | 1 | 2 | 3 | 4 | 5 | 6);
 };
 
 function Calendar({
