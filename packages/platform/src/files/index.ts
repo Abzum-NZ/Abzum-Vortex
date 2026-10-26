@@ -36,7 +36,6 @@ export { resolveFileStorageDestination, type FileStorageDestination } from "./st
 export { createStoredUploadInspection } from "./upload-inspection";
 export type {
   FileRemovalEligibilityDecision,
-  FileRemovalEligibilityRequest,
   FileRemovalRefusalReason,
 } from "./file-contracts";
 export {

@@ -1,14 +1,12 @@
 import "server-only";
 
 import { createHash } from "node:crypto";
-import { describeFailure, sameId } from "../catalogue/runtime-primitives";
+import { sameId } from "../catalogue/runtime-primitives";
 import {
   fileRemovalAuthoritySnapshotSchema,
   fileRemovalEligibilityDecisionSchema,
-  fileRemovalEligibilityRequestSchema,
   type FileRemovalAuthoritySnapshot,
   type FileRemovalEligibilityDecision,
-  type FileRemovalEligibilityRequest,
   type FileRemovalOwnerBinding,
   type FileRemovalRefusalReason,
   type ProtectedLegalHoldReference,

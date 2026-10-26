@@ -277,15 +277,6 @@ const fileRemovalRefusalReasonSchema = z.enum([
 
 export type FileRemovalRefusalReason = z.infer<typeof fileRemovalRefusalReasonSchema>;
 
-/** The public request selects a file; it carries no eligibility or policy facts. */
-export const fileRemovalEligibilityRequestSchema = z
-  .object({
-    fileId: fileIdSchema,
-  })
-  .strict();
-
-export type FileRemovalEligibilityRequest = z.infer<typeof fileRemovalEligibilityRequestSchema>;
-
 /**
  * Complete current-authority snapshot returned by trusted File-service wiring.
  * It is never accepted from a credential request. The exact object, owner and

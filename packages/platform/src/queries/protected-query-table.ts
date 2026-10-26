@@ -13,11 +13,11 @@ import {
   fingerprintQueryInputs,
   encodeQueryContinuationToken,
 } from "./continuation-token";
-import {
-  type ProtectedQueryCommand,
-  type ProtectedQueryRefusalReasonCode,
-  type ProtectedQueryResult,
-  type ProtectedQueryPage,
+import type {
+  ProtectedQueryCommand,
+  ProtectedQueryRefusalReasonCode,
+  ProtectedQueryResult,
+  ProtectedQueryPage,
 } from "./protected-query-contracts";
 import {
   conditionFieldIds,
