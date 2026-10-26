@@ -377,26 +377,6 @@ export const formPayloadSchema = z
 export type FormPayload = z.output<typeof formPayloadSchema>;
 
 /**
- * Explicit, data-safe state for one control placement. `loading` means the control's data or a
- * submission it started is pending, so it cannot be activated again; `disabled` carries an optional
- * safe reason; only `ready` carries values, which the block's own payload schema then reads.
- */
-export const controlDataStateSchema = z.discriminatedUnion("status", [
-  z
-    .object({ status: z.literal("loading") })
-    .strict()
-    .readonly(),
-  z
-    .object({ status: z.literal("disabled"), reason: displayTextSchema.exactOptional() })
-    .strict()
-    .readonly(),
-  z
-    .object({ status: z.literal("ready"), values: z.unknown() })
-    .strict()
-    .readonly(),
-]);
-
-/**
  * Located requirement messages, form-level warnings and an optional refusal for one exact draft.
  * Every entry is already located on the form's own declared field key by the supplying projection.
  */
