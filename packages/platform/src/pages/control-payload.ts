@@ -192,14 +192,16 @@ const timeZoneSchema = z
   .string()
   .min(1)
   .max(100)
-  .refine((zone) => {
+  .superRefine((zone, context) => {
     try {
       new Intl.DateTimeFormat("en", { timeZone: zone });
-      return true;
-    } catch {
-      return false;
+    } catch (error) {
+      context.addIssue({
+        code: "custom",
+        message: `A date-time zone must be a valid IANA time zone (${String(error)})`,
+      });
     }
-  }, "A date-time zone must be a valid IANA time zone");
+  });
 
 /** The ready values a time-zone-aware date-time input accepts: an offset-bearing instant. */
 export const dateTimeInputPayloadSchema = z
