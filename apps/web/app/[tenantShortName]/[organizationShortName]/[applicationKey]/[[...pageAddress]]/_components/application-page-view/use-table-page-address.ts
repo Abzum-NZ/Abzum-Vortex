@@ -6,7 +6,7 @@ import {
   readRecordsTableQueryState,
   readRecordsTableView,
   recordsTableAddressKey,
-  recordsTableParameterPlacement,
+  isRecordsTableParameterOf,
   type RecordsTablePageRequest,
   type RecordsTablePivotView,
   type GridViewDocument,
@@ -175,9 +175,11 @@ export function useTablePageAddress({
           ),
         );
         const placements = new Set(
-          [...entries]
-            .map(([name]) => recordsTableParameterPlacement(name))
-            .filter((placement): placement is string => placement !== undefined),
+          Object.keys(model.data)
+            .filter((placementId) =>
+              entries.some(([name]) => isRecordsTableParameterOf(placementId, name)),
+            )
+            .map((placementId) => placementId.toLowerCase()),
         );
         for (const placement of [...reads.current.tables.keys(), ...rebound])
           placements.add(placement);
@@ -319,8 +321,7 @@ export function useTablePageAddress({
       const view = readRecordsTableView(placementId, entries);
       if (view === undefined || view.cleared) continue;
       const queried = entries.some(
-        ([name]) =>
-          recordsTableParameterPlacement(name) === placement && !/^(view|page)./i.test(name),
+        ([name]) => isRecordsTableParameterOf(placementId, name) && !/^(view|page)./i.test(name),
       );
       if (queried) continue;
       const held = Object.keys(currentData).find(
