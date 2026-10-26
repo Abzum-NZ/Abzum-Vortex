@@ -71,10 +71,13 @@ const platformGuidanceCodes: ReadonlySet<string> = new Set<FlowRefusalFeedbackCo
 export const refusalKeepsPlatformGuidance = (code: string | undefined): boolean =>
   code !== undefined && platformGuidanceCodes.has(code);
 
-/** Definition-authored guidance for one refusal and a page to open within the current organization. */
+/**
+ * Definition-authored guidance for one refusal and a page to open within the current organization.
+ * Without a message the refusal keeps its platform sentence.
+ */
 const authoredRefusalGuidanceSchema = z
   .object({
-    message: z.string().min(1).max(300),
+    message: z.string().min(1).max(300).optional(),
     link_label: z.string().min(1).max(100),
     destination: z
       .object({ application_key: namespacedKeySchema, page_key: builderKeySchema })
