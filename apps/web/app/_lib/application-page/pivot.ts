@@ -12,7 +12,7 @@ import {
 } from "@vortex/platform/schema";
 import { getQueryContinuationKey } from "../query-continuation-key";
 import { loadInstalledContext, requestDependencies } from "./installed-context";
-import { readPageProjections } from "./load";
+import { readPageProjection } from "./load";
 import { first, pageSubjectParameter } from "./placement-helpers";
 import { createPlacementReadServices } from "./placement-services";
 import { pageGridLayoutRequest, readPageGridLayouts } from "./grid-layouts";
@@ -66,13 +66,12 @@ export const loadApplicationPivot = async (
   if (pageDefinition === undefined) return { kind: "unavailable" };
 
   const subjectId = first(parameters[pageSubjectParameter]);
-  const { projectedPageRead } = readPageProjections(
+  const projectedPageRead = readPageProjection(
     session,
     context,
     pageDefinition.pageId,
     subjectId,
     undefined,
-    false,
   );
   try {
     const projectedPage = await projectedPageRead;
