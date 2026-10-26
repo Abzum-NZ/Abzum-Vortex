@@ -1056,6 +1056,12 @@ export const parseTablePayload = (
   if (layoutKeys.size !== carriedKeys.size || [...carriedKeys].some((key) => !layoutKeys.has(key)))
     fail("A projected table layout must arrange exactly the declared columns", location);
   const rows = parseRows(record.rows, location);
+  for (const [index, row] of rows.entries())
+    if (row.title === undefined)
+      fail("A projected table row requires its record type title", {
+        ...location,
+        propertyPath: [`rows[${index}]`, "title"],
+      });
   const selection = parseSelectedRecordIds(record.selectedRecordIds, location);
   const page =
     record.page === undefined
