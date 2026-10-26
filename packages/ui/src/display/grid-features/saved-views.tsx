@@ -332,9 +332,9 @@ function ShareDialog({
 }
 
 const viewScopeBadge = (view: GridViewItem): ReactElement | null =>
-  view.scope !== "personal" ? (
+  view.personalDefault || view.scope === "shared" ? (
     <Badge variant="secondary" className="shrink-0">
-      {view.scope === "default" ? "Default" : "Shared"}
+      {view.personalDefault ? "Default" : "Shared"}
     </Badge>
   ) : null;
 
@@ -354,6 +354,7 @@ function ViewSwitcher({
   const [prompt, setPrompt] = useState<Prompt>(null);
   const [confirm, confirmElement] = useConfirm();
   const searchId = useId();
+  const formatReasonId = useId();
   useEffect(
     () => () => {
       listRequest.current += 1;
@@ -367,8 +368,7 @@ function ViewSwitcher({
     (view) => needle === "" || view.name.toLowerCase().includes(needle),
   );
   const personal = shown.filter((view) => view.mine);
-  const shared = shown.filter((view) => !view.mine && view.scope === "shared");
-  const defaults = shown.filter((view) => view.scope === "default");
+  const team = shown.filter((view) => !view.mine);
   // The page read already says whether the person may share; the fresh list refines it once it answers.
   const canShare = typeof listing === "object" ? listing.canShare : views.canShare;
   const canChange =
@@ -454,6 +454,7 @@ function ViewSwitcher({
                 id={searchId}
                 type="search"
                 placeholder="Search views"
+                className="w-full min-w-0"
                 value={search}
                 onChange={(event) => setSearch(event.currentTarget.value)}
                 onKeyDown={(event) => event.stopPropagation()}
@@ -473,12 +474,11 @@ function ViewSwitcher({
                 className="justify-between"
                 onClick={() => choose(null)}
               >
-                Default view
+                All columns (standard)
                 {selected === null ? <Icon name="check" aria-hidden="true" /> : null}
               </Button>
-              {listOf("Default", defaults)}
-              {listOf("Personal", personal)}
-              {listOf("Shared with me", shared)}
+              {listOf("Personal views", personal)}
+              {listOf("Team views", team)}
               {listing === "loading" ? (
                 <p role="status" className="px-2 py-1 text-sm text-muted-foreground">
                   Loading views…
@@ -535,19 +535,26 @@ function ViewSwitcher({
                 {selected === null ? "Save view" : "Save as…"}
               </Button>
               {views.formattingFields === undefined ? null : (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={!canChange}
-                  title={canChange ? undefined : "Save the table as your own view to format it"}
-                  onClick={() => {
-                    close();
-                    setPrompt("formatting");
-                  }}
-                >
-                  <Icon name="palette" aria-hidden="true" />
-                  Format…
-                </Button>
+                <div className="flex flex-col gap-1">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={!canChange}
+                    aria-describedby={canChange ? undefined : formatReasonId}
+                    onClick={() => {
+                      close();
+                      setPrompt("formatting");
+                    }}
+                  >
+                    <Icon name="palette" aria-hidden="true" />
+                    Format…
+                  </Button>
+                  {canChange ? null : (
+                    <p id={formatReasonId} className="max-w-64 text-xs text-muted-foreground">
+                      Save the table as your own view to format it.
+                    </p>
+                  )}
+                </div>
               )}
               {selected !== null && canChange ? (
                 <Button

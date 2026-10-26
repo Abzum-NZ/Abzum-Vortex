@@ -45,6 +45,17 @@ begin
         'name', listed.name,
         'scope', listed.scope,
         'mine', listed.organization_account_id = scope.organization_account_id,
+        'personalDefault', listed.organization_account_id = scope.organization_account_id and exists (
+          select 1 from vortex_platform.grid_views as personal
+          where personal.organization_id = scope.organization_id
+            and personal.organization_account_id = scope.organization_account_id
+            and personal.application_root_id = scope.application_root_id
+            and personal.page_id = p_page_id
+            and personal.placement_id = listed.placement_id
+            and personal.query_id = listed.query_id
+            and personal.kind = 'current_layout'
+            and personal.based_on_view_id = listed.view_id
+        ),
         'revision', listed.revision,
         'shareOrganization', listed.share_organization,
         'shareRoleIds', listed.share_role_ids,

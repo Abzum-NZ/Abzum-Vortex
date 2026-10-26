@@ -128,6 +128,12 @@ export const readRecordsTable = async (
   }
   const { layout, readable, state: effectiveState } = view;
   const recordType = bound.query.recordType;
+  const titleFieldId = bound.module.content.recordTypes.find(
+    (candidate) =>
+      recordType.state === "resolved" &&
+      sameId(String(candidate.recordTypeId), String(recordType.recordTypeId)),
+  )?.titleFieldId;
+  if (titleFieldId === undefined) throw new Error("RECORDS_TABLE_TITLE_FIELD_MISSING");
   // A date-and-time filter takes whole days in the organisation's time zone, so the zone is read
   // only when the table offers a filter on such a field.
   const filterTargets = Object.fromEntries(
@@ -331,6 +337,7 @@ export const readRecordsTable = async (
       moduleRootId: bound.module.rootId,
       queryId: bound.query.queryId,
       settings: placementSettingsOf(placement),
+      titleFieldId: String(titleFieldId),
       inputValues,
       fieldLabels: fieldLabelsOf(bound.module),
       fieldChoiceLabels: fieldChoiceLabelsOf(bound.module),

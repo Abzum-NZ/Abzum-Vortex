@@ -481,6 +481,7 @@ export function useGridLayout({
               name: command.name,
               scope: "personal",
               mine: true,
+              personalDefault: true,
               revision: result.revision,
             };
             await adoptOwnLayout(placementId, result.viewId, document);
