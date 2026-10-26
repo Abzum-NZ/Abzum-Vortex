@@ -25,6 +25,15 @@ export const ensureStudioRecordSheet = (
   );
   if (page === undefined || target === undefined || query === undefined)
     return refuse("Choose the grid's data before adding its record side sheet.");
+  if (typeof target.item.props.parameter !== "string" || target.item.props.parameter.length === 0) {
+    const parameters = new Set([
+      "record_id",
+      ...sourcePageItems(page.composition).flatMap((item) =>
+        typeof item.props.parameter === "string" ? [item.props.parameter] : [],
+      ),
+    ]);
+    target.item.props.parameter = uniqueKey(`${tableAlias}_record`, "", parameters, 40);
+  }
   source.body.flow_bindings = source.body.flow_bindings.filter(
     (binding) => binding.control !== tableAlias || binding.event !== "row_clicked",
   );
