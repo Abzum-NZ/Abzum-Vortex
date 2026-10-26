@@ -30,22 +30,21 @@ export const GRID_COLUMN_MAX_WIDTH = RECORDS_TABLE_COLUMN_MAXIMUM_WIDTH;
 /** The fixed width of the selection and row-actions columns. */
 export const GRID_CONTROL_COLUMN_WIDTH = 48;
 
-/** The trailing cell fits every authored button, its menu and the optional row editor. */
-export const gridActionsWidth = (contract: RecordsTableContract): number =>
-  Math.max(
-    contract.features.rowEdit.enabled ? 192 : GRID_CONTROL_COLUMN_WIDTH,
-    contract.features.rowActions.enabled && contract.rowBehaviours.rowActions.length > 0
-      ? 16 +
-          36 *
-            (Math.min(
-              3,
-              contract.rowBehaviours.rowActions.filter((action) => action.placement === "inline")
-                .length,
-            ) +
-              1 +
-              Number(contract.features.rowEdit.enabled))
-      : GRID_CONTROL_COLUMN_WIDTH,
-  );
+/** The trailing cell fits the declared text actions, their menu and the optional row editor. */
+export const gridActionsWidth = (contract: RecordsTableContract): number => {
+  const editorWidth = contract.features.rowEdit.enabled ? 192 : GRID_CONTROL_COLUMN_WIDTH;
+  if (!contract.features.rowActions.enabled || contract.rowBehaviours.rowActions.length === 0)
+    return editorWidth;
+  const inline = contract.rowBehaviours.rowActions
+    .filter((action) => action.placement === "inline")
+    .slice(0, 3);
+  // Reserve the label as well as the icon, padding and gaps; the menu keeps every action reachable.
+  const actionsWidth =
+    16 +
+    inline.reduce((width, action) => width + 48 + Array.from(action.label).length * 9, 0) +
+    36 * (1 + Number(contract.features.rowEdit.enabled));
+  return Math.max(editorWidth, actionsWidth);
+};
 
 /** Whether a page of this many rows mounts only the rows in view. */
 export const virtualizesRows = (rowCount: number): boolean =>
