@@ -370,21 +370,14 @@ export function ApplicationPageViewContent({
       setBusy(true);
       setNotice(undefined);
       try {
-        const dispatch = await webMcpRuntime.dispatchReference(
+        const result = await webMcpRuntime.dispatchReference(
           tool.binding,
           input,
           undefined,
           signal,
         );
-        await applyDispatch(
-          Promise.resolve(dispatch),
-          undefined,
-          undefined,
-          tool.binding.bindingId,
-        );
+        await applyDispatch(Promise.resolve(result), undefined, undefined, tool.binding.bindingId);
         if (signal?.aborted) return { outcome: "cancelled" };
-        if (dispatch.ranIn !== "server") return { outcome: "unavailable" };
-        const result = dispatch.result;
         if (result.kind === "finished")
           return {
             outcome: result.descriptor.outcome,

@@ -1,8 +1,9 @@
 import type { ComponentFlowBinding } from "@vortex/platform/schema";
-import type { FlowDispatchResult, FlowRuntime } from "./flow-runtime";
+import type { FlowRuntime } from "./flow-runtime";
+import type { ServerDrivenResult } from "./server-driven-run";
 
 /**
- * The form block's wiring to the browser flow runtime. A form container emits one
+ * The form block's wiring to the page's flow runtime. A form container emits one
  * `form_submit` for a gesture (a Submit click or Enter in a field); this module turns that gesture
  * into exactly one `FlowRuntime.dispatch` of the flow bound to it. While a dispatch for a binding
  * is in flight every further event for that binding is ignored, so a double click cannot start a
@@ -24,11 +25,11 @@ export type FormBlockRuntime = Readonly<{
     selectedOwnerGroupId?: string,
     /** Names included in the whole-record patch; individual answers remain complete. */
     recordChanges?: readonly string[],
-  ) => Promise<FlowDispatchResult | undefined>;
+  ) => Promise<ServerDrivenResult | undefined>;
   /** The form's mount event, when the placement binds it. */
-  ready: (binding: ComponentFlowBinding) => Promise<FlowDispatchResult | undefined>;
+  ready: (binding: ComponentFlowBinding) => Promise<ServerDrivenResult | undefined>;
   /** The form's reset event, when the placement binds it. */
-  reset: (binding: ComponentFlowBinding) => Promise<FlowDispatchResult | undefined>;
+  reset: (binding: ComponentFlowBinding) => Promise<ServerDrivenResult | undefined>;
 }>;
 
 /**
@@ -36,9 +37,8 @@ export type FormBlockRuntime = Readonly<{
  * gesture identity: the request failed or the server could not answer. Every other result is the
  * server's definitive answer for that gesture.
  */
-const outcomeUnknown = (result: FlowDispatchResult): boolean =>
-  result.ranIn === "server" &&
-  (result.result.kind === "unavailable" || result.result.kind === "abandoned");
+const outcomeUnknown = (result: ServerDrivenResult): boolean =>
+  result.kind === "unavailable" || result.kind === "abandoned";
 
 export function createFormBlockRuntime(
   runtime: FlowRuntime,
@@ -56,7 +56,7 @@ export function createFormBlockRuntime(
     binding: ComponentFlowBinding,
     callerInputs: Readonly<Record<string, unknown>>,
     retryKey?: string,
-  ): Promise<FlowDispatchResult | undefined> => {
+  ): Promise<ServerDrivenResult | undefined> => {
     if (inFlight.has(binding.bindingId)) return undefined;
     const gestureId =
       (retryKey === undefined ? undefined : unsettled.get(retryKey)) ?? newGestureId();

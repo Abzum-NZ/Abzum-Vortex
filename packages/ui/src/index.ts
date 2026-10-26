@@ -381,7 +381,6 @@ export {
   type FlowBindingReference,
   type FlowConfirmAnswer,
   type FlowConfirmIntent,
-  type FlowDispatchResult,
   type FormBlockRuntime,
   type FormFieldAnswers,
   type FlowFormAnswer,

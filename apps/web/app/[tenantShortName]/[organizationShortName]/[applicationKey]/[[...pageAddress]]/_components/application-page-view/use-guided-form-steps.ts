@@ -1,12 +1,8 @@
 import { isRecord } from "@vortex/platform/schema";
 import { useCallback, useMemo, type Dispatch, type SetStateAction, type RefObject } from "react";
 import type { useRouter, useSearchParams } from "next/navigation";
-import type {
-  createFormBlockRuntime,
-  useUnsavedWorkRegistry} from "@vortex/ui";
-import type {
-  FlowDispatchResult,
-} from "@vortex/ui";
+import type { createFormBlockRuntime, useUnsavedWorkRegistry } from "@vortex/ui";
+import type { ServerDrivenResult } from "@vortex/ui";
 import type {
   ApplicationPageModel,
   PlacementFlowBinding,
@@ -51,7 +47,12 @@ export function useGuidedFormSteps({
   guidedSubmitInFlight: RefObject<boolean>;
   unsavedWorkRegistry: ReturnType<typeof useUnsavedWorkRegistry>;
   formBlock: ReturnType<typeof createFormBlockRuntime>;
-  applyDispatch: (dispatch: Promise<FlowDispatchResult | undefined>, formPlacementId?: string, afterAccepted?: () => Promise<Notice | undefined>, sourceBindingId?: string) => Promise<unknown>;
+  applyDispatch: (
+    dispatch: Promise<ServerDrivenResult | undefined>,
+    formPlacementId?: string,
+    afterAccepted?: () => Promise<Notice | undefined>,
+    sourceBindingId?: string,
+  ) => Promise<unknown>;
 }>) {
   const guidedActivePlacementIds = useMemo(() => {
     const guidedForm = model.guidedForm;
@@ -62,7 +63,7 @@ export function useGuidedFormSteps({
   }, [model.guidedForm, model.page]);
   const guidedActiveFormIds = useMemo(
     () =>
-        guidedActivePlacementIds === undefined
+      guidedActivePlacementIds === undefined
         ? []
         : [...guidedActivePlacementIds].filter(
             (placementId) => formOwners[placementId] === placementId,
@@ -115,7 +116,10 @@ export function useGuidedFormSteps({
         });
         if (result.kind === "updated" || result.kind === "unchanged") {
           if (result.kind === "updated" && !result.valid && result.activeStepId === stepId)
-            setNotice({ tone: "problem", text: "Review the fields in this step before continuing." });
+            setNotice({
+              tone: "problem",
+              text: "Review the fields in this step before continuing.",
+            });
           const queryStep =
             result.activeStepId === result.computedStepId ? null : result.activeStepId;
           if (searchParams.get("step") === queryStep) router.refresh();
@@ -127,7 +131,10 @@ export function useGuidedFormSteps({
           return;
         }
         if (result.kind === "conflict") {
-          setNotice({ tone: "problem", text: "This draft changed in another session. Review the latest step." });
+          setNotice({
+            tone: "problem",
+            text: "This draft changed in another session. Review the latest step.",
+          });
           router.refresh();
           return;
         }
@@ -173,9 +180,11 @@ export function useGuidedFormSteps({
       const activeForm =
         activeFormId === undefined
           ? undefined
-          : [...document.querySelectorAll<HTMLFormElement>(
-              'form[data-vortex-control="form-container"]',
-            )].find((form) => form.dataset.vortexPlacementId === activeFormId);
+          : [
+              ...document.querySelectorAll<HTMLFormElement>(
+                'form[data-vortex-control="form-container"]',
+              ),
+            ].find((form) => form.dataset.vortexPlacementId === activeFormId);
       if (activeForm !== undefined) {
         activeForm.requestSubmit();
         return;
@@ -226,7 +235,10 @@ export function useGuidedFormSteps({
         if (confirmed.kind !== "confirmed") {
           setNotice(
             confirmed.kind === "conflict"
-              ? { tone: "problem", text: "This draft changed in another session. Review the latest step." }
+              ? {
+                  tone: "problem",
+                  text: "This draft changed in another session. Review the latest step.",
+                }
               : unavailableNotice,
           );
           if (confirmed.kind === "conflict") router.refresh();
@@ -275,5 +287,13 @@ export function useGuidedFormSteps({
     ],
   );
 
-  return { guidedActiveFormIds, guidedActivePlacementIds, guidedSummaryStepId, submitGuidedSummary, advanceGuidedStep, guidedPreviousStepId, requestGuidedStep };
+  return {
+    guidedActiveFormIds,
+    guidedActivePlacementIds,
+    guidedSummaryStepId,
+    submitGuidedSummary,
+    advanceGuidedStep,
+    guidedPreviousStepId,
+    requestGuidedStep,
+  };
 }

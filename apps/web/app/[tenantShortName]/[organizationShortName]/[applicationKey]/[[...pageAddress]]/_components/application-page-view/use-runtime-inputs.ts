@@ -7,7 +7,7 @@ import {
   type ChoiceInputPayload,
   type DisplayInlineEditResult,
   type DisplaySemanticEvent,
-  type FlowDispatchResult,
+  type ServerDrivenResult,
   type FlowIntentHost,
   type FormFlowFeedback,
 } from "@vortex/ui";
@@ -204,7 +204,7 @@ export function useRuntimeInputs({
   submittedFormsRef: RefObject<Map<string, SubmittedForm>>;
   formCancelledRef: RefObject<boolean>;
   applyDispatch: (
-    dispatch: Promise<FlowDispatchResult | undefined>,
+    dispatch: Promise<ServerDrivenResult | undefined>,
     formPlacementId?: string,
     afterAccepted?: () => Promise<Notice | undefined>,
     sourceBindingId?: string,
