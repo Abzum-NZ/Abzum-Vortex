@@ -14,28 +14,43 @@
         "VORTEX_FILE_STORAGE_SIGNING_KEY",
         "VORTEX_FILE_STORAGE_SIGNING_KEY_ID",
         "VORTEX_IDENTITY_AUTHORITY_ID",
+        "VORTEX_LOCAL_DEVELOPMENT_IDENTITY_ID",
+        "VORTEX_LOCAL_DEVELOPMENT_SIGN_IN_ENABLED",
+        "VORTEX_LOCAL_SUPABASE_AUTH_ADMIN_KEY",
+        "VORTEX_PAGE_READ_ATTRIBUTION",
         "VORTEX_QUERY_CONTINUATION_KEY",
+        "VORTEX_RUNTIME_BUNDLE_CLEANUP_CREDENTIAL_SHA256",
         "VORTEX_RUNTIME_DATABASE_POOL_SIZE",
         "VORTEX_RUNTIME_DATABASE_SSL_ROOT_CERT",
         "VORTEX_RUNTIME_DATABASE_URL",
         "VORTEX_SITE_URL",
         "VORTEX_SUPABASE_PUBLISHABLE_KEY",
         "VORTEX_SUPABASE_URL",
+        "VORTEX_SUPABASE_WORKDIR",
         "VORTEX_TENANT_ADMINISTRATION_OPERATOR_ACTOR_ID",
         "VORTEX_WORKFLOW_CALLBACK_KEY"
       ]
     },
     "typecheck": {
-      "dependsOn": ["^typecheck"],
+      "dependsOn": [
+        "^typecheck"
+      ],
       "outputs": []
     },
     "build": {
-      "dependsOn": ["^build"],
+      "dependsOn": [
+        "^build"
+      ],
       "outputs": []
     },
     "@vortex/web#build": {
-      "dependsOn": ["^build"],
-      "outputs": [".next/**", "!.next/cache/**"],
+      "dependsOn": [
+        "^build"
+      ],
+      "outputs": [
+        ".next/**",
+        "!.next/cache/**"
+      ],
       "passThroughEnv": [
         "VORTEX_APPLICATION_KESTRA_URL",
         "VORTEX_CLUSTER_ID",
@@ -46,13 +61,19 @@
         "VORTEX_FILE_STORAGE_SIGNING_KEY",
         "VORTEX_FILE_STORAGE_SIGNING_KEY_ID",
         "VORTEX_IDENTITY_AUTHORITY_ID",
+        "VORTEX_LOCAL_DEVELOPMENT_IDENTITY_ID",
+        "VORTEX_LOCAL_DEVELOPMENT_SIGN_IN_ENABLED",
+        "VORTEX_LOCAL_SUPABASE_AUTH_ADMIN_KEY",
+        "VORTEX_PAGE_READ_ATTRIBUTION",
         "VORTEX_QUERY_CONTINUATION_KEY",
+        "VORTEX_RUNTIME_BUNDLE_CLEANUP_CREDENTIAL_SHA256",
         "VORTEX_RUNTIME_DATABASE_POOL_SIZE",
         "VORTEX_RUNTIME_DATABASE_SSL_ROOT_CERT",
         "VORTEX_RUNTIME_DATABASE_URL",
         "VORTEX_SITE_URL",
         "VORTEX_SUPABASE_PUBLISHABLE_KEY",
         "VORTEX_SUPABASE_URL",
+        "VORTEX_SUPABASE_WORKDIR",
         "VORTEX_TENANT_ADMINISTRATION_OPERATOR_ACTOR_ID",
         "VORTEX_WORKFLOW_CALLBACK_KEY"
       ]

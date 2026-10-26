@@ -35,13 +35,9 @@ may call the existing idempotent ensure operation once; ordinary protected resol
 read operation so a missing projection is never recreated as a side effect of checking liveness.
 Supabase Auth remains the durable session store and Vortex adds no database session relation.
 
-Lint is restricted to Vortex-owned schemas. The database baseline covers `public`, and the private
-`vortex_platform`, `vortex_identity`, `vortex_definition`, `vortex_access` and `vortex_record`
-schemas, plus the generated `record_data` schema. Each issue
-that introduces another private service schema must add it to
-`workflows/kestra/database-verification.json`, which both the local and operated lint commands read
-their schema list from. Supabase-managed extension functions are deliberately excluded because their
-diagnostics are owned by the installed platform image, not this repository.
+The database baseline covers `public`, and the private `vortex_platform`, `vortex_identity`,
+`vortex_definition`, `vortex_access` and `vortex_record` schemas, plus the generated `record_data`
+schema.
 
 ## Roles and request context
 
@@ -167,8 +163,7 @@ verifies delivery before retiring the prior credential. Local Auth continues
 to use Mailpit.
 
 Vercel runtime traffic uses Supabase's shared transaction pooler on port 6543
-with prepared statements disabled. Kestra delivery uses the session pooler on
-port 5432. Both routes verify the certificate and hostname.
+with prepared statements disabled and verifies the certificate and hostname.
 `VORTEX_RUNTIME_DATABASE_URL` and `VORTEX_RUNTIME_DATABASE_SSL_ROOT_CERT` live
 in the Doppler `stg` and `prd` root configs; `VORTEX_MIGRATION_DATABASE_URL`,
 `VORTEX_MIGRATION_DATABASE_PASSWORD`, and `VORTEX_DATABASE_SSL_ROOT_CERT` live
