@@ -24,13 +24,13 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@vortex/ui/components/dialog";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@vortex/ui/components/tooltip";
 import { toast } from "@vortex/ui/components/sonner";
 import type { StudioSemanticSelection } from "@vortex/ui/studio";
 import {
   studioStructureDefaultShell,
   studioStructureShellChoices,
   studioRecordPageChoices,
+  StudioInspectorActions,
   type StudioPageLayoutPlan,
   type StudioStructureCommand,
   type StudioStructureResult,
@@ -313,12 +313,26 @@ export function StudioStructureEditor({
       )}
       {target !== undefined && (
         <section key={target.id} className="space-y-4" aria-label={`Selected ${what}`}>
-          <p className="text-sm font-medium">
-            {page !== undefined ? "Selected page" : "Selected layout"}
-            {page !== undefined && page.key === source.body.home_page && (
-              <span className="text-muted-foreground"> · home page</span>
-            )}
-          </p>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-sm font-medium">
+              {page !== undefined ? "Selected page" : "Selected layout"}
+              {page !== undefined && page.key === source.body.home_page && (
+                <span className="text-muted-foreground"> · home page</span>
+              )}
+            </p>
+            <StudioInspectorActions
+              actions={[
+                {
+                  label: page !== undefined ? "Delete page" : "Delete layout",
+                  destructive: true,
+                  disabled,
+                  onSelect: () => {
+                    void remove();
+                  },
+                },
+              ]}
+            />
+          </div>
           <StudioField
             label="Name"
             error={rename.problem === "" ? undefined : rename.problem}
@@ -346,25 +360,6 @@ export function StudioStructureEditor({
                 Make home page
               </Button>
             )}
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <Button
-                    type="button"
-                    size="icon-sm"
-                    variant="ghost"
-                    disabled={disabled}
-                    aria-label={`Remove ${what}`}
-                    onClick={() => {
-                      void remove();
-                    }}
-                  />
-                }
-              >
-                <Icon name="close" />
-              </TooltipTrigger>
-              <TooltipContent>Remove {what}</TooltipContent>
-            </Tooltip>
           </div>
           {page !== undefined && (
             <StudioField label="Layout" hint="Choose where your blocks go when you change layout.">

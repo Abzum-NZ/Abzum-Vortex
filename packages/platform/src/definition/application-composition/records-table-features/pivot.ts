@@ -282,46 +282,36 @@ const queryCheck = (
   if (!state.enabled) return featureAvailable;
   const rows = state.rowField === undefined ? undefined : factsOf(facts, state.rowField);
   const columns = state.columnField === undefined ? undefined : factsOf(facts, state.columnField);
-  const rowProblem = dimensionProblem("rows", rows, state.rowDateUnit);
-  if (rowProblem !== undefined) return featureNotPossible(featureRefusal, rowProblem);
-  const columnProblem = dimensionProblem("columns", columns, state.columnDateUnit);
-  if (columnProblem !== undefined) return featureNotPossible(featureRefusal, columnProblem);
-  if (rows!.field.toLowerCase() === columns!.field.toLowerCase())
-    return featureNotPossible(
-      featureRefusal,
-      "Choose different fields for the rows and the columns.",
-    );
+  const reasons = [
+    dimensionProblem("rows", rows, state.rowDateUnit),
+    dimensionProblem("columns", columns, state.columnDateUnit),
+  ].filter((reason): reason is string => reason !== undefined);
+  if (
+    rows !== undefined &&
+    columns !== undefined &&
+    rows.field.toLowerCase() === columns.field.toLowerCase()
+  )
+    reasons.push("Choose different fields for the rows and the columns.");
   if (state.measureFunction === undefined)
-    return featureNotPossible(featureRefusal, "Choose what each cell shows: a count or a total.");
-  if (state.measureFunction !== "count") {
+    reasons.push("Choose what each cell shows: a count or a total.");
+  else if (state.measureFunction !== "count") {
     const measure =
       state.measureField === undefined ? undefined : factsOf(facts, state.measureField);
-    if (measure === undefined)
-      return featureNotPossible(
-        featureRefusal,
-        "Choose the number or money field each cell totals.",
-      );
-    if (!recordsTablePivotMeasureFieldTypes.includes(measure.type))
-      return featureNotPossible(
-        featureRefusal,
-        `${measure.label} is not a number or money field, so it cannot be totalled.`,
-      );
+    if (measure === undefined) reasons.push("Choose the number or money field each cell totals.");
+    else if (!recordsTablePivotMeasureFieldTypes.includes(measure.type))
+      reasons.push(`${measure.label} is not a number or money field, so it cannot be totalled.`);
   } else if (state.measureField !== undefined)
-    return featureNotPossible(
-      featureRefusal,
-      "A count has no field to total: clear the field or choose a total.",
-    );
+    reasons.push("A count has no field to total: clear the field or choose a total.");
   if (
     state.rowPageSize === undefined ||
     !Number.isInteger(state.rowPageSize) ||
     state.rowPageSize < 1 ||
     state.rowPageSize > RECORDS_TABLE_PIVOT_MAXIMUM_ROW_PAGE_SIZE
   )
-    return featureNotPossible(
-      featureRefusal,
+    reasons.push(
       `Show between 1 and ${RECORDS_TABLE_PIVOT_MAXIMUM_ROW_PAGE_SIZE} pivot rows at a time.`,
     );
-  return featureAvailable;
+  return reasons.length === 0 ? featureAvailable : featureNotPossible(featureRefusal, reasons);
 };
 
 const textSchema = z.string().min(1);
@@ -410,7 +400,8 @@ export const recordsTablePivotFeature: RecordsTableFeatureDefinition<
   // among this table's enabled Column filters fields, not merely among its displayed columns.
   check: (state, facts, { features }) => {
     const check = queryCheck(state, facts);
-    if (!state.enabled || check.kind === "not_possible") return check;
+    if (!state.enabled) return check;
+    const reasons = check.kind === "not_possible" ? [check.reason] : [];
     const filterable = features.columnFilters.enabled ? features.columnFilters.fields : [];
     for (const [part, field] of [
       ["rows", state.rowField],
@@ -424,11 +415,8 @@ export const recordsTablePivotFeature: RecordsTableFeatureDefinition<
       const label =
         facts.fields.find((candidate) => candidate.field.toLowerCase() === field.toLowerCase())
           ?.label ?? field;
-      return featureNotPossible(
-        featureRefusal,
-        `Add ${label} to Column filters so people can drill into pivot ${part}.`,
-      );
+      reasons.push(`Add ${label} to Column filters so people can drill into pivot ${part}.`);
     }
-    return check;
+    return reasons.length === 0 ? featureAvailable : featureNotPossible(featureRefusal, reasons);
   },
 };

@@ -96,7 +96,7 @@ export function StudioCanvasToolbar({
               <TooltipContent>Arrange grid columns, widths and density</TooltipContent>
             </Tooltip>
             <label className="flex items-center gap-2 text-sm">
-              <span className="sr-only">View as</span>
+              <span>View as:</span>
               <NativeSelect
                 size="sm"
                 value={viewAs.value ?? ""}
@@ -106,7 +106,7 @@ export function StudioCanvasToolbar({
                   viewAs.onChange(event.target.value === "" ? null : event.target.value)
                 }
               >
-                <NativeSelectOption value="">Builder (everything)</NativeSelectOption>
+                <NativeSelectOption value="">Builder</NativeSelectOption>
                 {viewAs.roles.map((role) => (
                   <NativeSelectOption key={role.key} value={role.key}>
                     {role.name}

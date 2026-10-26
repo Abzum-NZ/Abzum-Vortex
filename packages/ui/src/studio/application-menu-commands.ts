@@ -138,7 +138,16 @@ const pageEntry = (candidate: Source, pageKey: string): StudioMenuItem => {
     id: newAlias(candidate, page.key),
     type: "page",
     label: page.name.slice(0, labelLimit),
-    icon: "grid",
+    icon: (
+      {
+        dashboard: "monitor",
+        list: "menu",
+        detail: "file-text",
+        form: "pencil",
+        guided_form: "list-tree",
+        public: "eye",
+      } as const
+    )[page.type],
     page: page.key,
     permission: page.permission,
   };
@@ -186,7 +195,7 @@ const addHeading = (
     id: newAlias(candidate, label),
     type: "heading",
     label,
-    icon: "grid",
+    icon: "list-tree",
     children: [place.item],
   };
   place.list.splice(place.index, 1, heading);
@@ -219,8 +228,7 @@ const change = (
   if (address !== undefined) {
     if (item.type !== "external") refuse("Only a link entry opens an address.");
     const parsed = safeHttpsUrlSchema.safeParse(address.trim());
-    if (!parsed.success)
-      refuse(`Enter an https:// address (${parsed.error.issues[0]!.message}).`);
+    if (!parsed.success) refuse(`Enter an https:// address (${parsed.error.issues[0]!.message}).`);
     next.address = address.trim();
   }
   place.list[place.index] = next as StudioMenuItem;

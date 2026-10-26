@@ -1214,7 +1214,7 @@
                     "vortex": {
                       "block": {
                         "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                        "release_version": "2.0.0"
+                        "release_version": "2.1.0"
                       },
                       "query": "vortex.landing_zone:landing_zone_tiles",
                       "responsive": {
