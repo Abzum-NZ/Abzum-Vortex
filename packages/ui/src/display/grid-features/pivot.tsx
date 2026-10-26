@@ -6,6 +6,7 @@ import { Alert, AlertDescription } from "../../components/alert";
 import { Button } from "../../components/button";
 import { Empty, EmptyHeader, EmptyTitle } from "../../components/empty";
 import { Skeleton } from "../../components/skeleton";
+import { ToggleGroup, ToggleGroupItem } from "../../components/toggle-group";
 import {
   Table,
   TableBody,
@@ -16,7 +17,8 @@ import {
   TableRow,
 } from "../../components/table";
 import { cn } from "../../lib/utils";
-import { DisplayCellView } from "../cell";
+import { cellValueToText, DisplayCellView } from "../cell";
+import { useDateFormatOptions } from "../date-format-context";
 import {
   fail,
   requireArray,
@@ -195,15 +197,19 @@ function PivotToggle({ context }: GridFeaturePointProps): ReactElement | null {
   if (pivot === undefined || context.events?.pivot_requested === undefined) return null;
   const open = pivot.view !== undefined;
   return (
-    <Button
-      type="button"
+    <ToggleGroup
+      aria-label={`View of ${context.accessibleName}`}
+      variant="outline"
       size="sm"
-      variant={open ? "default" : "outline"}
-      aria-pressed={open}
-      onClick={() => pivot.setView(open ? undefined : {})}
+      value={[open ? "pivot" : "records"]}
+      onValueChange={(values: unknown[]) => {
+        if (values[0] === "records") pivot.setView(undefined);
+        else if (values[0] === "pivot") pivot.setView({});
+      }}
     >
-      {open ? "Show records" : "Pivot"}
-    </Button>
+      <ToggleGroupItem value="records">Records</ToggleGroupItem>
+      <ToggleGroupItem value="pivot">Pivot</ToggleGroupItem>
+    </ToggleGroup>
   );
 }
 
@@ -225,6 +231,7 @@ function Value({ cell }: Readonly<{ cell: Cell | null }>): ReactElement {
  * refused and failed reads each have their own state. The pivot keeps its position in the address.
  */
 function PivotBody({ context }: GridFeaturePointProps): ReactElement | null {
+  const dateFormat = useDateFormatOptions();
   const pivot = context.pivot;
   const read = context.events?.pivot_requested;
   const drill = context.events?.pivot_drilled;
@@ -343,7 +350,8 @@ function PivotBody({ context }: GridFeaturePointProps): ReactElement | null {
       <button
         type="button"
         className="text-left font-medium underline-offset-4 hover:underline focus-visible:underline focus-visible:outline-none"
-        aria-label={`Open the records for ${axis.label}${recordCount === undefined ? "" : ` (${recordCount})`}`}
+        aria-label={`${axis.label}${recordCount === undefined ? "" : `, ${recordCount} records`}`}
+        aria-description="Open records"
         onClick={open2(filters)}
       >
         {axis.label}
@@ -397,7 +405,8 @@ function PivotBody({ context }: GridFeaturePointProps): ReactElement | null {
                       <button
                         type="button"
                         className="w-full text-right underline-offset-4 hover:underline focus-visible:underline focus-visible:outline-none"
-                        aria-label={`Open the records for ${row.label} and ${column.label}`}
+                        aria-label={`${cell.kind === "unavailable" ? "Mixed currencies" : cellValueToText(cell, dateFormat)}, ${row.label}, ${column.label}`}
+                        aria-description="Open records"
                         onClick={open2(both)}
                       >
                         <Value cell={cell} />
@@ -442,11 +451,22 @@ function PivotBody({ context }: GridFeaturePointProps): ReactElement | null {
             size="sm"
             disabled={cursor === undefined || refreshing}
             onClick={() => {
+              trail.current = [];
+              pivot?.setView({});
+            }}
+          >
+            First
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={cursor === undefined || refreshing}
+            onClick={() => {
               const previous = trail.current.pop();
               pivot?.setView(previous === undefined ? {} : { cursor: previous });
             }}
           >
-            Previous rows
+            Previous
           </Button>
           <Button
             variant="outline"
@@ -458,7 +478,7 @@ function PivotBody({ context }: GridFeaturePointProps): ReactElement | null {
               pivot?.setView({ cursor: page.nextCursor });
             }}
           >
-            Next rows
+            Next
           </Button>
         </div>
       </div>
