@@ -11,9 +11,9 @@ import {
 import type { DefinitionRenderErrorLocation } from "../definition-error";
 import { DefinitionRenderError } from "../definition-error";
 import {
-  parseDisplayData,
   parseDisplayEventHandlers,
-  parseLauncherRowsPayload,
+  readDisplayData,
+  type LauncherRowsPayload,
 } from "../display/projected-data";
 
 /**
@@ -23,27 +23,23 @@ import {
  */
 const LAUNCHER_ROWS_PAYLOAD_PARSER: PlatformComponentPayloadParser = createPayloadParser({
   data: (value, location: DefinitionRenderErrorLocation) =>
-    parseDisplayData(value, parseLauncherRowsPayload, location),
+    readDisplayData<LauncherRowsPayload>(value, location),
   events: (value, location) => parseDisplayEventHandlers(value, location),
 });
 
 // Link tiles consume the typed target payload and the current-visible invocation port.
 const LINK_TILES_PAYLOAD_INPUTS = createPayloadParser({
   data: (value, location) =>
-    parseDisplayData(
-      value,
-      (values) => {
-        const parsed = projectedLinkTilesSchema.safeParse(values);
-        if (!parsed.success)
-          throw new DefinitionRenderError(
-            "INVALID_COMPOSITION",
-            "Invalid protected tile projection",
-            location,
-          );
-        return parsed.data;
-      },
-      location,
-    ),
+    readDisplayData(value, location, (values) => {
+      const parsed = projectedLinkTilesSchema.safeParse(values);
+      if (!parsed.success)
+        throw new DefinitionRenderError(
+          "INVALID_COMPOSITION",
+          "Invalid protected tile projection",
+          location,
+        );
+      return parsed.data;
+    }),
   events: (value, location) => parseDisplayEventHandlers(value, location),
   open_tile: (value, location) => {
     if (typeof value !== "function")

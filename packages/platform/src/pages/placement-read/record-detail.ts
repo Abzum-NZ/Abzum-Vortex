@@ -12,6 +12,7 @@ import { projectRecordDetailData } from "../component-data-projection";
 import {
   logPlacementFailure,
   moduleFieldDisplay,
+  readyPlacementData,
   placementSettingsOf,
   readRecordLinks,
   type PageDataState,
@@ -20,15 +21,20 @@ import {
   type PlacementReadEntry,
 } from "./shared";
 import type { PlacementReadInput } from "./types";
+import { recordDetailPayloadSchema } from "../display-payload-record-detail";
 import { controlSelectedRecordType } from "./bindings";
 import type { PageSubjectReadResult } from "../page-subject-read";
 
-const detailState = (display: ReturnType<typeof projectRecordDetailData>): PageDataState =>
+const detailState = (
+  read: PlacementReadInput,
+  placementId: string,
+  display: ReturnType<typeof projectRecordDetailData>,
+): PageDataState =>
   display === undefined
     ? { status: "refused", reason: "not_found" }
     : display.status === "empty"
       ? { status: "empty" }
-      : { status: "ready", values: display.values };
+      : readyPlacementData(read.address, placementId, recordDetailPayloadSchema, display.values);
 
 /**
  * A Record detail on a detail or public page that binds no query reads its page subject: the one
@@ -147,6 +153,8 @@ const readRecordForDetail = async (
   }
   const recordLinks = await readRecordLinks(read.services.resolveRecordLinks, [record.row]);
   read.data[placementId] = detailState(
+    read,
+    placementId,
     projectRecordDetailData(
       {
         settings: placementSettingsOf(placement),
@@ -218,6 +226,8 @@ export const readQueryDetail = async (
   const rows: readonly ProtectedQueryRow[] = result.value.rows;
   const detailLinks = await readRecordLinks(read.services.resolveRecordLinks, rows);
   read.data[placementId] = detailState(
+    read,
+    placementId,
     projectRecordDetailData(
       {
         settings,

@@ -5,6 +5,7 @@ import { describeFailure } from "../../catalogue/runtime-primitives";
 import { projectCalendarPlacement, type CalendarPlacementContract } from "../calendar-query";
 import { addressParameter } from "../records-table-state";
 import {
+  readyPlacementData,
   firstParameter,
   logPlacementFailure,
   type PlacementModule,
@@ -12,6 +13,7 @@ import {
   type PlacementReadEntry,
 } from "./shared";
 import type { PlacementReadInput } from "./types";
+import { calendarPayloadSchema } from "../display-payload-calendar";
 
 /**
  * A calendar placement: the events of its bound query in the window its address names, in the
@@ -71,7 +73,12 @@ export const readCalendar = async (
     resolveRecordLinks: read.services.resolveRecordLinks,
   });
   if (projection.outcome === "ready") {
-    data[placementId] = { status: "ready", values: projection.values };
+    data[placementId] = readyPlacementData(
+      address,
+      placementId,
+      calendarPayloadSchema,
+      projection.values,
+    );
     return;
   }
   logPlacementFailure(address, placementId, projection.cause);

@@ -1,8 +1,7 @@
-import {
-  parseBoardPayload,
-  parseTablePayload,
-  type createPlatformComponentRegistryForReleases,
-  type BoardPayload,
+import type {
+  createPlatformComponentRegistryForReleases,
+  BoardPayload,
+  DisplayTablePayload,
 } from "@vortex/ui";
 import {
   type BoardColumnReadRequest,
@@ -66,34 +65,34 @@ export const placementIdsInLayout = (candidate: unknown): ReadonlySet<string> =>
   return result;
 };
 
-export const boardPayloadFor = (candidate: unknown): BoardPayload | undefined => {
-  if (
-    !isRecord(candidate) ||
-    candidate.status !== "ready" ||
-    !isRecord(candidate.values) ||
-    candidate.values.kind !== "board"
-  )
-    return undefined;
-  try {
-    return parseBoardPayload(candidate.values);
-  } catch (error) {
-    // The server built this board payload; a parse failure is a defect, so the cause stays visible.
-    console.error("[page] BOARD_PAYLOAD_INVALID", error);
-    return undefined;
-  }
-};
+/** The board payload of a placement's ready state, as the server built it. */
+export const boardPayloadFor = (candidate: unknown): BoardPayload | undefined =>
+  isRecord(candidate) &&
+  candidate.status === "ready" &&
+  isRecord(candidate.values) &&
+  candidate.values.kind === "board"
+    ? (candidate.values as BoardPayload)
+    : undefined;
 
-export const tablePayloadFor = (
-  candidate: unknown,
-): ReturnType<typeof parseTablePayload> | undefined => {
-  if (!isRecord(candidate) || candidate.status !== "ready") return undefined;
-  if (!isRecord(candidate.values) || candidate.values.kind !== "table") return undefined;
-  try {
-    return parseTablePayload(candidate.values);
-  } catch (error) {
-    console.error("[page] table payload invalid", error);
-    return undefined;
-  }
+/** The table payload of a placement's ready state, as the server built it. */
+export const tablePayloadFor = (candidate: unknown): DisplayTablePayload | undefined =>
+  isRecord(candidate) &&
+  candidate.status === "ready" &&
+  isRecord(candidate.values) &&
+  candidate.values.kind === "table"
+    ? (candidate.values as DisplayTablePayload)
+    : undefined;
+
+/** Each record shows in at most one bucket of a board. */
+const boardShowsEachRecordOnce = (board: BoardPayload): boolean => {
+  const seen = new Set<string>();
+  for (const bucket of [...board.columns, board.unassigned])
+    for (const row of bucket.page?.rows ?? []) {
+      const recordId = row.recordId.toLowerCase();
+      if (seen.has(recordId)) return false;
+      seen.add(recordId);
+    }
+  return true;
 };
 
 const sameBoardSource = (left: BoardPayload, right: BoardPayload): boolean =>
@@ -165,11 +164,7 @@ export const mergeBoardColumnRead = (
     named({ kind: "option", value: column.value }) ? column : current.columns[index]!,
   );
   const unassigned = named({ kind: "unassigned" }) ? fresh.unassigned : current.unassigned;
-  try {
-    return parseBoardPayload({ ...fresh, columns, unassigned });
-  } catch (error) {
-    console.error("[board] merged column payload invalid", error);
-    // A duplicate live record identity or strict merged-shape mismatch triggers a fresh read.
-    return undefined;
-  }
+  const merged: BoardPayload = { ...fresh, columns, unassigned };
+  // A card that moved between the two reads would show twice: that triggers a fresh read.
+  return boardShowsEachRecordOnce(merged) ? merged : undefined;
 };

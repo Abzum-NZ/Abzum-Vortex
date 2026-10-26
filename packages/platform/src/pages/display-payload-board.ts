@@ -19,8 +19,8 @@ import { displayTableFiltersSchema } from "./display-payload-table";
 /*
  * The ready values a Data grid in Board mode renders: its protected columns in pipeline stage
  * order, each with its colour role, the stages a card in it may move to, the action that owns it
- * and whether a new record may start in it, and the unassigned bucket. The server types the board
- * it reads with these schemas and the browser parses the payload with the same ones.
+ * and whether a new record may start in it, and the unassigned bucket. The server validates the
+ * board with these schemas where it builds it; the browser checks its envelope and renders it.
  */
 
 const maximumBoardRows = 100_000;

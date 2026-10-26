@@ -17,12 +17,13 @@ import {
   type ProjectedRecordLinks,
 } from "../component-data-projection";
 import type { DisplayScalarCell } from "../display-payload-parts";
-import type {
+import {
   chartPayloadSchema,
-  chartPointSchema,
   summaryPayloadSchema,
+  type chartPointSchema,
 } from "../display-payload-summary";
 import {
+  readyPlacementData,
   logPlacementFailure,
   placementSettingsOf,
   queryRecordType,
@@ -329,7 +330,7 @@ export const readSummaryOrChart = async (
     data[placementId] =
       projection.chart.points.length === 0
         ? { status: "empty" }
-        : { status: "ready", values: projection.chart };
+        : readyPlacementData(address, placementId, chartPayloadSchema, projection.chart);
     return;
   }
 
@@ -367,8 +368,8 @@ export const readSummaryOrChart = async (
   data[placementId] =
     values.length === 0
       ? { status: "empty" }
-      : {
-          status: "ready",
-          values: { kind: "summary_values", values } satisfies z.input<typeof summaryPayloadSchema>,
-        };
+      : readyPlacementData(address, placementId, summaryPayloadSchema, {
+          kind: "summary_values",
+          values,
+        } satisfies z.input<typeof summaryPayloadSchema>);
 };

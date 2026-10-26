@@ -1,9 +1,5 @@
 import type { ReactElement } from "react";
-import {
-  PLATFORM_BLOCK_RELEASE_IDENTITIES,
-  chartPayloadSchema,
-  type ChartPayload,
-} from "@vortex/platform/schema";
+import { PLATFORM_BLOCK_RELEASE_IDENTITIES, type ChartPayload } from "@vortex/platform/schema";
 import { Progress } from "../components/progress";
 import { createPayloadParser, type PlatformComponentRegistration } from "../registry";
 import {
@@ -18,21 +14,12 @@ import {
 import { DisplayHeader } from "./controls";
 import { resolveDisplayContext, type DisplayRenderProps } from "./context";
 import { DisplayStateContainer } from "./display-state-container";
-import {
-  parseDisplayData,
-  parseDisplayEventHandlers,
-  projectedValuesParser,
-} from "./projected-data";
+import { parseDisplayEventHandlers, readDisplayData } from "./projected-data";
 
 export type { ChartPayload };
 
 const CHART_PAYLOAD_PARSER = createPayloadParser({
-  data: (value, location) =>
-    parseDisplayData(
-      value,
-      projectedValuesParser(chartPayloadSchema, "Projected chart values are invalid"),
-      location,
-    ),
+  data: (value, location) => readDisplayData<ChartPayload>(value, location),
   events: (value, location) => parseDisplayEventHandlers(value, location),
 });
 
