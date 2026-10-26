@@ -9,7 +9,7 @@ import {
   recordsTableColumnFiltersFeature,
 } from "@vortex/platform/schema";
 
-import { useId, type ReactElement } from "react";
+import { useId, useState, type ReactElement } from "react";
 import { Button } from "../components/button";
 import { studioGridPrerequisites } from "./grid-features/prerequisites";
 import {
@@ -104,6 +104,7 @@ export const studioGridFeaturesProperty = (
 export function StudioGridFeatures({
   idPrefix,
   property,
+  problem,
   value,
   presentation,
   query,
@@ -120,6 +121,8 @@ export function StudioGridFeatures({
   onChange,
 }: Readonly<{
   idPrefix: string;
+  /** The inspector's held problem after a features change; shown in the changed feature. */
+  problem: string;
   /** The table release's `features` group declaration. */
   property: Extract<BlockPropertySchemaContract, { kind: "group" }>;
   /** The authored features group; unset uses the catalogue default (every feature off). */
@@ -145,6 +148,7 @@ export function StudioGridFeatures({
   onChange: (next: SourceBlockPropertyValueContract) => void;
 }>): ReactElement {
   const ownId = useId();
+  const [changedFeature, setChangedFeature] = useState<RecordsTableFeatureKey | undefined>();
   const authored = value?.kind === "group" ? value.properties : {};
   const catalogueDefault = (key: RecordsTableFeatureKey): GroupValue => {
     const declared = property.properties.find((feature) => feature.key === key)?.defaultValue;
@@ -255,6 +259,7 @@ export function StudioGridFeatures({
     };
   };
   const write = (key: RecordsTableFeatureKey, next: GroupValue): void => {
+    setChangedFeature(key);
     const candidate = { ...whole, properties: { ...whole.properties, [key]: next } };
     // New list entries need their catalogue defaults before the composition command checks the
     // typed value's round trip. Keep invalid user input in the inspector's ordinary validation path.
@@ -359,6 +364,12 @@ export function StudioGridFeatures({
             enabled && (check?.kind === "not_possible" || incomplete.has(key))
               ? studioGridPrerequisites(key, whole, facts)
               : undefined;
+          const ownProblems =
+            enabled && declaration !== undefined && check?.kind !== "not_possible"
+              ? studioSettingProblems({ [key]: current }, [declaration]).map((sentence) =>
+                  sentence.replace(`${label}, `, `${label}: `),
+                )
+              : [];
           const editor = studioGridFeatureEditors[key];
           const settingValues: StudioSettingValues = Object.fromEntries(
             Object.entries(current.properties).filter(([setting]) => setting !== "enabled"),
@@ -397,6 +408,7 @@ export function StudioGridFeatures({
                       disabled={disabled}
                       aria-label={`Fix ${label}`}
                       onClick={() => {
+                        setChangedFeature(key);
                         const normalized = typedSourceSettingValue(
                           plainSourceSettingValue(fix),
                           property,
@@ -431,13 +443,17 @@ export function StudioGridFeatures({
                   />
                 </ItemActions>
               </Item>
-              {enabled && declaration !== undefined && check?.kind !== "not_possible"
-                ? studioSettingProblems({ [key]: current }, [declaration]).map((sentence) => (
-                    <p key={sentence} role="alert" className="text-sm text-destructive">
-                      {sentence.replace(`${label}, `, `${label}: `)}
-                    </p>
-                  ))
-                : null}
+              {ownProblems.map((sentence) => (
+                <p key={sentence} role="alert" className="text-sm text-destructive">
+                  {sentence}
+                </p>
+              ))}
+              {/* A held change this feature's own sentences do not explain still says why. */}
+              {problem !== "" && changedFeature === key && ownProblems.length === 0 ? (
+                <p role="alert" className="text-sm text-destructive">
+                  {problem}
+                </p>
+              ) : null}
               {enabled && key === recordsTableSpreadsheetFeature.key ? (
                 <StudioSpreadsheetEditor
                   value={current}

@@ -29,6 +29,7 @@ import {
 } from "./board-source";
 import { applyStudioFlowCreate } from "./application-flow-create";
 import { ensureStudioBoardQuickAdd } from "./board-quick-add";
+import { StructureRefusal } from "./application-structure-common";
 import { resolveStudioDataQuery } from "./default-record-query";
 import { ensureStudioRecordSheet } from "./application-record-sheet";
 import { studioLayoutOutletPlacementUses } from "./application-layout-outlets";
@@ -873,7 +874,7 @@ export const applyStudioCompositionCommand = (
     return { kind: "applied", source: parsed };
   } catch (error) {
     console.error("[studio] composition command could not be applied", error);
-    if (error instanceof StoredCompositionRefusal)
+    if (error instanceof StoredCompositionRefusal || error instanceof StructureRefusal)
       return { kind: "refused", reason: error.message };
     return { kind: "invalid" };
   }
