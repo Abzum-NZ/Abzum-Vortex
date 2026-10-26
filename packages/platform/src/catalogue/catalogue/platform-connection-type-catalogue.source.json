@@ -9,7 +9,7 @@
       "key": "vortex.connection.email",
       "body": {
         "name": "Email",
-        "purpose": "Provider-neutral email connection contract for CRM and Service Desk. No provider adapter is supported yet, and the reserved host prevents remote calls until a later adapter-backed release is published.",
+        "purpose": "Provider-neutral email connection contract. No provider adapter is supported yet, and the reserved host prevents remote calls until a later adapter-backed release is published.",
         "provider": "Provider-neutral; no provider adapter supported",
         "authentication": {
           "kind": "oauth2",
@@ -110,7 +110,7 @@
       "key": "vortex.connection.calendar",
       "body": {
         "name": "Calendar",
-        "purpose": "Provider-neutral calendar connection contract for CRM. No provider adapter is supported yet, and the reserved host prevents remote calls until a later adapter-backed release is published.",
+        "purpose": "Provider-neutral calendar connection contract. No provider adapter is supported yet, and the reserved host prevents remote calls until a later adapter-backed release is published.",
         "provider": "Provider-neutral; no provider adapter supported",
         "authentication": {
           "kind": "oauth2",
@@ -473,7 +473,7 @@
       "key": "vortex.connection.webhook",
       "body": {
         "name": "Webhook",
-        "purpose": "Provider-neutral signed JSON connection contract for Service Desk. No provider adapter is supported yet, and the reserved host prevents remote calls until a later adapter-backed release is published.",
+        "purpose": "Provider-neutral signed JSON connection contract. No provider adapter is supported yet, and the reserved host prevents remote calls until a later adapter-backed release is published.",
         "provider": "Provider-neutral; no provider adapter supported",
         "authentication": {
           "kind": "signed_secret",
