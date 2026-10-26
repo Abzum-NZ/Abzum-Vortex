@@ -449,7 +449,10 @@ export function StudioGridFeatures({
                 </p>
               ))}
               {/* A held change this feature's own sentences do not explain still says why. */}
-              {problem !== "" && changedFeature === key && ownProblems.length === 0 ? (
+              {problem !== "" &&
+              changedFeature === key &&
+              check?.kind !== "not_possible" &&
+              ownProblems.length === 0 ? (
                 <p role="alert" className="text-sm text-destructive">
                   {problem}
                 </p>
