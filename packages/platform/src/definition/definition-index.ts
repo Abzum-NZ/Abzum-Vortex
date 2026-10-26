@@ -55,4 +55,4 @@ export * from "./publication/read";
 export * from "./application-bound-release-set";
 export * from "./prepared-installation-runtime-source";
 export * from "./application-release-adoption";
-export { createDatabaseDefinitionHistoryService } from "./definition-history-composition";
+export { createDefinitionHistoryService } from "./definition-history";
