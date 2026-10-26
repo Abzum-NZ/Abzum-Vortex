@@ -42,7 +42,7 @@ type SummaryCell = Extract<
 /** One bar of a chart: a stable group key, its readable label, and the group's measure. */
 type ChartPoint = z.input<typeof chartPointSchema>;
 
-export const summaryAggregateLabel = (alias: string): string =>
+const summaryAggregateLabel = (alias: string): string =>
   alias
     .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
     .replace(/[_-]+/g, " ")
