@@ -122,6 +122,8 @@ export type RecordsTableQueryRequest = Readonly<{
   moduleRootId: ModuleRootId;
   queryId: QueryId;
   settings: Readonly<Record<string, BlockPropertyValueContract>>;
+  /** The bound record type's title, supplied for a rendered page as well as its visible columns. */
+  titleFieldId?: string;
   inputValues: Readonly<Record<string, JsonValue>>;
   /**
    * The viewer's query state from the page address: ordered sort, filters, search and the requested
@@ -602,7 +604,11 @@ export const buildRecordsTableQueryCommand = (
     moduleRootId: request.moduleRootId,
     queryId: request.queryId,
     inputValues,
-    requestedFieldIds: [...fieldIds, ...formattingFieldIds],
+    requestedFieldIds: lowerUnique([
+      ...fieldIds,
+      ...formattingFieldIds,
+      ...(request.titleFieldId === undefined ? [] : [request.titleFieldId]),
+    ]),
     requestedSystemFieldKeys: [],
     sort,
     ...(filter === undefined ? {} : { filter }),
@@ -853,7 +859,7 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
   async resolve(
     session: IdentitySession,
     selection: OrganizationSelectionCandidate,
-    request: RecordsTableQueryRequest,
+    request: RecordsTableQueryRequest & Readonly<{ titleFieldId: string }>,
   ): Promise<RecordsTableQueryResolution> {
     const built = buildRecordsTableQueryCommand(request);
     if (built.kind === "refused") return refusedFor(built);
@@ -1051,6 +1057,7 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
         request.layout,
         {
           settings: request.settings,
+          titleFieldId: request.titleFieldId,
           filterFields: built.filterFields,
           ...(recordLinks === undefined ? {} : { recordLinks }),
           ...(request.fieldLabels === undefined ? {} : { fieldLabels: request.fieldLabels }),

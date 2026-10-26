@@ -66,6 +66,13 @@ function ExportScopeItem({
   scope: TableExportScope;
   label: string;
 }>): ReactElement {
+  const formats = context.features.export?.formats ?? [];
+  if (formats.length === 1)
+    return (
+      <DropdownMenuItem onClick={() => request(context, scope, formats[0]!)}>
+        {label}
+      </DropdownMenuItem>
+    );
   return (
     <DropdownMenuSub>
       <DropdownMenuSubTrigger>{label}</DropdownMenuSubTrigger>
@@ -125,6 +132,13 @@ function ExportToolbarItems({ context }: GridFeaturePointProps): ReactElement | 
       </div>
     );
   const { matching, selected } = selectionOf(context);
+  const formats = context.features.export?.formats ?? [];
+  if (formats.length === 1 && selected === 0 && !(matching !== undefined && matching > 0))
+    return (
+      <DropdownMenuItem onClick={() => request(context, "view", formats[0]!)}>
+        Export
+      </DropdownMenuItem>
+    );
   return (
     <DropdownMenuSub>
       <DropdownMenuSubTrigger>Export</DropdownMenuSubTrigger>
@@ -162,6 +176,17 @@ function ExportSelectionBanner({ context }: GridFeaturePointProps): ReactElement
   const label = allMatching
     ? `Export all ${numberFormat.format(matching)} matching`
     : `Export selected (${numberFormat.format(selected)})`;
+  const formats = context.features.export?.formats ?? [];
+  if (formats.length === 1)
+    return (
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => request(context, allMatching ? "matching" : "selected", formats[0]!)}
+      >
+        {label}
+      </Button>
+    );
   return (
     <DropdownMenu>
       <DropdownMenuTrigger render={<Button variant="outline" size="sm" />}>

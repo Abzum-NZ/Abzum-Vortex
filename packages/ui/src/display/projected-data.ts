@@ -136,6 +136,8 @@ export type DisplayRow = Readonly<{
   recordId: string;
   revision?: number;
   capabilities?: DisplayRowCapabilities;
+  /** The record type title projected under the viewer's current access. */
+  title?: Readonly<{ fieldId: string; value: DisplayCellValue }>;
   /**
    * The stored value of each field the viewer may edit on this row (null when empty), as the
    * field's own contract spells it. An editor starts from this, never from a displayed cell.
@@ -680,7 +682,17 @@ const parseRows = (
       const record = requireRecord(item, "A projected row must be an object", rowLocation);
       requireExactKeys(
         record,
-        ["recordId", "revision", "capabilities", "edit", "cells", "format", "hasChildren", "exact"],
+        [
+          "recordId",
+          "revision",
+          "capabilities",
+          "title",
+          "edit",
+          "cells",
+          "format",
+          "hasChildren",
+          "exact",
+        ],
         rowLocation,
       );
       if (
@@ -705,6 +717,26 @@ const parseRows = (
       for (const [key, cell] of Object.entries(cellsRecord)) {
         const cellKey = requireFieldKey(key, `Invalid projected cell key '${key}'`, rowLocation);
         cells[cellKey] = parseCellValue(cell, { ...rowLocation, propertyPath: [cellKey] });
+      }
+      let title: DisplayRow["title"];
+      if (record.title !== undefined) {
+        const titleRecord = requireRecord(
+          record.title,
+          "A projected title must be an object",
+          rowLocation,
+        );
+        requireExactKeys(titleRecord, ["fieldId", "value"], rowLocation);
+        title = Object.freeze({
+          fieldId: requireFieldKey(
+            titleRecord.fieldId,
+            "A projected title requires its field identity",
+            rowLocation,
+          ),
+          value: parseCellValue(titleRecord.value, {
+            ...rowLocation,
+            propertyPath: ["title", "value"],
+          }),
+        });
       }
       const revision =
         record.revision === undefined
@@ -750,6 +782,7 @@ const parseRows = (
         ...(revision === undefined ? {} : { revision }),
         ...(capabilities === undefined ? {} : { capabilities }),
         ...(edit === undefined ? {} : { edit }),
+        ...(title === undefined ? {} : { title }),
         cells: Object.freeze(cells),
         ...(format === undefined ? {} : { format }),
         ...(record.hasChildren === true || record.hasChildren === "unknown"
@@ -1023,6 +1056,12 @@ export const parseTablePayload = (
   if (layoutKeys.size !== carriedKeys.size || [...carriedKeys].some((key) => !layoutKeys.has(key)))
     fail("A projected table layout must arrange exactly the declared columns", location);
   const rows = parseRows(record.rows, location);
+  for (const [index, row] of rows.entries())
+    if (row.title === undefined)
+      fail("A projected table row requires its record type title", {
+        ...location,
+        propertyPath: [`rows[${index}]`, "title"],
+      });
   const selection = parseSelectedRecordIds(record.selectedRecordIds, location);
   const page =
     record.page === undefined

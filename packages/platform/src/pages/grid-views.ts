@@ -65,6 +65,7 @@ const storedViewRowsSchema = z
         name: gridViewNameSchema,
         scope: z.enum(gridViewScopes),
         mine: z.boolean(),
+        personalDefault: z.boolean(),
         revision: revisionSchema,
         shareOrganization: z.boolean(),
         shareRoleIds: z.array(idSchema),
@@ -137,6 +138,7 @@ export type StoredNamedGridView = Readonly<{
   name: string;
   scope: (typeof gridViewScopes)[number];
   mine: boolean;
+  personalDefault: boolean;
   revision: number;
   sharing: GridViewSharing;
   document: GridViewDocument | undefined;
@@ -227,6 +229,7 @@ const namedViews = (rows: z.infer<typeof storedViewRowsSchema>) => {
       name: row.name,
       scope: row.scope,
       mine: row.mine,
+      personalDefault: row.personalDefault,
       revision: row.revision,
       sharing: {
         organization: row.shareOrganization,
@@ -363,6 +366,7 @@ export const addressedGridView = (
       name: view.name,
       scope: view.scope,
       mine: view.mine,
+      personalDefault: view.personalDefault,
       revision: view.revision,
     },
     document: view.document,
