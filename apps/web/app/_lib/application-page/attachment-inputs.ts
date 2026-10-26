@@ -1,6 +1,6 @@
 import {
-  createSqlFileReadRepository,
   decideFileRead,
+  readFileForDownload,
   formFieldOf,
   type InstalledRuntimeContext,
 } from "@vortex/platform/server";
@@ -43,7 +43,6 @@ export const projectAttachmentInputs = async (
     input.session,
     selection,
     async (transaction) => {
-      const repository = createSqlFileReadRepository(transaction);
       const results: Record<string, PageDataState> = {};
       for (const entry of fields) {
         const field = formFieldOf(entry, recordType);
@@ -60,7 +59,7 @@ export const projectAttachmentInputs = async (
         for (const id of ids) {
           const decision = await decideFileRead(transaction, id);
           if (decision.outcome !== "allowed") throw new Error("ATTACHMENT_INPUT_FILE_UNREADABLE");
-          const file = await repository.readFile(id);
+          const file = await readFileForDownload(transaction, id);
           if (file === null || file.ownerFieldId !== field.fieldId)
             throw new Error("ATTACHMENT_INPUT_FILE_MISSING");
           files.push({ fileId: id, name: file.originalSafeDisplayName });

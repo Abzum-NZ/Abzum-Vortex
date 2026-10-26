@@ -5,7 +5,7 @@ import { fileRecordSchema } from "./file-contracts";
 import type { FileId } from "../catalogue/identifiers";
 import { z } from "zod";
 import type { FileRemovalRepository } from "./object-removal";
-import type { FileReadSqlTransaction } from "./read-repository";
+import type { FileReadSqlTransaction } from "./read";
 
 type SqlRow = Readonly<Record<string, unknown>>;
 

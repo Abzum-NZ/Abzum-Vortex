@@ -97,7 +97,6 @@ export {
   type FileReadPurpose,
   type FileReadRefusal,
   type FileReadRefusalReason,
-  type FileReadRepository,
   type FileReadRequest,
   type FileReadResult,
   type FileReadStreamResponse,
@@ -110,13 +109,13 @@ export {
   type UpstreamStorageReadResult,
 } from "./read";
 export {
-  createSqlFileReadRepository,
   decideFileRead,
   locateFileApplication,
+  readFileForDownload,
   type FileApplicationLocation,
   type FileReadDecision,
   type FileReadSqlTransaction,
-} from "./read-repository";
+} from "./read";
 export {
   createSqlVersionedFileMetadataRepository,
   type VersionedFileMetadataRepository,
