@@ -13,6 +13,7 @@ import {
   type FieldInputControlReleaseMap,
   type createPlatformComponentRegistryForReleases,
   PagePuckRenderer,
+  type FlowIntentHost,
   type ControlSemanticEvent,
   type ChoiceInputPayload,
   type DisplaySemanticEvent,
@@ -164,6 +165,7 @@ export function ApplicationPageViewContent({
   const requestedStepId = useRef<string | undefined>(undefined);
   const guidedSubmitInFlight = useRef(false);
   const runtimeInputsRef = useRef<Readonly<Record<string, unknown>>>({});
+  const setPanelRef = useRef<FlowIntentHost["setPanel"]>(undefined);
   const dialogFormRef = useRef<HTMLDivElement>(null);
   const requestChoicePageRef = useRef<
     (
@@ -300,6 +302,7 @@ export function ApplicationPageViewContent({
     platformThemeTokens,
     committed: (bindingId) =>
       void refreshPlacements(refreshTargetsForBinding(bindingId), undefined, { content: true }),
+    setPanelRef,
   });
 
   /** A page-level address change (a guided form step) renders the page again on the server. */
@@ -528,6 +531,7 @@ export function ApplicationPageViewContent({
     router,
     requestChoicePage,
     runtimeInputsRef,
+    setPanelRef,
   });
 
   // What the frame around this page shows for it: its breadcrumb name, its agent-tool state, its
@@ -657,6 +661,8 @@ export function ApplicationPageViewContent({
           platformThemeTokens={platformThemeTokens}
           applicationSearch={applicationFrame?.applicationSearch}
           applicationSearchPageSubject={applicationFrame?.applicationSearchPageSubject}
+          locale={applicationFrame?.locale}
+          timeZone={applicationFrame?.timeZone}
           pageId={model.pageId}
           theme={model.theme}
           {...(navigation === undefined ? {} : { projectedNavigation: navigation })}

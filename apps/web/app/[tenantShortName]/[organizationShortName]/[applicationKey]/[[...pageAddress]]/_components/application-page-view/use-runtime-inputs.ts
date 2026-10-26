@@ -8,6 +8,7 @@ import {
   type DisplayInlineEditResult,
   type DisplaySemanticEvent,
   type FlowDispatchResult,
+  type FlowIntentHost,
   type FormFlowFeedback,
 } from "@vortex/ui";
 import {
@@ -110,6 +111,7 @@ export function useRuntimeInputs({
   router,
   requestChoicePage,
   runtimeInputsRef,
+  setPanelRef,
 }: Readonly<{
   currentData: ApplicationPageModel["data"];
   model: ApplicationPageModel;
@@ -227,6 +229,7 @@ export function useRuntimeInputs({
     formId?: string,
   ) => Promise<void>;
   runtimeInputsRef: RefObject<Readonly<Record<string, unknown>>>;
+  setPanelRef: RefObject<FlowIntentHost["setPanel"]>;
 }>) {
   const pageParameters = usePageParameters({
     model,
@@ -236,6 +239,7 @@ export function useRuntimeInputs({
     refreshPlacements,
     rereadTables,
     setSelection,
+    setPanelRef,
   });
   // Bulk actions: every matching record of a table, and the runs over a selection.
   const bulk = useBulkSelection({
@@ -345,6 +349,8 @@ export function useRuntimeInputs({
                 );
                 return;
               }
+              if (event.event === "row_clicked")
+                pageParameters.rowClicked(placementId, event.recordId);
               if (!busy)
                 return runBinding(
                   placementId,
@@ -665,7 +671,13 @@ export function useRuntimeInputs({
           pageParameters.change(placementId, event);
         };
       }
-      if (publishedParameter !== undefined && supportsEvent("row_clicked"))
+      // A table whose click is bound to a flow keeps that flow; the flow publishes the record when
+      // it opens a panel.
+      if (
+        publishedParameter !== undefined &&
+        supportsEvent("row_clicked") &&
+        !bindings.some((binding) => binding.event === "row_clicked")
+      )
         events.row_clicked = (event: DisplaySemanticEvent) => {
           if (event.event === "row_clicked")
             pageParameters.publish(placementId, event.recordId, false);

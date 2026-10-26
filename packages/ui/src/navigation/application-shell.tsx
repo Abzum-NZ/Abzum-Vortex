@@ -65,6 +65,8 @@ export type ApplicationShellRuntime = Readonly<{
   applicationName: string;
   applicationHref: string;
   organizationName: string;
+  /** The organisation's address segment, shown beside its display name in the organisation menu. */
+  organizationShortName?: string;
   pageName: string;
   /** Page agent-tool state supplied through Puck metadata to the definition-selected shell. */
   webMcp?: ApplicationWebMcpRuntime;
@@ -186,6 +188,7 @@ function OrganizationSwitcher({
 }: Readonly<{ runtime: ApplicationShellRuntime | undefined }>): ReactElement {
   const actions = useApplicationAccountActions();
   const organizationName = runtime?.organizationName ?? actions?.organizationName ?? "Organisation";
+  const organizationShortName = runtime?.organizationShortName ?? actions?.organizationShortName;
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -199,7 +202,12 @@ function OrganizationSwitcher({
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-56">
         <DropdownMenuGroup>
-          <DropdownMenuLabel>{organizationName}</DropdownMenuLabel>
+          <DropdownMenuLabel className="flex flex-col gap-1">
+            <span>{organizationName}</span>
+            {organizationShortName === undefined ? null : (
+              <span className="font-normal text-muted-foreground">{organizationShortName}</span>
+            )}
+          </DropdownMenuLabel>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuItem
@@ -409,7 +417,7 @@ export function ApplicationShellRoot({
       <div
         data-vortex-puck-root=""
         data-vortex-application-shell={shell.key}
-        className="flex min-h-svh w-full min-w-0 flex-col bg-background text-foreground"
+        className="flex min-h-svh w-full min-w-0 flex-col bg-background text-foreground [--vortex-header-height:3.5rem]"
         {...(editing ? { "data-vortex-editing": "" } : {})}
       >
         <style>{shellFrameCss}</style>
