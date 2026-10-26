@@ -8,7 +8,7 @@ import {
 } from "@vortex/platform/schema";
 import { cellValueToText } from "../cell";
 import { fail } from "../payload-parse";
-import { readProjectedResult, type DisplayRow } from "../projected-data";
+import { REPLY_ENVELOPES, readProjectedResult, type DisplayRow } from "../projected-data";
 import type { SubRowEntry, SubRowsBeneath } from "../sub-rows";
 import type { GridFeatureModule, GridFeatureSubRowsProps } from "./registry";
 
@@ -39,7 +39,12 @@ const location = { propertyPath: [recordsTableTreeFeature.property] };
  */
 const parseOutcome = (value: unknown): Outcome | undefined => {
   if (value === undefined) return undefined;
-  const result = readProjectedResult<TableLevelReply>(value, "A tree level is invalid", location);
+  const result = readProjectedResult<TableLevelReply>(
+    value,
+    REPLY_ENVELOPES.tableLevel,
+    "A tree level is invalid",
+    location,
+  );
   if (result.status !== "ready") return { status: result.status };
   const payload = result.values;
   return {

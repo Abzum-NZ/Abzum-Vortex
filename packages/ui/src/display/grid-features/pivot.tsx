@@ -19,7 +19,7 @@ import {
 import { cn } from "../../lib/utils";
 import { cellValueToText, DisplayCellView } from "../cell";
 import { useDateFormatOptions } from "../date-format-context";
-import { readProjectedResult } from "../projected-data";
+import { REPLY_ENVELOPES, readProjectedResult } from "../projected-data";
 import type { GridFeatureModule, GridFeaturePointProps } from "./registry";
 
 type Page = PivotPage;
@@ -46,7 +46,12 @@ const location = { propertyPath: [recordsTablePivotFeature.property] };
  */
 const parseOutcome = (value: unknown): Outcome | undefined => {
   if (value === undefined) return undefined;
-  const result = readProjectedResult<PivotReply>(value, "A pivot is invalid", location);
+  const result = readProjectedResult<PivotReply>(
+    value,
+    REPLY_ENVELOPES.pivot,
+    "A pivot is invalid",
+    location,
+  );
   if (result.status !== "ready") return result;
   const { status, ...page } = result;
   return { status, page };

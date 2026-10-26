@@ -18,6 +18,7 @@ import { fail } from "../payload-parse";
 import {
   isInternalAddress,
   readProjectedResult,
+  REPLY_ENVELOPES,
   type DisplayColumn,
   type DisplayDetailCell,
   type DisplayDetailField,
@@ -55,6 +56,7 @@ const parseOutcome = (value: unknown): Outcome | undefined => {
   if (value === undefined) return undefined;
   const result = readProjectedResult<RowDetailReply>(
     value,
+    REPLY_ENVELOPES.rowDetail,
     "Related records are invalid",
     location,
   );

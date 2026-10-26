@@ -13,6 +13,7 @@ import {
   type DisplayEventHandlers,
   type DisplaySemanticEventName,
 } from "./display-events";
+import { displayRefusalReasons } from "@vortex/platform/schema";
 import type {
   RichTextPayload,
   TextPayload,
@@ -94,33 +95,81 @@ const ERROR_STATE: DisplayDataState<never> = Object.freeze({ status: "error" });
 /** A web link opens in a new page; a mail or telephone link hands over to the viewer's own app. */
 export const isWebLinkAddress = (value: string): boolean => /^https?:/i.test(value);
 
-const DATA_STATUSES: ReadonlySet<string> = new Set([
-  "loading",
-  "empty",
-  "awaiting_input",
-  "refused",
-  "error",
-  "ready",
-]);
+/** Text a closed envelope carries: more than white space, within its bound. */
+const isBoundedText = (value: unknown, maximum: number): value is string =>
+  typeof value === "string" && value.trim().length > 0 && value.length <= maximum;
+
+/** The keys one status of a closed envelope carries: each required key, and only those allowed. */
+type EnvelopeShape = Readonly<{
+  required: readonly string[];
+  optional?: readonly string[];
+  check?: (record: Readonly<Record<string, unknown>>) => boolean;
+}>;
+
+const STATUS_ONLY: EnvelopeShape = Object.freeze({ required: [] });
 
 /**
- * One block's projected state. The renderer checks the envelope: an object with a known status, and
- * values only in the ready state. The values are the payload the server built with its typed
- * projection from reads it validated; the renderer does not parse them again, in the server render
- * or in the browser. A block whose values carry what the browser itself must refuse (a closed
- * disclosure shape, a link target, a time zone it cannot show) names `readValues` for that check.
- * Throws a located definition error for any other envelope.
+ * Checks a closed envelope from the server: an object whose status is one of the given ones, with
+ * exactly that status's keys and their own small checks. The content of a ready envelope is the
+ * payload the server validated where it built it, so it is not parsed again here.
+ */
+const readEnvelope = (
+  value: unknown,
+  shapes: Readonly<Record<string, EnvelopeShape>>,
+  message: string,
+  location: DefinitionRenderErrorLocation,
+): Readonly<Record<string, unknown>> => {
+  const record = requireRecord(value, message, location);
+  const status = record.status;
+  const shape =
+    typeof status === "string" && Object.hasOwn(shapes, status) ? shapes[status] : undefined;
+  if (shape === undefined) return fail(`${message}: unknown status`, location, ["status"]);
+  const allowed = new Set(["status", ...shape.required, ...(shape.optional ?? [])]);
+  for (const key of Object.keys(record))
+    if (!allowed.has(key)) return fail(`${message}: unexpected '${key}'`, location, [key]);
+  for (const key of shape.required)
+    if (!Object.hasOwn(record, key)) return fail(`${message}: missing '${key}'`, location, [key]);
+  if (shape.check !== undefined && !shape.check(record)) return fail(message, location);
+  return record;
+};
+
+const DISPLAY_STATE_SHAPES: Readonly<Record<string, EnvelopeShape>> = Object.freeze({
+  loading: STATUS_ONLY,
+  empty: STATUS_ONLY,
+  error: STATUS_ONLY,
+  awaiting_input: {
+    required: ["message"],
+    check: (state) => isBoundedText(state.message, 300),
+  },
+  refused: {
+    required: ["reason"],
+    check: (state) =>
+      typeof state.reason === "string" &&
+      (displayRefusalReasons as readonly string[]).includes(state.reason),
+  },
+  ready: { required: ["values"] },
+});
+
+/**
+ * One block's projected state. The renderer checks the closed envelope: a known status with exactly
+ * its own keys, a refusal reason the platform names and a bounded awaiting-input message; only the
+ * ready state carries values. The values are the payload the server checked against the block's
+ * contract where it built it; the renderer does not parse them again, in the server render or in
+ * the browser. A block whose values carry what the browser itself must refuse (a closed disclosure
+ * shape, a link target, a time zone it cannot show) names `readValues` for that check.
  */
 export const readDisplayData = <Values>(
   value: unknown,
   location: DefinitionRenderErrorLocation = {},
   readValues?: (values: unknown, location: DefinitionRenderErrorLocation) => Values,
 ): DisplayDataState<Values> => {
-  const state = requireRecord(value, "Projected display data must be an object", location);
-  const status = state.status;
-  if (typeof status !== "string" || !DATA_STATUSES.has(status))
-    return fail("Projected display data has an unknown status", location, ["status"]);
-  switch (status) {
+  const state = readEnvelope(
+    value,
+    DISPLAY_STATE_SHAPES,
+    "Projected display data is invalid",
+    location,
+  );
+  switch (state.status) {
     case "loading":
       return LOADING_STATE;
     case "empty":
@@ -128,8 +177,6 @@ export const readDisplayData = <Values>(
     case "error":
       return ERROR_STATE;
     case "ready":
-      if (!Object.hasOwn(state, "values"))
-        return fail("Ready display data carries its values", location, ["values"]);
       return readValues === undefined
         ? (state as DisplayDataState<Values>)
         : Object.freeze({ status: "ready", values: readValues(state.values, location) });
@@ -138,20 +185,67 @@ export const readDisplayData = <Values>(
   }
 };
 
+/** A tree level's or a group's members reply: the table's ready values, or a bare status. */
+const TABLE_LEVEL_SHAPES: Readonly<Record<string, EnvelopeShape>> = Object.freeze({
+  ready: { required: ["values"] },
+  empty: STATUS_ONLY,
+  refused: STATUS_ONLY,
+  error: STATUS_ONLY,
+});
+
+/** A related-records reply: its columns and rows, or a bare status that carries nothing. */
+const ROW_DETAIL_SHAPES: Readonly<Record<string, EnvelopeShape>> = Object.freeze({
+  ready: {
+    required: ["columns", "rows"],
+    optional: ["nextContinuationToken"],
+    check: (reply) => Array.isArray(reply.columns) && Array.isArray(reply.rows),
+  },
+  empty: STATUS_ONLY,
+  refused: STATUS_ONLY,
+  error: STATUS_ONLY,
+});
+
+/** A pivot page reply, or a refusal with its message, or a bare status. */
+const PIVOT_SHAPES: Readonly<Record<string, EnvelopeShape>> = Object.freeze({
+  ready: {
+    required: [
+      "rowLabel",
+      "columnLabel",
+      "measureLabel",
+      "columns",
+      "rows",
+      "totalRecords",
+      "rowGroupCount",
+    ],
+    optional: ["columnTotals", "grandTotal", "nextCursor"],
+    check: (reply) => Array.isArray(reply.columns) && Array.isArray(reply.rows),
+  },
+  empty: STATUS_ONLY,
+  refused: {
+    required: ["message"],
+    check: (reply) => isBoundedText(reply.message, Number.MAX_SAFE_INTEGER),
+  },
+  error: STATUS_ONLY,
+});
+
+/** One read a grid feature asked its host for, by the reply's own closed envelope. */
+export const REPLY_ENVELOPES = Object.freeze({
+  tableLevel: TABLE_LEVEL_SHAPES,
+  rowDetail: ROW_DETAIL_SHAPES,
+  pivot: PIVOT_SHAPES,
+});
+
 /**
  * One read a grid feature asked its host for (a tree level, a group's members, related records, a
- * pivot page), as the server returned it: an object with a status. Like a block's ready values, its
- * content is the server's typed reply and is not parsed again here.
+ * pivot page), as the server returned it: its closed envelope is checked here; its content is the
+ * reply the server checked against its contract where it built it.
  */
 export const readProjectedResult = <Result extends Readonly<{ status: string }>>(
   value: unknown,
+  envelope: Readonly<Record<string, EnvelopeShape>>,
   message: string,
   location: DefinitionRenderErrorLocation,
-): Result => {
-  const result = requireRecord(value, message, location);
-  if (typeof result.status !== "string") return fail(message, location, ["status"]);
-  return result as Result;
-};
+): Result => readEnvelope(value, envelope, message, location) as unknown as Result;
 
 const EMPTY_HANDLERS: DisplayEventHandlers = Object.freeze({});
 

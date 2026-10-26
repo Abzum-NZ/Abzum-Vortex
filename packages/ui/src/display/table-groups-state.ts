@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { TableLevelReply } from "@vortex/platform/schema";
 import {
   readProjectedResult,
+  REPLY_ENVELOPES,
   type DisplayEventHandlers,
   type DisplayRow,
   type DisplayTablePayload,
@@ -42,6 +43,7 @@ const parseMembers = (
   if (value === undefined) return undefined;
   const result = readProjectedResult<TableLevelReply>(
     value,
+    REPLY_ENVELOPES.tableLevel,
     "A group's members are invalid",
     location,
   );
