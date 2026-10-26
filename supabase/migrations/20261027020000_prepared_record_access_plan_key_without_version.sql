@@ -785,6 +785,8 @@ create temporary table prepared_plan_key_rewrites (
   new_key text not null unique
 );
 grant select on prepared_plan_key_rewrites to vortex_record_adapter;
+create temporary table held_prepared_plan_keys (plan_key text primary key);
+grant select on held_prepared_plan_keys to vortex_record_adapter;
 
 do $rewrite$
 declare
@@ -881,6 +883,12 @@ begin
 
     insert into prepared_plan_key_rewrites (old_key, new_key) values (old_key, new_key);
   end loop;
+
+  insert into held_prepared_plan_keys (plan_key)
+  select distinct bundle.source_manifest #>> '{preparedRecordAccessPlan,planKey}'
+  from vortex_definition.installation_runtime_bundles as bundle
+  where bundle.bundle_format_version = 2
+    and bundle.source_manifest #>> '{preparedRecordAccessPlan,planKey}' is not null;
 end
 $rewrite$;
 
@@ -901,7 +909,7 @@ begin
   where plan.plan ? 'mappingFingerprint'
     and plan.plan ->> 'planKey' = plan.plan_key
     and not exists (
-      select 1 from prepared_plan_key_rewrites as rewrite where rewrite.new_key = plan.plan_key
+      select 1 from held_prepared_plan_keys as held where held.plan_key = plan.plan_key
     );
 end
 $rewrite$;
@@ -911,5 +919,6 @@ reset role;
 set role vortex_owner;
 
 drop table prepared_plan_key_rewrites;
+drop table held_prepared_plan_keys;
 
 reset role;
