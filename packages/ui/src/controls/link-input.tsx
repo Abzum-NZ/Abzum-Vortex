@@ -260,6 +260,10 @@ export function LinkInput(props: LinkInputProps): ReactElement {
           <ComboboxInput
             id={ids.control}
             placeholder={shownPlaceholder}
+            // While it waits for its parent the field says what to do first, in readable text.
+            {...(waiting
+              ? { className: "disabled:opacity-100 placeholder:text-muted-foreground" }
+              : {})}
             disabled={inactive}
             readOnly={readOnly}
             aria-labelledby={ids.label}
@@ -292,8 +296,8 @@ export function LinkInput(props: LinkInputProps): ReactElement {
               : failed
                 ? "Records could not be loaded. Try again."
                 : searchTerm.trim() === ""
-                  ? "No records you can see"
-                  : "No matching records"}
+                  ? `No ${label.toLowerCase()} to choose from yet`
+                  : `No ${label.toLowerCase()} matches your search`}
           </ComboboxEmpty>
           {next !== undefined ? (
             <Button
