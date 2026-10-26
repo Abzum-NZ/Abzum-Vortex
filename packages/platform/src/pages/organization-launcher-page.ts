@@ -130,7 +130,11 @@ const launcherItems = [
   platformPageItem(
     APPLICATION_LAUNCHER_BLOCK_RELEASE,
     organizationLauncherPlacementId,
-    { title: "Available applications", row_action_event_id: applicationLauncherOpenEventId },
+    {
+      title: "Available applications",
+      row_action_event_id: applicationLauncherOpenEventId,
+      empty_message: "You have no applications yet. Ask your administrator for access.",
+    },
     ["side_panel"],
   ),
 ];

@@ -151,7 +151,7 @@ const invitationTileValues = (invitations: readonly PendingInvitation[]): Launch
           .filter((part) => part !== undefined)
           .join(" · "),
       },
-      icon: { kind: "text", text: "mail" },
+      icon: { kind: "text", text: "building-2" },
     },
   })),
 });
