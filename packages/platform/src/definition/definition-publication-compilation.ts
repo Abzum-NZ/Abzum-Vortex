@@ -337,6 +337,7 @@ export const validateCandidate = (
     identities: supplied.identities,
     historyEvidence: supplied.historyEvidence,
     savedConditionHistory: supplied.savedConditionHistory,
+    latestPlatformPins: supplied.latestPlatformPins,
   };
   if (
     candidate.historyEvidence.kind !== candidate.draft.kind ||

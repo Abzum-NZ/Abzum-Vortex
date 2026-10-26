@@ -88,6 +88,11 @@ export type DefinitionPublicationCandidate = DefinitionCandidateDraft &
   Readonly<{
     historyEvidence: DefinitionPublicationHistoryEvidence;
     savedConditionHistory: readonly SavedConditionLike[];
+    /**
+     * The platform service operations and connection types the latest release pins, exactly as it
+     * stored them. A platform release changing under an unchanged draft still needs a new release.
+     */
+    latestPlatformPins: readonly ExactDefinitionDependency[];
   }>;
 
 /** Immutable organization-owned module release made available to a dependency compilation. */
