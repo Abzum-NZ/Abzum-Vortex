@@ -927,7 +927,7 @@ const readAddressedActiveApplicationIdentity = async (
   const requests = createHumanOrganizationRequestService({
     identityAuthorityId: identityAuthorityId.data,
   });
-  const result = await requests.run(
+  const result = await requests.runChangeWithRefusal(
     session.data,
     { organizationId: organizationId.data },
     async (transaction, scope) => {
@@ -972,8 +972,11 @@ const readAddressedActiveApplicationIdentity = async (
         throw new Error("APPLICATION_ADDRESS_IDENTITY_UNAVAILABLE");
       return identity.data;
     },
+    // An address that names no application here is an answer, not a platform failure.
+    (code) => (code === "P0002" ? null : undefined),
   );
-  if (result.kind !== "available" || result.value === undefined) return undefined;
+  if (result.kind !== "available" || result.value === undefined || result.value === null)
+    return undefined;
   const identity: AddressedActiveApplicationIdentity = result.value;
   // A preview holding copies of live records opens only once they are decided again by the
   // builder's current live access in the installed Application; a refusal refuses the preview.

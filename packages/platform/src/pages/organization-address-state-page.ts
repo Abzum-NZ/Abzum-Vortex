@@ -54,13 +54,10 @@ export const organizationAddressStatePage = (state: OrganizationAddressState): P
       organizationLauncherShell.shellId,
       launcherContentSlot.slotId,
       [
-        platformPageItem(HEADING_BLOCK_RELEASE, "3e8b5d27-9a14-4c6f-8d02-b71e4a9c5f13", {
-          text: state.title,
-          level: "two",
-        }),
+        // The page header shows the title; the content explains it under it.
         platformPageItem(HEADING_BLOCK_RELEASE, "c47a1e93-2b6d-4f85-a0e8-5d9b3c7f2a64", {
           text: state.detail,
-          level: "three",
+          level: "two",
         }),
         platformPageItem(BUTTON_BLOCK_RELEASE, organizationAddressStateActionPlacementId, {
           label: state.actionLabel,
