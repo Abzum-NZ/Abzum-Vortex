@@ -362,7 +362,7 @@ export const readInstallationRolesIn = async (
 
 /** The application's roles in their own installer request transaction. */
 export const readInstallationRoles = (
-  environment: InstallationRoleEnvironment,
+  environment: Pick<InstallationRoleEnvironment, "requests" | "permissions">,
   session: IdentitySession,
   selector: Selector,
   containsCustomComponents: boolean,

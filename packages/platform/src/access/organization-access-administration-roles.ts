@@ -10,8 +10,6 @@ import type { IdentitySession, OrganizationSelectionCandidate } from "./identity
 import {
   changeOrganizationAdministrationRoleAuthorityCommandSchema,
   changeOrganizationAdministrationRoleResultSchema,
-  listOrganizationAdministrationRolesCommandSchema,
-  listOrganizationAdministrationRolesResultSchema,
   readOrganizationAdministrationRoleCommandSchema,
   readOrganizationAdministrationRoleResultSchema,
   prepareOrganizationAdministrationRoleChangeCommandSchema,
@@ -20,8 +18,6 @@ import {
   reviseOrganizationAdministrationRoleMetadataCommandSchema,
   type ChangeOrganizationAdministrationRoleAuthorityCommand,
   type ChangeOrganizationAdministrationRoleResult,
-  type ListOrganizationAdministrationRolesCommand,
-  type ListOrganizationAdministrationRolesResult,
   type PrepareOrganizationAdministrationRoleChangeCommand,
   type PrepareOrganizationAdministrationRoleRevisionAcceptanceCommand,
   type ReadOrganizationAdministrationRoleCommand,
@@ -55,7 +51,6 @@ import {
   sealPreparedRoleChange,
 } from "./organization-access-administration-shared";
 import type {
-  RolePageRow,
   RoleDetailRow,
   RoleChangeRow,
   RoleChangePreparationRow,
@@ -578,48 +573,6 @@ export const createAccessAdministrationRoleOperations = ({
         candidate,
         commandCandidate,
       ),
-
-    listRoles: async (
-      session: IdentitySession,
-      candidate: OrganizationSelectionCandidate,
-      commandCandidate: ListOrganizationAdministrationRolesCommand,
-    ): Promise<HumanOrganizationRequestResult<ListOrganizationAdministrationRolesResult>> => {
-      const command = listOrganizationAdministrationRolesCommandSchema.safeParse(commandCandidate);
-      if (!command.success)
-        return refuseAdministration(
-          "listRoles",
-          "ACCESS_ADMIN_COMMAND_INVALID",
-          { kind: "unavailable" } as const,
-          command.error,
-        );
-
-      return requests.run(session, candidate, async (transaction, scope) => {
-        const row = requireOne(
-          await transaction.query<RolePageRow>`
-            select organization_id, roles, next_after_role_id, access_version
-            from vortex_access.list_organization_roles_for_administration(
-              ${command.data.afterRoleId ?? null}::uuid,
-              ${command.data.pageSize}::integer
-            )
-          `,
-        );
-        if (
-          typeof row.organization_id !== "string" ||
-          !sameId(row.organization_id, scope.organizationId) ||
-          databaseRevision(row.access_version) !== scope.accessVersion ||
-          !Array.isArray(row.roles)
-        )
-          throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
-
-        return listOrganizationAdministrationRolesResultSchema.parse({
-          roles: row.roles,
-          ...(row.next_after_role_id === null || row.next_after_role_id === undefined
-            ? {}
-            : { nextAfterRoleId: row.next_after_role_id }),
-          accessVersion: databaseRevision(row.access_version),
-        });
-      });
-    },
 
     readRole: async (
       session: IdentitySession,

@@ -8,14 +8,8 @@ import {
   changeOrganizationAdministrationMembershipResultSchema,
   changeOrganizationAdministrationGroupResultSchema,
   createOrganizationAdministrationGroupCommandSchema,
-  listOrganizationAdministrationGroupsCommandSchema,
-  listOrganizationAdministrationGroupsResultSchema,
-  listOrganizationAdministrationMembershipsCommandSchema,
-  listOrganizationAdministrationMembershipsResultSchema,
   readOrganizationAdministrationGroupCommandSchema,
   readOrganizationAdministrationGroupResultSchema,
-  readOrganizationAdministrationMembershipCommandSchema,
-  readOrganizationAdministrationMembershipResultSchema,
   removeOrganizationAdministrationMembershipCommandSchema,
   renameOrganizationAdministrationGroupCommandSchema,
   retireOrganizationAdministrationGroupCommandSchema,
@@ -23,14 +17,8 @@ import {
   type ChangeOrganizationAdministrationGroupResult,
   type ChangeOrganizationAdministrationMembershipResult,
   type CreateOrganizationAdministrationGroupCommand,
-  type ListOrganizationAdministrationGroupsCommand,
-  type ListOrganizationAdministrationGroupsResult,
-  type ListOrganizationAdministrationMembershipsCommand,
-  type ListOrganizationAdministrationMembershipsResult,
   type ReadOrganizationAdministrationGroupCommand,
   type ReadOrganizationAdministrationGroupResult,
-  type ReadOrganizationAdministrationMembershipCommand,
-  type ReadOrganizationAdministrationMembershipResult,
   type RenameOrganizationAdministrationGroupCommand,
   type RemoveOrganizationAdministrationMembershipCommand,
   type RetireOrganizationAdministrationGroupCommand,
@@ -46,11 +34,8 @@ import {
   mapRecordedRefusal,
 } from "./organization-access-administration-shared";
 import type {
-  GroupPageRow,
   GroupDetailRow,
   GroupChangeRow,
-  MembershipPageRow,
-  MembershipDetailRow,
   MembershipChangeRow,
   AccessAdministrationContext,
 } from "./organization-access-administration-shared";
@@ -409,48 +394,6 @@ export const createAccessAdministrationGroupOperations = ({
       );
     },
 
-    listGroups: async (
-      session: IdentitySession,
-      candidate: OrganizationSelectionCandidate,
-      commandCandidate: ListOrganizationAdministrationGroupsCommand,
-    ): Promise<HumanOrganizationRequestResult<ListOrganizationAdministrationGroupsResult>> => {
-      const command = listOrganizationAdministrationGroupsCommandSchema.safeParse(commandCandidate);
-      if (!command.success)
-        return refuseAdministration(
-          "listGroups",
-          "ACCESS_ADMIN_COMMAND_INVALID",
-          { kind: "unavailable" } as const,
-          command.error,
-        );
-
-      return requests.run(session, candidate, async (transaction, scope) => {
-        const row = requireOne(
-          await transaction.query<GroupPageRow>`
-            select organization_id, groups, next_after_group_id, access_version
-            from vortex_access.list_organization_groups_for_administration(
-              ${command.data.afterGroupId ?? null}::uuid,
-              ${command.data.pageSize}::integer
-            )
-          `,
-        );
-        if (
-          typeof row.organization_id !== "string" ||
-          !sameId(row.organization_id, scope.organizationId) ||
-          databaseRevision(row.access_version) !== scope.accessVersion ||
-          !Array.isArray(row.groups)
-        )
-          throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
-
-        return listOrganizationAdministrationGroupsResultSchema.parse({
-          groups: row.groups.map(normalizeGroup),
-          ...(row.next_after_group_id === null || row.next_after_group_id === undefined
-            ? {}
-            : { nextAfterGroupId: row.next_after_group_id }),
-          accessVersion: databaseRevision(row.access_version),
-        });
-      });
-    },
-
     readGroup: async (
       session: IdentitySession,
       candidate: OrganizationSelectionCandidate,
@@ -486,95 +429,6 @@ export const createAccessAdministrationGroupOperations = ({
           ...(row.group_summary === null || row.group_summary === undefined
             ? {}
             : { group: normalizeGroup(row.group_summary) }),
-          accessVersion: databaseRevision(row.access_version),
-        });
-      });
-    },
-
-    listGroupMemberships: async (
-      session: IdentitySession,
-      candidate: OrganizationSelectionCandidate,
-      commandCandidate: ListOrganizationAdministrationMembershipsCommand,
-    ): Promise<HumanOrganizationRequestResult<ListOrganizationAdministrationMembershipsResult>> => {
-      const command =
-        listOrganizationAdministrationMembershipsCommandSchema.safeParse(commandCandidate);
-      if (!command.success)
-        return refuseAdministration(
-          "listGroupMemberships",
-          "ACCESS_ADMIN_COMMAND_INVALID",
-          { kind: "unavailable" } as const,
-          command.error,
-        );
-
-      return requests.run(session, candidate, async (transaction, scope) => {
-        const row = requireOne(
-          await transaction.query<MembershipPageRow>`
-            select organization_id, group_id, memberships,
-              next_after_membership_id, access_version
-            from vortex_access.list_organization_group_memberships_for_administration(
-              ${command.data.groupId}::uuid,
-              ${command.data.afterMembershipId ?? null}::uuid,
-              ${command.data.pageSize}::integer
-            )
-          `,
-        );
-        if (
-          typeof row.organization_id !== "string" ||
-          !sameId(row.organization_id, scope.organizationId) ||
-          typeof row.group_id !== "string" ||
-          !sameId(row.group_id, command.data.groupId) ||
-          databaseRevision(row.access_version) !== scope.accessVersion ||
-          !Array.isArray(row.memberships)
-        )
-          throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
-
-        return listOrganizationAdministrationMembershipsResultSchema.parse({
-          groupId: row.group_id,
-          memberships: row.memberships.map(normalizeMembership),
-          ...(row.next_after_membership_id === null || row.next_after_membership_id === undefined
-            ? {}
-            : { nextAfterMembershipId: row.next_after_membership_id }),
-          accessVersion: databaseRevision(row.access_version),
-        });
-      });
-    },
-
-    readGroupMembership: async (
-      session: IdentitySession,
-      candidate: OrganizationSelectionCandidate,
-      commandCandidate: ReadOrganizationAdministrationMembershipCommand,
-    ): Promise<HumanOrganizationRequestResult<ReadOrganizationAdministrationMembershipResult>> => {
-      const command =
-        readOrganizationAdministrationMembershipCommandSchema.safeParse(commandCandidate);
-      if (!command.success)
-        return refuseAdministration(
-          "readGroupMembership",
-          "ACCESS_ADMIN_COMMAND_INVALID",
-          { kind: "unavailable" } as const,
-          command.error,
-        );
-
-      return requests.run(session, candidate, async (transaction, scope) => {
-        const row = requireOne(
-          await transaction.query<MembershipDetailRow>`
-            select organization_id, outcome, membership_summary, access_version
-            from vortex_access.read_organization_group_membership_for_administration(
-              ${command.data.membershipId}::uuid
-            )
-          `,
-        );
-        if (
-          typeof row.organization_id !== "string" ||
-          !sameId(row.organization_id, scope.organizationId) ||
-          databaseRevision(row.access_version) !== scope.accessVersion
-        )
-          throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
-
-        return readOrganizationAdministrationMembershipResultSchema.parse({
-          outcome: row.outcome,
-          ...(row.membership_summary === null || row.membership_summary === undefined
-            ? {}
-            : { membership: normalizeMembership(row.membership_summary) }),
           accessVersion: databaseRevision(row.access_version),
         });
       });

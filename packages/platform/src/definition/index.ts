@@ -41,7 +41,11 @@ export {
   activateFirstInstall,
   type FirstInstallMemberRoleChoice,
 } from "./installation-first-install-roles";
-export { acceptedApplicationRoleKey, releaseRoleTemplates } from "./installation-role-templates";
+export {
+  acceptedApplicationRoleKey,
+  readInstallationRoles,
+  releaseRoleTemplates,
+} from "./installation-role-templates";
 export { classifyInstallationFailure } from "./installation-failure";
 export {
   createApplicationStoreService,

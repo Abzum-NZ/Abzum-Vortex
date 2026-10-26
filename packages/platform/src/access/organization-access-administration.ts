@@ -38,21 +38,6 @@ export const organizationAdministrationGroupSchema = z
   })
   .strict();
 
-export const listOrganizationAdministrationGroupsCommandSchema = z
-  .object({
-    pageSize: z.number().int().min(1).max(100),
-    afterGroupId: groupIdSchema.optional(),
-  })
-  .strict();
-
-export const listOrganizationAdministrationGroupsResultSchema = z
-  .object({
-    groups: z.array(organizationAdministrationGroupSchema).max(100),
-    nextAfterGroupId: groupIdSchema.optional(),
-    accessVersion: revisionSchema,
-  })
-  .strict();
-
 export const readOrganizationAdministrationGroupCommandSchema = z
   .object({ groupId: groupIdSchema })
   .strict();
@@ -136,46 +121,6 @@ export const organizationAdministrationMembershipSchema = z
         message: "Only a revoked membership has revoked temporal state",
       });
   });
-
-export const listOrganizationAdministrationMembershipsCommandSchema = z
-  .object({
-    groupId: groupIdSchema,
-    pageSize: z.number().int().min(1).max(100),
-    afterMembershipId: membershipIdSchema.optional(),
-  })
-  .strict();
-
-export const listOrganizationAdministrationMembershipsResultSchema = z
-  .object({
-    groupId: groupIdSchema,
-    memberships: z.array(organizationAdministrationMembershipSchema).max(100),
-    nextAfterMembershipId: membershipIdSchema.optional(),
-    accessVersion: revisionSchema,
-  })
-  .strict();
-
-export const readOrganizationAdministrationMembershipCommandSchema = z
-  .object({ membershipId: membershipIdSchema })
-  .strict();
-
-export const readOrganizationAdministrationMembershipResultSchema = z.discriminatedUnion(
-  "outcome",
-  [
-    z
-      .object({
-        outcome: z.literal("available"),
-        membership: organizationAdministrationMembershipSchema,
-        accessVersion: revisionSchema,
-      })
-      .strict(),
-    z
-      .object({
-        outcome: z.literal("unavailable"),
-        accessVersion: revisionSchema,
-      })
-      .strict(),
-  ],
-);
 
 export const removeOrganizationAdministrationMembershipCommandSchema = z
   .object({
@@ -314,21 +259,6 @@ export const organizationAdministrationRoleDetailSchema = z
         message: "The accepted permission detail must match its safe count",
       });
   });
-
-export const listOrganizationAdministrationRolesCommandSchema = z
-  .object({
-    pageSize: z.number().int().min(1).max(100),
-    afterRoleId: roleIdSchema.optional(),
-  })
-  .strict();
-
-export const listOrganizationAdministrationRolesResultSchema = z
-  .object({
-    roles: z.array(organizationAdministrationRoleSummarySchema).max(100),
-    nextAfterRoleId: roleIdSchema.optional(),
-    accessVersion: revisionSchema,
-  })
-  .strict();
 
 export const readOrganizationAdministrationRoleCommandSchema = z
   .object({ roleId: roleIdSchema })
@@ -522,44 +452,6 @@ export const organizationAdministrationRoleAssignmentSchema = z
   .strict()
   .superRefine(addOrganizationAdministrationTemporalFactIssues);
 
-export const listOrganizationAdministrationRoleAssignmentsCommandSchema = z
-  .object({
-    pageSize: z.number().int().min(1).max(100),
-    afterRoleAssignmentId: roleAssignmentIdSchema.optional(),
-  })
-  .strict();
-
-export const listOrganizationAdministrationRoleAssignmentsResultSchema = z
-  .object({
-    assignments: z.array(organizationAdministrationRoleAssignmentSchema).max(100),
-    nextAfterRoleAssignmentId: roleAssignmentIdSchema.optional(),
-    accessVersion: revisionSchema,
-  })
-  .strict();
-
-export const readOrganizationAdministrationRoleAssignmentCommandSchema = z
-  .object({ roleAssignmentId: roleAssignmentIdSchema })
-  .strict();
-
-export const readOrganizationAdministrationRoleAssignmentResultSchema = z.discriminatedUnion(
-  "outcome",
-  [
-    z
-      .object({
-        outcome: z.literal("available"),
-        assignment: organizationAdministrationRoleAssignmentSchema,
-        accessVersion: revisionSchema,
-      })
-      .strict(),
-    z
-      .object({
-        outcome: z.literal("unavailable"),
-        accessVersion: revisionSchema,
-      })
-      .strict(),
-  ],
-);
-
 export const revokeOrganizationAdministrationRoleAssignmentCommandSchema = z
   .object({
     roleAssignmentId: roleAssignmentIdSchema,
@@ -648,44 +540,6 @@ export const organizationAdministrationDelegationAuthoritySchema = z
   .strict()
   .superRefine(addOrganizationAdministrationTemporalFactIssues);
 
-export const listOrganizationAdministrationDelegationAuthoritiesCommandSchema = z
-  .object({
-    pageSize: z.number().int().min(1).max(100),
-    afterDelegationAuthorityId: delegationAuthorityIdSchema.optional(),
-  })
-  .strict();
-
-export const listOrganizationAdministrationDelegationAuthoritiesResultSchema = z
-  .object({
-    delegations: z.array(organizationAdministrationDelegationAuthoritySchema).max(100),
-    nextAfterDelegationAuthorityId: delegationAuthorityIdSchema.optional(),
-    accessVersion: revisionSchema,
-  })
-  .strict();
-
-export const readOrganizationAdministrationDelegationAuthorityCommandSchema = z
-  .object({ delegationAuthorityId: delegationAuthorityIdSchema })
-  .strict();
-
-export const readOrganizationAdministrationDelegationAuthorityResultSchema = z.discriminatedUnion(
-  "outcome",
-  [
-    z
-      .object({
-        outcome: z.literal("available"),
-        delegation: organizationAdministrationDelegationAuthoritySchema,
-        accessVersion: revisionSchema,
-      })
-      .strict(),
-    z
-      .object({
-        outcome: z.literal("unavailable"),
-        accessVersion: revisionSchema,
-      })
-      .strict(),
-  ],
-);
-
 /** Catalogue delegation is separate from role permissions and stewardship. */
 export const grantOrganizationAdministrationDelegationAuthorityCommandSchema = z
   .object({
@@ -764,62 +618,6 @@ export const organizationAdministrationRoleActivationSummarySchema = z
   .strict()
   .superRefine(addOrganizationAdministrationRoleActivationIssues);
 
-export const organizationAdministrationRoleActivationPolicySchema = z
-  .object({
-    maximumActivationDurationSeconds: revisionSchema,
-    reasonRequired: z.boolean(),
-    recentAuthentication: roleRecentAuthenticationRequirementSchema,
-    requiredCallerExecutionBindingId: containedComponentIdSchema.optional(),
-  })
-  .strict();
-
-export const organizationAdministrationRoleActivationDetailSchema = z
-  .object({
-    ...organizationAdministrationRoleActivationFields,
-    eligibilitySource: roleActivationEligibilitySourceSchema,
-    policyAtActivation: organizationAdministrationRoleActivationPolicySchema,
-  })
-  .strict()
-  .superRefine(addOrganizationAdministrationRoleActivationIssues);
-
-export const listOrganizationAdministrationRoleActivationsCommandSchema = z
-  .object({
-    pageSize: z.number().int().min(1).max(100),
-    afterRoleActivationId: roleActivationIdSchema.optional(),
-  })
-  .strict();
-
-export const listOrganizationAdministrationRoleActivationsResultSchema = z
-  .object({
-    activations: z.array(organizationAdministrationRoleActivationSummarySchema).max(100),
-    nextAfterRoleActivationId: roleActivationIdSchema.optional(),
-    accessVersion: revisionSchema,
-  })
-  .strict();
-
-export const readOrganizationAdministrationRoleActivationCommandSchema = z
-  .object({ roleActivationId: roleActivationIdSchema })
-  .strict();
-
-export const readOrganizationAdministrationRoleActivationResultSchema = z.discriminatedUnion(
-  "outcome",
-  [
-    z
-      .object({
-        outcome: z.literal("available"),
-        activation: organizationAdministrationRoleActivationDetailSchema,
-        accessVersion: revisionSchema,
-      })
-      .strict(),
-    z
-      .object({
-        outcome: z.literal("unavailable"),
-        accessVersion: revisionSchema,
-      })
-      .strict(),
-  ],
-);
-
 export const deactivateOrganizationAdministrationRoleActivationCommandSchema = z
   .object({
     roleActivationId: roleActivationIdSchema,
@@ -834,13 +632,6 @@ export const changeOrganizationAdministrationRoleActivationResultSchema = z
   })
   .strict();
 
-export type OrganizationAdministrationGroup = z.infer<typeof organizationAdministrationGroupSchema>;
-export type ListOrganizationAdministrationGroupsCommand = z.infer<
-  typeof listOrganizationAdministrationGroupsCommandSchema
->;
-export type ListOrganizationAdministrationGroupsResult = z.infer<
-  typeof listOrganizationAdministrationGroupsResultSchema
->;
 export type ReadOrganizationAdministrationGroupCommand = z.infer<
   typeof readOrganizationAdministrationGroupCommandSchema
 >;
@@ -859,21 +650,6 @@ export type RetireOrganizationAdministrationGroupCommand = z.infer<
 export type ChangeOrganizationAdministrationGroupResult = z.infer<
   typeof changeOrganizationAdministrationGroupResultSchema
 >;
-export type OrganizationAdministrationMembership = z.infer<
-  typeof organizationAdministrationMembershipSchema
->;
-export type ListOrganizationAdministrationMembershipsCommand = z.infer<
-  typeof listOrganizationAdministrationMembershipsCommandSchema
->;
-export type ListOrganizationAdministrationMembershipsResult = z.infer<
-  typeof listOrganizationAdministrationMembershipsResultSchema
->;
-export type ReadOrganizationAdministrationMembershipCommand = z.infer<
-  typeof readOrganizationAdministrationMembershipCommandSchema
->;
-export type ReadOrganizationAdministrationMembershipResult = z.infer<
-  typeof readOrganizationAdministrationMembershipResultSchema
->;
 export type RemoveOrganizationAdministrationMembershipCommand = z.infer<
   typeof removeOrganizationAdministrationMembershipCommandSchema
 >;
@@ -882,15 +658,6 @@ export type ChangeOrganizationAdministrationMembershipResult = z.infer<
 >;
 export type OrganizationAdministrationRoleSummary = z.infer<
   typeof organizationAdministrationRoleSummarySchema
->;
-export type OrganizationAdministrationRoleDetail = z.infer<
-  typeof organizationAdministrationRoleDetailSchema
->;
-export type ListOrganizationAdministrationRolesCommand = z.infer<
-  typeof listOrganizationAdministrationRolesCommandSchema
->;
-export type ListOrganizationAdministrationRolesResult = z.infer<
-  typeof listOrganizationAdministrationRolesResultSchema
 >;
 export type ReadOrganizationAdministrationRoleCommand = z.infer<
   typeof readOrganizationAdministrationRoleCommandSchema
@@ -910,32 +677,11 @@ export type ChangeOrganizationAdministrationRoleAuthorityCommand = z.infer<
 export type ChangeOrganizationAdministrationRoleResult = z.infer<
   typeof changeOrganizationAdministrationRoleResultSchema
 >;
-export type OrganizationAdministrationRoleChangePreparationOperation = z.infer<
-  typeof organizationAdministrationRoleChangePreparationOperationSchema
->;
 export type PrepareOrganizationAdministrationRoleChangeCommand = z.infer<
   typeof prepareOrganizationAdministrationRoleChangeCommandSchema
 >;
 export type PrepareOrganizationAdministrationRoleRevisionAcceptanceCommand = z.infer<
   typeof prepareOrganizationAdministrationRoleRevisionAcceptanceCommandSchema
->;
-export type OrganizationAdministrationAssignmentSubject = z.infer<
-  typeof organizationAdministrationAssignmentSubjectSchema
->;
-export type OrganizationAdministrationRoleAssignment = z.infer<
-  typeof organizationAdministrationRoleAssignmentSchema
->;
-export type ListOrganizationAdministrationRoleAssignmentsCommand = z.infer<
-  typeof listOrganizationAdministrationRoleAssignmentsCommandSchema
->;
-export type ListOrganizationAdministrationRoleAssignmentsResult = z.infer<
-  typeof listOrganizationAdministrationRoleAssignmentsResultSchema
->;
-export type ReadOrganizationAdministrationRoleAssignmentCommand = z.infer<
-  typeof readOrganizationAdministrationRoleAssignmentCommandSchema
->;
-export type ReadOrganizationAdministrationRoleAssignmentResult = z.infer<
-  typeof readOrganizationAdministrationRoleAssignmentResultSchema
 >;
 export type RevokeOrganizationAdministrationRoleAssignmentCommand = z.infer<
   typeof revokeOrganizationAdministrationRoleAssignmentCommandSchema
@@ -943,44 +689,11 @@ export type RevokeOrganizationAdministrationRoleAssignmentCommand = z.infer<
 export type ChangeOrganizationAdministrationRoleAssignmentResult = z.infer<
   typeof changeOrganizationAdministrationRoleAssignmentResultSchema
 >;
-export type OrganizationAdministrationDelegationAuthority = z.infer<
-  typeof organizationAdministrationDelegationAuthoritySchema
->;
-export type ListOrganizationAdministrationDelegationAuthoritiesCommand = z.infer<
-  typeof listOrganizationAdministrationDelegationAuthoritiesCommandSchema
->;
-export type ListOrganizationAdministrationDelegationAuthoritiesResult = z.infer<
-  typeof listOrganizationAdministrationDelegationAuthoritiesResultSchema
->;
-export type ReadOrganizationAdministrationDelegationAuthorityCommand = z.infer<
-  typeof readOrganizationAdministrationDelegationAuthorityCommandSchema
->;
-export type ReadOrganizationAdministrationDelegationAuthorityResult = z.infer<
-  typeof readOrganizationAdministrationDelegationAuthorityResultSchema
->;
 export type RevokeOrganizationAdministrationDelegationAuthorityCommand = z.infer<
   typeof revokeOrganizationAdministrationDelegationAuthorityCommandSchema
 >;
 export type ChangeOrganizationAdministrationDelegationAuthorityResult = z.infer<
   typeof changeOrganizationAdministrationDelegationAuthorityResultSchema
->;
-export type OrganizationAdministrationRoleActivationSummary = z.infer<
-  typeof organizationAdministrationRoleActivationSummarySchema
->;
-export type OrganizationAdministrationRoleActivationDetail = z.infer<
-  typeof organizationAdministrationRoleActivationDetailSchema
->;
-export type ListOrganizationAdministrationRoleActivationsCommand = z.infer<
-  typeof listOrganizationAdministrationRoleActivationsCommandSchema
->;
-export type ListOrganizationAdministrationRoleActivationsResult = z.infer<
-  typeof listOrganizationAdministrationRoleActivationsResultSchema
->;
-export type ReadOrganizationAdministrationRoleActivationCommand = z.infer<
-  typeof readOrganizationAdministrationRoleActivationCommandSchema
->;
-export type ReadOrganizationAdministrationRoleActivationResult = z.infer<
-  typeof readOrganizationAdministrationRoleActivationResultSchema
 >;
 export type DeactivateOrganizationAdministrationRoleActivationCommand = z.infer<
   typeof deactivateOrganizationAdministrationRoleActivationCommandSchema

@@ -12,13 +12,6 @@ import type { createHumanOrganizationRequestService } from "./human-organization
 import type { HumanOrganizationRequestResult } from "./human-organization-request";
 import { prepareOrganizationRoleChangeEvidence } from "./organization-role-change-evidence";
 
-export type GroupPageRow = DatabaseRow & {
-  organization_id: unknown;
-  groups: unknown;
-  next_after_group_id: unknown;
-  access_version: unknown;
-};
-
 export type GroupDetailRow = DatabaseRow & {
   organization_id: unknown;
   outcome: unknown;
@@ -33,32 +26,10 @@ export type GroupChangeRow = DatabaseRow & {
   access_version: unknown;
 };
 
-export type MembershipPageRow = DatabaseRow & {
-  organization_id: unknown;
-  group_id: unknown;
-  memberships: unknown;
-  next_after_membership_id: unknown;
-  access_version: unknown;
-};
-
-export type MembershipDetailRow = DatabaseRow & {
-  organization_id: unknown;
-  outcome: unknown;
-  membership_summary: unknown;
-  access_version: unknown;
-};
-
 export type MembershipChangeRow = DatabaseRow & {
   outcome: unknown;
   organization_id: unknown;
   membership_summary: unknown;
-  access_version: unknown;
-};
-
-export type RolePageRow = DatabaseRow & {
-  organization_id: unknown;
-  roles: unknown;
-  next_after_role_id: unknown;
   access_version: unknown;
 };
 
@@ -73,20 +44,6 @@ export type RoleChangeRow = DatabaseRow & {
   outcome: unknown;
   organization_id: unknown;
   role_summary: unknown;
-  access_version: unknown;
-};
-
-export type RoleAssignmentPageRow = DatabaseRow & {
-  organization_id: unknown;
-  assignments: unknown;
-  next_after_role_assignment_id: unknown;
-  access_version: unknown;
-};
-
-export type RoleAssignmentDetailRow = DatabaseRow & {
-  organization_id: unknown;
-  outcome: unknown;
-  assignment_summary: unknown;
   access_version: unknown;
 };
 
@@ -118,34 +75,6 @@ export type StewardshipAppointmentRow = DatabaseRow & {
 export type RoleActivationChangeRow = DatabaseRow & {
   outcome: unknown;
   organization_id: unknown;
-  activation_summary: unknown;
-  access_version: unknown;
-};
-
-export type DelegationAuthorityPageRow = DatabaseRow & {
-  organization_id: unknown;
-  delegations: unknown;
-  next_after_delegation_authority_id: unknown;
-  access_version: unknown;
-};
-
-export type DelegationAuthorityDetailRow = DatabaseRow & {
-  organization_id: unknown;
-  outcome: unknown;
-  delegation_summary: unknown;
-  access_version: unknown;
-};
-
-export type RoleActivationPageRow = DatabaseRow & {
-  organization_id: unknown;
-  activations: unknown;
-  next_after_role_activation_id: unknown;
-  access_version: unknown;
-};
-
-export type RoleActivationDetailRow = DatabaseRow & {
-  organization_id: unknown;
-  outcome: unknown;
   activation_summary: unknown;
   access_version: unknown;
 };
