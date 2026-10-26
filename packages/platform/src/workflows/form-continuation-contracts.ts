@@ -4,10 +4,7 @@ import {
   safeFlowResultKindSchema,
 } from "../definition/application-flow-bindings";
 import { jsonValueSchema } from "../catalogue/common";
-import {
-  formContinuationAnswerSchema,
-  referenceChoiceSelectionEvidenceMapSchema,
-} from "./form-continuation-answer";
+import { formContinuationAnswerSchema } from "./form-continuation-answer";
 import { flowIdSchema } from "./flow-contracts";
 import { flowRefusalFeedbackSchema } from "./flow-refusal-feedback";
 import type { IdentitySession, OrganizationSelectionCandidate } from "../access/identity-access";
@@ -16,7 +13,6 @@ import {
   builderKeySchema,
   containedComponentIdSchema,
   platformIdSchema,
-  recordIdSchema,
   revisionSchema,
 } from "../catalogue/identifiers";
 
