@@ -73,6 +73,8 @@ import {
 export {
   isInternalAddress,
   type DisplayDataState,
+  type CalendarPayload,
+  type CalendarView,
   type DisplayRefusalReason,
 } from "@vortex/platform/schema";
 export type { DisplaySummaryMetric, RichTextPayload, SummaryPayload, TextPayload };
@@ -227,29 +229,6 @@ export type TablePayload = Readonly<{
   previousContinuationToken?: string;
 }> &
   TableSelectionParts;
-
-export type CalendarView = "month" | "week" | "agenda";
-
-/** One permitted query row placed on a calendar day and shown with its declared title field. */
-type CalendarItemPayload = Readonly<{
-  recordId: string;
-  start: string;
-  end: string | null;
-  title: string;
-}>;
-
-/** The server-computed bounded window and arranged calendar items for one placement. */
-export type CalendarPayload = Readonly<{
-  kind: "calendar";
-  view: CalendarView;
-  date: string;
-  windowStart: string;
-  windowEnd: string;
-  timeZone: string;
-  endExclusive: boolean;
-  truncated: boolean;
-  items: readonly CalendarItemPayload[];
-}>;
 
 /** The ready values a record-detail block renders. */
 export type RecordDetailPayload = Readonly<{
