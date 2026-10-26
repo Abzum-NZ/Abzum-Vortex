@@ -1278,7 +1278,8 @@ export function RecordsGrid({
       >
         <span id={instructionsId} className="sr-only">
           Use the arrow keys to move between cells. Enter opens a row or uses the controls in a
-          cell, F2 edits them and Escape returns to the cell. Space selects a row.{" "}
+          cell. Enter or F2 starts an editable cell's editor; Escape returns to the cell. Space
+          selects a row.{" "}
           {expansion === undefined
             ? null
             : `On a row's expand button, the right arrow shows its ${expansion.noun} and the left arrow hides them; F2 or Tab moves into them and Escape returns to the row. `}

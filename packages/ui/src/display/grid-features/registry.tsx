@@ -258,7 +258,7 @@ const gridFeatureViews: readonly GridFeatureView[] = [
   {
     definition: recordsTableInlineEditFeature,
     load: () => import("./inline-edit"),
-    points: ["CellEditor"],
+    points: ["CellEditor", "GridInteraction"],
   },
   {
     definition: recordsTableRowEditFeature,

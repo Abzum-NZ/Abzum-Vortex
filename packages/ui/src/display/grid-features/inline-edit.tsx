@@ -41,7 +41,11 @@ import { EditFieldControl } from "./edit-field-control";
 import { linkedRecordTitle } from "./record-choice-picker";
 import { dependentFieldsOf, parentFieldOf, storedChoiceKey } from "./link-dependency";
 import { waitingForParent } from "../../controls/dependent-field";
-import type { GridFeatureCellProps, GridFeatureModule } from "./registry";
+import type {
+  GridFeatureCellProps,
+  GridFeatureInteractionProps,
+  GridFeatureModule,
+} from "./registry";
 
 type Phase = "idle" | "editing" | "saving";
 
@@ -178,10 +182,16 @@ function EditableCell({
 
   // Focus follows the editor: into the control when editing starts, back to the value after.
   useEffect(() => {
-    if (phase === "editing") editing.current?.focus();
-    else if (phase === "idle" && restoreFocus.current) {
+    if (phase === "editing") {
+      editing.current?.focus();
+      if (
+        editing.current instanceof HTMLInputElement ||
+        editing.current instanceof HTMLTextAreaElement
+      )
+        editing.current.select();
+    } else if (phase === "idle" && restoreFocus.current) {
       restoreFocus.current = false;
-      trigger.current?.focus();
+      trigger.current?.closest<HTMLElement>("[data-grid-cell]")?.focus();
     }
   }, [phase]);
 
@@ -376,7 +386,7 @@ function EditableCell({
           onKeyDown={(event) => {
             if (event.key === "Escape") return;
             event.stopPropagation();
-            if (event.key === "F2") {
+            if (event.key === "F2" || event.key === "Enter") {
               event.preventDefault();
               start();
             }
@@ -394,7 +404,6 @@ function EditableCell({
               )}
             />
           )}
-          <span className="sr-only">. Press Enter to edit {label}.</span>
         </button>
         {status}
       </>
@@ -550,4 +559,33 @@ function InlineEditor({ context, row, column, children }: GridFeatureCellProps):
   );
 }
 
-export const gridFeature: GridFeatureModule = { CellEditor: InlineEditor };
+/** Enter and F2 begin an editable cell's editor in the grid's single focus model. */
+function InlineEditInteraction({ surface }: GridFeatureInteractionProps): null {
+  useEffect(() => {
+    const root = surface.rootRef.current;
+    if (root === null) return;
+    const keydown = (event: globalThis.KeyboardEvent): void => {
+      if (
+        event.defaultPrevented ||
+        event.isComposing ||
+        (event.key !== "F2" && event.key !== "Enter")
+      )
+        return;
+      if (!(event.target instanceof HTMLElement) || !event.target.matches("[data-grid-cell]"))
+        return;
+      const trigger = event.target.querySelector<HTMLButtonElement>("button[data-inline-edit]");
+      if (trigger === null) return;
+      event.preventDefault();
+      event.stopPropagation();
+      trigger.click();
+    };
+    root.addEventListener("keydown", keydown, true);
+    return () => root.removeEventListener("keydown", keydown, true);
+  }, [surface.rootRef]);
+  return null;
+}
+
+export const gridFeature: GridFeatureModule = {
+  CellEditor: InlineEditor,
+  GridInteraction: InlineEditInteraction,
+};
