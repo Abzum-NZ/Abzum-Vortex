@@ -6,7 +6,8 @@ import type { JsonValue } from "../../catalogue/common";
 import { isRecord, sameId } from "../../catalogue/runtime-primitives";
 import { recordsTableColumnWidth } from "../../definition/application-composition/records-display";
 import { recordsTableExportFeature } from "../../definition/application-composition/records-table-features";
-import { authoredGridLayout, type GridLayout } from "../grid-view-state";
+import { authoredGridLayout, resolveGridLayout } from "../grid-layout-resolution";
+import type { GridLayout } from "../grid-view-state";
 import type {
   RecordsTableExportRefusal,
   RecordsTableExportRequest,
@@ -36,7 +37,6 @@ import {
   addressedDefaultGridViews,
   gridLayoutVisibleFieldIds,
   gridViewLayout,
-  resolveGridLayout,
   resolveSelectedGridView,
 } from "../grid-view-state";
 import { addressedGridView, readGridViews } from "../grid-views";

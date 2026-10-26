@@ -2,6 +2,7 @@ export * from "./flow-contracts";
 export * from "./flow-values";
 export * from "./flow-run-as-principal";
 export * from "./form-continuation-contracts";
+export * from "./form-continuation-answer";
 export * from "./flow-invocation-contracts";
 export * from "./flow-refusal-feedback";
 export * from "./flow-source-contracts";

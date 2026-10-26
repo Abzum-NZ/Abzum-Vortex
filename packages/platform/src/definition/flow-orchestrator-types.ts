@@ -32,10 +32,8 @@ import {
 } from "../workflows/flow-contracts";
 import type { FlowRefusalFeedback } from "../workflows/flow-refusal-feedback";
 import { flowLiteralSchema } from "../workflows/flow-values";
-import {
-  formContinuationAnswerSchema,
-  type FlowWarningNotice,
-} from "../workflows/form-continuation-contracts";
+import type { FlowWarningNotice } from "../workflows/form-continuation-contracts";
+import { formContinuationAnswerSchema } from "../workflows/form-continuation-answer";
 import { stableDefinitionReleaseVersionSchema } from "./version-impact";
 import type { RecordSaveServiceResult } from "../records/save-record";
 import type { HumanOrganizationRequestResult } from "../access/human-organization-request";

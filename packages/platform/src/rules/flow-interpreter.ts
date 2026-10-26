@@ -25,7 +25,7 @@ import {
   type FlowReference,
   type FlowValue,
 } from "../workflows/flow-values";
-import type { FormContinuationAnswer } from "../workflows/form-continuation-contracts";
+import type { FormContinuationAnswer } from "../workflows/form-continuation-answer";
 import {
   evaluateFlowFormula,
   flowRuntimeValuesEqual,

@@ -10,6 +10,7 @@ export * from "./page-frame-projection";
 export * from "./page-composition-resolution";
 export * from "./records-table-state";
 export * from "./grid-view-state";
+export * from "./grid-layout-resolution";
 export * from "./records-selection";
 export * from "./records-range-summary";
 export * from "./records-table-export-request";

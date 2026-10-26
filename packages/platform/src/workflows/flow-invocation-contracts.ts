@@ -1,9 +1,6 @@
 import { z } from "zod";
-import {
-  formContinuationAnswerSchema,
-  formContinuationReceiptSchema,
-  formContinuationTargetSchema,
-} from "./form-continuation-contracts";
+import { formContinuationReceiptSchema, formContinuationTargetSchema } from "./form-continuation-contracts";
+import { formContinuationAnswerSchema } from "./form-continuation-answer";
 import { flowIdSchema } from "./flow-contracts";
 import { containedComponentIdSchema, recordIdSchema, revisionSchema } from "../catalogue/identifiers";
 

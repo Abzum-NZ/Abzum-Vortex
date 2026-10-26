@@ -21,7 +21,7 @@ import {
 } from "../catalogue/identifiers";
 import { sameId } from "../catalogue/runtime-primitives";
 import type { RecordTypeReference } from "../definition/definitions";
-import type { ReferenceChoiceSelectionEvidence } from "../workflows/form-continuation-contracts";
+import type { ReferenceChoiceSelectionEvidence } from "../workflows/form-continuation-answer";
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
 import type { QueryContinuationKey } from "./continuation-token";
 import type { ProtectedQueryRow } from "./protected-query-contracts";
