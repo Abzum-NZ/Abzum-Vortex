@@ -51,7 +51,7 @@ responsible owner has abandoned it, or it has been exported and a restore tested
 approved abandonment. Holding a lane does not authorize resetting its data. When `main` moves,
 forward migrate and rebuild the lane instead of resetting it. To set up without a reset, run
 `pnpm --filter @vortex/web demo:owner` and then `pnpm setup:local -- --local-development
---first-owner-identity-id <uuid>` with the printed identity and without `--seed-demo`.
+--first-owner-identity-id <uuid>` with the printed identity.
 
 ```
 node tooling/supabase/lane.mjs init <n>     # once: generate the lane config
