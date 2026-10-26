@@ -89,6 +89,7 @@ import {
   type DurableRecordSave,
 } from "./durable-record-update";
 import { effectCommandId } from "./flow-orchestrator-support";
+import { assignRoleAssignment, prepareRoleAssignment } from "./role-assignment-operation";
 
 /**
  * One server executor for the registered platform-service protected operations. The caller (the
@@ -243,6 +244,9 @@ type ProtectedOperationServices = Readonly<{
     | "createCustomRoleFromTemplate"
     | "appointOrganizationSteward"
     | "assignRoleAssignment"
+    | "readRole"
+    | "readGroup"
+    | "readOrganizationAccount"
     | "revokeRoleAssignment"
     | "deactivateRoleActivation"
     | "revokeDelegationAuthority"
@@ -538,6 +542,17 @@ const runTenantOrganizationCreation = async (
   return scoped.kind === "available" ? scoped.value : scoped;
 };
 
+const roleAssignmentCommand = (inputs: Inputs) => ({
+  roleId: inputs.role_id,
+  expectedRoleRevision: inputs.expected_role_revision,
+  assigneeKind: inputs.assignee_kind,
+  organizationAccountId: optionalText(inputs.organization_account_id),
+  groupId: optionalText(inputs.group_id),
+  assignmentKind: inputs.assignment_kind,
+  startsAt: optionalText(inputs.starts_at),
+  expiresAt: optionalText(inputs.expires_at),
+});
+
 /**
  * Each registered operation, exhaustively keyed by the catalogue (`satisfies` makes a missing or
  * an unregistered key a compile error), so a newly registered operation cannot exist without an
@@ -761,49 +776,19 @@ const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Obj
         }),
       ),
   }),
+  prepare_role_assignment: operation({
+    schema: assignOrganizationAdministrationRoleAssignmentCommandSchema,
+    inputAliases: { startsAt: "starts_at", expiresAt: "expires_at" },
+    command: roleAssignmentCommand,
+    run: (services, caller, command) =>
+      prepareRoleAssignment(services.accessAdministration, caller, command),
+  }),
   assign_role_assignment: operation({
     schema: assignOrganizationAdministrationRoleAssignmentCommandSchema,
     inputAliases: { startsAt: "starts_at", expiresAt: "expires_at" },
-    command: (inputs) => ({
-      roleId: inputs.role_id,
-      expectedRoleRevision: inputs.expected_role_revision,
-      assigneeKind: inputs.assignee_kind,
-      organizationAccountId: optionalText(inputs.organization_account_id),
-      groupId: optionalText(inputs.group_id),
-      assignmentKind: inputs.assignment_kind,
-      startsAt: optionalText(inputs.starts_at),
-      expiresAt: optionalText(inputs.expires_at),
-    }),
-    run: async (services, caller, command) => {
-      const result = await services.accessAdministration.assignRoleAssignment(
-        caller.session,
-        caller.selection,
-        command,
-      );
-      if (result.kind === "available" && "outcome" in result.value) {
-        return {
-          kind: "confirmed_failure",
-          outcome: "refused",
-          diagnostic: flowRefusalFeedbackSchema.parse({ code: result.value.code }),
-        };
-      }
-      if (result.kind !== "available") return result;
-      const value = result.value;
-      if (!("assignment" in value)) throw new Error("INVALID_ROLE_ASSIGNMENT_RESULT");
-      return {
-        kind: "available",
-        value: {
-          role_assignment_id: value.assignment.roleAssignmentId,
-          role_name: value.assignment.role.label,
-          assignee_name:
-            value.assignment.assignee.kind === "organization_account"
-              ? (value.assignment.assignee.displayName ?? "This person")
-              : value.assignment.assignee.label,
-          revision: value.assignment.revision,
-          access_version: value.accessVersion,
-        },
-      };
-    },
+    command: roleAssignmentCommand,
+    run: (services, caller, command) =>
+      assignRoleAssignment(services.accessAdministration, caller, command),
   }),
   revoke_role_assignment: operation({
     schema: revokeOrganizationAdministrationRoleAssignmentCommandSchema,
