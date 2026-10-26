@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { Readable } from "node:stream";
 import { fileTypeFromStream } from "file-type";
-import { trustedFileInspectionSchema } from "../schema";
+import { trustedFileInspectionSchema } from "./file-contracts";
 import type { StorageCredentialBridge } from "./storage-credentials";
 import { resolveFileStorageDestination, type FileStorageDestination } from "./storage-destination";
 import type { UploadedObjectInspector, UploadedObjectLocation } from "./upload";

@@ -1,22 +1,25 @@
 import "server-only";
+import { databaseCode } from "../catalogue/runtime-primitives";
 
 import {
   identitySessionSchema,
-  protectedOperationChannelSchema,
   selectedOrganizationScopeSchema,
   sessionContextSchema,
   type IdentitySession,
-  type ProtectedOperationChannel,
   type SessionContext,
   type SelectedOrganizationScope,
-} from "../schema";
+} from "../access/identity-access";
+import {
+  protectedOperationChannelSchema,
+  type ProtectedOperationChannel,
+} from "../definition/application-flow-bindings";
 import {
   requireRequestSavepoint,
   type DatabaseRow,
   type DatabaseValue,
   type RequestDatabaseTransaction,
   type SavepointRequestDatabaseTransaction,
-} from "../db/index";
+} from "../db/request-transaction";
 import {
   createTenantGovernanceService,
   transactionPoisonErrorName,
@@ -94,16 +97,6 @@ const mappedIdentitySqlErrorCodes = new Set([
   "40001",
   "22023",
 ]);
-
-const databaseCode = (error: unknown): string | undefined => {
-  try {
-    return typeof error === "object" && error !== null && "code" in error
-      ? String((error as { code?: unknown }).code)
-      : undefined;
-  } catch {
-    return undefined;
-  }
-};
 
 const isMappedIdentitySqlError = (error: unknown): boolean => {
   const code = databaseCode(error);

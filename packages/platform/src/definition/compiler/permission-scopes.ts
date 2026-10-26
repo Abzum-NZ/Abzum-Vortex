@@ -1,8 +1,14 @@
-import type { DefinitionCompilationOutput } from "../../schema";
+import type { DefinitionCompilationOutput } from "../definition-compilation-contracts";
 import { compareCanonicalStrings, fingerprintCanonicalValue } from "../canonical-json-definition";
 import type { Resolution } from "./resolution";
 import { compatibleVersion } from "./resolution";
-import { applicationModuleKeysOf, asObject, CURRENT_MODULE_RELEASE, fail, type JsonObject } from "./shared";
+import {
+  applicationModuleKeysOf,
+  asObject,
+  CURRENT_MODULE_RELEASE,
+  fail,
+  type JsonObject,
+} from "./shared";
 import {
   type ModuleValueContext,
   normaliseExact,
@@ -27,17 +33,11 @@ export function permissionScopeSourceOwners(source: JsonObject): string[] {
   const body = asObject(source.body);
   return source.kind === "module"
     ? [String(source.key)]
-    : [
-        String(source.key),
-        ...applicationModuleKeysOf(body),
-      ];
+    : [String(source.key), ...applicationModuleKeysOf(body)];
 }
 
 export function moduleFieldPermissionSourceOwners(source: JsonObject): string[] {
-  return [
-    String(source.key),
-    ...moduleDependencies(source).map((dependency) => dependency.module),
-  ];
+  return [String(source.key), ...moduleDependencies(source).map((dependency) => dependency.module)];
 }
 
 export function compilePermissionRecordScope(

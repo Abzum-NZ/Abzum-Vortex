@@ -1,10 +1,13 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
-import type { InstalledNamedActionReference } from "../../schema";
-import type { RequestDatabaseTransaction } from "../../db/index";
-import type { ActionFlowRunner } from "../../rules/index";
-import { namedActionPreviewEligibility, type NamedActionEligibility } from "../../records/index";
+import type { InstalledNamedActionReference } from "../../records/named-actions";
+import type { RequestDatabaseTransaction } from "../../db/request-transaction";
+import type { ActionFlowRunner } from "../../rules/action-flow-run";
+import {
+  namedActionPreviewEligibility,
+  type NamedActionEligibility,
+} from "../../records/action-record-availability";
 import { readableSubjectFromProjection } from "../page-subject-read";
 
 /** One record of a selection and the identity its command would run with. */
@@ -58,15 +61,11 @@ export const readNamedActionEligibility = async (
       actionId: action.actionId,
     })),
   }));
-  await transaction.query`set local role vortex_runtime`;
-  // A failed read aborts the transaction, so the role reset would fail too and replace the real
-  // cause; it runs only after a read that succeeded (the aborted transaction is rolled back).
   const [result] = await transaction.query<{ readonly value: unknown }>`
     select vortex_record.read_records_with_action_previews(
       ${recordTypeId}::uuid, ${JSON.stringify(requests)}::text::jsonb
     ) as value
   `;
-  await transaction.query`set local role vortex_request`;
   if (!Array.isArray(result?.value)) throw new Error("NAMED_ACTION_ELIGIBILITY_RESULT_INVALID");
   const rows = result.value as readonly EligibilityRow[];
   if (rows.length !== targets.length) throw new Error("NAMED_ACTION_ELIGIBILITY_ROWS_MISSING");

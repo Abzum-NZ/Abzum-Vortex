@@ -4,24 +4,28 @@ import type { ModuleExtensionPointUse } from "./module-extension-point-shape";
 import { planApplicationPreview } from "./preview-release-plan";
 import { componentLabelsOf } from "./publication-component-labels";
 
+import type { SessionContext } from "../access/identity-access";
+import {
+  recordTypeIdSchema,
+  fieldIdSchema,
+  type Fingerprint,
+  type Revision,
+} from "../catalogue/identifiers";
+import type {
+  ApplicationCompilationOutput,
+  DefinitionPublicationHistoryEvidence,
+} from "./definition-compilation-contracts";
+import type { ApplicationSourceDocument } from "./definition-source";
 import {
   prepareDefinitionPublicationCommandSchema,
   prepareDefinitionPublicationResultSchema,
   publishDefinitionCommandSchema,
   publishDefinitionResultSchema,
-  recordTypeIdSchema,
-  fieldIdSchema,
-  type ApplicationCompilationOutput,
-  type ApplicationSourceDocument,
   type PrepareDefinitionPublicationCommand,
   type PublishDefinitionCommand,
   type PublishDefinitionResult,
-  type SessionContext,
-  type ModuleField,
-  type Fingerprint,
-  type Revision,
-  type DefinitionPublicationHistoryEvidence,
-} from "../schema";
+} from "./definition-store-contracts";
+import type { ModuleField } from "./module-contracts";
 import { applicationModuleKeys } from "./application-module-sources";
 import { peopleDirectory, type PeopleDirectoryOwner } from "./module-links";
 import { selectCurrentModuleRelease } from "./definition-dependency-resolution";

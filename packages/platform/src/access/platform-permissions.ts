@@ -1,4 +1,5 @@
-import type { PermissionDeclaration, PlatformId } from "../schema";
+import type { PlatformId } from "../catalogue/identifiers";
+import type { PermissionDeclaration } from "./permissions";
 
 /** The shipped platform permission catalogue, passed explicitly by the composition root. */
 export type PlatformPermissionSource = Readonly<{

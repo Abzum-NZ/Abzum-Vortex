@@ -1,5 +1,5 @@
 import type { ApplicationDraftCompilation } from "./definition-publication";
-import type { DefinitionPublicationHistoryEvidence } from "../schema";
+import type { DefinitionPublicationHistoryEvidence } from "./definition-compilation-contracts";
 import type {
   DefinitionCandidateDraft,
   DefinitionDraftCandidate,

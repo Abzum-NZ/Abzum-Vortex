@@ -1,17 +1,17 @@
 import "server-only";
 
-import type {
-  sourceIdentityAssignmentSchema} from "@vortex/platform/schema";
+import type { sourceIdentityAssignmentSchema } from "@vortex/platform/schema";
 import {
   applicationRootIdSchema,
   canonicalJson,
+  describeFailure,
   organizationIdSchema,
   storedDefinitionDraftSchema,
   sameId,
   type SessionContext,
   type StoredDefinitionSource,
-  } from "@vortex/platform/schema";
-import type { DatabaseRow, RequestDatabaseTransaction } from "@vortex/platform/server";
+} from "@vortex/platform/schema";
+import type { RequestDatabaseTransaction } from "@vortex/platform/server";
 import {
   BuilderAuthorityError,
   createHumanApplicationDraftWriter,
@@ -19,6 +19,7 @@ import {
   createBuilderAuthority,
   requireBuilderAuthority,
   type BuilderTargetFactsReader,
+  readBuilderApplicationOrigin,
 } from "@vortex/platform/server";
 import {
   readApplicationDefinitionDraft,
@@ -33,6 +34,7 @@ import { humanOrganizationRequests } from "./server-composition";
 import {
   buildPageAdoptionPlan,
   listPageAdoptionTargets,
+  PageAdoptionIneligible,
   pageAdoptionCommandSchema,
   type PageAdoptionCommand,
   type PageAdoptionDifference,
@@ -44,29 +46,14 @@ import { platformPermissionSource } from "./platform-permission-source";
 
 type SourceIdentityAssignment = ReturnType<typeof sourceIdentityAssignmentSchema.parse>;
 
-type ClassificationRow = DatabaseRow & { outcome: unknown; application_origin_kind: unknown };
 const targetFacts: BuilderTargetFactsReader = async (transaction, _scope, rootId) => {
   if (rootId === undefined) return { isSystemApplication: false };
-  const rows = await transaction.query<ClassificationRow>`
-    select outcome, application_origin_kind
-    from vortex_definition.read_builder_application_root_classification(${rootId}::uuid)
-  `;
-  const row = rows[0];
-  if (
-    rows.length !== 1 ||
-    row === undefined ||
-    row.outcome !== "available" ||
-    (row.application_origin_kind !== "ordinary" &&
-      row.application_origin_kind !== "platform_system_application")
-  )
-    throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING");
-  return { isSystemApplication: row.application_origin_kind === "platform_system_application" };
+  const origin = await readBuilderApplicationOrigin(transaction, rootId);
+  if (origin === undefined) throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING");
+  return { isSystemApplication: origin === "platform_system_application" };
 };
 
-const sameDraft = (
-  candidate: unknown,
-  current: StoredApplicationDefinitionDraft,
-): boolean => {
+const sameDraft = (candidate: unknown, current: StoredApplicationDefinitionDraft): boolean => {
   const parsed = storedDefinitionDraftSchema.safeParse(candidate);
   return parsed.success && canonicalJson(parsed.data) === canonicalJson(current);
 };
@@ -119,14 +106,19 @@ const mapPageId = (
       identity.alias === alias,
   );
   const match = matches[0];
-  if (matches.length !== 1 || match === undefined) throw new DefinitionError("INVALID_DEFINITION_STORAGE_RESULT");
+  if (matches.length !== 1 || match === undefined)
+    throw new DefinitionError("INVALID_DEFINITION_STORAGE_RESULT");
   return match.identifier;
 };
 
 export type ComparisonChoice = Readonly<{
   original: Readonly<{ pageId: string; key: string; name: string; type: string }>;
   replacement: Readonly<{ pageId: string; key: string; name: string; type: string }>;
-  candidate: Readonly<{ releaseRevision: number; releaseVersion: string; impactReasons: readonly Readonly<{ code: string; impact: string }>[] }>;
+  candidate: Readonly<{
+    releaseRevision: number;
+    releaseVersion: string;
+    impactReasons: readonly Readonly<{ code: string; impact: string }>[];
+  }>;
   differences: Readonly<{
     entries: readonly PageAdoptionDifference[];
     omittedCount: number;
@@ -172,7 +164,8 @@ const toChoices = (
         originalPageId,
         replacementPageId,
       );
-    } catch {
+    } catch (error) {
+      if (!(error instanceof PageAdoptionIneligible)) throw error;
       continue;
     }
     for (const target of targets) {
@@ -206,8 +199,9 @@ const toChoices = (
           keepFingerprint: keep.comparisonFingerprint,
           adoptFingerprint: adopt.comparisonFingerprint,
         });
-      } catch {
+      } catch (error) {
         // An ineligible identity pair is omitted; the route never returns partial source evidence.
+        if (!(error instanceof PageAdoptionIneligible)) throw error;
       }
     }
   }
@@ -230,8 +224,28 @@ export const loadStudioStandardPageAdoption = async (
     const result = await humanOrganizationRequests().run(
       resolved.session,
       { organizationId: organization.data },
-      async (transaction, scope, issuedAt): Promise<Readonly<{ kind: "available"; value: Omit<Extract<StudioStandardPageAdoptionLoadResult, { kind: "available" }>, "kind"> } | { kind: "refused" }>> => {
-        const authority = createBuilderAuthority({ transaction, scope, targetFacts, permissions: platformPermissionSource });
+      async (
+        transaction,
+        scope,
+        issuedAt,
+      ): Promise<
+        Readonly<
+          | {
+              kind: "available";
+              value: Omit<
+                Extract<StudioStandardPageAdoptionLoadResult, { kind: "available" }>,
+                "kind"
+              >;
+            }
+          | { kind: "refused" }
+        >
+      > => {
+        const authority = createBuilderAuthority({
+          transaction,
+          scope,
+          targetFacts,
+          permissions: platformPermissionSource,
+        });
         try {
           await requireBuilderAuthority(authority, { kind: "draft_change", rootId: root.data });
           const facts = await targetFacts(transaction, scope, root.data);
@@ -240,16 +254,27 @@ export const loadStudioStandardPageAdoption = async (
           if (error instanceof BuilderAuthorityError) return { kind: "refused" };
           throw error;
         }
-        const draft = await readApplicationDefinitionDraft(transaction, scope, { rootId: root.data });
+        const draft = await readApplicationDefinitionDraft(transaction, scope, {
+          rootId: root.data,
+        });
         if (draft.kind !== "application" || !sameId(draft.organizationId, scope.organizationId))
           return { kind: "refused" };
         if (draft.publishedRevision === undefined) {
           return {
             kind: "available",
-            value: { organizationId: scope.organizationId, rootId: String(draft.rootId), draftRevision: draft.draftRevision, choices: [] },
+            value: {
+              organizationId: scope.organizationId,
+              rootId: String(draft.rootId),
+              draftRevision: draft.draftRevision,
+              choices: [],
+            },
           };
         }
-        const context = await readLiveHumanContext(transaction, { scope, session: resolved.session, issuedAt });
+        const context = await readLiveHumanContext(transaction, {
+          scope,
+          session: resolved.session,
+          issuedAt,
+        });
         const current = await createDatabaseDefinitionPublicationService(
           installedReleaseCatalogue,
           transaction,
@@ -274,7 +299,11 @@ export const loadStudioStandardPageAdoption = async (
           expectedDraftRevision: draft.draftRevision,
         });
         await requireBuilderAuthority(authority, { kind: "draft_change", rootId: root.data });
-        const finalContext = await readLiveHumanContext(transaction, { scope, session: resolved.session, issuedAt });
+        const finalContext = await readLiveHumanContext(transaction, {
+          scope,
+          session: resolved.session,
+          issuedAt,
+        });
         if (
           canonicalJson(finalDraft) !== canonicalJson(draft) ||
           canonicalJson(finalContext) !== canonicalJson(context)
@@ -292,9 +321,13 @@ export const loadStudioStandardPageAdoption = async (
       },
     );
     if (result.kind === "temporarily_unavailable") return { kind: "temporarily_unavailable" };
-    if (result.kind === "unavailable" || result.value.kind !== "available") return { kind: "refused" };
+    if (result.kind === "unavailable" || result.value.kind !== "available")
+      return { kind: "refused" };
     return { kind: "available", ...result.value.value };
-  } catch {
+  } catch (error) {
+    console.error(
+      `[studio] page adoption read failed STUDIO_PAGE_ADOPTION_READ_FAILED: ${describeFailure(error)}`,
+    );
     return { kind: "temporarily_unavailable" };
   }
 };
@@ -321,8 +354,8 @@ export const saveStudioStandardPageAdoption = async (
     const resolved = await resolveIdentitySession();
     if (resolved.kind !== "active")
       return resolved.kind === "temporarily_unavailable"
-        ? { kind: "temporarily_unavailable" } as const
-        : { kind: "refused" } as const;
+        ? ({ kind: "temporarily_unavailable" } as const)
+        : ({ kind: "refused" } as const);
     const writer = createHumanApplicationDraftWriter({
       requests: humanOrganizationRequests(),
       permissions: platformPermissionSource,
@@ -332,80 +365,100 @@ export const saveStudioStandardPageAdoption = async (
       organizationId,
       command,
       async ({ transaction, scope, session, issuedAt, draft, command: lockedCommand }) => {
-      if (
-        draft.kind !== "application" ||
-        !sameId(draft.rootId, lockedCommand.rootId) ||
-        draft.draftRevision !== lockedCommand.expectedDraftRevision ||
-        draft.publishedRevision !== lockedCommand.expectedPublicationAnchor
-      )
-        throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING");
-      const context = await readLiveHumanContext(transaction, { scope, session, issuedAt });
-      const authority = createBuilderAuthority({ transaction, scope, targetFacts, permissions: platformPermissionSource });
-      const facts = await targetFacts(transaction, scope, draft.rootId);
-      if (facts.isSystemApplication) throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
-      const current = await createDatabaseDefinitionPublicationService(
-        installedReleaseCatalogue,
-        transaction,
-        authority,
-      ).compileApplicationDraft(context, {
-        rootId: String(draft.rootId),
-        expectedDraftRevision: draft.draftRevision,
-      });
-      if (current.currentReleaseRevision !== lockedCommand.expectedPublicationAnchor)
-        throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING");
-      const candidateState = await readCurrentCandidate(transaction, context, draft);
-      const release = await readLatestPageAdoptionRelease(transaction, context, draft);
-      if (release === undefined) throw new DefinitionError("DEFINITION_HISTORY_INVALID");
-      const plan = buildPageAdoptionPlan({
-        draft,
-        currentIdentities: candidateState.identities,
-        currentContent: current.compilation.canonical.content,
-        release,
-        originalPageId: lockedCommand.originalPageId,
-        replacementPageId: lockedCommand.replacementPageId,
-        target: lockedCommand.target,
-        decision: lockedCommand.decision,
-      });
-      if (plan.comparisonFingerprint !== lockedCommand.comparisonFingerprint)
-        throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING");
-      return {
-        source: plan.source,
-        verifySaved: async (verifyTransaction, verifyScope, savedDraft) => {
-          if (
-            savedDraft.kind !== "application" ||
-            !sameId(savedDraft.rootId, lockedCommand.rootId) ||
-            savedDraft.publishedRevision !== lockedCommand.expectedPublicationAnchor
-          )
-            throw new DefinitionError("INVALID_DEFINITION_STORAGE_RESULT");
-          const verifiedContext = await readLiveHumanContext(
-            verifyTransaction,
-            { scope: verifyScope, session, issuedAt },
-          );
-          if (canonicalJson(verifiedContext) !== canonicalJson(context))
-            throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
-          const verifiedCandidate = await createDatabaseDefinitionPublicationService(
-            installedReleaseCatalogue,
-            verifyTransaction,
-            createBuilderAuthority({ transaction: verifyTransaction, scope: verifyScope, targetFacts, permissions: platformPermissionSource }),
-          ).compileApplicationDraft(verifiedContext, {
-            rootId: String(savedDraft.rootId),
-            expectedDraftRevision: savedDraft.draftRevision,
-          });
-          if (
-            verifiedCandidate.currentReleaseRevision !== lockedCommand.expectedPublicationAnchor ||
-            canonicalJson(verifiedCandidate.compilation.canonical.content) !== canonicalJson(plan.expectedCanonicalContent) ||
-            fingerprintCanonicalValue(verifiedCandidate.compilation.canonical.content) !==
-              fingerprintCanonicalValue(plan.expectedCanonicalContent)
-          )
-            throw new DefinitionError("INVALID_DEFINITION_STORAGE_RESULT");
-          const verifiedRelease = await readLatestPageAdoptionRelease(verifyTransaction, verifiedContext, savedDraft);
-          if (verifiedRelease === undefined || !sameRelease(release, verifiedRelease))
-            throw new DefinitionError("DEFINITION_HISTORY_INVALID");
-        },
-      };
+        if (
+          draft.kind !== "application" ||
+          !sameId(draft.rootId, lockedCommand.rootId) ||
+          draft.draftRevision !== lockedCommand.expectedDraftRevision ||
+          draft.publishedRevision !== lockedCommand.expectedPublicationAnchor
+        )
+          throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING");
+        const context = await readLiveHumanContext(transaction, { scope, session, issuedAt });
+        const authority = createBuilderAuthority({
+          transaction,
+          scope,
+          targetFacts,
+          permissions: platformPermissionSource,
+        });
+        const facts = await targetFacts(transaction, scope, draft.rootId);
+        if (facts.isSystemApplication) throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
+        const current = await createDatabaseDefinitionPublicationService(
+          installedReleaseCatalogue,
+          transaction,
+          authority,
+        ).compileApplicationDraft(context, {
+          rootId: String(draft.rootId),
+          expectedDraftRevision: draft.draftRevision,
+        });
+        if (current.currentReleaseRevision !== lockedCommand.expectedPublicationAnchor)
+          throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING");
+        const candidateState = await readCurrentCandidate(transaction, context, draft);
+        const release = await readLatestPageAdoptionRelease(transaction, context, draft);
+        if (release === undefined) throw new DefinitionError("DEFINITION_HISTORY_INVALID");
+        const plan = buildPageAdoptionPlan({
+          draft,
+          currentIdentities: candidateState.identities,
+          currentContent: current.compilation.canonical.content,
+          release,
+          originalPageId: lockedCommand.originalPageId,
+          replacementPageId: lockedCommand.replacementPageId,
+          target: lockedCommand.target,
+          decision: lockedCommand.decision,
+        });
+        if (plan.comparisonFingerprint !== lockedCommand.comparisonFingerprint)
+          throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING");
+        return {
+          source: plan.source,
+          verifySaved: async (verifyTransaction, verifyScope, savedDraft) => {
+            if (
+              savedDraft.kind !== "application" ||
+              !sameId(savedDraft.rootId, lockedCommand.rootId) ||
+              savedDraft.publishedRevision !== lockedCommand.expectedPublicationAnchor
+            )
+              throw new DefinitionError("INVALID_DEFINITION_STORAGE_RESULT");
+            const verifiedContext = await readLiveHumanContext(verifyTransaction, {
+              scope: verifyScope,
+              session,
+              issuedAt,
+            });
+            if (canonicalJson(verifiedContext) !== canonicalJson(context))
+              throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
+            const verifiedCandidate = await createDatabaseDefinitionPublicationService(
+              installedReleaseCatalogue,
+              verifyTransaction,
+              createBuilderAuthority({
+                transaction: verifyTransaction,
+                scope: verifyScope,
+                targetFacts,
+                permissions: platformPermissionSource,
+              }),
+            ).compileApplicationDraft(verifiedContext, {
+              rootId: String(savedDraft.rootId),
+              expectedDraftRevision: savedDraft.draftRevision,
+            });
+            if (
+              verifiedCandidate.currentReleaseRevision !==
+                lockedCommand.expectedPublicationAnchor ||
+              canonicalJson(verifiedCandidate.compilation.canonical.content) !==
+                canonicalJson(plan.expectedCanonicalContent) ||
+              fingerprintCanonicalValue(verifiedCandidate.compilation.canonical.content) !==
+                fingerprintCanonicalValue(plan.expectedCanonicalContent)
+            )
+              throw new DefinitionError("INVALID_DEFINITION_STORAGE_RESULT");
+            const verifiedRelease = await readLatestPageAdoptionRelease(
+              verifyTransaction,
+              verifiedContext,
+              savedDraft,
+            );
+            if (verifiedRelease === undefined || !sameRelease(release, verifiedRelease))
+              throw new DefinitionError("DEFINITION_HISTORY_INVALID");
+          },
+        };
       },
     );
-  } catch {
+  } catch (error) {
+    console.error(
+      `[studio] page adoption save failed STUDIO_PAGE_ADOPTION_SAVE_FAILED: ${describeFailure(error)}`,
+    );
     return { kind: "temporarily_unavailable" } as const;
   }
 };

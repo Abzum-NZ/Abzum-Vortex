@@ -10,7 +10,7 @@ import {
   type OrganizationSelectionCandidate,
   sameId,
 } from "@vortex/platform/schema";
-import { requestDependencies, loadInstalledContext } from "./load";
+import { loadInstalledContext, requestDependencies } from "./installed-context";
 import { platformPermissionSource } from "../platform-permission-source";
 import { withContributedPlacements } from "./contributed-placements";
 

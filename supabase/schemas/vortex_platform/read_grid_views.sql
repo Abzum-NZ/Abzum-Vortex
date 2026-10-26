@@ -132,7 +132,7 @@ begin
         'placementId', stored.placement_id,
         'queryId', stored.query_id,
         'revision', stored.revision,
-        'basedOnViewId', stored.based_on_view_id,
+        'basedOnViewId', coalesce(stored.based_on_view_id, stored.based_on_default_view_id),
         'layout', stored.document
       ) order by stored.placement_id)
       from vortex_platform.grid_views as stored

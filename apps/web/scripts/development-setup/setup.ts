@@ -1,13 +1,16 @@
 import { randomUUID } from "node:crypto";
 import { developmentSetupManifestFor } from "./manifest";
+import { signupPrivacyNoticeSetting } from "@vortex/definitions";
 import {
   createHumanOrganizationRequestService,
+  readPrivacyNotice,
   readCurrentOrganizationDefaultApplicationAfterAuthorization,
   readCurrentOrganizationAppStoreAddressAfterAuthorization,
   readCurrentOrganizationRuntimeSettingsAfterAuthorization,
 } from "@vortex/platform/server";
 import {
   applicationRootIdSchema,
+  identityIdSchema,
   organizationSelectionCandidateSchema,
   provisionTenantCommandSchema,
 } from "@vortex/platform/schema";
@@ -285,6 +288,36 @@ const initializeAppStoreAddress = async (facts: InstallFacts): Promise<void> => 
   );
 };
 
+/**
+ * Signup shows the latest published privacy notice, so a provisioned platform publishes the shipped
+ * one. The first owner becomes the local platform's first super-administrator (an operator
+ * bootstrap that replays) and the operator publishes the notice in their name.
+ */
+const publishShippedPrivacyNotice = async (
+  tenantAdministration: ReturnType<typeof createConfiguredTenantAdministrationService>,
+  manifest: ReturnType<typeof developmentSetupManifestFor>,
+  stewardIdentityId: string,
+): Promise<void> => {
+  const current = await readPrivacyNotice();
+  if (current?.versionLabel === signupPrivacyNoticeSetting.versionLabel) return;
+  const bootstrap = await tenantAdministration.bootstrapVortexSuperAdministrator({
+    operation: "bootstrap_vortex_super_administrator",
+    duplicateKey: manifest.superAdministratorDuplicateKey,
+    identityId: identityIdSchema.parse(stewardIdentityId),
+  });
+  if (bootstrap.outcome === "refused")
+    throw new DevelopmentSetupRefusal(
+      `The first owner could not become the platform super-administrator to publish the privacy notice (${bootstrap.code}). Another account already is: reset the local database (pnpm db:reset).`,
+    );
+  const published = await tenantAdministration.publishPrivacyNotice({
+    ...signupPrivacyNoticeSetting,
+    publisherIdentityId: stewardIdentityId,
+  });
+  if (published.outcome === "refused")
+    throw new DevelopmentSetupRefusal(`The privacy notice was not published (${published.code}).`);
+  log(`privacy notice ${signupPrivacyNoticeSetting.versionLabel} published`);
+};
+
 export const runDevelopmentSetup = async (
   argv: readonly string[],
 ): Promise<Readonly<{ organizationId: string; stewardIdentityId: string }>> => {
@@ -334,6 +367,7 @@ export const runDevelopmentSetup = async (
       `Provisioning was refused (${provisioned.code}). If the organisation already exists for a different account, reset the local database (pnpm db:reset).`,
     );
   log(`organisation ${provisioned.rootOrganizationId} (${provisioned.outcome})`);
+  await publishShippedPrivacyNotice(tenantAdministration, manifest, stewardIdentityId);
 
   // 2. Refresh the shipped applications through publication and protected installation.
   const system = {

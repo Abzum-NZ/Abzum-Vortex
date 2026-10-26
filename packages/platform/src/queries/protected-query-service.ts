@@ -3,12 +3,9 @@ import "server-only";
 import {
   createHumanOrganizationRequestService,
   type HumanOrganizationRequestResult,
-} from "../access/index";
-import type {
-  IdentitySession,
-  ExecutionAuthorityContext,
-  OrganizationSelectionCandidate,
-} from "../schema";
+} from "../access/human-organization-request";
+import type { IdentitySession, OrganizationSelectionCandidate } from "../access/identity-access";
+import type { ExecutionAuthorityContext } from "../workflows/flow-contracts";
 import {
   boardMembersCommand,
   boardColumnPagesCommandSchema,
@@ -34,8 +31,8 @@ import { summariseCommand, boardSummaryCommand } from "./protected-query-summary
 import { runCommand } from "./protected-query-table";
 import type { ProtectedQueryServiceDependencies, QueryCache } from "./protected-query-types";
 import type { ProtectedQueryRow } from "./protected-query-contracts";
-import type { RequestDatabaseTransaction } from "../db";
-import type { SelectedOrganizationScope } from "../schema";
+import type { RequestDatabaseTransaction } from "../db/request-transaction";
+import type { SelectedOrganizationScope } from "../access/identity-access";
 
 export type {
   ProtectedQueryCacheContext,

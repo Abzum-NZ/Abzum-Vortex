@@ -1,21 +1,13 @@
 import "server-only";
 
-import {
-  fieldIdSchema,
-  isRecord,
-  moduleRootIdSchema,
-  queryIdSchema,
-  sameId,
-  type IdentitySession,
-  type JsonValue,
-  type OrganizationSelectionCandidate,
-} from "../../schema";
-import type { InstalledRuntimeContext } from "../../definition/index";
-import {
-  titleText,
-  type createProtectedQueryService,
-  type ProtectedQueryCommand,
-} from "../../queries/index";
+import type { IdentitySession, OrganizationSelectionCandidate } from "../../access/identity-access";
+import type { JsonValue } from "../../catalogue/common";
+import { fieldIdSchema, moduleRootIdSchema, queryIdSchema } from "../../catalogue/identifiers";
+import { isRecord, sameId } from "../../catalogue/runtime-primitives";
+import type { InstalledRuntimeContext } from "../../definition/installed-runtime-context";
+import type { ProtectedQueryCommand } from "../../queries/protected-query-contracts";
+import type { createProtectedQueryService } from "../../queries/protected-query-service";
+import { titleText } from "../../queries/record-choices";
 import type { PlacementModule } from "../placement-read/shared";
 
 /**

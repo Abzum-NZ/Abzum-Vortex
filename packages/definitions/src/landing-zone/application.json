@@ -203,7 +203,6 @@
                       "gap": "medium",
                       "menu_width": 16,
                       "menu_placement": "sticky",
-                      "content_landmark": true,
                       "tablet_menu_width": 14,
                       "phone_direction": "column",
                       "phone_menu_placement": "flow",
@@ -462,6 +461,8 @@
                     "title": "All applications",
                     "name_key": "name",
                     "icon_key": "icon",
+                    "action_label": "Open",
+                    "empty_message": "No applications to show",
                     "side_panel": [],
                     "vortex": {
                       "block": {
@@ -1008,6 +1009,8 @@
                     "title": "All applications",
                     "name_key": "name",
                     "icon_key": "icon",
+                    "action_label": "Open",
+                    "empty_message": "No applications to show",
                     "side_panel": [],
                     "vortex": {
                       "block": {
@@ -1063,7 +1066,7 @@
                   "props": {
                     "id": "saved_tiles_summary",
                     "title": "Saved configuration",
-                    "text": "This bounded view shows at most 200 saved tile records returned by the permitted Records query.",
+                    "text": "Your saved tiles.",
                     "vortex": {
                       "block": {
                         "block_id": "addfad00-1b11-4674-83fa-913667f87e79",

@@ -1,16 +1,16 @@
 import type { PlatformPermissionSource } from "../../access/platform-permissions";
-import type { applicationCompilationRequestSchema } from "../../schema";
+import type { applicationCompilationRequestSchema } from "../definition-compilation-contracts";
+import { inspectApplicationPageReplacements } from "../../pages/application-page-replacement";
+import type { FlowDefinition } from "../../workflows/flow-contracts";
+import { applicationDraftSchema } from "../application-contracts";
 import {
-  inspectApplicationPageReplacements,
   applicationCompilationOutputSchema,
-  applicationDraftSchema,
-  conditionNodeSchema,
   type ApplicationCompilationOutput,
-  type FlowDefinition,
-  type ApplicationSourceDocument,
   type DefinitionCompilationOutput,
-  type ModuleField,
-} from "../../schema";
+} from "../definition-compilation-contracts";
+import type { ApplicationSourceDocument } from "../definition-source";
+import type { ModuleField } from "../module-contracts";
+import { conditionNodeSchema } from "../module-foundation-contracts";
 import { APPLICATION_PLATFORM_COMPATIBILITY_VERSION } from "../platform-compatibility";
 import {
   applicationRoleReviewBytes,

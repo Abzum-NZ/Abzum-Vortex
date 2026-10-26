@@ -126,7 +126,7 @@ export const guardRules = {
     tier: "warning",
     owner: "lead",
     reviewBy: "2026-11-15",
-    reviewNote: "Reconsider once #2235 splits the two remaining files",
+    reviewNote: "No file exceeds the limit; reconsider promoting the rule to blocking",
     description: "Source and canonical SQL files over 1,500 lines",
   },
   "silent-catch": {

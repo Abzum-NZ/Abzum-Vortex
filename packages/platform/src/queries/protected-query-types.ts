@@ -1,8 +1,8 @@
 import "server-only";
 
-import type { HumanOrganizationRequestDependencies } from "../access/index";
-import type { RequestDatabaseTransaction } from "../db/index";
-import type { SelectedOrganizationScope } from "../schema";
+import type { HumanOrganizationRequestDependencies } from "../access/human-organization-request";
+import type { RequestDatabaseTransaction } from "../db/request-transaction";
+import type { SelectedOrganizationScope } from "../access/identity-access";
 import type { QueryCacheInput, QueryCachePublishedField } from "./cache-policy";
 import type { QueryContinuationKey } from "./continuation-token";
 import type { ProtectedQueryCommand } from "./protected-query-contracts";

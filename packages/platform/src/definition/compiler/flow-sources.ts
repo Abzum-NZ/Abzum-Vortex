@@ -1,10 +1,10 @@
-import {
-  sourceFlowCollectionSchema,
-  sourcePageItems,
-  type ApplicationSourceDocument,
-  type ModuleCompilationOutput,
-  type DefinitionCompilationOutput,
-} from "../../schema";
+import { sourceFlowCollectionSchema } from "../../workflows/flow-source-contracts";
+import { sourcePageItems } from "../application-composition/source-composition";
+import type {
+  ModuleCompilationOutput,
+  DefinitionCompilationOutput,
+} from "../definition-compilation-contracts";
+import type { ApplicationSourceDocument } from "../definition-source";
 import { fingerprintCanonicalValue } from "../canonical-json-definition";
 import { DefinitionCompilationError } from "../compilation-error";
 import {

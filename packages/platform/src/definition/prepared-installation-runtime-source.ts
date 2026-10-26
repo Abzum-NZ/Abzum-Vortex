@@ -1,24 +1,26 @@
 import "server-only";
 
+import type { PermissionDeclaration } from "../access/permissions";
+import { correlationIdSchema } from "../catalogue/common";
 import {
   applicationRootIdSchema,
-  canonicalJson,
-  correlationIdSchema,
   fieldIdSchema,
   fingerprintSchema,
-  installationPreparedRecordAccessPlanSchema,
-  installationRuntimeBundleSourceManifestSchema,
   moduleRootIdSchema,
   organizationIdSchema,
-  type PermissionDeclaration,
   recordTypeIdSchema,
   revisionSchema,
-  sameId,
+} from "../catalogue/identifiers";
+import { sameId } from "../catalogue/runtime-primitives";
+import { canonicalJson } from "./canonical-json";
+import type { SystemApplicationBoundReleaseSetResult } from "./definition-consumer-read";
+import {
+  installationPreparedRecordAccessPlanSchema,
+  installationRuntimeBundleSourceManifestSchema,
   type InstallationRuntimeBundleSourceManifest,
   type PreparedInstallationRuntimeSource,
-  type SystemApplicationBoundReleaseSetResult,
-} from "../schema";
-import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
+} from "./installation-runtime-bundle";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
 import { z } from "zod";
 import {
   projectStoredConsumerRelease,
@@ -33,26 +35,30 @@ import {
 const compareCanonical = (left: string, right: string): number =>
   left < right ? -1 : left > right ? 1 : 0;
 
-const preparedBindingSchema = z.object({
-  moduleRootId: moduleRootIdSchema,
-  moduleReleaseRevision: revisionSchema,
-  bindingRevision: revisionSchema,
-  state: z.literal("provisioned"),
-}).strict();
+const preparedBindingSchema = z
+  .object({
+    moduleRootId: moduleRootIdSchema,
+    moduleReleaseRevision: revisionSchema,
+    bindingRevision: revisionSchema,
+    state: z.literal("provisioned"),
+  })
+  .strict();
 
-const preparedSourceSchema = z.object({
-  organizationId: organizationIdSchema,
-  applicationRootId: applicationRootIdSchema,
-  applicationReleaseRevision: revisionSchema,
-  accessVersion: revisionSchema,
-  correlationId: correlationIdSchema,
-  pinFingerprint: fingerprintSchema,
-  mappingFingerprint: fingerprintSchema,
-  moduleBindings: z.array(preparedBindingSchema).min(1).max(10_000),
-  application: z.unknown(),
-  modules: z.array(z.unknown()).min(1).max(10_000),
-  preparedRecordAccessPlan: installationPreparedRecordAccessPlanSchema,
-}).strict();
+const preparedSourceSchema = z
+  .object({
+    organizationId: organizationIdSchema,
+    applicationRootId: applicationRootIdSchema,
+    applicationReleaseRevision: revisionSchema,
+    accessVersion: revisionSchema,
+    correlationId: correlationIdSchema,
+    pinFingerprint: fingerprintSchema,
+    mappingFingerprint: fingerprintSchema,
+    moduleBindings: z.array(preparedBindingSchema).min(1).max(10_000),
+    application: z.unknown(),
+    modules: z.array(z.unknown()).min(1).max(10_000),
+    preparedRecordAccessPlan: installationPreparedRecordAccessPlanSchema,
+  })
+  .strict();
 
 type PreparedSourceRow = DatabaseRow & { readonly prepared_source: unknown };
 
@@ -104,15 +110,19 @@ const requirePreparedPlanMatchesReleaseSet = (
     plan.organizationId !== organizationId ||
     plan.applicationRootId !== applicationRootId ||
     plan.applicationReleaseRevision !== applicationReleaseRevision
-  ) invalid();
+  )
+    invalid();
 
-  const modules = [...releaseSet.modules]
-    .sort((left, right) => compareCanonical(left.rootId, right.rootId));
+  const modules = [...releaseSet.modules].sort((left, right) =>
+    compareCanonical(left.rootId, right.rootId),
+  );
   const expectedRecordTypeIds = new Set<string>();
   const expectedRelationships: Record<string, unknown> = {};
   for (const module of modules)
     for (const recordType of module.content.recordTypes) {
-      const parsedRecordTypeId = recordTypeIdSchema.safeParse(recordType.recordTypeId.toLowerCase());
+      const parsedRecordTypeId = recordTypeIdSchema.safeParse(
+        recordType.recordTypeId.toLowerCase(),
+      );
       if (!parsedRecordTypeId.success) invalid();
       const recordTypeId = parsedRecordTypeId.data;
       if (expectedRecordTypeIds.has(recordTypeId)) invalid();
@@ -128,12 +138,16 @@ const requirePreparedPlanMatchesReleaseSet = (
         planned.releaseRevision !== module.releaseRevision ||
         planned.validationContractVersion !== module.validationContractVersion ||
         planned.ownershipRelationshipId !== recordType.ownershipRelationshipId ||
-        canonicalJson(planned.fields) !== canonicalJson(recordType.fields.map((field) => ({
-          fieldId: field.fieldId,
-          type: field.type,
-          settings: field.settings,
-        })))
-      ) invalid();
+        canonicalJson(planned.fields) !==
+          canonicalJson(
+            recordType.fields.map((field) => ({
+              fieldId: field.fieldId,
+              type: field.type,
+              settings: field.settings,
+            })),
+          )
+      )
+        invalid();
       const expectedColumnIds = recordType.fields
         .map((field) => field.fieldId.toLowerCase())
         .sort(compareCanonical);
@@ -146,14 +160,16 @@ const requirePreparedPlanMatchesReleaseSet = (
           if (!parsedFieldId.success) invalid();
           return planned.columns[parsedFieldId.data]?.type !== field.type;
         })
-      ) invalid();
+      )
+        invalid();
 
       for (const relationship of recordType.relationships) {
         const relationshipId = relationship.relationshipId.toLowerCase();
         if (Object.prototype.hasOwnProperty.call(expectedRelationships, relationshipId)) invalid();
-        const targets = relationship.toRecordType === undefined
-          ? relationship.toRecordTypes
-          : [relationship.toRecordType];
+        const targets =
+          relationship.toRecordType === undefined
+            ? relationship.toRecordTypes
+            : [relationship.toRecordType];
         if (targets === undefined || targets.some((target) => target.state !== "resolved"))
           invalid();
         expectedRelationships[relationshipId] = {
@@ -173,8 +189,8 @@ const requirePreparedPlanMatchesReleaseSet = (
   if (Object.keys(plan.recordTypes).length !== expectedRecordTypeIds.size) invalid();
   if (canonicalJson(plan.relationships) !== canonicalJson(expectedRelationships)) invalid();
 
-  const expectedSharingConditions = modules.flatMap((module) =>
-    module.content.sharingConditions ?? [],
+  const expectedSharingConditions = modules.flatMap(
+    (module) => module.content.sharingConditions ?? [],
   );
   if (canonicalJson(plan.sharingConditions) !== canonicalJson(expectedSharingConditions)) invalid();
 
@@ -199,8 +215,7 @@ const requirePreparedPlanMatchesReleaseSet = (
       };
     }
   };
-  for (const module of modules)
-    addPermissions(module.content.permissions, "module", module.rootId);
+  for (const module of modules) addPermissions(module.content.permissions, "module", module.rootId);
   addPermissions(releaseSet.application.content.permissions, "application", applicationRootId);
   if (canonicalJson(plan.permissions) !== canonicalJson(expectedPermissions)) invalid();
 };
@@ -224,15 +239,19 @@ export const createDatabasePreparedInstallationRuntimeSourceService = (
   const catalogue = createImmutableDefinitionPublicationCatalogue(catalogueDefinition);
 
   return Object.freeze({
-    async read(commandCandidate: PreparedInstallationRuntimeSourceCommand): Promise<PreparedInstallationRuntimeSource> {
+    async read(
+      commandCandidate: PreparedInstallationRuntimeSourceCommand,
+    ): Promise<PreparedInstallationRuntimeSource> {
       const organizationId = organizationIdSchema.parse(commandCandidate.organizationId);
       const applicationRootId = applicationRootIdSchema.parse(commandCandidate.applicationRootId);
       const applicationReleaseRevision = revisionSchema.parse(
         commandCandidate.applicationReleaseRevision,
       );
-      const expectedBindings = z.array(preparedBindingSchema).min(1).max(10_000).parse(
-        commandCandidate.moduleBindings,
-      );
+      const expectedBindings = z
+        .array(preparedBindingSchema)
+        .min(1)
+        .max(10_000)
+        .parse(commandCandidate.moduleBindings);
       const rows = await transaction.query<PreparedSourceRow>`
         select vortex_definition.read_prepared_installation_runtime_source(
           ${applicationRootId}::uuid,
@@ -240,24 +259,26 @@ export const createDatabasePreparedInstallationRuntimeSourceService = (
           ${JSON.stringify(expectedBindings)}::text::jsonb
         ) as prepared_source
       `;
-      const parsed = rows.length === 1
-        ? preparedSourceSchema.safeParse(rows[0]?.prepared_source)
-        : null;
+      const parsed =
+        rows.length === 1 ? preparedSourceSchema.safeParse(rows[0]?.prepared_source) : null;
       if (
         parsed === null ||
         !parsed.success ||
         parsed.data.organizationId !== organizationId ||
         parsed.data.applicationRootId !== applicationRootId ||
         parsed.data.applicationReleaseRevision !== applicationReleaseRevision ||
-        parsed.data.mappingFingerprint !== parsed.data.preparedRecordAccessPlan.mappingFingerprint ||
+        parsed.data.mappingFingerprint !==
+          parsed.data.preparedRecordAccessPlan.mappingFingerprint ||
         parsed.data.moduleBindings.length !== expectedBindings.length ||
         parsed.data.moduleBindings.some((binding, index) => {
           const expected = expectedBindings[index];
-          return expected === undefined ||
+          return (
+            expected === undefined ||
             binding.moduleRootId !== expected.moduleRootId ||
             binding.moduleReleaseRevision !== expected.moduleReleaseRevision ||
             binding.bindingRevision !== expected.bindingRevision ||
-            binding.state !== "provisioned";
+            binding.state !== "provisioned"
+          );
         })
       )
         throw new Error("PREPARED_INSTALLATION_RUNTIME_SOURCE_INVALID");
@@ -304,17 +325,19 @@ export const createDatabasePreparedInstallationRuntimeSourceService = (
         const evidence = storedConsumerReleaseEvidenceSchema.safeParse(candidate);
         if (!evidence.success || evidence.data.kind !== "module")
           throw new Error("PREPARED_INSTALLATION_RUNTIME_SOURCE_INVALID");
-        modules.push(await projectStoredConsumerRelease(
-          evidence.data,
-          {
-            kind: "module",
-            rootId: evidence.data.rootId,
-            releaseRevision: evidence.data.releaseRevision,
-            organizationId,
-          },
-          correlationId,
-          catalogue,
-        ));
+        modules.push(
+          await projectStoredConsumerRelease(
+            evidence.data,
+            {
+              kind: "module",
+              rootId: evidence.data.rootId,
+              releaseRevision: evidence.data.releaseRevision,
+              organizationId,
+            },
+            correlationId,
+            catalogue,
+          ),
+        );
       }
       // Each release is a parsed consumer result; the set adds one exact release per Module root.
       if (
@@ -323,15 +346,17 @@ export const createDatabasePreparedInstallationRuntimeSourceService = (
       )
         throw new Error("PREPARED_INSTALLATION_RUNTIME_SOURCE_INVALID");
       const releaseSet = { application, modules } as SystemApplicationBoundReleaseSetResult;
-      const expectedModuleIdentities = expectedBindings.map((binding) =>
-        `${binding.moduleRootId}:${binding.moduleReleaseRevision}`,
-      ).sort();
-      const actualModuleIdentities = releaseSet.modules.map((module) =>
-        `${module.rootId}:${module.releaseRevision}`,
-      ).sort();
+      const expectedModuleIdentities = expectedBindings
+        .map((binding) => `${binding.moduleRootId}:${binding.moduleReleaseRevision}`)
+        .sort();
+      const actualModuleIdentities = releaseSet.modules
+        .map((module) => `${module.rootId}:${module.releaseRevision}`)
+        .sort();
       if (
         expectedModuleIdentities.length !== actualModuleIdentities.length ||
-        expectedModuleIdentities.some((identity, index) => identity !== actualModuleIdentities[index])
+        expectedModuleIdentities.some(
+          (identity, index) => identity !== actualModuleIdentities[index],
+        )
       )
         throw new Error("PREPARED_INSTALLATION_RUNTIME_SOURCE_INVALID");
       requirePreparedPlanMatchesReleaseSet(
@@ -380,10 +405,11 @@ export const createDatabasePreparedInstallationRuntimeSourceService = (
 };
 
 /** The reader the installation coordinator uses to build or check a release's runtime bundle. */
-export const createPreparedInstallationRuntimeSourceReader = (
-  catalogueDefinition: ImmutableDefinitionPublicationCatalogueDefinition,
-  verifiedReleaseSets: readonly SystemApplicationBoundReleaseSetResult[],
-): PreparedInstallationRuntimeSourceReader =>
+export const createPreparedInstallationRuntimeSourceReader =
+  (
+    catalogueDefinition: ImmutableDefinitionPublicationCatalogueDefinition,
+    verifiedReleaseSets: readonly SystemApplicationBoundReleaseSetResult[],
+  ): PreparedInstallationRuntimeSourceReader =>
   (transaction, input) => {
     const moduleBindings = input.moduleBindings.map((binding) => {
       const moduleRootId = moduleRootIdSchema.safeParse(binding.moduleRootId);

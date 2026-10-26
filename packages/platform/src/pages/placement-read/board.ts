@@ -1,12 +1,9 @@
 import "server-only";
 
-import {
-  describeFailure,
-  sameId,
-  type JsonValue,
-  type RecordsTableBoardMode,
-  type RecordsTableContract,
-} from "../../schema";
+import type { JsonValue } from "../../catalogue/common";
+import { describeFailure, sameId } from "../../catalogue/runtime-primitives";
+import type { RecordsTableContract } from "../../definition/application-composition/records-display";
+import type { RecordsTableBoardMode } from "../../definition/application-composition/records-table-features";
 import { buildRecordsTableNarrowing } from "../records-table-query";
 import {
   conditionalFormattingRelativeDates,

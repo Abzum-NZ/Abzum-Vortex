@@ -1,10 +1,10 @@
+import type { SourceIdentityKind } from "./definition-compilation-contracts";
 import type {
   ApplicationSourceDocument,
   DefinitionSourceDocument,
   ModuleSourceDocument,
-  StoredDefinitionSource,
-  SourceIdentityKind,
-} from "../schema";
+} from "./definition-source";
+import type { StoredDefinitionSource } from "./definition-store-contracts";
 
 import { isSourceItemShape } from "./application-composition/source-composition";
 import { reservedItemPropKeys } from "./application-composition/platform-block-release";

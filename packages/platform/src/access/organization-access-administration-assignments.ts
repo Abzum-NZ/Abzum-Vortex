@@ -1,18 +1,20 @@
 import "server-only";
 
 import {
-  databaseRevision,
-  type AssignOrganizationAdministrationRoleAssignmentResult,
-  sameId,
   activityIdSchema,
   delegationAuthorityIdSchema,
+  roleAssignmentIdSchema,
+} from "../catalogue/identifiers";
+import { databaseRevision, sameId } from "../catalogue/runtime-primitives";
+import type { IdentitySession, OrganizationSelectionCandidate } from "./identity-access";
+import {
+  type AssignOrganizationAdministrationRoleAssignmentResult,
   grantOrganizationAdministrationDelegationAuthorityCommandSchema,
   type GrantOrganizationAdministrationDelegationAuthorityCommand,
   assignOrganizationAdministrationRoleAssignmentCommandSchema,
   changeOrganizationAdministrationDelegationAuthorityResultSchema,
   changeOrganizationAdministrationRoleAssignmentResultSchema,
   changeOrganizationAdministrationRoleActivationResultSchema,
-  roleAssignmentIdSchema,
   listOrganizationAdministrationDelegationAuthoritiesCommandSchema,
   listOrganizationAdministrationDelegationAuthoritiesResultSchema,
   listOrganizationAdministrationRoleActivationsCommandSchema,
@@ -28,23 +30,16 @@ import {
   deactivateOrganizationAdministrationRoleActivationCommandSchema,
   revokeOrganizationAdministrationDelegationAuthorityCommandSchema,
   revokeOrganizationAdministrationRoleAssignmentCommandSchema,
-  organizationStewardshipAppointmentCommandSchema,
-  organizationStewardshipAppointmentAttemptSchema,
-  organizationStewardshipAppointmentResultSchema,
   type AssignOrganizationAdministrationRoleAssignmentCommand,
   type ChangeOrganizationAdministrationRoleAssignmentResult,
   type ChangeOrganizationAdministrationDelegationAuthorityResult,
   type ChangeOrganizationAdministrationRoleActivationResult,
-  type IdentitySession,
   type ListOrganizationAdministrationDelegationAuthoritiesCommand,
   type ListOrganizationAdministrationDelegationAuthoritiesResult,
   type ListOrganizationAdministrationRoleActivationsCommand,
   type ListOrganizationAdministrationRoleActivationsResult,
   type ListOrganizationAdministrationRoleAssignmentsCommand,
   type ListOrganizationAdministrationRoleAssignmentsResult,
-  type OrganizationSelectionCandidate,
-  type OrganizationStewardshipAppointmentCommand,
-  type OrganizationStewardshipAppointmentAttempt,
   type ReadOrganizationAdministrationDelegationAuthorityCommand,
   type ReadOrganizationAdministrationDelegationAuthorityResult,
   type ReadOrganizationAdministrationRoleActivationCommand,
@@ -54,7 +49,14 @@ import {
   type RevokeOrganizationAdministrationRoleAssignmentCommand,
   type DeactivateOrganizationAdministrationRoleActivationCommand,
   type RevokeOrganizationAdministrationDelegationAuthorityCommand,
-} from "../schema";
+} from "./organization-access-administration";
+import {
+  organizationStewardshipAppointmentCommandSchema,
+  organizationStewardshipAppointmentAttemptSchema,
+  organizationStewardshipAppointmentResultSchema,
+  type OrganizationStewardshipAppointmentCommand,
+  type OrganizationStewardshipAppointmentAttempt,
+} from "./organization-stewardship";
 import type { HumanOrganizationRequestResult } from "./human-organization-request";
 import {
   normalizeAssignmentLedgerFact,

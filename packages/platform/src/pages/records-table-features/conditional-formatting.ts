@@ -3,21 +3,21 @@ import type {
   ConditionalColumnFormatProjection,
   ConditionalFormattingProjection,
 } from "../records-table-feature-projection";
+import type { JsonValue } from "../../catalogue/common";
+import type { RecordsTableContract } from "../../definition/application-composition/records-display";
 import {
   conditionalFormatRuleFields,
   type ConditionalFormatRule,
   conditionalFormattingDateParameters,
-  type ConditionNode,
   type ConditionalFormattingDateParameter,
-  type JsonValue,
-  type ModuleField,
-  type RecordsTableContract,
-} from "../../schema";
+} from "../../definition/application-composition/records-table-features/conditional-formatting";
+import type { ModuleField } from "../../definition/module-contracts";
+import type { ConditionNode } from "../../definition/module-foundation-contracts";
 import {
   evaluateTypedCondition,
-  TypedConditionEvaluationError,
   type TypedConditionParameterDeclaration,
-} from "../../rules/index";
+} from "../../rules/typed-condition";
+import { TypedConditionEvaluationError } from "../../rules/typed-condition-error";
 import type { ProtectedQueryRow } from "../../queries/protected-query-contracts";
 import { relativeAnchorDate } from "../query-binding-resolver";
 

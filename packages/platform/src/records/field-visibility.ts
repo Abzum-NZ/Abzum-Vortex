@@ -1,7 +1,7 @@
 import "server-only";
 
 import { z } from "zod";
-import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
 
 /**
  * The fields the viewer may read now on one record type, decided by access route in the database

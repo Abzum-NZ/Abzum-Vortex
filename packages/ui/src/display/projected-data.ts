@@ -19,7 +19,6 @@ import {
   recordsTableTotalsSchema,
   type RecordsTableTotal,
   type JsonValue,
-  builderKeySchema,
   moduleFieldValueSchemas,
   fieldIdSchema,
   richTextDocumentSchema,
@@ -40,7 +39,7 @@ import {
   type GridLayoutState,
   isRecord,
 } from "@vortex/platform/schema";
-import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "../definition-error";
+import type { DefinitionRenderErrorLocation } from "../definition-error";
 import { parseRowFormat } from "./projected-format";
 import {
   parseTableGroups,
@@ -50,6 +49,18 @@ import {
   type TableGroups,
   type TableSelectionParts,
 } from "./projected-grid-features";
+import {
+  fail,
+  requireRecord,
+  requireExactKeys,
+  requireString,
+  requireNonEmptyString,
+  requireArray,
+  requireFieldKey,
+  requirePositiveInteger,
+  requireBuilderKey,
+  requireFiniteNumber,
+} from "./payload-parse";
 
 /**
  * Validated structured rich-text document from the shared closed rich-text contract.
@@ -436,99 +447,6 @@ export const parseProjectedPart = <Output>(
   const path = (issue?.path ?? []).map(String);
   return fail(`${message}: ${issue?.message ?? "invalid"}`, location, path);
 };
-
-/** @internal Shared with the board payload parser. */
-export function fail(
-  message: string,
-  location: DefinitionRenderErrorLocation,
-  propertyPath?: readonly string[],
-): never {
-  throw new DefinitionRenderError(
-    "INVALID_COMPOSITION",
-    message,
-    propertyPath === undefined ? location : { ...location, propertyPath },
-  );
-}
-
-/** @internal Shared with the board payload parser. */
-export const requireRecord = (
-  value: unknown,
-  message: string,
-  location: DefinitionRenderErrorLocation,
-): Record<string, unknown> => (isRecord(value) ? value : fail(message, location));
-
-/** @internal Shared with the board payload parser. */
-export const requireExactKeys = (
-  value: Record<string, unknown>,
-  allowed: readonly string[],
-  location: DefinitionRenderErrorLocation,
-): void => {
-  for (const key of Object.keys(value)) {
-    if (!allowed.includes(key)) fail(`Unexpected projected display field '${key}'`, location);
-  }
-};
-
-/** @internal Shared with the board payload parser. */
-export const requireString = (
-  value: unknown,
-  message: string,
-  location: DefinitionRenderErrorLocation,
-): string => (typeof value === "string" ? value : fail(message, location));
-
-/** @internal Shared with the board payload parser. */
-export const requireNonEmptyString = (
-  value: unknown,
-  message: string,
-  location: DefinitionRenderErrorLocation,
-): string => {
-  const text = requireString(value, message, location);
-  return text.trim().length > 0 ? text : fail(message, location);
-};
-
-/** @internal Shared with the board payload parser. */
-export const requireArray = (
-  value: unknown,
-  message: string,
-  location: DefinitionRenderErrorLocation,
-): readonly unknown[] => (Array.isArray(value) ? value : fail(message, location));
-
-const requireBuilderKey = (
-  value: unknown,
-  message: string,
-  location: DefinitionRenderErrorLocation,
-): string => {
-  const parsed = builderKeySchema.safeParse(value);
-  return parsed.success ? parsed.data : fail(message, location);
-};
-
-/** A row cell, column, detail field or sort key: a builder key or a declared field identity. */
-export const requireFieldKey = (
-  value: unknown,
-  message: string,
-  location: DefinitionRenderErrorLocation,
-): string => {
-  const parsed = builderKeySchema.safeParse(value);
-  if (parsed.success) return parsed.data;
-  const field = fieldIdSchema.safeParse(value);
-  return field.success ? field.data : fail(message, location);
-};
-
-/** @internal Shared with the board payload parser. */
-export const requirePositiveInteger = (
-  value: unknown,
-  message: string,
-  location: DefinitionRenderErrorLocation,
-): number =>
-  typeof value === "number" && Number.isInteger(value) && value >= 1
-    ? value
-    : fail(message, location);
-
-const requireFiniteNumber = (
-  value: unknown,
-  message: string,
-  location: DefinitionRenderErrorLocation,
-): number =>
-  typeof value === "number" && Number.isFinite(value) ? value : fail(message, location);
 
 const parseRichTextDocument = (
   value: unknown,

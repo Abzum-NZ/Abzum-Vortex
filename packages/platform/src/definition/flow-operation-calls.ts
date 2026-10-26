@@ -1,16 +1,20 @@
+import { valueTypesCompatible } from "../catalogue/catalogues";
 import {
   PLATFORM_SERVICE_OPERATIONS,
+  type PlatformServiceOperationCatalogueEntry,
+} from "../catalogue/platform-service-operation-catalogue";
+import type { DefinitionRuleFailureFamily } from "../catalogue/validation-errors";
+import { platformOperationKey } from "../workflows/default-flow-sources";
+import {
   flowTaskChildLists,
-  platformOperationKey,
-  canonicalizeProtectedOperationReferences,
-  valueTypesCompatible,
-  type DefinitionRuleFailureFamily,
   type FlowDefinition,
   type FlowTask,
-  type PlatformServiceOperationCatalogueEntry,
+} from "../workflows/flow-contracts";
+import type { SourceFlow } from "../workflows/flow-source-contracts";
+import {
+  canonicalizeProtectedOperationReferences,
   type ProtectedOperationReference,
-  type SourceFlow,
-} from "../schema";
+} from "./application-flow-bindings";
 import type { DefinitionCompilerRefusalCode } from "./compilation-error";
 import type { OperationInputDeclaration } from "./flow-validation";
 
@@ -75,7 +79,8 @@ const platformOperations: ReadonlyMap<string, CallableOperationInputs> = new Map
 );
 
 /** The registered platform-service operations a flow may call. */
-export const platformOperationLookup: CallableOperationLookup = (key) => platformOperations.get(key);
+export const platformOperationLookup: CallableOperationLookup = (key) =>
+  platformOperations.get(key);
 
 /** A named action's callable inputs, from an action's key and its declared inputs. */
 export const namedActionInputs = (
@@ -111,7 +116,8 @@ export function flowOperationNodeDescriptors(
       .filter((task) => task.type === "record.query" || task.type.startsWith("record."))
       .map((task) => {
         const properties = (task as Extract<FlowTask, { properties: unknown }>).properties;
-        const operationId = task.type === "record.query" ? literalIdentity(properties.query) : undefined;
+        const operationId =
+          task.type === "record.query" ? literalIdentity(properties.query) : undefined;
         const recordTypeIds =
           task.type === "record.query" || task.type === "record.link"
             ? []
@@ -234,9 +240,7 @@ export function flowOperationReferencesByNode(
   const nodes: FlowNodeOperationReferences[] = [];
   const seenNodeIdentities = new Set<string>();
 
-  const recordReferenceFor = (
-    recordTypeId: string,
-  ): ProtectedOperationReference => {
+  const recordReferenceFor = (recordTypeId: string): ProtectedOperationReference => {
     const reference = lookups.recordTypesById.get(recordTypeId.toLowerCase());
     if (reference === undefined)
       throw new Error("A published record type has no resolved operation owner");
@@ -254,7 +258,9 @@ export function flowOperationReferencesByNode(
       const nodeId = task.id;
       const identity = `${String(flow.id).toLowerCase()}:${nodeId.toLowerCase()}`;
       if (seenNodeIdentities.has(identity))
-        throw new Error("Published Record and Query node identities must be unique within each flow");
+        throw new Error(
+          "Published Record and Query node identities must be unique within each flow",
+        );
       seenNodeIdentities.add(identity);
 
       if (task.type === "record.query") {
@@ -438,7 +444,10 @@ export function platformOperationsCalledBy(
   flows: readonly (FlowDefinition | SourceFlow)[],
 ): PlatformServiceOperationCatalogueEntry[] {
   const byKey = new Map(
-    Object.values(PLATFORM_SERVICE_OPERATIONS).map((entry) => [platformOperationKey(entry.key), entry]),
+    Object.values(PLATFORM_SERVICE_OPERATIONS).map((entry) => [
+      platformOperationKey(entry.key),
+      entry,
+    ]),
   );
   const called = new Map<string, PlatformServiceOperationCatalogueEntry>();
   for (const flow of flows)

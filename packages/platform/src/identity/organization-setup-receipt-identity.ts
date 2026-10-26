@@ -1,14 +1,15 @@
 import "server-only";
 
 import { createHash } from "node:crypto";
+import { sameId } from "../catalogue/runtime-primitives";
 import {
   organizationSetupReceiptCommandSchema,
   organizationSetupReceiptResultSchema,
   organizationSetupReceiptSchema,
   type OrganizationSetupReceiptResult,
-  sameId,
-} from "../schema";
-import { withRuntimeTransaction, type RequestDatabaseTransaction } from "../db/index";
+} from "./organization-setup-receipt";
+import { withRuntimeTransaction, type RequestDatabaseTransaction } from "../db/request-transaction";
+import { describeFailure } from "../catalogue/runtime-primitives";
 
 type RuntimeTransactionRunner = <Result>(
   operation: (transaction: RequestDatabaseTransaction) => Promise<Result>,
@@ -77,10 +78,16 @@ export const createOrganizationSetupReceiptReader = (
               evidence.commandFingerprint !== commandFingerprint
             )
               return refused;
-            return organizationSetupReceiptResultSchema.parse({ kind: "available", receipt: evidence });
+            return organizationSetupReceiptResultSchema.parse({
+              kind: "available",
+              receipt: evidence,
+            });
           },
         );
-      } catch {
+      } catch (error) {
+        console.error(
+          `[identity] ORGANIZATION_SETUP_RECEIPT_READ_FAILED: ${describeFailure(error)}`,
+        );
         return refused;
       }
     },

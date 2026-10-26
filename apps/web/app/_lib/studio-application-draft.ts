@@ -6,6 +6,7 @@ import {
   IMMUTABLE_PLATFORM_BLOCK_CATALOGUE,
   FIELD_INPUT_CONTROL_RELEASES,
   type BuilderTargetFactsReader,
+  readBuilderApplicationOrigin,
 } from "@vortex/platform/server";
 import type { FieldInputControlReleaseMap, PlatformThemeTokens } from "@vortex/ui";
 import { studioThemeOptions } from "../studio/_lib/studio-theme-catalogue";
@@ -41,7 +42,6 @@ import {
   queryTotalLabel,
   definitionValidationMessage,
 } from "@vortex/platform/schema";
-import type { DatabaseRow } from "@vortex/platform/server";
 import {
   BuilderAuthorityError,
   DefinitionError,
@@ -294,8 +294,6 @@ export const pageCompiledSlotsFor = (
 type StudioApplicationCreateAccessResult =
   Readonly<{ kind: "available"; organizationId: OrganizationId }> | StudioApplicationFailure;
 
-type ClassificationRow = DatabaseRow & { outcome: unknown; application_origin_kind: unknown };
-
 /** Mirrors the writer's protected classification; an unknown existing root is never ordinary. */
 export const studioDraftTargetFacts: BuilderTargetFactsReader = async (
   transaction,
@@ -303,20 +301,9 @@ export const studioDraftTargetFacts: BuilderTargetFactsReader = async (
   rootId,
 ) => {
   if (rootId === undefined) return { isSystemApplication: false };
-  const rows = await transaction.query<ClassificationRow>`
-    select outcome, application_origin_kind
-    from vortex_definition.read_builder_application_root_classification(${rootId}::uuid)
-  `;
-  const row = rows[0];
-  if (
-    rows.length !== 1 ||
-    row === undefined ||
-    row.outcome !== "available" ||
-    (row.application_origin_kind !== "ordinary" &&
-      row.application_origin_kind !== "platform_system_application")
-  )
-    throw new Error("STUDIO_DRAFT_UNAVAILABLE");
-  return { isSystemApplication: row.application_origin_kind === "platform_system_application" };
+  const origin = await readBuilderApplicationOrigin(transaction, rootId);
+  if (origin === undefined) throw new Error("STUDIO_DRAFT_UNAVAILABLE");
+  return { isSystemApplication: origin === "platform_system_application" };
 };
 
 /** Organization selection is resolved from the current signed-in human on every request. */

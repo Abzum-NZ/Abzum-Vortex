@@ -115,7 +115,7 @@ export const inviteLocalMember = async (
   const accepted = await acceptOrganizationInvitation(
     verified,
     acceptOrganizationInvitationCommandSchema.parse({
-      invitationSecret: created.value.invitationSecret,
+      invitationId: created.value.invitationId,
       displayName,
       correlationId: randomUUID(),
     }),

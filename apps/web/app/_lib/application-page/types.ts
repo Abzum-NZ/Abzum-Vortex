@@ -153,7 +153,9 @@ export type ApplicationPageResult =
       applicationShell?: ApplicationShell;
     }>
   | Readonly<{ kind: "unavailable" }>
-  | Readonly<{ kind: "temporarily_unavailable" }>;
+  | Readonly<{ kind: "temporarily_unavailable" }>
+  /** A draft preview whose saved draft cannot run: `sentence` names what to fix in Studio. */
+  | Readonly<{ kind: "not_runnable"; sentence: string }>;
 
 export type ApplicationPagePlacementReadResult =
   | Readonly<{

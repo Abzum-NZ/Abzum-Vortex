@@ -1,8 +1,5 @@
-import {
-  type DefinitionValidationLocation,
-  namespacedKeySchema,
-  builderKeySchema,
-} from "../../schema";
+import { namespacedKeySchema, builderKeySchema } from "../../catalogue/identifiers";
+import type { DefinitionValidationLocation } from "../../catalogue/validation-errors";
 import { type JsonObject, type DefinitionPath, isApplicationSource } from "./context";
 import { array, object } from "./helpers";
 

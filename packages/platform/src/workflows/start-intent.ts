@@ -1,19 +1,11 @@
 import "server-only";
 
-import {
-  applicationRootIdSchema,
-  correlationIdSchema,
-  flowIdSchema,
-  flowLiteralSchema,
-  flowTriggerOriginSchema,
-  moduleRootIdSchema,
-  organizationIdSchema,
-  revisionSchema,
-  stableDefinitionReleaseVersionSchema,
-  timestampSchema,
-  type FlowLiteral,
-} from "../schema";
-import { withRuntimeTransaction, type RequestDatabaseTransaction } from "../db/index";
+import { correlationIdSchema } from "../catalogue/common";
+import { applicationRootIdSchema, moduleRootIdSchema, organizationIdSchema, revisionSchema, timestampSchema } from "../catalogue/identifiers";
+import { stableDefinitionReleaseVersionSchema } from "../definition/version-impact";
+import { flowIdSchema, flowTriggerOriginSchema } from "./flow-contracts";
+import { flowLiteralSchema, type FlowLiteral } from "./flow-values";
+import { withRuntimeTransaction, type RequestDatabaseTransaction } from "../db/request-transaction";
 import { z } from "zod";
 
 /** One accepted start, written inside the caller's authorized request transaction. */

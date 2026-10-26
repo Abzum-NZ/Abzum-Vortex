@@ -1,12 +1,11 @@
+import { compareExactDecimals, parseExactDecimal } from "../../records/exact-decimal";
 import {
   type VersionImpact,
   type VersionImpactReason,
-  compareExactDecimals,
-  parseExactDecimal,
   versionImpactComponentKinds,
   versionImpactProperties,
   versionImpactReasonCodes,
-} from "../../schema";
+} from "../version-impact";
 import {
   canonicalJson,
   compareCanonicalStrings,

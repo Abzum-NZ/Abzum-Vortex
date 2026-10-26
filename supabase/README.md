@@ -1,17 +1,9 @@
 # Supabase database project
 
-## Current development policy — 21 September 2026
-
-The [current roadmap](../docs/build-plan/README.md) and [architecture review](../docs/build-plan/architecture-review-2026-09-21.md) govern implementation work. Development completion is implemented functionality plus independent code review. Do not create or run tests, require database review, collect hosted proof, or introduce verification/promotion gates for these development issues.
-
-This policy supersedes contrary completion or standing-authority wording below. The recipes and environment observations below are separate, optional operational documentation. They describe existing tooling and historical operational practices; they are not developer completion instructions and do not authorize running commands, starting recurring jobs, deploying, recovering data, changing credentials or modifying Production. Any operational work requires a separately scoped request for that environment and action. Reading this file or finishing a development issue grants no Production authority.
-
-Preserve runtime access controls, tenant isolation, atomic changes, protected credentials and safe error handling. This policy changes completion requirements, not those product protections.
-
 ## Operational reference
 
 This is the repository's official Supabase CLI project. It is operational
-configuration, migrations, synthetic seed data, and database tests—not a
+configuration, migrations, canonical functions and synthetic seed data, not a
 workspace package and not an application data model.
 
 | Path | Purpose |
@@ -37,11 +29,6 @@ checkout and copied in, so a reset in any worktree keeps the same key id for the
 No hosted signing key is downloaded or committed, and no private key is ever committed. After
 changing signing-key settings, restart the Local stack with `pnpm db:stop` followed by
 `pnpm db:start`.
-
-With the Local stack running, `pnpm auth:local:proof` creates an isolated local address and proves
-Mailpit confirmation, password sign-in, local `getClaims()` verification against the published
-ES256 JWKS, and password-recovery delivery. It does not configure Testing or Production and does not
-exercise durable application sessions.
 
 Identity-session delivery adds a narrow runtime-only, non-mutating projection read. Session bootstrap
 may call the existing idempotent ensure operation once; ordinary protected resolution must use the
@@ -160,20 +147,6 @@ alter default privileges for role postgres
 PostgreSQL's built-in function default grants `EXECUTE` to `PUBLIC`. A
 schema-limited revoke cannot subtract that global default, so each callable
 function receives its exact execution grant only after this owner-wide baseline.
-
-Later pgTAP suites include
-`tests/helpers/private-schema-assertions.psql` and call
-`pg_temp.vortex_private_schema_assertions(...)`. The reusable assertions prove
-the schema owner, direct Data API denial, public creation denial, and absence of
-future-object default grants without installing any permanent test function.
-Ordinary service schemas omit the helper's optional runtime-usage flag. The
-`vortex_platform`, `vortex_identity` and `vortex_access` schemas pass `true` only where their
-named runtime functions require schema usage; object execution remains
-explicitly granted. `vortex_identity` gives `vortex_request` no schema usage or function grant in
-Phase 2. Runtime invitation acceptance is available only through `vortex_access`, which commits the
-Identity transition and organisation version increment together. Its generic increment, initialisation
-and account-administration composition remain owner-only; #30 must perform permission checking before
-the latter becomes an authenticated command. Neither runtime role receives direct relation access.
 
 PostgreSQL grants temporary-relation capability through the database-wide
 `PUBLIC` role by default. This baseline leaves that Supabase-managed default

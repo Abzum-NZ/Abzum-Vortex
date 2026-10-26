@@ -1,7 +1,8 @@
 import "server-only";
 
-import { groupIdSchema, unavailableError } from "../schema";
-import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
+import { groupIdSchema } from "../catalogue/identifiers";
+import { unavailableError } from "../catalogue/runtime-primitives";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
 
 type OwnerGroupRow = DatabaseRow & { group_id: unknown; label: unknown };
 

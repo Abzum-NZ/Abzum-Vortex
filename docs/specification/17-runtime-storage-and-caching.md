@@ -266,7 +266,7 @@ journey succeeded through `vortex_runtime`. Production provisioning and proof re
 gated from Testing.
 
 The Supabase CLI development database is the only exception to the hosted transport profile. Local
-uses a loopback endpoint (port 54322 for the main stack, its own port for a worker's database lane)
+uses a loopback endpoint (the database port of `supabase/config.toml`, or of the database lane)
 and the same restricted `vortex_runtime` role, with a
 fixed disposable Local-only password assigned by the Local seed. The adapter permits this without
 TLS only when the declared environment is Local and refuses owner roles, non-loopback hosts and

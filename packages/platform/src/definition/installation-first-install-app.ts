@@ -1,20 +1,17 @@
 import "server-only";
 
-import type { RequestDatabaseTransaction } from "../db/index";
+import type { RequestDatabaseTransaction } from "../db/request-transaction";
 import type { PlatformPermissionSource } from "../access/platform-permissions";
+import type { createHumanOrganizationRequestService } from "../access/human-organization-request";
+import type { createOrganizationAccessAdministrationService } from "../access/organization-access-administration-access";
 import type {
-  createHumanOrganizationRequestService,
-  createOrganizationAccessAdministrationService,
-} from "../access/index";
-import {
-  canonicalJson,
-  type ApplicationRootId,
-  type IdentitySession,
-  type OrganizationId,
-  type OrganizationSelectionCandidate,
-  type SelectedOrganizationScope,
-  type SystemApplicationBoundReleaseSetResult,
-} from "../schema";
+  IdentitySession,
+  OrganizationSelectionCandidate,
+  SelectedOrganizationScope,
+} from "../access/identity-access";
+import type { ApplicationRootId, OrganizationId } from "../catalogue/identifiers";
+import { canonicalJson } from "./canonical-json";
+import type { SystemApplicationBoundReleaseSetResult } from "./definition-consumer-read";
 import {
   installationOperation,
   installationProblem,

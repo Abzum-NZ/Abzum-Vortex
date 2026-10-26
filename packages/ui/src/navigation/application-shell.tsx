@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type MouseEvent,
   type ReactElement,
   type ReactNode,
 } from "react";
@@ -298,6 +299,30 @@ function ApplicationSwitcher({
   );
 }
 
+const mainContentId = "vortex-main-content";
+
+/**
+ * Moves focus to the page's own content: its first heading or control outside the navigation,
+ * or the content region itself when it has neither.
+ */
+const skipToPageContent = (event: MouseEvent<HTMLAnchorElement>): void => {
+  const main = document.getElementById(mainContentId);
+  if (main === null) return;
+  event.preventDefault();
+  const target = [
+    ...main.querySelectorAll<HTMLElement>(
+      "h2, h3, input, select, textarea, button, a[href], [role=grid], [tabindex='0']",
+    ),
+  ].find((element) => element.closest("nav") === null && element.offsetParent !== null);
+  if (target === undefined) {
+    main.focus();
+    return;
+  }
+  if (!target.matches("input, select, textarea, button, a[href], [tabindex='0']"))
+    target.setAttribute("tabindex", "-1");
+  target.focus();
+};
+
 /** Puck root renderer for a definition-selected application frame. */
 export function ApplicationShellRoot({
   shell,
@@ -341,6 +366,14 @@ export function ApplicationShellRoot({
       >
         <style>{shellFrameCss}</style>
         <header className="sticky top-0 z-20 flex min-h-14 w-full shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b py-1 sm:h-14 sm:flex-nowrap sm:py-0 bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+          {/* The first stop for keyboard users: past the header and the navigation to the page. */}
+          <a
+            href={`#${mainContentId}`}
+            onClick={skipToPageContent}
+            className="sr-only bg-background px-3 py-2 text-sm font-medium text-foreground focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:ring-2 focus:ring-ring"
+          >
+            Skip to main content
+          </a>
           {presentation.sidebar.collapsible === "icon" ? (
             <SidebarTrigger className="max-sm:hidden" />
           ) : null}
@@ -356,16 +389,24 @@ export function ApplicationShellRoot({
             ) : null}
             {runtime?.webMcp === undefined ? null : <WebMcpStatus runtime={runtime.webMcp} />}
             {presentation.topBar.appearanceToggle ? <AppearanceToggle /> : null}
-            {presentation.topBar.accountMenu ? <ApplicationAccountMenu /> : null}
+            {presentation.topBar.accountMenu ? (
+              <ApplicationAccountMenu
+                offerOrganizationSwitch={!presentation.topBar.organizationSwitcher}
+              />
+            ) : null}
           </div>
         </header>
-        <div
+        <main
+          id={mainContentId}
+          tabIndex={-1}
           data-vortex-application-shell-content=""
-          className="vortex-puck-slot min-w-0 flex-1"
+          className="vortex-puck-slot min-w-0 flex-1 focus:outline-none"
           style={contentStyle}
         >
+          {/* Every page has one level-1 heading: the page's name. Its blocks' headings follow it. */}
+          {runtime === undefined ? null : <h1 className="sr-only">{runtime.pageName}</h1>}
           {children}
-        </div>
+        </main>
       </div>
     </SidebarProvider>
   );

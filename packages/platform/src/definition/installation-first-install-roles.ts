@@ -1,11 +1,11 @@
 import "server-only";
 
+import type { IdentitySession } from "../access/identity-access";
 import {
   assignOrganizationAdministrationRoleAssignmentCommandSchema,
   revokeOrganizationAdministrationRoleAssignmentCommandSchema,
-  sameId,
-  type IdentitySession,
-} from "../schema";
+} from "../access/organization-access-administration";
+import { sameId } from "../catalogue/runtime-primitives";
 import {
   InstallationProblem,
   installationProblem,

@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_access.change_organization_account_state(p_organization_account_id uuid, p_expected_revision bigint, p_state text) RETURNS TABLE(organization_account_id uuid, organization_id uuid, identity_id uuid, display_name text, state text, language text, time_zone text, invitation_id uuid, activated_at timestamp with time zone, suspended_at timestamp with time zone, closed_at timestamp with time zone, changed_at timestamp with time zone, state_changed_at timestamp with time zone, state_changed_by uuid, state_change_correlation_id uuid, revision bigint, access_version bigint)
+CREATE OR REPLACE FUNCTION vortex_access.change_organization_account_state(p_organization_account_id uuid, p_expected_revision bigint, p_state text) RETURNS TABLE(organization_account_id uuid, organization_id uuid, identity_id uuid, display_name text, state text, language text, time_zone text, invitation_id uuid, activated_at timestamp with time zone, suspended_at timestamp with time zone, closed_at timestamp with time zone, changed_at timestamp with time zone, state_changed_at timestamp with time zone, state_changed_by uuid, state_change_correlation_id uuid, revision bigint, access_version bigint)
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO ''
     AS $$
@@ -24,7 +24,7 @@ begin
   end if;
 
   select result.* into strict changed
-  from vortex_access.change_account_state_without_stewardship_v1_internal(
+  from vortex_access.change_account_state_without_stewardship_internal(
       p_organization_account_id, p_expected_revision, p_state
     ) as result;
 

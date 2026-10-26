@@ -241,19 +241,6 @@ const runbookPages = operationsRunbooks.map((runbook) => {
 const pages = [
   ...runbookPages,
   {
-    id: "page_operations_signals",
-    key: "operations_signals",
-    name: "Open signals",
-    type: "dashboard",
-    permission: "application.operations.open",
-    blocks: slot({
-      operations_signals_text: textBlock(
-        "Open alert signals",
-        "Open alert signals are recorded and deduplicated by the platform alert sink and hold no customer content. They cannot be listed here yet: signals will appear on this page once they become a system record type. Until then, create an incident from the Create incident page, or open an incident from the Incidents page and attach a signal to it by its deduplication key.",
-      ),
-    }),
-  },
-  {
     id: "page_operations_incidents",
     key: "operations_incidents",
     name: "Incidents",
@@ -391,7 +378,6 @@ const applicationShell = {
                 gap: "medium",
                 menu_width: 16,
                 menu_placement: "sticky",
-                content_landmark: true,
                 tablet_menu_width: 14,
                 phone_direction: "column",
                 phone_menu_placement: "flow",
@@ -505,7 +491,7 @@ export const operationsApplication: ApplicationSourceDocument =
       description:
         "Operational incidents with timelines, scope, containment, recovery, evidence, communication, cause, follow-up and verification, plus one reachable runbook for each critical alert code. Operators create incidents, attach alert signals to open incidents, and acknowledge, escalate or resolve them under their own permission.",
       icon: "activity",
-      home_page: "operations_signals",
+      home_page: "operations_incidents",
       modules: operationsModules,
       uses: [],
       permissions: [
@@ -561,7 +547,7 @@ export const operationsApplication: ApplicationSourceDocument =
           key: "operations_operator",
           default_member: true,
           name: "Operations operator",
-          home_page: "operations_signals",
+          home_page: "operations_incidents",
           permissions: [
             "application.operations.open",
             createAction,
@@ -588,14 +574,6 @@ export const operationsApplication: ApplicationSourceDocument =
           label: "Operations",
           icon: "grid",
           children: [
-            {
-              id: "nav_operations_signals",
-              type: "page",
-              label: "Open signals",
-              icon: "life-buoy",
-              page: "operations_signals",
-              permission: "application.operations.open",
-            },
             {
               id: "nav_operations_incidents",
               type: "page",

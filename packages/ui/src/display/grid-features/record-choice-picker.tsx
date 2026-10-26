@@ -152,8 +152,10 @@ export function RecordChoicePicker({
       }}
       itemToStringLabel={(item: RecordChoiceOption) => item.title}
       itemToStringValue={(item: RecordChoiceOption) => item.recordId}
-      // The server already searched; every record it returned is offered.
-      filter={() => true}
+      // The server already searched: the list shows exactly the records it returned, as they
+      // arrive, without filtering them again.
+      filteredItems={choices}
+      filter={null}
     >
       <ComboboxInput
         ref={inputRef}

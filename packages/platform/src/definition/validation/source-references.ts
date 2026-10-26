@@ -1,8 +1,8 @@
-import {
-  type DefinitionRuleFailure,
-  type DefinitionValidationLocation,
-  builderKeySchema,
-} from "../../schema";
+import { builderKeySchema } from "../../catalogue/identifiers";
+import type {
+  DefinitionRuleFailure,
+  DefinitionValidationLocation,
+} from "../../catalogue/validation-errors";
 import { createContractValueWalker } from "../contract-value-walker";
 import {
   type PreparedValidationContext,
@@ -324,8 +324,7 @@ export function sourceLocalReferenceRule(
           .map((permission) => String(permission.key)),
       );
       const pageGateKnown = (key: unknown) =>
-        applicationPermissionKeys.has(String(key)) ||
-        context.permissions.hasKey(String(key));
+        applicationPermissionKeys.has(String(key)) || context.permissions.hasKey(String(key));
       for (const permission of array(body.permissions)) {
         const scope = permission.record_scope ? object(permission.record_scope) : undefined;
         for (const route of scope ? array(scope.routes) : []) {

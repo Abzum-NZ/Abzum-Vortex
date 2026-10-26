@@ -1,20 +1,27 @@
 import "server-only";
+import { databaseCode } from "../catalogue/runtime-primitives";
 
 import { z } from "zod";
 import {
   createHumanOrganizationRequestService,
-  runOrganizationAccessOperation,
   type HumanOrganizationRequestDependencies,
   type HumanOrganizationRequestResult,
-} from "../access/index";
-import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
+} from "../access/human-organization-request";
+import { runOrganizationAccessOperation } from "../access/organization-access-decision-access";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
+import type {
+  IdentitySession,
+  OrganizationSelectionCandidate,
+  SelectedOrganizationScope,
+} from "../access/identity-access";
+import type { OrganizationAccessDeclaration } from "../access/organization-access-decision";
+import { jsonValueSchema, type JsonValue } from "../catalogue/common";
 import {
   applicationRootIdSchema,
   builderKeySchema,
   containedComponentIdSchema,
   fieldIdSchema,
   identityIdSchema,
-  jsonValueSchema,
   organizationAccountIdSchema,
   organizationIdSchema,
   platformIdSchema,
@@ -23,12 +30,7 @@ import {
   ruleIdSchema,
   timestampSchema,
   workflowNodeIdSchema,
-  type IdentitySession,
-  type JsonValue,
-  type OrganizationAccessDeclaration,
-  type OrganizationSelectionCandidate,
-  type SelectedOrganizationScope,
-} from "../schema";
+} from "../catalogue/identifiers";
 
 /**
  * #587: Page-owned private revisioned form drafts.
@@ -354,11 +356,6 @@ const parseCommand = <Schema extends z.ZodType>(
     throw new PrivateFormDraftError("INVALID_PRIVATE_FORM_DRAFT_COMMAND", { cause: command.error });
   return command.data;
 };
-
-const databaseCode = (error: unknown): string | undefined =>
-  typeof error === "object" && error !== null && "code" in error
-    ? String((error as { readonly code?: unknown }).code)
-    : undefined;
 
 const mapStorageFailure = (error: unknown): PrivateFormDraftError => {
   const code = databaseCode(error);

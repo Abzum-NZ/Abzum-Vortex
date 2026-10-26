@@ -1,4 +1,5 @@
-import type { FlowDefinition, FlowTask, JsonValue } from "../schema";
+import type { JsonValue } from "../catalogue/common";
+import type { FlowDefinition, FlowTask } from "../workflows/flow-contracts";
 import { flowRuntimeValueOf, retypeTasks } from "./action-flow-run";
 import { startFlowRun, type FlowRuntimeValues } from "./flow-interpreter";
 

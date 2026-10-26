@@ -1,11 +1,9 @@
 import type { canonicalValueWalker } from "./context";
 import { type PreparedValidationContext, allValidationOutputs, type JsonObject } from "./context";
-import type {
-  DefinitionRuleFailure,
-  ModuleField,
-  FlowDefinition,
-  VersionRequirement,
-} from "../../schema";
+import type { DefinitionRuleFailure } from "../../catalogue/validation-errors";
+import type { FlowDefinition } from "../../workflows/flow-contracts";
+import type { VersionRequirement } from "../definitions";
+import type { ModuleField } from "../module-contracts";
 import { object, array, outputKey, failure } from "./helpers";
 import { walkPageComposition, walkPlacementData } from "../../pages/placement-walk";
 import { placementSettings } from "../application-composition-catalogue";

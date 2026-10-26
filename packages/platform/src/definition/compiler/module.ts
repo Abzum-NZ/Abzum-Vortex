@@ -1,13 +1,12 @@
-import type { moduleCompilationRequestSchema } from "../../schema";
+import type { moduleCompilationRequestSchema } from "../definition-compilation-contracts";
+import { recordOwnershipModeSchema } from "../../records/record-ownership-mode";
+import type { FlowDefinition } from "../../workflows/flow-contracts";
 import {
-  moduleDraftSchema,
   moduleCompilationOutputSchema,
-  isRegisteredWritableSystemProjection,
-  recordOwnershipModeSchema,
   type ModuleCompilationOutput,
-  type FlowDefinition,
   type DefinitionCompilationOutput,
-} from "../../schema";
+} from "../definition-compilation-contracts";
+import { moduleDraftSchema, isRegisteredWritableSystemProjection } from "../module-contracts";
 import { compareCanonicalStrings, fingerprintCanonicalValue } from "../canonical-json-definition";
 import { DefinitionCompilationError } from "../compilation-error";
 import { compileActionFlow, platformServiceProtectedOperationReference } from "./action-flows";

@@ -71,7 +71,7 @@ alter function vortex_record.read_record_with_action_previews(uuid,uuid,jsonb,js
 
 revoke all on function vortex_record.read_record_with_action_previews(uuid, uuid, jsonb, jsonb)
   from public, anon, authenticated, service_role, vortex_request;
-grant execute on function vortex_record.read_record_with_action_previews(uuid, uuid, jsonb, jsonb) to vortex_runtime;
+grant execute on function vortex_record.read_record_with_action_previews(uuid, uuid, jsonb, jsonb) to vortex_request;
 
 comment on function vortex_record.read_record_with_action_previews(uuid, uuid, jsonb, jsonb) is
   'Fixed record adapter for a page subject and the named actions its placements are bound to: from one read decision under the caller''s current authority, the readable projection (record) and capabilities vortex_record.read_record returns, and, only when the record is readable, each action''s preview exactly as vortex_record.preview_named_action_set_announce returns it for the record''s current concurrency number and no inputs (previews, in the order given), writing nothing.';

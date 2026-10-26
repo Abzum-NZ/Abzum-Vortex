@@ -68,6 +68,8 @@ export function resolveLauncherListContext(props: LauncherRenderProps): Launcher
 /** Typed, fail-closed reads of a launcher placement's settings against its declared properties. */
 export type LauncherSettings = Readonly<{
   text: (key: string) => string | undefined;
+  /** A declared required text setting; a placement without it fails closed. */
+  requiredText: (key: string) => string;
   boolean: (key: string) => boolean;
   /** A declared choice value restricted to the supplied option keys, or the fallback. */
   choice: <Option extends string>(
@@ -105,6 +107,8 @@ export function readLauncherSettings(
 
   return {
     text,
+    requiredText: (key) =>
+      text(key) ?? fail(`Setting '${key}' is required`, { ...location, propertyPath: [key] }),
     boolean,
     choice: <Option extends string>(
       key: string,

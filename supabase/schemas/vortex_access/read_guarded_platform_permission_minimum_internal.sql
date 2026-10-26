@@ -11,7 +11,7 @@ as $function$
   select declaration.permission_id, declaration.meaning_fingerprint
   from vortex_access.platform_permission_declarations as declaration
   where declaration.owner_kind = 'platform'
-    and declaration.owner_id = 'cabe121e-0baf-4084-9471-cce915d460a8'::uuid
+    and declaration.owner_id = vortex_access.platform_permission_owner_id()
     and declaration.steward_minimum
   order by declaration.permission_id
 $function$;

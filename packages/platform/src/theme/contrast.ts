@@ -1,6 +1,7 @@
 import "server-only";
 
-import { platformThemeTokenRoles, type DefinitionRuleFailure } from "../schema";
+import type { DefinitionRuleFailure } from "../catalogue/validation-errors";
+import { platformThemeTokenRoles } from "../definition/application-composition/theme";
 import { createLocatedFailure } from "./errors";
 import type { ThemeResolutionOptions, ThemeTokenValue, ThemeValidationFailure } from "./types";
 

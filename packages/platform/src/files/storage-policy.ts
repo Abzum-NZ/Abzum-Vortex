@@ -1,17 +1,16 @@
 import "server-only";
 
 import { randomBytes } from "node:crypto";
+import type { FileId, OrganizationId } from "../catalogue/identifiers";
 import {
   MAXIMUM_FILE_STORAGE_OPERATION_SECONDS,
   PRIVATE_FILE_BUCKET,
   fileStorageOperationClaimsSchema,
   privateFileObjectPathSchema,
-  type FileId,
   type FileStorageOperation,
   type FileStorageOperationClaims,
-  type OrganizationId,
   type VerifiedFileActor,
-} from "../schema";
+} from "./file-contracts";
 
 export { MAXIMUM_FILE_STORAGE_OPERATION_SECONDS, PRIVATE_FILE_BUCKET };
 
@@ -28,10 +27,7 @@ export const createUnguessableStorageKey = (
  * Validates that an object key belongs to the expected organisation and uses the
  * unguessable platform format, with no traversal and no original file name.
  */
-export const validateStorageKey = (
-  storageKey: string,
-  organizationId: OrganizationId,
-): boolean =>
+export const validateStorageKey = (storageKey: string, organizationId: OrganizationId): boolean =>
   privateFileObjectPathSchema.safeParse(storageKey).success &&
   storageKey.startsWith(`${organizationId}/`);
 

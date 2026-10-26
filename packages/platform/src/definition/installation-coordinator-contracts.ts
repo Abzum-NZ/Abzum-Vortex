@@ -1,31 +1,29 @@
 import "server-only";
 
+import type {
+  IdentitySession,
+  SelectedOrganizationScope,
+  SessionContext,
+} from "../access/identity-access";
+import type { PreparedApplicationRoleTemplates } from "../access/organization-access-catalogue";
 import {
   applicationRootIdSchema,
   organizationIdSchema,
   revisionSchema,
   type ApplicationRootId,
-  type InstallationRuntimeBundleIndex,
-  type IdentitySession,
-  type ModuleInstallationBindingEvidence,
-  type ModuleContent,
   type OrganizationId,
-  type PreparedApplicationRoleTemplates,
-  type SelectedOrganizationScope,
-  type SessionContext,
-  type SystemApplicationBoundReleaseSetResult,
-} from "../schema";
-import type {
-  BuilderAuthority,
-  createHumanOrganizationRequestService,
-  PermissionRegistryDefinitionSetReader,
-} from "../access/index";
-import type { createModuleInstallationStorageRepository } from "./module-index";
-import type {
-  InstallationRuntimeBundleRemovalReport,
-  ResolvedContributionBinding,
-} from "./module-index";
-import type { RequestDatabaseTransaction } from "../db/index";
+} from "../catalogue/identifiers";
+import type { ModuleInstallationBindingEvidence } from "../files/storage";
+import type { SystemApplicationBoundReleaseSetResult } from "./definition-consumer-read";
+import type { InstallationRuntimeBundleIndex } from "./installation-runtime-bundle";
+import type { ModuleContent } from "./module-contracts";
+import type { createHumanOrganizationRequestService } from "../access/human-organization-request";
+import type { PermissionRegistryDefinitionSetReader } from "../access/permission-registry-definition-adapter";
+import type { BuilderAuthority } from "./builder-authority";
+import type { createModuleInstallationStorageRepository } from "./storage-provisioning";
+import type { InstallationRuntimeBundleRemovalReport } from "./runtime-bundle-cleanup";
+import type { ResolvedContributionBinding } from "./storage-provisioning";
+import type { RequestDatabaseTransaction } from "../db/request-transaction";
 import { z } from "zod";
 import type { PreparedInstallationRuntimeSourceReader } from "./installation-runtime-bundle-app";
 

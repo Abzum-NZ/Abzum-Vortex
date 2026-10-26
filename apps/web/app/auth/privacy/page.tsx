@@ -13,12 +13,17 @@ export default async function PrivacyPage({
   const notice =
     version !== undefined && !parsed.success
       ? undefined
-      : await readPrivacyNotice(parsed.success ? parsed.data : undefined).catch(() => undefined);
+      : await readPrivacyNotice(parsed.success ? parsed.data : undefined);
   return (
     <AuthShell
       eyebrow="Privacy"
-      title={notice?.content.title ?? "Privacy Policy unavailable"}
-      description={notice?.versionLabel ?? "Please try again shortly."}
+      title={notice?.content.title ?? "Privacy Policy not found"}
+      description={
+        notice?.versionLabel ??
+        (version === undefined
+          ? "No privacy policy has been published yet."
+          : "This version of the Privacy Policy does not exist.")
+      }
       footer={
         <Link className="underline" href="/auth/register">
           Back to create account

@@ -1,21 +1,23 @@
 import {
   applicationContentSchema,
+  type PublishedApplicationDefinition,
+} from "./application-contracts";
+import type { DefinitionPublicationHistoryEvidence } from "./definition-compilation-contracts";
+import { unresolvedRecordTypeReferencePaths } from "./definitions";
+import { moduleContentSchema } from "./module-contracts";
+import {
   applicationVersionImpactRequestSchema,
-  moduleContentSchema,
   moduleVersionImpactRequestSchema,
-  unresolvedRecordTypeReferencePaths,
   definitionVersionImpactRequestSchema,
   definitionVersionImpactResultSchema,
   stableDefinitionReleaseVersionSchema,
-  type DefinitionPublicationHistoryEvidence,
   type DefinitionVersionImpactRequest,
   type DefinitionVersionImpactResult,
   type DefinitionVersionSubject,
   type ApplicationVersionImpactRequest,
   type ModuleVersionImpactRequest,
-  type PublishedApplicationDefinition,
   type VersionImpact,
-} from "../schema";
+} from "./version-impact";
 import { canonicalJson, fingerprintCanonicalValue } from "./canonical-json-definition";
 import {
   assertUnambiguousApplicationContent,

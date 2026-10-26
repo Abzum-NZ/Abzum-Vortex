@@ -29,7 +29,7 @@ import {
   useSeededState,
 } from "./field-parts";
 import { useFormFieldValue, useRequiredFormField } from "./form-context";
-import { waitingForParent } from "./dependent-field";
+import { labelInSentence, waitingForParent } from "./dependent-field";
 import {
   parseRecordChoicePage,
   type LinkInputPayload,
@@ -248,8 +248,10 @@ export function LinkInput(props: LinkInputProps): ReactElement {
         itemToStringLabel={(item) => item.title}
         itemToStringValue={(item) => choiceKey(item)}
         isItemEqualToValue={(item, value) => choiceKey(item) === choiceKey(value)}
-        // The server already searched; every record it returned is offered.
-        filter={() => true}
+        // The server already searched: the list shows exactly the records it returned, as they
+        // arrive, without filtering them again.
+        filteredItems={items}
+        filter={null}
         name={fieldKey}
         required={required}
         disabled={inactive}
@@ -258,6 +260,10 @@ export function LinkInput(props: LinkInputProps): ReactElement {
           <ComboboxInput
             id={ids.control}
             placeholder={shownPlaceholder}
+            // While it waits for its parent the field says what to do first, in readable text.
+            {...(waiting
+              ? { className: "disabled:opacity-100 placeholder:text-muted-foreground" }
+              : {})}
             disabled={inactive}
             readOnly={readOnly}
             aria-labelledby={ids.label}
@@ -266,7 +272,7 @@ export function LinkInput(props: LinkInputProps): ReactElement {
             aria-invalid={error !== undefined}
           />
           <InputGroupAddon align="inline-end">
-            <ComboboxTrigger aria-label={"Show " + label + " records"} disabled={inactive} />
+            <ComboboxTrigger aria-label={"Show choices for " + label} disabled={inactive} />
             <ComboboxClear
               aria-label={"Clear " + label}
               disabled={inactive || pickedOption === null}
@@ -290,8 +296,8 @@ export function LinkInput(props: LinkInputProps): ReactElement {
               : failed
                 ? "Records could not be loaded. Try again."
                 : searchTerm.trim() === ""
-                  ? "No records you can see"
-                  : "No matching records"}
+                  ? `No ${labelInSentence(label)} to choose from yet`
+                  : `No ${labelInSentence(label)} matches your search`}
           </ComboboxEmpty>
           {next !== undefined ? (
             <Button

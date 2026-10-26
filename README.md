@@ -9,11 +9,10 @@ The project is under active development. The current priority is definition-led 
 | Document | Purpose |
 | --- | --- |
 | [Agent instructions](AGENTS.md) | Entry point for every provider |
-| [Roadmap](docs/build-plan/README.md) | Phase order and Phase 6 visible-application objective |
+| [Build plan](docs/build-plan/README.md) | Architecture and design documents |
 | [GitHub roadmap](https://github.com/orgs/Abzum-NZ/projects/2/views/3) | Current issues, dependencies and status |
 | [Platform specification](docs/specification/README.md) | Product functionality and architecture |
-| [Definition-led application delivery](docs/build-plan/engine-first-application-delivery.md) | Path to a usable application before the designer |
-| [Target architecture](docs/build-plan/target-architecture.md) | Current architecture and delivery order |
+| [Target architecture](docs/build-plan/target-architecture.md) | Binding architecture rules |
 | [Open decisions](docs/specification/appendices/decisions.md) | Unresolved product choices requiring the owner's input |
 
 ## Development workflow

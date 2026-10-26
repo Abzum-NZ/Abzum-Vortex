@@ -133,8 +133,8 @@ Relationship-total preparation, closure and application remain in
 [`20260914013000_transactional_relationship_totals.sql`](../../supabase/migrations/20260914013000_transactional_relationship_totals.sql#L11-L818),
 while the private Event append retains the human-context boundary in
 [`20260913060000_first_private_transactional_event_append.sql`](../../supabase/migrations/20260913060000_first_private_transactional_event_append.sql#L232-L262).
-Activity append is
-[`append_base_save_activity_internal`](../../supabase/migrations/20260913115000_base_protected_record_save.sql#L71-L179);
+Activity append is the one
+[`append_record_activity_internal`](../../supabase/schemas/vortex_record/append_record_activity_internal.sql);
 the private total catalogue, snapshot, closure and parent application are at
 [`20260914013000_transactional_relationship_totals.sql`](../../supabase/migrations/20260914013000_transactional_relationship_totals.sql#L11-L738);
 and the two organization-runtime-settings readers are
@@ -265,11 +265,11 @@ Lifecycle and ownership entry points:
 Receipt ledgers and helpers:
 
 - `vortex_record.command_receipts(command_id, organization_id, tenant_id, actor_id, command_kind, result, created_at)`, the one receipt table for record saves and ownership transfers, named actions, deletes and restores (command kinds `record_save`, `named_action`, `record_delete`, `record_restore`), keyed by the client-generated command id (identity and access administration commands, including capability reservations, share the table under their own command kinds) and replaying its stored result only for the organisation, tenant, actor and command kind that stored it (any other combination is an identity conflict), with the helpers `claim_command_receipt_internal`, `complete_command_receipt_internal`, `release_command_receipt_internal`, `lock_command_receipt_internal` and `command_receipt_exists_internal`.
-- `append_base_save_activity_internal`, `append_named_action_activity_internal`, `append_record_lifecycle_activity_internal`, `append_ownership_transfer_activity_internal`.
+- `append_record_activity_internal`, the one activity appender for saves, named actions, lifecycle changes and ownership transfers.
 
 The engine keeps and builds on the private primitives `create_record_internal`,
 `change_record`, `change_record_relationship_internal`,
-`write_relationship_value_internal`, `soft_delete_record_recursive_internal` and `restore_record_internal`.
+`write_relationship_value_internal` and `soft_delete_record_recursive_internal`.
 `vortex_record.record_lifecycle_command_effects`, the identity-only journal of
 what a delete or restore traversal changed, is the only trusted source of a
 command's deleted set; it moves under the one receipt rather than being

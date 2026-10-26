@@ -2,18 +2,15 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
-import {
-  describeFailure,
-  correlationIdSchema,
-  identityIdSchema,
-  isLoopbackHostname,
-  platformIdSchema,
-} from "../schema";
+import { correlationIdSchema } from "../catalogue/common";
+import { identityIdSchema, platformIdSchema } from "../catalogue/identifiers";
+import { describeFailure } from "../catalogue/runtime-primitives";
+import { isLoopbackHostname } from "./loopback-hostname";
 import {
   withRuntimeTransaction,
   type DatabaseRow,
   type RequestDatabaseTransaction,
-} from "../db/index";
+} from "../db/request-transaction";
 
 /**
  * The fixed server-only Identity Authority disable/revoke adapter.

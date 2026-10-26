@@ -1,16 +1,16 @@
 import "server-only";
 
 import { z } from "zod";
-import { createBuilderAuthority } from "../access/index";
+import { createBuilderAuthority } from "../access/builder-authority";
+import type { IdentitySession } from "../access/identity-access";
 import {
   applicationRootIdSchema,
-  canonicalJson,
-  moduleInstallationBindingEvidenceSchema,
   organizationIdSchema,
   revisionSchema,
-  sameId,
-  type IdentitySession,
-} from "../schema";
+} from "../catalogue/identifiers";
+import { sameId } from "../catalogue/runtime-primitives";
+import { moduleInstallationBindingEvidenceSchema } from "../files/storage";
+import { canonicalJson } from "./canonical-json";
 import {
   installationProblem,
   installationTargetFacts,

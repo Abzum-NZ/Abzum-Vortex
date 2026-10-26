@@ -137,6 +137,6 @@ alter function vortex_record.read_derived_field_backfill(uuid,uuid) owner to vor
 revoke all on function vortex_record.read_derived_field_backfill(uuid, uuid)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 grant execute on function vortex_record.read_derived_field_backfill(uuid, uuid)
-  to vortex_runtime;
+  to vortex_request;
 comment on function vortex_record.read_derived_field_backfill(uuid, uuid) is
   'Server-only derived-field backfill read: one locked page of a record type''s existing records in the request''s live or preview installation, with every value and each total''s related records, for the platform to work out the totals and stored calculations it has just provisioned.';

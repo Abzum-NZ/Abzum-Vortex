@@ -1,4 +1,4 @@
-import type { DefinitionProvenanceEntry } from "../../schema";
+import type { DefinitionProvenanceEntry } from "../definition-provenance";
 import { sameCanonicalValue } from "../canonical-json-definition";
 import { explicitSourceTargets } from "./explicit-source-targets";
 import { moduleReferencePaths } from "../module-dependencies";

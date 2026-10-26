@@ -4,11 +4,11 @@ import { z } from "zod";
 import {
   fieldIdSchema,
   organizationAccountIdSchema,
-  publishedModuleQueryDescriptorSchema,
   recordIdSchema,
   recordTypeIdSchema,
-  recordTypeReferenceSchema,
-} from "../schema";
+} from "../catalogue/identifiers";
+import { publishedModuleQueryDescriptorSchema } from "../definition/definition-consumer-read";
+import { recordTypeReferenceSchema } from "../definition/definitions";
 
 const choiceSearchSchema = z.string().trim().min(1).max(100);
 const choicePageSizeSchema = z.number().int().min(1).max(100).default(50);

@@ -2,15 +2,14 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 import { z } from "zod";
-import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
+import type { ApplicationRootId, OrganizationId } from "../catalogue/identifiers";
+import { sameId } from "../catalogue/runtime-primitives";
+import { canonicalJson } from "./canonical-json";
 import {
-  canonicalJson,
-  sameId,
   systemApplicationBoundReleaseSetResultSchema,
-  type ApplicationRootId,
-  type OrganizationId,
   type SystemApplicationBoundReleaseSetResult,
-} from "../schema";
+} from "./definition-consumer-read";
 import { DefinitionError, classifyDatabaseError } from "./definition-error";
 import { createDatabaseFirstInstallApplicationReleaseSetService } from "./application-bound-release-set";
 import {

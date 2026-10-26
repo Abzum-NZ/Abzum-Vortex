@@ -1,16 +1,8 @@
 # Target architecture
 
-**Status:** approved by the owner on 12 October 2026. It is authoritative for the reset epic [#2209](https://github.com/Abzum-NZ/Abzum-Vortex/issues/2209) and for all later work. Where an older document conflicts with this one, this one wins.
+**Status:** approved by the owner on 12 October 2026 and binding for all work. Where another document conflicts with this one, this one wins.
 
-**Why this exists:** the 12 October audit found several problems:
-
-- 270k lines of TypeScript spread across 23 packages.
-- A contracts package that duplicates the runtime.
-- About 146 V2/V3 copies and about 372 dead exports.
-- 363 migrations containing more than 15 parallel record writers and 5 receipt tables.
-- Errors swallowed into opaque codes.
-
-Because of these, `main` could not run, even though dozens of "verified" merges had landed. This document defines the shape the code must converge to and the rules that keep it there. Every R2/R3 issue implements a section of it, and every review checks against it.
+This document defines the shape the code keeps and the rules that keep it there. Every review checks against it.
 
 ## 1. Product rules
 
@@ -32,8 +24,6 @@ Because of these, `main` could not run, even though dozens of "verified" merges 
    - A parse failure of data the platform itself produced (request context, stored definitions, query rows) is a defect. Log it with its cause and surface it in development.
    - Never turn it into "unavailable" or `null`.
    - A refusal shown to a user is fine, but the server log must hold the real cause, such as the database error code and message.
-
-   Two of the three blocking defects found on 12 October were hidden by this pattern.
 8. **No process artefacts in product code.** Receipts, fingerprints, continuity evidence and proofs that exist only to satisfy a review process are not allowed. Idempotency, revisions and a release content hash are product features; keep each in exactly one place.
 
 ## 2. Repository layout
@@ -90,7 +80,7 @@ flowchart LR
 
 **Shell.** The application shell (sidebar, top bar, breadcrumbs, account menu) is the Puck root component, configured by the application definition.
 
-**Theme.** One stylesheet plus per-application CSS variables, with fonts loaded through `next/font`. The seven pre-built style sheets and the font emit chain are removed (#2227).
+**Theme.** One stylesheet plus per-application CSS variables, with fonts loaded through `next/font`.
 
 **Runtime data.** Queries, form state, actions and flow continuations reach blocks through Puck `metadata`, never through module globals.
 
@@ -111,7 +101,7 @@ flowchart LR
 - `vortex_owner` owns the tables, sequences, types and functions in the five `vortex_*` schemas, except the record objects deliberately owned by `vortex_record_adapter` or `vortex_record_inventory` and four integration functions. `vortex_identity.complete_identity_disablement` deletes GoTrue-managed `auth.sessions` rows; `vortex_platform.may_receive_topic` calls `auth.uid()`; `vortex_platform.request_event_dispatch_wakeup` calls `net.http_post`; `vortex_platform.publish_change_notice` calls `realtime.send`, which inserts into the `supabase_realtime_admin`-owned `realtime.messages` that `postgres` may use but cannot grant onward. These retain `postgres` ownership so the integration privileges stay within their existing boundaries. Where `postgres` can grant the integration privilege, the function moves to `vortex_owner` with only that privilege: the Event append holds just the PGmq schema and its one occurrence queue.
 - `vortex_owner` is NOLOGIN and has `BYPASSRLS`. Security-definer functions owned by it retain the access that their former `postgres` ownership provided on FORCE RLS tables. The restricted record roles do not have `BYPASSRLS`; their organisation-scoped policies continue to apply.
 - `vortex_runtime` is the application login and may only execute the API functions.
-- `vortex_request` is the role every request transaction runs as; the API functions are granted to it, never the owner-only `*_internal` helpers.
+- `vortex_request` is the role every request transaction runs as; the API functions, record writes included, are granted to it, never the owner-only `*_internal` helpers. Request code never switches back to `vortex_runtime`, with one explicit exception: tenant governance runs its one identity operation under `vortex_runtime` inside a savepoint that admits exactly one call and restores `vortex_request` before it settles (`identity/tenant-governance-request-bound.ts`).
 - `vortex_record_adapter` is the role the record-data RLS policies are written for.
 - `vortex_record_inventory` is the second restricted role: the account-deletion inventory reads record data through organisation-scoped policies.
 
@@ -139,8 +129,6 @@ on schema vortex_identity from supabase_auth_admin`. The statements are listed i
 The operational `postgres` role retains explicit privileges on the transferred objects for the local seed and controlled migrations; ownership remains with `vortex_owner`. The restricted record roles and their organisation-scoped grants and policies remain separate.
 
 
-Per-schema owner roles are removed. The provisioning defect of 12 October came from grants missing across them.
-
 ### API surface
 
 Tables are private. The application calls `security definer` functions with `set search_path = ''`. Tenant and organisation isolation comes from the validated request context inside every function, and RLS applies on `record_data.*`.
@@ -150,9 +138,15 @@ Tables are private. The application calls `security definer` functions with `set
 - **Every record write goes through `record.apply_record_changes`.** That covers create, update, relationships, named actions, lifecycle, restore, settings records and offboarding transfers.
 - **Within that path, three steps each happen once:**
   - save rules run inside its transaction;
-  - it appends activity through one `append_activity(kind, payload)`;
+  - it appends activity through one composer, `append_record_activity_internal`, over the one
+    insert `append_organization_activity_entry`;
   - it publishes one change notice at its end.
-- **Parallel writers are deleted,** and so are the `exact_*_notice` variants.
+- **There are no parallel writers.** Account offboarding transfers, including those of a retained
+  row or a detached installation's record, are `apply_record_changes` operations.
+- **One maintenance write.** `apply_derived_field_backfill` stores the totals and stored
+  calculations the platform works out for existing records when a definition adds a derived
+  field. It is not a change anyone made: it writes only those derived columns under the record's
+  revision check, moves the revision so an open form refreshes, and records no Activity or Event.
 
 ### Other database rules
 
@@ -161,8 +155,8 @@ Tables are private. The application calls `security definer` functions with `set
   - The platform owner and the permission catalogue are rows, read by functions.
   - Functions contain no hard-coded UUIDs except the nil sentinel.
   - There are no versioned catalogue copies (`_v1_2_0`).
-- **Migrations.** One baseline (#2236) followed by ordinary forward migrations. `supabase/schemas/<schema>/<function>.sql` remains the editable source of each function, and a migration that changes a function contains the identical full definition.
-- **Deferred stacks.** A table or function stack with no shipped feature using it today is removed (#2240). Examples: capability metering, share consent, storage conversion, preview mirror, runtime bundles in the database, legal holds. The feature issue that needs it re-adds the simplest design that meets the specification, built to these rules.
+- **Migrations.** One baseline followed by ordinary forward migrations. `supabase/schemas/<schema>/<function>.sql` remains the editable source of each function, and a migration that changes a function contains the identical full definition.
+- **No deferred stacks.** A table or function stack exists only while a shipped feature uses it; the feature that needs one adds the simplest design that meets the specification, built to these rules. Installation runtime bundles (the compiled sections an active installation serves) and the preview copy of live records (Studio preview with real data) are such features.
 
 ## 5. Errors and logging
 
@@ -174,20 +168,11 @@ Tables are private. The application calls `security definer` functions with `set
 
 ## 6. Guardrails that keep it this way
 
-Static checks run in CI on every pull request and locally with `pnpm guard`. They are lint-style rules, not tests. Any blocking finding fails the build; an intentional exception carries a reviewed `guard-allow` comment. `tooling/guard/config.ts` is the current list of rules.
-
-| Check | Fails when |
-|---|---|
-| Business names | `packages/platform`, `packages/ui` or `apps/web` (outside development setup) contain a shipped application key or name |
-| Versioned contracts | A new exported identifier ends in `V2`/`V3`/… or a file name ends in `-v2`/`-v3` |
-| File size (warning) | A source or canonical SQL file exceeds 1,500 lines |
-| Layering | An import breaks the dependency direction in section 2 |
-| Migrations | A `supabase/schemas` function and the latest migration that defines it differ, a forward migration leaves a function without a canonical file, two migrations share a version, an SQL name exceeds 63 bytes, forward-migration DDL runs without an owner role, or a function body hard-codes a non-nil UUID |
-| Definitions | A shipped Module or Application fails the offline compile and validation that publication runs |
+Static checks run in CI on every pull request and locally with `pnpm guard`. They are lint-style rules, not tests. Any blocking finding fails the build; an intentional exception carries a reviewed `guard-allow` comment. `tooling/guard/config.ts` is the list of rules and their tiers; AGENTS.md summarises them.
 
 ### Running app as the gate
 
-Every pull request that changes behaviour states which pages were exercised on a freshly reset local database (sign-in, then the affected application pages). Reviewers re-run that walkthrough before merging, and a pull request that changes what users see includes screenshots.
+Every pull request that changes behaviour states which pages were exercised on a local database lane (sign-in, then the affected application pages). Reviewers re-run that walkthrough before merging, and a pull request that changes what users see includes screenshots.
 
 ### Review checklist (pull request template)
 
@@ -196,11 +181,3 @@ Every pull request that changes behaviour states which pages were exercised on a
 - [ ] No business names, no absent-setting behaviour, no hard-coded shell or theme.
 - [ ] Errors keep their cause in the log.
 - [ ] `pnpm guard`, `pnpm typecheck` and the local walkthrough pass.
-
-## 7. Delivery order
-
-1. Guardrails (#2209 child "Guardrail checks"), so new code is held to these rules from the first R2 PR.
-2. U3 #2224: Puck Render cut-over, deleting the old renderers. Then U4 #2225: shell as definition.
-3. R2.1 #2230, then R2.2 #2231, then R2.3 #2232, then R2.4 #2233, then R2.5 #2234, then R2.6 #2235: consolidation, done one PR at a time on a quiet `main`.
-4. R3.1 #2236, then R3.2 #2237, then R3.3 #2238, R3.4 #2239, R3.5 #2240 and R3.6 #2241: database.
-5. Feature phases resume on the simplified base.

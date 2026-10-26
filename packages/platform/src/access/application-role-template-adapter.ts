@@ -2,24 +2,29 @@ import "server-only";
 
 import {
   applicationRootIdSchema,
+  revisionSchema,
+  type ApplicationRootId,
+} from "../catalogue/identifiers";
+import type { ApplicationRole } from "../definition/application-contracts";
+import {
+  systemApplicationBoundReleaseSetResultSchema,
+  type DefinitionConsumerReadResult,
+} from "../definition/definition-consumer-read";
+import { sessionContextSchema, type SessionContext } from "./identity-access";
+import {
   preparedApplicationRoleTemplatesSchema,
   projectLiveApplicationRolePermissions,
-  revisionSchema,
-  sessionContextSchema,
-  systemApplicationBoundReleaseSetResultSchema,
-  type ApplicationPermissionCatalogueSnapshot,
-  type ApplicationRole,
   type ApplicationRoleTemplatePreparationBasis,
-  type ApplicationRootId,
-  type DefinitionConsumerReadResult,
-  type PermissionCatalogueEntry,
-  type PermissionRegistryEntryCandidate,
-  type PreparedApplicationPermissionRegistration,
   type PreparedApplicationRoleTemplate,
   type PreparedApplicationRoleTemplates,
-  type SessionContext,
-} from "../schema";
-import { canonicalJson } from "../definition/definition-index";
+} from "./organization-access-catalogue";
+import type {
+  ApplicationPermissionCatalogueSnapshot,
+  PermissionCatalogueEntry,
+  PermissionRegistryEntryCandidate,
+  PreparedApplicationPermissionRegistration,
+} from "./permission-registry";
+import { canonicalJson } from "../definition/canonical-json";
 import {
   PermissionRegistryPreparationError,
   prepareApplicationPermissionRegistrationForHumanRequest,

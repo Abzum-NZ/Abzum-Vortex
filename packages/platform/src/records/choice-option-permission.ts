@@ -1,7 +1,7 @@
 import "server-only";
 
-import { recordIdSchema, recordTypeIdSchema, permissionIdSchema } from "../schema";
-import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
+import { recordIdSchema, recordTypeIdSchema, permissionIdSchema } from "../catalogue/identifiers";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
 
 type DecisionRow = DatabaseRow & { readonly allowed: unknown };
 

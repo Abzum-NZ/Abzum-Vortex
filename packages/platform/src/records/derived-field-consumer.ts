@@ -1,8 +1,8 @@
 import "server-only";
 
 import { z } from "zod";
-import { installationActivatedOccurrenceSchema } from "../schema";
-import type { DatabaseRow } from "../db/index";
+import { installationActivatedOccurrenceSchema } from "../events/occurrence-contracts";
+import type { DatabaseRow } from "../db/request-transaction";
 import type { EventConsumerAdapter } from "../events/dispatcher";
 import { inEventConsumerScope } from "../events/system-scope";
 import { backfillDerivedFieldPage } from "./derived-field-backfill";
@@ -37,7 +37,6 @@ export const createDerivedFieldBackfillConsumer = (): EventConsumerAdapter => ({
         occurrence.organizationId,
         occurrence.applicationRootId,
         async (transaction) => {
-          await transaction.query`set local role vortex_runtime`;
           const rows = await transaction.query<DatabaseRow>`
           select vortex_platform.installation_backfill_progress(
             ${occurrence.occurrenceId}::uuid, ${delivery.claimCursor}::uuid, null::jsonb
