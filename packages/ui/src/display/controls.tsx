@@ -138,23 +138,33 @@ export function SelectionControl({
   }
   if (mode === "single")
     return (
-      <input
-        type="radio"
-        className="vortex-selection-radio"
-        name={groupName}
+      <label
+        className="inline-flex min-h-6 min-w-6 items-center justify-center p-1 [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <input
+          type="radio"
+          className="vortex-selection-radio"
+          name={groupName}
+          aria-label={`Select ${name}`}
+          checked={selected}
+          onClick={(event) => event.stopPropagation()}
+          onChange={() => onSelection(selectionChanged(row, true)!)}
+        />
+      </label>
+    );
+  return (
+    <label
+      className="inline-flex min-h-6 min-w-6 items-center justify-center p-1 [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11"
+      onClick={(event) => event.stopPropagation()}
+    >
+      <Checkbox
         aria-label={`Select ${name}`}
         checked={selected}
         onClick={(event) => event.stopPropagation()}
-        onChange={() => onSelection(selectionChanged(row, true)!)}
+        onCheckedChange={(checked) => onSelection(selectionChanged(row, checked)!)}
       />
-    );
-  return (
-    <Checkbox
-      aria-label={`Select ${name}`}
-      checked={selected}
-      onClick={(event) => event.stopPropagation()}
-      onCheckedChange={(checked) => onSelection(selectionChanged(row, checked)!)}
-    />
+    </label>
   );
 }
 
@@ -180,26 +190,28 @@ export function SelectAllControl({
   if (onSelection === undefined) return null;
   const onScope = events?.selection_scope_changed;
   return (
-    <Checkbox
-      aria-label={
-        allSelected
-          ? `Clear selection for ${accessibleName}`
-          : `Select all on this page of ${accessibleName}`
-      }
-      checked={allSelected}
-      indeterminate={someSelected}
-      disabled={rows.length === 0}
-      onCheckedChange={() => {
-        if (allSelected && onScope !== undefined) {
-          onScope({ event: "selection_scope_changed", scope: "cleared" });
-          return;
+    <label className="inline-flex min-h-6 min-w-6 items-center justify-center p-1 [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11">
+      <Checkbox
+        aria-label={
+          allSelected
+            ? `Clear selection for ${accessibleName}`
+            : `Select all on this page of ${accessibleName}`
         }
-        for (const row of rows) {
-          const event = selectionChanged(row, !allSelected);
-          if (event !== undefined) onSelection(event);
-        }
-      }}
-    />
+        checked={allSelected}
+        indeterminate={someSelected}
+        disabled={rows.length === 0}
+        onCheckedChange={() => {
+          if (allSelected && onScope !== undefined) {
+            onScope({ event: "selection_scope_changed", scope: "cleared" });
+            return;
+          }
+          for (const row of rows) {
+            const event = selectionChanged(row, !allSelected);
+            if (event !== undefined) onSelection(event);
+          }
+        }}
+      />
+    </label>
   );
 }
 
@@ -235,6 +247,7 @@ export function RowActionControl({
       variant="outline"
       size="sm"
       aria-label={`${text} ${name}`}
+      className="min-h-6 min-w-6 [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11"
       disabled={gesture.pending}
       aria-busy={gesture.pending}
       onClick={(clickEvent) => {
