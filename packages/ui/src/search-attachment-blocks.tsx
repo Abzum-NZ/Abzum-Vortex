@@ -12,7 +12,7 @@ import { DisplayStateContainer } from "./display/display-state-container";
 import { DisplayHeader } from "./display/controls";
 import { resolveDisplayContext, type DisplayRenderProps } from "./display/context";
 import { formatLocaleNumber } from "./display/date-format";
-import { parseDisplayData, parseDisplayEventHandlers } from "./display/projected-data";
+import { parseDisplayEventHandlers, readDisplayData } from "./display/projected-data";
 import { createPayloadParser, type PlatformComponentRegistration } from "./registry";
 
 const ATTACHMENT_LIST_RELEASE = PLATFORM_BLOCK_RELEASE_IDENTITIES.ATTACHMENT_LIST_BLOCK_RELEASE;
@@ -44,7 +44,7 @@ function parseAttachmentListPayload(
 }
 
 const ATTACHMENT_PAYLOAD_PARSER = createPayloadParser({
-  data: (value, location) => parseDisplayData(value, parseAttachmentListPayload, location),
+  data: (value, location) => readDisplayData(value, location, parseAttachmentListPayload),
   events: (value, location) => {
     const parsed = parseDisplayEventHandlers(value, location);
     if (Object.keys(parsed).some((event) => event !== "refresh")) return refuse(location);

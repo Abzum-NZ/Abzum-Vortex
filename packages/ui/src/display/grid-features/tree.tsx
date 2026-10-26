@@ -4,11 +4,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   RECORDS_TABLE_TREE_MAXIMUM_PAGE_SIZE,
   recordsTableTreeFeature,
-  tableLevelResultSchema,
+  type TableLevelReply,
 } from "@vortex/platform/schema";
 import { cellValueToText } from "../cell";
 import { fail } from "../payload-parse";
-import { parseProjectedPart, type DisplayRow } from "../projected-data";
+import { REPLY_ENVELOPES, readProjectedResult, type DisplayRow } from "../projected-data";
 import type { SubRowEntry, SubRowsBeneath } from "../sub-rows";
 import type { GridFeatureModule, GridFeatureSubRowsProps } from "./registry";
 
@@ -39,9 +39,9 @@ const location = { propertyPath: [recordsTableTreeFeature.property] };
  */
 const parseOutcome = (value: unknown): Outcome | undefined => {
   if (value === undefined) return undefined;
-  const result = parseProjectedPart(
-    tableLevelResultSchema,
+  const result = readProjectedResult<TableLevelReply>(
     value,
+    REPLY_ENVELOPES.tableLevel,
     "A tree level is invalid",
     location,
   );

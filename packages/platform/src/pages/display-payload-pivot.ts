@@ -2,10 +2,10 @@ import { z } from "zod";
 import { displayScalarCellSchema, displayTextSchema } from "./display-payload-parts";
 
 /*
- * One page of a Records table's pivot. The server types the page it reads with these schemas and
- * the pivot panel parses the reply with the same ones. A refusal carries a business sentence and
- * nothing else; an error carries nothing, so the panel cannot show values the read did not
- * authorise. The cause stays in the log.
+ * One page of a Records table's pivot. The server validates the final reply with these schemas;
+ * the pivot panel checks its closed envelope and renders the validated values. A refusal carries
+ * a business sentence and nothing else; an error carries nothing, so the panel cannot show values
+ * the read did not authorise. The cause stays in the log.
  */
 
 const wholeCountSchema = z.number().int().nonnegative();
@@ -95,6 +95,8 @@ export const pivotResultSchema = z.discriminatedUnion("status", [
     .readonly(),
 ]);
 export type PivotResult = z.input<typeof pivotResultSchema>;
+/** A pivot read as the page receives it. */
+export type PivotReply = z.output<typeof pivotResultSchema>;
 export type PivotPage = Omit<
   Extract<z.output<typeof pivotResultSchema>, { status: "ready" }>,
   "status"

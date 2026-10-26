@@ -1,6 +1,6 @@
 import { useMemo, useRef, type Dispatch, type SetStateAction, type RefObject } from "react";
 import type { useRouter } from "next/navigation";
-import type { createFormBlockRuntime, parseTablePayload, useUnsavedWorkGuard } from "@vortex/ui";
+import type { createFormBlockRuntime, DisplayTablePayload, useUnsavedWorkGuard } from "@vortex/ui";
 import {
   equalFormValue,
   type ControlSemanticEvent,
@@ -146,7 +146,7 @@ export function useRuntimeInputs({
   continueTablePage: (
     placementId: string,
     event: DisplaySemanticEvent,
-    table: ReturnType<typeof parseTablePayload>,
+    table: DisplayTablePayload,
   ) => Promise<void>;
   refreshPlacements: (
     placementIds: readonly string[],

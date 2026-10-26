@@ -38,8 +38,6 @@ import { pageCompiledSlotsFor } from "./studio-application-draft";
 import { collectPlacements, pageSubjectParameter } from "./application-page/placement-helpers";
 import { findModuleQuery, pageQueryBindingContext } from "@vortex/platform/server";
 import { applicationLauncherQueryRowsToListValues } from "@vortex/ui/launcher/bindings";
-import { parseBoardPayload } from "@vortex/ui/display/board-payload";
-import { parseDisplayData } from "@vortex/ui/display/projected-data";
 import {
   isStreamablePlacement,
   readPlacement,
@@ -391,7 +389,6 @@ export const readStudioCanvasRecords = async (
         readSubject,
         records: services.subjects,
         launcherValues: applicationLauncherQueryRowsToListValues,
-        boardData: (values) => parseDisplayData({ status: "ready", values }, parseBoardPayload),
       },
       permittedApplicationKeys: undefined,
       permittedApplicationsUnavailable: false,

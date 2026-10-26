@@ -1,6 +1,12 @@
 import "server-only";
 
-import type { PivotAxisValue, PivotCell, PivotResult, PivotRow } from "../display-payload-pivot";
+import {
+  pivotResultSchema,
+  type PivotAxisValue,
+  type PivotCell,
+  type PivotResult,
+  type PivotRow,
+} from "../display-payload-pivot";
 
 import type { IdentitySession, OrganizationSelectionCandidate } from "../../access/identity-access";
 import type { JsonValue } from "../../catalogue/common";
@@ -200,6 +206,15 @@ const measureNames: Readonly<Record<string, string>> = {
  * records is refused by the engine, and the refusal here carries a business sentence, not a value.
  */
 export const readRecordsTablePivot = async (request: PivotRequest): Promise<PivotResult> => {
+  // The reply is checked against its contract once, here, so the page renders it as it is.
+  const reply = await projectPivot(request);
+  const checked = pivotResultSchema.safeParse(reply);
+  if (checked.success) return checked.data;
+  const issue = checked.error.issues[0];
+  return fail(`reply_invalid ${(issue?.path ?? []).map(String).join(".")}: ${issue?.message}`);
+};
+
+const projectPivot = async (request: PivotRequest): Promise<PivotResult> => {
   const { context, placement } = request;
   const settings = placementSettingsOf(placement);
   const contract = recordsTableContractOrLog(settings, recordsTablePivotFeature.key);
