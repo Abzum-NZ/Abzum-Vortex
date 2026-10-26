@@ -28,8 +28,6 @@ import {
 import {
   applicationKestraBaseUrlEnvironmentKey,
   applicationKestraCallbackKeySecretName,
-  createDatabaseProtectedNodeRunStore,
-  createDatabaseProtectedNodeEffectLedger,
   createProtectedNodeExecution,
   resolveApplicationKestraInstanceTarget,
   type ProtectedNodeRunRecord,
@@ -170,15 +168,12 @@ const createCallbackService = () => {
     },
     durableActorRequest: createDurableActorRequestService({ identityAuthorityId }),
   });
-  const runs = createDatabaseProtectedNodeRunStore();
   const execution = createProtectedNodeExecution({
     callbackKey: () => {
       const secret = optionalEnvironmentValue(applicationKestraCallbackKeySecretName);
       return secret === undefined ? undefined : Buffer.from(secret, "utf8");
     },
     correlationId: randomUUID,
-    runs,
-    effects: createDatabaseProtectedNodeEffectLedger(),
     operations: executor,
     readKestraState: kestraExecutionState,
   });

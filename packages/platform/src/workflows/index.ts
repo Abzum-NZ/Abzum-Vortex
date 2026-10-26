@@ -102,13 +102,11 @@ export {
   type ProtectedNodeCallbackResponse,
   type ProtectedNodeEffectClaim,
   type ProtectedNodeEffectKey,
-  type ProtectedNodeEffectLedger,
   type ProtectedNodeExecutionDependencies,
   type ProtectedNodeOperationExecutor,
   type ProtectedNodeOperationIdentity,
   type ProtectedNodeRunRecord,
   type ProtectedNodeRunStatus,
-  type ProtectedNodeRunStore,
 } from "./protected-node-execution";
 
-export { createDatabaseProtectedNodeRunStore, createDatabaseProtectedNodeEffectLedger } from "./protected-node-store";
+export { writeProtectedNodeRun } from "./protected-node-store";
