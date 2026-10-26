@@ -5383,6 +5383,88 @@
                     ]
                   },
                   {
+                    "id": "prepare_person",
+                    "type": "operation.call",
+                    "version": "1.0.0",
+                    "properties": {
+                      "operation": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "platform.prepare_role_assignment"
+                        }
+                      },
+                      "inputs": {
+                        "kind": "map",
+                        "entries": {
+                          "role_id": {
+                            "kind": "reference",
+                            "reference": {
+                              "source": "input",
+                              "name": "role_id"
+                            }
+                          },
+                          "expected_role_revision": {
+                            "kind": "reference",
+                            "reference": {
+                              "source": "input",
+                              "name": "expected_role_revision"
+                            }
+                          },
+                          "assignee_kind": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "choice",
+                              "value": "organization_account"
+                            }
+                          },
+                          "organization_account_id": {
+                            "kind": "formula",
+                            "formula": {
+                              "op": "record_id",
+                              "arg": {
+                                "op": "reference",
+                                "reference": {
+                                  "source": "task_output",
+                                  "task": "person_form",
+                                  "key": "values",
+                                  "path": ["organization_account_id"]
+                                }
+                              }
+                            }
+                          },
+                          "assignment_kind": {
+                            "kind": "reference",
+                            "reference": {
+                              "source": "task_output",
+                              "task": "person_form",
+                              "key": "values",
+                              "path": ["assignment_kind"]
+                            }
+                          },
+                          "starts_at": {
+                            "kind": "reference",
+                            "reference": {
+                              "source": "task_output",
+                              "task": "person_form",
+                              "key": "values",
+                              "path": ["starts_at"]
+                            }
+                          },
+                          "expires_at": {
+                            "kind": "reference",
+                            "reference": {
+                              "source": "task_output",
+                              "task": "person_form",
+                              "key": "values",
+                              "path": ["expires_at"]
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  {
                     "id": "confirm_person",
                     "type": "interface.confirm",
                     "version": "1.0.0",
@@ -5395,10 +5477,44 @@
                         }
                       },
                       "message": {
-                        "kind": "literal",
-                        "literal": {
-                          "type": "text",
-                          "value": "Assign the selected person this role with the selected assignment kind and start and expiry times?"
+                        "kind": "formula",
+                        "formula": {
+                          "op": "join",
+                          "parts": [
+                            {
+                              "op": "literal",
+                              "type": "text",
+                              "value": "Assign "
+                            },
+                            {
+                              "op": "reference",
+                              "reference": {
+                                "source": "task_output",
+                                "task": "prepare_person",
+                                "key": "result",
+                                "path": ["assignee_name"]
+                              }
+                            },
+                            {
+                              "op": "literal",
+                              "type": "text",
+                              "value": " the "
+                            },
+                            {
+                              "op": "reference",
+                              "reference": {
+                                "source": "task_output",
+                                "task": "prepare_person",
+                                "key": "result",
+                                "path": ["role_name"]
+                              }
+                            },
+                            {
+                              "op": "literal",
+                              "type": "text",
+                              "value": " role with the selected assignment kind and start and expiry times?"
+                            }
+                          ]
                         }
                       }
                     }
@@ -5687,6 +5803,88 @@
                     ]
                   },
                   {
+                    "id": "prepare_group",
+                    "type": "operation.call",
+                    "version": "1.0.0",
+                    "properties": {
+                      "operation": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "platform.prepare_role_assignment"
+                        }
+                      },
+                      "inputs": {
+                        "kind": "map",
+                        "entries": {
+                          "role_id": {
+                            "kind": "reference",
+                            "reference": {
+                              "source": "input",
+                              "name": "role_id"
+                            }
+                          },
+                          "expected_role_revision": {
+                            "kind": "reference",
+                            "reference": {
+                              "source": "input",
+                              "name": "expected_role_revision"
+                            }
+                          },
+                          "assignee_kind": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "choice",
+                              "value": "group"
+                            }
+                          },
+                          "group_id": {
+                            "kind": "formula",
+                            "formula": {
+                              "op": "record_id",
+                              "arg": {
+                                "op": "reference",
+                                "reference": {
+                                  "source": "task_output",
+                                  "task": "group_form",
+                                  "key": "values",
+                                  "path": ["group_id"]
+                                }
+                              }
+                            }
+                          },
+                          "assignment_kind": {
+                            "kind": "reference",
+                            "reference": {
+                              "source": "task_output",
+                              "task": "group_form",
+                              "key": "values",
+                              "path": ["assignment_kind"]
+                            }
+                          },
+                          "starts_at": {
+                            "kind": "reference",
+                            "reference": {
+                              "source": "task_output",
+                              "task": "group_form",
+                              "key": "values",
+                              "path": ["starts_at"]
+                            }
+                          },
+                          "expires_at": {
+                            "kind": "reference",
+                            "reference": {
+                              "source": "task_output",
+                              "task": "group_form",
+                              "key": "values",
+                              "path": ["expires_at"]
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  {
                     "id": "confirm_group",
                     "type": "interface.confirm",
                     "version": "1.0.0",
@@ -5699,10 +5897,44 @@
                         }
                       },
                       "message": {
-                        "kind": "literal",
-                        "literal": {
-                          "type": "text",
-                          "value": "Assign the selected group this role with the selected assignment kind and start and expiry times?"
+                        "kind": "formula",
+                        "formula": {
+                          "op": "join",
+                          "parts": [
+                            {
+                              "op": "literal",
+                              "type": "text",
+                              "value": "Assign "
+                            },
+                            {
+                              "op": "reference",
+                              "reference": {
+                                "source": "task_output",
+                                "task": "prepare_group",
+                                "key": "result",
+                                "path": ["assignee_name"]
+                              }
+                            },
+                            {
+                              "op": "literal",
+                              "type": "text",
+                              "value": " the "
+                            },
+                            {
+                              "op": "reference",
+                              "reference": {
+                                "source": "task_output",
+                                "task": "prepare_group",
+                                "key": "result",
+                                "path": ["role_name"]
+                              }
+                            },
+                            {
+                              "op": "literal",
+                              "type": "text",
+                              "value": " role with the selected assignment kind and start and expiry times?"
+                            }
+                          ]
                         }
                       }
                     }
