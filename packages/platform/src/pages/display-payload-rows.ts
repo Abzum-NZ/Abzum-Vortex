@@ -61,6 +61,12 @@ export const displayRowSchema = z
     recordId: displayTextSchema,
     revision: revisionSchema.exactOptional(),
     capabilities: displayRowCapabilitiesSchema.exactOptional(),
+    /** The record type title projected under the viewer's current access. */
+    title: z
+      .object({ fieldId: displayFieldKeySchema, value: displayScalarCellSchema })
+      .strict()
+      .readonly()
+      .exactOptional(),
     /**
      * The stored value of each field the viewer may edit on this row (null when empty), as the
      * field's own contract spells it. An editor starts from this, never from a displayed cell.
