@@ -7,8 +7,9 @@ import { readMotionSeconds } from "./motion-tokens";
  * current page on screen) until that data has arrived or the page hold token has passed, whichever
  * comes first. A page that is still waiting after the hold swaps in with its loading skeleton.
  *
- * Only a page that mounts in the browser after the document has hydrated is held: the server render
- * and hydration never wait, so the first load streams exactly as before.
+ * Only a page that mounts in the browser after the document has hydrated is held. The first document
+ * never holds: it streams its frame first and its primary placement's rows after it, in the same
+ * response.
  */
 
 /** How a held page was released: its primary data arrived, or the hold ran out first. */
