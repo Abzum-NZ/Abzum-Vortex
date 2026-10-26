@@ -242,12 +242,3 @@ export const loadSetupState = (
   };
   return state;
 };
-
-/** Loads the most recently set up organisation for the standalone idempotent demo seeder. */
-export const loadCurrentSetupState = (): SetupState => {
-  const document = readSetupStateDocument();
-  if (document === undefined)
-    throw new Error("Development setup state is unavailable for the demo seeder.");
-  const { organizationId } = requiredStateEnvelope(document);
-  return loadSetupState(organizationId);
-};

@@ -118,14 +118,9 @@ const main = async (): Promise<void> => {
     "--local-development",
     "--first-owner-identity-id",
     identityId,
-    "--seed-demo",
   ]);
   const site = new URL(process.env.VORTEX_SITE_URL!);
   log(`ready. Sign in with VORTEX_DEMO_OWNER_EMAIL at ${site.origin}/auth/sign-in.`);
-  log(`CRM company list: ${site.origin}/abzum/abzum/vortex.app.crm/crm_companies`);
-  log(
-    `Service Desk case list: ${site.origin}/abzum/abzum/vortex.app.service_desk/service_desk_cases`,
-  );
 };
 
 // A one-shot command: exit once the setup settles, so an idle client keep-alive socket can never

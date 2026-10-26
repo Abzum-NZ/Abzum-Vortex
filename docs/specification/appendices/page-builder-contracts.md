@@ -8,7 +8,7 @@ This specifies the single Application contract consolidated under [#249](https:/
 
 Adapt the useful authoring experience inspected in Fluid, not its prototype persistence or authority model. Fluid is the local reference at `C:/Apps/fluid`, with [its running editor](http://localhost:3001/builder/edit/projects). Its Puck canvas, outline, palette, inspector, shell/outlet editing and viewport previews are useful. Its filesystem JSON store, seed-on-read-error fallback, label-derived identities, client-only shell locks, unauthorised server actions, global refreshes and static demonstration rows are not Vortex implementations.
 
-The user approved a normal editable HR application as the example. There is no customer-uploaded executable module, HR engine, HR schema in core, or new independent publication kind.
+The user approved a normal editable HR application as the example; it is built in App Studio, not shipped with the platform. There is no customer-uploaded executable module, HR engine, HR schema in core, or new independent publication kind.
 
 ## Composition
 
@@ -202,7 +202,7 @@ Visible behaviour follows the local application walkthrough in [quality and acce
 
 ## HR example policy
 
-The HR application in [#251](https://github.com/Abzum-NZ/Abzum-Vortex/issues/251) is an ordinary editable example, not a platform rule.
+The HR application in [#251](https://github.com/Abzum-NZ/Abzum-Vortex/issues/251) is an ordinary editable example, not a platform rule and not a shipped application.
 
 | Area             | Approved example behavior                                                                                                                                                                  |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -218,7 +218,7 @@ The user approved the no-self-approval rule for this example; it is not a legal 
 
 The Employee record links to the People system record type through an ordinary link. Organisation-wide person details are organisation-added fields on that system record type, and a link to a person or a group is an ordinary link to the People or Group system record type, so the example builds no second people directory and needs no special person field type.
 
-Write the full HR JSON fixture set first, including the future workflow definition. Phase 7 delivers the editable HR application; Phase 9 adds its workflow through the generic workflow owners.
+Write the full HR JSON fixture set first, including the future workflow definition. The editable HR application is authored in App Studio; its workflow is added through the generic workflow owners.
 
 ### Approvals are workflows, not custom code
 
