@@ -1307,16 +1307,10 @@
                     "empty_message": "No roles yet",
                     "columns": [
                       {
-                        "field": "vortex.system_directory:role.key",
-                        "label": "Key",
-                        "visible": true,
-                        "pin": "start"
-                      },
-                      {
                         "field": "vortex.system_directory:role.label",
                         "label": "Label",
                         "visible": true,
-                        "pin": "unpinned"
+                        "pin": "start"
                       },
                       {
                         "field": "vortex.system_directory:role.lifecycle",
@@ -1349,9 +1343,15 @@
                         "pin": "unpinned"
                       },
                       {
+                        "field": "vortex.system_directory:role.key",
+                        "label": "Key",
+                        "visible": false,
+                        "pin": "unpinned"
+                      },
+                      {
                         "field": "vortex.system_directory:role.revision",
                         "label": "Role revision",
-                        "visible": true,
+                        "visible": false,
                         "pin": "unpinned"
                       }
                     ],
@@ -1423,21 +1423,21 @@
                     "empty_message": "No Groups yet",
                     "columns": [
                       {
-                        "field": "vortex.system_directory:group.key",
-                        "label": "Key",
-                        "visible": true,
-                        "pin": "start"
-                      },
-                      {
                         "field": "vortex.system_directory:group.label",
                         "label": "Label",
                         "visible": true,
-                        "pin": "unpinned"
+                        "pin": "start"
                       },
                       {
                         "field": "vortex.system_directory:group.state",
                         "label": "State",
                         "visible": true,
+                        "pin": "unpinned"
+                      },
+                      {
+                        "field": "vortex.system_directory:group.key",
+                        "label": "Key",
+                        "visible": false,
                         "pin": "unpinned"
                       }
                     ],
@@ -1521,12 +1521,6 @@
                         "pin": "start"
                       },
                       {
-                        "field": "vortex.system_directory:group_membership.group_id",
-                        "label": "Group",
-                        "visible": true,
-                        "pin": "unpinned"
-                      },
-                      {
                         "field": "vortex.system_directory:group_membership.starts_at",
                         "label": "Starts at",
                         "visible": true,
@@ -1542,6 +1536,12 @@
                         "field": "vortex.system_directory:group_membership.state",
                         "label": "State",
                         "visible": true,
+                        "pin": "unpinned"
+                      },
+                      {
+                        "field": "vortex.system_directory:group_membership.group_id",
+                        "label": "Group",
+                        "visible": false,
                         "pin": "unpinned"
                       }
                     ],
@@ -2298,31 +2298,31 @@
                       {
                         "field": "vortex.system_directory:role_assignment.role_id",
                         "label": "Role ID",
-                        "visible": true,
+                        "visible": false,
                         "pin": "unpinned"
                       },
                       {
                         "field": "vortex.system_directory:role_assignment.role_key",
                         "label": "Role key",
-                        "visible": true,
+                        "visible": false,
                         "pin": "unpinned"
                       },
                       {
                         "field": "vortex.system_directory:role_assignment.organization_account_id",
                         "label": "Organisation account ID",
-                        "visible": true,
+                        "visible": false,
                         "pin": "unpinned"
                       },
                       {
                         "field": "vortex.system_directory:role_assignment.group_id",
                         "label": "Group ID",
-                        "visible": true,
+                        "visible": false,
                         "pin": "unpinned"
                       },
                       {
                         "field": "vortex.system_directory:role_assignment.revision",
                         "label": "Assignment revision",
-                        "visible": true,
+                        "visible": false,
                         "pin": "unpinned"
                       }
                     ],
