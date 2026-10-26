@@ -650,7 +650,32 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
         pinning={features?.pinning === true}
         layout={layout}
         rows={rows}
-        totals={grouped === undefined ? values?.totals : undefined}
+        totals={values?.totals}
+        groups={
+          grouped === undefined
+            ? undefined
+            : {
+                count: grouped.groups.groups.length,
+                rowOffset: Math.max(
+                  0,
+                  grouped.groups.groups.findIndex((group) => group.key === grouped.expanded) + 1,
+                ),
+                render: (members, cells) => (
+                  <Suspense fallback={loading}>
+                    <GroupedBody
+                      placementId={placementId}
+                      accessibleName={accessibleName}
+                      grouped={grouped}
+                      loading={loading}
+                      members={() => members}
+                      columns={layout.shown}
+                      cells={cells}
+                      memberRows={lines.length}
+                    />
+                  </Suspense>
+                ),
+              }
+        }
         lines={lines}
         sort={values?.requestedSort ?? values?.sort}
         selection={selectable ? "multiple" : undefined}
@@ -750,18 +775,20 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
     // skeleton stands in until the one presentation that fits is known.
     if (presentation === undefined) return loading;
     if (grouped !== undefined)
-      return (
-        <Suspense fallback={loading}>
-          <GroupedBody
-            placementId={placementId}
-            accessibleName={accessibleName}
-            grouped={grouped}
-            loading={loading}
-            members={membersView}
-            columns={layout.shown}
-          />
-        </Suspense>
-      );
+      if (presentation === "grid") return membersView();
+      else
+        return (
+          <Suspense fallback={loading}>
+            <GroupedBody
+              placementId={placementId}
+              accessibleName={accessibleName}
+              grouped={grouped}
+              loading={loading}
+              members={membersView}
+              columns={layout.shown}
+            />
+          </Suspense>
+        );
     return values.groups?.status === "too_many" ? (
       <div className="flex flex-col gap-2">
         <Alert>
@@ -815,7 +842,7 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
           {ready &&
           !pivotOpen &&
           values?.totals !== undefined &&
-          (grouped !== undefined || presentation === "cards" || rows.length === 0) ? (
+          (presentation === "cards" || (grouped === undefined && rows.length === 0)) ? (
             <TableTotals
               totals={values.totals}
               columns={layout.shown}
