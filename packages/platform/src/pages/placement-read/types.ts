@@ -1,5 +1,6 @@
 import "server-only";
 
+import type { z } from "zod";
 import type {
   BoardColumnReadRequest,
   PageDefinition,
@@ -9,6 +10,7 @@ import type { readCurrentOrganizationRuntimeSettingsAfterAuthorization } from ".
 import type { InstalledRuntimeContext } from "../../definition/installed-runtime-context";
 import type { createProtectedQueryService } from "../../queries/protected-query-service";
 import type { RecordLinkResolver } from "../component-data-projection";
+import type { launcherRowsPayloadSchema } from "../display-payload-launcher";
 import type { createLinkTilesQueryResolver } from "../link-tiles-query";
 import type { createQueryNoticeQueryResolver } from "../notice-query-projection";
 import type { createRecordsTableQueryResolver } from "../records-table-query";
@@ -79,7 +81,7 @@ export type PlacementReadServices = Readonly<{
     permittedApplicationKeys: readonly string[],
     nameKey: string,
     iconKey: string,
-  ) => unknown;
+  ) => z.input<typeof launcherRowsPayloadSchema>;
   /** A board's ready state, checked against the board block's own payload contract. */
   boardData: (values: unknown) => PageDataState;
 }>;

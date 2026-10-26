@@ -33,6 +33,11 @@ import {
   displayScalarCellSchema,
   recordDetailPayloadSchema,
   type RecordDetailPayload,
+  displayRowCapabilitiesSchema,
+  displayRowsSchema,
+  launcherRowsPayloadSchema,
+  type DisplayRow,
+  type LauncherRowsPayload,
   type DisplayDataState,
   type DisplayDetailCell,
   type DisplayDetailField,
@@ -53,7 +58,6 @@ import {
   type GridLayoutState,
 } from "@vortex/platform/schema";
 import type { DefinitionRenderErrorLocation } from "../definition-error";
-import { parseRowFormat } from "./projected-format";
 import {
   parseTableGroups,
   parseTableNarrowing,
@@ -81,7 +85,9 @@ export {
   type DisplayRefusalReason,
 } from "@vortex/platform/schema";
 export type {
+  DisplayRow,
   DisplaySummaryMetric,
+  LauncherRowsPayload,
   RecordDetailPayload,
   RichTextPayload,
   SummaryPayload,
@@ -123,59 +129,18 @@ export type DisplayTableFieldValue = DisplayTableField;
 /** One display value that is not itself a table. */
 export type DisplayScalarCellValue = DisplayScalarCell;
 
-/** The record action kinds a row may report as available to the viewer. */
-const displayRowActionKinds = ["update", "delete", "restore"] as const;
-type DisplayRowActionKind = (typeof displayRowActionKinds)[number];
-
 /**
  * The per-row capabilities the Query engine decided for the viewer: the fields it may change on
  * this row and the record actions it may take. They only hide controls; the server re-checks
  * every change and action.
  */
-type DisplayRowCapabilities = Readonly<{
-  changeableFieldIds: readonly string[];
-  actions: readonly DisplayRowActionKind[];
-}>;
-
-/**
- * One permission-projected row addressed by its stable record identity. A Records table row also
- * carries the record revision an inline edit sends and its per-row capabilities; either is absent
- * when the payload does not carry it, and is never inferred.
- */
-export type DisplayRow = Readonly<{
-  recordId: string;
-  revision?: number;
-  capabilities?: DisplayRowCapabilities;
-  /**
-   * The stored value of each field the viewer may edit on this row (null when empty), as the
-   * field's own contract spells it. An editor starts from this, never from a displayed cell.
-   */
-  edit?: Readonly<Record<string, JsonValue>>;
-  cells: Readonly<Record<string, DisplayCellValue>>;
-  /** The style keys and measures the table's formatting gives the row, decided on the server. */
-  format?: RecordsTableRowFormat;
-  /**
-   * A tree row the viewer may read a matching child of, decided on the server; "unknown" when the
-   * server stopped before deciding, so the child level is read when the row is opened.
-   */
-  hasChildren?: true | "unknown";
-  /** The exact text of each readable number and money cell, for the range copy (see the server). */
-  exact?: Readonly<Record<string, string>>;
-}>;
+type DisplayRowCapabilities = NonNullable<DisplayRow["capabilities"]>;
 
 /** One declared table column; only declared columns are ever rendered. */
 export type DisplayColumn = Readonly<{ key: string; label: string }>;
 
 /** One labelled record-detail field. */
 export type DisplayField = DisplayDetailField;
-
-/** The ready rows a launcher or link-tile block renders. */
-export type LauncherRowsPayload = Readonly<{
-  kind: "launcher_rows";
-  rows: readonly DisplayRow[];
-  headingKey: string;
-  secondaryKey?: string;
-}>;
 
 /** The viewer's search and filters one table page was read with. */
 export type TableNarrowing = Readonly<{
@@ -387,155 +352,19 @@ const parseCellValue = (
 export const parseRowCapabilities = (
   value: unknown,
   location: DefinitionRenderErrorLocation,
-): DisplayRowCapabilities => {
-  const record = requireRecord(value, "Row capabilities must be an object", location);
-  requireExactKeys(record, ["changeableFieldIds", "actions"], location);
-  const changeable = requireArray(
-    record.changeableFieldIds,
-    "Row capabilities require a changeable field list",
+): DisplayRowCapabilities =>
+  parseProjectedPart(
+    displayRowCapabilitiesSchema,
+    value,
+    "Projected row capabilities are invalid",
     location,
-  ).map((fieldId) =>
-    requireFieldKey(fieldId, `Invalid changeable field '${String(fieldId)}'`, location),
   );
-  if (new Set(changeable.map((fieldId) => fieldId.toLowerCase())).size !== changeable.length)
-    fail("Each changeable field is reported once", location);
-  const actions = requireArray(
-    record.actions,
-    "Row capabilities require an action list",
-    location,
-  ).map(
-    (action) =>
-      displayRowActionKinds.find((kind) => kind === action) ??
-      fail(`Unknown row action '${String(action)}'`, location),
-  );
-  if (new Set(actions).size !== actions.length) fail("Each row action is reported once", location);
-  return Object.freeze({
-    changeableFieldIds: Object.freeze(changeable),
-    actions: Object.freeze(actions),
-  });
-};
-
-/** The stored values of a row's editable fields: JSON in the field's own contract, keyed by field. */
-const parseEditValues = (
-  value: unknown,
-  location: DefinitionRenderErrorLocation,
-): Readonly<Record<string, JsonValue>> => {
-  const record = requireRecord(value, "A projected row's edit values must be an object", location);
-  const values: Record<string, JsonValue> = {};
-  for (const [key, held] of Object.entries(record)) {
-    const field = requireFieldKey(key, `Invalid projected edit key '${key}'`, location);
-    if (!jsonValueSchema.safeParse(held).success)
-      fail(`A projected edit value for '${field}' is not JSON`, location);
-    values[field] = held as JsonValue;
-  }
-  return Object.freeze(values);
-};
-
-/** The exact number and money texts of a row's cells, keyed by column. */
-const parseExactValues = (
-  value: unknown,
-  location: DefinitionRenderErrorLocation,
-): Readonly<Record<string, string>> => {
-  const record = requireRecord(value, "A projected row's exact values must be an object", location);
-  const values: Record<string, string> = {};
-  for (const [key, held] of Object.entries(record)) {
-    const field = requireFieldKey(key, `Invalid projected exact key '${key}'`, location);
-    values[field] = requireNonEmptyString(held, "A projected exact value must be text", location);
-  }
-  return Object.freeze(values);
-};
 
 const parseRows = (
   value: unknown,
   location: DefinitionRenderErrorLocation,
-): readonly DisplayRow[] => {
-  const items = requireArray(value, "Projected rows must be an array", location);
-  const seen = new Set<string>();
-  return Object.freeze(
-    items.map((item, index) => {
-      const rowLocation = { ...location, propertyPath: [`rows[${index}]`] };
-      const record = requireRecord(item, "A projected row must be an object", rowLocation);
-      requireExactKeys(
-        record,
-        ["recordId", "revision", "capabilities", "edit", "cells", "format", "hasChildren", "exact"],
-        rowLocation,
-      );
-      if (
-        record.hasChildren !== undefined &&
-        record.hasChildren !== true &&
-        record.hasChildren !== "unknown"
-      )
-        fail("A projected row can only say it has or may have children", rowLocation);
-      const recordId = requireNonEmptyString(
-        record.recordId,
-        "A projected row requires a stable record identity",
-        rowLocation,
-      );
-      if (seen.has(recordId)) fail(`Duplicate projected row identity '${recordId}'`, rowLocation);
-      seen.add(recordId);
-      const cellsRecord = requireRecord(
-        record.cells,
-        "A projected row requires a cells object",
-        rowLocation,
-      );
-      const cells: Record<string, DisplayCellValue> = {};
-      for (const [key, cell] of Object.entries(cellsRecord)) {
-        const cellKey = requireFieldKey(key, `Invalid projected cell key '${key}'`, rowLocation);
-        cells[cellKey] = parseCellValue(cell, { ...rowLocation, propertyPath: [cellKey] });
-      }
-      const revision =
-        record.revision === undefined
-          ? undefined
-          : requirePositiveInteger(
-              record.revision,
-              "A projected row revision must be a positive integer",
-              rowLocation,
-            );
-      if (revision !== undefined && !Number.isSafeInteger(revision))
-        fail("A projected row revision must be a safe integer", rowLocation);
-      const capabilities =
-        record.capabilities === undefined
-          ? undefined
-          : parseRowCapabilities(record.capabilities, {
-              ...rowLocation,
-              propertyPath: [`rows[${index}]`, "capabilities"],
-            });
-      const edit =
-        record.edit === undefined
-          ? undefined
-          : parseEditValues(record.edit, {
-              ...rowLocation,
-              propertyPath: [`rows[${index}]`, "edit"],
-            });
-      const format =
-        record.format === undefined
-          ? undefined
-          : parseRowFormat(record.format, {
-              ...rowLocation,
-              propertyPath: [`rows[${index}]`, "format"],
-            });
-      const exact =
-        record.exact === undefined
-          ? undefined
-          : parseExactValues(record.exact, {
-              ...rowLocation,
-              propertyPath: [`rows[${index}]`, "exact"],
-            });
-      return Object.freeze({
-        recordId,
-        ...(exact === undefined ? {} : { exact }),
-        ...(revision === undefined ? {} : { revision }),
-        ...(capabilities === undefined ? {} : { capabilities }),
-        ...(edit === undefined ? {} : { edit }),
-        cells: Object.freeze(cells),
-        ...(format === undefined ? {} : { format }),
-        ...(record.hasChildren === true || record.hasChildren === "unknown"
-          ? { hasChildren: record.hasChildren }
-          : {}),
-      });
-    }),
-  );
-};
+): readonly DisplayRow[] =>
+  parseProjectedPart(displayRowsSchema, value, "Projected rows are invalid", location);
 
 const parseColumns = (
   value: unknown,
@@ -608,38 +437,11 @@ export const parseRichTextPayload = projectedValuesParser(
   "Projected rich text values are invalid",
 );
 
-/** The ready rows a launcher or link-tile block accepts. */
-export const parseLauncherRowsPayload = (
-  value: unknown,
-  location: DefinitionRenderErrorLocation = {},
-): LauncherRowsPayload => {
-  const record = requireRecord(value, "Projected display values must be an object", location);
-  if (record.kind !== "launcher_rows")
-    return fail(
-      `Expected 'launcher_rows' projected values, got '${String(record.kind)}'`,
-      location,
-    );
-  requireExactKeys(record, ["kind", "rows", "headingKey", "secondaryKey"], location);
-  const rows = parseRows(record.rows, location);
-  return Object.freeze({
-    kind: "launcher_rows",
-    rows,
-    headingKey: requireBuilderKey(
-      record.headingKey,
-      "Projected launcher rows require a heading key",
-      location,
-    ),
-    ...(record.secondaryKey === undefined
-      ? {}
-      : {
-          secondaryKey: requireBuilderKey(
-            record.secondaryKey,
-            "The projected launcher secondary key is invalid",
-            location,
-          ),
-        }),
-  });
-};
+/** The ready rows a launcher block accepts. */
+export const parseLauncherRowsPayload = projectedValuesParser(
+  launcherRowsPayloadSchema,
+  "Projected launcher rows are invalid",
+);
 
 /** The order of a table's rows: one to twenty distinct fields, each ascending or descending. */
 const parseTableSort = (
