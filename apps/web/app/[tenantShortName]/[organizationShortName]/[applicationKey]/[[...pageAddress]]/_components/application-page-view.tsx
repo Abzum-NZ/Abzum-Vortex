@@ -1,9 +1,11 @@
 "use client";
 
-import { useMemo, type ReactElement, type ReactNode } from "react";
+import { Suspense, use, useMemo, useState, type ReactElement, type ReactNode } from "react";
 import {
   createPlatformComponentRegistryForReleases,
   type FieldInputControlReleaseMap,
+  isClientPageChange,
+  primaryStreamedPlacement,
   UnsavedWorkProvider,
   type DisplaySemanticEvent,
   type PlatformThemeTokens,
@@ -12,6 +14,58 @@ import type { PlatformBlockRelease, ProjectedApplicationFrame } from "@vortex/pl
 import type { ApplicationPageModel } from "../../../../../_lib/application-page";
 import type { GuidedFormActions } from "./application-page-view/types";
 import { ApplicationPageViewContent } from "./application-page-view/application-page-content";
+
+/** The page model with one streamed placement's settled state served as ready data. */
+const withSettledPlacement = (
+  model: ApplicationPageModel,
+  placementId: string,
+  state: ApplicationPageModel["data"][string],
+): ApplicationPageModel => {
+  const { streamedData, data, ...rest } = model;
+  const stillStreamed = Object.fromEntries(
+    Object.entries(streamedData ?? {}).filter(([id]) => id !== placementId),
+  );
+  return {
+    ...rest,
+    data: { ...data, [placementId]: state },
+    ...(Object.keys(stillStreamed).length === 0 ? {} : { streamedData: stillStreamed }),
+  };
+};
+
+/**
+ * The first document shows its primary placement (the first streamed read of the page's own
+ * content, the one a page change holds for) in its HTML: this waits for that read while the
+ * document streams, so the frame is sent and painted first and the rows follow in their own part of
+ * the same response, painted before the page's code has loaded and hydrated as they are. A page
+ * that mounts after the document has hydrated never waits here; the page hold keeps the current
+ * page on screen instead.
+ */
+function FirstDocumentPage({
+  model,
+  content,
+  settle,
+  render,
+}: Readonly<{
+  model: ApplicationPageModel;
+  content: Readonly<Record<string, unknown>>;
+  settle: boolean;
+  render: (model: ApplicationPageModel) => ReactElement;
+}>): ReactElement {
+  const primaryId =
+    settle && model.streamedData !== undefined
+      ? primaryStreamedPlacement(content, model.streamedData)
+      : undefined;
+  const primaryRead = primaryId === undefined ? undefined : model.streamedData?.[primaryId];
+  const state = primaryRead === undefined ? undefined : use(primaryRead);
+  const shown = useMemo(
+    () =>
+      primaryId === undefined || state === undefined
+        ? model
+        : withSettledPlacement(model, primaryId, state),
+    [model, primaryId, state],
+  );
+  return render(shown);
+}
 
 /**
  * Renders the content of one installed application page and carries out what its people do on it.
@@ -48,20 +102,29 @@ export function ApplicationPageView({
     () => createPlatformComponentRegistryForReleases(platformBlockReleases),
     [platformBlockReleases],
   );
+  // Only the model this view first rendered with in the document waits for its primary read.
+  const [documentModel] = useState(() => (isClientPageChange() ? undefined : model));
+  const page = (shown: ApplicationPageModel): ReactElement => (
+    <ApplicationPageViewContent
+      model={shown}
+      content={content}
+      frame={frame}
+      guidedFormActions={guidedFormActions}
+      onOpenApplication={onOpenApplication}
+      adoptReleaseAction={adoptReleaseAction}
+      pageFeedback={pageFeedback}
+      platformComponentRegistry={platformComponentRegistry}
+      fieldInputControlReleases={fieldInputControlReleases}
+      platformThemeTokens={platformThemeTokens}
+    />
+  );
+  const settle = documentModel === model;
   return (
     <UnsavedWorkProvider>
-      <ApplicationPageViewContent
-        model={model}
-        content={content}
-        frame={frame}
-        guidedFormActions={guidedFormActions}
-        onOpenApplication={onOpenApplication}
-        adoptReleaseAction={adoptReleaseAction}
-        pageFeedback={pageFeedback}
-        platformComponentRegistry={platformComponentRegistry}
-        fieldInputControlReleases={fieldInputControlReleases}
-        platformThemeTokens={platformThemeTokens}
-      />
+      {/* While the first document waits for the rows, it shows the page with their skeleton. */}
+      <Suspense fallback={settle ? page(model) : null}>
+        <FirstDocumentPage model={model} content={content} settle={settle} render={page} />
+      </Suspense>
     </UnsavedWorkProvider>
   );
 }
