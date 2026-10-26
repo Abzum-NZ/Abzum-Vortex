@@ -369,31 +369,6 @@
             "props": {
               "slot_primary": [
                 {
-                  "type": "platform.renderer.heading",
-                  "props": {
-                    "id": "overview_text",
-                    "text": "Tenant overview",
-                    "level": "two",
-                    "vortex": {
-                      "block": {
-                        "block_id": "78bfeead-a38d-424a-81b9-7cd553b92bcc",
-                        "release_version": "1.1.0"
-                      },
-                      "responsive": {
-                        "desktop": {
-                          "visible": true,
-                          "width": {
-                            "kind": "fill"
-                          },
-                          "height": {
-                            "kind": "content"
-                          }
-                        }
-                      }
-                    }
-                  }
-                },
-                {
                   "type": "platform.renderer.text",
                   "props": {
                     "id": "overview_text_description",
@@ -1107,31 +1082,6 @@
           "root": {
             "props": {
               "slot_primary": [
-                {
-                  "type": "platform.renderer.heading",
-                  "props": {
-                    "id": "administrators_text",
-                    "text": "Tenant administrators",
-                    "level": "two",
-                    "vortex": {
-                      "block": {
-                        "block_id": "78bfeead-a38d-424a-81b9-7cd553b92bcc",
-                        "release_version": "1.1.0"
-                      },
-                      "responsive": {
-                        "desktop": {
-                          "visible": true,
-                          "width": {
-                            "kind": "fill"
-                          },
-                          "height": {
-                            "kind": "content"
-                          }
-                        }
-                      }
-                    }
-                  }
-                },
                 {
                   "type": "platform.renderer.text",
                   "props": {

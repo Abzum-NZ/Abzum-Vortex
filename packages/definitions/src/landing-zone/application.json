@@ -1066,31 +1066,6 @@
             "props": {
               "slot_primary": [
                 {
-                  "type": "platform.renderer.heading",
-                  "props": {
-                    "id": "saved_tiles_summary",
-                    "text": "Manage saved tiles",
-                    "level": "two",
-                    "vortex": {
-                      "block": {
-                        "block_id": "78bfeead-a38d-424a-81b9-7cd553b92bcc",
-                        "release_version": "1.1.0"
-                      },
-                      "responsive": {
-                        "desktop": {
-                          "visible": true,
-                          "width": {
-                            "kind": "fill"
-                          },
-                          "height": {
-                            "kind": "content"
-                          }
-                        }
-                      }
-                    }
-                  }
-                },
-                {
                   "type": "platform.renderer.text",
                   "props": {
                     "id": "saved_tiles_summary_description",
