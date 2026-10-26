@@ -291,6 +291,8 @@ type ChoiceOptionGate = Readonly<{
   fieldId: string;
   /** The record type's pipeline whose stage this field is, if it is one. */
   pipeline: RecordTypePipeline | undefined;
+  /** The stages only a named action may set (such as Lost, with its reason): never offered here. */
+  actionOwnedStages: ReadonlySet<string>;
 }>;
 
 /** The option permissions the projected page's choice placements name, planned for one page. */
@@ -371,6 +373,16 @@ export const planChoiceOptionGates = (
       pipeline: source.recordType.pipelines.find((pipeline) =>
         sameId(String(pipeline.stageFieldId), String(source.field.fieldId)),
       ),
+      actionOwnedStages: new Set(
+        source.module.content.actions.flatMap((action) =>
+          sameId(String(action.subjectRecordTypeId), recordTypeId) &&
+          action.setsChoiceFieldId !== undefined &&
+          sameId(String(action.setsChoiceFieldId), String(source.field.fieldId)) &&
+          action.setsChoiceOption !== undefined
+            ? [action.setsChoiceOption]
+            : [],
+        ),
+      ),
     });
   }
   return { gates, permissions };
@@ -411,7 +423,8 @@ export type HeldChoiceOptions = (
  * Leaves in each placement's option list, the page payload the form renders, only the options the
  * person may use. An option the record already holds stays, so the field keeps its value. A
  * pipeline's stage field offers only the stages the save accepts: those the held stage moves to,
- * or for a new record the start stage and the stages it moves to.
+ * or for a new record the start stage and the stages it moves to, and never a stage a named
+ * action owns (the action sets it, with whatever it asks for).
  */
 export const applyChoiceOptionGates = (
   plan: ChoiceOptionPlan,
@@ -424,7 +437,11 @@ export const applyChoiceOptionGates = (
     gate.props.options = gate.items.filter((item, index) => {
       const value = isRecord(item) && typeof item.key === "string" ? item.key : undefined;
       if (value !== undefined && kept.has(value)) return true;
-      if (gate.pipeline !== undefined && !pipelineAllowsMove(gate.pipeline, stage, value))
+      if (
+        gate.pipeline !== undefined &&
+        (!pipelineAllowsMove(gate.pipeline, stage, value) ||
+          (value !== undefined && gate.actionOwnedStages.has(value)))
+      )
         return false;
       const key = gate.permissionKeys[index];
       return key === undefined || allowedKeys.has(key);

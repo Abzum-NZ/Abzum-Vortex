@@ -11,12 +11,12 @@ export const outcomeNotices: Readonly<Record<string, Notice>> = {
   committed: { tone: "info", text: "Saved." },
   refused: {
     tone: "problem",
-    text: "The operation was refused by current access rules or operation policy. Review your access and the submitted values.",
+    text: "This was not allowed. Check your access and the values, or ask your administrator.",
   },
   conflict: { tone: "problem", text: "This changed since you opened it. Refresh and review it." },
   validation: {
     tone: "problem",
-    text: "One or more submitted values do not match the operation's required format or rules. Review each field and its allowed values.",
+    text: "Some values were not accepted. Check each field and try again.",
   },
   partial: {
     tone: "problem",

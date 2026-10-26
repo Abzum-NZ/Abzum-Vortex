@@ -16,7 +16,7 @@ import {
   refusalDestinations,
   outcomeNotices,
 } from "./notices";
-import { visibleOwningFormFieldLabel } from "./form-surface";
+import { formSurfaceComposition, visibleOwningFormFieldLabel } from "./form-surface";
 
 export function useApplyDispatch({
   placementRequestsRef,
@@ -91,15 +91,27 @@ export function useApplyDispatch({
           (reportOnControl === "in_place" || resultNotice.tone !== "problem")
         )
           return;
-        // A refusal must remain visible after a flow's form dialog has closed.
-        setNotice((current) => {
-          // A client intent can refuse after the server has completed (for example, a page the
-          // viewer cannot open). A successful run must not erase that more specific refusal.
-          if (current?.tone === "problem" && resultNotice.tone !== "problem") return current;
-          return formPlacementId === undefined || resultNotice.tone === "problem"
-            ? resultNotice
-            : undefined;
-        });
+        // A form on the page shows its own outcome where the person is looking; the page repeats
+        // it only when it offers a way forward (a link). A refusal from a flow's form dialog must
+        // remain visible after the dialog has closed, so it stays on the page.
+        const formOnPage =
+          formPlacementId !== undefined &&
+          formSurfaceComposition(
+            model.page,
+            model.pageId,
+            formPlacementId,
+            platformComponentRegistry,
+          ) !== undefined;
+        if (formOnPage && resultNotice.link === undefined) setNotice(undefined);
+        else
+          setNotice((current) => {
+            // A client intent can refuse after the server has completed (for example, a page the
+            // viewer cannot open). A successful run must not erase that more specific refusal.
+            if (current?.tone === "problem" && resultNotice.tone !== "problem") return current;
+            return formPlacementId === undefined || resultNotice.tone === "problem"
+              ? resultNotice
+              : undefined;
+          });
         if (formPlacementId !== undefined) {
           setFormFeedback((current) => ({
             ...current,

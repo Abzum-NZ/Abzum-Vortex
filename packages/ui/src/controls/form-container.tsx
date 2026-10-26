@@ -11,6 +11,7 @@ import {
   type FormEvent,
   type KeyboardEvent,
   type ReactElement,
+  type RefObject,
 } from "react";
 import {
   flowRefusalFeedbackSentences,
@@ -116,6 +117,56 @@ const NON_SUBMITTING_INPUT_TYPES = new Set([
 
 const FIRST_FIELD_SELECTOR =
   "input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled])";
+
+/** Focuses the control of one field of the form, by its field key. */
+const focusField = (form: HTMLFormElement | null, fieldKey: string | undefined): void => {
+  if (form === null || fieldKey === undefined) return;
+  form
+    .querySelector<HTMLElement>(
+      `[data-vortex-field-key="${CSS.escape(fieldKey)}"] :is(input, select, textarea, button):not([disabled], [type="hidden"])`,
+    )
+    ?.focus();
+};
+
+/**
+ * The form's error summary: when a submission is refused with two or more fields to fix, one
+ * announced list at the top of the form names each problem, and choosing one moves to its field.
+ */
+function FormErrorSummary({
+  form,
+  errors,
+}: Readonly<{
+  form: RefObject<HTMLFormElement | null>;
+  errors: Readonly<Record<string, string>>;
+}>): ReactElement | null {
+  const entries = Object.entries(errors);
+  if (entries.length < 2) return null;
+  return (
+    <Alert
+      variant="destructive"
+      role="alert"
+      data-vortex-form-error-summary=""
+      className="order-first"
+    >
+      <AlertDescription>
+        <p className="font-medium">Fix these {entries.length} fields to continue:</p>
+        <ul className="mt-1 list-disc ps-5">
+          {entries.map(([fieldKey, message]) => (
+            <li key={fieldKey}>
+              <button
+                type="button"
+                className="text-start underline underline-offset-4"
+                onClick={() => focusField(form.current, fieldKey)}
+              >
+                {message}
+              </button>
+            </li>
+          ))}
+        </ul>
+      </AlertDescription>
+    </Alert>
+  );
+}
 
 /**
  * Accessible form boundary. It emits `form_ready` once when mounted, and one `form_submit` with
@@ -281,13 +332,30 @@ export function FormContainer(props: FormContainerProps): ReactElement {
     formRef.current?.querySelector<HTMLElement>(FIRST_FIELD_SELECTOR)?.focus();
   }, [generation]);
 
+  // A refused submission moves focus to the first field it names, so a keyboard or screen-reader
+  // user lands on what to fix instead of staying on the button.
+  const focusFirstInvalidRef = useRef(false);
+  useEffect(() => {
+    if (!focusFirstInvalidRef.current) return;
+    focusFirstInvalidRef.current = false;
+    focusField(formRef.current, Object.keys(validationErrors)[0]);
+  }, [validationErrors]);
+  useEffect(() => {
+    const refused = props.flowFeedback;
+    if (refused?.kind !== "refusal" || refused.corrections === undefined) return;
+    focusField(formRef.current, refused.corrections[0]?.field);
+  }, [props.flowFeedback]);
+
   const onSubmit = (event: FormEvent<HTMLFormElement>): void => {
     event.preventDefault();
     if (context.inactive || submission.running()) return;
     validationAttemptedRef.current = true;
     const nextValidationErrors = registry.validationErrors();
     setValidationErrors(nextValidationErrors);
-    if (Object.keys(nextValidationErrors).length > 0) return;
+    if (Object.keys(nextValidationErrors).length > 0) {
+      focusFirstInvalidRef.current = true;
+      return;
+    }
     if (ownerGroups !== undefined && selectedOwnerGroupId === undefined) {
       setOwnerGroupError(true);
       return;
@@ -425,6 +493,7 @@ export function FormContainer(props: FormContainerProps): ReactElement {
             {props.slots.content ?? null}
           </fieldset>
         </FormScopeContext.Provider>
+        <FormErrorSummary form={formRef} errors={validationErrors} />
         <FormDraftFeedbackRegion id={feedbackId} summary={summary} />
         {flowFeedback === undefined ? null : (
           <Alert
