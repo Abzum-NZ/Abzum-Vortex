@@ -56,6 +56,7 @@ import {
   GRID_CONTROL_COLUMN_WIDTH,
   gridActionsWidth,
   GRID_ROW_HEIGHT,
+  useBoundedGridViewport,
   virtualizesRows,
 } from "./table-geometry";
 import type { GridColumn, GridLayoutControls } from "./table-layout";
@@ -504,6 +505,7 @@ export function RecordsGrid({
   const visibleIds = visibleColumns.map((column) => column.id);
   const visibleSignature = visibleIds.join("\u0000");
   const scrollRef = useRef<HTMLDivElement>(null);
+  useBoundedGridViewport(scrollRef, bounded && !fill);
   const pinSignature = visibleIds.map((id) => layout.state.pins[id.toLowerCase()]).join(",");
   const pinningStyle = useGridPinning(
     scrollRef,

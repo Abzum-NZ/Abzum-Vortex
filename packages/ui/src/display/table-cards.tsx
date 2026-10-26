@@ -12,7 +12,7 @@ import { RowExpansionToggle } from "./row-expansion-toggle";
 import { SubRowNoticeView } from "./sub-row-notice";
 import { SUB_ROW_INDENT_REM, type RowLine, type SubRowsControls } from "./sub-rows";
 import type { GridColumn } from "./table-layout";
-import { BOUNDED_VIEWPORT_CLASS, CARD_SPACING } from "./table-geometry";
+import { BOUNDED_VIEWPORT_CLASS, CARD_SPACING, useBoundedGridViewport } from "./table-geometry";
 import { isOwnClick } from "./table-interaction";
 
 const PRIORITY_ORDER: Readonly<Record<RecordsTableColumnContract["priority"], number>> = {
@@ -105,6 +105,7 @@ export function RecordsCards({
     lines.map((line) => line.id),
     "li[data-vortex-record-id]",
   );
+  useBoundedGridViewport(listRef, bounded && !fill);
   return (
     <ul
       ref={listRef}
