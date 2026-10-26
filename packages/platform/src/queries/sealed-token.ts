@@ -36,7 +36,7 @@ export const sealToken = (key: QueryContinuationKey, purpose: string, payload: u
   ]).toString("base64url");
 };
 
-export type SealedTokenOpening =
+type SealedTokenOpening =
   | Readonly<{ kind: "opened"; payload: unknown }>
   | Readonly<{ kind: "refused"; cause: "token_malformed" | "token_not_authentic" }>;
 

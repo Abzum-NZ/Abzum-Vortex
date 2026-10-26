@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-export type PendingGesture = Readonly<{
+type PendingGesture = Readonly<{
   /** The gesture's flow is still running; the control shows busy and cannot be activated. */
   pending: boolean;
   /** True from the gesture's own event turn, before the busy state has rendered. */

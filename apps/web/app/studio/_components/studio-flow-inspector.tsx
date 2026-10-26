@@ -66,7 +66,7 @@ const findStep = (
   return undefined;
 };
 
-export const findStudioFlowStepById = (
+const findStudioFlowStepById = (
   lists: readonly StudioFlowTaskListOutline[],
   id: string,
 ): StudioFlowTaskOutline | undefined => {

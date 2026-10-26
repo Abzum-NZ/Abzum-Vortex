@@ -10,7 +10,7 @@ import {
   timestampSchema,
 } from "@vortex/platform/schema";
 
-export const studioApplicationRestoreSelectorSchema = z.object({
+const studioApplicationRestoreSelectorSchema = z.object({
   organizationId: organizationIdSchema,
   rootId: applicationRootIdSchema,
   releaseRevision: revisionSchema,
@@ -23,7 +23,7 @@ const studioApplicationRestoreExpectedSchema = z.object({
 }).strict();
 
 /** How the viewer may see one person: named, restricted by the directory permissions, or not readable right now. */
-export const studioPersonLabelSchema = z.discriminatedUnion("kind", [
+const studioPersonLabelSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("named"), name: z.string().min(1) }).strict(),
   z.object({ kind: z.literal("restricted") }).strict(),
   z.object({ kind: z.literal("unavailable") }).strict(),
@@ -66,7 +66,7 @@ export const studioApplicationRestoreCommandResultSchema = z.union([
 ]);
 
 export type StudioPersonLabel = z.infer<typeof studioPersonLabelSchema>;
-export type StudioApplicationRestoreSelector = z.infer<typeof studioApplicationRestoreSelectorSchema>;
+type StudioApplicationRestoreSelector = z.infer<typeof studioApplicationRestoreSelectorSchema>;
 /** Why a restore did not run. */
 export type StudioApplicationRestoreFailure = Readonly<{ kind: "refused" | "conflict" | "temporarily_unavailable" }>;
 export type StudioApplicationRestoreCommand = z.infer<typeof studioApplicationRestoreCommandSchema>;

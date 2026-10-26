@@ -162,7 +162,7 @@ const noQuery: StudioCanvasGridState["query"] = {
 };
 
 /** A grid event the canvas refuses, with the business reason it shows and the cause it logs. */
-export type StudioCanvasGridNotice = Readonly<{
+type StudioCanvasGridNotice = Readonly<{
   kind: "refused";
   code: "field_unmapped";
   reason: string;

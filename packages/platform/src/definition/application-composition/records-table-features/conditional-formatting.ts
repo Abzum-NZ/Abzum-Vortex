@@ -91,7 +91,7 @@ export type ConditionalFormatStyle = Readonly<{
  * A rule's condition as the table's settings spell it: the authored short form with qualified
  * fields in a draft, the canonical condition tree with field identities in a release.
  */
-export type ConditionalFormatCondition =
+type ConditionalFormatCondition =
   ConditionNode | z.infer<typeof sourceQualifiedConditionSchema>;
 
 /**
@@ -191,13 +191,13 @@ const readColumnFormat = (value: ComponentSettingValue, at: string): Conditional
 };
 
 /** One operand of a comparison, read from either spelling of a condition. */
-export type ConditionalFormatOperand =
+type ConditionalFormatOperand =
   | Readonly<{ source: "field"; field: string }>
   | Readonly<{ source: "value"; value: JsonValue }>
   | Readonly<{ source: "parameter"; key: string }>;
 
 /** One comparison of a condition, read from either spelling. */
-export type ConditionalFormatComparison = Readonly<{
+type ConditionalFormatComparison = Readonly<{
   operator: string;
   left: ConditionalFormatOperand;
   right?: ConditionalFormatOperand;
@@ -229,7 +229,7 @@ const operandOf = (value: unknown): ConditionalFormatOperand | undefined => {
  * The comparisons of a condition in either spelling: the canonical tree (`kind`, `fieldId`, `key`)
  * or the authored short form (`field` with a `value` or `parameter`, and `all`/`any`/`not`).
  */
-export const conditionalFormatComparisons = (
+const conditionalFormatComparisons = (
   condition: ConditionalFormatCondition,
 ): readonly ConditionalFormatComparison[] => {
   const node = plain(condition);
@@ -284,7 +284,7 @@ const dateTypes = new Set(["date"]);
  * The fields a rule is checked against: the bound query's fields at publication and in Studio, a
  * record type's fields when a person saves a personal rule.
  */
-export type ConditionalFormatFacts = Readonly<{
+type ConditionalFormatFacts = Readonly<{
   fields: readonly Pick<
     RecordsTableFieldFacts,
     "field" | "label" | "type" | "resultType" | "choiceValues"

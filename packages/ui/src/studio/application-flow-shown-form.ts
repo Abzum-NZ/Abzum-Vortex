@@ -13,7 +13,7 @@ import {
   syncStoredBlockDependencies,
 } from "./stored-composition";
 
-export type StudioFlowShownFormResult =
+type StudioFlowShownFormResult =
   Readonly<{ ok: true; alias: string }> | Readonly<{ ok: false; reason: string }>;
 
 const noPage =

@@ -64,7 +64,7 @@ export type StudioApplicationPreviewResult =
 type PreviewFailure = Exclude<StudioApplicationPreviewResult, { kind: "provisioned" }>;
 
 /** The builder's preview that a read of the saved draft runs on, or why there is none. */
-export type StudioPreviewResult =
+type StudioPreviewResult =
   | Readonly<{
       kind: "available";
       previewInstallationId: string;
@@ -77,7 +77,7 @@ export type StudioPreviewResult =
   | PreviewFailure;
 
 /** The saved draft at one revision and the builder's current preview of its Application. */
-export type StudioPreviewState =
+type StudioPreviewState =
   | Readonly<{
       kind: "read";
       draft: StoredApplicationDefinitionDraft;
@@ -554,7 +554,7 @@ export const studioPreviewRunsDraft = (
  * shape only: presentation edits reuse the current records without rehearsing a publication.
  * `open` (the Preview button) asks for the exact revision, so its pages and menu are the draft's.
  */
-export async function currentStudioPreview(
+async function currentStudioPreview(
   session: IdentitySession,
   organizationId: OrganizationId,
   draft: StoredApplicationDefinitionDraft,
@@ -687,7 +687,7 @@ export const scheduleStudioPreviewMove = (
 };
 
 /** Whether the builder's preview runs a saved revision's data shape, so its records can be read. */
-export type StudioPreviewReadiness =
+type StudioPreviewReadiness =
   | Readonly<{ kind: "ready"; draftRevision: number; previewShape: string }>
   /** A move to this revision is still under way: ask again. */
   | Readonly<{ kind: "following" }>

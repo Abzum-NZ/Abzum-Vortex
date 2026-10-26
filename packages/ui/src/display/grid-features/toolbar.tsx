@@ -53,7 +53,7 @@ const ownsEscape = (target: EventTarget | null): boolean => {
   return cell !== null && cell !== target;
 };
 
-export type GridFullScreen = Readonly<{
+type GridFullScreen = Readonly<{
   active: boolean;
   toggle: () => void;
   buttonRef: RefObject<HTMLButtonElement | null>;
@@ -231,7 +231,7 @@ function ColumnChoices({
 const pickDensity = (value: unknown): RecordsTableDensity | undefined =>
   recordsTableDensities.find((candidate) => candidate === value);
 
-export type GridToolbarProps = Readonly<{
+type GridToolbarProps = Readonly<{
   accessibleName: string;
   /** What the projected grid features draw first: search, filter chips, the view switcher. */
   featureItems: ReactNode;

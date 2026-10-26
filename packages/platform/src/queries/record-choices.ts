@@ -81,7 +81,7 @@ export type RecordChoiceRead =
     }>;
 
 /** The Query engine entry point the picker reads through; it authorises the viewer itself. */
-export type RecordChoiceQueryRunner = Readonly<{
+type RecordChoiceQueryRunner = Readonly<{
   run(
     session: IdentitySession,
     selection: OrganizationSelectionCandidate,

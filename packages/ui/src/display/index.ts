@@ -46,7 +46,6 @@ export {
 } from "./projected-data";
 export type {
   DisplayTableBulkRun,
-  RecordsTableBulkRunSummary,
   DisplayTableExportRun,
   DisplayTableExportScope,
   DisplayTableSelectionScope,

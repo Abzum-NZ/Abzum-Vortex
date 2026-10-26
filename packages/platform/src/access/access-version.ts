@@ -116,7 +116,7 @@ const parseAcceptance = (row: AcceptanceRow): InvitationAcceptanceWithAccessVers
 };
 
 /** An invitation the signed-in person may accept: sent to their verified email and still pending. */
-export const pendingInvitationSchema = z
+const pendingInvitationSchema = z
   .object({
     invitationId: invitationIdSchema,
     organizationId: organizationIdSchema,

@@ -12,7 +12,7 @@ import {
 } from "@vortex/ui/studio";
 
 /** Why the saved draft does not compile, in words, and the Data tab item to change when it is one. */
-export type StudioCompileProblem = Readonly<{
+type StudioCompileProblem = Readonly<{
   message: string;
   selection: StudioDataSelection | null;
 }>;

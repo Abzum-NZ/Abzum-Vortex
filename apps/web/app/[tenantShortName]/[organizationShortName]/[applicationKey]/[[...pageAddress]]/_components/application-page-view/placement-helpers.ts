@@ -107,7 +107,7 @@ const sameBoardSource = (left: BoardPayload, right: BoardPayload): boolean =>
     (fieldId, index) => fieldId.toLowerCase() === right.cardFieldIds[index]?.toLowerCase(),
   );
 
-export const boardBucketForSelector = (
+const boardBucketForSelector = (
   board: BoardPayload,
   selector: BoardColumnSelector,
 ): BoardPayload["unassigned"] | BoardPayload["columns"][number] | undefined =>

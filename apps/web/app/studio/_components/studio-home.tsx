@@ -31,7 +31,7 @@ import {
   PaginationPrevious,
 } from "@vortex/ui/components/pagination";
 
-export type StudioHomeOrganization = Readonly<{
+type StudioHomeOrganization = Readonly<{
   organizationId: string;
   name: string;
   tenantName: string;

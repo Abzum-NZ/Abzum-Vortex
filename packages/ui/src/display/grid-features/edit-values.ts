@@ -26,7 +26,7 @@ export type EditDraft = string | boolean | LinkDraft;
  */
 export type LinkDraft = Readonly<{ recordTypeId: string; recordId: string; title?: string }> | null;
 
-export type EditReading =
+type EditReading =
   Readonly<{ ok: true; value: JsonValue }> | Readonly<{ ok: false; message: string }>;
 
 const WHOLE_NUMBER = /^-?\d{1,15}$/;

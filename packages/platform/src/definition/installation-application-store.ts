@@ -59,7 +59,7 @@ export type ApplicationStoreEnvironment = FirstInstallFlowEnvironment & UpgradeR
 type Outputs = Readonly<Record<string, JsonValue>>;
 
 /** A result the protected operation executor maps: available outputs, a refusal, a failure or a conflict. */
-export type ApplicationStoreResult =
+type ApplicationStoreResult =
   | HumanOrganizationRequestResult<Outputs>
   | "conflict"
   | Readonly<{

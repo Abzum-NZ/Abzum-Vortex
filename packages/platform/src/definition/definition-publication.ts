@@ -101,7 +101,7 @@ export type ApplicationDraftCompilation = Readonly<{
 }>;
 
 /** The record types (`module:record`) and fields (`module:record.field`) the draft's own Modules have published. */
-export type ApplicationDraftPublication = Readonly<{
+type ApplicationDraftPublication = Readonly<{
   recordTypes: readonly string[];
   fields: readonly string[];
   extensionPointUses: readonly ModuleExtensionPointUse[];

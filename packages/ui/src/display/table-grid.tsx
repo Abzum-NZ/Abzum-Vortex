@@ -111,7 +111,7 @@ export type GridRenderers = Readonly<{
   actions: (row: DisplayRow) => ReactNode;
 }>;
 
-export type RecordsGridProps = Readonly<{
+type RecordsGridProps = Readonly<{
   accessibleName: string;
   contract: RecordsTableContract;
   /** The viewer's projection turns column pinning on. */

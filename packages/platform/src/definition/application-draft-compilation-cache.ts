@@ -198,7 +198,7 @@ export const compileApplicationDraftOnce = async (
 export const applicationDraftCompilationKey = (parts: readonly unknown[]): string =>
   JSON.stringify(parts);
 
-export const readCachedApplicationDraftCompilation = (
+const readCachedApplicationDraftCompilation = (
   key: string,
 ): ApplicationDraftCompilation | undefined => {
   const cached = applicationDraftCompilations.get(key);

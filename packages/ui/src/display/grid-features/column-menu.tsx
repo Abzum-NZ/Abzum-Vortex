@@ -26,7 +26,7 @@ const AutoSizeItem = lazy(() => import("./auto-size"));
 const sameFieldKey = (left: string, right: string): boolean =>
   left.toLowerCase() === right.toLowerCase();
 
-export type ColumnMenuProps = Readonly<{
+type ColumnMenuProps = Readonly<{
   column: GridColumn;
   open: boolean;
   onOpenChange: (open: boolean) => void;

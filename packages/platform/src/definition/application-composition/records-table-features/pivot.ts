@@ -20,21 +20,21 @@ import {
 } from "./shared";
 
 /** The most values a pivot's column dimension may hold; the server refuses a wider one. */
-export const RECORDS_TABLE_PIVOT_MAXIMUM_COLUMNS = 50;
+const RECORDS_TABLE_PIVOT_MAXIMUM_COLUMNS = 50;
 /** The most rows one pivot page may show. */
-export const RECORDS_TABLE_PIVOT_MAXIMUM_ROW_PAGE_SIZE = 200;
+const RECORDS_TABLE_PIVOT_MAXIMUM_ROW_PAGE_SIZE = 200;
 
-export const recordsTablePivotMeasureFunctions = [
+const recordsTablePivotMeasureFunctions = [
   "count",
   "sum",
   "average",
   "minimum",
   "maximum",
 ] as const;
-export type RecordsTablePivotMeasureFunction = (typeof recordsTablePivotMeasureFunctions)[number];
+type RecordsTablePivotMeasureFunction = (typeof recordsTablePivotMeasureFunctions)[number];
 
 /** The field types a measure may total: stored numbers and money, not calculations. */
-export const recordsTablePivotMeasureFieldTypes: readonly string[] = Object.freeze([
+const recordsTablePivotMeasureFieldTypes: readonly string[] = Object.freeze([
   "whole_number",
   "decimal_number",
   "money",

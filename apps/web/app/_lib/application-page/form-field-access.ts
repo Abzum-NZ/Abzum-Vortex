@@ -34,7 +34,7 @@ type Flow = InstalledRuntimeContext["releaseSet"]["application"]["content"]["flo
  * is shown read-only, and a form whose required field they cannot fill in is refused, naming it.
  * This only narrows what is shown. Every save is still decided by the record writer.
  */
-export type FormFieldAccess = Readonly<{
+type FormFieldAccess = Readonly<{
   /** Field placements left out of the page, by lowercase placement identity. */
   omitted: ReadonlySet<string>;
   /** Field placements shown read-only, by lowercase placement identity. */
@@ -88,7 +88,7 @@ export const flowCreatedRecordTypeIds = (
  * The fields this viewer may set when they create a record of one type. A draft preview gives its
  * builder every field, so it narrows nothing (`undefined`).
  */
-export const readCreatableFieldIds = async (
+const readCreatableFieldIds = async (
   session: IdentitySession,
   selection: OrganizationSelectionCandidate,
   context: InstalledRuntimeContext,
@@ -131,7 +131,7 @@ const isRequired = (placement: Placement, field: ModuleField): boolean => {
 };
 
 /** The viewer's access, decided for each form of the page's record type. */
-export const decideFormFieldAccess = (
+const decideFormFieldAccess = (
   input: Readonly<{
     placements: readonly Placement[];
     recordType: RecordType;
