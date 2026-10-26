@@ -317,10 +317,10 @@ export function GridToolbar({
       aria-label={`Tools for ${accessibleName}`}
       className="mb-2 flex h-11 min-w-0 shrink-0 items-center gap-2 overflow-x-auto whitespace-nowrap"
     >
-      <div className={selectionActive ? "flex min-w-0 flex-1 items-center gap-2" : "hidden"}>
+      <div className={selectionActive ? "flex min-w-max flex-1 items-center gap-2" : "hidden"}>
         {selectionBanner}
       </div>
-      <div className={selectionActive ? "hidden" : "flex min-w-0 flex-1 items-center gap-2"}>
+      <div className={selectionActive ? "hidden" : "flex min-w-max flex-1 items-center gap-2"}>
         {featureItems}
       </div>
       <div
