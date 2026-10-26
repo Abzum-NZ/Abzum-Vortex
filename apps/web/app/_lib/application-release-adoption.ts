@@ -17,7 +17,7 @@ import type {
 } from "@vortex/platform/schema";
 import {
   createDatabaseApplicationReleaseAdoptionReleaseSetService,
-  createDatabaseApplicationReleaseAdoptionTargetService,
+  createApplicationReleaseAdoptionTargetService,
   createPreparedInstallationRuntimeSourceReader,
   resolveModuleContributions,
   type ApplicationReleaseAdoptionTarget,
@@ -133,7 +133,7 @@ export const readApplicationReleaseAdoption = async (
         acceptedPermissions: [],
       });
       if (decision.outcome !== "allowed") return undefined;
-      return createDatabaseApplicationReleaseAdoptionTargetService(transaction).read({
+      return createApplicationReleaseAdoptionTargetService(transaction).read({
         applicationRootId: scope.applicationRootId,
       });
     },

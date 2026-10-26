@@ -42,13 +42,12 @@ export {
   type DefinitionPublicationCatalogue,
   type DefinitionReleaseAppend,
   type DefinitionPublicationTransaction,
-  type DefinitionPublicationRepository,
   type PreparedDefinitionPublication,
 } from "./definition-publication-contracts";
 export {
   type ApplicationDraftCompilation,
   type ApplicationDraftConditionContext,
-  createDefinitionPublicationService,
+  createDatabaseDefinitionPublicationService,
 } from "./definition-publication";
 export * from "./publication/publish";
 export * from "./publication/read";

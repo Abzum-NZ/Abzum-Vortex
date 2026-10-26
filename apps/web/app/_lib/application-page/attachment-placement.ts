@@ -1,6 +1,6 @@
 import {
   readPageSubjectInTransaction,
-  createSqlFileReadRepository,
+  readFileForDownload,
   projectReadOnlyAttachmentList,
   type ReadOnlyAttachmentFileEvidence,
   decideFileRead,
@@ -21,8 +21,7 @@ import {
   sameId,
 } from "@vortex/platform/schema";
 import { humanOrganizationRequests } from "../server-composition";
-import type {
-  collectPlacements} from "./placement-helpers";
+import type { collectPlacements } from "./placement-helpers";
 import { first, pageSubjectParameter } from "./placement-helpers";
 import type { PageSubjectType, PageDataState, SearchParameters } from "./types";
 
@@ -79,23 +78,22 @@ export const readAttachmentListPlacement = async (input: {
     sameId(String(module.rootId), subjectModuleRootId),
   );
   const subjectModule = subjectModuleMatches.length === 1 ? subjectModuleMatches[0] : undefined;
-  const subjectRecordTypes = subjectModule?.content.recordTypes.filter((recordType) =>
-    sameId(String(recordType.recordTypeId), pageSubjectRecordTypeId),
-  ) ?? [];
+  const subjectRecordTypes =
+    subjectModule?.content.recordTypes.filter((recordType) =>
+      sameId(String(recordType.recordTypeId), pageSubjectRecordTypeId),
+    ) ?? [];
   const subjectRecordType = subjectRecordTypes.length === 1 ? subjectRecordTypes[0] : undefined;
   const matchingFields =
     fieldId === undefined
       ? []
-      : subjectRecordType?.fields.filter((field) => sameId(String(field.fieldId), fieldId)) ?? [];
+      : (subjectRecordType?.fields.filter((field) => sameId(String(field.fieldId), fieldId)) ?? []);
   const attachmentField = matchingFields.length === 1 ? matchingFields[0] : undefined;
   if (fieldId === undefined || attachmentField?.type !== "attachment") {
     logRefusal("page", `attachment placement ${placementId}`, "field_setting_not_attachment_field");
     data[placementId] = { status: "refused", reason: "not_permitted" };
     return;
   }
-  const maximumFiles = attachmentField.settings.multiple
-    ? attachmentField.settings.maxFiles
-    : 1;
+  const maximumFiles = attachmentField.settings.multiple ? attachmentField.settings.maxFiles : 1;
   const subjectId = recordIdSchema.safeParse(first(parameters[pageSubjectParameter]));
   if (maximumFiles === undefined || !subjectId.success) {
     logRefusal(
@@ -125,7 +123,6 @@ export const readAttachmentListPlacement = async (input: {
       });
       if (currentSubject.kind !== "read")
         return { kind: "subject" as const, subject: currentSubject };
-      const repository = createSqlFileReadRepository(transaction);
       const projection = await projectReadOnlyAttachmentList({
         owner: {
           organizationId: String(context.organizationId),
@@ -152,7 +149,7 @@ export const readAttachmentListPlacement = async (input: {
               );
               return { kind: "refused" };
             }
-            const file = await repository.readFile(parsedFileId.data);
+            const file = await readFileForDownload(transaction, parsedFileId.data);
             if (file === null) {
               logRefusal("page", `attachment placement ${placementId}`, "file_record_missing");
               return { kind: "refused" };

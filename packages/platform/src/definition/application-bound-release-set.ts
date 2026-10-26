@@ -105,46 +105,6 @@ const readFirstInstallReleaseSet = async (
   }
 };
 
-export interface ApplicationBoundReleaseSetRepository {
-  read(command: ApplicationBoundReleaseSetCommand): Promise<unknown | undefined>;
-}
-
-export interface SystemApplicationBoundReleaseSetRepository {
-  read(
-    context: SessionContext,
-    command: SystemApplicationBoundReleaseSetCommand,
-  ): Promise<unknown | undefined>;
-}
-
-export const createDatabaseApplicationBoundReleaseSetRepository = (
-  transaction: RequestDatabaseTransaction,
-): ApplicationBoundReleaseSetRepository => ({
-  async read(command) {
-    const rows = await transaction.query<BoundReleaseSetRow>`
-      select vortex_definition.read_application_bound_release_set(
-        ${command.applicationReleaseRevision}::bigint
-      ) as bound_release_set
-    `;
-    if (rows.length !== 1) throw new Error("APPLICATION_BOUND_RELEASE_SET_STORAGE_INVALID");
-    return rows[0]!.bound_release_set === null ? undefined : rows[0]!.bound_release_set;
-  },
-});
-
-export const createDatabaseSystemApplicationBoundReleaseSetRepository = (
-  transaction: RequestDatabaseTransaction,
-): SystemApplicationBoundReleaseSetRepository => ({
-  async read(_context, command) {
-    const rows = await transaction.query<BoundReleaseSetRow>`
-      select vortex_definition.read_system_application_bound_release_set(
-        ${command.applicationRootId}::uuid,
-        ${command.applicationReleaseRevision}::bigint
-      ) as bound_release_set
-    `;
-    if (rows.length !== 1) throw new Error("APPLICATION_BOUND_RELEASE_SET_STORAGE_INVALID");
-    return rows[0]!.bound_release_set === null ? undefined : rows[0]!.bound_release_set;
-  },
-});
-
 type BoundProjectionExpectation = Readonly<{
   applicationReleaseRevision: number;
   applicationRootId?: string;
@@ -271,94 +231,109 @@ const exactModuleClosure = (releaseSet: SystemApplicationBoundReleaseSetResult):
   return visitedRoots.size === modulesByIdentity.size;
 };
 
-export const createApplicationBoundReleaseSetService = (
-  repository: ApplicationBoundReleaseSetRepository,
-  catalogue: DefinitionPublicationCatalogue,
-) => ({
-  async read(commandCandidate: unknown): Promise<ApplicationBoundReleaseSetResult> {
-    const command = applicationBoundReleaseSetCommandSchema.safeParse(commandCandidate);
-    if (!command.success) throw new DefinitionError("INVALID_DEFINITION_READ_COMMAND");
-
-    let candidate: unknown | undefined;
-    try {
-      candidate = await repository.read(command.data);
-    } catch (error) {
-      throw new DefinitionError(
-        isDefinitionContextFailure(error) ? "DEFINITION_CONTEXT_REFUSED" : "DEFINITION_READ_FAILED",
-      );
-    }
-    if (candidate === undefined) throw new DefinitionError("DEFINITION_RELEASE_NOT_FOUND");
-    return (await projectBoundReleaseSet(
-      candidate,
-      {
-        applicationReleaseRevision: command.data.applicationReleaseRevision,
-        allowEmptyModules: false,
-      },
-      catalogue,
-    )) as ApplicationBoundReleaseSetResult;
-  },
-});
-
-export const createSystemApplicationBoundReleaseSetService = (
-  repository: SystemApplicationBoundReleaseSetRepository,
-  catalogue: DefinitionPublicationCatalogue,
-) => ({
-  async read(
-    contextCandidate: SessionContext,
-    commandCandidate: unknown,
-    purpose: "consume" | "replace_or_remove" = "consume",
-  ): Promise<SystemApplicationBoundReleaseSetResult> {
-    const context = sessionContextSchema.safeParse(contextCandidate);
-    const command = systemApplicationBoundReleaseSetCommandSchema.safeParse(commandCandidate);
-    if (!command.success) throw new DefinitionError("INVALID_DEFINITION_READ_COMMAND");
-    if (!context.success || !isLiveDefinitionSystemContext(context.data))
-      throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
-    if (
-      context.data.applicationRootId !== undefined &&
-      !sameId(context.data.applicationRootId, command.data.applicationRootId)
-    )
-      throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
-
-    let candidate: unknown | undefined;
-    try {
-      candidate = await repository.read(context.data, command.data);
-    } catch (error) {
-      throw new DefinitionError(
-        isDefinitionContextFailure(error) ? "DEFINITION_CONTEXT_REFUSED" : "DEFINITION_READ_FAILED",
-      );
-    }
-    if (candidate === undefined) throw new DefinitionError("DEFINITION_RELEASE_NOT_FOUND");
-    return (await projectBoundReleaseSet(
-      candidate,
-      {
-        applicationReleaseRevision: command.data.applicationReleaseRevision,
-        applicationRootId: command.data.applicationRootId,
-        organizationId: context.data.organizationId,
-        correlationId: context.data.correlationId,
-        allowEmptyModules: true,
-      },
-      purpose === "consume" ? catalogue : undefined,
-    )) as SystemApplicationBoundReleaseSetResult;
-  },
-});
-
 export const createDatabaseApplicationBoundReleaseSetService = (
   catalogueDefinition: ImmutableDefinitionPublicationCatalogueDefinition,
   transaction: RequestDatabaseTransaction,
-) =>
-  createApplicationBoundReleaseSetService(
-    createDatabaseApplicationBoundReleaseSetRepository(transaction),
-    createImmutableDefinitionPublicationCatalogue(catalogueDefinition),
-  );
+) => {
+  const catalogue = createImmutableDefinitionPublicationCatalogue(catalogueDefinition);
+  const readStoredSet = async (
+    command: ApplicationBoundReleaseSetCommand,
+  ): Promise<unknown | undefined> => {
+    const rows = await transaction.query<BoundReleaseSetRow>`
+      select vortex_definition.read_application_bound_release_set(
+        ${command.applicationReleaseRevision}::bigint
+      ) as bound_release_set
+    `;
+    if (rows.length !== 1) throw new Error("APPLICATION_BOUND_RELEASE_SET_STORAGE_INVALID");
+    return rows[0]!.bound_release_set === null ? undefined : rows[0]!.bound_release_set;
+  };
+  return {
+    async read(commandCandidate: unknown): Promise<ApplicationBoundReleaseSetResult> {
+      const command = applicationBoundReleaseSetCommandSchema.safeParse(commandCandidate);
+      if (!command.success) throw new DefinitionError("INVALID_DEFINITION_READ_COMMAND");
+
+      let candidate: unknown | undefined;
+      try {
+        candidate = await readStoredSet(command.data);
+      } catch (error) {
+        throw new DefinitionError(
+          isDefinitionContextFailure(error)
+            ? "DEFINITION_CONTEXT_REFUSED"
+            : "DEFINITION_READ_FAILED",
+        );
+      }
+      if (candidate === undefined) throw new DefinitionError("DEFINITION_RELEASE_NOT_FOUND");
+      return (await projectBoundReleaseSet(
+        candidate,
+        {
+          applicationReleaseRevision: command.data.applicationReleaseRevision,
+          allowEmptyModules: false,
+        },
+        catalogue,
+      )) as ApplicationBoundReleaseSetResult;
+    },
+  };
+};
 
 export const createDatabaseSystemApplicationBoundReleaseSetService = (
   catalogueDefinition: ImmutableDefinitionPublicationCatalogueDefinition,
   transaction: RequestDatabaseTransaction,
-) =>
-  createSystemApplicationBoundReleaseSetService(
-    createDatabaseSystemApplicationBoundReleaseSetRepository(transaction),
-    createImmutableDefinitionPublicationCatalogue(catalogueDefinition),
-  );
+) => {
+  const catalogue = createImmutableDefinitionPublicationCatalogue(catalogueDefinition);
+  const readStoredSet = async (
+    command: SystemApplicationBoundReleaseSetCommand,
+  ): Promise<unknown | undefined> => {
+    const rows = await transaction.query<BoundReleaseSetRow>`
+      select vortex_definition.read_system_application_bound_release_set(
+        ${command.applicationRootId}::uuid,
+        ${command.applicationReleaseRevision}::bigint
+      ) as bound_release_set
+    `;
+    if (rows.length !== 1) throw new Error("APPLICATION_BOUND_RELEASE_SET_STORAGE_INVALID");
+    return rows[0]!.bound_release_set === null ? undefined : rows[0]!.bound_release_set;
+  };
+  return {
+    async read(
+      contextCandidate: SessionContext,
+      commandCandidate: unknown,
+      purpose: "consume" | "replace_or_remove" = "consume",
+    ): Promise<SystemApplicationBoundReleaseSetResult> {
+      const context = sessionContextSchema.safeParse(contextCandidate);
+      const command = systemApplicationBoundReleaseSetCommandSchema.safeParse(commandCandidate);
+      if (!command.success) throw new DefinitionError("INVALID_DEFINITION_READ_COMMAND");
+      if (!context.success || !isLiveDefinitionSystemContext(context.data))
+        throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
+      if (
+        context.data.applicationRootId !== undefined &&
+        !sameId(context.data.applicationRootId, command.data.applicationRootId)
+      )
+        throw new DefinitionError("DEFINITION_CONTEXT_REFUSED");
+
+      let candidate: unknown | undefined;
+      try {
+        candidate = await readStoredSet(command.data);
+      } catch (error) {
+        throw new DefinitionError(
+          isDefinitionContextFailure(error)
+            ? "DEFINITION_CONTEXT_REFUSED"
+            : "DEFINITION_READ_FAILED",
+        );
+      }
+      if (candidate === undefined) throw new DefinitionError("DEFINITION_RELEASE_NOT_FOUND");
+      return (await projectBoundReleaseSet(
+        candidate,
+        {
+          applicationReleaseRevision: command.data.applicationReleaseRevision,
+          applicationRootId: command.data.applicationRootId,
+          organizationId: context.data.organizationId,
+          correlationId: context.data.correlationId,
+          allowEmptyModules: true,
+        },
+        purpose === "consume" ? catalogue : undefined,
+      )) as SystemApplicationBoundReleaseSetResult;
+    },
+  };
+};
 
 const applicationReleaseAdoptionReleaseSetCommandSchema = z
   .object({

@@ -51,7 +51,6 @@ import {
   refuse,
   type ResolvableModuleRelease,
   type DefinitionPublicationCatalogue,
-  type DefinitionPublicationRepository,
   type PreparedDefinitionPublication,
   type DefinitionDraftCandidate,
   type DefinitionPublicationCandidate,
@@ -60,6 +59,12 @@ import {
 } from "./definition-publication-contracts";
 import type { ResolvedDependencies } from "./definition-dependency-resolution";
 import { validateDraftCandidate } from "./definition-publication-compilation";
+import type { RequestDatabaseTransaction } from "../db/request-transaction";
+import { createDatabaseDefinitionPublicationRepository } from "./publication/publish";
+import {
+  createImmutableDefinitionPublicationCatalogue,
+  type ImmutableDefinitionPublicationCatalogueDefinition,
+} from "./publication/read";
 import {
   applicationCandidate,
   materializeInlineModules,
@@ -414,7 +419,7 @@ const compileDraftSnapshot = async (
 };
 
 /**
- * Publication orchestration over private injected stores. Preparation exposes only safe JSON
+ * Publication orchestration over the request transaction. Preparation exposes only safe JSON
  * evidence; every byte that matters is recomputed inside the publish transaction.
  *
  * Every operation is decided by the builder authority before any evidence is read, and only for
@@ -424,306 +429,339 @@ const compileDraftSnapshot = async (
  * application). The authority is a required argument, so the designer, the API and MCP all pass
  * the same server-side check and none can publish without it.
  */
-export const createDefinitionPublicationService = (
-  repository: DefinitionPublicationRepository,
-  catalogue: DefinitionPublicationCatalogue,
+export const createDatabaseDefinitionPublicationService = (
+  catalogueDefinition: ImmutableDefinitionPublicationCatalogueDefinition,
+  requestTransaction: RequestDatabaseTransaction,
   authority: BuilderAuthority,
-) => ({
-  prepare: async (
-    context: SessionContext,
-    input: unknown,
-  ): Promise<PreparedDefinitionPublication> => {
-    const command = prepareDefinitionPublicationCommandSchema.safeParse(input);
-    if (!command.success) refuse("INVALID_DEFINITION_PUBLICATION_COMMAND");
-    const parsedCommand = command.data as PrepareDefinitionPublicationCommand;
-    await authorize(authority, context, { kind: "publication", rootId: parsedCommand.rootId });
-    // Permanent inline identities are established before planning; release rows stay in memory.
-    return repository.transaction(context, async (transaction) => {
-      const candidate = applicationCandidate(
-        context,
-        await transaction.lockCandidate(parsedCommand.rootId),
-        parsedCommand,
-      );
-      const ownedRoots = await transaction.readOwnedModuleRoots(String(candidate.draft.rootId));
-      const roots = await materializeInlineModules(transaction, candidate, ownedRoots);
-      // Publication labels also need fields removed from the current candidate.
-      const previousModules = await transaction.readModuleReleases(
-        context.organizationId,
-        (candidate.historyEvidence.latestRelease?.dependencyManifest ?? [])
-          .filter((dependency) => dependency.kind === "module")
-          .map((dependency) => ({
-            rootId: dependency.rootId,
-            releaseRevision: dependency.revision,
-          })),
-      );
-      if (previousModules.some((release) => release === undefined))
-        refuse("DEFINITION_DEPENDENCY_MISSING");
-      const state = await planApplicationPublication(
-        context,
-        transaction,
-        catalogue,
-        candidate,
-        roots,
-        preparationReleaseNote,
-      );
-      const inlineRootIds = new Set(
-        state.moduleOutputs.map((output) => String(output.canonical.envelope.rootId)),
-      );
-      const usedModules = await transaction.readModuleReleases(
-        context.organizationId,
-        state.confirmation.dependencyManifest
-          .filter(
-            (dependency) =>
-              dependency.kind === "module" && !inlineRootIds.has(String(dependency.rootId)),
-          )
-          .map((dependency) => {
-            if (dependency.kind !== "module") return refuse("DEFINITION_DEPENDENCY_MISSING");
-            return { rootId: dependency.rootId, releaseRevision: dependency.releaseRevision };
-          }),
-      );
-      if (usedModules.some((release) => release === undefined))
-        refuse("DEFINITION_DEPENDENCY_MISSING");
-      const previousFields = new Set(
-        previousModules.flatMap((release) =>
-          release!.compilationOutput.canonical.content.recordTypes.flatMap((record) =>
-            record.fields.map((field) => `${release!.key}:${record.key}.${field.key}`),
-          ),
-        ),
-      );
-      const source = candidate.draft.source as ApplicationSourceDocument;
-      return prepareDefinitionPublicationResultSchema.parse({
-        confirmation: state.confirmation,
-        addedFields: source.body.modules.flatMap((module) =>
-          module.record_types.flatMap((record) =>
-            record.fields.flatMap((field) => {
-              const reference = `${module.key}:${record.key}.${field.key}`;
-              return previousFields.has(reference) ? [] : [reference];
+) => {
+  const storage = createDatabaseDefinitionPublicationRepository(requestTransaction);
+  const catalogue = createImmutableDefinitionPublicationCatalogue(catalogueDefinition);
+  const service = {
+    prepare: async (
+      context: SessionContext,
+      input: unknown,
+    ): Promise<PreparedDefinitionPublication> => {
+      const command = prepareDefinitionPublicationCommandSchema.safeParse(input);
+      if (!command.success) refuse("INVALID_DEFINITION_PUBLICATION_COMMAND");
+      const parsedCommand = command.data as PrepareDefinitionPublicationCommand;
+      await authorize(authority, context, { kind: "publication", rootId: parsedCommand.rootId });
+      // Permanent inline identities are established before planning; release rows stay in memory.
+      return storage.transaction(context, async (transaction) => {
+        const candidate = applicationCandidate(
+          context,
+          await transaction.lockCandidate(parsedCommand.rootId),
+          parsedCommand,
+        );
+        const ownedRoots = await transaction.readOwnedModuleRoots(String(candidate.draft.rootId));
+        const roots = await materializeInlineModules(transaction, candidate, ownedRoots);
+        // Publication labels also need fields removed from the current candidate.
+        const previousModules = await transaction.readModuleReleases(
+          context.organizationId,
+          (candidate.historyEvidence.latestRelease?.dependencyManifest ?? [])
+            .filter((dependency) => dependency.kind === "module")
+            .map((dependency) => ({
+              rootId: dependency.rootId,
+              releaseRevision: dependency.revision,
+            })),
+        );
+        if (previousModules.some((release) => release === undefined))
+          refuse("DEFINITION_DEPENDENCY_MISSING");
+        const state = await planApplicationPublication(
+          context,
+          transaction,
+          catalogue,
+          candidate,
+          roots,
+          preparationReleaseNote,
+        );
+        const inlineRootIds = new Set(
+          state.moduleOutputs.map((output) => String(output.canonical.envelope.rootId)),
+        );
+        const usedModules = await transaction.readModuleReleases(
+          context.organizationId,
+          state.confirmation.dependencyManifest
+            .filter(
+              (dependency) =>
+                dependency.kind === "module" && !inlineRootIds.has(String(dependency.rootId)),
+            )
+            .map((dependency) => {
+              if (dependency.kind !== "module") return refuse("DEFINITION_DEPENDENCY_MISSING");
+              return { rootId: dependency.rootId, releaseRevision: dependency.releaseRevision };
             }),
+        );
+        if (usedModules.some((release) => release === undefined))
+          refuse("DEFINITION_DEPENDENCY_MISSING");
+        const previousFields = new Set(
+          previousModules.flatMap((release) =>
+            release!.compilationOutput.canonical.content.recordTypes.flatMap((record) =>
+              record.fields.map((field) => `${release!.key}:${record.key}.${field.key}`),
+            ),
           ),
-        ),
-        componentLabels: await componentLabelsOf(
-          (blockId, releaseVersion) => catalogue.readPlatformBlockRelease(blockId, releaseVersion),
-          state.compilationOutput.canonical,
-          ...state.moduleOutputs.map((output) => output.canonical),
-          ...usedModules.map((release) => release!.compilationOutput.canonical),
-          candidate.historyEvidence.latestRelease?.content,
-          ...previousModules.map((release) => release!.compilationOutput.canonical),
-        ),
+        );
+        const source = candidate.draft.source as ApplicationSourceDocument;
+        return prepareDefinitionPublicationResultSchema.parse({
+          confirmation: state.confirmation,
+          addedFields: source.body.modules.flatMap((module) =>
+            module.record_types.flatMap((record) =>
+              record.fields.flatMap((field) => {
+                const reference = `${module.key}:${record.key}.${field.key}`;
+                return previousFields.has(reference) ? [] : [reference];
+              }),
+            ),
+          ),
+          componentLabels: await componentLabelsOf(
+            (blockId, releaseVersion) =>
+              catalogue.readPlatformBlockRelease(blockId, releaseVersion),
+            state.compilationOutput.canonical,
+            ...state.moduleOutputs.map((output) => output.canonical),
+            ...usedModules.map((release) => release!.compilationOutput.canonical),
+            candidate.historyEvidence.latestRelease?.content,
+            ...previousModules.map((release) => release!.compilationOutput.canonical),
+          ),
+        });
       });
-    });
-  },
+    },
 
-  /**
-   * Compiles the caller organisation's current Application draft at the expected revision through
-   * the same candidate validation, exact dependency resolution and compilation as preparation. It
-   * is a read for exact-draft preview: it assigns no version, produces no confirmation and
-   * writes nothing, and a draft identical to its current release still compiles.
-   */
-  compileApplicationDraft: async (
-    context: SessionContext,
-    input: unknown,
-  ): Promise<ApplicationDraftCompilation> => {
-    const command = prepareDefinitionPublicationCommandSchema.safeParse(input);
-    if (!command.success) refuse("INVALID_DEFINITION_PUBLICATION_COMMAND");
-    const parsedCommand = command.data as PrepareDefinitionPublicationCommand;
-    await authorize(authority, context, { kind: "draft_change", rootId: parsedCommand.rootId });
-    return repository.read(context, async (reader) => {
-      // The draft and its current release's version; the published release itself is read and
-      // verified by preparation and publication, which judge the draft against it.
-      const candidate = validateDraftCandidate(
-        context,
-        await reader.readDraftCandidate(parsedCommand.rootId),
-        parsedCommand,
-      );
-      // Another definition kind at this root is refused exactly like a missing draft.
-      if (candidate.draft.kind !== "application" || candidate.draft.source.kind !== "application")
-        refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
-      return compileDraftSnapshot(
-        context,
-        reader,
-        createDraftModuleOverlay(reader, context, candidate.draft),
-        catalogue,
-        candidate,
-      );
-    });
-  },
-
-  /**
-   * Published field facts and compilation share one request-scoped definition snapshot. It reads
-   * the draft once and returns it beside the compile; a caller that omits the expected revision
-   * takes the saved one, so no caller reads the same draft a second time.
-   */
-  readApplicationDraftSnapshot: async (
-    context: SessionContext,
-    input: unknown,
-    resources: Readonly<{ publication: boolean }>,
-  ) => {
-    const command = prepareDefinitionPublicationCommandSchema
-      .partial({ expectedDraftRevision: true })
-      .safeParse(input);
-    if (!command.success) return refuse("INVALID_DEFINITION_PUBLICATION_COMMAND");
-    await authorize(authority, context, { kind: "draft_change", rootId: command.data.rootId });
-    return repository.read(context, async (reader) => {
-      const stored = await reader.readDraftCandidate(command.data.rootId);
-      if (stored === undefined) return refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
-      const candidate = validateDraftCandidate(context, stored, {
-        rootId: command.data.rootId,
-        expectedDraftRevision: command.data.expectedDraftRevision ?? stored.draft.draftRevision,
+    /**
+     * Compiles the caller organisation's current Application draft at the expected revision through
+     * the same candidate validation, exact dependency resolution and compilation as preparation. It
+     * is a read for exact-draft preview: it assigns no version, produces no confirmation and
+     * writes nothing, and a draft identical to its current release still compiles.
+     */
+    compileApplicationDraft: async (
+      context: SessionContext,
+      input: unknown,
+    ): Promise<ApplicationDraftCompilation> => {
+      const command = prepareDefinitionPublicationCommandSchema.safeParse(input);
+      if (!command.success) refuse("INVALID_DEFINITION_PUBLICATION_COMMAND");
+      const parsedCommand = command.data as PrepareDefinitionPublicationCommand;
+      await authorize(authority, context, { kind: "draft_change", rootId: parsedCommand.rootId });
+      return storage.read(context, async (reader) => {
+        // The draft and its current release's version; the published release itself is read and
+        // verified by preparation and publication, which judge the draft against it.
+        const candidate = validateDraftCandidate(
+          context,
+          await reader.readDraftCandidate(parsedCommand.rootId),
+          parsedCommand,
+        );
+        // Another definition kind at this root is refused exactly like a missing draft.
+        if (candidate.draft.kind !== "application" || candidate.draft.source.kind !== "application")
+          refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
+        return compileDraftSnapshot(
+          context,
+          reader,
+          createDraftModuleOverlay(reader, context, candidate.draft),
+          catalogue,
+          candidate,
+        );
       });
-      if (candidate.draft.kind !== "application" || candidate.draft.source.kind !== "application")
-        return refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
-      const overlay = createDraftModuleOverlay(reader, context, candidate.draft);
-      const publication: ApplicationDraftPublication | null = resources.publication
-        ? await overlay.readOwnedModulePublication(String(candidate.draft.rootId))
-        : null;
-      try {
-        return {
-          draft: candidate.draft,
-          publication,
-          compilation: await compileDraftSnapshot(context, reader, overlay, catalogue, candidate),
-          failure: undefined,
-        };
-      } catch (failure) {
-        return { draft: candidate.draft, publication, compilation: null, failure };
-      }
-    });
-  },
+    },
 
-  /** Establish permanent inline identities in a short authorised write phase. */
-  prepareApplicationPreview: async (context: SessionContext, input: unknown): Promise<void> => {
-    const command = prepareDefinitionPublicationCommandSchema.safeParse(input);
-    if (!command.success) return refuse("INVALID_DEFINITION_PUBLICATION_COMMAND");
-    await authorize(authority, context, { kind: "publication", rootId: command.data.rootId });
-    await repository.transaction(context, async (transaction) => {
-      const candidate = validateDraftCandidate(
-        context,
-        await transaction.readDraftCandidate(command.data.rootId),
-        command.data,
-      );
-      if (candidate.draft.kind !== "application" || candidate.draft.source.kind !== "application")
-        return refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
-      if (candidate.draft.publishedRevision === candidate.draft.draftRevision) return;
-      const ownedRoots = await transaction.readOwnedModuleRoots(String(candidate.draft.rootId));
-      const unchanged = await releasedUnchangedModules(transaction, candidate, ownedRoots);
-      await materializeInlineModules(transaction, candidate, ownedRoots, unchanged);
-    });
-  },
+    /**
+     * Published field facts and compilation share one request-scoped definition snapshot. It reads
+     * the draft once and returns it beside the compile; a caller that omits the expected revision
+     * takes the saved one, so no caller reads the same draft a second time.
+     */
+    readApplicationDraftSnapshot: async (
+      context: SessionContext,
+      input: unknown,
+      resources: Readonly<{ publication: boolean }>,
+    ) => {
+      const command = prepareDefinitionPublicationCommandSchema
+        .partial({ expectedDraftRevision: true })
+        .safeParse(input);
+      if (!command.success) return refuse("INVALID_DEFINITION_PUBLICATION_COMMAND");
+      await authorize(authority, context, { kind: "draft_change", rootId: command.data.rootId });
+      return storage.read(context, async (reader) => {
+        const stored = await reader.readDraftCandidate(command.data.rootId);
+        if (stored === undefined) return refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
+        const candidate = validateDraftCandidate(context, stored, {
+          rootId: command.data.rootId,
+          expectedDraftRevision: command.data.expectedDraftRevision ?? stored.draft.draftRevision,
+        });
+        if (candidate.draft.kind !== "application" || candidate.draft.source.kind !== "application")
+          return refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
+        const overlay = createDraftModuleOverlay(reader, context, candidate.draft);
+        const publication: ApplicationDraftPublication | null = resources.publication
+          ? await overlay.readOwnedModulePublication(String(candidate.draft.rootId))
+          : null;
+        try {
+          return {
+            draft: candidate.draft,
+            publication,
+            compilation: await compileDraftSnapshot(context, reader, overlay, catalogue, candidate),
+            failure: undefined,
+          };
+        } catch (failure) {
+          return { draft: candidate.draft, publication, compilation: null, failure };
+        }
+      });
+    },
 
-  planApplicationPreview: async (context: SessionContext, input: unknown) => {
-    const command = prepareDefinitionPublicationCommandSchema.safeParse(input);
-    if (!command.success) return refuse("INVALID_DEFINITION_PUBLICATION_COMMAND");
-    await authorize(authority, context, { kind: "publication", rootId: command.data.rootId });
-    return repository.read(context, async (reader) => {
-      const retained = readRetainedApplicationDraftCandidate(
-        context.organizationId,
-        command.data.rootId,
-        command.data.expectedDraftRevision,
-      );
-      const candidate =
-        retained !== undefined && (await reader.isApplicationDraftCurrent(retained))
-          ? retained
-          : validateDraftCandidate(
+    /** Establish permanent inline identities in a short authorised write phase. */
+    prepareApplicationPreview: async (context: SessionContext, input: unknown): Promise<void> => {
+      const command = prepareDefinitionPublicationCommandSchema.safeParse(input);
+      if (!command.success) return refuse("INVALID_DEFINITION_PUBLICATION_COMMAND");
+      await authorize(authority, context, { kind: "publication", rootId: command.data.rootId });
+      await storage.transaction(context, async (transaction) => {
+        const candidate = validateDraftCandidate(
+          context,
+          await transaction.readDraftCandidate(command.data.rootId),
+          command.data,
+        );
+        if (candidate.draft.kind !== "application" || candidate.draft.source.kind !== "application")
+          return refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
+        if (candidate.draft.publishedRevision === candidate.draft.draftRevision) return;
+        const ownedRoots = await transaction.readOwnedModuleRoots(String(candidate.draft.rootId));
+        const unchanged = await releasedUnchangedModules(transaction, candidate, ownedRoots);
+        await materializeInlineModules(transaction, candidate, ownedRoots, unchanged);
+      });
+    },
+
+    planApplicationPreview: async (context: SessionContext, input: unknown) => {
+      const command = prepareDefinitionPublicationCommandSchema.safeParse(input);
+      if (!command.success) return refuse("INVALID_DEFINITION_PUBLICATION_COMMAND");
+      await authorize(authority, context, { kind: "publication", rootId: command.data.rootId });
+      return storage.read(context, async (reader) => {
+        const retained = readRetainedApplicationDraftCandidate(
+          context.organizationId,
+          command.data.rootId,
+          command.data.expectedDraftRevision,
+        );
+        const candidate =
+          retained !== undefined && (await reader.isApplicationDraftCurrent(retained))
+            ? retained
+            : validateDraftCandidate(
+                context,
+                await reader.readDraftCandidate(command.data.rootId),
+                command.data,
+              );
+        if (candidate.draft.source.kind !== "application")
+          return refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
+        const overlay = createDraftModuleOverlay(reader, context, candidate.draft);
+        // The revision the builder already compiled is released as it was compiled.
+        return planApplicationPreview(
+          context,
+          overlay,
+          candidate,
+          catalogue.permissions,
+          async () => {
+            const compilation = await compileDraftSnapshot(
               context,
-              await reader.readDraftCandidate(command.data.rootId),
-              command.data,
+              reader,
+              overlay,
+              catalogue,
+              candidate,
             );
-      if (candidate.draft.source.kind !== "application")
-        return refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
-      const overlay = createDraftModuleOverlay(reader, context, candidate.draft);
-      // The revision the builder already compiled is released as it was compiled.
-      return planApplicationPreview(
-        context,
-        overlay,
-        candidate,
-        catalogue.permissions,
-        async () => {
-          const compilation = await compileDraftSnapshot(
-            context,
-            reader,
-            overlay,
-            catalogue,
-            candidate,
-          );
-          const historyEvidence =
-            compilation.publicationHistory ??
-            applicationCandidate(
-              context,
-              await reader.readCandidate(command.data.rootId),
-              command.data,
-            ).historyEvidence;
-          if (historyEvidence.anchorReleaseRevision !== (candidate.draft.publishedRevision ?? null))
-            return refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
-          retainApplicationDraftPublicationHistory(compilation, historyEvidence);
-          return { releasePlan: compilation.releasePlan, historyEvidence };
-        },
-      );
-    });
-  },
-
-  publish: async (context: SessionContext, input: unknown): Promise<PublishDefinitionResult> => {
-    const command = publishDefinitionCommandSchema.safeParse(input);
-    if (!command.success) refuse("INVALID_DEFINITION_PUBLICATION_COMMAND");
-    const parsedCommand = command.data as PublishDefinitionCommand;
-    await authorize(authority, context, {
-      kind: "publication",
-      rootId: parsedCommand.confirmation.rootId,
-    });
-    return repository.transaction(context, async (transaction) => {
-      const confirmation = parsedCommand.confirmation;
-      const candidate = applicationCandidate(
-        context,
-        await transaction.lockCandidate(confirmation.rootId),
-        { rootId: confirmation.rootId, expectedDraftRevision: confirmation.expectedDraftRevision },
-      );
-      const ownedRoots = await transaction.readOwnedModuleRoots(String(candidate.draft.rootId));
-      const roots = await materializeInlineModules(transaction, candidate, ownedRoots);
-      // The inline Modules that changed are released here, before the Application, which is last.
-      const recomputed = await planApplicationPublication(
-        context,
-        transaction,
-        catalogue,
-        candidate,
-        roots,
-        parsedCommand.releaseNote,
-        confirmation.dependencyManifest,
-      );
-      if (
-        fingerprintCanonicalValue(recomputed.confirmation) !==
-        fingerprintCanonicalValue(confirmation)
-      )
-        refuse("DEFINITION_CONFIRMATION_MISMATCH");
-      if (
-        recomputed.compilationOutput.kind !== "application" ||
-        recomputed.compilationOutput.platformCompatibilityVersion !==
-          APPLICATION_PLATFORM_COMPATIBILITY_VERSION
-      )
-        refuse("DEFINITION_COMPILATION_REFUSED");
-      for (const release of recomputed.moduleReleases)
-        await transaction.appendModuleRelease(release);
-      const result = await transaction.appendRelease({
-        draft: recomputed.draft,
-        compilationOutput: recomputed.compilationOutput,
-        assignedVersion: confirmation.assignedVersion,
-        reasons: confirmation.reasons,
-        dependencyManifest: confirmation.dependencyManifest,
-        resolutionSnapshot: recomputed.resolutionSnapshot,
-        validationContractVersion: recomputed.compilationOutput.validationContractVersion,
-        releaseNote: parsedCommand.releaseNote,
+            const historyEvidence =
+              compilation.publicationHistory ??
+              applicationCandidate(
+                context,
+                await reader.readCandidate(command.data.rootId),
+                command.data,
+              ).historyEvidence;
+            if (
+              historyEvidence.anchorReleaseRevision !== (candidate.draft.publishedRevision ?? null)
+            )
+              return refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
+            retainApplicationDraftPublicationHistory(compilation, historyEvidence);
+            return { releasePlan: compilation.releasePlan, historyEvidence };
+          },
+        );
       });
-      const parsed = publishDefinitionResultSchema.safeParse(result);
-      if (!parsed.success) refuse("DEFINITION_PUBLICATION_FAILED");
-      const published = parsed.data as PublishDefinitionResult;
-      if (
-        published.rootId !== confirmation.rootId ||
-        published.releaseRevision !== confirmation.expectedDraftRevision ||
-        published.releaseVersion !== confirmation.assignedVersion ||
-        published.contentFingerprint !== confirmation.contentFingerprint ||
-        published.resolutionFingerprint !== confirmation.resolutionFingerprint ||
-        fingerprintCanonicalValue(published.dependencyManifest) !==
-          fingerprintCanonicalValue(confirmation.dependencyManifest)
-      )
-        refuse("DEFINITION_PUBLICATION_FAILED");
-      return published;
-    });
-  },
-});
+    },
+
+    publish: async (context: SessionContext, input: unknown): Promise<PublishDefinitionResult> => {
+      const command = publishDefinitionCommandSchema.safeParse(input);
+      if (!command.success) refuse("INVALID_DEFINITION_PUBLICATION_COMMAND");
+      const parsedCommand = command.data as PublishDefinitionCommand;
+      await authorize(authority, context, {
+        kind: "publication",
+        rootId: parsedCommand.confirmation.rootId,
+      });
+      return storage.transaction(context, async (transaction) => {
+        const confirmation = parsedCommand.confirmation;
+        const candidate = applicationCandidate(
+          context,
+          await transaction.lockCandidate(confirmation.rootId),
+          {
+            rootId: confirmation.rootId,
+            expectedDraftRevision: confirmation.expectedDraftRevision,
+          },
+        );
+        const ownedRoots = await transaction.readOwnedModuleRoots(String(candidate.draft.rootId));
+        const roots = await materializeInlineModules(transaction, candidate, ownedRoots);
+        // The inline Modules that changed are released here, before the Application, which is last.
+        const recomputed = await planApplicationPublication(
+          context,
+          transaction,
+          catalogue,
+          candidate,
+          roots,
+          parsedCommand.releaseNote,
+          confirmation.dependencyManifest,
+        );
+        if (
+          fingerprintCanonicalValue(recomputed.confirmation) !==
+          fingerprintCanonicalValue(confirmation)
+        )
+          refuse("DEFINITION_CONFIRMATION_MISMATCH");
+        if (
+          recomputed.compilationOutput.kind !== "application" ||
+          recomputed.compilationOutput.platformCompatibilityVersion !==
+            APPLICATION_PLATFORM_COMPATIBILITY_VERSION
+        )
+          refuse("DEFINITION_COMPILATION_REFUSED");
+        for (const release of recomputed.moduleReleases)
+          await transaction.appendModuleRelease(release);
+        const result = await transaction.appendRelease({
+          draft: recomputed.draft,
+          compilationOutput: recomputed.compilationOutput,
+          assignedVersion: confirmation.assignedVersion,
+          reasons: confirmation.reasons,
+          dependencyManifest: confirmation.dependencyManifest,
+          resolutionSnapshot: recomputed.resolutionSnapshot,
+          validationContractVersion: recomputed.compilationOutput.validationContractVersion,
+          releaseNote: parsedCommand.releaseNote,
+        });
+        const parsed = publishDefinitionResultSchema.safeParse(result);
+        if (!parsed.success) refuse("DEFINITION_PUBLICATION_FAILED");
+        const published = parsed.data as PublishDefinitionResult;
+        if (
+          published.rootId !== confirmation.rootId ||
+          published.releaseRevision !== confirmation.expectedDraftRevision ||
+          published.releaseVersion !== confirmation.assignedVersion ||
+          published.contentFingerprint !== confirmation.contentFingerprint ||
+          published.resolutionFingerprint !== confirmation.resolutionFingerprint ||
+          fingerprintCanonicalValue(published.dependencyManifest) !==
+            fingerprintCanonicalValue(confirmation.dependencyManifest)
+        )
+          refuse("DEFINITION_PUBLICATION_FAILED");
+        return published;
+      });
+    },
+  };
+  const compiling = async <Result>(operation: () => Promise<Result>): Promise<Result> => {
+    const [settings] = await requestTransaction.query<{ idle_timeout: string }>`
+      select pg_catalog.current_setting('idle_in_transaction_session_timeout') as idle_timeout
+    `;
+    if (settings === undefined) throw new Error("Publication transaction settings are unavailable");
+    // Compilation can legitimately spend longer than a request's idle backstop between queries.
+    // Only this publication operation receives the exception; rollback clears it on failure.
+    await requestTransaction.query`
+      select pg_catalog.set_config('idle_in_transaction_session_timeout', '0', true)
+    `;
+    const result = await operation();
+    await requestTransaction.query`
+      select pg_catalog.set_config('idle_in_transaction_session_timeout', ${settings.idle_timeout}, true)
+    `;
+    return result;
+  };
+  return {
+    ...service,
+    prepare: (...args: Parameters<typeof service.prepare>) =>
+      compiling(() => service.prepare(...args)),
+    publish: (...args: Parameters<typeof service.publish>) =>
+      compiling(() => service.publish(...args)),
+  };
+};

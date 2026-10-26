@@ -1,6 +1,7 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
+import { z } from "zod";
 import type { SessionContext } from "../access/identity-access";
 import { correlationIdSchema, type CorrelationId } from "../catalogue/common";
 import {
@@ -365,35 +366,176 @@ export const privateFileResponseHeaders = (): Record<string, string> => ({
   "X-Download-Options": "noopen",
 });
 
-/**
- * Durable File-service store for read grants. Every write runs server-side,
- * scoped to the file's owning organisation; there is no in-memory production
- * implementation.
- */
-export type FileReadRepository = Readonly<{
-  /** Loads the canonical file record; null when no such file exists. */
-  readFile(fileId: FileId): Promise<FileRecord | null>;
-  /** Persists one unclaimed, short-lived read grant for this request. */
-  recordDownloadGrant(
-    input: Readonly<{
-      grant: DownloadGrant;
-      correlationId: CorrelationId;
-      purpose: FileReadPurpose;
-    }>,
-  ): Promise<void>;
-  /**
-   * Atomically marks an unexpired, unclaimed read grant claimed and returns it
-   * with the current canonical file record. An unknown, expired or already
-   * claimed grant returns null, so each grant issues exactly one credential.
-   */
-  claimDownloadGrant(oneTimeId: PlatformId): Promise<ClaimedDownloadGrant | null>;
-}>;
-
 export type ClaimedDownloadGrant = Readonly<{
   grant: DownloadGrant;
   fileRecord: FileRecord;
   correlationId: CorrelationId;
 }>;
+
+type SqlValue = string | number | boolean | Date | Uint8Array | null;
+type SqlRow = Readonly<Record<string, unknown>>;
+
+/**
+ * The Access-resolved protected request transaction, as `@vortex/db` provides
+ * it. Every function below reads the request context that transaction
+ * established, so it runs only inside the viewer's own protected request.
+ */
+export type FileReadSqlTransaction = Readonly<{
+  query<Row extends SqlRow = SqlRow>(
+    strings: TemplateStringsArray,
+    ...values: readonly SqlValue[]
+  ): Promise<readonly Row[]>;
+}>;
+
+type ResultRow = SqlRow & { result: unknown };
+
+const singleResult = (rows: readonly ResultRow[]): unknown => {
+  if (rows.length !== 1 || rows[0] === undefined) throw new Error("FILE_READ_RESULT_INVALID");
+  return rows[0].result;
+};
+
+const asObject = (value: unknown): Readonly<Record<string, unknown>> | null =>
+  value !== null && typeof value === "object" && !Array.isArray(value)
+    ? (value as Readonly<Record<string, unknown>>)
+    : null;
+
+const fileApplicationLocationSchema = z.discriminatedUnion("outcome", [
+  z.object({ outcome: z.literal("located"), applicationRootId: applicationRootIdSchema }).strict(),
+  z.object({ outcome: z.literal("refused") }).strict(),
+]);
+
+const fileReadDecisionSchema = z.discriminatedUnion("outcome", [
+  z
+    .object({
+      outcome: z.literal("allowed"),
+      organizationId: organizationIdSchema,
+      applicationRootId: applicationRootIdSchema,
+      recordTypeId: recordTypeIdSchema,
+      recordId: recordIdSchema,
+      fieldId: fieldIdSchema,
+    })
+    .strict(),
+  z.object({ outcome: z.literal("refused") }).strict(),
+]);
+
+const claimedDownloadGrantSchema = z
+  .object({
+    grant: downloadGrantSchema,
+    fileRecord: fileRecordSchema,
+    correlationId: correlationIdSchema,
+  })
+  .strict();
+
+export type FileApplicationLocation =
+  | Readonly<{ outcome: "located"; applicationRootId: ApplicationRootId }>
+  | Readonly<{ outcome: "refused" }>;
+
+/**
+ * Locates the application of an active, attached file of the request
+ * organisation, so the caller can open the application-scoped protected
+ * request that a record read requires.
+ */
+export const locateFileApplication = async (
+  transaction: FileReadSqlTransaction,
+  fileId: FileId,
+): Promise<FileApplicationLocation> => {
+  return fileApplicationLocationSchema.parse(
+    singleResult(
+      await transaction.query<ResultRow>`
+        select vortex_platform.read_file_application(${fileId}::uuid) as result
+      `,
+    ),
+  );
+};
+
+export type FileReadDecision =
+  | Readonly<{
+      outcome: "allowed";
+      organizationId: OrganizationId;
+      applicationRootId: ApplicationRootId;
+      recordTypeId: RecordTypeId;
+      recordId: RecordId;
+      fieldId: FieldId;
+    }>
+  | Readonly<{ outcome: "refused" }>;
+
+/**
+ * The viewer's current read decision for one file, from the protected record
+ * read of its owning record and the attachment value that must still name it.
+ */
+export const decideFileRead = async (
+  transaction: FileReadSqlTransaction,
+  fileId: FileId,
+): Promise<FileReadDecision> => {
+  return fileReadDecisionSchema.parse(
+    singleResult(
+      await transaction.query<ResultRow>`
+        select vortex_platform.decide_file_read(${fileId}::uuid) as result
+      `,
+    ),
+  );
+};
+
+/** Loads the canonical file record for a download; null when no such file exists. */
+export const readFileForDownload = async (
+  transaction: FileReadSqlTransaction,
+  fileId: FileId,
+): Promise<FileRecord | null> => {
+  const result = singleResult(
+    await transaction.query<ResultRow>`
+      select vortex_platform.read_file_for_download(${fileId}::uuid) as result
+    `,
+  );
+  if (result === null) return null;
+  return fileRecordSchema.parse(result);
+};
+
+/** Persists one unclaimed, short-lived read grant for this request. */
+export const recordFileDownloadGrant = async (
+  transaction: FileReadSqlTransaction,
+  {
+    grant,
+    correlationId,
+    purpose,
+  }: Readonly<{ grant: DownloadGrant; correlationId: CorrelationId; purpose: FileReadPurpose }>,
+): Promise<void> => {
+  const result = asObject(
+    singleResult(
+      await transaction.query<ResultRow>`
+        select vortex_platform.record_file_download_grant(
+          ${grant.oneTimeId}::uuid,
+          ${grant.fileId}::uuid,
+          ${grant.recordTypeId}::uuid,
+          ${grant.recordId}::uuid,
+          ${grant.fieldId}::uuid,
+          ${JSON.stringify(grant.actor)}::text::jsonb,
+          ${purpose},
+          ${correlationId}::uuid,
+          ${grant.expiresAt}::timestamptz
+        ) as result
+      `,
+    ),
+  );
+  if (result?.outcome !== "recorded") throw new Error("FILE_READ_GRANT_REFUSED");
+};
+
+/**
+ * Atomically marks an unexpired, unclaimed read grant claimed and returns it with the current
+ * canonical file record. An unknown, expired or already claimed grant returns null, so each grant
+ * issues exactly one credential.
+ */
+const claimFileDownloadGrant = async (
+  transaction: FileReadSqlTransaction,
+  oneTimeId: PlatformId,
+): Promise<ClaimedDownloadGrant | null> => {
+  const result = singleResult(
+    await transaction.query<ResultRow>`
+      select vortex_platform.claim_file_download_grant(${oneTimeId}::uuid) as result
+    `,
+  );
+  if (result === null) return null;
+  return claimedDownloadGrantSchema.parse(result);
+};
 
 const sameActor = (left: VerifiedFileActor, right: VerifiedFileActor): boolean =>
   left.kind === "human" && right.kind === "human"
@@ -420,7 +562,7 @@ const sameDownloadGrant = (left: DownloadGrant, right: DownloadGrant): boolean =
  * grant's record field.
  */
 export const createReadStorageAuthorityResolver = (
-  repository: Pick<FileReadRepository, "claimDownloadGrant">,
+  transaction: FileReadSqlTransaction,
   clock: () => Date = () => new Date(),
 ): ResolveCurrentStorageAuthority => {
   return async (request) => {
@@ -428,7 +570,7 @@ export const createReadStorageAuthorityResolver = (
     const requested = downloadGrantSchema.safeParse(request.grant);
     if (!requested.success) return { authorized: false };
 
-    const claimed = await repository.claimDownloadGrant(requested.data.oneTimeId);
+    const claimed = await claimFileDownloadGrant(transaction, requested.data.oneTimeId);
     if (claimed === null) return { authorized: false };
 
     const grant = downloadGrantSchema.safeParse(claimed.grant);
@@ -608,7 +750,7 @@ export type FileReadRefusal = Readonly<{
 export type FileReadResult = FileReadStreamResponse | FileReadRefusal;
 
 export type FileReadCoordinatorDependencies = Readonly<{
-  repository: FileReadRepository;
+  transaction: FileReadSqlTransaction;
   bridge: Pick<StorageCredentialBridge, "mintStorageOperationCredential">;
   upstreamStorageReader: UpstreamStorageReader;
   previewRenderer?: FilePreviewRenderer;
@@ -863,12 +1005,8 @@ const chooseRepresentation = (
 export const createFileReadCoordinator = (
   dependencies: FileReadCoordinatorDependencies,
 ): FileReadCoordinator => {
-  if (
-    typeof dependencies?.repository?.readFile !== "function" ||
-    typeof dependencies.repository.recordDownloadGrant !== "function" ||
-    typeof dependencies.repository.claimDownloadGrant !== "function"
-  ) {
-    throw new Error("File reads require a durable read-grant repository");
+  if (typeof dependencies?.transaction?.query !== "function") {
+    throw new Error("File reads require the protected request transaction");
   }
   if (typeof dependencies.bridge?.mintStorageOperationCredential !== "function") {
     throw new Error("File reads require the Storage credential bridge");
@@ -919,7 +1057,7 @@ export const createFileReadCoordinator = (
 
     let loaded: FileRecord | null;
     try {
-      loaded = await dependencies.repository.readFile(fileId.data);
+      loaded = await readFileForDownload(dependencies.transaction, fileId.data);
     } catch (error) {
       return refusal("storage_unavailable", "file_record_read_failed", error);
     }
@@ -1001,7 +1139,7 @@ export const createFileReadCoordinator = (
           ),
         ).toISOString(),
       });
-      await dependencies.repository.recordDownloadGrant({
+      await recordFileDownloadGrant(dependencies.transaction, {
         grant,
         correlationId,
         purpose: request.purpose,

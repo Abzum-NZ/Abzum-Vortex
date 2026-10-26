@@ -8,7 +8,7 @@ import {
   type VerifiedIdentity,
 } from "@vortex/platform/schema";
 import {
-  createDefaultIdentitySessionService,
+  createIdentitySessionService,
   createIdentityVerifier,
   type VerifiedSignInResult,
   type IdentityVerificationExecution,
@@ -57,7 +57,7 @@ const staleCookieDeletions = (
 
 const sessionService = (execution?: IdentityVerificationExecution) => {
   const journey = getIdentityJourneyConfiguration();
-  return createDefaultIdentitySessionService(
+  return createIdentitySessionService(
     createIdentityVerifier(
       getIdentityAuthorityConfiguration(),
       journey.publishableKey,

@@ -11,8 +11,11 @@ import {
 } from "../catalogue/identifiers";
 import { sameId } from "../catalogue/runtime-primitives";
 import type { RequestDatabaseTransaction } from "../db/request-transaction";
-import { createSqlFileUploadRepository } from "./upload-repository";
-import { createFileUploadCoordinator, createUploadStorageAuthorityResolver } from "./upload";
+import {
+  createFileUploadCoordinator,
+  createUploadStorageAuthorityResolver,
+  readStoredPendingUpload,
+} from "./upload";
 import { createStorageCredentialBridge, type StorageKeyDefinition } from "./storage-credentials";
 import { createStoredUploadInspection } from "./upload-inspection";
 import { resolveFileStorageDestination, type FileStorageDestination } from "./storage-destination";
@@ -72,16 +75,14 @@ const uploadContext = async (
   if (rows.length !== 1) throw new Error("UPLOAD_AUTHORITY_RESULT_INVALID");
   const authority = authoritySchema.parse(rows[0]?.result);
   if (authority.outcome !== "allowed") return undefined;
-  const repository = createSqlFileUploadRepository(transaction);
   const bridge = createStorageCredentialBridge({
     destination: configuration.destination,
     activeKeyId: configuration.key.keyId,
     keys: [configuration.key],
-    resolveCurrentAuthority: createUploadStorageAuthorityResolver(repository),
+    resolveCurrentAuthority: createUploadStorageAuthorityResolver(transaction),
   });
   return {
     authority,
-    repository,
     bridge,
     current: {
       sessionContext: authority.sessionContext,
@@ -106,10 +107,10 @@ export const admitAttachmentUpload = async (
 ) => {
   const resolved = await uploadContext(transaction, input, configuration);
   if (resolved === undefined) return refusal;
-  const { authority, repository, bridge, current } = resolved;
+  const { authority, bridge, current } = resolved;
   const context = authority.sessionContext;
   const coordinator = createFileUploadCoordinator({
-    repository,
+    transaction,
     bridge,
     ...createStoredUploadInspection({
       bridge,
@@ -146,8 +147,8 @@ export const completeAttachmentUpload = async (
 ) => {
   const resolved = await uploadContext(transaction, input, configuration);
   if (resolved === undefined) return refusal;
-  const { authority, repository, bridge, current } = resolved;
-  const pending = await repository.readPendingUpload(input.fileId);
+  const { authority, bridge, current } = resolved;
+  const pending = await readStoredPendingUpload(transaction, input.fileId);
   if (
     pending === null ||
     !sameId(pending.fileRecord.ownerRecordTypeId, input.recordTypeId) ||
@@ -156,7 +157,7 @@ export const completeAttachmentUpload = async (
   )
     return refusal;
   const coordinator = createFileUploadCoordinator({
-    repository,
+    transaction,
     bridge,
     ...createStoredUploadInspection({
       bridge,

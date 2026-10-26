@@ -25,7 +25,7 @@ import {
   type StoredApplicationDefinitionDraft,
   type StoredModuleDefinitionDraft,
 } from "../definition/definition-draft-read";
-import { createDatabaseDefinitionPublicationService } from "../definition/publication/publish";
+import { createDatabaseDefinitionPublicationService } from "../definition/definition-publication";
 import type { ImmutableDefinitionPublicationCatalogueDefinition } from "../definition/publication/read";
 import {
   assertBeforeLiveDeadline,

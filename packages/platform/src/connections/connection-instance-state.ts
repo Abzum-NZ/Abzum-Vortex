@@ -8,18 +8,6 @@ export type ConnectionState = (typeof connectionStateValues)[number];
 export const connectionHealthOutcomeValues = ["healthy", "unhealthy", "unknown"] as const;
 export type ConnectionHealthOutcome = (typeof connectionHealthOutcomeValues)[number];
 
-const hexFingerprintRegex = /^[a-f0-9]{64}$/;
-
-export function assertDestinationFingerprint(fingerprint: string): string {
-  if (!fingerprint || typeof fingerprint !== "string" || !hexFingerprintRegex.test(fingerprint)) {
-    throw new ConnectionInstanceStateError(
-      "CONNECTION_INVALID_STATE",
-      "Invalid destination fingerprint: must be a 64-character lowercase hex string",
-    );
-  }
-  return fingerprint;
-}
-
 export type ConnectionStateErrorCode =
   | "CONNECTION_INACTIVE"
   | "CONNECTION_UNHEALTHY"

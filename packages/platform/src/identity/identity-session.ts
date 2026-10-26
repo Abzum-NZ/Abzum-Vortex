@@ -15,23 +15,6 @@ import {
 import type { IdentityVerifier } from "./identity-verifier";
 import { ensureIdentityProjection, readIdentityProjection } from "./organization-accounts";
 
-type VerifyAccessToken = (accessToken: string) => Promise<VerifiedIdentity>;
-type EnsureProjection = (
-  verifiedIdentity: VerifiedIdentity,
-  command: Readonly<{ correlationId: CorrelationId }>,
-) => Promise<IdentityProjection>;
-type ReadProjection = (
-  verifiedIdentity: VerifiedIdentity,
-) => Promise<IdentityProjection | undefined>;
-
-export type IdentitySessionServiceDependencies = Readonly<{
-  verifyAccessToken: VerifyAccessToken;
-  ensureProjection: EnsureProjection;
-  readProjection: ReadProjection;
-  clock?: () => Date;
-  checkpoint?(): void;
-}>;
-
 const closed = (result: IdentitySessionResolution): IdentitySessionResolution =>
   identitySessionResolutionSchema.parse(result);
 
@@ -100,8 +83,8 @@ const activeResult = (
   });
 };
 
-export const createIdentitySessionService = (dependencies: IdentitySessionServiceDependencies) => {
-  const clock = dependencies.clock ?? (() => new Date());
+export const createIdentitySessionService = (verifier: IdentityVerifier) => {
+  const clock = () => new Date();
 
   const verify = async (
     accessToken: string,
@@ -111,9 +94,9 @@ export const createIdentitySessionService = (dependencies: IdentitySessionServic
   > => {
     if (accessToken.trim().length === 0) return { ok: false, result: closed({ kind: "missing" }) };
     try {
-      dependencies.checkpoint?.();
-      const identity = await dependencies.verifyAccessToken(accessToken);
-      dependencies.checkpoint?.();
+      verifier.checkpoint?.();
+      const identity = await verifier.verifyAccessToken(accessToken);
+      verifier.checkpoint?.();
       return { ok: true, identity };
     } catch (error) {
       return { ok: false, result: verificationFailure(error) };
@@ -126,9 +109,9 @@ export const createIdentitySessionService = (dependencies: IdentitySessionServic
     const verified = await verify(accessToken);
     if (!verified.ok) return { resolution: verified.result };
     try {
-      dependencies.checkpoint?.();
-      const projection = await dependencies.readProjection(verified.identity);
-      dependencies.checkpoint?.();
+      verifier.checkpoint?.();
+      const projection = await readIdentityProjection(verified.identity);
+      verifier.checkpoint?.();
       const resolution = activeResult(verified.identity, projection, clock);
       return resolution.kind === "active"
         ? { resolution, identity: verified.identity }
@@ -146,11 +129,11 @@ export const createIdentitySessionService = (dependencies: IdentitySessionServic
       const verified = await verify(accessToken);
       if (!verified.ok) return verified.result;
       try {
-        dependencies.checkpoint?.();
-        const projection = await dependencies.ensureProjection(verified.identity, {
+        verifier.checkpoint?.();
+        const projection = await ensureIdentityProjection(verified.identity, {
           correlationId,
         });
-        dependencies.checkpoint?.();
+        verifier.checkpoint?.();
         return activeResult(verified.identity, projection, clock);
       } catch (error) {
         return projectionFailure(error);
@@ -168,11 +151,3 @@ export const createIdentitySessionService = (dependencies: IdentitySessionServic
     resolveVerified,
   });
 };
-
-export const createDefaultIdentitySessionService = (verifier: IdentityVerifier) =>
-  createIdentitySessionService({
-    verifyAccessToken: verifier.verifyAccessToken,
-    ensureProjection: ensureIdentityProjection,
-    readProjection: readIdentityProjection,
-    ...(verifier.checkpoint === undefined ? {} : { checkpoint: verifier.checkpoint }),
-  });

@@ -1,12 +1,14 @@
 import "server-only";
 
 import { createHash, randomUUID } from "node:crypto";
+import { z } from "zod";
 import type { SessionContext } from "../access/identity-access";
-import type { CorrelationId } from "../catalogue/common";
+import { correlationIdSchema, type CorrelationId } from "../catalogue/common";
 import {
   fileIdSchema,
   fingerprintSchema,
   platformIdSchema,
+  timestampSchema,
   type ApplicationRootId,
   type FieldId,
   type FileId,
@@ -21,8 +23,11 @@ import {
   MAXIMUM_FILE_STORAGE_OPERATION_SECONDS,
   PRIVATE_FILE_BUCKET,
   fileRecordSchema,
+  fileUploadCompletionRefusalReasonSchema,
+  fileUploadRenewalRefusalReasonSchema,
   trustedFileInspectionSchema,
   uploadGrantSchema,
+  verifiedFileActorSchema,
   type FileRecord,
   type FileUploadAdmissionRefusalReason,
   type FileUploadCompletionRefusalReason,
@@ -52,6 +57,7 @@ import type {
   ResolveCurrentStorageAuthority,
   StorageCredentialBridge,
 } from "./storage-credentials";
+import type { RequestDatabaseTransaction } from "../db/request-transaction";
 
 /**
  * How long an admitted upload may stay pending, across every resumable renewal.
@@ -127,64 +133,147 @@ export type ClaimedUploadGrant = Readonly<{
   correlationId: CorrelationId;
 }>;
 
+const storedPendingUploadSchema = z
+  .object({
+    fileRecord: fileRecordSchema,
+    uploader: verifiedFileActorSchema,
+    maximumBytes: z.number().int().positive(),
+    uploadExpiresAt: timestampSchema,
+    replacingFileId: fileIdSchema.optional(),
+    currentGrantId: platformIdSchema.optional(),
+    correlationId: correlationIdSchema,
+    revision: z.number().int().positive(),
+  })
+  .strict();
+const storedReservationSchema = z.discriminatedUnion("outcome", [
+  z.object({ outcome: z.literal("reserved"), fileRecord: fileRecordSchema }).strict(),
+  z
+    .object({
+      outcome: z.literal("refused"),
+      reason: z.enum(["field_capacity_exceeded", "replacement_file_not_found"]),
+    })
+    .strict(),
+]);
+const storedRenewalSchema = z.discriminatedUnion("outcome", [
+  z.object({ outcome: z.literal("renewed") }).strict(),
+  z
+    .object({
+      outcome: z.literal("refused"),
+      reason: fileUploadRenewalRefusalReasonSchema.exclude([
+        "field_not_writable",
+        "malformed_request",
+      ]),
+    })
+    .strict(),
+]);
+const storedCompletionSchema = z.discriminatedUnion("outcome", [
+  z.object({ outcome: z.literal("recorded"), fileRecord: fileRecordSchema }).strict(),
+  z
+    .object({
+      outcome: z.literal("refused"),
+      reason: fileUploadCompletionRefusalReasonSchema.exclude([
+        "field_not_writable",
+        "upload_incomplete",
+      ]),
+    })
+    .strict(),
+]);
+
+const claimedUploadGrantSchema = z
+  .object({
+    grant: uploadGrantSchema,
+    fileRecord: fileRecordSchema,
+    correlationId: correlationIdSchema,
+  })
+  .strict();
+
 /**
- * Durable upload store, bound to the Storage credential bridge's resolver and
- * the protected request transaction. Every write checks the upload's revision, runs
- * inside the request's own organisation and verifies that the request actor is
- * the uploader. The `vortex_platform` upload functions are the canonical
- * implementation.
+ * Durable upload state belongs to the protected request transaction. Every write checks the
+ * upload's revision, runs inside the request's own organisation and verifies that the request
+ * actor is the uploader. The `vortex_platform` upload functions are the canonical implementation.
  */
-export type FileUploadRepository = Readonly<{
-  /**
-   * Locks the owning field and checks current authority and active capacity,
-   * including the replacement target. Pending metadata and its first grant are
-   * inserted together. The record save enforces the final attachment capacity.
-   */
-  reservePendingUpload(reservation: PendingUploadReservation): Promise<
-    | Readonly<{ outcome: "reserved"; fileRecord: FileRecord }>
-    | Readonly<{
-        outcome: "refused";
-        reason: "field_capacity_exceeded" | "replacement_file_not_found";
-      }>
-  >;
-  readPendingUpload(fileId: FileId): Promise<PendingUploadState | null>;
-  /** Supersedes the current grant and inserts its successor, advancing the revision. */
-  renewUploadGrant(
-    input: Readonly<{
-      fileId: FileId;
-      expectedRevision: number;
-      previousOneTimeId: PlatformId;
-      grant: UploadGrant;
-    }>,
-  ): Promise<
-    | Readonly<{ outcome: "renewed" }>
-    | Readonly<{
-        outcome: "refused";
-        reason: Exclude<FileUploadRenewalRefusalReason, "field_not_writable" | "malformed_request">;
-      }>
-  >;
-  /**
-   * Marks the current, unexpired grant of a pending upload as having issued its
-   * one Storage credential. A superseded, expired or already used grant returns null.
-   */
-  claimUploadGrant(oneTimeId: PlatformId): Promise<ClaimedUploadGrant | null>;
-  /**
-   * Records the inspected metadata and safety result of a pending upload,
-   * leaving it scanning (clean) or quarantined, and supersedes its grants.
-   */
-  recordUploadOutcome(
-    input: Readonly<{ fileId: FileId; expectedRevision: number; fileRecord: FileRecord }>,
-  ): Promise<
-    | Readonly<{ outcome: "recorded"; fileRecord: FileRecord }>
-    | Readonly<{
-        outcome: "refused";
-        reason: Exclude<
-          FileUploadCompletionRefusalReason,
-          "field_not_writable" | "upload_incomplete"
-        >;
-      }>
-  >;
-}>;
+const callUploadOperation = async (
+  transaction: RequestDatabaseTransaction,
+  operation: "reserve" | "read" | "renew" | "claim" | "complete",
+  input: unknown,
+): Promise<unknown> => {
+  const rows = await transaction.query<{
+    result: unknown;
+  }>`select vortex_platform.file_upload_operation(${operation}::text,${JSON.stringify(input)}::text::jsonb) as result`;
+  if (rows.length !== 1 || rows[0] === undefined) throw new Error("FILE_UPLOAD_RESULT_INVALID");
+  return rows[0].result;
+};
+
+/**
+ * Locks the owning field and checks current authority and active capacity, including the
+ * replacement target. Pending metadata and its first grant are inserted together. The record save
+ * enforces the final attachment capacity.
+ */
+const reserveStoredUpload = async (
+  transaction: RequestDatabaseTransaction,
+  reservation: PendingUploadReservation,
+): Promise<
+  | Readonly<{ outcome: "reserved"; fileRecord: FileRecord }>
+  | Readonly<{
+      outcome: "refused";
+      reason: "field_capacity_exceeded" | "replacement_file_not_found";
+    }>
+> => storedReservationSchema.parse(await callUploadOperation(transaction, "reserve", reservation));
+
+export const readStoredPendingUpload = async (
+  transaction: RequestDatabaseTransaction,
+  fileId: FileId,
+): Promise<PendingUploadState | null> =>
+  storedPendingUploadSchema
+    .nullable()
+    .parse(await callUploadOperation(transaction, "read", { fileId }));
+
+/** Supersedes the current grant and inserts its successor, advancing the revision. */
+const renewStoredUploadGrant = async (
+  transaction: RequestDatabaseTransaction,
+  input: Readonly<{
+    fileId: FileId;
+    expectedRevision: number;
+    previousOneTimeId: PlatformId;
+    grant: UploadGrant;
+  }>,
+): Promise<
+  | Readonly<{ outcome: "renewed" }>
+  | Readonly<{
+      outcome: "refused";
+      reason: Exclude<FileUploadRenewalRefusalReason, "field_not_writable" | "malformed_request">;
+    }>
+> => storedRenewalSchema.parse(await callUploadOperation(transaction, "renew", input));
+
+/**
+ * Marks the current, unexpired grant of a pending upload as having issued its one Storage
+ * credential. A superseded, expired or already used grant returns null.
+ */
+const claimStoredUploadGrant = async (
+  transaction: RequestDatabaseTransaction,
+  oneTimeId: PlatformId,
+): Promise<ClaimedUploadGrant | null> =>
+  claimedUploadGrantSchema
+    .nullable()
+    .parse(await callUploadOperation(transaction, "claim", { oneTimeId }));
+
+/**
+ * Records the inspected metadata and safety result of a pending upload, leaving it scanning
+ * (clean) or quarantined, and supersedes its grants.
+ */
+const recordStoredUploadOutcome = async (
+  transaction: RequestDatabaseTransaction,
+  input: Readonly<{ fileId: FileId; expectedRevision: number; fileRecord: FileRecord }>,
+): Promise<
+  | Readonly<{ outcome: "recorded"; fileRecord: FileRecord }>
+  | Readonly<{
+      outcome: "refused";
+      reason: Exclude<
+        FileUploadCompletionRefusalReason,
+        "field_not_writable" | "upload_incomplete"
+      >;
+    }>
+> => storedCompletionSchema.parse(await callUploadOperation(transaction, "complete", input));
 
 export type UploadedObjectLocation = Readonly<{
   organizationId: OrganizationId;
@@ -203,7 +292,7 @@ export type UploadedObjectInspector = (
 ) => Promise<TrustedFileInspection | null>;
 
 export type FileUploadCoordinatorDependencies = Readonly<{
-  repository: FileUploadRepository;
+  transaction: RequestDatabaseTransaction;
   bridge: StorageCredentialBridge;
   inspectUploadedObject: UploadedObjectInspector;
   clock?: () => Date;
@@ -564,7 +653,7 @@ export const reservePendingUpload = async (
     oneTimeId,
   });
 
-  const reserved = await dependencies.repository.reservePendingUpload({
+  const reserved = await reserveStoredUpload(dependencies.transaction, {
     fileRecord: pendingRecord.data,
     grant: uploadGrant,
     correlationId: input.sessionContext.correlationId,
@@ -609,7 +698,7 @@ export const renewPendingUpload = async (
   const ttlSeconds = grantLifetimeSeconds(input.ttlSeconds);
   if (ttlSeconds === undefined) return refuse("malformed_request");
 
-  const state = await dependencies.repository.readPendingUpload(input.fileId);
+  const state = await readStoredPendingUpload(dependencies.transaction, input.fileId);
   if (state === null) return refuse("file_not_found");
 
   const authority = authorizeUploader(state, input);
@@ -645,7 +734,7 @@ export const renewPendingUpload = async (
     oneTimeId: platformIdSchema.parse(randomUUID()),
   });
 
-  const renewed = await dependencies.repository.renewUploadGrant({
+  const renewed = await renewStoredUploadGrant(dependencies.transaction, {
     fileId: fileRecord.fileId,
     expectedRevision: state.revision,
     previousOneTimeId: input.oneTimeId,
@@ -743,7 +832,7 @@ export const completeFileUpload = async (
     throw new Error("FILE_UPLOAD_ATTACHMENT_SETTINGS_INVALID");
   }
 
-  const state = await dependencies.repository.readPendingUpload(input.fileId);
+  const state = await readStoredPendingUpload(dependencies.transaction, input.fileId);
   if (state === null) return refuse("file_not_found");
 
   const authority = authorizeUploader(state, input);
@@ -787,7 +876,7 @@ export const completeFileUpload = async (
     scannerResult: decision.outcome,
   };
 
-  const recorded = await dependencies.repository.recordUploadOutcome({
+  const recorded = await recordStoredUploadOutcome(dependencies.transaction, {
     fileId: fileRecord.fileId,
     expectedRevision: state.revision,
     fileRecord: recordFileSafetyResult(scanning, safetyResult),
@@ -824,7 +913,7 @@ export const completeFileUpload = async (
  * operation is refused here.
  */
 export const createUploadStorageAuthorityResolver = (
-  repository: FileUploadRepository,
+  transaction: RequestDatabaseTransaction,
   clock: () => Date = defaultClock,
 ): ResolveCurrentStorageAuthority => {
   return async (request) => {
@@ -833,7 +922,7 @@ export const createUploadStorageAuthorityResolver = (
       case "upload": {
         const requested = uploadGrantSchema.safeParse(request.grant);
         if (!requested.success) return { authorized: false };
-        const claimed = await repository.claimUploadGrant(requested.data.oneTimeId);
+        const claimed = await claimStoredUploadGrant(transaction, requested.data.oneTimeId);
         if (claimed === null) return { authorized: false };
         const grant = uploadGrantSchema.safeParse(claimed.grant);
         const fileRecord = fileRecordSchema.safeParse(claimed.fileRecord);
@@ -859,7 +948,7 @@ export const createUploadStorageAuthorityResolver = (
         };
       }
       case "inspect": {
-        const state = await repository.readPendingUpload(request.fileId);
+        const state = await readStoredPendingUpload(transaction, request.fileId);
         if (
           state === null ||
           state.fileRecord.lifecycleState !== "pending" ||

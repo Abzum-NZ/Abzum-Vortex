@@ -13,13 +13,11 @@ import {
   fingerprintQueryInputs,
   encodeQueryContinuationToken,
 } from "./continuation-token";
-import { planCache, recheckHit } from "./protected-query-cache";
 import {
   type ProtectedQueryCommand,
   type ProtectedQueryRefusalReasonCode,
   type ProtectedQueryResult,
   type ProtectedQueryPage,
-  protectedQueryResultSchema,
 } from "./protected-query-contracts";
 import {
   conditionFieldIds,
@@ -30,8 +28,6 @@ import {
   admitQueryInputs,
 } from "./protected-query-helpers";
 import { pageAnchorSchema, pageReadSchema } from "./protected-query-read-schemas";
-import type { QueryCache } from "./protected-query-types";
-import { readThroughQueryCache } from "./shared-cache-adapter";
 
 /**
  * One table read makes at most this many database reads, each examining at most
@@ -130,7 +126,6 @@ export const runCommand = async (
   scope: SelectedOrganizationScope,
   command: ProtectedQueryCommand,
   continuationKey: QueryContinuationKey,
-  cache: QueryCache | undefined,
 ): Promise<ProtectedQueryResult> => {
   const applicationRootId = scope.applicationRootId;
   if (applicationRootId === undefined)
@@ -309,22 +304,5 @@ export const runCommand = async (
     };
   };
 
-  if (cache === undefined || command.exactRecordIds !== undefined) return load();
-  const plan = await planCache(transaction, scope, command, applicationRootId, declared, cache);
-  if (plan === undefined) return load();
-  const { value } = await readThroughQueryCache<ProtectedQueryResult>({
-    store: cache.store,
-    decision: plan.decision,
-    now: cache.now,
-    load,
-    parse: (stored) => {
-      const parsed = protectedQueryResultSchema.safeParse(stored);
-      return parsed.success ? parsed.data : undefined;
-    },
-    // A hit is returned only after every stored row passes the same per-row
-    // Access projection the ordinary query applies, at current authority.
-    recheck: (stored) => recheckHit(transaction, stored, command, declared, plan),
-    shouldStore: (result) => result.outcome === "completed",
-  });
-  return value;
+  return load();
 };

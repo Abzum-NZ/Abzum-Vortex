@@ -601,32 +601,6 @@ export const delegationAuthorityEffectiveStateSchema = z
     },
   );
 
-/** Current availability plus a retained tombstone; a later identical meaning starts new continuity. */
-export const permissionContinuitySchema = z
-  .object({
-    organizationId: organizationIdSchema,
-    ...exactPermissionScopeFields,
-    state: z.enum(["available", "unavailable"]),
-    continuityRevision: revisionSchema,
-    meaningFingerprint: fingerprintSchema,
-    lastProcessedRegistrationRevision: revisionSchema,
-    changedAt: timestampSchema,
-  })
-  .strict()
-  .superRefine(addPermissionScopeIssue);
-
-export const applicationRoleTemplateContinuitySchema = z
-  .object({
-    organizationId: organizationIdSchema,
-    applicationRootId: applicationRootIdSchema,
-    sourceRoleId: roleIdSchema,
-    state: z.enum(["available", "unavailable"]),
-    continuityRevision: revisionSchema,
-    lastProcessedRegistrationRevision: revisionSchema,
-    changedAt: timestampSchema,
-  })
-  .strict();
-
 export const affectedRoleAssignmentSchema = z
   .object({
     roleAssignmentId: roleAssignmentIdSchema,
@@ -851,10 +825,6 @@ export type DelegationScope = z.infer<typeof delegationScopeSchema>;
 export type DelegationAuthority = z.infer<typeof delegationAuthoritySchema>;
 export type DelegationAuthorityEffectiveState = z.infer<
   typeof delegationAuthorityEffectiveStateSchema
->;
-export type PermissionContinuity = z.infer<typeof permissionContinuitySchema>;
-export type ApplicationRoleTemplateContinuity = z.infer<
-  typeof applicationRoleTemplateContinuitySchema
 >;
 export type AffectedRoleAssignment = z.infer<typeof affectedRoleAssignmentSchema>;
 export type AffectedRoleAssignmentManifest = z.infer<typeof affectedRoleAssignmentManifestSchema>;

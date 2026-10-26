@@ -12,7 +12,6 @@ import {
   createDefaultUpstreamStorageReader,
   createFileReadCoordinator,
   createReadStorageAuthorityResolver,
-  createSqlFileReadRepository,
   createStorageCredentialBridge,
   createStorageSignerFromPrivateKey,
   decideFileRead,
@@ -181,17 +180,16 @@ export const handleFileReadRequest = async (
       // The grant store and the bridge's read resolver are bound to this
       // protected transaction, so the grant is recorded and claimed under the
       // same current request context that just decided authority.
-      const repository = createSqlFileReadRepository(transaction);
       const bridge = createStorageCredentialBridge({
         destination: signing.destination,
         activeKeyId: signing.keyId,
         keys: [{ keyId: signing.keyId, signer: signing.signer }],
         resolveCurrentAuthority: composeStorageAuthorityResolvers({
-          read: createReadStorageAuthorityResolver(repository),
+          read: createReadStorageAuthorityResolver(transaction),
         }),
       });
       const coordinator = createFileReadCoordinator({
-        repository,
+        transaction,
         bridge,
         upstreamStorageReader,
       });
