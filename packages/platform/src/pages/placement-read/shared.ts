@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { IdentitySession, OrganizationSelectionCandidate } from "../../access/identity-access";
-import { isRecord, sameId } from "../../catalogue/runtime-primitives";
+import { isRecord, logRefusal, sameId } from "../../catalogue/runtime-primitives";
 import type { BlockPropertyValueContract } from "../../definition/application-composition/block-property-values";
 import { recordsTableContractOrLog } from "../../definition/application-composition/records-display";
 import type { RecordsTableInlineEditor } from "../../definition/application-composition/records-table-features/inline-edit";
@@ -119,6 +119,14 @@ export const logPlacementFailure = (
   reason: PlacementFailureReason,
   detail?: string,
 ): void => {
+  if (reason === "table_columns_withheld") {
+    logRefusal(
+      "page",
+      `data placement application=${address.application.key} page=${address.pageKey} placement=${placementId}${detail === undefined ? "" : ` detail=${detail}`}`,
+      reason,
+    );
+    return;
+  }
   console.error(
     `[page] data placement not loaded: application=${address.application.key} page=${address.pageKey} placement=${placementId} reason=${reason}${detail === undefined ? "" : ` cause=${detail}`}`,
   );

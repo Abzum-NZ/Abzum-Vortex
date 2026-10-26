@@ -570,31 +570,6 @@
             "props": {
               "slot_primary": [
                 {
-                  "type": "platform.renderer.heading",
-                  "props": {
-                    "id": "overview_text",
-                    "text": "Organisation overview",
-                    "level": "two",
-                    "vortex": {
-                      "block": {
-                        "block_id": "78bfeead-a38d-424a-81b9-7cd553b92bcc",
-                        "release_version": "1.1.0"
-                      },
-                      "responsive": {
-                        "desktop": {
-                          "visible": true,
-                          "width": {
-                            "kind": "fill"
-                          },
-                          "height": {
-                            "kind": "content"
-                          }
-                        }
-                      }
-                    }
-                  }
-                },
-                {
                   "type": "platform.renderer.text",
                   "props": {
                     "id": "overview_text_description",
@@ -638,31 +613,6 @@
           "root": {
             "props": {
               "slot_primary": [
-                {
-                  "type": "platform.renderer.heading",
-                  "props": {
-                    "id": "accounts_text",
-                    "text": "Organisation accounts",
-                    "level": "two",
-                    "vortex": {
-                      "block": {
-                        "block_id": "78bfeead-a38d-424a-81b9-7cd553b92bcc",
-                        "release_version": "1.1.0"
-                      },
-                      "responsive": {
-                        "desktop": {
-                          "visible": true,
-                          "width": {
-                            "kind": "fill"
-                          },
-                          "height": {
-                            "kind": "content"
-                          }
-                        }
-                      }
-                    }
-                  }
-                },
                 {
                   "type": "platform.renderer.text",
                   "props": {
@@ -795,15 +745,16 @@
             "props": {
               "slot_primary": [
                 {
-                  "type": "platform.renderer.heading",
+                  "type": "platform.renderer.button",
                   "props": {
-                    "id": "invitations_text",
-                    "text": "Invitations",
-                    "level": "two",
+                    "id": "button_invite_person",
+                    "label": "Invite person",
+                    "action_kind": "action",
+                    "variant": "primary",
                     "vortex": {
                       "block": {
-                        "block_id": "78bfeead-a38d-424a-81b9-7cd553b92bcc",
-                        "release_version": "1.1.0"
+                        "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                        "release_version": "1.0.0"
                       },
                       "responsive": {
                         "desktop": {
@@ -816,35 +767,7 @@
                           }
                         }
                       }
-                    },
-                    "actions": [
-                      {
-                        "type": "platform.renderer.button",
-                        "props": {
-                          "id": "button_invite_person",
-                          "label": "Invite person",
-                          "action_kind": "action",
-                          "variant": "primary",
-                          "vortex": {
-                            "block": {
-                              "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
-                              "release_version": "1.0.0"
-                            },
-                            "responsive": {
-                              "desktop": {
-                                "visible": true,
-                                "width": {
-                                  "kind": "fill"
-                                },
-                                "height": {
-                                  "kind": "content"
-                                }
-                              }
-                            }
-                          }
-                        }
-                      }
-                    ]
+                    }
                   }
                 },
                 {
@@ -876,7 +799,7 @@
                   "props": {
                     "presentation": "grid",
                     "id": "invitations_region",
-                    "title": "Invitations",
+                    "title": "Organisation invitations",
                     "empty_message": "No invitations yet",
                     "columns": [
                       {
@@ -1044,31 +967,6 @@
           "root": {
             "props": {
               "slot_primary": [
-                {
-                  "type": "platform.renderer.heading",
-                  "props": {
-                    "id": "settings_text",
-                    "text": "Runtime settings",
-                    "level": "two",
-                    "vortex": {
-                      "block": {
-                        "block_id": "78bfeead-a38d-424a-81b9-7cd553b92bcc",
-                        "release_version": "1.1.0"
-                      },
-                      "responsive": {
-                        "desktop": {
-                          "visible": true,
-                          "width": {
-                            "kind": "fill"
-                          },
-                          "height": {
-                            "kind": "content"
-                          }
-                        }
-                      }
-                    }
-                  }
-                },
                 {
                   "type": "platform.renderer.text",
                   "props": {

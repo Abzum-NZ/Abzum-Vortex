@@ -79,11 +79,12 @@ export const describeFailure = (error: unknown): string => {
  * The one server-side line for a refusal or a caught failure: the route or service, the operation,
  * a stable reason code and, when there is one, the safe description of its cause (class names and
  * codes only). Ids may be part of `op`; personal data, values and secrets never are.
+ * Expected refusals are information; caught failures retain error severity and their cause.
  */
 export const logRefusal = (route: string, op: string, code: string, cause?: unknown): void => {
-  console.error(
-    `[${route}] ${op} refused: code=${code}${cause === undefined ? "" : ` cause=${describeFailure(cause)}`}`,
-  );
+  const message = `[${route}] ${op} refused: code=${code}${cause === undefined ? "" : ` cause=${describeFailure(cause)}`}`;
+  if (cause === undefined) console.info(message);
+  else console.error(message);
 };
 
 export const unavailableResult = Object.freeze({ kind: "unavailable" as const });
