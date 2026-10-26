@@ -49,7 +49,7 @@
             "id": "nav_applications",
             "type": "page",
             "label": "Applications",
-            "icon": "blocks",
+            "icon": "app-window",
             "page": "app_store_catalogue",
             "permission": "application.app_store.open"
           }

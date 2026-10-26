@@ -6,7 +6,7 @@
   "body": {
     "name": "Tenant Administration",
     "description": "Tenant structure and direct protected actions for a tenant administrator.",
-    "icon": "building-2",
+    "icon": "sitemap",
     "home_page": "tenant_administrators",
     "uses": [
       {
@@ -127,7 +127,7 @@
             "id": "nav_overview",
             "type": "page",
             "label": "Overview",
-            "icon": "building-2",
+            "icon": "layout-dashboard",
             "page": "tenant_overview",
             "permission": "application.tenant_administration.open"
           },
@@ -135,7 +135,7 @@
             "id": "nav_structure",
             "type": "page",
             "label": "Tenant structure",
-            "icon": "building-2",
+            "icon": "sitemap",
             "page": "tenant_structure",
             "permission": "application.tenant_administration.open"
           }
@@ -145,13 +145,13 @@
         "id": "nav_access",
         "type": "heading",
         "label": "Access",
-        "icon": "grid",
+        "icon": "shield",
         "children": [
           {
             "id": "nav_administrators",
             "type": "page",
             "label": "Tenant administrators",
-            "icon": "building-2",
+            "icon": "user-check",
             "page": "tenant_administrators",
             "permission": "application.tenant_administration.open"
           }

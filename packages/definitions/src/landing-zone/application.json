@@ -6,7 +6,7 @@
   "body": {
     "name": "Landing Zone",
     "description": "A personal start page for permitted applications and privately owned tiles.",
-    "icon": "grid",
+    "icon": "home",
     "home_page": "home",
     "uses": [],
     "permissions": [
@@ -43,7 +43,7 @@
         "id": "nav_landing_home",
         "type": "page",
         "label": "Home",
-        "icon": "grid",
+        "icon": "home",
         "page": "home",
         "permission": "application.landing_zone.open"
       },
@@ -51,7 +51,7 @@
         "id": "nav_landing_favourites",
         "type": "page",
         "label": "Favourites",
-        "icon": "grid",
+        "icon": "star",
         "page": "favourites",
         "permission": "application.landing_zone.open"
       },
@@ -59,7 +59,7 @@
         "id": "nav_landing_bookmarks",
         "type": "page",
         "label": "Bookmarks",
-        "icon": "grid",
+        "icon": "bookmark",
         "page": "bookmarks",
         "permission": "application.landing_zone.open"
       },
@@ -67,7 +67,7 @@
         "id": "nav_landing_add_bookmark",
         "type": "page",
         "label": "Add bookmark",
-        "icon": "grid",
+        "icon": "bookmark-plus",
         "page": "bookmark_entry",
         "permission": "application.landing_zone.open"
       },
@@ -75,7 +75,7 @@
         "id": "nav_landing_all_applications",
         "type": "page",
         "label": "All applications",
-        "icon": "grid",
+        "icon": "app-window",
         "page": "all_applications",
         "permission": "application.landing_zone.open"
       },
@@ -83,7 +83,7 @@
         "id": "nav_landing_manage_saved_tiles",
         "type": "page",
         "label": "Manage saved tiles",
-        "icon": "grid",
+        "icon": "settings",
         "page": "manage_saved_tiles",
         "permission": "application.landing_zone.open"
       }

@@ -586,7 +586,7 @@ export const operationsApplication: ApplicationSourceDocument =
           id: "nav_operations",
           type: "heading",
           label: "Operations",
-          icon: "grid",
+          icon: "activity",
           children: [
             {
               id: "nav_operations_signals",
@@ -600,7 +600,7 @@ export const operationsApplication: ApplicationSourceDocument =
               id: "nav_operations_incidents",
               type: "page",
               label: "Incidents",
-              icon: "life-buoy",
+              icon: "triangle-alert",
               page: "operations_incidents",
               permission: readIncidentsPage,
             },
@@ -618,12 +618,12 @@ export const operationsApplication: ApplicationSourceDocument =
           id: "nav_operations_runbooks",
           type: "heading",
           label: "Runbooks",
-          icon: "sliders-horizontal",
+          icon: "book-open",
           children: operationsRunbooks.map((runbook) => ({
             id: `nav_operations_${runbookPageKey(runbook)}`,
             type: "page",
             label: runbook.title,
-            icon: "life-buoy",
+            icon: "file-text",
             page: runbookPageKey(runbook),
             permission: "application.operations.open",
           })),

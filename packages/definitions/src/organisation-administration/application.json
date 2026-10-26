@@ -6,7 +6,7 @@
   "body": {
     "name": "Organisation Administration",
     "description": "Organisation accounts, invitations, runtime settings, notices and privacy request cases for an organisation administrator, entirely definition-led.",
-    "icon": "sliders-horizontal",
+    "icon": "building-2",
     "home_page": "organisation_overview",
     "uses": [],
     "permissions": [
@@ -166,7 +166,7 @@
             "id": "nav_activity",
             "type": "page",
             "label": "Activity",
-            "icon": "circle",
+            "icon": "activity",
             "page": "activity",
             "permission": "application.organisation_administration.open"
           },
@@ -174,7 +174,7 @@
             "id": "nav_overview",
             "type": "page",
             "label": "Overview",
-            "icon": "building-2",
+            "icon": "layout-dashboard",
             "page": "organisation_overview",
             "permission": "platform.organization.accounts.read"
           },
@@ -182,7 +182,7 @@
             "id": "nav_accounts",
             "type": "page",
             "label": "Organisation accounts",
-            "icon": "building-2",
+            "icon": "users",
             "page": "organisation_accounts",
             "permission": "application.organisation_administration.open"
           },
@@ -190,7 +190,7 @@
             "id": "nav_invitations",
             "type": "page",
             "label": "Invitations",
-            "icon": "building-2",
+            "icon": "mail",
             "page": "organisation_invitations",
             "permission": "platform.organization.invitations.read"
           },
@@ -198,7 +198,7 @@
             "id": "nav_runtime_settings",
             "type": "page",
             "label": "Runtime settings",
-            "icon": "building-2",
+            "icon": "settings",
             "page": "organisation_runtime_settings",
             "permission": "platform.organization.runtime_settings.read"
           }
@@ -208,13 +208,13 @@
         "id": "nav_content",
         "type": "heading",
         "label": "Organisation content",
-        "icon": "building-2",
+        "icon": "file-text",
         "children": [
           {
             "id": "nav_notices",
             "type": "page",
             "label": "Notices",
-            "icon": "building-2",
+            "icon": "megaphone",
             "page": "organisation_notices",
             "permission": "application.organisation_administration.organisation_notice.read"
           },
@@ -230,7 +230,7 @@
             "id": "nav_privacy_cases",
             "type": "page",
             "label": "Privacy request cases",
-            "icon": "life-buoy",
+            "icon": "shield-check",
             "page": "privacy_request_cases",
             "permission": "application.organisation_administration.privacy_request_case.read"
           },

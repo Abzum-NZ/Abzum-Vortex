@@ -372,7 +372,7 @@
         "id": "nav_iam_overview",
         "type": "page",
         "label": "Overview",
-        "icon": "grid",
+        "icon": "layout-dashboard",
         "page": "iam_overview",
         "permission": "platform.organization.permissions.read"
       },
@@ -380,13 +380,13 @@
         "id": "nav_iam_profile_heading",
         "type": "heading",
         "label": "Your profile",
-        "icon": "grid",
+        "icon": "user-round",
         "children": [
           {
             "id": "nav_iam_profile",
             "type": "page",
             "label": "My profile",
-            "icon": "grid",
+            "icon": "user-round",
             "page": "iam_profile",
             "permission": "application.iam.open"
           }
@@ -412,13 +412,13 @@
         "id": "nav_iam_roles_heading",
         "type": "heading",
         "label": "Roles and Groups",
-        "icon": "sliders-horizontal",
+        "icon": "key-round",
         "children": [
           {
             "id": "nav_iam_roles",
             "type": "page",
             "label": "Roles and Groups",
-            "icon": "sliders-horizontal",
+            "icon": "key-round",
             "page": "iam_roles_groups",
             "permission": "platform.organization.roles.read"
           },
@@ -434,7 +434,7 @@
             "id": "nav_iam_assignments",
             "type": "page",
             "label": "Assignments",
-            "icon": "grid",
+            "icon": "check-square",
             "page": "iam_assignments",
             "permission": "platform.organization.assignments.read"
           }
@@ -444,13 +444,13 @@
         "id": "nav_iam_access_heading",
         "type": "heading",
         "label": "Access",
-        "icon": "grid",
+        "icon": "inbox",
         "children": [
           {
             "id": "nav_iam_requests",
             "type": "page",
             "label": "Access Requests",
-            "icon": "life-buoy",
+            "icon": "inbox",
             "page": "iam_access_requests",
             "permission": "application.iam.open"
           }
@@ -460,13 +460,13 @@
         "id": "nav_iam_privileged_heading",
         "type": "heading",
         "label": "Privileged access",
-        "icon": "grid",
+        "icon": "shield-check",
         "children": [
           {
             "id": "nav_iam_active",
             "type": "page",
             "label": "Active roles",
-            "icon": "sliders-horizontal",
+            "icon": "shield",
             "page": "iam_privileged_active",
             "permission": "platform.organization.roles.read"
           }
