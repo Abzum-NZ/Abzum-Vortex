@@ -82,8 +82,8 @@ export const usePhoneViewport = (): boolean =>
 /**
  * The presentation the table shows now: the grid, or the phone cards when the definition asks for
  * cards and the viewport is a phone's. While the server renders and the page hydrates the
- * viewport is unknown (`undefined`): the table draws its grid, which a phone hides behind the
- * declared skeleton until the cards replace it; nothing is read twice, because both presentations
+ * viewport is unknown (`undefined`), and the table shows its declared skeleton rather than one
+ * presentation it may replace a moment later; nothing is read twice, because both presentations
  * show the same requested columns.
  */
 export const useTablePresentation = (

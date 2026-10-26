@@ -48,7 +48,9 @@ export const LAYOUT_CLASS_NAMES = Object.freeze({
 /**
  * Computes inline CSSProperties for a placement's layout declaration at a given breakpoint.
  */
-export function computePlacementStyle(layout: PlacementLayoutContract | undefined): CSSProperties {
+export function computePlacementStyle(
+  layout: PlacementLayoutContract | undefined,
+): CSSProperties {
   if (!layout) {
     return { boxSizing: "border-box" };
   }
@@ -138,7 +140,10 @@ export const slotGapLength = (gap: SlotGapName): string =>
  * CSS declarations for one breakpoint's layout. Visibility and geometry are explicit so a narrower
  * rule can always override a wider one, including resetting bounded height and grid placement.
  */
-function responsiveLayoutDeclarations(layout: PlacementLayoutContract, gridItem: boolean): string {
+function responsiveLayoutDeclarations(
+  layout: PlacementLayoutContract,
+  gridItem: boolean,
+): string {
   if (!layout.visible) return "display: none";
 
   const declarations: string[] = ["display: block"];
@@ -273,20 +278,6 @@ export const LAYOUT_ONLY_STYLES_CSS = `
 [data-vortex-puck-root]:not([data-vortex-editing])
   [data-vortex-container-region]:not(:has([data-vortex-layout-wrapper], [data-vortex-shell-outlet])):not([data-vortex-editing] *) {
   display: none;
-}
-
-/* A records table whose presentation is not yet known (server render and hydration) draws its grid;
-   on a phone, which may show cards instead, the skeleton stands in for it until the cards are drawn. */
-[data-vortex-table-presentation="pending"] > [data-vortex-table-phone-skeleton] {
-  display: none;
-}
-@media ${LAYOUT_BREAKPOINT_MEDIA.phone} {
-  [data-vortex-table-presentation="pending"] > [data-vortex-table-body] {
-    display: none;
-  }
-  [data-vortex-table-presentation="pending"] > [data-vortex-table-phone-skeleton] {
-    display: contents;
-  }
 }
 
 .vortex-puck-slot:has(> [data-vortex-grid-child]) {
