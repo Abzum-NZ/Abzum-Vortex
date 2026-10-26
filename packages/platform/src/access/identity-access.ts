@@ -670,10 +670,6 @@ export const invitationSchema = z
       });
   });
 
-export const storedInvitationSchema = invitationSchema.safeExtend({
-  tokenFingerprint: fingerprintSchema,
-});
-
 export const ensureIdentityProjectionCommandSchema = z
   .object({
     correlationId: correlationIdSchema,
@@ -1270,7 +1266,6 @@ export type InvitationAcceptanceWithAccessVersion = z.infer<
   typeof invitationAcceptanceWithAccessVersionSchema
 >;
 export type Invitation = z.infer<typeof invitationSchema>;
-export type StoredInvitation = z.infer<typeof storedInvitationSchema>;
 export type EnsureIdentityProjectionCommand = z.infer<typeof ensureIdentityProjectionCommandSchema>;
 export type AcceptOrganizationInvitationCommand = z.infer<
   typeof acceptOrganizationInvitationCommandSchema

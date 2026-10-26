@@ -162,8 +162,18 @@ export function StudioBlockSetupDialog({
   return (
     <Dialog
       open
-      onOpenChange={(open) => {
-        if (!open) onClose();
+      onOpenChange={(open, eventDetails) => {
+        if (open) return;
+        // Typed values are not in the draft yet: a stray Escape or outside click keeps them, and
+        // only Cancel or the close button leaves without adding the block.
+        if (
+          touched &&
+          (eventDetails.reason === "escape-key" || eventDetails.reason === "outside-press")
+        ) {
+          setProblem("Add the block to keep these choices, or press Cancel to leave without it.");
+          return;
+        }
+        onClose();
       }}
     >
       <DialogContent className="max-h-dvh overflow-y-auto sm:max-w-lg">

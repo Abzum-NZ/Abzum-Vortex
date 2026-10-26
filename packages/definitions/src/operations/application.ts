@@ -378,7 +378,6 @@ const applicationShell = {
                 gap: "medium",
                 menu_width: 16,
                 menu_placement: "sticky",
-                content_landmark: true,
                 tablet_menu_width: 14,
                 phone_direction: "column",
                 phone_menu_placement: "flow",

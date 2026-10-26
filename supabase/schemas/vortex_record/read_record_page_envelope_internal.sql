@@ -77,3 +77,10 @@ begin
   return next;
 end
 $function$;
+
+alter function vortex_record.read_record_page_envelope_internal(uuid,jsonb) owner to vortex_record_adapter;
+revoke all on function vortex_record.read_record_page_envelope_internal(uuid,jsonb)
+  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+
+comment on function vortex_record.read_record_page_envelope_internal(uuid,jsonb) is
+  'Private page read helper for the fixed record adapter: the page-wide part of every record''s read facts, built once from the first record''s exact facts, narrowed to the record type and its permissions when nothing about that type reaches another record or type.';

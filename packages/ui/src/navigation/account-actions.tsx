@@ -55,9 +55,8 @@ export function useApplicationAccountActions(): ApplicationAccountActions | null
   return useContext(AccountActionsContext);
 }
 
-/** Account actions placed in the application definition's configured top bar. */
 /**
- * The account menu. It offers switching organisation only when the shell shows no organisation
+ * The account actions placed in the application definition's configured top bar. It offers switching organisation only when the shell shows no organisation
  * menu, so there is one place to switch, labelled the same everywhere.
  */
 export function ApplicationAccountMenu({

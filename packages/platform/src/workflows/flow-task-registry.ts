@@ -776,7 +776,7 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
       message: required("message_text"),
       tone: optional("builder_key"),
       /** The dialog's heading: what the person was doing ("Install or upgrade"). */
-      title: optional("message_text"),
+      title: required("message_text"),
     },
     kestra: "not_compiled",
   },

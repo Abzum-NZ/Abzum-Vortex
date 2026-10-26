@@ -203,7 +203,6 @@
                       "gap": "medium",
                       "menu_width": 16,
                       "menu_placement": "sticky",
-                      "content_landmark": true,
                       "tablet_menu_width": 14,
                       "phone_direction": "column",
                       "phone_menu_placement": "flow",
@@ -462,6 +461,8 @@
                     "title": "All applications",
                     "name_key": "name",
                     "icon_key": "icon",
+                    "action_label": "Open",
+                    "empty_message": "No applications to show",
                     "side_panel": [],
                     "vortex": {
                       "block": {
@@ -1008,6 +1009,8 @@
                     "title": "All applications",
                     "name_key": "name",
                     "icon_key": "icon",
+                    "action_label": "Open",
+                    "empty_message": "No applications to show",
                     "side_panel": [],
                     "vortex": {
                       "block": {

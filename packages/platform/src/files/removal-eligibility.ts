@@ -1,7 +1,7 @@
 import "server-only";
 
 import { createHash } from "node:crypto";
-import { sameId } from "../catalogue/runtime-primitives";
+import { describeFailure, sameId } from "../catalogue/runtime-primitives";
 import {
   fileRemovalAuthoritySnapshotSchema,
   fileRemovalEligibilityDecisionSchema,
@@ -13,15 +13,6 @@ import {
   type FileRemovalRefusalReason,
   type ProtectedLegalHoldReference,
 } from "./file-contracts";
-import { describeFailure } from "../catalogue/runtime-primitives";
-
-export {
-  type FileRemovalAuthoritySnapshot,
-  type FileRemovalEligibilityDecision,
-  type FileRemovalEligibilityRequest,
-  type FileRemovalOwnerBinding,
-  type FileRemovalRefusalReason,
-} from "../schema";
 
 export type FileHoldEvaluationScope = Readonly<{
   tenantId: string;

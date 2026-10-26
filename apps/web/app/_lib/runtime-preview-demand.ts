@@ -17,9 +17,10 @@ import { studioPreviewDemand } from "./studio-preview-demand";
 import { beginStudioPreviewRead } from "./studio-preview-work";
 import { collectPlacements } from "./application-page/placement-helpers";
 
-export type RuntimePreviewDemandResult = Readonly<{
-  kind: "ready" | "refused" | "conflict" | "temporarily_unavailable";
-}>;
+/** `not_runnable`: the saved draft has a problem its builder must fix, named by `sentence`. */
+export type RuntimePreviewDemandResult =
+  | Readonly<{ kind: "ready" | "refused" | "conflict" | "temporarily_unavailable" }>
+  | Readonly<{ kind: "not_runnable"; sentence: string }>;
 
 /**
  * A runtime preview uses the same demand path as Studio; ordinary installed reads do no work. Every
@@ -56,7 +57,7 @@ const demandRuntimePreview = async (
     );
     signal?.throwIfAborted();
     if (state.kind === "conflict") return conflict("draft_revision_stale");
-    if (state.kind === "not_runnable") return { kind: "temporarily_unavailable" };
+    if (state.kind === "not_runnable") return { kind: "not_runnable", sentence: state.sentence };
     if (state.kind !== "read") return state;
     if (state.preview === undefined) return conflict("none");
     if (
@@ -72,7 +73,7 @@ const demandRuntimePreview = async (
       demand,
       signal,
     );
-    if (result.kind === "not_runnable") return { kind: "temporarily_unavailable" };
+    if (result.kind === "not_runnable") return { kind: "not_runnable", sentence: result.sentence };
     return result.kind === "conflict" ? conflict("materialize_superseded") : result;
   } finally {
     release();

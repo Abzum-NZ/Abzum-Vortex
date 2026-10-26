@@ -8,6 +8,7 @@ import {
   parseThemeMode,
 } from "@vortex/ui/theme/appearance";
 import { AppearanceProvider } from "@vortex/ui/appearance";
+import { Toaster } from "@vortex/ui/components/sonner";
 import { loadDocumentTheme } from "./_lib/document-theme";
 import { documentStylesheetHref } from "./_lib/document-styles";
 import "@vortex/ui/styles/globals.css";
@@ -46,6 +47,9 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         <AppearanceProvider initial={appearance}>
           <HistoryRefresh />
           {children}
+          {/* One notifications region for every page, so a toast survives opening another
+              application. The document root carries the on-screen application's theme. */}
+          <Toaster position="bottom-right" visibleToasts={3} closeButton />
         </AppearanceProvider>
       </body>
     </html>

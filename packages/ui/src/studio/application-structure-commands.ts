@@ -314,7 +314,6 @@ const placeMenuShell = (
             direction: "row",
             gap: "medium",
             padding: "medium",
-            content_landmark: true,
             phone_direction: "column",
           },
           { menu: [blockItem(menu!, menuId, { title }, {})] },

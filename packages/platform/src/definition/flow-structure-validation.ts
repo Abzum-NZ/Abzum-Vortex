@@ -12,7 +12,9 @@ import {
 } from "../workflows/flow-contracts";
 import { flowLiteralSchema } from "../workflows/flow-values";
 import type { DefinitionCompilerRefusalCode } from "./compilation-error";
-import type { Path } from "./flow-validation";
+
+/** A location inside a flow source: object keys and array indexes from its root. */
+export type Path = (string | number)[];
 
 /**
  * The structural half of the one flow validator (`flow-validation.ts`): task identity, count and

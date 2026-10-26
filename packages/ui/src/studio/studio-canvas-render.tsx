@@ -395,29 +395,31 @@ function CanvasBlock({
 
 const canvasConfigs = new WeakMap<Config, Config>();
 
+/** The input blocks that each register one form field: an input naming its field. */
+const formFieldRendererKeys = (registry: PlatformComponentRegistry): ReadonlySet<string> =>
+  new Set(
+    registry
+      .getReleases()
+      .filter(
+        (release) =>
+          release.paletteGroup === "input" &&
+          release.properties.some(
+            (property) => property.key === "name" || property.key === "field",
+          ),
+      )
+      .map((release) => release.rendererKey),
+  );
+
 /**
  * The canvas config: the one config's components and root, each component drawing its stored
  * item as above. Only slot fields remain, because Puck finds slots through them and Studio edits
  * settings in its inspector. No defaults are merged: a block dropped from the palette is added by
  * Studio's add command, never by Puck.
  */
-/** The input blocks that each register one form field. */
-const formFieldRendererKeys: ReadonlySet<string> = new Set([
-  "platform.renderer.field_input",
-  "platform.renderer.text_input",
-  "platform.renderer.table_input",
-  "platform.renderer.attachment_input",
-  "platform.renderer.link_input",
-  "platform.renderer.rich_text_input",
-  "platform.renderer.number_input",
-  "platform.renderer.boolean_input",
-  "platform.renderer.date_input",
-  "platform.renderer.choice_input",
-]);
-
 export const studioCanvasConfig = (config: Config, registry: PlatformComponentRegistry): Config => {
   let canvas = canvasConfigs.get(config);
   if (canvas !== undefined) return canvas;
+  const fieldInputs = formFieldRendererKeys(registry);
   const components = Object.fromEntries(
     Object.entries(
       config.components as Record<string, ComponentConfig<Record<string, unknown>>>,
@@ -445,7 +447,7 @@ export const studioCanvasConfig = (config: Config, registry: PlatformComponentRe
         ),
         // A second input for a field the form already shows would be refused when the form
         // draws, so a field input is never duplicated; add another field from the palette.
-        ...(formFieldRendererKeys.has(type) ? { permissions: { duplicate: false } } : {}),
+        ...(fieldInputs.has(type) ? { permissions: { duplicate: false } } : {}),
       },
     ]),
   );

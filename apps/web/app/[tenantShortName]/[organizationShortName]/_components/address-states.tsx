@@ -40,6 +40,25 @@ export function PageNotOpenAddress({
   );
 }
 
+/** A draft preview whose saved draft cannot run: the builder is told what to fix and where. */
+export function PreviewNotRunnableAddress({
+  sentence,
+  studioHref,
+}: Readonly<{ sentence: string; studioHref: string }>): ReactElement {
+  return (
+    <AuthShell
+      addressState="preview_not_runnable"
+      eyebrow="Draft preview"
+      title="This draft cannot run yet"
+      description={sentence}
+    >
+      <Button variant="outline" nativeButton={false} render={<Link href={studioHref} />}>
+        Open in Studio
+      </Button>
+    </AuthShell>
+  );
+}
+
 /** The address could not be read right now; the sign-in itself is still active. */
 export function TemporarilyUnavailableAddress({
   retryHref,

@@ -14,11 +14,16 @@ import { revokeIdentitySession } from "../_lib/session-server";
 import { privateResponse } from "../../_lib/private-response";
 import { mapWebError } from "../../_lib/web-error-mapper";
 
-/** Where ending the session leads: "your session ended", or "confirm it's you" for a recent sign-in. */
+/**
+ * Where ending the session leads: "your session ended", "confirm it's you" for a recent sign-in,
+ * or a plain sign-in when nobody was signed in and only stale cookies remained.
+ */
 const destinationPathFor = (status: string | null): string =>
   status === "reauthenticate"
     ? "/auth/sign-in?status=reauthenticate"
-    : "/auth/sign-in?status=session-ended";
+    : status === "signed-out"
+      ? "/auth/sign-in"
+      : "/auth/sign-in?status=session-ended";
 
 const allowsSessionEnd = (request: NextRequest, siteUrl: string): boolean => {
   const configuredOrigin = new URL(siteUrl).origin;

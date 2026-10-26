@@ -33,6 +33,7 @@ import {
   taskIdAtPath,
   validateStructure,
   type DeclarationView,
+  type Path,
 } from "./flow-structure-validation";
 
 /**
@@ -65,8 +66,6 @@ import {
  * identity; the caller's `targetFlow` and `triggerRecordFieldExists` do any resolution.
  * It returns every issue with a path relative to the flow; callers place them on the definition.
  */
-
-export type Path = (string | number)[];
 
 export type FlowValidationIssue = Readonly<{
   /** Path inside the flow, for example `["tasks", 1, "then", 0, "properties", "message"]`. */

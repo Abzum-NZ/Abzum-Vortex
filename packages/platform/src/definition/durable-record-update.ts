@@ -45,7 +45,6 @@ export const prepareDurableRecordUpdate = async (
   commandId: string,
   update: DurableRecordUpdate,
 ) => {
-  await transaction.query`set local role vortex_request`;
   const rows = await transaction.query<{ preparation: unknown }>`
     select vortex_record.prepare_flow_record_update(
       ${update.recordTypeId}::uuid, ${update.recordId}::uuid,

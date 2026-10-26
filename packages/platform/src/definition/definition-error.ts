@@ -71,10 +71,6 @@ const describeCause = (cause: unknown): string => {
   return databaseCode === undefined ? message : `database ${databaseCode}: ${message}`;
 };
 
-/**
- * Builds a DefinitionError for an unexpected failure and logs the real cause (database code and
- * message, or Zod issues) on the server. Expected refusals are constructed directly instead.
- */
 /** A definition rule refusing the draft (a validation answer) somewhere in this cause chain. */
 const isValidationRefusal = (cause: unknown): boolean => {
   let current: unknown = cause;
@@ -85,6 +81,10 @@ const isValidationRefusal = (cause: unknown): boolean => {
   return false;
 };
 
+/**
+ * Builds a DefinitionError for an unexpected failure and logs the real cause (database code and
+ * message, or Zod issues) on the server. Expected refusals are constructed directly instead.
+ */
 export const unexpectedDefinitionFailure = <Code extends string>(
   code: Code,
   cause: unknown,

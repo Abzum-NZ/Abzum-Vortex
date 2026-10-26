@@ -254,21 +254,12 @@ export function useFlowIntentHost(
 
   const current = surfaces[0];
   let element: ReactElement | null = null;
-  /** A message the flow did not title is headed by what kind of message it is, in plain words. */
-  const messageHeading = (tone: string | undefined): string =>
-    tone === "success"
-      ? "Done"
-      : tone === "warning"
-        ? "Before you continue"
-        : tone === "danger" || tone === "error" || tone === "problem"
-          ? "Not possible"
-          : "For your information";
   if (current?.kind === "message") {
     const { message, settle } = current;
     element = (
       <FlowDialog
         key={current.id}
-        title={message.title ?? messageHeading(message.tone)}
+        title={message.title}
         onDismiss={() => settle()}
         actions={
           <Button type="button" onClick={() => settle()}>

@@ -29,14 +29,21 @@ export const refusal = (
 
 /**
  * A refusal the engine answers with: the client sees only the neutral reason code; the part of the
- * request and the cause are logged here so a refusal never goes without one.
+ * request and the cause are logged here so a refusal never goes without one. A stale continuation
+ * (the records or release moved since the page loaded) and an input value the page cannot run are
+ * expected answers and are logged as information; every other refusal is an error.
  */
 export const refuseWithCause = (
   reasonCode: ProtectedQueryRefusalReasonCode,
   part: string,
   cause: string,
 ): Extract<ProtectedQueryResult, { outcome: "refused" }> => {
-  console.error("[protected-query] request refused", { part, reason: reasonCode, cause });
+  const expected = reasonCode === "cursor_stale" || reasonCode === "input_invalid";
+  (expected ? console.info : console.error)("[protected-query] request refused", {
+    part,
+    reason: reasonCode,
+    cause,
+  });
   return refusal(reasonCode);
 };
 

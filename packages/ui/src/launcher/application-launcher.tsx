@@ -34,8 +34,8 @@ export function ApplicationLauncher(props: LauncherRenderProps): ReactElement {
   const settings = readLauncherSettings(props, context.location);
   const nameKey = settings.cellKey("name_key", "name");
   const iconKey = settings.cellKey("icon_key", "icon");
-  const actionLabel = settings.text("action_label") ?? "Open";
-  const emptyMessage = settings.text("empty_message") ?? "No applications to show";
+  const actionLabel = settings.requiredText("action_label");
+  const emptyMessage = settings.requiredText("empty_message");
   // The launcher bindings write an optional fixed `description` cell; it is not a declared setting.
   const descriptionKey = "description";
   const values = context.values;

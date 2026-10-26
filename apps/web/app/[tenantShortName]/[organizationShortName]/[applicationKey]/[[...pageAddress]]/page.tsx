@@ -13,6 +13,7 @@ import { ApplicationPageView } from "./_components/application-page-view";
 import { BarePage } from "../_components/bare-page";
 import {
   PageNotOpenAddress,
+  PreviewNotRunnableAddress,
   suspendedOrganizationAccount,
   TemporarilyUnavailableAddress,
   unavailableAddress,
@@ -307,6 +308,16 @@ async function readApplicationAddressPage({ params, searchParams }: ApplicationA
     return (
       <BarePage>
         <TemporarilyUnavailableAddress retryHref={retryHref} />
+      </BarePage>
+    );
+  if (page.kind === "not_runnable")
+    return (
+      <BarePage>
+        <PreviewNotRunnableAddress
+          sentence={page.sentence}
+          // Only a draft preview, which always has its installed context, cannot run.
+          studioHref={`/studio/${encodeURIComponent(resolved.installedContext!.organizationId)}/${encodeURIComponent(resolved.application.applicationRootId)}`}
+        />
       </BarePage>
     );
   if (page.kind === "unavailable") notFound();

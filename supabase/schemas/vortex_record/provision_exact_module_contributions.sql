@@ -46,6 +46,7 @@ declare
   protected_view_key text;
   contribution_ids uuid[] := array[]::uuid[];
   any_change boolean := false;
+  evolve_field boolean;
 begin
   if not vortex_platform.is_non_nil_uuid(p_module_root_id::text)
     or p_module_release_revision not between 1 and 9007199254740991
@@ -457,6 +458,7 @@ begin
       raise exception using errcode = '23514', message = 'Contributed field type is unsupported';
     end if;
 
+    evolve_field := false;
     select mapping.* into stored_field
     from vortex_record.field_storage_mappings as mapping
     where mapping.storage_contract_id = stored_catalogue.storage_contract_id
@@ -477,14 +479,9 @@ begin
         raise exception using errcode = '55000',
           message = 'Existing contributed field storage is incompatible';
       end if;
-      if p_module_release_revision >= contributor_revision
-        and stored_field.field_definition is distinct from source_field then
-        perform vortex_record.evolve_field_storage_internal(
-          stored_catalogue.storage_contract_id, field_id_value, source_field,
-          storage_scope_value, table_token, column_token, is_projection
-        );
-        any_change := true;
-      end if;
+      -- A later definition is applied once the column is checked and a retired field is active.
+      evolve_field := p_module_release_revision >= contributor_revision
+        and stored_field.field_definition is distinct from source_field;
     end if;
 
     if is_projection then
@@ -625,6 +622,13 @@ begin
         end if;
         any_change := true;
       end if;
+    end if;
+    if evolve_field then
+      perform vortex_record.evolve_field_storage_internal(
+        stored_catalogue.storage_contract_id, field_id_value, source_field,
+        storage_scope_value, table_token, column_token, is_projection
+      );
+      any_change := true;
     end if;
 
     contribution_ids := contribution_ids || contribution_id;

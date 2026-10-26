@@ -189,7 +189,7 @@ export const PLATFORM_BLOCK_RELEASE_IDENTITIES = Object.freeze({
     key: "platform.launcher.application_launcher",
     rendererKey: "platform.renderer.application_launcher",
     releaseVersion: "1.0.0",
-    contentFingerprint: "sha256:3f77d549f8a36a119c2f1d5b329e1f30e284e4ffab6fa1c7e43c95c5a2bd3998",
+    contentFingerprint: "sha256:5188f037652aa608a34612eb98e02dbc4b890d938c619067015d564d97108ed4",
   },
   LINK_TILES_BLOCK_RELEASE: {
     blockId: "c4d9e1f2-7a68-4c05-9b3d-5f2a8e6c0b47",
@@ -210,7 +210,7 @@ export const PLATFORM_BLOCK_RELEASE_IDENTITIES = Object.freeze({
     key: "platform.layout.container",
     rendererKey: "platform.renderer.container",
     releaseVersion: "1.3.0",
-    contentFingerprint: "sha256:2f57bccb215439f5a7eb377e3d0c570a2bdbc353391dc36d0237ed40b7b51196",
+    contentFingerprint: "sha256:0f631c71bd643955b8b106b881455baaaa314940ffd22cc1fddd84fef846e93c",
   },
   ATTACHMENT_LIST_BLOCK_RELEASE: {
     blockId: "39217bcc-8fd1-4825-afca-e97598a13f0a",
@@ -231,7 +231,7 @@ export const PLATFORM_BLOCK_RELEASE_IDENTITIES = Object.freeze({
     key: "platform.layout.heading",
     rendererKey: "platform.renderer.heading",
     releaseVersion: "1.1.0",
-    contentFingerprint: "sha256:8b3955a41b07de8b09455a60a1f33fc499c774efb96d0d4553e2643191d21ae3",
+    contentFingerprint: "sha256:f609045ba3df1cbc479a128e8f70256a5e60239072e42848aea48752697e601e",
   },
   CHART_BLOCK_RELEASE: {
     blockId: "5e7d5839-04fe-4b33-93c7-a382521a74b8",

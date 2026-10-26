@@ -126,6 +126,7 @@ export const readPageProjections = cache(
       subjectRecordId !== undefined,
     );
     const projectedPageRead = subjectReady.then(async (ready) => {
+      if (ready.kind === "not_runnable") return ready;
       if (ready.kind !== "ready")
         return {
           kind:
@@ -146,6 +147,7 @@ export const readPageProjections = cache(
         projected.value,
         selectedPlacementIds,
       );
+      if (demand.kind === "not_runnable") return demand;
       if (demand.kind !== "ready")
         return {
           kind:

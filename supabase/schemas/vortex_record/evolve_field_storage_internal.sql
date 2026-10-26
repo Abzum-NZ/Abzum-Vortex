@@ -61,6 +61,12 @@ begin
           and index_row.purpose in ('uniqueness', 'performance');
       end if;
     end if;
+    -- A unique field keeps its sort index only while it is sortable.
+    if desired_purpose = 'uniqueness'
+      and not coalesce((p_requested ->> 'sortable')::boolean, false) then
+      execute pg_catalog.format('drop index if exists record_data.%I',
+        'ix_' || pg_catalog.substr(p_column_token, 3));
+    end if;
   end if;
   update vortex_record.field_storage_mappings as mapping
   set field_definition = p_requested
@@ -81,4 +87,4 @@ revoke all on function vortex_record.evolve_field_storage_internal(uuid, uuid, j
 grant execute on function vortex_record.evolve_field_storage_internal(uuid, uuid, jsonb, text, text, text, boolean)
   to vortex_owner;
 comment on function vortex_record.evolve_field_storage_internal(uuid, uuid, jsonb, text, text, text, boolean) is
-  'Applies a later compatible release of one stored field: drops a requirement it no longer has, moves the field to the one index its unique, filterable and sortable flags need, and records the release''s field definition.';
+  'Applies a later compatible release of one stored field: drops a requirement it no longer has, moves the field to the one index its unique, filterable and sortable flags need (a unique field''s sort index only while sortable), and records the release''s field definition.';

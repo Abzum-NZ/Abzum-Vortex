@@ -49,7 +49,7 @@ export const isSurfaceCancellation = (error: unknown): boolean =>
 export type FlowMessageIntent = Readonly<{
   text: string;
   tone: string | undefined;
-  title?: string;
+  title: string;
 }>;
 /**
  * A confirmation: its question, what it covers line by line, and one optional opt-in that goes with
@@ -93,17 +93,13 @@ export const isFlowIntent = (candidate: unknown): candidate is FlowIntent => {
   );
 };
 
-/** Undefined when the intent lacks its required, bounded message text. */
+/** Undefined when the intent lacks its required, bounded message text or title. */
 export const readMessageIntent = (intent: FlowIntent): FlowMessageIntent | undefined => {
   const message = text(intent.properties.message);
   const title = text(intent.properties.title);
-  return message === undefined
+  return message === undefined || title === undefined
     ? undefined
-    : {
-        text: message,
-        tone: text(intent.properties.tone),
-        ...(title === undefined ? {} : { title }),
-      };
+    : { text: message, tone: text(intent.properties.tone), title };
 };
 
 /**

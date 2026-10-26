@@ -29,7 +29,7 @@ import {
   useSeededState,
 } from "./field-parts";
 import { useFormFieldValue, useRequiredFormField } from "./form-context";
-import { waitingForParent } from "./dependent-field";
+import { labelInSentence, waitingForParent } from "./dependent-field";
 import {
   parseRecordChoicePage,
   type LinkInputPayload,
@@ -296,8 +296,8 @@ export function LinkInput(props: LinkInputProps): ReactElement {
               : failed
                 ? "Records could not be loaded. Try again."
                 : searchTerm.trim() === ""
-                  ? `No ${label.toLowerCase()} to choose from yet`
-                  : `No ${label.toLowerCase()} matches your search`}
+                  ? `No ${labelInSentence(label)} to choose from yet`
+                  : `No ${labelInSentence(label)} matches your search`}
           </ComboboxEmpty>
           {next !== undefined ? (
             <Button

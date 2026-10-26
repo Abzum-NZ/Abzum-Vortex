@@ -118,14 +118,26 @@ const NON_SUBMITTING_INPUT_TYPES = new Set([
 const FIRST_FIELD_SELECTOR =
   "input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled])";
 
-/** Focuses the control of one field of the form, by its field key. */
+/**
+ * Focuses the control of one field of the form, by its field key: the control its label names
+ * (a file field's chooser, not a listed file's Remove button), else its first enabled control.
+ */
 const focusField = (form: HTMLFormElement | null, fieldKey: string | undefined): void => {
   if (form === null || fieldKey === undefined) return;
-  form
-    .querySelector<HTMLElement>(
-      `[data-vortex-field-key="${CSS.escape(fieldKey)}"] :is(input, select, textarea, button):not([disabled], [type="hidden"])`,
-    )
-    ?.focus();
+  const field = form.querySelector<HTMLElement>(
+    `[data-vortex-field-key="${CSS.escape(fieldKey)}"]`,
+  );
+  if (field === null) return;
+  const labelled = field.querySelector<HTMLLabelElement>("label[for]")?.htmlFor;
+  const named =
+    labelled === undefined ? null : field.querySelector<HTMLElement>(`#${CSS.escape(labelled)}`);
+  const control =
+    named !== null && !named.matches(":disabled")
+      ? named
+      : field.querySelector<HTMLElement>(
+          ':is(input, select, textarea, button):not([disabled], [type="hidden"])',
+        );
+  control?.focus();
 };
 
 /**
@@ -142,12 +154,7 @@ function FormErrorSummary({
   const entries = Object.entries(errors);
   if (entries.length < 2) return null;
   return (
-    <Alert
-      variant="destructive"
-      role="alert"
-      data-vortex-form-error-summary=""
-      className="order-first"
-    >
+    <Alert variant="destructive" role="alert" data-vortex-form-error-summary="">
       <AlertDescription>
         <p className="font-medium">Fix these {entries.length} fields to continue:</p>
         <ul className="mt-1 list-disc ps-5">
@@ -430,6 +437,7 @@ export function FormContainer(props: FormContainerProps): ReactElement {
         data-vortex-placement-id={props.placementId}
         className="flex flex-col gap-4"
       >
+        <FormErrorSummary form={formRef} errors={validationErrors} />
         {ownerGroups === undefined ? null : ownerGroups.length === 0 ? (
           <p role="alert" className="text-sm text-muted-foreground">
             You need current membership in an active Group before you can create this record.
@@ -493,7 +501,6 @@ export function FormContainer(props: FormContainerProps): ReactElement {
             {props.slots.content ?? null}
           </fieldset>
         </FormScopeContext.Provider>
-        <FormErrorSummary form={formRef} errors={validationErrors} />
         <FormDraftFeedbackRegion id={feedbackId} summary={summary} />
         {flowFeedback === undefined ? null : (
           <Alert

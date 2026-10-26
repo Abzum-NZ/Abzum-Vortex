@@ -141,6 +141,7 @@ const uninformative: ReadonlySet<string> = new Set([
   "conflict",
   "refused",
   "temporarily_unavailable",
+  "not_runnable",
 ]);
 
 /**

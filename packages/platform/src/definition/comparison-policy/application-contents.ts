@@ -1,7 +1,11 @@
 import type { ApplicationContent } from "../application-contracts";
 import type { VersionImpactReason } from "../version-impact";
 import { canonicalJson } from "../canonical-json-definition";
-import { placementBlockRelease, placementSettings } from "../application-composition-catalogue";
+import {
+  TABLE_BLOCK_RELEASE,
+  placementBlockRelease,
+  placementSettings,
+} from "../application-composition-catalogue";
 import { releaseSettingDeclarations } from "../application-composition/platform-block-release";
 import type { BlockPropertySchemaContract } from "../application-composition/block-property-schema";
 import {
@@ -311,6 +315,10 @@ const comparePlacements = (
       "behavior",
       id,
     );
+    // Only the Data grid's `features` group is versioned feature by feature.
+    const grid =
+      placementBlockRelease(after.vortex.block).blockId.toLowerCase() ===
+      TABLE_BLOCK_RELEASE.blockId.toLowerCase();
     for (const key of new Set([...Object.keys(before.settings), ...Object.keys(after.settings)])) {
       const declaration =
         after.declarations.find((property) => property.key === key) ??
@@ -318,7 +326,7 @@ const comparePlacements = (
       if (declaration === undefined) throw new Error(`Block release has no setting '${key}'`);
       const previousSetting = asRecord(before.settings[key]);
       const candidateSetting = asRecord(after.settings[key]);
-      if (key === "features" && declaration.kind === "group") {
+      if (grid && key === "features" && declaration.kind === "group") {
         compareGridFeatures(reasons, previousSetting, candidateSetting, id);
         continue;
       }

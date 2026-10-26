@@ -35,6 +35,11 @@ begin
   end if;
 
   -- One pending invitation per email and organisation: inviting again while one waits is refused.
+  -- Invitations of one email to one organisation are serialised, so two at once cannot both pass.
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended(pg_catalog.concat_ws(E'\x1f',
+      checked ->> 'organizationId', p_invited_email), 3584)
+  );
   if exists (
     select 1
     from vortex_identity.organization_invitations as pending

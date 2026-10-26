@@ -53,6 +53,7 @@ Status: **Fixed** (merged with #3584, commit named), **Batch 2** (ARCH, `arch-ba
 | Defect | Status | Change |
 |---|---|---|
 | Changing a platform operation left installed apps' controls "Unavailable", and publishing answered "no change" | Fixed 3d48b6a9 | publication compares the latest release's platform operation and connection pins and releases again |
+| Every application page had two `main` landmarks: the shell's and the Container's content region | Fixed (RV-3584 batch) | the shell draws the one `main`; the Container's `content_landmark` setting is removed from the catalogue, shipped definitions and Studio's shell command |
 | Development setup refused the IAM upgrade (role revision not accepted) | Fixed 087579e9 | setup accepts shipped role revisions |
 
 ## UI review findings (ARCH part and those fixed before the split)
@@ -81,3 +82,45 @@ Status: **Fixed** (merged with #3584, commit named), **Batch 2** (ARCH, `arch-ba
 | UI-48 control border contrast | Fixed c5b891c3 | |
 | UI-50 empty calendar | Fixed 0034b506 | |
 | Other UI findings | FIX-A to FIX-E, FIX-R | `fix-split/partition.md` |
+
+## Review of #3584 (RV-3584: 0 blocking, 9 should-fix, 26 nits)
+
+All 35 are fixed on `arch-batch`; the database ones in migration 20261026120000.
+
+| Id | Change |
+|---|---|
+| S1 | A contributed field applies a later definition only after its column is checked and a retired field is active again |
+| S2 | A unique field drops its sort index when it stops being sortable (walked in a rolled-back transaction: `ix_` gone, `ux_` kept) |
+| S3 | The lifecycle entry refuses an offboarding transfer mutation (`command_invalid`); `transfer_offboarding_owned_record` is the one entry |
+| S4 | Invitations of one email to one organisation are serialised with a transaction lock |
+| S5 | Stale `storedInvitationSchema` and `StoredInvitation` removed |
+| S6 | Text, Heading and Launcher pins changed: compiled releases using them are STALE-REBUILD; development and demo setup republish the shipped applications, and Studio-authored applications are republished (see the PR's deploy note) |
+| S7 | Launcher `action_label` and `empty_message` are required with catalogue defaults; every placement states them; the renderer has no fallback wording |
+| S8 | The form error summary is the form's first element in DOM and tab order |
+| S9 | A Postgres missing privilege (`permission denied for ...`) is logged as an error and answered as temporarily unavailable; the access model's refusals stay information |
+| N1 | Redundant `set local role vortex_request` removed |
+| N2 | Records specification names the one activity appender |
+| N3 | `transfer_offboarding_owned_record` no longer repeats the scope check |
+| N4 | The envelope function's owner, revoke and comment live in its own file |
+| N5 | Migration 189000's allowance reasons say the identities are read from 190000 |
+| N6 | Not a defect (as the reviewer notes) |
+| N7 | `removal-eligibility.ts` imports once and re-exports nothing |
+| N8 | `Path` lives in the structure validator |
+| N9 | Only the Data grid's `features` group is versioned feature by feature |
+| N10 | A stale continuation and an input the page cannot run log as information |
+| N11 | Roles and Groups and Assignments have their own intros |
+| N12 | `not_runnable` is uninformative to the preview gate |
+| N13 | A draft preview that cannot run says why and links to Studio |
+| N14 | A missing session with stale cookies clears them, then shows plain sign-in |
+| N15 | Studio derives field inputs from the releases |
+| N16 | Doc comments sit on their functions |
+| N17 | Headings offer levels 2 to 4; the page name is the one level-1 heading |
+| N18 | An invitation says how many days it stays open, the same in every time zone |
+| N19 | A join that does not happen says why; invitations that cannot be read never hide the person's organisations |
+| N20 | Escape or an outside click keeps typed setup values and says how to leave |
+| N21 | One notifications region for every page, so a toast survives opening another application |
+| N22 | Labels keep acronyms inside sentences |
+| N23 | A message task requires its title; shipped flows are titled; Studio seeds it from the flow's name |
+| N24 | A field's focus goes to the control its label names |
+| N25 | `next-env.d.ts` restored to main's |
+| N26 | Dead prototype link removed |

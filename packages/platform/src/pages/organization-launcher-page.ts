@@ -92,7 +92,6 @@ export const organizationLauncherShell = applicationShellSchema.parse({
           phone_direction: "inherit",
           phone_menu_width: 14,
           phone_menu_placement: "inherit",
-          content_landmark: true,
           padding: "medium",
           content_width: "fill",
         },
@@ -133,6 +132,7 @@ const launcherItems = [
     {
       title: "Available applications",
       row_action_event_id: applicationLauncherOpenEventId,
+      action_label: "Open",
       empty_message: "You have no applications yet. Ask your administrator for access.",
     },
     ["side_panel"],

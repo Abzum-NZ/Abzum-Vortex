@@ -315,12 +315,20 @@ export const createHumanOrganizationRequestService = (
       }
       const recentAuthenticationRequired = code === "V3150";
       const roleSettingsChangeRequired = code === "V3151";
+      // Postgres reports a missing privilege (a lost GRANT, a role misconfiguration) with the same
+      // code as the access model's refusals, but always as "permission denied for ...".
+      const missingPrivilege =
+        code === "42501" &&
+        error instanceof Error &&
+        error.message.startsWith("permission denied for ");
       const refused =
-        code === "42501" || recentAuthenticationRequired || roleSettingsChangeRequired;
+        (code === "42501" && !missingPrivilege) ||
+        recentAuthenticationRequired ||
+        roleSettingsChangeRequired;
       const cause = describeFailure(error);
       // A request its caller abandoned (the browser left the page) is stopped on purpose, and a
-      // permission refusal is the access model answering: neither is a failure of the platform,
-      // so neither is logged as an error. Every other cause is logged in full.
+      // refusal the access model raises is it answering: neither is a failure of the platform, so
+      // neither is logged as an error. Every other cause, a missing privilege too, is logged in full.
       const abandoned =
         error instanceof Error &&
         error.name === "VortexDatabaseError" &&

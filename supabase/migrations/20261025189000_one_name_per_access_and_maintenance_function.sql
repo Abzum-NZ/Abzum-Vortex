@@ -2392,7 +2392,7 @@ begin
       end
       and registration.registration_owner_id = case
         when item.value ->> 'ownerKind' = 'platform'
-          -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
+          -- guard-allow: function-uuid until 20261025190000 reads platform permission identities
           then 'cabe121e-0baf-4084-9471-cce915d460a8'::uuid
         else (item.value ->> 'applicationRootId')::uuid
       end
@@ -3919,9 +3919,9 @@ begin
       'target', pg_catalog.jsonb_build_object('kind', 'organization'),
       'requiredPermission', pg_catalog.jsonb_build_object(
         'ownerKind', 'platform',
-        -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
+        -- guard-allow: function-uuid until 20261025190000 reads platform permission identities
         'ownerId', 'cabe121e-0baf-4084-9471-cce915d460a8',
-        -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
+        -- guard-allow: function-uuid until 20261025190000 reads platform permission identities
         'permissionId', '7ecd3304-f16c-47d4-94db-0964980091ba'
       ),
       'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
@@ -3941,9 +3941,9 @@ begin
       'target', pg_catalog.jsonb_build_object('kind', 'organization'),
       'requiredPermission', pg_catalog.jsonb_build_object(
         'ownerKind', 'platform',
-        -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
+        -- guard-allow: function-uuid until 20261025190000 reads platform permission identities
         'ownerId', 'cabe121e-0baf-4084-9471-cce915d460a8',
-        -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
+        -- guard-allow: function-uuid until 20261025190000 reads platform permission identities
         'permissionId', '7ecd3304-f16c-47d4-94db-0964980091ba'
       ),
       'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
