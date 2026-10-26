@@ -792,26 +792,20 @@ const createRuntimePostgresClient = (configuration: RuntimeDatabaseConfiguration
     onnotice: logDatabaseNotice,
   });
 
-// Next's instrumentation and page bundles have separate module caches in one Node process.
-// They share the ordinary connection pool; request context is still installed per transaction,
-// and request-owned connections keep their separate abortable lifetime above.
-const runtimeDatabaseClientKey = Symbol.for("vortex.runtimeDatabaseClient");
-const processDatabase = globalThis as typeof globalThis & {
-  [runtimeDatabaseClientKey]?: Sql;
-};
 const loadClient = (): Sql =>
-  (processDatabase[runtimeDatabaseClientKey] ??= createRuntimePostgresClient(
-    parseRuntimeDatabaseConfiguration(process.env),
-  ));
+  createRuntimePostgresClient(parseRuntimeDatabaseConfiguration(process.env));
 
+let client: Sql | undefined;
 const defaultRuntimeRunner = createRuntimeTransactionRunner({
   transaction: async <Result>(operation: (transaction: TransactionDriver) => Promise<Result>) => {
-    return createPostgresDriver(loadClient()).transaction(operation);
+    client ??= loadClient();
+    return createPostgresDriver(client).transaction(operation);
   },
 });
 const defaultResolvedRequestRunner = createResolvedRequestTransactionRunner({
   transaction: async <Result>(operation: (transaction: TransactionDriver) => Promise<Result>) => {
-    return createPostgresDriver(loadClient()).transaction(operation);
+    client ??= loadClient();
+    return createPostgresDriver(client).transaction(operation);
   },
 });
 
