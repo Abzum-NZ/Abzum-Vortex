@@ -7,8 +7,10 @@ import {
   standardPermissionKey,
   type SourceFlow,
   type SourceItem,
+  type ImmutablePlatformBlockCatalogue,
 } from "@vortex/platform/schema";
 import { applyStudioFlowCreate, type StudioFlowCreateCommand } from "./application-flow-create";
+import { ensureStudioRecordQuery } from "./default-record-query";
 import { STUDIO_ROW_ACTION_EVENT_SETTING, studioRowActionEventId } from "./contextual-palette";
 import {
   blockItem,
@@ -37,8 +39,8 @@ import {
  *
  * Nothing is generated at runtime: every block, query, flow, event and binding is written into the
  * draft by the one add-page, block, flow-create and binding paths, and can then be edited like any
- * other. A companion page that exists is linked both ways (adding the create form puts a New
- * button on the existing list); a companion that does not exist yet is named in the plan.
+ * other. A list includes its missing detail and create pages; existing companions are reused.
+ * Adding a companion separately connects it to the record type's existing pages.
  */
 
 export type StudioRecordPageKind = "list" | "detail" | "form_create" | "form_edit" | "guided";
@@ -349,50 +351,15 @@ const listQuery = (
   resolved: Resolved,
   columns: readonly Field[],
 ): Readonly<{ reference: string; select: readonly string[] }> => {
-  const module = plan.source.body.modules.find((entry) => entry.key === resolved.module.key)!;
-  const existing = module.queries.find(
-    (query) =>
-      query.record_type === resolved.record.key &&
-      query.inputs.length === 0 &&
-      query.filter === null &&
-      query.group_by.length === 0 &&
-      query.aggregates.length === 0 &&
-      query.select.includes(resolved.title.key),
+  const query = ensureStudioRecordQuery(
+    plan.source,
+    resolved.qualified,
+    columns.map((entry) => entry.key),
   );
-  if (existing !== undefined) {
-    plan.details.push(`It reads the existing query ${quoted(existing.label ?? existing.key)}.`);
-    return { reference: `${module.key}:${existing.key}`, select: existing.select };
-  }
-  if (module.queries.length >= 100)
-    refuse(
-      `${quoted(module.name)} already holds 100 queries, so no list query can be added for ${resolved.record.plural_name.toLowerCase()}.`,
-    );
-  const key = uniqueKey(
-    resolved.record.plural_name,
-    "",
-    new Set(module.queries.map((query) => query.key)),
-    40,
-  );
-  const query = {
-    id: freshAlias(plan, `qry_${key}`),
-    key,
-    label: resolved.record.plural_name,
-    exposure: "private",
-    record_type: resolved.record.key,
-    inputs: [],
-    select: columns.map((entry) => entry.key),
-    filter: null,
-    group_by: [],
-    aggregates: [],
-    sort: [{ field: resolved.title.key, direction: "ascending" }],
-    page_size: pageSize,
-    relationship_hops: 0,
-  } as unknown as Query;
-  module.queries.push(query);
   plan.details.push(
-    `A new query ${quoted(resolved.record.plural_name)} in ${quoted(module.name)} returns every ${lowerFirst(resolved.record.name)}, sorted by ${resolved.title.label}.`,
+    `${query.created ? "A new" : "The existing"} query returns all ${resolved.record.plural_name.toLowerCase()}, sorted by ${resolved.title.label}.`,
   );
-  return { reference: `${module.key}:${key}`, select: query.select };
+  return query;
 };
 
 /**
@@ -508,7 +475,7 @@ const openFlow = (
   );
 
 /** Finds a placed block by alias in the current draft, with the list that holds it. */
-const placed = (
+export const placed = (
   source: Source,
   alias: string,
 ): Readonly<{ item: SourceItem; siblings: SourceItem[] }> | undefined => {
@@ -566,7 +533,7 @@ const openButton = (
   const button = blockItem(
     release(context, PLATFORM_BLOCK_RELEASE_IDENTITIES.BUTTON_BLOCK_RELEASE, "button"),
     alias,
-    { label, action_kind: "action", variant: "secondary" },
+    { label, action_kind: "action", variant: "primary" },
     {},
     { view_permission: permission },
   );
@@ -575,7 +542,20 @@ const openButton = (
     const holder = placed(plan.source, place.beside);
     if (holder === undefined)
       return refuse(`The block ${quoted(place.beside)} is no longer in the draft.`);
-    holder.siblings.splice(holder.siblings.indexOf(holder.item), 0, button);
+    const preceding = holder.siblings[holder.siblings.indexOf(holder.item) - 1];
+    const header =
+      holder.item.type === "platform.renderer.heading"
+        ? holder.item
+        : holder.item.type === "platform.renderer.table" &&
+            preceding?.type === "platform.renderer.heading"
+          ? preceding
+          : undefined;
+    if (header === undefined)
+      holder.siblings.splice(holder.siblings.indexOf(holder.item), 0, button);
+    else {
+      if (!Array.isArray(header.props.actions)) header.props.actions = [];
+      (header.props.actions as SourceItem[]).push(button);
+    }
   }
   openFlow(plan, alias, "action", label, target, resolved);
   return alias;
@@ -665,7 +645,6 @@ const addList = (
     release(context, PLATFORM_BLOCK_RELEASE_IDENTITIES.TABLE_BLOCK_RELEASE, "records table"),
     tableAlias,
     {
-      title: listName ?? record.plural_name,
       empty_message: `There are no ${record.plural_name.toLowerCase()} yet.`,
       columns: tableColumns((entry) => field(resolved, entry), columns, title.key),
     },
@@ -673,7 +652,15 @@ const addList = (
     { query: query.reference },
   );
   const name = listName ?? record.plural_name.slice(0, 60);
-  const items = [table];
+  const items = [
+    blockItem(
+      release(context, PLATFORM_BLOCK_RELEASE_IDENTITIES.HEADING_BLOCK_RELEASE, "heading"),
+      freshAlias(plan, `heading_${record.key}`),
+      { text: name, level: "two" },
+      { actions: [] },
+    ),
+    table,
+  ];
   const placedPage = placeNewPage(
     plan.source,
     name,
@@ -864,6 +851,38 @@ const relatedTables = (
     ),
   );
 
+/** The same ordinary Record detail block for a generated page and a record side sheet. */
+export const studioRecordDetailItem = (
+  catalogue: ImmutablePlatformBlockCatalogue,
+  source: Source,
+  reference: string,
+  alias: string,
+  recordFrom?: string,
+): SourceItem => {
+  const resolved = resolveRecordType(source, reference);
+  const record = resolved.record;
+  const detail = blockRelease(
+    catalogue,
+    PLATFORM_BLOCK_RELEASE_IDENTITIES.RECORD_DETAIL_BLOCK_RELEASE,
+  );
+  if (detail === undefined) return refuse("The block catalogue has no Record detail block.");
+  return blockItem(
+    detail,
+    alias,
+    {
+      title: record.name,
+      heading_source: "field",
+      heading_field: field(resolved, resolved.title),
+      [STUDIO_ROW_ACTION_EVENT_SETTING]: studioRowActionEventId(alias),
+      ...(recordFrom === undefined ? {} : { record_from: recordFrom }),
+      detail_fields: record.fields
+        .filter((entry) => entry.type !== "attachment" && resolved.readable.has(entry.key))
+        .map((entry) => ({ field: field(resolved, entry), label: entry.label })),
+    },
+    {},
+  );
+};
+
 const addDetail = (
   context: StudioStructureContext,
   plan: Plan,
@@ -875,21 +894,11 @@ const addDetail = (
     (entry) => entry.type !== "attachment" && resolved.readable.has(entry.key),
   );
   const detailAlias = freshAlias(plan, `detail_${record.key}`);
-  const detail = blockItem(
-    release(
-      context,
-      PLATFORM_BLOCK_RELEASE_IDENTITIES.RECORD_DETAIL_BLOCK_RELEASE,
-      "record detail",
-    ),
+  const detail = studioRecordDetailItem(
+    context.catalogue,
+    plan.source,
+    resolved.qualified,
     detailAlias,
-    {
-      title: record.name,
-      heading_source: "field",
-      heading_field: field(resolved, resolved.title),
-      [STUDIO_ROW_ACTION_EVENT_SETTING]: studioRowActionEventId(detailAlias),
-      detail_fields: shown.map((entry) => ({ field: field(resolved, entry), label: entry.label })),
-    },
-    {},
   );
   const attachments = record.fields
     .filter((entry) => entry.type === "attachment" && resolved.readable.has(entry.key))
@@ -1428,6 +1437,12 @@ export const addRecordPage = (
       `${resolved.record.plural_name} already have ${/^[aeiou]/.test(kindWords[command.type]) ? "an" : "a"} ${kindWords[command.type]}: ${quoted(existing.name)}. Open it in Structure and change it there.`,
     );
   const plan: Plan = { source: candidate, details: [], taken: takenIds(candidate) };
+  if (command.type === "list") {
+    const companionCommand = { ...command, addToMenu: false };
+    if (found.detail === undefined) addDetail(context, plan, resolved, companionCommand);
+    if (found.create === undefined && resolved.record.standard_actions.includes("create"))
+      addForm(context, plan, resolved, companionCommand, "create");
+  }
   const page =
     command.type === "list"
       ? addList(context, plan, resolved, command, listName)

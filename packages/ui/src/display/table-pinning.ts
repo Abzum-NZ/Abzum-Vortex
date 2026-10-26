@@ -20,6 +20,9 @@ export const pinStyle = (id: string, side: "start" | "end"): CSSProperties => ({
     ? { insetInlineStart: `var(${pinVariable(id)}-offset)` }
     : { insetInlineEnd: `var(${pinVariable(id)}-offset)` }),
   zIndex: `var(${pinVariable(id)}-layer)` as unknown as number,
+  borderInlineStart: `var(${pinVariable(id)}-border-start, 0px solid transparent)`,
+  borderInlineEnd: `var(${pinVariable(id)}-border-end, 0px solid transparent)`,
+  boxShadow: `var(${pinVariable(id)}-shadow, none)`,
 });
 
 /**
@@ -38,6 +41,37 @@ export function useGridPinning(
   expansion: boolean,
 ): Readonly<{ variables: CSSProperties; scrollPadding: CSSProperties }> {
   const [viewport, setViewport] = useState(0);
+  // Edge shadows follow horizontal scrolling without re-rendering the rows during wheel input.
+  useLayoutEffect(() => {
+    const element = scroll.current;
+    if (!enabled || element === null) return;
+    let previous = "";
+    const update = (): void => {
+      const start = element.scrollLeft > 1;
+      const end = element.scrollLeft + element.clientWidth < element.scrollWidth - 1;
+      const next = `${start}:${end}`;
+      if (next === previous) return;
+      previous = next;
+      element.style.setProperty(
+        "--grid-pin-start-shadow",
+        start ? "4px 0 8px -4px color-mix(in oklab, var(--foreground) 25%, transparent)" : "none",
+      );
+      element.style.setProperty(
+        "--grid-pin-end-shadow",
+        end ? "-4px 0 8px -4px color-mix(in oklab, var(--foreground) 25%, transparent)" : "none",
+      );
+    };
+    element.addEventListener("scroll", update, { passive: true });
+    const observer = new ResizeObserver(update);
+    observer.observe(element);
+    update();
+    return () => {
+      observer.disconnect();
+      element.removeEventListener("scroll", update);
+      element.style.removeProperty("--grid-pin-start-shadow");
+      element.style.removeProperty("--grid-pin-end-shadow");
+    };
+  }, [scroll, enabled, layout.state.order]);
   // A grid without pinning never observes its width, so a plain table never re-renders on resize.
   useLayoutEffect(() => {
     const element = scroll.current;
@@ -86,6 +120,7 @@ export function useGridPinning(
               .reverse(),
           ];
     const offsets: string[] = [];
+    let lastPinned: string | undefined;
     for (const id of ids) {
       const utility = id === EXPAND_COLUMN || id === SELECT_COLUMN || id === ACTIONS_COLUMN;
       const active = utility ? utilityPins : accepted.has(id);
@@ -97,6 +132,7 @@ export function useGridPinning(
           : `calc(${offsets.join(" + ")})`
         : "auto";
       if (active) {
+        lastPinned = id;
         offsets.push(
           utility
             ? `${id === ACTIONS_COLUMN ? actions : GRID_CONTROL_COLUMN_WIDTH}px`
@@ -108,6 +144,11 @@ export function useGridPinning(
             : GRID_CONTROL_COLUMN_WIDTH
           : layout.state.widths[id]!;
       }
+    }
+    if (lastPinned !== undefined) {
+      style[`${pinVariable(lastPinned)}-border-${side === "start" ? "end" : "start"}`] =
+        "1px solid var(--border)";
+      style[`${pinVariable(lastPinned)}-shadow`] = `var(--grid-pin-${side}-shadow, none)`;
     }
   }
   // The viewport's scroll padding keeps a focused cell clear of the pinned edges.

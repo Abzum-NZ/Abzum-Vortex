@@ -1,12 +1,12 @@
-CREATE FUNCTION vortex_access.project_organization_role_activation_summary(p_organization_id uuid, p_role_activation_id uuid) RETURNS jsonb
+create or replace function vortex_access.project_organization_role_activation_summary(p_organization_id uuid, p_role_activation_id uuid) RETURNS jsonb
     LANGUAGE sql SECURITY DEFINER
     SET search_path TO ''
     AS $$
   select pg_catalog.jsonb_build_object(
     'roleActivationId', activation.role_activation_id,
-    'beneficiary', pg_catalog.jsonb_build_object(
+    'beneficiary', pg_catalog.jsonb_strip_nulls(pg_catalog.jsonb_build_object(
       'organizationAccountId', activation.organization_account_id,
-      'displayName', account.display_name),
+      'displayName', account.display_name)),
     'role', pg_catalog.jsonb_build_object(
       'roleId', activation.role_id, 'key', revision.role_key,
       'label', revision.label, 'lifecycle', revision.lifecycle),

@@ -1154,7 +1154,7 @@
                     "vortex": {
                       "block": {
                         "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                        "release_version": "2.0.0"
+                        "release_version": "2.1.0"
                       },
                       "query": "vortex.system_directory:people",
                       "responsive": {
@@ -1412,7 +1412,7 @@
                     "vortex": {
                       "block": {
                         "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                        "release_version": "2.0.0"
+                        "release_version": "2.1.0"
                       },
                       "query": "vortex.system_directory:roles",
                       "responsive": {
@@ -1504,7 +1504,7 @@
                     "vortex": {
                       "block": {
                         "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                        "release_version": "2.0.0"
+                        "release_version": "2.1.0"
                       },
                       "query": "vortex.system_directory:groups",
                       "responsive": {
@@ -1585,7 +1585,7 @@
                     "vortex": {
                       "block": {
                         "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                        "release_version": "2.0.0"
+                        "release_version": "2.1.0"
                       },
                       "query": "vortex.system_directory:group_memberships",
                       "responsive": {
@@ -2373,7 +2373,7 @@
                     "vortex": {
                       "block": {
                         "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                        "release_version": "2.0.0"
+                        "release_version": "2.1.0"
                       },
                       "query": "vortex.system_directory:role_assignments",
                       "responsive": {
@@ -2454,7 +2454,7 @@
                     "vortex": {
                       "block": {
                         "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                        "release_version": "2.0.0"
+                        "release_version": "2.1.0"
                       },
                       "query": "vortex.system_directory:delegations",
                       "responsive": {
@@ -2963,7 +2963,7 @@
                     "vortex": {
                       "block": {
                         "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                        "release_version": "2.0.0"
+                        "release_version": "2.1.0"
                       },
                       "query": "vortex.system_directory:role_activations",
                       "responsive": {
@@ -3121,7 +3121,7 @@
                     "vortex": {
                       "block": {
                         "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
-                        "release_version": "2.0.0"
+                        "release_version": "2.1.0"
                       },
                       "query": "vortex.iam.core:iam_access_requests",
                       "responsive": {

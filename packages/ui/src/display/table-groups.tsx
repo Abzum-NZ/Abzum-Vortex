@@ -9,7 +9,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "../components/tooltip";
 import { Icon } from "../icons/icon";
 import { cn } from "../lib/utils";
 import type { TableGroup } from "./projected-grid-features";
-import { TableTotals } from "./table-totals";
+import { TableTotals, TotalValues } from "./table-totals";
+import type { GridGroupCell } from "./table-grid";
 import { memberKey, type GroupedTable } from "./table-groups-state";
 
 const groupLabelId = (placementId: string, key: string): string =>
@@ -28,6 +29,8 @@ export function GroupedBody({
   loading,
   members,
   columns,
+  cells,
+  memberRows = 0,
 }: Readonly<{
   placementId: string;
   accessibleName: string;
@@ -37,21 +40,22 @@ export function GroupedBody({
   /** Draws a page of the open group's rows. */
   members: () => ReactNode;
   columns: readonly Readonly<{ key: string; label: string }>[];
+  cells?: readonly GridGroupCell[];
+  memberRows?: number;
 }>): ReactElement {
   const { groups, expanded } = grouped;
   const state = grouped.members;
   return (
     <div
       data-vortex-grouped=""
-      role="group"
+      role={cells === undefined ? "group" : "rowgroup"}
       aria-label={`${accessibleName}: groups`}
       className="flex flex-col gap-2"
     >
       <p className="m-0 text-xs text-muted-foreground tabular-nums">
         {groups.total === 1 ? "1 record" : `${groups.total} records`} in{" "}
         {groups.groups.length === 1 ? "1 group" : `${groups.groups.length} groups`}
-        {groups.page.first && groups.page.next === undefined ? "" : " on this page"}, counted when
-        the table was read
+        {groups.page.first && groups.page.next === undefined ? "" : " on this page"}
       </p>
       {groups.groups.length === 0 ? (
         <Empty
@@ -64,12 +68,18 @@ export function GroupedBody({
           </EmptyHeader>
         </Empty>
       ) : null}
-      {groups.groups.map((group) => (
+      {groups.groups.map((group, index) => (
         <GroupSection
           key={group.key}
           id={groupLabelId(placementId, group.key)}
           group={group}
           columns={columns}
+          cells={cells}
+          rowIndex={
+            index +
+            2 +
+            (groups.groups.findIndex((entry) => entry.key === expanded) < index ? memberRows : 0)
+          }
           open={expanded === group.key}
           onToggle={() => grouped.toggle(group.key)}
         >
@@ -155,6 +165,8 @@ function GroupSection({
   id,
   group,
   columns,
+  cells,
+  rowIndex,
   open,
   onToggle,
   children,
@@ -162,45 +174,73 @@ function GroupSection({
   id: string;
   group: TableGroup;
   columns: readonly Readonly<{ key: string; label: string }>[];
+  cells: readonly GridGroupCell[] | undefined;
+  rowIndex: number;
   open: boolean;
   onToggle: () => void;
   children: ReactNode;
 }>): ReactElement {
+  const label = (
+    <>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              aria-expanded={open}
+              aria-controls={`${id}-members`}
+              aria-label={`${open ? "Close" : "Open"} ${group.label}`}
+              onClick={onToggle}
+            />
+          }
+        >
+          <Icon name={open ? "chevron-down" : "chevron-right"} aria-hidden="true" />
+        </TooltipTrigger>
+        <TooltipContent>{open ? "Close the group" : "Open the group"}</TooltipContent>
+      </Tooltip>
+      <span
+        id={id}
+        className={cn(
+          "min-w-0 flex-1 truncate text-sm font-medium",
+          group.unassigned === true && "text-muted-foreground",
+        )}
+      >
+        {group.label}
+      </span>
+      <Badge variant="secondary" className="tabular-nums" aria-label={`${group.count} records`}>
+        {group.count}
+      </Badge>
+    </>
+  );
   return (
     <Collapsible open={open} onOpenChange={() => onToggle()}>
-      <div className="flex items-center gap-2 bg-muted/40 px-2 py-1.5">
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                aria-expanded={open}
-                aria-controls={`${id}-members`}
-                aria-label={`${open ? "Close" : "Open"} ${group.label}`}
-                onClick={onToggle}
-              />
-            }
-          >
-            <Icon name={open ? "chevron-down" : "chevron-right"} aria-hidden="true" />
-          </TooltipTrigger>
-          <TooltipContent>{open ? "Close the group" : "Open the group"}</TooltipContent>
-        </Tooltip>
-        <span
-          id={id}
-          className={cn(
-            "min-w-0 flex-1 truncate text-sm font-medium",
-            group.unassigned === true && "text-muted-foreground",
-          )}
-        >
-          {group.label}
-        </span>
-        <Badge variant="secondary" className="tabular-nums" aria-label={`${group.count} records`}>
-          {group.count}
-        </Badge>
-      </div>
-      {group.totals === undefined ? null : (
+      {cells === undefined ? (
+        <div className="flex items-center gap-2 bg-muted/40 px-2 py-1.5">{label}</div>
+      ) : (
+        <div role="row" aria-rowindex={rowIndex} className="flex w-full border-b bg-muted/40">
+          {cells.map((cell, index) => (
+            <div
+              key={cell.key}
+              role="gridcell"
+              aria-colindex={index + 1}
+              style={cell.style}
+              className="flex min-w-0 shrink-0 items-center justify-end gap-2 px-2 py-1.5 text-right"
+            >
+              {cell.key === cells.find((entry) => entry.column !== undefined)?.key ? label : null}
+              {cell.column === undefined ? null : (
+                <TotalValues
+                  totals={(group.totals ?? []).filter(
+                    (total) => total.fieldId.toLowerCase() === cell.key.toLowerCase(),
+                  )}
+                />
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+      {cells !== undefined || group.totals === undefined ? null : (
         <TableTotals totals={group.totals} columns={columns} label={`${group.label}: subtotals`} />
       )}
       <CollapsibleContent id={`${id}-members`} className="pt-2">

@@ -820,7 +820,8 @@ const organizationAdministrationRoleActivationFields = {
   beneficiary: z
     .object({
       organizationAccountId: organizationAccountIdSchema,
-      displayName: z.string().trim().min(1).max(120),
+      // A person who has just joined has no display name until they set their profile.
+      displayName: z.string().trim().min(1).max(120).optional(),
     })
     .strict(),
   role: organizationAdministrationAssignedRoleSchema,

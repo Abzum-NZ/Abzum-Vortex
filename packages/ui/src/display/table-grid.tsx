@@ -56,6 +56,7 @@ import {
   GRID_CONTROL_COLUMN_WIDTH,
   gridActionsWidth,
   GRID_ROW_HEIGHT,
+  useBoundedGridViewport,
   virtualizesRows,
 } from "./table-geometry";
 import type { GridColumn, GridLayoutControls } from "./table-layout";
@@ -139,6 +140,19 @@ export type RecordsGridProps = Readonly<{
   rowName: (row: DisplayRow) => string;
   /** The table fills the screen: the grid takes the remaining height instead of its bound. */
   fill: boolean;
+  groups?:
+    | Readonly<{
+        count: number;
+        rowOffset: number;
+        render: (members: ReactNode, cells: readonly GridGroupCell[]) => ReactNode;
+      }>
+    | undefined;
+}>;
+
+export type GridGroupCell = Readonly<{
+  key: string;
+  column: GridColumn | undefined;
+  style: CSSProperties;
 }>;
 
 const cellAlignment = (column: GridColumn | undefined): string => {
@@ -160,6 +174,7 @@ const cellAlignment = (column: GridColumn | undefined): string => {
 const GridRow = memo(function GridRow({
   row,
   index,
+  rowIndex,
   slots,
   rowHeight,
   selected,
@@ -186,6 +201,7 @@ const GridRow = memo(function GridRow({
 }: Readonly<{
   row: DisplayRow;
   index: number;
+  rowIndex: number;
   slots: readonly CellSlot[];
   rowHeight: number;
   selected: boolean;
@@ -217,7 +233,7 @@ const GridRow = memo(function GridRow({
   return (
     <div
       role="row"
-      aria-rowindex={index + 2}
+      aria-rowindex={rowIndex}
       {...(selectable && row.revision !== undefined ? { "aria-selected": selected } : {})}
       {...(pending ? { "aria-busy": true } : {})}
       {...(subExpandable
@@ -376,6 +392,7 @@ export function RecordsGrid({
   rowName,
   fill,
   totals,
+  groups,
 }: RecordsGridProps): ReactElement {
   const rowHeight = GRID_ROW_HEIGHT[layout.density];
   const virtual = virtualizesRows(lines.length);
@@ -488,6 +505,7 @@ export function RecordsGrid({
   const visibleIds = visibleColumns.map((column) => column.id);
   const visibleSignature = visibleIds.join("\u0000");
   const scrollRef = useRef<HTMLDivElement>(null);
+  useBoundedGridViewport(scrollRef, bounded && !fill);
   const pinSignature = visibleIds.map((id) => layout.state.pins[id.toLowerCase()]).join(",");
   const pinningStyle = useGridPinning(
     scrollRef,
@@ -1181,7 +1199,7 @@ export function RecordsGrid({
         <GridSpanRow
           key={line.id}
           rowAttributes={{
-            "aria-rowindex": index + 2,
+            "aria-rowindex": index + 2 + (groups?.rowOffset ?? 0),
             "aria-level": line.level,
             "data-vortex-sub-rows-of": line.parentId,
           }}
@@ -1213,6 +1231,7 @@ export function RecordsGrid({
         <GridRow
           row={row}
           index={index}
+          rowIndex={index + 2 + (groups?.rowOffset ?? 0)}
           slots={slots}
           rowHeight={rowHeight}
           selected={selectedSet.has(row.recordId)}
@@ -1278,7 +1297,8 @@ export function RecordsGrid({
       >
         <span id={instructionsId} className="sr-only">
           Use the arrow keys to move between cells. Enter opens a row or uses the controls in a
-          cell, F2 edits them and Escape returns to the cell. Space selects a row.{" "}
+          cell. Enter or F2 starts an editable cell's editor; Escape returns to the cell. Space
+          selects a row.{" "}
           {expansion === undefined
             ? null
             : `On a row's expand button, the right arrow shows its ${expansion.noun} and the left arrow hides them; F2 or Tab moves into them and Escape returns to the row. `}
@@ -1294,7 +1314,7 @@ export function RecordsGrid({
           role={subRows === undefined ? "grid" : "treegrid"}
           aria-label={accessibleName}
           aria-describedby={instructionsId}
-          aria-rowcount={lines.length + 1 + (totals === undefined ? 0 : 1)}
+          aria-rowcount={lines.length + 1 + (totals === undefined ? 0 : 1) + (groups?.count ?? 0)}
           aria-colcount={slots.length}
           {...(selection === "multiple" ? { "aria-multiselectable": true } : {})}
           className="text-sm"
@@ -1316,35 +1336,38 @@ export function RecordsGrid({
               {headerSlots.map((slot, index) => renderHeader(headerById.get(slot.id), slot, index))}
             </div>
           </div>
-          {virtual ? (
-            <Suspense
-              // Until the virtual body arrives, the rows' full height keeps the real scroll range.
-              fallback={<div role="rowgroup" style={{ height: lines.length * rowHeight }} />}
-            >
-              <VirtualRows
-                expandedRecordIds={[
-                  ...(expansion?.expandedRecordIds ?? []),
-                  ...(retainedRecordIds ?? []),
-                ]}
-                lines={lines}
-                rowHeight={rowHeight}
-                activeRow={activeRow}
-                stickyHeader={contract.stickyHeader}
-                scrollRef={scrollRef}
-                drawRow={drawRow}
-              />
-            </Suspense>
-          ) : (
-            <div ref={rowsRef} role="rowgroup">
-              {lines.map((line, index) => drawRow(line, index))}
-            </div>
+          {(groups?.render ?? ((members: ReactNode) => members))(
+            virtual ? (
+              <Suspense
+                // Until the virtual body arrives, the rows' full height keeps the real scroll range.
+                fallback={<div role="rowgroup" style={{ height: lines.length * rowHeight }} />}
+              >
+                <VirtualRows
+                  expandedRecordIds={[
+                    ...(expansion?.expandedRecordIds ?? []),
+                    ...(retainedRecordIds ?? []),
+                  ]}
+                  lines={lines}
+                  rowHeight={rowHeight}
+                  activeRow={activeRow}
+                  stickyHeader={contract.stickyHeader}
+                  scrollRef={scrollRef}
+                  drawRow={drawRow}
+                />
+              </Suspense>
+            ) : (
+              <div ref={rowsRef} role="rowgroup">
+                {lines.map((line, index) => drawRow(line, index))}
+              </div>
+            ),
+            slots.map((slot) => ({ key: slot.id, column: slot.column, style: slot.style })),
           )}
           {totals === undefined ? null : (
             <div role="rowgroup" aria-label="Totals for all matching records">
               <div
                 role="row"
                 aria-label="Totals for all matching records"
-                aria-rowindex={lines.length + 2}
+                aria-rowindex={lines.length + 2 + (groups?.count ?? 0)}
                 data-vortex-grid-footer=""
                 className="flex w-full border-t bg-muted/80"
               >
@@ -1369,6 +1392,9 @@ export function RecordsGrid({
                         <span className="sr-only">
                           {slot.column.label}: totals for all matching records.{" "}
                         </span>
+                        {slot.id === slots.find((entry) => entry.column !== undefined)?.id ? (
+                          <span className="text-xs font-medium">Total</span>
+                        ) : null}
                         <TotalValues
                           totals={totals.filter((total) => sameFieldKey(total.fieldId, slot.id))}
                         />
@@ -1382,9 +1408,7 @@ export function RecordsGrid({
         </div>
       </Card>
       {totals === undefined ? null : (
-        <p className="m-0 text-xs text-muted-foreground">
-          Totals for all matching records, counted when the table was read
-        </p>
+        <p className="m-0 text-xs text-muted-foreground">Totals for all matching records</p>
       )}
     </>
   );

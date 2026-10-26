@@ -431,7 +431,7 @@ function ApplicationPageSlotPuckEditor({
   const [actionsHost, setActionsHost] = useState<HTMLDivElement | null>(null);
   const [availableWidth, setAvailableWidth] = useState(0);
   const width = deviceWidths[breakpoint];
-  const scale = zoom === "fit" ? Math.max(0.75, Math.min(1, availableWidth / width)) : zoom / 100;
+  const scale = zoom === "fit" ? Math.min(1, availableWidth / width) : zoom / 100;
   const registry = useMemo(
     () => createPlatformComponentRegistryForReleases(platformBlockCatalogue.releases),
     [platformBlockCatalogue],
@@ -618,7 +618,7 @@ function ApplicationPageSlotPuckEditor({
       const available =
         element.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
       setAvailableWidth(available);
-      onFitZoom(Math.max(0.75, Math.min(1, available / width)) * 100);
+      onFitZoom(Math.min(1, available / width) * 100);
     };
     measure();
     const observer = new ResizeObserver(measure);
@@ -753,6 +753,12 @@ function ApplicationPageSlotPuckEditor({
   return (
     <section className="space-y-3" aria-label="Page canvas" aria-busy={disabled}>
       {/* The screen size is chosen in Studio's canvas toolbar. */}
+      {slot.items.length === 0 && (
+        <CanvasEmpty
+          title="Build this page"
+          description="Add a block from Blocks, or add a record type in Data and its List page in Structure. This guidance only appears in Studio."
+        />
+      )}
       <div className="flex flex-wrap items-center gap-2">
         <p className="px-4 text-sm text-muted-foreground">
           {readOnlyCause !== undefined

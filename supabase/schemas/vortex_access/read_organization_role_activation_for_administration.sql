@@ -30,10 +30,10 @@ begin
 
   select pg_catalog.jsonb_build_object(
     'roleActivationId', activation.role_activation_id,
-    'beneficiary', pg_catalog.jsonb_build_object(
+    'beneficiary', pg_catalog.jsonb_strip_nulls(pg_catalog.jsonb_build_object(
       'organizationAccountId', activation.organization_account_id,
       'displayName', account.display_name
-    ),
+    )),
     'role', pg_catalog.jsonb_build_object(
       'roleId', activation.role_id,
       'key', role_revision.role_key,
