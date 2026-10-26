@@ -123,7 +123,7 @@ export const firstInstallState = (
     return "unprepared";
   }
   // An active installation of another release is an upgrade, even when a failed upgrade left the
-  // registration naming the selected release (#3503); the upgrade path repairs that mismatch.
+  // registration naming the selected release; the upgrade path repairs that mismatch.
   if (
     bindings.registeredReleaseRevision !== selector.releaseRevision ||
     bindings.moduleBindings.some(

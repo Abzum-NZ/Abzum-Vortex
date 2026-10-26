@@ -644,7 +644,7 @@ function ColumnFilterButton({ context, column }: GridFeatureColumnProps): ReactE
 }
 
 /** What the filters toolbar reads: a board holds no rows, so it supplies only these. */
-export type FiltersToolbarContext = Pick<
+type FiltersToolbarContext = Pick<
   GridFeatureContext,
   "accessibleName" | "features" | "narrowing" | "events"
 >;

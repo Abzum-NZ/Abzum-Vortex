@@ -6,8 +6,8 @@ import type { RequestDatabaseTransaction } from "../db/request-transaction";
 /**
  * Live disablement checks for named sensitive operations.
  *
- * #755 disables an identity environment-wide and #963 publishes that fact to
- * the cluster-local identity projections. These checks additionally read the
+ * Identity disablement applies environment-wide, and its publication carries
+ * that fact to the cluster-local identity projections. These checks additionally read the
  * recorded disablement inside the operation's own transaction, so an identity
  * whose access token is still unexpired is refused immediately at the sensitive
  * operation. Ordinary reads keep the documented token-expiry policy and never

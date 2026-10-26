@@ -239,6 +239,7 @@ export const protectedQueryDateBucketSchema = z
             if (/^[+-]/.test(zone)) return false;
             new Intl.DateTimeFormat("en", { timeZone: zone });
             return true;
+            // guard-allow: silent-catch Intl throws for an unknown time zone; the schema reports it as invalid input.
           } catch {
             return false;
           }

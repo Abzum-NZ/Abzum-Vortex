@@ -77,6 +77,7 @@ export const openWebPrivateInvalidationSource = (
         typeof EventSource === "undefined" || options.signal?.aborted)
       return Promise.resolve(unavailable);
     selectors = parsed.data;
+    // guard-allow: silent-catch Hostile caller inputs are refused as unavailable without inspecting the exception.
   } catch {
     return Promise.resolve(unavailable);
   }
@@ -104,6 +105,7 @@ export const openWebPrivateInvalidationSource = (
     const signal = options.signal;
 
     const report = (state: WebPrivateInvalidationConnection): void => {
+      // guard-allow: silent-catch A consumer callback failure must not reveal transport details or stop delivery.
       try { notify(state); } catch { /* Consumer failures reveal no transport details. */ }
     };
     const clearAttempt = (): void => {
@@ -162,6 +164,7 @@ export const openWebPrivateInvalidationSource = (
         return undefined;
       if (new TextEncoder().encode(event.data).byteLength >
           privateInvalidationTransportLimits.maximumFrameBytes) return undefined;
+      // guard-allow: silent-catch A malformed server frame is dropped; the schema check below refuses it.
       try { return JSON.parse(event.data) as unknown; } catch { return undefined; }
     };
     const source: PrivateInvalidationSubscriptionSource = Object.freeze({
@@ -210,6 +213,7 @@ export const openWebPrivateInvalidationSource = (
       const parsed = liveInvalidationSchema.safeParse(parseData(event));
       if (!parsed.success || !sameScope(scope, parsed.data)) return;
       if (receiver === undefined) { reportGap(); return; }
+      // guard-allow: silent-catch A receiver failure is reported to the page as a delivery gap.
       try { receiver(parsed.data); } catch { reportGap(); }
     }
     function connect(): void {
@@ -221,6 +225,7 @@ export const openWebPrivateInvalidationSource = (
         socket.onerror = retry;
         socket.onmessage = () => finish("unavailable");
         attemptTimer = setTimeout(retry, privateInvalidationTransportLimits.joinMilliseconds);
+        // guard-allow: silent-catch A failed EventSource construction is retried through the same backoff as a dropped connection.
       } catch { retry(); }
     }
     signal?.addEventListener("abort", onAbort, { once: true });

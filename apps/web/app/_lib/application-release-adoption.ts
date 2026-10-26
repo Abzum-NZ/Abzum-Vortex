@@ -31,9 +31,9 @@ import { DefinitionError } from "@vortex/platform/server";
 import { platformPermissionSource } from "./platform-permission-source";
 
 /**
- * The deliberate release adoption of one installed application (#610). The offered target is the
+ * The deliberate release adoption of one installed application. The offered target is the
  * application root's published-current release, read through the governed human read under the
- * caller's own application scope; the adoption itself is the #598 App installation coordinator. A
+ * caller's own application scope; the adoption itself is the App installation coordinator. A
  * successful adoption changes the installation the next request resolves; a refusal, stale
  * revision or preparation failure leaves the previous active release exactly as it was.
  */
@@ -161,8 +161,8 @@ type AdoptApplicationReleaseRequest = Readonly<{
  * Deliberately upgrades the installation to the exact offered release, or refuses. The browser's
  * offered target is never trusted: the published-current release is re-read under the caller's
  * own permission-gated request and must be exactly the offered revision and strictly newer than
- * the loaded installation. The #598 coordinator then re-checks installation authority and refuses
- * as stale unless the active release is still exactly the one the page loaded.
+ * the loaded installation. The installation coordinator then re-checks installation authority and
+ * refuses as stale unless the active release is still exactly the one the page loaded.
  */
 export const adoptApplicationRelease = async (
   session: IdentitySession,

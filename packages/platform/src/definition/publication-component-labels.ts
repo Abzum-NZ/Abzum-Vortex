@@ -4,6 +4,7 @@ import { compiledItemSettings } from "./application-composition/page-composition
 import { releaseSettingDeclarations } from "./application-composition/platform-block-release";
 import { sameCanonicalValue } from "./canonical-json-definition";
 import type { PrepareDefinitionPublicationResult } from "./definition-store-contracts";
+import { asRecord } from "../catalogue/runtime-primitives";
 
 type ComponentLabel = Readonly<
   Omit<PrepareDefinitionPublicationResult["componentLabels"][number], "componentId" | "pageId"> & {
@@ -58,11 +59,6 @@ const ownedIdentity = (
   });
   return matches.length === 1 ? (record[matches[0]!] as string) : undefined;
 };
-
-const asRecord = (value: unknown): Record<string, unknown> | undefined =>
-  value !== null && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : undefined;
 
 const text = (value: unknown): string | undefined =>
   typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;

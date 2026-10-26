@@ -4,7 +4,7 @@ import { sourceContractPositions } from "./compiler/source-paths";
 import { valueAtPath, type JsonObject, type Path } from "./compiler/shared";
 
 /** One Module another Module depends on, as the compiler reads it. It is never stored. */
-export type DerivedModuleDependency = Readonly<{
+type DerivedModuleDependency = Readonly<{
   dependency_key: string;
   module: string;
   version: Readonly<{ selection: "allowed_range"; expression: "*" }>;

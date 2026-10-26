@@ -454,7 +454,7 @@ export const decideRecordRecoveryEligibility = (
     return refusedRecovery("scope_mismatch", policyRevision);
   // Recoverable deletion is the only end-of-life action this decision allows.
   // An archive-workflow policy removes its source through the durable archive
-  // path owned by #560/#568, so it is refused here with a stable reason rather
+  // path owned by archive removal, so it is refused here with a stable reason rather
   // than silently reinterpreted as a recoverable delete.
   if (policy.action !== "delete")
     return refusedRecovery("recovery_action_ineligible", policyRevision);

@@ -21,6 +21,7 @@ import {
   type SignInContinuation,
 } from "./_lib/sign-in-continuation";
 import { bootstrapIdentitySession, endIdentitySession } from "./_lib/session-server";
+import { mapWebError } from "../_lib/web-error-mapper";
 
 const formValue = (formData: FormData, name: string, trim = true): string => {
   const value = formData.get(name);
@@ -41,8 +42,13 @@ const failureStatus = (code: string): string => {
 const configuredAuthority = () => {
   try {
     return getIdentityJourneyConfiguration();
-  } catch {
-    return undefined;
+  } catch (error) {
+    return mapWebError(error, {
+      route: "auth/actions",
+      operation: "read-configuration",
+      code: "IDENTITY_JOURNEY_CONFIGURATION_INVALID",
+      fallback: undefined,
+    });
   }
 };
 

@@ -93,7 +93,7 @@ export type ComponentBundleFile = Readonly<{ path: string; bytes: Uint8Array }>;
 
 /**
  * A closed refusal reason. `digest_mismatch` refuses a supplied bundle whose
- * entry bytes do not match the digest recorded in its #1142 component release;
+ * entry bytes do not match the digest recorded in its custom component release;
  * `integrity_failure` refuses a served object whose bytes do not match the
  * digest recorded for it, so a tampered bundle is never delivered.
  */
@@ -121,7 +121,7 @@ const refuse = (reason: ComponentBundleRefusalReason): never => {
 
 /**
  * The Subresource Integrity digest of one bundle's bytes, formatted exactly as
- * the #1142 component release records it.
+ * the custom component release records it.
  */
 export const computeComponentBundleDigest = (bytes: Uint8Array): string =>
   `sha384-${createHash("sha384").update(bytes).digest("base64")}`;
@@ -415,7 +415,7 @@ export const componentBundleMediaType = (relativePath: string): string => {
 };
 
 export type PublishedComponentBundle = Readonly<{
-  /** The #1142 component release with its verified digest recorded. */
+  /** The custom component release with its verified digest recorded. */
   release: CustomComponentRelease;
   digest: string;
   contentAddress: string;
@@ -428,7 +428,7 @@ export type PublishedComponentBundle = Readonly<{
 /**
  * The publication step for one custom component bundle.
  *
- * 1. It validates the #1142 bundle manifest.
+ * 1. It validates the custom component bundle manifest.
  * 2. It computes the SHA-384 Subresource Integrity digest of the supplied entry
  *    bytes and refuses the bundle unless it matches the digest the release
  *    records.

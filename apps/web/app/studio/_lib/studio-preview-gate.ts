@@ -2,7 +2,7 @@ import { describeFailure } from "@vortex/platform/schema";
 import { prepareStudioPreview } from "./studio-reads";
 
 /** Why Studio's readers cannot read the preview's records of a saved revision now. */
-export type StudioPreviewGateOutcome = Readonly<{ kind: "ready" }> | StudioPreviewNotReady;
+type StudioPreviewGateOutcome = Readonly<{ kind: "ready" }> | StudioPreviewNotReady;
 
 /** Why a reader cannot read the preview's records now. */
 type StudioPreviewNotReady =

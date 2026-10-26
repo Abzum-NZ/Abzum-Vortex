@@ -38,7 +38,7 @@ export type FlowInstallationContext = Readonly<{
  * response carried and sends it back unchanged.
  */
 export type FlowResumeEvidence = Readonly<{
-  /** The exact paused target (#544): installation, release, flow, node, awaiting form and receipt. */
+  /** The exact paused target: installation, release, flow, node, awaiting form and receipt. */
   target?: FormContinuationTarget;
   /** The run receipt: which run and how many protected effects it has committed. */
   receipt?: FormContinuationReceipt;
@@ -223,7 +223,7 @@ export const parseServerFlowResponse = (candidate: unknown): ServerFlowResponse 
 };
 
 /**
- * The page's client for the component event endpoint (#1014). It names only the application
+ * The page's client for the component event endpoint. It names only the application
  * address and the invocation; the organisation, installation and bindings are resolved on the
  * server. It sends a continuation exactly as the server issued it, together with only the person's
  * answer, and never states which path a flow took.

@@ -2,7 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 import type { JsonValue } from "../catalogue/common";
-import { isUuidText } from "../catalogue/runtime-primitives";
+import { isUuidText, isRecord } from "../catalogue/runtime-primitives";
 import {
   actionInputDefinitionSchema,
   type ActionInputDefinition,
@@ -25,9 +25,6 @@ export class QueryInputRefusalError extends Error {
 const refuse = (): never => {
   throw new QueryInputRefusalError();
 };
-
-const isPlainRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
-  value !== null && typeof value === "object" && !Array.isArray(value);
 
 const hasExactKeys = (value: Readonly<Record<string, unknown>>, keys: readonly string[]): boolean =>
   Object.keys(value).length === keys.length &&
@@ -123,7 +120,7 @@ const validateOne = (input: ActionInputDefinition, value: JsonValue): JsonValue 
     case "decimal_number":
       return exactWithinRange(value, input.validation);
     case "money": {
-      if (!isPlainRecord(value) || !hasExactKeys(value, ["amount", "currency"])) return refuse();
+      if (!isRecord(value) || !hasExactKeys(value, ["amount", "currency"])) return refuse();
       if (typeof value.currency !== "string" || !/^[A-Z]{3}$/.test(value.currency)) return refuse();
       return { amount: exactWithinRange(value.amount, input.validation), currency: value.currency };
     }
@@ -149,8 +146,7 @@ const validateOne = (input: ActionInputDefinition, value: JsonValue): JsonValue 
       return value;
     }
     case "record_reference": {
-      if (!isPlainRecord(value) || !hasExactKeys(value, ["recordTypeId", "recordId"]))
-        return refuse();
+      if (!isRecord(value) || !hasExactKeys(value, ["recordTypeId", "recordId"])) return refuse();
       const { recordTypeId, recordId } = value;
       if (
         typeof recordTypeId !== "string" ||
@@ -167,7 +163,7 @@ const validateOne = (input: ActionInputDefinition, value: JsonValue): JsonValue 
       return allowed ? { recordTypeId, recordId } : refuse();
     }
     case "organization_account_reference": {
-      if (!isPlainRecord(value) || !hasExactKeys(value, ["organizationAccountId"])) return refuse();
+      if (!isRecord(value) || !hasExactKeys(value, ["organizationAccountId"])) return refuse();
       const { organizationAccountId } = value;
       if (!isUuidText(organizationAccountId)) return refuse();
       return { organizationAccountId };

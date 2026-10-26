@@ -49,7 +49,7 @@ const maximumRetries = 5;
  * What the canvas and the Data tab draw from: the compile of one saved revision, with what the
  * platform read alongside it. The canvas reads records only for this revision.
  */
-export type StudioCompiledView = StudioViewResources &
+type StudioCompiledView = StudioViewResources &
   Readonly<{
     catalogue: StudioCatalogue;
     source: StudioStoredApplicationDraft["source"];
@@ -71,7 +71,7 @@ export type StudioCompiledView = StudioViewResources &
   }>;
 
 /** Where the draft stands against the saved draft, for the one status chip and what blocks edits. */
-export type StudioSaveStatus =
+type StudioSaveStatus =
   | Readonly<{ kind: "saved" }>
   | Readonly<{ kind: "saving" }>
   /** Another window or person saved a newer revision: edits stop until the latest draft is loaded. */
@@ -97,7 +97,7 @@ export type StudioDraftStep<Result> =
   | Readonly<{ kind: "keep"; result: Result }>;
 
 /** The envelope's answer: the command ran (and `changed` says whether the draft took an edit), or it could not run now. */
-export type StudioRunOutcome<Result> =
+type StudioRunOutcome<Result> =
   | Readonly<{ kind: "done"; result: Result; changed: boolean }>
   | Readonly<{ kind: "blocked"; message: string }>;
 
@@ -109,7 +109,7 @@ export type StudioRunOptions = Readonly<{
 }>;
 
 /** A request that holds the whole draft while it runs: nothing else may edit it meanwhile. */
-export type StudioDraftHold = "publication" | "reopening" | "restoring";
+type StudioDraftHold = "publication" | "reopening" | "restoring";
 
 /**
  * The one draft of a Studio workspace: its history (Undo and Redo), its one selection store, the

@@ -25,7 +25,7 @@ const literalSearchLocalRefusalReasonCodes = [
   "unsupported_scope",
 ] as const;
 
-/** Safe local parser refusals plus the unchanged refusals from #645. */
+/** Safe local parser refusals plus the unchanged refusals from permitted search. */
 export const literalSearchRefusalReasonCodes = Object.freeze([
   ...literalSearchLocalRefusalReasonCodes,
   ...permittedSearchRefusalReasonCodes,
@@ -281,7 +281,7 @@ export const matchLiteralSearch = async (
   dependencies: PermittedSearchDependencies,
 ): Promise<LiteralSearchResult> => {
   if (!isLiteralSearchInput(input)) return refusal("input_invalid");
-  // Refuse own or inherited groups before #645 can inspect them.
+  // Refuse own or inherited groups before permitted search can inspect them.
   if ("shared" in input.search) return refusal("unsupported_scope");
 
   if (input.expression.length > literalSearchLimits.expressionLength)

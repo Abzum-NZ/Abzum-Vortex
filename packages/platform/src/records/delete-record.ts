@@ -1,5 +1,5 @@
 import "server-only";
-import { databaseCode } from "../catalogue/runtime-primitives";
+import { databaseCode, isRecord } from "../catalogue/runtime-primitives";
 
 import { correlationIdSchema } from "../catalogue/common";
 import { recordIdSchema } from "../catalogue/identifiers";
@@ -95,11 +95,8 @@ const refusalReasons: ReadonlySet<string> = new Set<RecordLifecycleRefusalReason
   "unsupported_relationship_totals",
 ]);
 
-const isPlainObject = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
 const parseDatabaseOutcome = (candidate: unknown): DatabaseOutcome => {
-  if (!isPlainObject(candidate)) return { outcome: "invalid" };
+  if (!isRecord(candidate)) return { outcome: "invalid" };
   const correlation = correlationIdSchema.safeParse(candidate.correlationId);
   const correlationId = correlation.success ? (correlation.data as string) : undefined;
   if (candidate.outcome === "deleted") {

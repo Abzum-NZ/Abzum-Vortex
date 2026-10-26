@@ -888,6 +888,7 @@ export function moduleReferenceRule(context: PreparedValidationContext): Definit
             ) !== publicationTest.expected
           )
             valid = false;
+        // guard-allow: silent-catch An authored publication test that cannot be evaluated is reported as failing.
       } catch {
         valid = false;
       }

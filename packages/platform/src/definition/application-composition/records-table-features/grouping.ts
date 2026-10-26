@@ -21,11 +21,11 @@ import {
 } from "./shared";
 
 /** The most choices a grouping field may hold: every group is one summary row and one header. */
-export const RECORDS_TABLE_GROUPING_MAXIMUM_CHOICES = 50;
+const RECORDS_TABLE_GROUPING_MAXIMUM_CHOICES = 50;
 /** The longest name the group of records with no value may carry. */
-export const RECORDS_TABLE_GROUPING_MAXIMUM_LABEL_LENGTH = 40;
+const RECORDS_TABLE_GROUPING_MAXIMUM_LABEL_LENGTH = 40;
 /** The most groups one page of a grouped table may show; more groups continue on the next page. */
-export const RECORDS_TABLE_GROUPING_MAXIMUM_PAGE_SIZE = 200;
+const RECORDS_TABLE_GROUPING_MAXIMUM_PAGE_SIZE = 200;
 
 /** The field types a table may be grouped by: a link is grouped by its target, a date by a calendar unit. */
 export const recordsTableGroupingFieldTypes = ["choice", "link", "date", "date_time"] as const;
@@ -56,7 +56,7 @@ const groupable = (field: RecordsTableFieldFacts): boolean =>
  * A table that reads a grouped query has no flat rows to show: it is a Grouped table, so Group by
  * and Open grouped must be on. Publication and Studio refuse the table until they are.
  */
-export const recordsTableGroupedQueryRefusal = (
+const recordsTableGroupedQueryRefusal = (
   facts: Pick<RecordsTableQueryFacts, "queryLabel">,
 ): RecordsTableFeatureCheck =>
   featureNotPossible(

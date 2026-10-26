@@ -64,7 +64,7 @@ const groupPageToken = (trail: readonly string[]): string => {
 };
 
 /** One column of the results grid: a field the query returns, by its label. */
-export type StudioDataColumn = Readonly<{ key: string; label: string }>;
+type StudioDataColumn = Readonly<{ key: string; label: string }>;
 
 /** One total of a summary, as a person reads it. */
 export type StudioDataTotal = Readonly<{ alias: string; label: string; value: string }>;

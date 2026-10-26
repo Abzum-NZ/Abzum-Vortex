@@ -79,7 +79,7 @@ begin
   end if;
 
   -- Releasing the lease at the backoff instant is what schedules the retry:
-  -- #639's claim reclaims exactly this consumer/occurrence row once the lease
+  -- The delivery claim reclaims exactly this consumer/occurrence row once the lease
   -- has lapsed, so no fresh work is claimed and no ordering is skipped.
   next_lease_expires_at := failure_time + pg_catalog.make_interval(secs => p_retry_backoff_seconds);
   update vortex_platform.consumer_occurrence_progress

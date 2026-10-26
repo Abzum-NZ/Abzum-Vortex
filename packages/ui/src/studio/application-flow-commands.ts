@@ -540,7 +540,8 @@ export const projectStudioFlowStepActions = (
       canMoveDown: typeof index === "number" && list !== undefined && index < list.length - 1,
       branch,
     };
-  } catch {
+  } catch (error) {
+    console.error("[studio-flow] step actions unavailable", error);
     return { stepTypes: [], canMoveUp: false, canMoveDown: false, branch: null };
   }
 };

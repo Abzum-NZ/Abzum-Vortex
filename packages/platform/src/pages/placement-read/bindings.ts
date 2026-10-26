@@ -33,6 +33,7 @@ import type { PlacementReadInput } from "./types";
 const blockOf = (vortex: unknown): Readonly<{ key: string; name: string }> | undefined => {
   try {
     return placementBlockRelease((vortex as { block?: unknown } | undefined)?.block);
+    // guard-allow: silent-catch A custom component placement has no platform block release and publishes no page parameter.
   } catch {
     // A custom component publishes no page parameter.
     return undefined;

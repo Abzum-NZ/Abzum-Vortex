@@ -51,7 +51,6 @@ export default tseslint.config(
   {
     files: [
       "packages/platform/src/files/application-attachment-blocks.ts",
-      "packages/platform/src/connections/outbound-target-policy.ts",
       "packages/platform/src/files/file-metadata.ts",
       "packages/ui/src/components/notice.tsx",
     ],
@@ -61,9 +60,6 @@ export default tseslint.config(
   {
     files: [
       "apps/web/app/_lib/definition-catalogue.ts",
-      "apps/web/app/_lib/guided-form-steps.ts",
-      "apps/web/app/_lib/studio-application-installation.ts",
-      "apps/web/app/studio/_components/application-search-editor.tsx",
       "packages/platform/src/access/record-share-grants.ts",
       "packages/platform/src/files/file-metadata.ts",
       "packages/platform/src/pages/stored-page-capability.ts",
@@ -86,11 +82,6 @@ export default tseslint.config(
   },
   // This timer must be declared before callbacks that can fire before it is assigned.
   { files: ["packages/platform/src/db/request-owned-socket.ts"], rules: { "prefer-const": "off" } },
-  // `problem` throws, so each switch arm terminates without an explicit break.
-  {
-    files: ["apps/web/app/_lib/studio-application-installation.ts"],
-    rules: { "no-fallthrough": "off" },
-  },
   // The rich text schema makes the emphasis style exhaustive at runtime.
   { files: ["packages/ui/src/display/rich-text.tsx"], rules: { "no-fallthrough": "off" } },
 );

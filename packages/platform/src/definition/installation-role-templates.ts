@@ -49,7 +49,7 @@ import type { FirstInstallFlowEnvironment } from "./installation-first-install-a
  * scope over every permission the role confers and a recent primary sign-in), never role
  * management. Who holds a role is decided separately, by assignment.
  */
-export type InstallationRoleEnvironment = Pick<
+type InstallationRoleEnvironment = Pick<
   FirstInstallFlowEnvironment,
   "requests" | "permissions" | "accessAdministration" | "containsCustomComponents"
 >;
@@ -210,7 +210,7 @@ export const refusedFor = (detail: string, refusal: Refusal, cause?: unknown): n
 };
 
 /** Turns a check's refusal into the named refusal; a stale sign-in and other failures keep their own meaning. */
-export const named = async <Value>(
+const named = async <Value>(
   detail: string,
   refusal: Refusal,
   check: () => Promise<Value>,
@@ -308,8 +308,8 @@ const installationRolesSchema = z
   .strict();
 
 /** The organisation's roles accepted from one application's templates, read under the installation authority. */
-export type InstallationRoles = z.infer<typeof installationRolesSchema>;
-export type InstalledApplicationRole = InstallationRoles["roles"][number];
+type InstallationRoles = z.infer<typeof installationRolesSchema>;
+type InstalledApplicationRole = InstallationRoles["roles"][number];
 
 /**
  * Reads, in the open installer transaction and under the installer's own installation authority,

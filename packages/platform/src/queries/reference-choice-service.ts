@@ -42,7 +42,7 @@ import {
 
 export type ReferenceChoiceServiceDependencies = ProtectedQueryServiceDependencies;
 
-/** The #582 `choice_input` projected values for one reference input placement. */
+/** The `choice_input` projected values for one reference input placement. */
 export type ReferenceChoiceInputValues = Readonly<{
   kind: "choice_input";
   value?: string | null;
@@ -77,7 +77,7 @@ const freezeChoices = (choices: readonly ReferenceChoiceOption[]): ReferenceChoi
   choices.map((choice) => Object.freeze({ ...choice, value: Object.freeze(choice.value) }));
 
 /**
- * Projects one page of permitted choices into #582 `choice_input` values. A
+ * Projects one page of permitted choices into `choice_input` values. A
  * selected key outside the permitted choices is dropped rather than shown.
  */
 export function projectReferenceChoiceInputValues(
@@ -397,7 +397,7 @@ const accountChoices = async (
 
 /**
  * Protected choices for record- and account-reference inputs. Record choices
- * are the rows the #572 protected Query admits for a published query of an
+ * are the rows the protected Query admits for a published query of an
  * allowed record type; account choices are active accounts in the verified
  * current organisation. Neither carries counts, and every refusal is neutral.
  */

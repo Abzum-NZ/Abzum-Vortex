@@ -27,7 +27,7 @@ export type GridColumn = Readonly<{
 }>;
 
 /** One declared column as the Columns menu lists it: shown or hidden, in display order. */
-export type GridLayoutEntry = Readonly<{ key: string; label: string; visible: boolean }>;
+type GridLayoutEntry = Readonly<{ key: string; label: string; visible: boolean }>;
 
 export type GridLayoutControls = Readonly<{
   /** The shown columns the page carries, in declared order. */

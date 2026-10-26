@@ -33,7 +33,7 @@ import {
   type FileRecord,
   type VerifiedFileActor,
 } from "./file-contracts";
-import { isExecutableContent, normalizeFileExtension } from "./content-safety";
+import { isExecutableContent, normalizeFileExtension, normalizeMediaType } from "./content-safety";
 import { sanitizeFileDisplayName } from "./file-metadata";
 import { resolveVerifiedFileActor, verifyAttachmentFieldAuthority } from "./attachment-authority";
 import type {
@@ -257,9 +257,6 @@ const ACTIVE_BROWSER_EXTENSIONS: ReadonlySet<string> = new Set([
   ".swf",
   ".hta",
 ]);
-
-const normalizeMediaType = (mediaType: string): string =>
-  (mediaType.split(";")[0] ?? "").trim().toLowerCase();
 
 /**
  * Reports content a browser could execute or render actively if served under

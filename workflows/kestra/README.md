@@ -49,7 +49,6 @@ Every secret is supplied by the environment. Nothing in this directory holds one
 
 These values are stored as protected Coolify runtime variables. The operations instance receives
 only the route URL and credential for each scheduled flow; it has no database-delivery credentials.
-The Kestra API credential is also provided to the web application so it can reach the engine.
 
 `event_dispatch_recovery` is the scheduled recovery half of the event dispatch boundary. Its
 schedule trigger calls the protected Vercel dispatch route every minute, so an event
@@ -89,7 +88,7 @@ server carries the raw credential as the `vortex.event_dispatch_wakeup_bearer` s
 only its SHA-256 digest in `VORTEX_EVENT_DISPATCHER_CREDENTIAL_SHA256`. Set
 `VORTEX_EVENT_DELIVERY_MODE=external` on the web deployment to select this trigger explicitly. Database sessions can read
 that setting, so the credential must authorise nothing beyond the bounded dispatcher wake-up. The
-database hint is installed by the `20260923173000_event_dispatch_wakeup` migration, reads
+database hint, `vortex_platform.request_event_dispatch_wakeup`, reads
 `vortex.event_dispatch_wakeup_url` and `vortex.event_dispatch_wakeup_bearer` at runtime, queues at
 most one request per appending transaction and sends it only after that transaction commits. It
 sends nothing when either setting is absent or unusable, so missing configuration fails closed

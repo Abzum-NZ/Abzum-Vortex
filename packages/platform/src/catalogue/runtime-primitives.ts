@@ -10,6 +10,10 @@ export const sameId = (
 export const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
+/** The value as a plain object, or undefined when it is not one. */
+export const asRecord = (value: unknown): Readonly<Record<string, unknown>> | undefined =>
+  isRecord(value) ? value : undefined;
+
 /** Convert database revision transport values before a caller validates its schema. */
 export const databaseRevision = (value: unknown): unknown => {
   if (typeof value === "bigint")

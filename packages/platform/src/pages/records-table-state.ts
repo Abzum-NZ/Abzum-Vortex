@@ -83,6 +83,7 @@ export const parseRecordsTableGroupKey = (key: string): RecordsTableGroupValue |
   let parsed: unknown;
   try {
     parsed = JSON.parse(key);
+    // guard-allow: silent-catch Text that is not JSON is not a group key this codec writes.
   } catch {
     return undefined;
   }
@@ -266,6 +267,7 @@ const fromBase64Url = (value: string): string | undefined => {
     return new TextDecoder("utf-8", { fatal: true }).decode(
       Uint8Array.from(binary, (character) => character.charCodeAt(0)),
     );
+    // guard-allow: silent-catch Text that is not base64url UTF-8 is refused as an invalid address parameter.
   } catch {
     return undefined;
   }

@@ -33,8 +33,6 @@ const effectReplayResult = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("in_progress") }),
   z.object({ kind: z.literal("unavailable") }),
 ]);
-const asJson = (value: unknown): string => JSON.stringify(value);
-
 /*
  * The private retained-run store and callback effect ledger. Kestra identifiers remain private to
  * this server-side store.
@@ -163,7 +161,7 @@ export const completeProtectedNodeEffect = async (
       ${key.taskPath}::text,
       ${key.iteration}::text,
       ${outcome}::text,
-      ${asJson(outputs)}::text::jsonb
+      ${JSON.stringify(outputs)}::text::jsonb
     ) as completed
   `;
   return rows.length === 1 && rows[0]?.completed === true;

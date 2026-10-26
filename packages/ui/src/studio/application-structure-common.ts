@@ -232,7 +232,7 @@ export const judged = (candidate: Source): Source => {
 };
 
 /** The fields of a new page beyond its name, key and composition: its type, permission and, for a record page, its record type and query. */
-export type NewPageFields = Readonly<Record<string, unknown>> &
+type NewPageFields = Readonly<Record<string, unknown>> &
   Readonly<{ type: Page["type"]; permission: string }>;
 
 /**

@@ -36,14 +36,14 @@ import { addPlaces, commandSettings, newBlockItem } from "./application-composit
 import { studioOwnsSetting } from "./contextual-palette";
 
 /** The page or layout that owns a region. */
-export const regionOwner = (region: Region): StudioCompositionOwner | undefined =>
+const regionOwner = (region: Region): StudioCompositionOwner | undefined =>
   region.shell !== undefined
     ? { kind: "layout", shellAlias: region.shell.id }
     : region.page !== undefined
       ? { kind: "page", pageAlias: region.page.id }
       : undefined;
 
-export type WrapContainer = Readonly<{
+type WrapContainer = Readonly<{
   release: PlatformBlockRelease;
   description: string;
   slotKey: string;
@@ -58,7 +58,7 @@ export type WrapContainer = Readonly<{
  * layout or in the ordinary content of a page can be wrapped; the container is judged by the same
  * places the add command offers.
  */
-export const resolveWrap = (
+const resolveWrap = (
   context: StudioCompositionContext,
   selection: StudioSemanticSelection | null,
 ) => {

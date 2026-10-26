@@ -3,7 +3,7 @@ import "server-only";
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { DatabaseRow, DatabaseValue } from "./request-transaction";
 
-export type ProtectedReadFamily =
+type ProtectedReadFamily =
   | "eligibility_batch"
   | "eligibility_single"
   | "module_query"

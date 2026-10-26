@@ -1,7 +1,7 @@
 import "server-only";
 
 import { performance } from "node:perf_hooks";
-import { logRefusal } from "../catalogue/runtime-primitives";
+import { logRefusal, asRecord } from "../catalogue/runtime-primitives";
 import type { DatabaseRow } from "../db/request-transaction";
 import { withRuntimeTransaction } from "../db/request-transaction";
 import {
@@ -99,16 +99,11 @@ export type EventDispatcherWakeupDependencies = EventDispatcherRouteDependencies
 
 type BacklogRow = DatabaseRow & { readonly result: unknown };
 
-const record = (value: unknown): Readonly<Record<string, unknown>> | undefined =>
-  typeof value === "object" && value !== null && !Array.isArray(value)
-    ? (value as Readonly<Record<string, unknown>>)
-    : undefined;
-
 const exactRecord = <Key extends string>(
   value: unknown,
   keys: readonly Key[],
 ): Readonly<Record<Key, unknown>> | undefined => {
-  const candidate = record(value);
+  const candidate = asRecord(value);
   if (
     candidate === undefined ||
     Object.keys(candidate).length !== keys.length ||
@@ -136,7 +131,7 @@ type ParsedWakeupRequest =
  */
 const parseWakeupRequest = (body: unknown): ParsedWakeupRequest => {
   if (body === undefined || body === null) return { kind: "accepted", source: "database_webhook" };
-  const fields = record(body);
+  const fields = asRecord(body);
   if (fields === undefined || Object.keys(fields).some((key) => key !== "source"))
     return { kind: "invalid", source: null };
   const source = fields.source;
@@ -213,7 +208,7 @@ export const createEventDispatchBacklogReader = (
   });
 
 /**
- * Wake-up and recovery entry over the same bounded #641 dispatcher route. Both
+ * Wake-up and recovery entry over the same bounded event dispatcher route. Both
  * a database webhook hint and a scheduled recovery tick authenticate with the
  * same configured dispatcher credential and run the identical claim, deliver,
  * acknowledge and retry operation. Successful nonempty batches are claimed

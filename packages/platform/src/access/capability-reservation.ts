@@ -47,7 +47,7 @@ export const capabilityPolicyEvidenceSchema = z
   .strict();
 
 /**
- * The #649 result supplies only the requested scope. Reservation authority and
+ * The entitlement check result supplies only the requested scope. Reservation authority and
  * every policy field are resolved again from current storage under lock.
  */
 export const reserveCapabilityCommandSchema = z

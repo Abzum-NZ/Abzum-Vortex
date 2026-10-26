@@ -7,6 +7,7 @@ import { getIdentityJourneyConfiguration } from "./authority-configuration";
 import { serializeSignInContinuation, type SignInContinuation } from "./sign-in-continuation";
 import { issueSessionCleanupProof } from "./session-cleanup-proof";
 import { identitySessionProxyHeader } from "./session-request-state";
+import { mapWebError } from "../../_lib/web-error-mapper";
 
 /** The one route that ends a browser session: it clears the session cookies, then shows sign-in. */
 const SESSION_ENDED_PATH = "/auth/session-ended";
@@ -39,8 +40,14 @@ export const redirectToSessionEnd = async (
     const siteUrl = getIdentityJourneyConfiguration().siteUrl;
     const sessionCookies = (await cookies()).getAll().map(({ name, value }) => ({ name, value }));
     proof = issueSessionCleanupProof(sessionCookies, siteUrl);
-  } catch {
-    /* Session cleanup can proceed without a proof. */
+  } catch (error) {
+    // Session cleanup proceeds without a proof; the cause is logged.
+    mapWebError(error, {
+      route: "auth/session-redirect",
+      operation: "issue-cleanup-proof",
+      code: "SESSION_CLEANUP_PROOF_UNAVAILABLE",
+      fallback: undefined,
+    });
   }
   if (proof !== undefined) {
     const query = new URLSearchParams({ proof });

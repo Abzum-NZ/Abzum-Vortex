@@ -12,7 +12,7 @@ import type {
 } from "./document-store";
 
 /**
- * Database-backed dependencies of the search event consumer (#644).
+ * Database-backed dependencies of the search event consumer.
  *
  * Indexing runs inside event dispatch, which has no human caller. Each step
  * runs under a short-lived system context for the occurrence's organisation

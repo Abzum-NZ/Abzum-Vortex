@@ -73,7 +73,7 @@ export type StudioCompiledFields = Readonly<{
 }>;
 
 /** One field as the Data tab's schema grid shows it. */
-export type StudioDataField = Readonly<{
+type StudioDataField = Readonly<{
   key: string;
   label: string;
   type: string;
@@ -136,7 +136,7 @@ export const fieldTypeLabel = (type: string): string =>
     : sentence(type);
 
 /** A query's name: its label, else its key in words. */
-export const queryLabel = (query: Readonly<{ key: string; label?: string | undefined }>): string =>
+const queryLabel = (query: Readonly<{ key: string; label?: string | undefined }>): string =>
   query.label ?? sentence(query.key);
 
 /** The modules the draft owns, as the Data tab shows them. */

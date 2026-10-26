@@ -62,7 +62,7 @@ export const kestraProtectedOperationContractVersion = "1.0.0";
 /**
  * The single generic Kestra callback task every effect, every condition and
  * every formula compiles to. The platform plugin merges resolved typed inputs
- * and evaluator scope into the #664 request contract, signs it with the fixed
+ * and evaluator scope into the protected-operation request contract, signs it with the fixed
  * callback key, and calls the protected-operation endpoint once per attempt.
  */
 export const kestraProtectedCallbackTaskType = "io.kestra.plugin.vortex.ProtectedCallback";
@@ -234,7 +234,7 @@ const isEnvironment = (value: unknown): value is KestraFlowCompilerEnvironment =
  * refused. UUIDs are canonicalised to lower case so one identity always
  * derives one namespace, flow id and label set.
  */
-const parseIdentity = (candidate: unknown): KestraFlowIdentity | undefined => {
+export const parseKestraFlowIdentity = (candidate: unknown): KestraFlowIdentity | undefined => {
   if (
     !isRecord(candidate) ||
     !hasOnlyKeys(candidate, [
@@ -265,14 +265,14 @@ const parseIdentity = (candidate: unknown): KestraFlowIdentity | undefined => {
   )
     return undefined;
 
-  return {
+  return Object.freeze({
     environment: candidate.environment,
     organizationId: organizationId.data.toLowerCase() as OrganizationId,
     applicationRootId: applicationRootId.data.toLowerCase() as ApplicationRootId,
     applicationVersion: applicationVersion.data,
     installationRevision: installationRevision.data,
     workflowRevision: workflowRevision.data,
-  };
+  });
 };
 
 // ─── Determinism ─────────────────────────────────────────────────────────────────────────────
@@ -1314,7 +1314,7 @@ export const compileKestraFlow = (inputCandidate: unknown): KestraFlowCompilatio
   )
     return refused("invalid_input");
 
-  const identity = parseIdentity(inputCandidate.identity);
+  const identity = parseKestraFlowIdentity(inputCandidate.identity);
   if (identity === undefined) return refused("invalid_identity");
 
   const childFlowRevisions = parseChildFlowRevisions(inputCandidate.childFlowRevisions);

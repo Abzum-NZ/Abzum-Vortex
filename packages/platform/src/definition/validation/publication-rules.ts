@@ -236,6 +236,7 @@ export function publicationCompatibilityRule(
         );
         continue;
       }
+      // guard-allow: silent-catch An unparseable prior version is reported as a publication failure.
     } catch {
       failures.push(
         failure(output, "vortex.definition.prior_published_version_invalid", "invalid_value"),

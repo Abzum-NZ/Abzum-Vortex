@@ -24,7 +24,7 @@ type MemberPage = Readonly<{
   page: number;
 }>;
 
-export type Members =
+type Members =
   | Readonly<{ status: "loading"; key: string }>
   | Readonly<{ status: "ready"; page: MemberPage; refreshing: boolean }>
   | Readonly<{ status: "empty" | "refused" | "error"; key: string }>;

@@ -1,4 +1,4 @@
-import { canonicalJson, type ApplicationSourceDocument } from "@vortex/platform/schema";
+import { canonicalJson, type ApplicationSourceDocument, asRecord } from "@vortex/platform/schema";
 
 export type SourceChangeRow = Readonly<{ area: string; change: "Added" | "Removed" | "Changed"; item: string }>;
 
@@ -12,12 +12,9 @@ const areaLabels: Readonly<Record<string, string>> = {
 const areaLabel = (key: string): string => areaLabels[key] ??
   (key.replaceAll("_", " ").replace(/^./, (first) => first.toUpperCase()));
 
-const record = (value: unknown): Record<string, unknown> | undefined =>
-  typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
-
 /** The name a person knows an entry by, from its own name or label; a key is the last resort. */
 const itemName = (entry: unknown, index: number): string => {
-  const fields = record(entry);
+  const fields = asRecord(entry);
   for (const field of ["name", "label", "key", "purpose", "module", "id"]) {
     const value = fields?.[field];
     if (typeof value === "string" && value.trim() !== "") return value.trim();
@@ -25,7 +22,7 @@ const itemName = (entry: unknown, index: number): string => {
   return `Entry ${index + 1}`;
 };
 const identity = (entry: unknown, index: number): string => {
-  const fields = record(entry);
+  const fields = asRecord(entry);
   for (const field of ["id", "key", "module", "purpose"]) {
     const value = fields?.[field];
     if (typeof value === "string") return value;

@@ -19,7 +19,7 @@ const choiceContinuationTokenSchema = z.string().min(1).max(65_536);
  * input's declared allowed record types and the published Module query that
  * lists its choices from the installed release; the organisation, Application
  * and viewer come only from the verified request. Rows are read through the
- * #572 protected Query, so only records the viewer may read are ever offered.
+ * protected Query, so only records the viewer may read are ever offered.
  */
 export const recordReferenceChoiceCommandSchema = z
   .object({

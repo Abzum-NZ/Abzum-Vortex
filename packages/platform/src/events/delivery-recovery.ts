@@ -1,7 +1,7 @@
 import "server-only";
 
 import { eventOccurrenceIdSchema, timestampSchema } from "../catalogue/identifiers";
-import { databaseCode, isNonNilUuidText } from "../catalogue/runtime-primitives";
+import { databaseCode, isNonNilUuidText, asRecord } from "../catalogue/runtime-primitives";
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
 
 export const eventDeliveryRecoveryLimits = Object.freeze({
@@ -42,14 +42,14 @@ export class EventDeliveryRecoveryError extends Error {
 }
 
 /**
- * Input identifies an existing #639 claim by the same exact consumer and
+ * Input identifies an existing event delivery claim by the same exact consumer and
  * occurrence identity the claim was issued under, authenticated by its claim
  * cursor. This never claims fresh work.
  *
  * `maxAttempts` counts total reported attempts including this one, so a budget
  * of one makes the first reported failure terminal. `retryBackoffSeconds` is
  * how long the reclaim lease is held before the same claim becomes eligible
- * for #639's ordinary reclaim again.
+ * for ordinary claim reclaim again.
  */
 export type EventDeliveryFailureReportInput = Readonly<{
   consumerKey: string;
@@ -90,16 +90,11 @@ const failureClassificationMatches = (
 const boundedCount = (value: unknown, maximum: number): value is number =>
   Number.isSafeInteger(value) && (value as number) >= 0 && (value as number) <= maximum;
 
-const record = (value: unknown): Readonly<Record<string, unknown>> | undefined =>
-  typeof value === "object" && value !== null && !Array.isArray(value)
-    ? (value as Readonly<Record<string, unknown>>)
-    : undefined;
-
 const exactRecord = <Key extends string>(
   value: unknown,
   keys: readonly Key[],
 ): Readonly<Record<Key, unknown>> | undefined => {
-  const candidate = record(value);
+  const candidate = asRecord(value);
   if (
     candidate === undefined ||
     Object.keys(candidate).length !== keys.length ||

@@ -2,7 +2,7 @@ import "server-only";
 
 import { createHash, timingSafeEqual } from "node:crypto";
 import { applicationRootIdSchema, type ApplicationRootId } from "../catalogue/identifiers";
-import { logRefusal } from "../catalogue/runtime-primitives";
+import { logRefusal, asRecord } from "../catalogue/runtime-primitives";
 import {
   withRuntimeTransaction,
   type DatabaseRow,
@@ -41,16 +41,11 @@ export type InstallationRuntimeBundleRemovalReport = Readonly<{
 
 type CleanupRow = DatabaseRow & { readonly cleanup_result: unknown };
 
-const record = (value: unknown): Readonly<Record<string, unknown>> | undefined =>
-  typeof value === "object" && value !== null && !Array.isArray(value)
-    ? (value as Readonly<Record<string, unknown>>)
-    : undefined;
-
 const isCount = (value: unknown): value is number =>
   Number.isSafeInteger(value) && (value as number) >= 0;
 
 const parseBatchResult = (candidate: unknown): RuntimeBundleCleanupBatchResult => {
-  const value = record(candidate);
+  const value = asRecord(candidate);
   if (
     value === undefined ||
     Object.keys(value).length !== 4 ||
@@ -75,7 +70,7 @@ const parseBatchResult = (candidate: unknown): RuntimeBundleCleanupBatchResult =
 const parseInstallationRemovalReport = (
   candidate: unknown,
 ): InstallationRuntimeBundleRemovalReport => {
-  const value = record(candidate);
+  const value = asRecord(candidate);
   if (
     value === undefined ||
     Object.keys(value).length !== 3 ||
@@ -89,7 +84,7 @@ const parseInstallationRemovalReport = (
     throw new DefinitionError("RUNTIME_BUNDLE_CLEANUP_UNAVAILABLE");
 
   const bundles = (value.bundles as readonly unknown[]).map((candidateBundle) => {
-    const bundle = record(candidateBundle);
+    const bundle = asRecord(candidateBundle);
     if (
       bundle === undefined ||
       Object.keys(bundle).length !== 2 ||

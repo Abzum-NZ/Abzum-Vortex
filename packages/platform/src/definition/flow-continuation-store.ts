@@ -70,8 +70,6 @@ const claimResultSchema = z.discriminatedUnion("kind", [
 const claimRowSchema = z.object({ result: z.unknown() });
 const completionRowSchema = z.object({ completed: z.boolean() });
 
-const asJson = (value: unknown): string => JSON.stringify(value);
-
 /*
  * The database-backed continuation store and effect ledger of flow runs. Each operation runs in
  * its own runtime transaction.
@@ -98,7 +96,7 @@ export const issueFlowContinuation = async (
         ${input.identityId}::uuid,
         ${input.flowId}::uuid,
         ${input.releaseKey}::text,
-        ${asJson(input.state)}::text::jsonb,
+        ${JSON.stringify(input.state)}::text::jsonb,
         ${input.elapsedMilliseconds}::integer,
         ${input.lifetimeSeconds}::integer
       ) as expires_at
@@ -185,7 +183,7 @@ export const completeFlowEffect = async (
         ${key.taskPath}::text,
         ${key.iteration}::text,
         ${outcome}::text,
-        ${asJson(outputs)}::text::jsonb
+        ${JSON.stringify(outputs)}::text::jsonb
       ) as completed
     `,
   );

@@ -30,7 +30,7 @@ import { OrganizationAddressStatePage } from "./organization-launcher-page";
  * What an address shows when it shows no application page. A refused and a missing address stay
  * indistinguishable: neither names a reason or whether anything exists.
  */
-export type AddressState =
+type AddressState =
   | Readonly<{ kind: "unavailable"; back: "organization" | "chooser" }>
   | Readonly<{ kind: "page_not_open"; applicationName: string; homeHref: string }>
   | Readonly<{ kind: "temporarily_unavailable"; retryHref: string }>

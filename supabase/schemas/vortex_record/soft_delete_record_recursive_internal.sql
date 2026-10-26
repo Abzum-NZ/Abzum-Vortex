@@ -73,7 +73,7 @@ begin
   end if;
 
   -- Incoming edges are canonicalised before any child lock.  Every affected
-  -- child is then reloaded and locked by #401's fixed loader.
+  -- child is then reloaded and locked by the fixed record loader.
   for incoming in
     select edge.*
     from vortex_record.relationship_edges as edge

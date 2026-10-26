@@ -21,9 +21,9 @@ import {
 } from "./document-store";
 
 /**
- * Shared-result capability boundary (#646).
+ * Shared-result capability boundary.
  *
- * The organisation search index built by #643 holds recipient-owned content
+ * The organisation search index built by `document-store` holds recipient-owned content
  * only, so a shared source can never be found there. Application search may
  * still show a Shared result group: the source executes that search itself and
  * returns its own approved projection, and this module decides, before any
@@ -48,7 +48,7 @@ import {
  * complete grant, and named by the current request. A field the source did not
  * approve has no words in the group at all, so a secret, hidden or
  * non-searchable value cannot be searched, counted or highlighted here, and a
- * recipient-copied shared-source value is refused by the #643 builder and has
+ * recipient-copied shared-source value is refused by the search document builder and has
  * no representation in this decision.
  *
  * The output is request-only. An admitted projection carries source identities
@@ -58,7 +58,7 @@ import {
  * caller ranks, counts, filters and pages over the returned projections within
  * the current response only, shows the plain source-organisation marker, and
  * opens a result through a separate current read at the source. Remote
- * execution of the source search is #739 and the signed gateway is #738; this
+ * execution of the source search and the signed gateway are outside it; this
  * module performs no remote call and trusts no input it has not rechecked.
  */
 

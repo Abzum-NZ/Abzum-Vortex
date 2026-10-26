@@ -15,7 +15,7 @@ import {
 } from "./shared";
 
 /** The largest page of related records one expanded row reads at a time. */
-export const RECORDS_TABLE_RELATED_RECORDS_MAXIMUM_PAGE_SIZE = 40;
+const RECORDS_TABLE_RELATED_RECORDS_MAXIMUM_PAGE_SIZE = 40;
 
 /**
  * Master/detail: a row expands to the records of another record type that link to it, read through

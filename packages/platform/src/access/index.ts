@@ -271,9 +271,6 @@ export {
 
 export {
   createHumanDefinitionPublisher,
-  type HumanDefinitionKind,
-  type HumanDefinitionPublicationDraft,
-  type HumanDefinitionPublicationDraftResult,
   type HumanDefinitionPublicationPreparationResult,
   type HumanDefinitionPublicationResult,
   type HumanDefinitionPublisherDependencies,

@@ -142,7 +142,7 @@ type FlowBindingEndpointDependencies = Readonly<{
     installation: InstalledFlowBindings,
   ) => Pick<FlowOrchestrator, "start" | "resume">;
   /**
-   * THE SEAM for #588's form-submit adapter (`adaptPrivateFormSubmit`): turns what a form
+   * THE SEAM for the form request's submit adapter (`adaptPrivateFormSubmit`): turns what a form
    * submission supplies, and the record the form was rendered for, into the caller inputs of a
    * `form_submit` binding. Until it is supplied a `form_submit` binding is refused, so there is
    * never a second, ad hoc submit path.
@@ -154,9 +154,9 @@ type FlowBindingEndpointDependencies = Readonly<{
     installation: InstalledFlowBindings,
   ) => Promise<Readonly<Record<string, unknown>> | undefined>;
   /**
-   * THE SEAM for #588's continuation adapter: forwards an exact paused target and its run receipt to
-   * the web-independent form continuation interface (#544), which compares them with trusted state.
-   * Until it is supplied a continuation that carries a target is refused.
+   * THE SEAM for the form request's continuation adapter: forwards an exact paused target and its
+   * run receipt to the web-independent form continuation interface, which compares them with
+   * trusted state. Until it is supplied a continuation that carries a target is refused.
    */
   continueForm?: (
     session: IdentitySession,
@@ -635,7 +635,8 @@ const formIdOf = (
 /**
  * The exact paused target the surface returns with its continuation. It is built from the trusted
  * installation and the server-stored run, never from the request, and only when it satisfies the
- * shared #544 target contract; otherwise the surface resumes under the server's own receipt checks.
+ * shared form continuation target contract; otherwise the surface resumes under the server's own
+ * receipt checks.
  */
 const suspendedTarget = (
   response: Extract<FlowOrchestratorResponse, { kind: "suspended" }>,
@@ -692,7 +693,7 @@ const toResult = (
   }
 };
 
-/** Maps the #544 continuation outcome back onto this endpoint's one result contract. */
+/** Maps the form continuation outcome back onto this endpoint's one result contract. */
 const continuationResult = (
   outcome: FormContinuationOutcome,
   installationRevision: number,
@@ -807,9 +808,9 @@ export const createFlowBindingEndpoint = (dependencies: FlowBindingEndpointDepen
           if (!installation.bindings.some((entry) => sameId(entry.flow.flowId, request.flowId)))
             return refuse("FLOW_INVOKE_CONTINUATION_FLOW_NOT_BOUND");
           const target = request.target;
-          // #588: an exact paused target always goes to the #544 interface, the one place that
-          // compares the installation, release, flow, node, form and receipt with trusted state; a
-          // stale target comes back as a reload and a forged one as the neutral refusal.
+          // An exact paused target always goes to the form continuation interface, the one place
+          // that compares the installation, release, flow, node, form and receipt with trusted
+          // state; a stale target comes back as a reload and a forged one as the neutral refusal.
           if (target !== undefined) {
             if (dependencies.continueForm === undefined)
               return refuse("FLOW_INVOKE_FORM_CONTINUATION_UNAVAILABLE");

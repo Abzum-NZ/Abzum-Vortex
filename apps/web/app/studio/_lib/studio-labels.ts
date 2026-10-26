@@ -88,18 +88,3 @@ export const studioPlacementLabels = (context: StudioCompositionContext): Readon
   for (const [key, label] of labels) if (key.startsWith("placement:")) byAlias.set(key.slice("placement:".length), label);
   return byAlias;
 };
-
-
-/** The kind of a theme setting in plain words. */
-export const tokenKindName = (kind: string): string => {
-  switch (kind) {
-    case "color_pair": return "colour";
-    case "typography": return "text style";
-    case "border": return "border";
-    case "focus": return "focus outline";
-    case "asset": return "image";
-    case "shadow": return "shadow";
-    case "radius": return "corner radius";
-    default: return kind.replaceAll("_", " ");
-  }
-};
