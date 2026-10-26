@@ -64,8 +64,8 @@ const listRoles = async (
     const page = await administration.listRoles(session, selection, roles.at(-1)?.roleId);
     if (page.kind !== "available")
       throw new Error(`Accepted application roles could not be read (${page.kind})`);
+    if (page.value.length === 0) return roles;
     roles.push(...page.value);
-    if (page.value.length < 200) return roles;
   }
 };
 
@@ -84,8 +84,8 @@ const listAssignments = async (
     );
     if (page.kind !== "available")
       throw new Error(`Current role assignments could not be read (${page.kind})`);
+    if (page.value.length === 0) return assignments;
     assignments.push(...page.value);
-    if (page.value.length < 200) return assignments;
   }
 };
 
