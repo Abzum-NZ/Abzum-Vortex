@@ -1421,6 +1421,7 @@ export const organisationAdministrationModule: SourceApplicationModule =
         record_type: "organization_settings",
         inputs: [],
         select: [
+          "organization_id",
           "language",
           "time_zone",
           "currency",
