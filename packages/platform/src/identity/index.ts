@@ -48,11 +48,7 @@ export {
   suspendTenant,
   type ConfiguredTenantAdministrationDependencies,
 } from "./configured-tenant-administration";
-export {
-  createDefaultIdentitySessionService,
-  createIdentitySessionService,
-  type IdentitySessionServiceDependencies,
-} from "./identity-session";
+export { createIdentitySessionService } from "./identity-session";
 export {
   createOrganizationAccountStore,
   ensureIdentityProjection,
