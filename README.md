@@ -19,7 +19,7 @@ The project is under active development. The current priority is definition-led 
 
 Working instructions are in [AGENTS.md](AGENTS.md), and the [target architecture](docs/build-plan/target-architecture.md) defines the current technical direction.
 
-Every behaviour change is walked through in the running app on a local database before merge; the walk runs on a lane you hold, and you reset only that lane (Local database lanes in [AGENTS.md](AGENTS.md)). Pull requests that change visible behaviour include screenshots. Product correctness, access control, isolation, transaction integrity and safe errors remain required functionality.
+Every behaviour change is walked through in the running app on a local database before merge; a destructive reset or `pnpm demo:setup` for that walk is permitted only as the Local database lanes rules in [AGENTS.md](AGENTS.md) allow. Pull requests that change visible behaviour include screenshots. Product correctness, access control, isolation, transaction integrity and safe errors remain required functionality.
 
 ## Architecture
 
@@ -168,6 +168,6 @@ inside `apply_record_changes`. Pending uploads never appear in record detail or 
 - Use the existing engine boundaries and official framework conventions. Update the specification and build plan when agreed behaviour or sequencing changes.
 - Keep changes focused. Preserve organisation isolation, current permission checks, atomic writes, revision checks and safe errors without introducing unnecessary abstractions.
 - Work on a branch from `origin/main` and open a pull request to `main`; never push to `main` directly.
-- Before merge, walk every behaviour change through the running app on a local database (on a lane you hold; reset only that lane); include screenshots for visible changes.
+- Before merge, walk every behaviour change through the running app on a local database (a destructive reset only as the Local database lanes rules in [AGENTS.md](AGENTS.md) allow); include screenshots for visible changes.
 - Follow the [AGENTS.md](AGENTS.md) and [target architecture](docs/build-plan/target-architecture.md).
 - Manage secrets through the documented Doppler configuration. Keep credentials out of source, browser bundles, agent prompts and logs.

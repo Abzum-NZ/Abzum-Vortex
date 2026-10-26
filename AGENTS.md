@@ -5,9 +5,9 @@ relationships, pages, permissions, actions, flows, connections, themes). Generic
 Next.js application render and execute those definitions for many organisations, with access
 enforced by the platform and the database.
 
-Operating procedure (roles, coordination, launch, review, reporting):
-C:/Users/vijay/Documents/Codex/2026-10-24/task-5/vortex-orca-operating-manual.md. Read it before
-starting work; your launch spec names your role.
+Operating procedure: every agent reads its own role procedure,
+C:/Users/vijay/Documents/Codex/2026-10-24/task-5/procedure/<role>.md (the launch spec names the
+role), before starting work.
 
 ## One way only
 
