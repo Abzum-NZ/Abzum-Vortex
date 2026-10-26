@@ -2,7 +2,7 @@ import { z } from "zod";
 import { blockPaletteGroupSchema } from "../../catalogue/catalogues";
 import { labelSchema } from "../../catalogue/common";
 import { sourceProvenanceTarget, sourceProvenanceUnchanged } from "../definition-source-common";
-import { componentSemanticEventKindSchema } from "../application-flow-bindings";
+import { componentSemanticEventKindSchema } from "../component-semantic-events";
 import {
   blockIdSchema,
   builderKeySchema,

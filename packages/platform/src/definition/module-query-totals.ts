@@ -38,3 +38,10 @@ export const queryTotalOperationLabels = {
   maximum: "Highest",
   distinct_count: "Number of different values",
 } as const satisfies Record<InlineQueryAggregate["operation"], string>;
+
+/** The business name of a query total, shared by its editor, pickers and charts. */
+export const queryTotalLabel = (operation: string, fieldLabel: string | undefined): string => {
+  const label = queryTotalOperationLabels[operation as InlineQueryAggregate["operation"]];
+  if (label === undefined) throw new Error(`Unknown query total operation: ${operation}`);
+  return operation === "count" ? label : `${label} of ${fieldLabel ?? "records"}`;
+};
