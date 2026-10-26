@@ -317,7 +317,6 @@ const prepare = async (
   activityId: string,
   preview: boolean,
 ): Promise<ActionPreparation> => {
-  await transaction.query`set local role vortex_runtime`;
   const rows = preview
     ? await transaction.query<ResultRow>`
         select vortex_record.preview_named_action_set_announce(

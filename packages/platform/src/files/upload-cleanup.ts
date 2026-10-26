@@ -28,7 +28,7 @@ export const cleanupAbandonedUploads = async (
   const destination = resolveFileStorageDestination(configuration.destination);
   const claims = await withRuntimeTransaction(async (transaction) => {
     const rows = await transaction.query<{ result: unknown }>`
-      select vortex_platform.claim_abandoned_file_uploads_internal(25,${destination.destinationProject}::text) as result`;
+      select vortex_platform.claim_abandoned_file_uploads(25,${destination.destinationProject}::text) as result`;
     if (rows.length !== 1) throw new Error("UPLOAD_CLEANUP_CLAIMS_INVALID");
     return z.array(claimSchema).max(25).parse(rows[0]?.result);
   });
@@ -79,7 +79,7 @@ export const cleanupAbandonedUploads = async (
       await response.body?.cancel();
       const finished = await withRuntimeTransaction(async (transaction) => {
         const rows = await transaction.query<{ result: unknown }>`
-          select vortex_platform.finish_abandoned_file_upload_internal(${file.fileId}::uuid,${claim.claimId}::uuid) as result`;
+          select vortex_platform.finish_abandoned_file_upload(${file.fileId}::uuid,${claim.claimId}::uuid) as result`;
         if (rows.length !== 1) throw new Error("UPLOAD_CLEANUP_FINISH_INVALID");
         return z.boolean().parse(rows[0]?.result);
       });

@@ -1,6 +1,6 @@
 import type { ModuleContent } from "../module-contracts";
 import type { VersionImpactReason } from "../version-impact";
-import { compareCanonicalStrings } from "../canonical-json-definition";
+import { canonicalJson, compareCanonicalStrings } from "../canonical-json-definition";
 import {
   type RecordValue,
   type ComponentKind,
@@ -888,10 +888,7 @@ export const compareFlow = (
     "inputs",
     "variables",
     "triggers",
-    "tasks",
     "outputs",
-    "errors",
-    "finally",
     "retry",
     "timeout",
     "concurrency",
@@ -906,6 +903,36 @@ export const compareFlow = (
       "behavior",
       flowId,
     );
+  // Rewording what a flow tells the person (a message's text, title or tone) is presentation;
+  // any other change to its steps changes what it does.
+  for (const key of ["tasks", "errors", "finally"] as const) {
+    if (canonicalJson(previous[key] ?? null) === canonicalJson(candidate[key] ?? null)) continue;
+    const reworded =
+      canonicalJson(withoutMessageWording(previous[key] ?? null)) ===
+      canonicalJson(withoutMessageWording(candidate[key] ?? null));
+    reasons.push(
+      reworded
+        ? makeReason("patch", "presentation_changed", "flow", "configuration", flowId)
+        : makeReason("major", "existing_behavior_changed", "flow", "behavior", flowId),
+    );
+  }
+};
+
+/** A flow's steps with every message's wording blanked, to tell rewording from other changes. */
+const withoutMessageWording = (value: unknown): unknown => {
+  if (Array.isArray(value)) return value.map(withoutMessageWording);
+  if (typeof value !== "object" || value === null) return value;
+  const node = value as Record<string, unknown>;
+  const copied = Object.fromEntries(
+    Object.entries(node).map(([key, child]) => [key, withoutMessageWording(child)]),
+  );
+  if (node.type === "interface.show_message" && typeof copied.properties === "object")
+    copied.properties = Object.fromEntries(
+      Object.entries(copied.properties as Record<string, unknown>).filter(
+        ([key]) => key !== "message" && key !== "title" && key !== "tone",
+      ),
+    );
+  return copied;
 };
 
 export const compareModuleContents = (

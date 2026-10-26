@@ -1,7 +1,7 @@
 "use client";
 
 import { Item, ItemContent, ItemDescription, ItemTitle } from "../components/item";
-import { createContext, useContext, type ReactElement, type ReactNode } from "react";
+import { Component, createContext, useContext, type ReactElement, type ReactNode } from "react";
 import type { ComponentConfig, Config, Field } from "@puckeditor/core";
 import {
   canonicalResponsivePlacement,
@@ -47,10 +47,13 @@ export function StudioCanvasCompiledSettings({
  * revision with their preview access, by block name, with what each block looked like in that
  * saved revision. A block is given its records only while it is still exactly as it was saved; a
  * block edited since shows that it needs a save, never the records of its old settings.
- * `refused` means the builder may not preview this application, so no records are read.
+ * `refused` means the builder may not preview this application, so no records are read;
+ * `not_runnable` means the saved draft has a problem to fix before it can run, named by `sentence`.
  */
 export type StudioCanvasRecords = Readonly<{
-  state: "loading" | "ready" | "refused" | "unavailable";
+  state: "loading" | "ready" | "refused" | "not_runnable" | "unavailable";
+  /** Why the saved draft cannot run yet, when `state` is `not_runnable`. */
+  sentence?: string;
   /** The records of each data block of the saved revision, by block name. */
   records: Readonly<Record<string, unknown>>;
   /** Each block's release, settings and query in the saved revision the records were read for. */
@@ -130,6 +133,8 @@ const recordsNote = (records: StudioCanvasRecords, id: string): string | undefin
   if (records.state === "loading") return "Reading records…";
   if (records.state === "refused")
     return "Showing records here needs permission to preview this application.";
+  if (records.state === "not_runnable")
+    return `Records show here once the draft can run. ${records.sentence ?? ""}`.trim();
   if (records.state === "unavailable") return "Records could not be read just now.";
   if (Object.hasOwn(records.records, id)) return undefined;
   return records.sample !== undefined && records.sample.title === undefined
@@ -210,6 +215,43 @@ const releaseOf = (
     ? registry.get(block.block_id, block.release_version)?.metadata
     : undefined;
 };
+
+/**
+ * One canvas block that cannot be drawn says so in its own place, with the reason, while the rest of
+ * the page and the outline stay usable; the cause goes to the console. It draws again when the
+ * block's settings change.
+ */
+class CanvasBlockBoundary extends Component<
+  Readonly<{ settings: unknown; children: ReactNode }>,
+  Readonly<{ message: string | null }>
+> {
+  override state: Readonly<{ message: string | null }> = { message: null };
+
+  static getDerivedStateFromError(error: unknown) {
+    return { message: error instanceof Error ? error.message : "" };
+  }
+
+  override componentDidCatch(error: unknown) {
+    console.error("[studio] a canvas block could not be shown", error);
+  }
+
+  override componentDidUpdate(previous: Readonly<{ settings: unknown }>) {
+    if (previous.settings !== this.props.settings && this.state.message !== null)
+      this.setState({ message: null });
+  }
+
+  override render() {
+    if (this.state.message === null) return this.props.children;
+    return (
+      <Item variant="outline" size="sm" role="alert" className="border-destructive">
+        <ItemContent>
+          <ItemTitle>This block can't be shown</ItemTitle>
+          <ItemDescription>{this.state.message}</ItemDescription>
+        </ItemContent>
+      </Item>
+    );
+  }
+}
 
 function CanvasBlock({
   component,
@@ -353,6 +395,21 @@ function CanvasBlock({
 
 const canvasConfigs = new WeakMap<Config, Config>();
 
+/** The input blocks that each register one form field: an input naming its field. */
+const formFieldRendererKeys = (registry: PlatformComponentRegistry): ReadonlySet<string> =>
+  new Set(
+    registry
+      .getReleases()
+      .filter(
+        (release) =>
+          release.paletteGroup === "input" &&
+          release.properties.some(
+            (property) => property.key === "name" || property.key === "field",
+          ),
+      )
+      .map((release) => release.rendererKey),
+  );
+
 /**
  * The canvas config: the one config's components and root, each component drawing its stored
  * item as above. Only slot fields remain, because Puck finds slots through them and Studio edits
@@ -362,6 +419,7 @@ const canvasConfigs = new WeakMap<Config, Config>();
 export const studioCanvasConfig = (config: Config, registry: PlatformComponentRegistry): Config => {
   let canvas = canvasConfigs.get(config);
   if (canvas !== undefined) return canvas;
+  const fieldInputs = formFieldRendererKeys(registry);
   const components = Object.fromEntries(
     Object.entries(
       config.components as Record<string, ComponentConfig<Record<string, unknown>>>,
@@ -383,8 +441,13 @@ export const studioCanvasConfig = (config: Config, registry: PlatformComponentRe
               },
             }),
         render: (props: Record<string, unknown>) => (
-          <CanvasBlock component={component} registry={registry} props={props} />
+          <CanvasBlockBoundary settings={props.vortex}>
+            <CanvasBlock component={component} registry={registry} props={props} />
+          </CanvasBlockBoundary>
         ),
+        // A second input for a field the form already shows would be refused when the form
+        // draws, so a field input is never duplicated; add another field from the palette.
+        ...(fieldInputs.has(type) ? { permissions: { duplicate: false } } : {}),
       },
     ]),
   );

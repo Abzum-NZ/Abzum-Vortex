@@ -217,6 +217,8 @@ const notReadable = (
           : `Your access does not let you see these ${plural.toLowerCase()}. Ask an administrator for access to see them.`;
     case "refused":
       return `Seeing these ${plural.toLowerCase()} here needs permission to preview this application. Ask an administrator for access.`;
+    case "not_runnable":
+      return `Records show here once the draft can run. ${result.sentence}`;
     case "temporarily_unavailable":
       return "The records could not be read just now. Try again in a moment.";
   }

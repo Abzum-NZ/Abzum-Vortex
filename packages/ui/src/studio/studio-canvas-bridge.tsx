@@ -84,6 +84,39 @@ export const puckDataForBreakpoint = (
 const sameContent = (left: Data, right: Data): boolean =>
   JSON.stringify(left.content) === JSON.stringify(right.content);
 
+type CanvasBlock = Readonly<{ type: string; props: Readonly<Record<string, unknown>> }>;
+
+const isCanvasBlock = (value: unknown): value is CanvasBlock =>
+  typeof value === "object" &&
+  value !== null &&
+  typeof (value as CanvasBlock).type === "string" &&
+  typeof (value as CanvasBlock).props === "object" &&
+  typeof (value as CanvasBlock).props?.id === "string";
+
+/**
+ * Every block of a canvas by id with its own settings (not the blocks inside it), and the shape of
+ * the tree: which block sits where. Two drafts of the same shape differ only in settings.
+ */
+const canvasBlocks = (content: unknown) => {
+  const blocks = new Map<string, Readonly<{ block: CanvasBlock; own: string }>>();
+  const shape: string[] = [];
+  const visit = (value: unknown, path: string) => {
+    if (!Array.isArray(value)) return;
+    value.forEach((child, index) => {
+      if (!isCanvasBlock(child)) return;
+      const id = String(child.props.id);
+      const own = Object.entries(child.props).filter(
+        ([, prop]) => !(Array.isArray(prop) && prop.some(isCanvasBlock)),
+      );
+      blocks.set(id, { block: child, own: JSON.stringify([child.type, own]) });
+      shape.push(`${path}[${index}]=${id}`);
+      for (const [key, prop] of Object.entries(child.props)) visit(prop, `${id}.${key}`);
+    });
+  };
+  visit(content, "content");
+  return { blocks, shape: shape.join("|") };
+};
+
 /**
  * Runs inside Puck: keeps Puck's private state in step with the workspace draft and its shared
  * selection, and draws Puck's canvas in the application's frame. The workspace draft is the
@@ -150,14 +183,39 @@ export function StudioCanvasBridge({
 
   // The workspace draft changed (an edit, Undo, Redo, a save or Revert): show exactly that draft,
   // keeping the selected block selected while it is still on the canvas.
+  // A settings edit of one block (the inspector's usual change) replaces just that block; any
+  // other change (blocks added, moved or removed, Undo across several) replaces the whole canvas.
   useEffect(() => {
-    const { appState, dispatch } = getPuck();
-    if (sameContent(appState.data, data)) return;
+    const { appState, dispatch, getSelectorForId } = getPuck();
+    const rootChanged = JSON.stringify(appState.data.root) !== JSON.stringify(data.root);
+    if (sameContent(appState.data, data) && !rootChanged) return;
     const kept = puckSelection();
-    dispatch({
-      type: "setData",
-      data: { ...appState.data, root: data.root, content: data.content },
-    });
+    const before = canvasBlocks(appState.data.content);
+    const after = canvasBlocks(data.content);
+    const edited =
+      before.shape === after.shape
+        ? [...after.blocks].filter(([id, entry]) => before.blocks.get(id)?.own !== entry.own)
+        : undefined;
+    const selectors =
+      edited === undefined || edited.length > 1 || (edited.length === 0 && !rootChanged)
+        ? undefined
+        : edited.map(([id, entry]) => ({ selector: getSelectorForId(id), block: entry.block }));
+    if (selectors === undefined || selectors.some(({ selector }) => selector === undefined))
+      dispatch({
+        type: "setData",
+        data: { ...appState.data, root: data.root, content: data.content },
+      });
+    else {
+      if (rootChanged) dispatch({ type: "replaceRoot", root: data.root });
+      for (const { selector, block } of selectors)
+        if (selector !== undefined)
+          dispatch({
+            type: "replace",
+            destinationIndex: selector.index,
+            destinationZone: selector.zone,
+            data: block as Content[number],
+          });
+    }
     showSelection(kept);
   }, [data, resync]);
 

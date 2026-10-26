@@ -153,6 +153,8 @@ const recordKeys = (
  */
 export type StudioCanvasRecordsRead = Readonly<{
   state: StudioCanvasRecords["state"] | "superseded";
+  /** Why the saved draft cannot run yet, when `state` is `not_runnable`. */
+  sentence?: string;
   records: Readonly<Record<string, unknown>>;
   /** On a page of one record, the record its blocks were read with. */
   sample?: StudioCanvasSample;

@@ -20,14 +20,12 @@ import {
   type FileStorageOperation,
   type UploadGrant,
   type VerifiedFileActor,
+  type FileRemovalAuthoritySnapshot,
+  type FileRemovalOwnerBinding,
 } from "./file-contracts";
 import { createSignedStorageOperationClaims, validateStorageKey } from "./storage-policy";
 import { resolveFileStorageDestination, type FileStorageDestination } from "./storage-destination";
-import {
-  evaluateResolvedFileRemovalAuthority,
-  type FileRemovalAuthoritySnapshot,
-  type FileRemovalOwnerBinding,
-} from "./removal-eligibility";
+import { evaluateResolvedFileRemovalAuthority } from "./removal-eligibility";
 
 /**
  * The request presented to the trusted, server-injected authority resolver.

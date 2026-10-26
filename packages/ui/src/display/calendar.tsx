@@ -258,9 +258,15 @@ export function CalendarDisplay(props: DisplayRenderProps<CalendarPayload>): Rea
               More items in this period than shown
             </p>
           ) : null}
+          {/* An empty period still shows its days, so a person can see the dates and move on. */}
           {values.items.length === 0 && !values.truncated ? (
-            <RecordsEmptyState accessibleName={accessibleName} message={emptyMessage} />
-          ) : values.view === "agenda" ? (
+            <p className="mb-2 text-sm text-muted-foreground" role="status">
+              {emptyMessage}
+            </p>
+          ) : null}
+          {values.items.length === 0 &&
+          !values.truncated &&
+          values.view === "agenda" ? null : values.view === "agenda" ? (
             <div className="space-y-3" data-vortex-calendar-view="agenda">
               {days.map((day) => {
                 const boundaries = dayBoundaries.get(day);

@@ -21,7 +21,6 @@ import {
   protectedQueryPageRowSchema,
   protectedQueryRowSchema,
   protectedQuerySummaryAggregateResultSchema,
-  protectedQuerySummaryCommandSchema,
 } from "./protected-query-contracts";
 import { supportedRecordSystemFieldKeySchema } from "./record-system-values";
 
@@ -206,10 +205,6 @@ export const arrangementCommandSchema = z
   .strict();
 export type ArrangementCommand = z.input<typeof arrangementCommandSchema>;
 
-/** Summary input identifies the installed Query; its own declaration provides groups and totals. */
-export const summaryArrangementCommandSchema = protectedQuerySummaryCommandSchema;
-export type SummaryArrangementCommand = z.infer<typeof summaryArrangementCommandSchema>;
-
 /** The first page of each named column, or the next page of one column. */
 export const protectedBoardArrangementPageRequestSchema = z.discriminatedUnion("kind", [
   z
@@ -379,23 +374,6 @@ const calendarArrangementResultSchema = z
   .strict();
 export type CalendarArrangementResult = z.infer<typeof calendarArrangementResultSchema>;
 
-const summaryGroupSchema = tableGroupSchema.omit({ rows: true }).strict();
-export type SummaryGroup = z.infer<typeof summaryGroupSchema>;
-
-export const summaryArrangementResultSchema = z
-  .object({
-    outcome: z.literal("completed"),
-    arrangement: z.literal("summary"),
-    plan: arrangementSourcePlanSchema,
-    groupByFieldIds: z.array(fieldIdSchema),
-    totalRowCount: z.number().int().nonnegative(),
-    /** Empty when the summary is not grouped. */
-    groups: z.array(summaryGroupSchema),
-    aggregates: aggregateResultsSchema,
-  })
-  .strict();
-export type SummaryArrangementResult = z.infer<typeof summaryArrangementResultSchema>;
-
 export const arrangementRefusalReasonCodes = [
   /** The command does not match the arrangement contract. */
   "request_invalid",
@@ -443,7 +421,6 @@ export const arrangementResultSchema = z.union([
     tableArrangementResultSchema,
     boardArrangementResultSchema,
     calendarArrangementResultSchema,
-    summaryArrangementResultSchema,
   ]),
   arrangementRefusalSchema,
 ]);

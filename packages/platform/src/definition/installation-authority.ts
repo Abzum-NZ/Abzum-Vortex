@@ -31,6 +31,7 @@ import {
   deriveBuilderRequirements,
 } from "./builder-authority";
 import type { prepareApplicationRoleTemplatesForHumanRequest } from "../access/application-role-template-adapter";
+import { readBuilderApplicationOrigin } from "../access/builder-authority";
 
 type InstallationProblemKind =
   "conflict" | "refused" | "authentication_required" | "temporarily_unavailable" | "failed";
@@ -142,13 +143,10 @@ export const readInstallationOrdinaryRoot = async (
   transaction: RequestDatabaseTransaction,
   rootId: string,
 ): Promise<Readonly<{ isSystemApplication: false }>> => {
-  const rows = await transaction.query<DatabaseRow>`
-    select outcome, application_origin_kind
-    from vortex_definition.read_builder_application_root_classification(${rootId}::uuid)
-  `;
-  if (rows.length !== 1 || rows[0]?.outcome !== "available")
+  const origin = await readBuilderApplicationOrigin(transaction, rootId);
+  if (origin === undefined)
     installationProblem("application_root_unavailable", "refused", "unsupported_root");
-  if (rows[0]?.application_origin_kind !== "ordinary")
+  if (origin !== "ordinary")
     installationProblem("application_root_not_ordinary", "refused", "unsupported_root");
   return { isSystemApplication: false };
 };

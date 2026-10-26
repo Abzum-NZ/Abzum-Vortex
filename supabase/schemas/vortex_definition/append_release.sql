@@ -102,10 +102,8 @@ begin
     ] loop
       permission_id := case permission_key
         when 'platform.organization.definition_drafts.manage'
-          -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
-          then '0548c061-b1a9-48e5-a04a-eb1d0dae0644'::uuid
-        -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
-        else 'dfdd5aba-2b85-4169-b570-92be284e7b5c'::uuid
+          then vortex_access.platform_permission_id('platform.organization.definition_drafts.manage')
+        else vortex_access.platform_permission_id('platform.organization.definition_releases.manage')
       end;
       select evaluated.* into strict permission_decision
       from vortex_access.evaluate_organization_permission_eligibility(
@@ -114,8 +112,7 @@ begin
           'action', pg_catalog.jsonb_build_object('actionKind', 'manage'),
           'target', pg_catalog.jsonb_build_object('kind', 'organization'),
           'requiredPermission', pg_catalog.jsonb_build_object(
-            -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
-            'ownerKind', 'platform', 'ownerId', 'cabe121e-0baf-4084-9471-cce915d460a8',
+            'ownerKind', 'platform', 'ownerId', vortex_access.platform_permission_owner_id(),
             'permissionId', permission_id
           ),
           'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
@@ -1128,10 +1125,8 @@ begin
     ] loop
       permission_id := case permission_key
         when 'platform.organization.definition_drafts.manage'
-          -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
-          then '0548c061-b1a9-48e5-a04a-eb1d0dae0644'::uuid
-        -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
-        else 'dfdd5aba-2b85-4169-b570-92be284e7b5c'::uuid
+          then vortex_access.platform_permission_id('platform.organization.definition_drafts.manage')
+        else vortex_access.platform_permission_id('platform.organization.definition_releases.manage')
       end;
       select evaluated.* into strict permission_decision
       from vortex_access.evaluate_organization_permission_eligibility(
@@ -1140,8 +1135,7 @@ begin
           'action', pg_catalog.jsonb_build_object('actionKind', 'manage'),
           'target', pg_catalog.jsonb_build_object('kind', 'organization'),
           'requiredPermission', pg_catalog.jsonb_build_object(
-            -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
-            'ownerKind', 'platform', 'ownerId', 'cabe121e-0baf-4084-9471-cce915d460a8',
+            'ownerKind', 'platform', 'ownerId', vortex_access.platform_permission_owner_id(),
             'permissionId', permission_id
           ),
           'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),

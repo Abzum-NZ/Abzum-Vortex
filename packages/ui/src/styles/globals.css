@@ -20,6 +20,34 @@
 @import "./shared-components.css" layer(vortex-components);
 @import "./style-variants.css" layer(vortex-components);
 
+/*
+ * A form control's boundary keeps at least 3:1 against the surface it sits on in every theme and
+ * mode (WCAG 1.4.11): the theme's input colour is drawn towards the foreground. Focus, checked and
+ * invalid states keep their own colours.
+ */
+@layer vortex-components {
+  /* Scoped style rules win ties over unscoped ones, so this rule carries one more attribute. */
+  [data-vortex-style]
+    :is(
+      .cn-input,
+      .cn-textarea,
+      .cn-select-trigger,
+      .cn-checkbox,
+      .cn-radio-group-item,
+      .cn-input-group,
+      .cn-native-select
+    ):not(
+      :focus-visible,
+      :focus-within,
+      [aria-invalid="true"],
+      [data-invalid],
+      [data-checked],
+      [aria-checked="true"]
+    ) {
+    border-color: color-mix(in oklch, var(--input), var(--foreground) 45%);
+  }
+}
+
 /* Document defaults shared by the application and its account pages. */
 * {
   box-sizing: border-box;

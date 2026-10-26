@@ -39,12 +39,14 @@ export {
   matchesProtectedLegalHold,
   type FileHoldEvaluationScope,
   type FileRemovalAuthorityResolution,
-  type FileRemovalEligibilityDecision,
-  type FileRemovalEligibilityRequest,
   type FileRemovalEligibilityService,
-  type FileRemovalRefusalReason,
   type ResolveCurrentFileRemovalAuthority,
 } from "./removal-eligibility";
+export type {
+  FileRemovalEligibilityDecision,
+  FileRemovalEligibilityRequest,
+  FileRemovalRefusalReason,
+} from "./file-contracts";
 export {
   createFileRemovalCoordinator,
   type FilePreviewDeleter,

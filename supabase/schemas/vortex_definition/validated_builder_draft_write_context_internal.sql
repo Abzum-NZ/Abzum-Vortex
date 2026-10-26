@@ -63,10 +63,8 @@ begin
   foreach permission_key in array permission_keys loop
     permission_id := case permission_key
       when 'platform.organization.definition_drafts.manage'
-        -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
-        then '0548c061-b1a9-48e5-a04a-eb1d0dae0644'::uuid
-      -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
-      else 'eaade6fd-7390-44d2-a7ef-343324c7384a'::uuid
+        then vortex_access.platform_permission_id('platform.organization.definition_drafts.manage')
+      else vortex_access.platform_permission_id('platform.organization.system_applications.manage')
     end;
     select evaluated.* into strict permission_decision
     from vortex_access.evaluate_organization_permission_eligibility(
@@ -76,8 +74,7 @@ begin
         'target', pg_catalog.jsonb_build_object('kind', 'organization'),
         'requiredPermission', pg_catalog.jsonb_build_object(
           'ownerKind', 'platform',
-          -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
-          'ownerId', 'cabe121e-0baf-4084-9471-cce915d460a8',
+          'ownerId', vortex_access.platform_permission_owner_id(),
           'permissionId', permission_id
         ),
         'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),

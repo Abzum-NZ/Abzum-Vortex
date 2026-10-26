@@ -103,19 +103,13 @@ export const readSubjectWithNamedActionAvailability = async (
     releaseRevision: action.releaseRevision,
     actionId: action.actionId,
   }));
-  let rows: readonly ResultRow[];
-  await transaction.query`set local role vortex_runtime`;
-  try {
-    rows = await transaction.query<ResultRow>`
-      select vortex_record.read_record_with_action_previews(
-        ${subject.recordTypeId}::uuid, ${subject.recordId}::uuid,
-        ${JSON.stringify(requests)}::text::jsonb,
-        ${subject.requestedFieldIds === null ? null : JSON.stringify(subject.requestedFieldIds)}::text::jsonb
-      ) as value
-    `;
-  } finally {
-    await transaction.query`set local role vortex_request`;
-  }
+  const rows = await transaction.query<ResultRow>`
+    select vortex_record.read_record_with_action_previews(
+      ${subject.recordTypeId}::uuid, ${subject.recordId}::uuid,
+      ${JSON.stringify(requests)}::text::jsonb,
+      ${subject.requestedFieldIds === null ? null : JSON.stringify(subject.requestedFieldIds)}::text::jsonb
+    ) as value
+  `;
   const value = one(rows).value;
   if (typeof value !== "object" || value === null)
     throw new Error("NAMED_ACTION_PREVIEWS_RESULT_INVALID");

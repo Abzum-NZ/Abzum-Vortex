@@ -704,12 +704,9 @@ export const createStoredPageCapabilityService = (
             if (read.kind !== "read") return false;
             const availability = previewed.get(key);
             if (availability === undefined) throw new Error("PAGE_ACTION_PREVIEW_MISSING");
-            if (availability.kind === "undecided") {
-              console.info(
-                `[page] action availability undecided for placement ${placementId}: ${availability.reason}`,
-              );
-              return undefined;
-            }
+            // An action that needs the person's inputs cannot be decided before they give them:
+            // the control shows and submitting decides. That is the normal case, not a fault.
+            if (availability.kind === "undecided") return undefined;
             return availability.kind === "available";
           })();
           availabilities.set(key, decision);

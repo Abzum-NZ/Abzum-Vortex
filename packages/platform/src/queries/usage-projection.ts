@@ -8,6 +8,7 @@ import {
   type DatabaseRow,
   type RequestDatabaseTransaction,
 } from "../db/request-transaction";
+import { describeFailure } from "../catalogue/runtime-primitives";
 
 const periodSchema = z
   .object({
@@ -153,7 +154,8 @@ export const createUsageProjectionService = (
         `,
         );
         return usageProjectionResultSchema.parse(onlyResult(rows));
-      } catch {
+      } catch (error) {
+        console.error(`[query] USAGE_PROJECTION_READ_FAILED: ${describeFailure(error)}`);
         return refusal("unavailable");
       }
     },

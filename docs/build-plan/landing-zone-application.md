@@ -1,6 +1,6 @@
 # Landing Zone application
 
-[Roadmap archive](README.md) · [Target architecture](target-architecture.md)
+[Build plan](README.md) · [Target architecture](target-architecture.md)
 
 Tasks: [#376](https://github.com/Abzum-NZ/Abzum-Vortex/issues/376) blocks,
 [#377](https://github.com/Abzum-NZ/Abzum-Vortex/issues/377) application,

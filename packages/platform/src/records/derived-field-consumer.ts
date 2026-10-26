@@ -37,7 +37,6 @@ export const createDerivedFieldBackfillConsumer = (): EventConsumerAdapter => ({
         occurrence.organizationId,
         occurrence.applicationRootId,
         async (transaction) => {
-          await transaction.query`set local role vortex_runtime`;
           const rows = await transaction.query<DatabaseRow>`
           select vortex_platform.installation_backfill_progress(
             ${occurrence.occurrenceId}::uuid, ${delivery.claimCursor}::uuid, null::jsonb

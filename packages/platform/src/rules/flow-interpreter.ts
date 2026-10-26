@@ -1,3 +1,4 @@
+import { describeFailure } from "../catalogue/runtime-primitives";
 import { typedValueMatchesType } from "./condition-types";
 import type { JsonValue } from "../catalogue/common";
 import { PLATFORM_SERVICE_OPERATIONS } from "../catalogue/platform-service-operation-catalogue";
@@ -969,7 +970,10 @@ const observe = (
 ): void => {
   try {
     observer?.(observation);
-  } catch {
+  } catch (error) {
+    console.error(
+      `[flows] trace observer failed FLOW_TRACE_OBSERVER_FAILED: ${describeFailure(error)}`,
+    );
     // Diagnostics must never change a flow result.
   }
 };

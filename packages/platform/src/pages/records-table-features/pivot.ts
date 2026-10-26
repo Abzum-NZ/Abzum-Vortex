@@ -345,6 +345,7 @@ export const readRecordsTablePivot = async (request: PivotRequest): Promise<Pivo
   const rowBucket = bucket(row, feature.rowDateUnit);
   const columnBucket = bucket(column, feature.columnDateUnit);
   const query = {
+    mode: "pivot",
     moduleRootId: bound.module.rootId,
     queryId: bound.query.queryId,
     inputValues: resolution.inputValues,

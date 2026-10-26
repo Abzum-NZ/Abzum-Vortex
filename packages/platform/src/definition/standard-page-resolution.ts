@@ -10,6 +10,7 @@ import {
   requireInstalledRuntimeContext,
   type InstalledRuntimeContext,
 } from "./installed-runtime-context";
+import { describeFailure } from "../catalogue/runtime-primitives";
 
 const selectionSchema = z.object({ pageId: pageIdSchema }).strict();
 
@@ -169,8 +170,7 @@ export const resolveInstalledPageIdentity = (
     if (original === undefined) return unavailable();
     const replacement = pages.find(
       (page) =>
-        page.replacementOfPageId !== undefined &&
-        sameId(page.replacementOfPageId, original.pageId),
+        page.replacementOfPageId !== undefined && sameId(page.replacementOfPageId, original.pageId),
     );
     const subject = subjectIdentity(context, original);
     // Resolve each declared endpoint's subject against real bound records, including unpaired
@@ -190,7 +190,8 @@ export const resolveInstalledPageIdentity = (
       accessPermissionKey: original.accessPermissionKey,
       ...(subject === undefined ? {} : { subject }),
     });
-  } catch {
+  } catch (error) {
+    console.error(`[definition] STANDARD_PAGE_RESOLUTION_FAILED: ${describeFailure(error)}`);
     // Never surface a parser issue, raw endpoint, release contents or nested evidence to callers.
     return unavailable();
   }

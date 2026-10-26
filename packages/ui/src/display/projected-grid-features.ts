@@ -18,8 +18,8 @@ import {
   requireArray,
   requireFieldKey,
   requireNonEmptyString,
-  type TableNarrowing,
-} from "./projected-data";
+} from "./payload-parse";
+import type { TableNarrowing } from "./projected-data";
 
 /** The table's gestures over its explicit selection or sealed matching scope. */
 export type TableSelectionEvent =

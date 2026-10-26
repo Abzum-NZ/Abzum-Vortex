@@ -1,4 +1,5 @@
 import "server-only";
+import { describeFailure } from "../catalogue/runtime-primitives";
 
 import {
   alertRecordSchema,
@@ -33,7 +34,10 @@ export const createAppTelemetryCollector = (
         dependencies.downstream?.appendTelemetry(
           Object.freeze({ ...parsed.data, counters: Object.freeze({ ...parsed.data.counters }) }),
         );
-      } catch {
+      } catch (error) {
+        console.error(
+          `[telemetry] telemetry not delivered TELEMETRY_DOWNSTREAM_FAILED: ${describeFailure(error)}`,
+        );
         // A failing consumer never propagates back into the measured operation.
       }
     },
@@ -42,7 +46,10 @@ export const createAppTelemetryCollector = (
       if (!parsed.success) return;
       try {
         dependencies.downstream?.appendAlert(Object.freeze({ ...parsed.data }));
-      } catch {
+      } catch (error) {
+        console.error(
+          `[telemetry] alert not delivered TELEMETRY_ALERT_DOWNSTREAM_FAILED: ${describeFailure(error)}`,
+        );
         // A failing consumer never propagates back into the measured operation.
       }
     },

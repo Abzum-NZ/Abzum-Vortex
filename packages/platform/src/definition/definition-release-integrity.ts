@@ -11,11 +11,9 @@ import { assertModuleContractPair } from "./definition-source";
 import type { ExactDefinitionDependency } from "./definition-store-contracts";
 import { fingerprintCanonicalValue } from "./canonical-json-definition";
 import { flowOperationNodeDescriptors, platformOperationsCalledBy } from "./flow-operation-calls";
+import { describeFailure } from "../catalogue/runtime-primitives";
 
-type CustomerDefinitionOutput = Exclude<
-  DefinitionCompilationOutput,
-  { kind: "connection_type" }
->;
+type CustomerDefinitionOutput = Exclude<DefinitionCompilationOutput, { kind: "connection_type" }>;
 type CustomerDefinitionResolution = DefinitionResolutionSnapshot;
 
 export const applicationDraftFromStoredRelease = (
@@ -329,7 +327,8 @@ export const releaseManifestMatchesCanonicalContent = (
   if (output.kind === "application") {
     try {
       return exactApplicationDependenciesMatch(output, manifest);
-    } catch {
+    } catch (error) {
+      console.error(`[definition] RELEASE_DEPENDENCY_CHECK_FAILED: ${describeFailure(error)}`);
       return false;
     }
   }
@@ -374,7 +373,8 @@ export const hasAuthenticStoredCustomerDefinitionRelease = (
         release.validationContractVersion,
       );
     else assertModuleContractPair(release.sourceContractVersion, release.validationContractVersion);
-  } catch {
+  } catch (error) {
+    console.error(`[definition] RELEASE_CONTRACT_PAIR_INVALID: ${describeFailure(error)}`);
     return false;
   }
   if (

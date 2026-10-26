@@ -337,7 +337,6 @@ const prepare = async (
   command: SaveRecordCommand,
   activityId: string,
 ): Promise<PreparationOutcome> => {
-  await transaction.query`set local role vortex_runtime`;
   const rows = await transaction.query<PreparationRow>`
     select vortex_record.prepare_base_record_save(
       ${command.commandId}::uuid,
@@ -459,7 +458,6 @@ const prepareRelationshipTotals = async (
   command: SaveRecordCommand,
   activityId: string,
 ): Promise<RelationshipTotalPreparationOutcome> => {
-  await transaction.query`set local role vortex_runtime`;
   const rows = await transaction.query<PreparationRow>`
     select vortex_record.prepare_relationship_total_save(
       ${command.commandId}::uuid,
@@ -655,20 +653,12 @@ const invalidSettingsCorrections = (
 };
 
 /**
- * The Record service owns the privileged prepare/persist boundary, while
- * Access owns the request-scoped settings read. Keep that read between those
- * two phases: a replay or refusal never observes settings, and persistence
- * always resumes with the runtime role.
+ * The organisation's runtime settings, read between a save's prepare and persist phases so a
+ * replay or refusal never observes them.
  */
 /** @internal Shared only by the fixed named-action save composition. */
-export const readOrganizationRuntimeSettings = async (transaction: RequestDatabaseTransaction) => {
-  await transaction.query`set local role vortex_request`;
-  try {
-    return await readCurrentOrganizationRuntimeSettingsAfterAuthorization(transaction);
-  } finally {
-    await transaction.query`set local role vortex_runtime`;
-  }
-};
+export const readOrganizationRuntimeSettings = async (transaction: RequestDatabaseTransaction) =>
+  readCurrentOrganizationRuntimeSettingsAfterAuthorization(transaction);
 
 /**
  * The save result plus any before-save rule warnings of a saved attempt. The
@@ -1387,7 +1377,6 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
               concurrencyNumber: replays[position]!,
               previous: {},
             }));
-          await transaction.query`set local role vortex_runtime`;
           const rows = await transaction.query<SaveRow>`
             select vortex_record.save_base_record_set(
               ${recordTypeId}::uuid,

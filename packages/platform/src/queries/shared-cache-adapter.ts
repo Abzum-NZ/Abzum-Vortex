@@ -2,6 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 import type { QueryCacheDecision } from "./cache-policy";
+import { describeFailure } from "../catalogue/runtime-primitives";
 
 /**
  * The shared cache boundary for Query results. The store is injected (the
@@ -23,7 +24,11 @@ export type QueryCacheReadResult<Value> = Readonly<{ value: Value; cacheState: Q
 const maxEntryCharacters = 4_000_000;
 
 const envelopeSchema = z
-  .object({ key: z.string().min(1).max(128), expiresAt: z.iso.datetime({ offset: true }), value: z.unknown() })
+  .object({
+    key: z.string().min(1).max(128),
+    expiresAt: z.iso.datetime({ offset: true }),
+    value: z.unknown(),
+  })
   .strict();
 
 export type QueryCacheAdapterOptions<Value> = Readonly<{
@@ -64,7 +69,8 @@ const readEntry = async <Value>(
     const value = options.parse(envelope.data.value);
     if (value === undefined || (await options.recheck(value)) !== true) return undefined;
     return value;
-  } catch {
+  } catch (error) {
+    console.error(`[query] SHARED_CACHE_READ_FAILED: ${describeFailure(error)}`);
     return undefined;
   }
 };
@@ -76,12 +82,19 @@ const writeEntry = async <Value>(
 ): Promise<void> => {
   try {
     if (!options.shouldStore(value)) return;
-    const remainingSeconds = Math.floor((Date.parse(decision.expiresAt) - options.now().getTime()) / 1_000);
+    const remainingSeconds = Math.floor(
+      (Date.parse(decision.expiresAt) - options.now().getTime()) / 1_000,
+    );
     if (remainingSeconds < 1) return;
     const serialized = JSON.stringify({ key: decision.key, expiresAt: decision.expiresAt, value });
     if (serialized.length > maxEntryCharacters) return;
-    await options.store.set(decision.key, serialized, Math.min(remainingSeconds, decision.ttlSeconds));
-  } catch {
+    await options.store.set(
+      decision.key,
+      serialized,
+      Math.min(remainingSeconds, decision.ttlSeconds),
+    );
+  } catch (error) {
+    console.error(`[query] SHARED_CACHE_WRITE_FAILED: ${describeFailure(error)}`);
     // A failed write only forgoes a later hit.
   }
 };

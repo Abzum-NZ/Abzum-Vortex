@@ -188,6 +188,7 @@ export const createDraftModuleOverlay = (
           latestRelease: null,
         } as DefinitionPublicationCandidate["historyEvidence"]),
       savedConditionHistory: previous?.savedConditionHistory ?? [],
+      latestPlatformPins: previous?.latestPlatformPins ?? [],
     };
   };
 

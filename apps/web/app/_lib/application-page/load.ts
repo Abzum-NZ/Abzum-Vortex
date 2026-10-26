@@ -4,8 +4,6 @@ import {
   placementSettings,
   DRAWER_BLOCK_RELEASE,
   type InstalledRuntimeContext,
-  type HumanOrganizationRequestDependencies,
-  createHumanInstalledPageBundleContextLoader,
   createStoredPageCapabilityService,
   createStoredNavigationProjectionService,
   type PageSubjectReadResult,
@@ -34,11 +32,6 @@ import { prepareRuntimePreviewPage } from "../runtime-preview-demand";
 import { beginStudioPreviewRead } from "../studio-preview-work";
 import { getQueryContinuationKey } from "../query-continuation-key";
 import { loadPermittedApplicationsAtAddress } from "../organization-context";
-import {} from "@vortex/platform/server";
-import {
-  humanOrganizationRequestDependencies,
-  humanOrganizationRequests,
-} from "../server-composition";
 import type {
   ApplicationPageLoaderAddress,
   SearchParameters,
@@ -99,34 +92,7 @@ import {
   withContributedPlacements,
 } from "./contributed-placements";
 import { applyFormFieldAccess, decideFormPolicy } from "./form-field-access";
-
-export const requestDependencies = (): HumanOrganizationRequestDependencies =>
-  humanOrganizationRequestDependencies();
-
-/** The exact installed runtime context, read once under the person's own verified request scope. */
-export const loadInstalledContext = (
-  session: IdentitySession,
-  dependencies: HumanOrganizationRequestDependencies,
-  selection: OrganizationSelectionCandidate,
-) =>
-  humanOrganizationRequests(dependencies.identityAuthorityId).run(
-    session,
-    selection,
-    async (transaction, scope) => {
-      if (scope.applicationRootId === undefined) throw new Error("APPLICATION_SCOPE_UNAVAILABLE");
-      return createHumanInstalledPageBundleContextLoader({
-        transaction,
-        scope: {
-          organizationId: scope.organizationId,
-          organizationAccountId: scope.organizationAccountId,
-          applicationRootId: scope.applicationRootId,
-          ...(scope.previewInstallationId === undefined
-            ? {}
-            : { previewInstallationId: scope.previewInstallationId }),
-        },
-      }).load();
-    },
-  );
+import { loadInstalledContext, requestDependencies } from "./installed-context";
 
 /**
  * The viewer's projection of one page and of the application menu, read once per server render:
@@ -160,6 +126,7 @@ export const readPageProjections = cache(
       subjectRecordId !== undefined,
     );
     const projectedPageRead = subjectReady.then(async (ready) => {
+      if (ready.kind === "not_runnable") return ready;
       if (ready.kind !== "ready")
         return {
           kind:
@@ -180,6 +147,7 @@ export const readPageProjections = cache(
         projected.value,
         selectedPlacementIds,
       );
+      if (demand.kind === "not_runnable") return demand;
       if (demand.kind !== "ready")
         return {
           kind:

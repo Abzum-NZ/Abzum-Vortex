@@ -13,7 +13,8 @@ type RegisterPageProps = Readonly<{ searchParams: Promise<{ status?: string }> }
 
 export default async function RegisterPage({ searchParams }: RegisterPageProps) {
   const { status } = await searchParams;
-  const notice = await readPrivacyNotice().catch(() => undefined);
+  // No notice in effect means registration is not open; any other failure reaches the error page.
+  const notice = await readPrivacyNotice();
 
   return (
     <AuthShell
@@ -32,7 +33,7 @@ export default async function RegisterPage({ searchParams }: RegisterPageProps) 
         </p>
       }
     >
-      <StatusMessage status={notice === undefined ? "privacy_notice_unavailable" : status} />
+      <StatusMessage status={notice === undefined ? "registration_closed" : status} />
       {notice !== undefined && (
         <form className="flex flex-col gap-5" action={register}>
           <p className="text-sm text-muted-foreground">

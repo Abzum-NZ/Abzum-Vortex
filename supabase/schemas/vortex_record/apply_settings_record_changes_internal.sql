@@ -321,9 +321,7 @@ begin
     );
   end if;
 
-  perform vortex_record.append_base_save_activity_internal(
-    p_activity_id, 'update', p_record_id, changed_field_ids, 'completed'
-  );
+  perform vortex_record.append_record_activity_internal(p_activity_id, 'update_record', array[p_record_id]::uuid[], changed_field_ids, 'completed');
   event_result := vortex_platform.append_record_occurrences(
     (meta ->> 'storageContractId')::uuid,
     p_record_id,

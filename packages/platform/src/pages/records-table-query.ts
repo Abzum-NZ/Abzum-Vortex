@@ -729,6 +729,7 @@ const readGrouped = async (
   if (!group.membersOnly) {
     const totals = recordsTableTotalReads(request.settings, built.fieldIds);
     const summaryCommand = protectedQuerySummaryCommandSchema.safeParse({
+      mode: "grouping",
       moduleRootId: request.moduleRootId,
       queryId: request.queryId,
       inputValues: request.inputValues,
@@ -969,6 +970,7 @@ export const createRecordsTableQueryResolver = (runner: RecordsTableQueryRunner)
           session,
           selection,
           protectedQuerySummaryCommandSchema.parse({
+            mode: "totals",
             moduleRootId: request.moduleRootId,
             queryId: request.queryId,
             inputValues: request.inputValues,

@@ -23,8 +23,7 @@ security invoker
 set search_path = ''
 as $function$
 declare
-  -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
-  platform_owner_id constant uuid := 'cabe121e-0baf-4084-9471-cce915d460a8';
+  platform_owner_id constant uuid := vortex_access.platform_permission_owner_id();
   stewardship vortex_access.organization_stewardship_requirements%rowtype;
   platform_registration vortex_access.permission_registrations%rowtype;
   is_replay boolean;

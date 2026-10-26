@@ -85,4 +85,4 @@ alter function vortex_platform.installation_backfill_progress(uuid, uuid, jsonb)
 revoke all on function vortex_platform.installation_backfill_progress(uuid, uuid, jsonb)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 grant execute on function vortex_platform.installation_backfill_progress(uuid, uuid, jsonb)
-  to vortex_runtime, postgres;
+  to vortex_request, postgres;

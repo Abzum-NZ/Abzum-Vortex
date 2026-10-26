@@ -14,6 +14,7 @@ import {
   type AttachmentListPayload,
 } from "../files/application-attachment-blocks";
 import { attachmentValueSchema } from "../records/module-field-values";
+import { describeFailure } from "../catalogue/runtime-primitives";
 
 export type ReadOnlyAttachmentOwner = Readonly<{
   organizationId: string;
@@ -152,7 +153,8 @@ export const projectReadOnlyAttachmentList = async (
         downloadHref: `/api/files/${organizationId.data}/${parsedId.data}`,
       });
     }
-  } catch {
+  } catch (error) {
+    console.error(`[page] SEARCH_ATTACHMENT_READ_FAILED: ${describeFailure(error)}`);
     return { kind: "unavailable" };
   }
 

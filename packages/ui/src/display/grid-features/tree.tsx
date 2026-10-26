@@ -6,13 +6,8 @@ import {
   recordsTableTreeFeature,
 } from "@vortex/platform/schema";
 import { cellValueToText } from "../cell";
-import {
-  fail,
-  parseTablePayload,
-  requireExactKeys,
-  requireRecord,
-  type DisplayRow,
-} from "../projected-data";
+import { fail, requireExactKeys, requireRecord } from "../payload-parse";
+import { parseTablePayload, type DisplayRow } from "../projected-data";
 import type { SubRowEntry, SubRowsBeneath } from "../sub-rows";
 import type { GridFeatureModule, GridFeatureSubRowsProps } from "./registry";
 

@@ -6,7 +6,7 @@ import {
   requireFieldKey,
   requireNonEmptyString,
   requireRecord,
-} from "./projected-data";
+} from "./payload-parse";
 
 /*
  * The parser of the formatting a table's rows carry: the style keys and measures of one row. The

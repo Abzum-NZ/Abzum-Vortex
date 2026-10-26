@@ -1,4 +1,5 @@
 import "server-only";
+import { databaseCode } from "../catalogue/runtime-primitives";
 
 import { z } from "zod";
 import {
@@ -355,11 +356,6 @@ const parseCommand = <Schema extends z.ZodType>(
     throw new PrivateFormDraftError("INVALID_PRIVATE_FORM_DRAFT_COMMAND", { cause: command.error });
   return command.data;
 };
-
-const databaseCode = (error: unknown): string | undefined =>
-  typeof error === "object" && error !== null && "code" in error
-    ? String((error as { readonly code?: unknown }).code)
-    : undefined;
 
 const mapStorageFailure = (error: unknown): PrivateFormDraftError => {
   const code = databaseCode(error);

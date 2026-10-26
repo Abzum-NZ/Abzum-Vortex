@@ -16,6 +16,7 @@ import {
   type ProtectedQueryCommand,
 } from "../queries/protected-query-contracts";
 import type { RecordsTableQueryRunner } from "./records-table-query";
+import { describeFailure } from "../catalogue/runtime-primitives";
 
 export type QueryNoticeSeverity = "info" | "success" | "warning" | "critical";
 export type ProjectedQueryNotice = Readonly<{
@@ -238,7 +239,8 @@ export const createQueryNoticeQueryResolver = (runner: RecordsTableQueryRunner) 
           truncated: page.nextContinuationToken !== undefined,
         }),
       });
-    } catch {
+    } catch (error) {
+      console.error(`[page] NOTICE_QUERY_PROJECTION_FAILED: ${describeFailure(error)}`);
       return ERROR;
     }
   },

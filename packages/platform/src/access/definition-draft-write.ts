@@ -38,7 +38,11 @@ import {
 } from "../definition/definition-draft-read";
 import { createDefinitionStore } from "../definition/definition-store";
 import { extractApplicationSourceIdentityRequirements } from "../definition/source-identities";
-import { createBuilderAuthority, type BuilderTargetFactsReader } from "./builder-authority";
+import {
+  createBuilderAuthority,
+  type BuilderTargetFactsReader,
+  readBuilderApplicationOrigin,
+} from "./builder-authority";
 import type { createHumanOrganizationRequestService } from "./human-organization-request";
 import { DefinitionError, classifyDatabaseError } from "../definition/definition-error";
 
@@ -70,26 +74,12 @@ function invalidResult(): never {
   throw new DefinitionError("INVALID_DEFINITION_STORAGE_RESULT");
 }
 
-type ClassificationRow = DatabaseRow & { outcome: unknown; application_origin_kind: unknown };
-
 /** Unknown, missing, foreign and wrong-kind roots share one neutral conflict. */
 const targetFacts: BuilderTargetFactsReader = async (transaction, _scope, rootId) => {
   if (rootId === undefined) return { isSystemApplication: false };
-  const rows = await transaction.query<ClassificationRow>`
-    select outcome, application_origin_kind
-    from vortex_definition.read_builder_application_root_classification(${rootId}::uuid)
-  `;
-  const row = rows[0];
-  if (rows.length !== 1 || row === undefined) invalidResult();
-  if (row.outcome === "unavailable" && row.application_origin_kind === null)
-    throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING");
-  if (
-    row.outcome !== "available" ||
-    (row.application_origin_kind !== "ordinary" &&
-      row.application_origin_kind !== "platform_system_application")
-  )
-    invalidResult();
-  return { isSystemApplication: row.application_origin_kind === "platform_system_application" };
+  const origin = await readBuilderApplicationOrigin(transaction, rootId);
+  if (origin === undefined) throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING");
+  return { isSystemApplication: origin === "platform_system_application" };
 };
 
 const derivedDraftCommandSchema = z
@@ -385,7 +375,7 @@ export const createHumanApplicationDraftWriter = (
           let locked: readonly DatabaseRow[];
           try {
             locked = await transaction.query<DatabaseRow>`
-              select vortex_definition.lock_application_page_adoption_draft_internal(
+              select vortex_definition.lock_application_page_adoption_draft(
                 ${command.data.rootId}::uuid,
                 ${command.data.expectedDraftRevision},
                 ${command.data.expectedPublicationAnchor}

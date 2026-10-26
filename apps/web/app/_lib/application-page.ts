@@ -220,6 +220,8 @@ export const loadApplicationPagePlacements = async (
     tableContinuation,
   );
   if (loaded.kind === "reload") return loaded;
+  // The page itself names why a draft that cannot run does not open; its parts are unavailable.
+  if (loaded.kind === "not_runnable") return { kind: "unavailable" };
   if (loaded.kind !== "placements") {
     if (loaded.kind === "available") throw new Error("WHOLE_PAGE_READ_FOR_PLACEMENTS");
     return loaded;

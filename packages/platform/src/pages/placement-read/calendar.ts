@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { JsonValue } from "../../catalogue/common";
+import { describeFailure } from "../../catalogue/runtime-primitives";
 import { projectCalendarPlacement, type CalendarPlacementContract } from "../calendar-query";
 import { addressParameter } from "../records-table-state";
 import {
@@ -28,8 +29,13 @@ export const readCalendar = async (
   let organizationSettings: Awaited<ReturnType<typeof read.services.readCalendarSettings>>;
   try {
     organizationSettings = await read.services.readCalendarSettings();
-  } catch {
-    logPlacementFailure(address, placementId, "calendar_time_zone_unavailable");
+  } catch (error) {
+    logPlacementFailure(
+      address,
+      placementId,
+      "calendar_time_zone_unavailable",
+      describeFailure(error),
+    );
     data[placementId] = { status: "error" };
     return;
   }

@@ -24,16 +24,11 @@ import {
   one,
   refusal,
   filterInputRefusal,
-  readInputs,
   normalizeConditionFieldIdentifiers,
   sqlArray,
+  admitQueryInputs,
 } from "./protected-query-helpers";
 import { pageReadSchema, boardColumnPagesReadSchema } from "./protected-query-read-schemas";
-import {
-  parseQueryInputDeclarations,
-  validateQueryInputValues,
-  QueryInputRefusalError,
-} from "./typed-input-validation";
 
 export const boardColumnPagesCommandSchema = protectedQueryBoardMembersCommandSchema
   .omit({ selector: true, continuationToken: true })
@@ -114,20 +109,9 @@ export const boardMembersCommand = async (
     if (after.sortKey.length !== 0) return refusal("cursor_stale");
   }
 
-  const declared = await readInputs(transaction, command);
-  if (declared.outcome === "refused") return refusal(declared.reasonCode);
-  if (after !== undefined && after.moduleReleaseRevision !== declared.moduleReleaseRevision)
-    return refusal("cursor_stale");
-  const declarations = parseQueryInputDeclarations(declared.inputs);
-  if (declarations === undefined) return refusal("descriptor_invalid");
-
-  let inputValues: Readonly<Record<string, JsonValue>>;
-  try {
-    inputValues = validateQueryInputValues(declarations, command.inputValues);
-  } catch (error) {
-    if (error instanceof QueryInputRefusalError) return refusal("input_invalid");
-    throw error;
-  }
+  const admitted = await admitQueryInputs(transaction, command, after?.moduleReleaseRevision);
+  if (admitted.outcome === "refused") return admitted;
+  const { declared, inputValues } = admitted;
 
   const inputFingerprint = boardMemberFingerprint(command, inputValues);
   if (after !== undefined && after.inputFingerprint !== inputFingerprint)
@@ -271,17 +255,9 @@ export const boardColumnPagesCommand = async (
   const filterRefusal = filterInputRefusal(memberCommands[0]!);
   if (filterRefusal !== undefined) return refusal(filterRefusal);
 
-  const declared = await readInputs(transaction, command);
-  if (declared.outcome === "refused") return refusal(declared.reasonCode);
-  const declarations = parseQueryInputDeclarations(declared.inputs);
-  if (declarations === undefined) return refusal("descriptor_invalid");
-  let inputValues: Readonly<Record<string, JsonValue>>;
-  try {
-    inputValues = validateQueryInputValues(declarations, command.inputValues);
-  } catch (error) {
-    if (error instanceof QueryInputRefusalError) return refusal("input_invalid");
-    throw error;
-  }
+  const admitted = await admitQueryInputs(transaction, command);
+  if (admitted.outcome === "refused") return admitted;
+  const { declared, inputValues } = admitted;
 
   const read = await readBoardColumnPages(
     transaction,

@@ -3,6 +3,7 @@ import { correlationIdSchema } from "./common";
 import { builderKeySchema, namespacedKeySchema } from "./identifiers";
 import { recordsTableFeatureRefusals } from "../definition/application-composition/records-table-features/index";
 import { recordsTableFeatureRefusalCodes } from "../definition/application-composition/records-table-features/shared";
+import { describeFailure } from "./runtime-primitives";
 
 export const definitionValidationCatalogueVersion = "1.4.0" as const;
 
@@ -63,6 +64,7 @@ export const definitionValidationErrorCodes = [
   "definition_runtime_not_supported",
   "definition_query_binding_choice",
   "definition_form_field_dependency",
+  "definition_form_field_duplicate",
   "definition_unknown_property",
   "definition_too_few_items",
   "definition_too_many_items",
@@ -162,6 +164,12 @@ const definitionValidationErrorCatalogueSource = {
     order: 39,
     message: "A form shows a field without the field its choices depend on.",
     guidance: "Add the field it depends on to the same form, or remove the dependent field.",
+  },
+  // The sentence names the field shown twice.
+  definition_form_field_duplicate: {
+    order: 39,
+    message: "A form shows the same field twice.",
+    guidance: "Remove one of the two inputs, or point it at another field.",
   },
   definition_unknown_property: {
     order: 40,
@@ -524,7 +532,10 @@ function emitDiagnostic(
 ) {
   try {
     sink?.(diagnostic);
-  } catch {
+  } catch (error) {
+    console.error(
+      `[validation] diagnostic not stored VALIDATION_DIAGNOSTIC_SINK_FAILED: ${describeFailure(error)}`,
+    );
     // Diagnostic storage must never change the safe public result.
   }
 }
@@ -587,7 +598,10 @@ export function translateDefinitionSchemaError(
         `[definition] definition_sortable_field_limit ${context.correlationId}: a record type declares more than eight sortable fields`,
       );
     return finishResult(errors, context.correlationId);
-  } catch {
+  } catch (error) {
+    console.error(
+      `[definition] DEFINITION_VALIDATION_TRANSLATION_FAILED: ${describeFailure(error)}`,
+    );
     return finishResult(
       [
         makePublicError(

@@ -28,20 +28,21 @@ import { signOut } from "../../auth/actions";
 export function OrganizationChooserPage({
   page,
   shell,
-  placementId,
-  values,
+  launchers,
   account,
-  openOrganization,
   platformBlockReleases,
   fieldInputControlReleases,
   platformThemeTokens,
 }: Readonly<{
   page: PageDefinition;
   shell: ApplicationShell;
-  placementId: string;
-  values: LauncherRowsPayload | undefined;
+  /** The launcher tiles the page shows, each with its row action (open or join). */
+  launchers: readonly Readonly<{
+    placementId: string;
+    values: LauncherRowsPayload;
+    onRowAction: (event: DisplaySemanticEvent) => Promise<void>;
+  }>[];
   account: ApplicationAccount;
-  openOrganization: (event: DisplaySemanticEvent) => Promise<void>;
   platformBlockReleases: readonly PlatformBlockRelease[];
   fieldInputControlReleases: FieldInputControlReleaseMap;
   platformThemeTokens: PlatformThemeTokens;
@@ -76,16 +77,15 @@ export function OrganizationChooserPage({
           organizationName: page.name,
           pageName: page.name,
         }}
-        runtimeInputs={
-          values === undefined
-            ? {}
-            : {
-                [placementId]: {
-                  data: { status: "ready", values },
-                  events: { row_action: openOrganization },
-                },
-              }
-        }
+        runtimeInputs={Object.fromEntries(
+          launchers.map((launcher) => [
+            launcher.placementId,
+            {
+              data: { status: "ready", values: launcher.values },
+              events: { row_action: launcher.onRowAction },
+            },
+          ]),
+        )}
       />
     </ApplicationAccountActionsProvider>
   );

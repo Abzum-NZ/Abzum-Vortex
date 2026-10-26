@@ -269,6 +269,46 @@ export function StudioGridFeatures({
     onChange(normalized ?? candidate);
   };
 
+  /** The value a feature's switch writes when it is turned on: its defaults and starting settings. */
+  const enabledValue = (key: RecordsTableFeatureKey): GroupValue => {
+    const declaration = property.properties.find((feature) => feature.key === key);
+    return {
+      kind: "group",
+      properties: {
+        ...(declaration?.defaultValue?.kind === "group" ? declaration.defaultValue.properties : {}),
+        ...studioGridFeatureStart(key, facts),
+        enabled: { kind: "boolean", value: true },
+      },
+    };
+  };
+
+  /**
+   * A board takes its columns from a stage field: with none in the bound query there is nothing an
+   * author can set on the board to make it possible, so its switch stays off and says why.
+   */
+  const boardBlocked =
+    features === undefined || (facts.board?.stageFields.length ?? 0) > 0
+      ? undefined
+      : (() => {
+          const read = readRecordsTableFeatures({
+            kind: "group",
+            properties: {
+              ...whole.properties,
+              [recordsTableBoardFeature.key]: enabledValue(recordsTableBoardFeature.key),
+            },
+          });
+          if (read.kind !== "read") return undefined;
+          const check = checkRecordsTableFeature(
+            recordsTableBoardFeature.key,
+            recordsTableFeatureState(read.features, recordsTableBoardFeature.key),
+            facts,
+            presentation,
+            read.features,
+            tablePageSize,
+          );
+          return check.kind === "not_possible" ? check.reason : undefined;
+        })();
+
   const viewportCheck =
     features === undefined
       ? undefined
@@ -309,6 +349,8 @@ export function StudioGridFeatures({
                   features,
                   tablePageSize,
                 );
+          const blocked =
+            key === recordsTableBoardFeature.key && !enabled ? boardBlocked : undefined;
           const switchId = `${idPrefix}-${ownId}-${key}`;
           const settings =
             declaration?.kind === "group"
@@ -325,7 +367,9 @@ export function StudioGridFeatures({
                 <ItemContent>
                   <ItemTitle>
                     <Label htmlFor={switchId}>{label}</Label>
-                    {check === undefined ? null : check.kind === "available" ? (
+                    {blocked !== undefined ? (
+                      <Badge variant="outline">Not possible</Badge>
+                    ) : check === undefined ? null : check.kind === "available" ? (
                       <Badge
                         variant="outline"
                         className="border-transparent bg-success/10 text-success"
@@ -337,30 +381,21 @@ export function StudioGridFeatures({
                     )}
                   </ItemTitle>
                   <ItemDescription>
-                    {check?.kind === "not_possible" ? check.reason : description}
+                    {blocked ?? (check?.kind === "not_possible" ? check.reason : description)}
                   </ItemDescription>
                 </ItemContent>
                 <ItemActions>
                   <Switch
                     id={switchId}
                     checked={enabled}
-                    disabled={disabled || features === undefined}
+                    disabled={disabled || features === undefined || blocked !== undefined}
                     onCheckedChange={(on: boolean) => {
                       // A disabled feature holds only its catalogue default. Its workflow stays
                       // in the draft; the settings command restores that binding when enabled.
                       write(
                         key,
                         on
-                          ? {
-                              kind: "group",
-                              properties: {
-                                ...(declaration?.defaultValue?.kind === "group"
-                                  ? declaration.defaultValue.properties
-                                  : {}),
-                                ...studioGridFeatureStart(key, facts),
-                                enabled: { kind: "boolean", value: true },
-                              },
-                            }
+                          ? enabledValue(key)
                           : (() => {
                               const defaultValue = declaration?.defaultValue;
                               if (defaultValue?.kind !== "group")

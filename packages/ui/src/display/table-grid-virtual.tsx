@@ -57,9 +57,20 @@ export default function VirtualRows({
     scrollMargin: rowHeight,
     scrollPaddingStart: stickyHeader ? rowHeight : 0,
     rangeExtractor,
+    // Scrolling writes the rows' positions straight to the page and renders again only when the
+    // window of rows changes, not on every scroll event.
+    directDomUpdates: true,
+    useFlushSync: false,
   });
   return (
-    <div role="rowgroup" style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
+    <div
+      role="rowgroup"
+      ref={virtualizer.containerRef}
+      // While the rows scroll under a still pointer, none of them takes the hover: a wheel turn
+      // repaints no row and starts no transition.
+      className={virtualizer.isScrolling ? "pointer-events-none" : undefined}
+      style={{ position: "relative" }}
+    >
       {virtualizer.getVirtualItems().map((item) => {
         const line = lines[item.index];
         return line === undefined ? null : (
@@ -69,7 +80,6 @@ export default function VirtualRows({
             data-index={item.index}
             ref={virtualizer.measureElement}
             className="absolute top-0 left-0 w-full"
-            style={{ transform: `translateY(${item.start - rowHeight}px)` }}
           >
             {drawRow(line, item.index)}
           </div>

@@ -106,7 +106,9 @@ const loadActionPage = async (addressCandidate: unknown) => {
   const selection = organizationSelectionCandidateSchema.parse({
     organizationId: resolved.read.organizationId,
     applicationRootId: resolved.application.applicationRootId,
-    ...(resolved.application.previewInstallationId === undefined ? {} : { previewInstallationId: resolved.application.previewInstallationId }),
+    ...(resolved.application.previewInstallationId === undefined
+      ? {}
+      : { previewInstallationId: resolved.application.previewInstallationId }),
   });
   const loaded = await loadApplicationPage(
     identity.session,
@@ -148,16 +150,11 @@ const requestMetadata = async (loaded: Awaited<ReturnType<typeof loadActionPage>
   );
   if (authority.kind !== "available") return authority;
   if (authority.value === undefined) return { kind: "unavailable" as const };
-  const visiblePlacementIds = getGuidedFormVisiblePlacementIds(
-    loaded.model.page,
-    loaded.shells,
-  );
+  const visiblePlacementIds = getGuidedFormVisiblePlacementIds(loaded.model.page, loaded.shells);
   if (visiblePlacementIds === undefined) return { kind: "unavailable" as const };
   const steps = authority.value.steps.map((step) => ({
     ...step,
-    fields: step.fields.filter((field) =>
-      visiblePlacementIds.has(field.placementId.toLowerCase()),
-    ),
+    fields: step.fields.filter((field) => visiblePlacementIds.has(field.placementId.toLowerCase())),
   }));
   return { ...loaded, scope, recordType: authority.value.recordType, steps };
 };
@@ -169,12 +166,10 @@ export async function advanceGuidedFormStepAction(
   if (!parsedRequest.success) return { kind: "unavailable" };
   const input = parsedRequest.data;
   const loaded = await requestMetadata(await loadActionPage(input.address));
+  if (loaded.kind === "not_runnable") return { kind: "unavailable" };
   if (loaded.kind !== "available") return loaded;
   const current = loaded.model.guidedForm!;
-  if (
-    input.expectedRevision !== current.revision ||
-    !sameId(input.draftId, current.draftId)
-  )
+  if (input.expectedRevision !== current.revision || !sameId(input.draftId, current.draftId))
     return {
       kind: "conflict",
       activeStepId: current.computedStepId,
@@ -184,8 +179,7 @@ export async function advanceGuidedFormStepAction(
   const computedIndex = loaded.steps.findIndex((step) => step.stepId === current.computedStepId);
   const stepIndex = loaded.steps.findIndex((step) => step.stepId === input.stepId);
   const step = loaded.steps[stepIndex];
-  if (stepIndex < 0 || step === undefined)
-    return { kind: "unavailable" };
+  if (stepIndex < 0 || step === undefined) return { kind: "unavailable" };
   if (stepIndex > computedIndex)
     return {
       kind: "unchanged",
@@ -202,7 +196,11 @@ export async function advanceGuidedFormStepAction(
       return { kind: "unavailable" };
     return {
       kind: "unchanged",
-      activeStepId: earlierGuidedStepId(loaded.steps, current.computedStepId, input.requestedStepId),
+      activeStepId: earlierGuidedStepId(
+        loaded.steps,
+        current.computedStepId,
+        input.requestedStepId,
+      ),
       computedStepId: current.computedStepId,
       revision: current.revision,
     };
@@ -232,7 +230,10 @@ export async function advanceGuidedFormStepAction(
       revision: current.revision,
     };
   if (result.value.outcome !== "updated") return { kind: "unavailable" };
-  const visibleValidation = visibleGuidedFormValidation(result.value.draft.validation, loaded.steps);
+  const visibleValidation = visibleGuidedFormValidation(
+    result.value.draft.validation,
+    loaded.steps,
+  );
   const computedStepId = computeGuidedFormStepId(loaded.steps, visibleValidation);
   if (computedStepId === undefined) return { kind: "unavailable" };
   return {
@@ -251,6 +252,7 @@ export async function confirmGuidedFormAction(
   if (!parsedRequest.success) return { kind: "unavailable" };
   const input = parsedRequest.data;
   const loaded = await requestMetadata(await loadActionPage(input.address));
+  if (loaded.kind === "not_runnable") return { kind: "unavailable" };
   if (loaded.kind !== "available") return loaded;
   const current = loaded.model.guidedForm!;
   const summary = loaded.steps.find((step) => step.summary);
@@ -292,14 +294,15 @@ export async function confirmGuidedFormAction(
 
 export async function abandonGuidedFormDraftAction(
   request: GuidedFormAbandonRequest,
-): Promise<Readonly<{ kind: "abandoned" | "conflict" | "unavailable" | "temporarily_unavailable" }>> {
+): Promise<
+  Readonly<{ kind: "abandoned" | "conflict" | "unavailable" | "temporarily_unavailable" }>
+> {
   const parsedRequest = abandonRequestSchema.safeParse(request);
   if (!parsedRequest.success) return { kind: "unavailable" };
   const input = parsedRequest.data;
   const address = input.address;
   const identity = await continueSessionOrEnd(await resolveIdentitySession());
-  if (identity.kind === "temporarily_unavailable")
-    return { kind: "temporarily_unavailable" };
+  if (identity.kind === "temporarily_unavailable") return { kind: "temporarily_unavailable" };
   const resolved = await resolveApplicationAddress(
     identity.session,
     address.tenantShortName,
@@ -307,18 +310,23 @@ export async function abandonGuidedFormDraftAction(
     address.applicationKey,
     address.pageKey,
   );
-  if (resolved.kind === "temporarily_unavailable")
-    return { kind: "temporarily_unavailable" };
+  if (resolved.kind === "temporarily_unavailable") return { kind: "temporarily_unavailable" };
   if (resolved.kind !== "application_page") return { kind: "unavailable" };
   const selection = organizationSelectionCandidateSchema.parse({
     organizationId: resolved.read.organizationId,
     applicationRootId: resolved.application.applicationRootId,
-    ...(resolved.application.previewInstallationId === undefined ? {} : { previewInstallationId: resolved.application.previewInstallationId }),
+    ...(resolved.application.previewInstallationId === undefined
+      ? {}
+      : { previewInstallationId: resolved.application.previewInstallationId }),
   });
-  const result = await createGuidedFormDraftService(guidedFormDependencies()).abandon(identity.session, selection, {
-    draftId: input.draftId,
-    expectedRevision: input.expectedRevision,
-  });
+  const result = await createGuidedFormDraftService(guidedFormDependencies()).abandon(
+    identity.session,
+    selection,
+    {
+      draftId: input.draftId,
+      expectedRevision: input.expectedRevision,
+    },
+  );
   if (result.kind !== "available") return result;
   return result.value.outcome === "abandoned" ? { kind: "abandoned" } : { kind: "conflict" };
 }

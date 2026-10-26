@@ -11,7 +11,7 @@ import {
   organizationAccountIdSchema,
   roleIdSchema,
 } from "../catalogue/identifiers";
-import { isRecord, sameId } from "../catalogue/runtime-primitives";
+import { describeFailure, isRecord, sameId } from "../catalogue/runtime-primitives";
 import {
   accessGrantSchema,
   grantConsentDecisionSchema,
@@ -369,7 +369,10 @@ export const createRecordShareGrantService = (dependencies: RecordShareGrantDepe
         consentRequestId: grantConsentRequestIdSchema.parse(newConsentRequestId()),
         activityId: activityIdSchema.parse(newActivityId()),
       };
-    } catch {
+    } catch (error) {
+      console.error(
+        `[access] record share identifiers unavailable RECORD_SHARE_IDENTIFIERS_FAILED: ${describeFailure(error)}`,
+      );
       return undefined;
     }
   };

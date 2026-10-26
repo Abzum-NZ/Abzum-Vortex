@@ -33,6 +33,7 @@ import {
   requireInstalledRuntimeContext,
   type InstalledRuntimeContext,
 } from "../definition/installed-runtime-context";
+import { describeFailure } from "../catalogue/runtime-primitives";
 
 export type NavigationPermissionBinding = Readonly<{
   permissionKey: string;
@@ -262,7 +263,8 @@ export const createStoredNavigationProjectionService = (
     let fixed: FixedAuthenticatedNavigationProjection;
     try {
       fixed = load();
-    } catch {
+    } catch (error) {
+      console.error(`[page] NAVIGATION_PROJECTION_LOAD_FAILED: ${describeFailure(error)}`);
       const verified = await requests.run(session, candidate, async () => undefined);
       if (verified.kind !== "available") return verified;
       return { kind: "temporarily_unavailable" };

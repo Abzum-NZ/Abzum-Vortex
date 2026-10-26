@@ -62,7 +62,6 @@ export {
   finalizeOrganizationAccountDeletion,
   OrganizationAccountError,
   organizationAccountErrorCodes,
-  type CreatedOrganizationInvitation,
   type IdentityProjectionReader,
   type OrganizationAccountErrorCode,
   type OffboardingApplicationPageCount,

@@ -127,8 +127,6 @@ export {
   type TableArrangementDescriptor,
   type BoardArrangementDescriptor,
   type CalendarArrangementDescriptor,
-  summaryArrangementCommandSchema,
-  type SummaryArrangementCommand,
   protectedBoardArrangementPageRequestSchema,
   protectedBoardArrangementPageSchema,
   protectedBoardArrangementCommandSchema,
@@ -146,14 +144,12 @@ export {
   type BoardArrangementResult,
   type CalendarItem,
   type CalendarArrangementResult,
-  type SummaryGroup,
-  type SummaryArrangementResult,
   type ArrangementRefusalReasonCode,
   type ArrangementRefusal,
   type ArrangementResult,
 } from "./arrangement-contracts";
 
-export { arrangeDataset, arrangeSummary, arrangeProtectedBoard } from "./arrangements";
+export { arrangeDataset, arrangeProtectedBoard } from "./arrangements";
 
 export {
   createUsageProjectionService,

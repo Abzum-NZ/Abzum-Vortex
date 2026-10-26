@@ -1,4 +1,5 @@
 import "server-only";
+import { describeFailure } from "../catalogue/runtime-primitives";
 
 import { createHash, randomUUID } from "node:crypto";
 import {
@@ -418,7 +419,10 @@ export const createFileRecordImportSourceService = (
     let correlationId: CorrelationId;
     try {
       correlationId = correlationIdSchema.parse(randomUUID());
-    } catch {
+    } catch (error) {
+      console.error(
+        `[files] import correlation id unavailable FILE_IMPORT_CORRELATION_FAILED: ${describeFailure(error)}`,
+      );
       return sourceRefusal("storage_unavailable");
     }
     const protectedRequests = createHumanOrganizationRequestService({

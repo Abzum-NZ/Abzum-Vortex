@@ -1,4 +1,5 @@
 import "server-only";
+import { platformPins } from "../platform-pins";
 
 import type { SessionContext } from "../../access/identity-access";
 import {
@@ -541,6 +542,16 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
     const state = await this.readPublicationState(rootId);
     if (state === undefined) return undefined;
     const anchor = state.root.currentReleaseRevision;
+    const latestApplication =
+      anchor === null || state.draft.kind === "module"
+        ? undefined
+        : await this.readLatestRelease(
+            rootId,
+            anchor,
+            state.draft.kind,
+            state.draft.key,
+            String(state.draft.rootId),
+          );
     const latest =
       anchor === null
         ? undefined
@@ -552,15 +563,7 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
                 anchor,
               )
             )?.published
-          : (
-              await this.readLatestRelease(
-                rootId,
-                anchor,
-                state.draft.kind,
-                state.draft.key,
-                String(state.draft.rootId),
-              )
-            ).published;
+          : latestApplication?.published;
     if (
       (anchor !== null && latest === undefined) ||
       (latest !== undefined &&
@@ -581,6 +584,7 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
       historyEvidence: historyEvidence.data,
       savedConditionHistory:
         state.draft.kind === "module" ? await this.readSavedConditionHistory(rootId) : [],
+      latestPlatformPins: platformPins(latestApplication?.stored.dependencyManifest ?? []),
     };
   }
 

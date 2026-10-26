@@ -299,7 +299,10 @@ const seededTask = (
     const seed =
       definition.type === "rule.refuse" && key === "reason"
         ? refusalReasonSeed
-        : seedValue(declaration.type, flow, source);
+        : definition.type === "interface.show_message" && key === "title"
+          ? // A message is headed by what the person was doing: the flow's name.
+            text(flow.labels?.name ?? "")
+          : seedValue(declaration.type, flow, source);
     if (seed === undefined) return undefined;
     properties[key] = seed;
   }

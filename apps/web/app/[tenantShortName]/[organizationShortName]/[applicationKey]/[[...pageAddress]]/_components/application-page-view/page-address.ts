@@ -9,8 +9,10 @@ export type AddressEntry = "push" | "replace";
  * (sort, filters, search, page position, saved view, grouping, open group, pivot) and of the page
  * parameters that controls publish. A gesture changes it at once, so a second gesture made before
  * the first one's read lands builds on the first and never on an older address. `write` is the
- * only code that changes the browser history; the location is read only when a page loads and on
- * Back or Forward (`load`), and listeners registered with `onLoad` hear exactly those reads.
+ * only code that changes the browser history for this state; a guided form step is a page-level
+ * address that renders the page again on the server, so it goes through the Next router instead.
+ * The location is read only when a page loads and on Back or Forward (`load`), and listeners
+ * registered with `onLoad` hear exactly those reads.
  */
 export type PageAddress = Readonly<{
   search: () => string;

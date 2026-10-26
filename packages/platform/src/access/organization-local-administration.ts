@@ -233,17 +233,16 @@ export const createOrganizationInvitationForAdministrationResultSchema = z.discr
   [
     z
       .object({
-        outcome: z.literal("accepted"),
+        outcome: z.enum(["accepted", "replayed"]),
         operation: z.literal("create_organization_invitation"),
         ...organizationInvitationChangeFields,
-        invitationSecret: z.string().min(32).max(2_000),
       })
       .strict(),
+    /** The email already has an invitation waiting to be accepted in this organisation. */
     z
       .object({
-        outcome: z.literal("replayed"),
+        outcome: z.literal("already_pending"),
         operation: z.literal("create_organization_invitation"),
-        ...organizationInvitationChangeFields,
       })
       .strict(),
   ],

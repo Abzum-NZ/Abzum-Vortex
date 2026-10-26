@@ -1,6 +1,7 @@
 import "server-only";
 
 import {
+  describeFailure,
   builderKeySchema,
   namespacedKeySchema,
   type ApplicationRootId,
@@ -73,8 +74,7 @@ const isLiveSession = (session: IdentitySession): boolean => {
   return Number.isFinite(expiresAt) && expiresAt > Date.now();
 };
 
-const isPositiveSafeInteger = (value: number): boolean =>
-  Number.isSafeInteger(value) && value >= 1;
+const isPositiveSafeInteger = (value: number): boolean => Number.isSafeInteger(value) && value >= 1;
 
 const readAddressFacts = async (
   session: IdentitySession,
@@ -145,10 +145,7 @@ const sameSelectedScope = (
   sameUuid(left.applicationRootId, right.applicationRootId) &&
   left.accessVersion === right.accessVersion;
 
-const sameAddressFacts = (
-  left: ResolvedAddressFacts,
-  right: ResolvedAddressFacts,
-): boolean =>
+const sameAddressFacts = (left: ResolvedAddressFacts, right: ResolvedAddressFacts): boolean =>
   sameUuid(left.organizationId, right.organizationId) &&
   sameUuid(left.currentApplicationRootId, right.currentApplicationRootId) &&
   left.currentPageKey === right.currentPageKey &&
@@ -180,27 +177,26 @@ export const createWebPrivateInvalidationChannelAuthority = (
       return undefined;
     }
   })();
-  const currentPageAddress = currentPageAddressResult !== undefined &&
-    currentPageAddressResult.success
-    ? Object.freeze(currentPageAddressResult.data)
-    : undefined;
-  const targetApplicationKey = targetApplicationKeyResult !== undefined &&
-    targetApplicationKeyResult.success
-    ? targetApplicationKeyResult.data
-    : undefined;
+  const currentPageAddress =
+    currentPageAddressResult !== undefined && currentPageAddressResult.success
+      ? Object.freeze(currentPageAddressResult.data)
+      : undefined;
+  const targetApplicationKey =
+    targetApplicationKeyResult !== undefined && targetApplicationKeyResult.success
+      ? targetApplicationKeyResult.data
+      : undefined;
 
   const readFreshSnapshot = async (): Promise<AuthoritySnapshot | undefined> => {
-    if (currentPageAddress === undefined || targetApplicationKey === undefined)
-      return undefined;
+    if (currentPageAddress === undefined || targetApplicationKey === undefined) return undefined;
 
     try {
       execution?.checkpoint();
-      const resolution = execution === undefined
-        ? await resolveIdentitySession()
-        : (await resolveIdentitySessionForPrivateInvalidation(execution)).resolution;
+      const resolution =
+        execution === undefined
+          ? await resolveIdentitySession()
+          : (await resolveIdentitySessionForPrivateInvalidation(execution)).resolution;
       execution?.checkpoint();
-      if (resolution.kind !== "active" || !isLiveSession(resolution.session))
-        return undefined;
+      if (resolution.kind !== "active" || !isLiveSession(resolution.session)) return undefined;
       const session = resolution.session;
 
       const initialFacts = await readAddressFacts(
@@ -244,9 +240,8 @@ export const createWebPrivateInvalidationChannelAuthority = (
         targetScope,
         async (transaction, checkedScope) => ({
           scope: checkedScope,
-          installation: await createActiveApplicationInstallationRepository(
-            transaction,
-          ).readCurrent(),
+          installation:
+            await createActiveApplicationInstallationRepository(transaction).readCurrent(),
         }),
       );
       execution?.checkpoint();
@@ -276,7 +271,10 @@ export const createWebPrivateInvalidationChannelAuthority = (
         access,
         accessTokenExpiresAt: session.accessTokenExpiresAt,
       });
-    } catch {
+    } catch (error) {
+      console.error(
+        `[invalidation] channel access not granted INVALIDATION_ACCESS_FAILED: ${describeFailure(error)}`,
+      );
       // Every refused, incomplete, or temporary failure has the same safe result.
       return undefined;
     }

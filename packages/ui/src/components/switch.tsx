@@ -14,6 +14,9 @@ function Switch({
     <SwitchPrimitive.Root
       data-slot="switch"
       data-size={size}
+      // A native button carries the id, so a <Label htmlFor> names the switch and toggles it.
+      nativeButton
+      render={<button type="button" />}
       className={cn(
         "cn-switch peer group/switch relative inline-flex items-center transition-all outline-none after:absolute after:-inset-x-3 after:-inset-y-2 data-disabled:cursor-not-allowed data-disabled:opacity-50",
         className,

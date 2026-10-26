@@ -377,8 +377,16 @@ const comparePages = (
   };
 };
 
+/** A page pair or target that cannot be adopted; callers omit it, every other error propagates. */
+export class PageAdoptionIneligible extends Error {
+  constructor() {
+    super("STUDIO_PAGE_ADOPTION_UNAVAILABLE");
+    this.name = "PageAdoptionIneligible";
+  }
+}
+
 const invalid = (): never => {
-  throw new Error("STUDIO_PAGE_ADOPTION_UNAVAILABLE");
+  throw new PageAdoptionIneligible();
 };
 
 const sourcePageIdentifier = (

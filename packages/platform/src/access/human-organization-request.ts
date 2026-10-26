@@ -128,7 +128,10 @@ export const createHumanOrganizationRequestService = (
         durationMs: clampTelemetryDurationMs(startedAtMs, clock().valueOf()),
         counters: countersForOutcome(outcome),
       });
-    } catch {
+    } catch (error) {
+      console.error(
+        `[access] request telemetry not recorded ACCESS_TELEMETRY_FAILED: ${describeFailure(error)}`,
+      );
       // Telemetry must not change the protected request's safe outcome.
     }
   };
@@ -312,17 +315,26 @@ export const createHumanOrganizationRequestService = (
       }
       const recentAuthenticationRequired = code === "V3150";
       const roleSettingsChangeRequired = code === "V3151";
+      // Postgres reports a missing privilege (a lost GRANT, a role misconfiguration) with the same
+      // code as the access model's refusals, but always as "permission denied for ...".
+      const missingPrivilege =
+        code === "42501" &&
+        error instanceof Error &&
+        error.message.startsWith("permission denied for ");
       const refused =
-        code === "42501" || recentAuthenticationRequired || roleSettingsChangeRequired;
+        (code === "42501" && !missingPrivilege) ||
+        recentAuthenticationRequired ||
+        roleSettingsChangeRequired;
       const cause = describeFailure(error);
-      // A request its caller abandoned (the browser left the page) is stopped on purpose; that is
-      // not a failure of the platform. Every other cause is logged in full.
+      // A request its caller abandoned (the browser left the page) is stopped on purpose, and a
+      // refusal the access model raises is it answering: neither is a failure of the platform, so
+      // neither is logged as an error. Every other cause, a missing privilege too, is logged in full.
       const abandoned =
         error instanceof Error &&
         error.name === "VortexDatabaseError" &&
         error.message === "DATABASE_REQUEST_STOPPED";
       if (abandoned) console.info(`[access] human organisation request stopped: ${cause}`);
-      else if (refused) console.error(`[access] human organisation request refused: ${cause}`);
+      else if (refused) console.info(`[access] human organisation request refused: ${cause}`);
       else console.error(`[access] human organisation request failed: ${cause}`);
       appendTelemetry(correlationId, refused ? "refused" : "temporarily_unavailable", startedAtMs);
       return recentAuthenticationRequired
