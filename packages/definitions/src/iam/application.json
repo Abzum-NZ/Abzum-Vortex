@@ -8,37 +8,6 @@
     "description": "Roles and Groups. People request, review, grant and remove access, and manage active privileged roles. Effective assignments always come from the protected Access source.",
     "icon": "users",
     "home_page": "iam_overview",
-    "search": {
-      "enabled": true,
-      "record_types": [
-        {
-          "record_type": "vortex.iam.core:access_request",
-          "fields": [
-            {
-              "field": "vortex.iam.core:access_request.request_number",
-              "priority": "first"
-            },
-            {
-              "field": "vortex.iam.core:access_request.title",
-              "priority": "first"
-            }
-          ],
-          "title_field": "vortex.iam.core:access_request.title",
-          "target_page": "iam_access_request_detail"
-        },
-        {
-          "record_type": "vortex.system_directory:person",
-          "fields": [
-            {
-              "field": "vortex.system_directory:person.display_name",
-              "priority": "first"
-            }
-          ],
-          "title_field": "vortex.system_directory:person.display_name",
-          "target_page": "iam_person_detail"
-        }
-      ]
-    },
     "uses": [
       {
         "application": "vortex.app.organisation_administration",
@@ -116,6 +85,7 @@
           "readable_fields": [
             "key",
             "label",
+            "application_name",
             "lifecycle",
             "role_kind",
             "privilege_classification",
@@ -211,6 +181,7 @@
         "field_policy": {
           "readable_fields": [
             "role_label",
+            "assignee_display_name",
             "assignee_kind",
             "assignment_kind",
             "starts_at",
@@ -393,7 +364,7 @@
         "id": "nav_iam_overview",
         "type": "page",
         "label": "Overview",
-        "icon": "grid",
+        "icon": "layout-dashboard",
         "page": "iam_overview",
         "permission": "platform.organization.permissions.read"
       },
@@ -401,13 +372,13 @@
         "id": "nav_iam_profile_heading",
         "type": "heading",
         "label": "Your profile",
-        "icon": "grid",
+        "icon": "user-round",
         "children": [
           {
             "id": "nav_iam_profile",
             "type": "page",
             "label": "My profile",
-            "icon": "grid",
+            "icon": "user-round",
             "page": "iam_profile",
             "permission": "application.iam.open"
           }
@@ -433,13 +404,13 @@
         "id": "nav_iam_roles_heading",
         "type": "heading",
         "label": "Roles and Groups",
-        "icon": "sliders-horizontal",
+        "icon": "key-round",
         "children": [
           {
             "id": "nav_iam_roles",
             "type": "page",
             "label": "Roles and Groups",
-            "icon": "sliders-horizontal",
+            "icon": "key-round",
             "page": "iam_roles_groups",
             "permission": "platform.organization.roles.read"
           },
@@ -455,7 +426,7 @@
             "id": "nav_iam_assignments",
             "type": "page",
             "label": "Assignments",
-            "icon": "grid",
+            "icon": "check-square",
             "page": "iam_assignments",
             "permission": "platform.organization.assignments.read"
           }
@@ -465,13 +436,13 @@
         "id": "nav_iam_access_heading",
         "type": "heading",
         "label": "Access",
-        "icon": "grid",
+        "icon": "inbox",
         "children": [
           {
             "id": "nav_iam_requests",
             "type": "page",
             "label": "Access Requests",
-            "icon": "life-buoy",
+            "icon": "inbox",
             "page": "iam_access_requests",
             "permission": "application.iam.open"
           }
@@ -481,13 +452,13 @@
         "id": "nav_iam_privileged_heading",
         "type": "heading",
         "label": "Privileged access",
-        "icon": "grid",
+        "icon": "shield-check",
         "children": [
           {
             "id": "nav_iam_active",
             "type": "page",
             "label": "Active roles",
-            "icon": "sliders-horizontal",
+            "icon": "shield",
             "page": "iam_privileged_active",
             "permission": "platform.organization.roles.read"
           }
@@ -695,33 +666,7 @@
                 "gap": "medium",
                 "padding": "medium",
                 "content_width": "fill",
-                "header": [
-                  {
-                    "type": "platform.renderer.application_search",
-                    "props": {
-                      "id": "application_search",
-                      "placeholder": "Search this application",
-                      "submit_label": "Search",
-                      "vortex": {
-                        "block": {
-                          "block_id": "d5ecf8af-a6c4-4f0a-93e1-2c6d0a56a726",
-                          "release_version": "1.0.0"
-                        },
-                        "responsive": {
-                          "desktop": {
-                            "visible": true,
-                            "width": {
-                              "kind": "fill"
-                            },
-                            "height": {
-                              "kind": "content"
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
-                ],
+                "header": [],
                 "content": [
                   {
                     "type": "platform.renderer.container",
@@ -835,14 +780,42 @@
             "props": {
               "slot_primary": [
                 {
-                  "type": "platform.renderer.text",
+                  "type": "platform.renderer.heading",
                   "props": {
                     "id": "iam_profile_heading",
-                    "title": "My profile",
-                    "text": "Change your own display name, language and time zone. Changing someone else's profile needs the Manage accounts permission.",
+                    "text": "My profile",
+                    "level": "two",
+                    "actions": [
+                      {
+                        "type": "platform.renderer.button",
+                        "props": {
+                          "id": "button_update_own_profile",
+                          "label": "Update profile",
+                          "action_kind": "action",
+                          "variant": "primary",
+                          "vortex": {
+                            "block": {
+                              "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                              "release_version": "1.0.0"
+                            },
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    ],
                     "vortex": {
                       "block": {
-                        "block_id": "addfad00-1b11-4674-83fa-913667f87e79",
+                        "block_id": "78bfeead-a38d-424a-81b9-7cd553b92bcc",
                         "release_version": "1.1.0"
                       },
                       "responsive": {
@@ -860,16 +833,14 @@
                   }
                 },
                 {
-                  "type": "platform.renderer.button",
+                  "type": "platform.renderer.text",
                   "props": {
-                    "id": "button_update_own_profile",
-                    "label": "Update profile",
-                    "action_kind": "action",
-                    "variant": "primary",
+                    "id": "iam_profile_heading_description",
+                    "text": "Change your own display name, language and time zone. Changing someone else's profile needs the Manage accounts permission.",
                     "vortex": {
                       "block": {
-                        "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
-                        "release_version": "1.0.0"
+                        "block_id": "addfad00-1b11-4674-83fa-913667f87e79",
+                        "release_version": "1.1.0"
                       },
                       "responsive": {
                         "desktop": {
@@ -1010,10 +981,34 @@
             "props": {
               "slot_primary": [
                 {
-                  "type": "platform.renderer.text",
+                  "type": "platform.renderer.heading",
                   "props": {
                     "id": "iam_overview_heading",
-                    "title": "IAM overview",
+                    "text": "IAM overview",
+                    "level": "two",
+                    "vortex": {
+                      "block": {
+                        "block_id": "78bfeead-a38d-424a-81b9-7cd553b92bcc",
+                        "release_version": "1.1.0"
+                      },
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "type": "platform.renderer.text",
+                  "props": {
+                    "id": "iam_overview_heading_description",
                     "text": "Ask for the access you need here; your request goes to the people who approve it. People, Roles and Groups and Assignments show who has access now.",
                     "vortex": {
                       "block": {
@@ -1057,10 +1052,34 @@
             "props": {
               "slot_primary": [
                 {
-                  "type": "platform.renderer.text",
+                  "type": "platform.renderer.heading",
                   "props": {
                     "id": "iam_people_heading",
-                    "title": "People",
+                    "text": "People",
+                    "level": "two",
+                    "vortex": {
+                      "block": {
+                        "block_id": "78bfeead-a38d-424a-81b9-7cd553b92bcc",
+                        "release_version": "1.1.0"
+                      },
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "type": "platform.renderer.text",
+                  "props": {
+                    "id": "iam_people_heading_description",
                     "text": "People in this organisation and their access.",
                     "vortex": {
                       "block": {
@@ -1091,6 +1110,7 @@
                       "mode": "flow"
                     },
                     "title": "People (organisation accounts)",
+                    "empty_message": "No people yet",
                     "row_actions": [
                       {
                         "event_id": "event_make_steward",
@@ -1190,7 +1210,8 @@
                   "type": "platform.renderer.record_detail",
                   "props": {
                     "id": "iam_person_detail",
-                    "heading_source": "title",
+                    "heading_source": "field",
+                    "heading_field": "vortex.system_directory:person.display_name",
                     "title": "Person detail",
                     "detail_fields": [
                       {
@@ -1251,10 +1272,34 @@
             "props": {
               "slot_primary": [
                 {
-                  "type": "platform.renderer.text",
+                  "type": "platform.renderer.heading",
                   "props": {
                     "id": "iam_roles_groups_heading",
-                    "title": "Roles and Groups",
+                    "text": "Roles and Groups",
+                    "level": "two",
+                    "vortex": {
+                      "block": {
+                        "block_id": "78bfeead-a38d-424a-81b9-7cd553b92bcc",
+                        "release_version": "1.1.0"
+                      },
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "type": "platform.renderer.text",
+                  "props": {
+                    "id": "iam_roles_groups_heading_description",
                     "text": "The roles this organisation grants and the groups that hold them.",
                     "vortex": {
                       "block": {
@@ -1281,16 +1326,18 @@
                     "presentation": "grid",
                     "id": "iam_roles_region",
                     "title": "Roles",
+                    "empty_message": "No roles yet",
                     "columns": [
                       {
-                        "field": "vortex.system_directory:role.key",
-                        "label": "Key",
+                        "field": "vortex.system_directory:role.label",
+                        "label": "Label",
                         "visible": true,
                         "pin": "start"
                       },
                       {
-                        "field": "vortex.system_directory:role.label",
-                        "label": "Label",
+                        "field": "vortex.system_directory:role.application_name",
+                        "label": "Application",
+                        "format": "text",
                         "visible": true,
                         "pin": "unpinned"
                       },
@@ -1325,9 +1372,15 @@
                         "pin": "unpinned"
                       },
                       {
+                        "field": "vortex.system_directory:role.key",
+                        "label": "Key",
+                        "visible": false,
+                        "pin": "unpinned"
+                      },
+                      {
                         "field": "vortex.system_directory:role.revision",
                         "label": "Role revision",
-                        "visible": true,
+                        "visible": false,
                         "pin": "unpinned"
                       }
                     ],
@@ -1396,23 +1449,24 @@
                     "presentation": "grid",
                     "id": "iam_groups_region",
                     "title": "Groups",
+                    "empty_message": "No Groups yet",
                     "columns": [
-                      {
-                        "field": "vortex.system_directory:group.key",
-                        "label": "Key",
-                        "visible": true,
-                        "pin": "start"
-                      },
                       {
                         "field": "vortex.system_directory:group.label",
                         "label": "Label",
                         "visible": true,
-                        "pin": "unpinned"
+                        "pin": "start"
                       },
                       {
                         "field": "vortex.system_directory:group.state",
                         "label": "State",
                         "visible": true,
+                        "pin": "unpinned"
+                      },
+                      {
+                        "field": "vortex.system_directory:group.key",
+                        "label": "Key",
+                        "visible": false,
                         "pin": "unpinned"
                       }
                     ],
@@ -1487,18 +1541,13 @@
                     "presentation": "grid",
                     "id": "iam_group_memberships_region",
                     "title": "Group memberships",
+                    "empty_message": "No Group members yet",
                     "columns": [
                       {
                         "field": "vortex.system_directory:group_membership.account_display_name",
                         "label": "Member",
                         "visible": true,
                         "pin": "start"
-                      },
-                      {
-                        "field": "vortex.system_directory:group_membership.group_id",
-                        "label": "Group",
-                        "visible": true,
-                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.system_directory:group_membership.starts_at",
@@ -1516,6 +1565,12 @@
                         "field": "vortex.system_directory:group_membership.state",
                         "label": "State",
                         "visible": true,
+                        "pin": "unpinned"
+                      },
+                      {
+                        "field": "vortex.system_directory:group_membership.group_id",
+                        "label": "Group",
+                        "visible": false,
                         "pin": "unpinned"
                       }
                     ],
@@ -1598,15 +1653,15 @@
                         }
                       },
                       {
-                        "type": "platform.renderer.text_input",
+                        "type": "platform.renderer.field_input",
                         "props": {
                           "id": "input_add_group_membership_starts_at",
-                          "name": "starts_at",
-                          "label": "Starts at",
-                          "required": false,
+                          "field": "vortex.system_directory:group_membership.starts_at",
+                          "label": "Starts",
+                          "help_text": "Starts now unless you pick a later time. Times are in the organisation time zone.",
                           "vortex": {
                             "block": {
-                              "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                              "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
                               "release_version": "1.0.0"
                             },
                             "responsive": {
@@ -1624,15 +1679,15 @@
                         }
                       },
                       {
-                        "type": "platform.renderer.text_input",
+                        "type": "platform.renderer.field_input",
                         "props": {
                           "id": "input_add_group_membership_expires_at",
-                          "name": "expires_at",
-                          "label": "Expires at",
-                          "required": false,
+                          "field": "vortex.system_directory:group_membership.expires_at",
+                          "label": "Ends",
+                          "help_text": "Leave empty for no end date.",
                           "vortex": {
                             "block": {
-                              "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                              "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
                               "release_version": "1.0.0"
                             },
                             "responsive": {
@@ -1657,7 +1712,7 @@
                       },
                       "responsive": {
                         "desktop": {
-                          "visible": true,
+                          "visible": false,
                           "width": {
                             "kind": "fill"
                           },
@@ -1850,7 +1905,7 @@
                       },
                       "responsive": {
                         "desktop": {
-                          "visible": true,
+                          "visible": false,
                           "width": {
                             "kind": "fill"
                           },
@@ -1935,15 +1990,15 @@
                         }
                       },
                       {
-                        "type": "platform.renderer.text_input",
+                        "type": "platform.renderer.field_input",
                         "props": {
                           "id": "input_assign_role_assignment_person_starts_at",
-                          "name": "starts_at",
-                          "label": "Starts at",
-                          "required": false,
+                          "field": "vortex.system_directory:role_assignment.starts_at",
+                          "label": "Starts",
+                          "help_text": "Starts now unless you pick a later time. Times are in the organisation time zone.",
                           "vortex": {
                             "block": {
-                              "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                              "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
                               "release_version": "1.0.0"
                             },
                             "responsive": {
@@ -1961,15 +2016,15 @@
                         }
                       },
                       {
-                        "type": "platform.renderer.text_input",
+                        "type": "platform.renderer.field_input",
                         "props": {
                           "id": "input_assign_role_assignment_person_expires_at",
-                          "name": "expires_at",
-                          "label": "Expires at",
-                          "required": false,
+                          "field": "vortex.system_directory:role_assignment.expires_at",
+                          "label": "Ends",
+                          "help_text": "Leave empty for no end date.",
                           "vortex": {
                             "block": {
-                              "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                              "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
                               "release_version": "1.0.0"
                             },
                             "responsive": {
@@ -1994,7 +2049,7 @@
                       },
                       "responsive": {
                         "desktop": {
-                          "visible": true,
+                          "visible": false,
                           "width": {
                             "kind": "fill"
                           },
@@ -2079,15 +2134,15 @@
                         }
                       },
                       {
-                        "type": "platform.renderer.text_input",
+                        "type": "platform.renderer.field_input",
                         "props": {
                           "id": "input_assign_role_assignment_group_starts_at",
-                          "name": "starts_at",
-                          "label": "Starts at",
-                          "required": false,
+                          "field": "vortex.system_directory:role_assignment.starts_at",
+                          "label": "Starts",
+                          "help_text": "Starts now unless you pick a later time. Times are in the organisation time zone.",
                           "vortex": {
                             "block": {
-                              "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                              "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
                               "release_version": "1.0.0"
                             },
                             "responsive": {
@@ -2105,15 +2160,15 @@
                         }
                       },
                       {
-                        "type": "platform.renderer.text_input",
+                        "type": "platform.renderer.field_input",
                         "props": {
                           "id": "input_assign_role_assignment_group_expires_at",
-                          "name": "expires_at",
-                          "label": "Expires at",
-                          "required": false,
+                          "field": "vortex.system_directory:role_assignment.expires_at",
+                          "label": "Ends",
+                          "help_text": "Leave empty for no end date.",
                           "vortex": {
                             "block": {
-                              "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                              "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
                               "release_version": "1.0.0"
                             },
                             "responsive": {
@@ -2138,7 +2193,7 @@
                       },
                       "responsive": {
                         "desktop": {
-                          "visible": true,
+                          "visible": false,
                           "width": {
                             "kind": "fill"
                           },
@@ -2171,10 +2226,34 @@
             "props": {
               "slot_primary": [
                 {
-                  "type": "platform.renderer.text",
+                  "type": "platform.renderer.heading",
                   "props": {
                     "id": "iam_assignments_heading",
-                    "title": "Assignments",
+                    "text": "Assignments",
+                    "level": "two",
+                    "vortex": {
+                      "block": {
+                        "block_id": "78bfeead-a38d-424a-81b9-7cd553b92bcc",
+                        "release_version": "1.1.0"
+                      },
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "type": "platform.renderer.text",
+                  "props": {
+                    "id": "iam_assignments_heading_description",
                     "text": "Who holds each role, and through which group.",
                     "vortex": {
                       "block": {
@@ -2201,12 +2280,20 @@
                     "presentation": "grid",
                     "id": "iam_assignments_region",
                     "title": "Role assignment ledger",
+                    "empty_message": "No role assignments yet",
                     "columns": [
                       {
                         "field": "vortex.system_directory:role_assignment.role_label",
                         "label": "Role",
                         "visible": true,
                         "pin": "start"
+                      },
+                      {
+                        "field": "vortex.system_directory:role_assignment.assignee_display_name",
+                        "label": "Assignee",
+                        "format": "text",
+                        "visible": true,
+                        "pin": "unpinned"
                       },
                       {
                         "field": "vortex.system_directory:role_assignment.assignee_kind",
@@ -2247,31 +2334,31 @@
                       {
                         "field": "vortex.system_directory:role_assignment.role_id",
                         "label": "Role ID",
-                        "visible": true,
+                        "visible": false,
                         "pin": "unpinned"
                       },
                       {
                         "field": "vortex.system_directory:role_assignment.role_key",
                         "label": "Role key",
-                        "visible": true,
+                        "visible": false,
                         "pin": "unpinned"
                       },
                       {
                         "field": "vortex.system_directory:role_assignment.organization_account_id",
                         "label": "Organisation account ID",
-                        "visible": true,
+                        "visible": false,
                         "pin": "unpinned"
                       },
                       {
                         "field": "vortex.system_directory:role_assignment.group_id",
                         "label": "Group ID",
-                        "visible": true,
+                        "visible": false,
                         "pin": "unpinned"
                       },
                       {
                         "field": "vortex.system_directory:role_assignment.revision",
                         "label": "Assignment revision",
-                        "visible": true,
+                        "visible": false,
                         "pin": "unpinned"
                       }
                     ],
@@ -2323,6 +2410,7 @@
                     "presentation": "grid",
                     "id": "iam_delegations_region",
                     "title": "Delegated authority",
+                    "empty_message": "No delegated authority yet",
                     "columns": [
                       {
                         "field": "vortex.system_directory:delegation.holder_kind",
@@ -2418,10 +2506,34 @@
             "props": {
               "slot_primary": [
                 {
-                  "type": "platform.renderer.text",
+                  "type": "platform.renderer.heading",
                   "props": {
                     "id": "iam_manage_roles_groups_heading",
-                    "title": "Manage roles and Groups",
+                    "text": "Manage roles and Groups",
+                    "level": "two",
+                    "vortex": {
+                      "block": {
+                        "block_id": "78bfeead-a38d-424a-81b9-7cd553b92bcc",
+                        "release_version": "1.1.0"
+                      },
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "type": "platform.renderer.text",
+                  "props": {
+                    "id": "iam_manage_roles_groups_heading_description",
                     "text": "Create a Group or a custom role. Applications bring their own roles when they are installed from the App Store. Change, rename or end a role or Group, and change who is in a Group, from its row on Roles and Groups.",
                     "vortex": {
                       "block": {
@@ -2753,11 +2865,35 @@
             "props": {
               "slot_primary": [
                 {
-                  "type": "platform.renderer.text",
+                  "type": "platform.renderer.heading",
                   "props": {
                     "id": "iam_privileged_active_heading",
-                    "title": "Active roles",
-                    "text": "Review privileged role activations available under your current authority. Use a row action to deactivate an activation.",
+                    "text": "Active roles",
+                    "level": "two",
+                    "vortex": {
+                      "block": {
+                        "block_id": "78bfeead-a38d-424a-81b9-7cd553b92bcc",
+                        "release_version": "1.1.0"
+                      },
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "type": "platform.renderer.text",
+                  "props": {
+                    "id": "iam_privileged_active_heading_description",
+                    "text": "Review active privileged roles. Use a row action to deactivate one.",
                     "vortex": {
                       "block": {
                         "block_id": "addfad00-1b11-4674-83fa-913667f87e79",
@@ -2783,6 +2919,7 @@
                     "presentation": "grid",
                     "id": "iam_role_activations_region",
                     "title": "Active roles",
+                    "empty_message": "No active roles",
                     "columns": [
                       {
                         "field": "vortex.system_directory:role_activation.account_display_name",
@@ -2880,10 +3017,65 @@
             "props": {
               "slot_primary": [
                 {
+                  "type": "platform.renderer.heading",
+                  "props": {
+                    "id": "iam_access_requests_heading",
+                    "text": "Access requests",
+                    "level": "two",
+                    "actions": [
+                      {
+                        "type": "platform.renderer.button",
+                        "props": {
+                          "id": "button_new_access_request",
+                          "label": "New access request",
+                          "action_kind": "action",
+                          "variant": "primary",
+                          "vortex": {
+                            "block": {
+                              "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                              "release_version": "1.0.0"
+                            },
+                            "view_permission": "application.iam.request",
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    ],
+                    "vortex": {
+                      "block": {
+                        "block_id": "78bfeead-a38d-424a-81b9-7cd553b92bcc",
+                        "release_version": "1.1.0"
+                      },
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
                   "type": "platform.renderer.table",
                   "props": {
                     "presentation": "grid",
                     "id": "iam_access_requests_list",
+                    "empty_message": "No access requests yet",
                     "row_click": {
                       "event_id": "event_iam_open_access_request",
                       "mode": "flow"
@@ -2926,7 +3118,6 @@
                         "pin": "unpinned"
                       }
                     ],
-                    "title": "Access Requests",
                     "vortex": {
                       "block": {
                         "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
@@ -2957,33 +3148,6 @@
                       }
                     }
                   }
-                },
-                {
-                  "type": "platform.renderer.button",
-                  "props": {
-                    "id": "button_new_access_request",
-                    "label": "New access request",
-                    "action_kind": "action",
-                    "variant": "secondary",
-                    "vortex": {
-                      "block": {
-                        "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
-                        "release_version": "1.0.0"
-                      },
-                      "view_permission": "application.iam.request",
-                      "responsive": {
-                        "desktop": {
-                          "visible": true,
-                          "width": {
-                            "kind": "fill"
-                          },
-                          "height": {
-                            "kind": "content"
-                          }
-                        }
-                      }
-                    }
-                  }
                 }
               ],
               "vortex": {
@@ -3007,10 +3171,65 @@
             "props": {
               "slot_primary": [
                 {
+                  "type": "platform.renderer.heading",
+                  "props": {
+                    "id": "iam_access_request_detail_heading",
+                    "text": "Access request",
+                    "level": "two",
+                    "actions": [
+                      {
+                        "type": "platform.renderer.button",
+                        "props": {
+                          "id": "button_edit_access_request",
+                          "label": "Edit",
+                          "action_kind": "action",
+                          "variant": "secondary",
+                          "vortex": {
+                            "block": {
+                              "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                              "release_version": "1.0.0"
+                            },
+                            "view_permission": "application.iam.request",
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    ],
+                    "vortex": {
+                      "block": {
+                        "block_id": "78bfeead-a38d-424a-81b9-7cd553b92bcc",
+                        "release_version": "1.1.0"
+                      },
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
                   "type": "platform.renderer.record_detail",
                   "props": {
                     "id": "iam_access_request_detail_body",
-                    "heading_source": "title",
+                    "heading_source": "field",
+                    "heading_field": "vortex.iam.core:access_request.title",
                     "detail_fields": [
                       {
                         "field": "vortex.iam.core:access_request.request_number",
@@ -3088,33 +3307,6 @@
                       }
                     },
                     "row_action_event_id": "row_action_iam_access_request_detail_body"
-                  }
-                },
-                {
-                  "type": "platform.renderer.button",
-                  "props": {
-                    "id": "button_edit_access_request",
-                    "label": "Edit",
-                    "action_kind": "action",
-                    "variant": "secondary",
-                    "vortex": {
-                      "block": {
-                        "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
-                        "release_version": "1.0.0"
-                      },
-                      "view_permission": "application.iam.request",
-                      "responsive": {
-                        "desktop": {
-                          "visible": true,
-                          "width": {
-                            "kind": "fill"
-                          },
-                          "height": {
-                            "kind": "content"
-                          }
-                        }
-                      }
-                    }
                   }
                 }
               ],
@@ -4854,10 +5046,9 @@
                     }
                   },
                   "starts_at": {
-                    "kind": "literal",
-                    "literal": {
-                      "type": "text",
-                      "value": ""
+                    "kind": "formula",
+                    "formula": {
+                      "op": "now"
                     }
                   },
                   "expires_at": {
@@ -4994,6 +5185,40 @@
                 }
               }
             }
+          },
+          {
+            "id": "member_added",
+            "type": "interface.show_message",
+            "version": "1.0.0",
+            "properties": {
+              "message": {
+                "kind": "formula",
+                "formula": {
+                  "op": "join",
+                  "parts": [
+                    {
+                      "op": "literal",
+                      "type": "text",
+                      "value": "The person is now in the Group."
+                    }
+                  ]
+                }
+              },
+              "tone": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "success"
+                }
+              },
+              "title": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "Add member"
+                }
+              }
+            }
           }
         ],
         "outputs": {}
@@ -5119,10 +5344,9 @@
                             }
                           },
                           "starts_at": {
-                            "kind": "literal",
-                            "literal": {
-                              "type": "text",
-                              "value": ""
+                            "kind": "formula",
+                            "formula": {
+                              "op": "now"
                             }
                           },
                           "expires_at": {
@@ -5327,6 +5551,63 @@
                         }
                       }
                     }
+                  },
+                  {
+                    "id": "assigned_person",
+                    "type": "interface.show_message",
+                    "version": "1.0.0",
+                    "properties": {
+                      "message": {
+                        "kind": "formula",
+                        "formula": {
+                          "op": "join",
+                          "parts": [
+                            {
+                              "op": "reference",
+                              "reference": {
+                                "source": "task_output",
+                                "task": "call_person",
+                                "key": "result",
+                                "path": ["assignee_name"]
+                              }
+                            },
+                            {
+                              "op": "literal",
+                              "type": "text",
+                              "value": " now has the "
+                            },
+                            {
+                              "op": "reference",
+                              "reference": {
+                                "source": "task_output",
+                                "task": "call_person",
+                                "key": "result",
+                                "path": ["role_name"]
+                              }
+                            },
+                            {
+                              "op": "literal",
+                              "type": "text",
+                              "value": " role."
+                            }
+                          ]
+                        }
+                      },
+                      "tone": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "success"
+                        }
+                      },
+                      "title": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "Assign role"
+                        }
+                      }
+                    }
                   }
                 ]
               },
@@ -5367,10 +5648,9 @@
                             }
                           },
                           "starts_at": {
-                            "kind": "literal",
-                            "literal": {
-                              "type": "text",
-                              "value": ""
+                            "kind": "formula",
+                            "formula": {
+                              "op": "now"
                             }
                           },
                           "expires_at": {
@@ -5572,6 +5852,63 @@
                               "path": ["expires_at"]
                             }
                           }
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "id": "assigned_group",
+                    "type": "interface.show_message",
+                    "version": "1.0.0",
+                    "properties": {
+                      "message": {
+                        "kind": "formula",
+                        "formula": {
+                          "op": "join",
+                          "parts": [
+                            {
+                              "op": "reference",
+                              "reference": {
+                                "source": "task_output",
+                                "task": "call_group",
+                                "key": "result",
+                                "path": ["assignee_name"]
+                              }
+                            },
+                            {
+                              "op": "literal",
+                              "type": "text",
+                              "value": " now has the "
+                            },
+                            {
+                              "op": "reference",
+                              "reference": {
+                                "source": "task_output",
+                                "task": "call_group",
+                                "key": "result",
+                                "path": ["role_name"]
+                              }
+                            },
+                            {
+                              "op": "literal",
+                              "type": "text",
+                              "value": " role."
+                            }
+                          ]
+                        }
+                      },
+                      "tone": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "success"
+                        }
+                      },
+                      "title": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "Assign role"
                         }
                       }
                     }

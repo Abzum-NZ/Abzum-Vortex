@@ -9,7 +9,6 @@ import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "../de
 import type { DisplayCellValue, DisplayRow, LauncherRowsPayload } from "../display/projected-data";
 
 const MAXIMUM_APPLICATIONS = 10_000;
-const MAXIMUM_PAGE_KEYS = 10_000;
 const MAXIMUM_APPLICATION_TEXT = 120;
 
 const fail = (message: string, location: DefinitionRenderErrorLocation): never => {
@@ -94,7 +93,7 @@ const sameIdentity = (left: string, right: string): boolean =>
 
 /**
  * The safe, presentation-only metadata of one permitted application: the fields of Identity/Access's
- * permitted-applications read that a launcher tile may show. Its page set and the tenant and
+ * application-launcher read that a launcher tile may show. The tenant and
  * organisation identity of the read never cross this boundary.
  */
 export type PermittedApplicationMetadata = Readonly<{
@@ -106,7 +105,7 @@ export type PermittedApplicationMetadata = Readonly<{
 }>;
 
 /**
- * Launcher projection of the `PermittedApplicationsRead` returned by
+ * Launcher projection of the `ApplicationLauncherRead` returned by
  * `readPermittedApplicationsAtAddress` (packages/platform/src/definition/application-address.ts). The launcher block
  * supplies the organisation-address launcher when no default application resolves.
  */
@@ -124,21 +123,7 @@ const parseApplicationMetadata = (
   location: DefinitionRenderErrorLocation,
 ): PermittedApplicationMetadata => {
   const record = requireRecord(value, "A permitted application must be an object", location);
-  requireExactKeys(
-    record,
-    ["applicationRootId", "key", "name", "icon", "homePageKey", "pageKeys"],
-    location,
-  );
-  const pageKeys = requireArray(
-    record.pageKeys,
-    MAXIMUM_PAGE_KEYS,
-    "A permitted application requires its permitted page keys",
-    location,
-  );
-  if (pageKeys.length === 0)
-    fail("A permitted application requires at least one permitted page", location);
-  for (const pageKey of pageKeys)
-    requireBuilderKey(pageKey, "A permitted page key is invalid", location);
+  requireExactKeys(record, ["applicationRootId", "key", "name", "icon", "homePageKey"], location);
   return Object.freeze({
     applicationRootId: requireApplicationRootId(
       record.applicationRootId,
@@ -161,10 +146,10 @@ const parseApplicationMetadata = (
 };
 
 /**
- * Validates unknown input against the exact `PermittedApplicationsRead` shape and projects it to
+ * Validates unknown input against the exact `ApplicationLauncherRead` shape and projects it to
  * launcher metadata. An unknown status, a missing or unexpected field, a malformed application, a
  * duplicate identity or a default outside the permitted set fails closed. The organisation identity,
- * tenant and organisation short names and page sets are validated, then dropped.
+ * tenant and organisation short names are validated, then dropped.
  */
 export function parsePermittedApplicationsLauncherProjection(
   value: unknown,

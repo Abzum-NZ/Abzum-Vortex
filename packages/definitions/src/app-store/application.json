@@ -49,7 +49,7 @@
             "id": "nav_applications",
             "type": "page",
             "label": "Applications",
-            "icon": "blocks",
+            "icon": "app-window",
             "page": "app_store_catalogue",
             "permission": "application.app_store.open"
           }
@@ -235,10 +235,34 @@
             "props": {
               "slot_primary": [
                 {
-                  "type": "platform.renderer.text",
+                  "type": "platform.renderer.heading",
                   "props": {
                     "id": "catalogue_text",
-                    "title": "App Store",
+                    "text": "App Store",
+                    "level": "two",
+                    "vortex": {
+                      "block": {
+                        "block_id": "78bfeead-a38d-424a-81b9-7cd553b92bcc",
+                        "release_version": "1.1.0"
+                      },
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "type": "platform.renderer.text",
+                  "props": {
+                    "id": "catalogue_text_description",
                     "text": "Every application this organisation has published. Install an application to make it available here, or upgrade one to its latest version. Select an application to see what its latest version changes.",
                     "vortex": {
                       "block": {
@@ -265,6 +289,7 @@
                     "presentation": "grid",
                     "id": "store_applications_region",
                     "title": "Applications",
+                    "empty_message": "No applications yet",
                     "row_click": {
                       "event_id": "event_open_store_application",
                       "mode": "flow"
@@ -384,10 +409,64 @@
             "props": {
               "slot_primary": [
                 {
+                  "type": "platform.renderer.heading",
+                  "props": {
+                    "id": "store_application_heading",
+                    "text": "Application",
+                    "level": "two",
+                    "actions": [
+                      {
+                        "type": "platform.renderer.button",
+                        "props": {
+                          "id": "store_application_install",
+                          "label": "Install or upgrade",
+                          "action_kind": "action",
+                          "vortex": {
+                            "block": {
+                              "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
+                              "release_version": "1.0.0"
+                            },
+                            "responsive": {
+                              "desktop": {
+                                "visible": true,
+                                "width": {
+                                  "kind": "fill"
+                                },
+                                "height": {
+                                  "kind": "content"
+                                }
+                              }
+                            }
+                          },
+                          "variant": "primary"
+                        }
+                      }
+                    ],
+                    "vortex": {
+                      "block": {
+                        "block_id": "78bfeead-a38d-424a-81b9-7cd553b92bcc",
+                        "release_version": "1.1.0"
+                      },
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
                   "type": "platform.renderer.record_detail",
                   "props": {
                     "id": "store_application_detail",
-                    "heading_source": "title",
+                    "heading_source": "field",
+                    "heading_field": "vortex.app_store:store_application.name",
                     "title": "Application",
                     "detail_fields": [
                       {
@@ -445,31 +524,6 @@
                       }
                     },
                     "row_action_event_id": "row_action_store_application_detail"
-                  }
-                },
-                {
-                  "type": "platform.renderer.button",
-                  "props": {
-                    "id": "store_application_install",
-                    "label": "Install or upgrade",
-                    "action_kind": "action",
-                    "vortex": {
-                      "block": {
-                        "block_id": "c6fb63eb-fdf4-4fdf-954d-7610aad7be1b",
-                        "release_version": "1.0.0"
-                      },
-                      "responsive": {
-                        "desktop": {
-                          "visible": true,
-                          "width": {
-                            "kind": "fill"
-                          },
-                          "height": {
-                            "kind": "content"
-                          }
-                        }
-                      }
-                    }
                   }
                 }
               ],

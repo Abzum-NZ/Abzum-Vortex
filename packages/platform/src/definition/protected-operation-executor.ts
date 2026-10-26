@@ -40,6 +40,7 @@ import {
   workflowIdSchema,
   organizationIdSchema,
   revisionSchema,
+  timestampSchema,
   type TenantId,
 } from "../catalogue/identifiers";
 import {
@@ -400,7 +401,7 @@ const applicationStoreOperation = (journey: keyof ApplicationStoreService): Oper
 
 /** A blank optional text input, as an empty form field submits it, is the same as an absent one. */
 const optionalText = (value: ProtectedOperationValue | undefined) =>
-  typeof value === "string" && value.trim() === "" ? undefined : value;
+  value === null || (typeof value === "string" && value.trim() === "") ? undefined : value;
 
 /**
  * A text control submits a string; a declared JSON input that a person types as text is parsed here
@@ -793,6 +794,11 @@ const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Obj
         kind: "available",
         value: {
           role_assignment_id: value.assignment.roleAssignmentId,
+          role_name: value.assignment.role.label,
+          assignee_name:
+            value.assignment.assignee.kind === "organization_account"
+              ? value.assignment.assignee.displayName
+              : value.assignment.assignee.label,
           revision: value.assignment.revision,
           access_version: value.accessVersion,
         },
@@ -1162,6 +1168,8 @@ const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Obj
 const valueMatches = (type: string, value: unknown): value is ProtectedOperationValue => {
   if (type === "text" || type === "choice") return typeof value === "string";
   if (type === "whole_number") return typeof value === "number" && Number.isSafeInteger(value);
+  if (type === "date_time")
+    return typeof value === "string" && timestampSchema.safeParse(value).success;
   if (type === "yes_no") return typeof value === "boolean";
   if (type === "json") return jsonValueSchema.safeParse(value).success;
   return false;

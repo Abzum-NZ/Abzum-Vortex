@@ -56,6 +56,22 @@ export const VORTEX_ICON_NAMES = [
   "clock",
   "flag",
   "star",
+  "activity",
+  "home",
+  "bookmark",
+  "bookmark-plus",
+  "app-window",
+  "settings",
+  "layout-dashboard",
+  "user-round",
+  "key-round",
+  "user-check",
+  "check-square",
+  "inbox",
+  "shield-check",
+  "book-open",
+  "mail",
+  "megaphone",
 ] as const;
 
 export const vortexIconNameSchema = z.enum(VORTEX_ICON_NAMES);

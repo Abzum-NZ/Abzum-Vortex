@@ -231,7 +231,7 @@ export const PLATFORM_BLOCK_RELEASE_IDENTITIES = Object.freeze({
     key: "platform.layout.heading",
     rendererKey: "platform.renderer.heading",
     releaseVersion: "1.1.0",
-    contentFingerprint: "sha256:f609045ba3df1cbc479a128e8f70256a5e60239072e42848aea48752697e601e",
+    contentFingerprint: "sha256:cf7d8986653b4bea5ac56cb533c4eb67084907a2904e6e4c8a29fb74384f2bcc",
   },
   CHART_BLOCK_RELEASE: {
     blockId: "5e7d5839-04fe-4b33-93c7-a382521a74b8",

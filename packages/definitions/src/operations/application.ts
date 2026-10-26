@@ -20,6 +20,7 @@ const {
   CHOICE_INPUT_BLOCK_RELEASE,
   CONTAINER_BLOCK_RELEASE,
   FORM_CONTAINER_BLOCK_RELEASE,
+  HEADING_BLOCK_RELEASE,
   RECORD_DETAIL_BLOCK_RELEASE,
   RICH_TEXT_INPUT_BLOCK_RELEASE,
   TABLE_BLOCK_RELEASE,
@@ -249,10 +250,14 @@ const pages = [
     permission: readIncidentsPage,
     query: openIncidentsQuery,
     blocks: slot({
+      operations_incidents_heading: placement(HEADING_BLOCK_RELEASE, {
+        text: "Open incidents",
+        level: "two",
+      }),
       operations_incidents_table: placement(
         TABLE_BLOCK_RELEASE,
         {
-          title: "Open incidents",
+          empty_message: "No open incidents",
           features: { pinning: { enabled: true }, spreadsheet: { enabled: false } },
           columns: incidentColumns.map(([field, label], index) => ({
             field: `${incidentRecordType}.${field}`,
@@ -276,8 +281,26 @@ const pages = [
     record_type: incidentRecordType,
     permission: readIncidentsPage,
     blocks: slot({
+      // The bounded operator actions run on the open incident as their subject. Each button is
+      // shown only to its own permission holder, and every action refuses a resolved or closed
+      // incident in the module.
+      operations_incident_heading: placement(
+        HEADING_BLOCK_RELEASE,
+        { text: "Incident", level: "two" },
+        {
+          actions: slot(
+            Object.fromEntries(
+              incidentOperations.map((operation) => [
+                operation.button,
+                actionButton(operation.label, operation.variant, operation.viewPermission),
+              ]),
+            ),
+          ),
+        },
+      ),
       operations_incident_detail_body: placement(RECORD_DETAIL_BLOCK_RELEASE, {
-        heading_source: "title",
+        heading_source: "field",
+        heading_field: `${incidentRecordType}.incident_number`,
         title: "Incident",
         row_action_event_id: "row_action_operations_incident_detail_body",
         detail_fields: incidentColumns.map(([field, label]) => ({
@@ -303,15 +326,6 @@ const pages = [
           submit_operations_incident_attach: submitButton("Attach signal"),
         },
         { view_permission: attachIncidentView },
-      ),
-      // The bounded operator actions run on the open incident as their subject. Each button is
-      // shown only to its own permission holder, and every action refuses a resolved or closed
-      // incident in the module.
-      ...Object.fromEntries(
-        incidentOperations.map((operation) => [
-          operation.button,
-          actionButton(operation.label, operation.variant, operation.viewPermission),
-        ]),
       ),
     }),
   },
@@ -476,9 +490,7 @@ const theme = {
  * deduplication key does not match the incident's, so a repeated signal updates the one incident it
  * belongs to. One Runbooks page per spec 19 critical code carries concrete operator steps keyed by
  * the incident's `runbook_reference`. No workflow, schedule or system path creates or changes an
- * incident. Open alert signals are recorded by the alert sink, but no record type or protected read
- * model exposes them yet, so the open-signals page is honest text rather than an unbound table. No
- * page or action grants customer-content access, and no action approves itself.
+ * incident. No page or action grants customer-content access, and no action approves itself.
  */
 export const operationsApplication: ApplicationSourceDocument =
   applicationSourceDocumentSchema.parse({
@@ -572,13 +584,13 @@ export const operationsApplication: ApplicationSourceDocument =
           id: "nav_operations",
           type: "heading",
           label: "Operations",
-          icon: "grid",
+          icon: "activity",
           children: [
             {
               id: "nav_operations_incidents",
               type: "page",
               label: "Incidents",
-              icon: "life-buoy",
+              icon: "triangle-alert",
               page: "operations_incidents",
               permission: readIncidentsPage,
             },
@@ -596,12 +608,12 @@ export const operationsApplication: ApplicationSourceDocument =
           id: "nav_operations_runbooks",
           type: "heading",
           label: "Runbooks",
-          icon: "sliders-horizontal",
+          icon: "book-open",
           children: operationsRunbooks.map((runbook) => ({
             id: `nav_operations_${runbookPageKey(runbook)}`,
             type: "page",
             label: runbook.title,
-            icon: "life-buoy",
+            icon: "file-text",
             page: runbookPageKey(runbook),
             permission: "application.operations.open",
           })),
