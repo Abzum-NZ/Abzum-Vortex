@@ -264,9 +264,21 @@ export const definitionPublicationConfirmationSchema = z.discriminatedUnion("out
 export const prepareDefinitionPublicationResultSchema = z
   .object({
     confirmation: definitionPublicationConfirmationSchema,
-    // The authored names of the components a change touches, so a review reads names, not ids.
+    // Authored names and display facts for explaining each changed component in business words.
     componentLabels: z
-      .array(z.object({ componentId: platformIdSchema, label: z.string().min(1) }).strict())
+      .array(
+        z
+          .object({
+            componentId: platformIdSchema,
+            label: z.string().min(1),
+            pageId: platformIdSchema.optional(),
+            addedAccess: z.array(z.string().min(1)).optional(),
+            removedAccess: z.array(z.string().min(1)).optional(),
+            addedCapabilities: z.array(z.string().min(1)).optional(),
+            wordingChanged: z.boolean().optional(),
+          })
+          .strict(),
+      )
       .max(10_000),
     // Qualified source references of new fields, for reviewing their use on authored pages.
     addedFields: z.array(z.string().min(1)).max(10_000),
