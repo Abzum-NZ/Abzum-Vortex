@@ -14,6 +14,8 @@ export async function register(): Promise<void> {
     );
   if (deliveryMode === "external" && !process.env.VORTEX_EVENT_DISPATCHER_CREDENTIAL_SHA256)
     throw new Error("External event delivery requires a dispatcher credential digest");
+  const { prepareApplicationRuntime } = await import("./app/_lib/prepare-application-runtime");
+  await prepareApplicationRuntime();
   if (deliveryMode === "in_process") {
     const { startLocalEventDispatch } = await import("./app/_lib/local-event-dispatch");
     startLocalEventDispatch();
