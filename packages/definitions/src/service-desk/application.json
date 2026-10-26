@@ -2612,7 +2612,7 @@
                                 "name": "working_starts_at",
                                 "label": "Starts at",
                                 "required": true,
-                                "help_text": "Enter the start time for this interval using up to five characters.",
+                                "help_text": "Start time (HH:MM, 24-hour).",
                                 "vortex": {
                                   "block": {
                                     "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
@@ -2639,7 +2639,7 @@
                                 "name": "working_ends_at",
                                 "label": "Ends at",
                                 "required": true,
-                                "help_text": "Enter the end time for this interval using up to five characters.",
+                                "help_text": "End time (HH:MM, 24-hour).",
                                 "vortex": {
                                   "block": {
                                     "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
@@ -2792,7 +2792,7 @@
                                 "name": "calendar_record",
                                 "label": "Business calendar",
                                 "required": true,
-                                "help_text": "Choose an existing readable business calendar. Create a calendar first if none are available.",
+                                "help_text": "Choose a business calendar. Create one first if there are none.",
                                 "choice_source": {
                                   "query": "vortex.service_desk.sla:service_desk_business_calendars",
                                   "label_field": "vortex.service_desk.sla:business_calendar.name"

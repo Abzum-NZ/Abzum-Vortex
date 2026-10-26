@@ -1063,7 +1063,7 @@
                   "props": {
                     "id": "saved_tiles_summary",
                     "title": "Saved configuration",
-                    "text": "This bounded view shows at most 200 saved tile records returned by the permitted Records query.",
+                    "text": "Your saved tiles.",
                     "vortex": {
                       "block": {
                         "block_id": "addfad00-1b11-4674-83fa-913667f87e79",

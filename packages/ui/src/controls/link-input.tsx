@@ -268,7 +268,7 @@ export function LinkInput(props: LinkInputProps): ReactElement {
             aria-invalid={error !== undefined}
           />
           <InputGroupAddon align="inline-end">
-            <ComboboxTrigger aria-label={"Show " + label + " records"} disabled={inactive} />
+            <ComboboxTrigger aria-label={"Show choices for " + label} disabled={inactive} />
             <ComboboxClear
               aria-label={"Clear " + label}
               disabled={inactive || pickedOption === null}
