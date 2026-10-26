@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_access.list_organization_role_activations_for_administration(p_after_role_activation_id uuid, p_page_size integer) RETURNS TABLE(organization_id uuid, activations jsonb, next_after_role_activation_id uuid, access_version bigint)
+create or replace function vortex_access.list_organization_role_activations_for_administration(p_after_role_activation_id uuid, p_page_size integer) RETURNS TABLE(organization_id uuid, activations jsonb, next_after_role_activation_id uuid, access_version bigint)
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO ''
     AS $$
@@ -59,10 +59,10 @@ begin
       pg_catalog.jsonb_agg(
         pg_catalog.jsonb_build_object(
           'roleActivationId', candidate.role_activation_id,
-          'beneficiary', pg_catalog.jsonb_build_object(
+          'beneficiary', pg_catalog.jsonb_strip_nulls(pg_catalog.jsonb_build_object(
             'organizationAccountId', candidate.organization_account_id,
             'displayName', candidate.display_name
-          ),
+          )),
           'role', pg_catalog.jsonb_build_object(
             'roleId', candidate.role_id,
             'key', candidate.role_key,
