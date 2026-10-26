@@ -9,6 +9,12 @@ import type {
   VortexIconName,
 } from "@vortex/platform/schema";
 import { Badge } from "../../components/badge";
+import {
+  DropdownMenuGroup,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+} from "../../components/dropdown-menu";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../../components/tooltip";
 import { Icon } from "../../icons/icon";
 import { cn } from "../../lib/utils";
 import type { DisplayRow } from "../projected-data";
@@ -193,7 +199,34 @@ function ConditionalFormatHeading({
   column,
 }: GridFeatureColumnProps): ReactElement | null {
   return columnFormatOf(context, column) === undefined ? null : (
-    <span className="text-xs font-normal text-muted-foreground">on this page</span>
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <button
+            type="button"
+            onClick={(event) => event.stopPropagation()}
+            aria-label={`Formatting of ${column.label}`}
+            className="inline-flex size-6 items-center justify-center text-muted-foreground"
+          />
+        }
+      >
+        <Icon name="info" className="size-3.5" aria-hidden="true" />
+      </TooltipTrigger>
+      <TooltipContent>Formatting uses the values on this page.</TooltipContent>
+    </Tooltip>
+  );
+}
+
+function ConditionalFormatMenu({ context, column }: GridFeatureColumnProps): ReactElement | null {
+  return columnFormatOf(context, column) === undefined ? null : (
+    <>
+      <DropdownMenuGroup>
+        <DropdownMenuLabel className="max-w-64 whitespace-normal font-normal">
+          Formatting uses the values on this page.
+        </DropdownMenuLabel>
+      </DropdownMenuGroup>
+      <DropdownMenuSeparator />
+    </>
   );
 }
 
@@ -272,4 +305,5 @@ export const gridFeature: GridFeatureModule = {
   },
   CellAdornment: ConditionalFormatCell,
   HeaderAdornment: ConditionalFormatHeading,
+  ColumnMenuItems: ConditionalFormatMenu,
 };

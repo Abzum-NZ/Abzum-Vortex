@@ -12,7 +12,7 @@ import { RowExpansionToggle } from "./row-expansion-toggle";
 import { SubRowNoticeView } from "./sub-row-notice";
 import { SUB_ROW_INDENT_REM, type RowLine, type SubRowsControls } from "./sub-rows";
 import type { GridColumn } from "./table-layout";
-import { BOUNDED_VIEWPORT_CLASS, CARD_SPACING } from "./table-geometry";
+import { BOUNDED_VIEWPORT_CLASS, CARD_SPACING, useBoundedGridViewport } from "./table-geometry";
 import { isOwnClick } from "./table-interaction";
 
 const PRIORITY_ORDER: Readonly<Record<RecordsTableColumnContract["priority"], number>> = {
@@ -105,6 +105,7 @@ export function RecordsCards({
     lines.map((line) => line.id),
     "li[data-vortex-record-id]",
   );
+  useBoundedGridViewport(listRef, bounded && !fill);
   return (
     <ul
       ref={listRef}
@@ -183,7 +184,7 @@ export function RecordsCards({
               size="sm"
               className={cn(CARD_SPACING[density], selected && "ring-2 ring-primary")}
             >
-              <div className="flex min-w-0 items-center gap-2">
+              <div className="flex min-w-0 items-center gap-2 [&_button]:min-h-6 [&_button]:min-w-6 [@media(pointer:coarse)]:[&_button]:min-h-11 [@media(pointer:coarse)]:[&_button]:min-w-11">
                 {selectable ? renderers.select(row, selected) : null}
                 <h3
                   id={headingId}
@@ -227,10 +228,12 @@ export function RecordsCards({
                 <dl className="m-0 grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-x-3 gap-y-1">
                   {details.map((column) => (
                     <div key={column.key} className="contents">
-                      <dt className="truncate text-muted-foreground">{column.label}</dt>
+                      <dt className="break-words whitespace-normal text-muted-foreground">
+                        {column.label}
+                      </dt>
                       <dd
                         data-vortex-field-key={column.key}
-                        className="m-0 min-w-0 truncate text-end"
+                        className="m-0 min-w-0 break-words whitespace-normal text-end"
                       >
                         {renderers.cell(row, column)}
                       </dd>
