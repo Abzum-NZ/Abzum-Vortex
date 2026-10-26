@@ -95,11 +95,13 @@ export function useGridLayout({
         )
           return current;
         const values = data.values as Readonly<{ layout: GridLayoutState }>;
+        const layout = update(values.layout);
+        if (layout === values.layout) return current;
         return {
           navigationKey,
           data: {
             ...(prior?.data ?? {}),
-            [held]: { ...data, values: { ...values, layout: update(values.layout) } },
+            [held]: { ...data, values: { ...values, layout } },
           },
           editFormBaselines: { ...(prior?.editFormBaselines ?? {}) },
           ...(prior?.subject === undefined ? {} : { subject: prior.subject }),
@@ -114,13 +116,15 @@ export function useGridLayout({
    * A write's change to the selected view, applied now and kept for a few seconds: a grid read that
    * was already under way when the write answered lands with the view it read before the write,
    * and would otherwise undo the change on screen. Whenever the page's data changes and no longer
-   * shows the change, it is applied again.
+   * shows the change, it is applied again. Only the latest patch for a placement survives, and
+   * only while the address still names that view.
    */
   const trackedPatches = useRef(
     new Map<
       string,
       Readonly<{
         placementId: string;
+        viewId: string;
         expires: number;
         apply: (layout: GridLayoutState) => GridLayoutState;
         done: (layout: GridLayoutState) => boolean;
@@ -134,8 +138,9 @@ export function useGridLayout({
       apply: (layout: GridLayoutState) => GridLayoutState,
       done: (layout: GridLayoutState) => boolean,
     ): void => {
-      trackedPatches.current.set(`${placementId.toLowerCase()}:${viewId}`, {
+      trackedPatches.current.set(placementId.toLowerCase(), {
         placementId,
+        viewId,
         expires: Date.now() + 15_000,
         apply,
         done,
@@ -146,7 +151,10 @@ export function useGridLayout({
   );
   useEffect(() => {
     for (const [key, patch] of trackedPatches.current) {
-      if (patch.expires < Date.now()) {
+      const addressedView = readRecordsTableView(patch.placementId, [
+        ...new URLSearchParams(pageAddress.search()),
+      ])?.viewId;
+      if (patch.expires < Date.now() || addressedView !== patch.viewId) {
         trackedPatches.current.delete(key);
         continue;
       }
@@ -154,7 +162,7 @@ export function useGridLayout({
       if (layout?.views !== undefined && !patch.done(layout))
         patchLayoutState(patch.placementId, patch.apply);
     }
-  }, [currentData, layoutOf, patchLayoutState]);
+  }, [currentData, layoutOf, pageAddress, patchLayoutState]);
 
   const commitLayout = useCallback(
     async (placementId: string, event: DisplaySemanticEvent): Promise<GridLayoutCommitResult> => {
@@ -361,14 +369,13 @@ export function useGridLayout({
         (layout) => {
           if (layout.views === undefined) return layout;
           const { selected } = layout.views;
+          if (selected === null || selected.viewId !== viewId || selected.revision >= revision)
+            return layout;
           return {
             ...layout,
             views: {
               ...layout.views,
-              selected:
-                selected !== null && selected.viewId === viewId && selected.revision < revision
-                  ? { ...selectedChange(selected), revision }
-                  : selected,
+              selected: { ...selectedChange(selected), revision },
             },
           };
         },

@@ -467,7 +467,14 @@
         "shared": "awaiting_message"
       }
     ],
-    "slots": [],
+    "slots": [
+      {
+        "key": "actions",
+        "label": "Header actions",
+        "required": false,
+        "allowedChildCategories": ["actions"]
+      }
+    ],
     "capabilities": {
       "responsiveVisibility": true,
       "responsiveOrder": true,

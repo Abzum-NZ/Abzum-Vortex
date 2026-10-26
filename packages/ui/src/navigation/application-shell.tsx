@@ -26,6 +26,8 @@ import {
   DropdownMenuItem,
   DropdownMenuGroup,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "../components/dropdown-menu";
@@ -34,6 +36,7 @@ import { Skeleton } from "../components/skeleton";
 import { SidebarProvider, SidebarTrigger } from "../components/sidebar";
 import { FlowSurfaceContext } from "../flow-runtime/flow-surface-context";
 import { Icon } from "../icons/icon";
+import { resolveVortexIconName } from "../icons/icon-names";
 import { AppearanceToggle } from "./appearance-toggle";
 import { ApplicationAccountMenu, useApplicationAccountActions } from "./account-actions";
 
@@ -48,7 +51,7 @@ export type ApplicationWebMcpRuntime = Readonly<{
 
 export type ApplicationSwitcherData = Readonly<{
   state: "available" | "unavailable" | "temporarily_unavailable";
-  applications: readonly Readonly<{ key: string; name: string; href: string }>[];
+  applications: readonly Readonly<{ key: string; name: string; href: string; icon?: string }>[];
 }>;
 
 export type ApplicationSwitcherSource = () => Promise<ApplicationSwitcherData>;
@@ -62,6 +65,8 @@ export type ApplicationShellRuntime = Readonly<{
   applicationName: string;
   applicationHref: string;
   organizationName: string;
+  /** The organisation's address segment, shown beside its display name in the organisation menu. */
+  organizationShortName?: string;
   pageName: string;
   /** Page agent-tool state supplied through Puck metadata to the definition-selected shell. */
   webMcp?: ApplicationWebMcpRuntime;
@@ -183,6 +188,7 @@ function OrganizationSwitcher({
 }: Readonly<{ runtime: ApplicationShellRuntime | undefined }>): ReactElement {
   const actions = useApplicationAccountActions();
   const organizationName = runtime?.organizationName ?? actions?.organizationName ?? "Organisation";
+  const organizationShortName = runtime?.organizationShortName ?? actions?.organizationShortName;
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -196,7 +202,12 @@ function OrganizationSwitcher({
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-56">
         <DropdownMenuGroup>
-          <DropdownMenuLabel>{organizationName}</DropdownMenuLabel>
+          <DropdownMenuLabel className="flex flex-col gap-1">
+            <span>{organizationName}</span>
+            {organizationShortName === undefined ? null : (
+              <span className="font-normal text-muted-foreground">{organizationShortName}</span>
+            )}
+          </DropdownMenuLabel>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuItem
@@ -316,16 +327,28 @@ function ApplicationSwitcher({
             No other applications
           </div>
         ) : (
-          switcher.applications.map((application) => (
-            <DropdownMenuItem
-              key={application.key}
-              onClick={() => void actions?.openApplication(application.href)}
-              disabled={actions === null}
-              data-active={application.name === applicationName ? "true" : undefined}
-            >
-              {application.name}
-            </DropdownMenuItem>
-          ))
+          <DropdownMenuRadioGroup
+            value={
+              switcher.applications.find((application) => application.name === applicationName)
+                ?.key ?? ""
+            }
+          >
+            {switcher.applications.map((application) => (
+              <DropdownMenuRadioItem
+                key={application.key}
+                value={application.key}
+                onClick={() => void actions?.openApplication(application.href)}
+                disabled={actions === null}
+              >
+                <Icon
+                  name={resolveVortexIconName(application.icon ?? "") ?? "circle"}
+                  aria-hidden="true"
+                  data-icon="inline-start"
+                />
+                {application.name}
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
         )}
       </DropdownMenuContent>
     </DropdownMenu>
@@ -394,7 +417,7 @@ export function ApplicationShellRoot({
       <div
         data-vortex-puck-root=""
         data-vortex-application-shell={shell.key}
-        className="flex min-h-svh w-full min-w-0 flex-col bg-background text-foreground"
+        className="flex min-h-svh w-full min-w-0 flex-col bg-background text-foreground [--vortex-header-height:3.5rem]"
         {...(editing ? { "data-vortex-editing": "" } : {})}
       >
         <style>{shellFrameCss}</style>
@@ -434,7 +457,9 @@ export function ApplicationShellRoot({
           tabIndex={-1}
           data-vortex-application-shell-content=""
           className="vortex-puck-slot min-w-0 flex-1 focus:outline-none"
-          style={contentStyle}
+          style={
+            { ...contentStyle, "--vortex-content-padding": contentStyle.padding } as CSSProperties
+          }
         >
           {/* Every page has one level-1 heading: the page's name. Its blocks' headings follow it. */}
           {runtime === undefined ? null : <h1 className="sr-only">{runtime.pageName}</h1>}

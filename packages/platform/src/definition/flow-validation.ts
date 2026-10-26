@@ -183,6 +183,7 @@ const literalOnlyPropertyTypes: ReadonlySet<string> = new Set([
   "query_id",
   "page_id",
   "form_id",
+  "placement_id",
   "connection_binding_id",
   "protected_operation_key",
   "flow_id",
