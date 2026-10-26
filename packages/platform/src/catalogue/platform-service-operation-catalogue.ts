@@ -74,6 +74,7 @@ export const PLATFORM_SERVICE_OPERATIONS = deepFreeze({
   create_custom_role: entry(sources.create_custom_role),
   create_custom_role_from_template: entry(sources.create_custom_role_from_template),
   assign_role_assignment: entry(sources.assign_role_assignment),
+  prepare_role_assignment: entry(sources.prepare_role_assignment),
   revoke_role_assignment: entry(sources.revoke_role_assignment),
   deactivate_role_activation: entry(sources.deactivate_role_activation),
   revoke_delegation_authority: entry(sources.revoke_delegation_authority),
