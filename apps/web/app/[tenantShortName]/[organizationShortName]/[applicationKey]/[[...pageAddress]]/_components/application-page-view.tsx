@@ -21,12 +21,14 @@ const withSettledPlacement = (
   placementId: string,
   state: ApplicationPageModel["data"][string],
 ): ApplicationPageModel => {
-  const { [placementId]: _settled, ...streamedData } = model.streamedData ?? {};
-  const { streamedData: _streamed, ...rest } = model;
+  const { streamedData, data, ...rest } = model;
+  const stillStreamed = Object.fromEntries(
+    Object.entries(streamedData ?? {}).filter(([id]) => id !== placementId),
+  );
   return {
     ...rest,
-    data: { ...model.data, [placementId]: state },
-    ...(Object.keys(streamedData).length === 0 ? {} : { streamedData }),
+    data: { ...data, [placementId]: state },
+    ...(Object.keys(stillStreamed).length === 0 ? {} : { streamedData: stillStreamed }),
   };
 };
 
