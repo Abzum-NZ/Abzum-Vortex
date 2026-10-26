@@ -46,7 +46,6 @@ export {
 } from "./projected-data";
 export type {
   DisplayTableBulkRun,
-  RecordsTableBulkRunSummary,
   DisplayTableExportRun,
   DisplayTableExportScope,
   DisplayTableSelectionScope,
@@ -87,5 +86,5 @@ export {
   type QueryNoticePayload,
 } from "./query-notice";
 
-// The platform loader for long waits (#2519)
+// The platform loader for long waits
 export { BrandLoader, type LoaderMark } from "./brand-loader";

@@ -36,7 +36,7 @@ export const sealToken = (key: QueryContinuationKey, purpose: string, payload: u
   ]).toString("base64url");
 };
 
-export type SealedTokenOpening =
+type SealedTokenOpening =
   | Readonly<{ kind: "opened"; payload: unknown }>
   | Readonly<{ kind: "refused"; cause: "token_malformed" | "token_not_authentic" }>;
 
@@ -65,6 +65,7 @@ export const openToken = (
       decipher.final(),
     ]).toString("utf8");
     return { kind: "opened", payload: JSON.parse(text) };
+    // guard-allow: silent-catch Any decryption or parse failure means the token is not authentic and is refused.
   } catch {
     return { kind: "refused", cause: "token_not_authentic" };
   }

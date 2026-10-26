@@ -32,7 +32,7 @@ This document defines the shape the code keeps and the rules that keep it there.
 apps/web                 the only deployable: Next.js routes, server actions, thin glue
 packages/platform        server library: every domain, schema and implementation together
   src/<domain>/          identity, access, definition, records, queries, pages, rules,
-                         workflows, files, search, events, theme, catalogue
+                         workflows, files, search, events, connections, theme, catalogue
   src/db/                connection, transactions, request context
 packages/ui              shadcn components, Puck config, blocks, controls, theme root, studio editor UI
 packages/definitions     shipped application and module definitions plus their loader
@@ -90,11 +90,11 @@ flowchart LR
 
 | Schema | Holds |
 |---|---|
-| `identity` | tenants, organisations, accounts, invitations, identity projection, request context |
-| `access` | permission catalogue, roles, role permissions, assignments, groups, access version |
-| `definition` | roots, drafts, releases (with one `content_hash`), dependencies, installations |
-| `record` | storage catalogue, field and relationship mappings, `record_data.*` tables, activity, change notices, idempotency |
-| `platform` | files, search documents, connections, workflow runs, events, added only when their feature is built |
+| `vortex_identity` | tenants, organisations, accounts, invitations, identity projection, request context |
+| `vortex_access` | permission catalogue, roles, role permissions, assignments, groups, access version |
+| `vortex_definition` | roots, drafts, releases (with one `content_hash`), dependencies, installations |
+| `vortex_record` | storage catalogue, field and relationship mappings, `record_data.*` tables, activity, change notices, idempotency |
+| `vortex_platform` | files, search documents, connections, workflow runs, events, added only when their feature is built |
 
 ### Roles
 
@@ -135,7 +135,7 @@ Tables are private. The application calls `security definer` functions with `set
 
 ### Record writes
 
-- **Every record write goes through `record.apply_record_changes`.** That covers create, update, relationships, named actions, lifecycle, restore, settings records and offboarding transfers.
+- **Every record write goes through `vortex_record.apply_record_changes`.** That covers create, update, relationships, named actions, lifecycle, restore, settings records and offboarding transfers.
 - **Within that path, three steps each happen once:**
   - save rules run inside its transaction;
   - it appends activity through one composer, `append_record_activity_internal`, over the one

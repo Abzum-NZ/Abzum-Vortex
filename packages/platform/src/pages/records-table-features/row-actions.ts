@@ -72,9 +72,10 @@ const namedActionFor = (
 };
 
 /**
- * The shared #3182 evaluator decides every named-action-backed command for every visible row in
- * one batch. Flow commands retain the capability decisions from the protected page read. Nothing
- * reads another page, changes a record or exposes business values from an eligibility preview.
+ * The shared named-action eligibility evaluator decides every named-action-backed command for
+ * every visible row in one batch. Flow commands retain the capability decisions from the protected
+ * page read. Nothing reads another page, changes a record or exposes business values from an
+ * eligibility preview.
  */
 export const projectRowActionAvailability = async (
   transaction: RequestDatabaseTransaction,

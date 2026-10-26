@@ -56,7 +56,7 @@ export const readUpgradeRoleChanges = async (
   return applicationRoleChanges(roles.roles, state.selectedReleaseSet, [state.activeReleaseSet]);
 };
 
-export type UpgradeWithRoleChangesResult = Readonly<{
+type UpgradeWithRoleChangesResult = Readonly<{
   /** Source role ids whose role now matches the selected version's template. */
   accepted: readonly string[];
   /** Source role ids that could not be accepted; the App Store offers them again. */

@@ -57,7 +57,7 @@ export const recordsTableExportService = () =>
     continuationKey: getQueryContinuationKey(),
   });
 
-export type ResolvedBulkRequest<Body> =
+type ResolvedBulkRequest<Body> =
   | Readonly<{
       kind: "resolved";
       session: IdentitySession;

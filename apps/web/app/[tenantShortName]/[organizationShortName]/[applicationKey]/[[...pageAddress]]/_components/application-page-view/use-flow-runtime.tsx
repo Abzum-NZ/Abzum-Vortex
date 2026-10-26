@@ -105,7 +105,7 @@ export function useFlowRuntime({
   setPanelRef: RefObject<FlowIntentHost["setPanel"]>;
 }>) {
   /**
-   * The one browser flow client and host (#1013): a form submit starts the bound flow on the server
+   * The one browser flow client and host: a form submit starts the bound flow on the server
    * and the runtime carries out every pause (another form or a confirmation) through a continuation,
    * which is returned exactly as the server issued it.
    */

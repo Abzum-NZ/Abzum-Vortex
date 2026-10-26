@@ -25,6 +25,7 @@ import {
   blockPropertyValueSchema,
   type SourceBlockPropertyValueContract,
 } from "./block-property-values";
+import { asRecord } from "../../catalogue/runtime-primitives";
 
 /**
  * The control an automatic field input renders, chosen from its referenced module field type by the
@@ -411,10 +412,6 @@ export const componentSettingApplies = (
   return selected?.kind === "choice" && declaration.showWhen.values.includes(selected.value);
 };
 
-const plainObject = (value: unknown): Readonly<Record<string, unknown>> | undefined =>
-  value !== null && typeof value === "object" && !Array.isArray(value)
-    ? (value as Readonly<Record<string, unknown>>)
-    : undefined;
 
 const plainStringOf = (schema: z.ZodType<string>, value: unknown): string | undefined => {
   const parsed = schema.safeParse(value);
@@ -520,7 +517,7 @@ export const typedSourceSettingValue = (
         : { kind: "record_type_reference", record_type: parsed };
     }
     case "record_reference": {
-      const reference = plainObject(value);
+      const reference = asRecord(value);
       const recordType = plainStringOf(sourceQualifiedRecordTypeSchema, reference?.record_type);
       const recordId = plainStringOf(z.uuid(), reference?.record_id);
       if (
@@ -533,7 +530,7 @@ export const typedSourceSettingValue = (
       return { kind: "record_reference", record_type: recordType, record_id: recordId };
     }
     case "group": {
-      const group = plainObject(value);
+      const group = asRecord(value);
       if (group === undefined) return invalid();
       const declared = new Map(declaration.properties.map((property) => [property.key, property]));
       const properties: Record<string, SourceBlockPropertyValueContract> = {};
@@ -728,11 +725,11 @@ const typedSettingCandidate = (
     case "record_type_reference":
       return { kind: declaration.kind, recordType: value };
     case "record_reference": {
-      const reference = plainObject(value);
+      const reference = asRecord(value);
       return reference === undefined ? undefined : { kind: declaration.kind, ...reference };
     }
     case "group": {
-      const group = plainObject(value);
+      const group = asRecord(value);
       if (group === undefined) return undefined;
       const declared = new Map(declaration.properties.map((property) => [property.key, property]));
       const properties: Record<string, unknown> = {};

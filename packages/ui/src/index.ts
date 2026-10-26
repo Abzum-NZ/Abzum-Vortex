@@ -1,6 +1,6 @@
 export const uiPackage = "@vortex/ui" as const;
 
-// Shared notice component (#1607)
+// Shared notice component
 export {
   Notice,
   type NoticeContent,
@@ -285,13 +285,13 @@ export { ApplicationLauncher, LinkTiles } from "./launcher";
 // Launcher Registrations & Registry
 export { LAUNCHER_COMPONENT_REGISTRATIONS } from "./launcher";
 
-// General Layout Components (#1008)
+// General Layout Components
 export { Container, Heading, type ContainerProps, type HeadingProps } from "./layout";
 
 // General Layout Registrations & Registry
 export { LAYOUT_COMPONENT_REGISTRATIONS } from "./layout";
 
-// Application Navigation (#861)
+// Application Navigation
 export {
   ApplicationNavigation,
   ApplicationNavigationBlock,
@@ -301,7 +301,7 @@ export {
   type ProjectedNavigationItem,
 } from "./navigation";
 
-// Application Navigation Registrations & Registry (#1009)
+// Application Navigation Registrations & Registry
 export {
   ApplicationAccountActionsBlock,
   ApplicationAccountActionsProvider,
@@ -358,7 +358,7 @@ export {
   type VortexStyleSelection,
 } from "./theme";
 
-// Semantic icons drawn by the selected shadcn/create icon library (#1278)
+// Semantic icons drawn by the selected shadcn/create icon library
 export {
   Icon,
   IconLibraryProvider,
@@ -370,7 +370,7 @@ export {
   type VortexIconProps,
 } from "./icons";
 
-// Browser Flow Runtime (#1013)
+// Browser Flow Runtime
 export {
   FLOW_INTENT_KINDS,
   createFlowInvokeClient,
@@ -413,7 +413,7 @@ export {
   type ServerFlowResponse,
 } from "./flow-runtime";
 
-// Link Navigation and the Navigate task (#1013)
+// Link Navigation and the Navigate task
 export {
   activateLinkTarget,
   externalLinkActivation,
@@ -427,7 +427,7 @@ export {
   type UnsavedWorkGuard,
 } from "./launcher";
 
-// Sandboxed custom component host (#1143)
+// Sandboxed custom component host
 export {
   COMPONENT_BOOTSTRAP_QUERY_PARAMETERS,
   COMPONENT_BOOTSTRAP_SERVING_PATH,

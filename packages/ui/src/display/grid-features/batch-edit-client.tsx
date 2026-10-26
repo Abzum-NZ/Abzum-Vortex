@@ -25,7 +25,7 @@ import type { GridFeatureContext, GridInteractionSurface } from "./registry";
  * the server checks every cell again and commits all of the batch or none of it.
  */
 
-export type BatchRows = RecordsTableBatchEditRequest["rows"];
+type BatchRows = RecordsTableBatchEditRequest["rows"];
 
 export type BatchTarget = Readonly<{
   /** Index in `context.lines`, which is the cell's `data-row`. */

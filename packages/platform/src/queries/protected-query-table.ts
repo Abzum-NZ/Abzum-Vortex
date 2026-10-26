@@ -34,8 +34,8 @@ import { pageAnchorSchema, pageReadSchema } from "./protected-query-read-schemas
  * `tableReadCandidatesPerCall` candidates (the `scan_limit` of module_query_scan_internal), so one request
  * examines at most `tableReadCandidatesPerRequest` candidates.
  */
-export const tableReadCallsPerRequest = 4;
-export const tableReadCandidatesPerCall = 500;
+const tableReadCallsPerRequest = 4;
+const tableReadCandidatesPerCall = 500;
 export const tableReadCandidatesPerRequest = tableReadCallsPerRequest * tableReadCandidatesPerCall;
 
 /**

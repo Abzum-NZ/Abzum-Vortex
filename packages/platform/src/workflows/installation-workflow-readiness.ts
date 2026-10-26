@@ -1,11 +1,10 @@
 import "server-only";
 
-import { applicationRootIdSchema, organizationIdSchema, revisionSchema, workflowRunIdSchema, type ApplicationRootId, type OrganizationId, type SemanticVersion, type WorkflowRunId } from "../catalogue/identifiers";
+import { revisionSchema, workflowRunIdSchema, type ApplicationRootId, type OrganizationId, type SemanticVersion, type WorkflowRunId } from "../catalogue/identifiers";
 import { sameId, isRecord } from "../catalogue/runtime-primitives";
-import { stableDefinitionReleaseVersionSchema } from "../definition/version-impact";
 import { installationWorkflowActivationPlanSchema, installationWorkflowWithdrawalReconciliationSchema, type InstallationWorkflowActivationEvidence, type InstallationWorkflowActivationPlan, type InstallationWorkflowFlowReference, type InstallationWorkflowReadinessRefusalReason, type InstallationWorkflowRegisteredFlow, type InstallationWorkflowRetainedStart, type InstallationWorkflowScheduleChange, type InstallationWorkflowWithdrawalReconciliation } from "../rules/automation-contracts";
 import {
-  kestraFlowCompilerEnvironments,
+  parseKestraFlowIdentity,
   type KestraFlowCompilerEnvironment,
   type KestraFlowIdentity,
   type KestraFlowTrigger,
@@ -17,8 +16,8 @@ import type {
 import { workflowServiceKestraInstanceKind } from "./kestra-instance";
 
 /**
- * #662: installation activation and withdrawal readiness over the #661 flow
- * registrations.
+ * Installation activation and withdrawal readiness over the stored workflow flow
+ * registrations (`flow-registration`).
  *
  * The compiler builds each exact published workflow of one Application release
  * into a deterministic inactive Kestra candidate and the registration stores it
@@ -40,13 +39,13 @@ import { workflowServiceKestraInstanceKind } from "./kestra-instance";
  * Every flow this module names must sit in the generated namespace of the
  * target's own environment, organisation and Application, so neither evidence
  * nor a schedule change can reach another organisation's flows. Both results
- * name the application Kestra instance (#1152) as their only provider target;
+ * name the application Kestra instance as their only provider target;
  * the operations instance cannot be expressed.
  *
  * This module is pure. It performs no I/O, calls no Kestra API, compiles no
  * flow, and never invents an identity, revision, fingerprint or authority from
  * its inputs: every value is either the exact permanent identity the caller
- * supplied or the exact stored registration #661 produced.
+ * supplied or the exact stored flow registration produced.
  */
 
 export const installationWorkflowReadinessErrorCodes = [
@@ -81,7 +80,7 @@ export type InstallationWorkflowInstallationIdentity = Readonly<{
   installationRevision: number;
 }>;
 
-/** One expected workflow: its exact #661 identity and compiled inactive candidate. */
+/** One expected workflow: its exact flow registration identity and compiled inactive candidate. */
 export type InstallationWorkflowExpectedCandidate = KestraFlowRegistrationCommand;
 
 /** One accepted start intent the installation retains. */
@@ -123,8 +122,6 @@ const targetKeys = [
   "installationRevision",
 ] as const;
 
-const identityKeys = [...targetKeys, "workflowRevision"] as const;
-
 /** The start kinds a compiled durable flow candidate carries (`KestraFlowTrigger.kind`). */
 const workflowTriggerKinds = [
   "schedule",
@@ -137,10 +134,6 @@ const hasOnlyKeys = (
   allowed: readonly string[],
 ): boolean => Object.keys(value).every((key) => allowed.includes(key));
 
-const isEnvironment = (value: unknown): value is KestraFlowCompilerEnvironment =>
-  typeof value === "string" &&
-  (kestraFlowCompilerEnvironments as readonly string[]).includes(value);
-
 const invalidInput = (): InstallationWorkflowReadinessError =>
   new InstallationWorkflowReadinessError("INVALID_INSTALLATION_WORKFLOW_READINESS_INPUT");
 
@@ -148,45 +141,10 @@ const refusedPlan = (
   reason: InstallationWorkflowReadinessRefusalReason,
 ): InstallationWorkflowActivationPlan => ({ outcome: "refused", reason });
 
-/**
- * Validates exactly the six identity fields and canonicalises the UUIDs to
- * lower case, exactly as the #661 compiler and registration repository do, so
- * one identity always names one installation.
- */
-const parseIdentity = (candidate: unknown): KestraFlowIdentity | undefined => {
-  if (!isRecord(candidate) || !hasOnlyKeys(candidate, identityKeys)) return undefined;
-  if (!isEnvironment(candidate.environment)) return undefined;
-
-  const organizationId = organizationIdSchema.safeParse(candidate.organizationId);
-  const applicationRootId = applicationRootIdSchema.safeParse(candidate.applicationRootId);
-  const applicationVersion = stableDefinitionReleaseVersionSchema.safeParse(
-    candidate.applicationVersion,
-  );
-  const installationRevision = revisionSchema.safeParse(candidate.installationRevision);
-  const workflowRevision = revisionSchema.safeParse(candidate.workflowRevision);
-  if (
-    !organizationId.success ||
-    !applicationRootId.success ||
-    !applicationVersion.success ||
-    !installationRevision.success ||
-    !workflowRevision.success
-  )
-    return undefined;
-
-  return Object.freeze({
-    environment: candidate.environment,
-    organizationId: organizationId.data.toLowerCase() as OrganizationId,
-    applicationRootId: applicationRootId.data.toLowerCase() as ApplicationRootId,
-    applicationVersion: applicationVersion.data,
-    installationRevision: installationRevision.data,
-    workflowRevision: workflowRevision.data,
-  });
-};
-
 /** Validates the five installation fields, refusing any extra or missing field. */
 const parseTarget = (candidate: unknown): InstallationWorkflowInstallationIdentity | undefined => {
   if (!isRecord(candidate) || !hasOnlyKeys(candidate, targetKeys)) return undefined;
-  const identity = parseIdentity({ ...candidate, workflowRevision: 1 });
+  const identity = parseKestraFlowIdentity({ ...candidate, workflowRevision: 1 });
   if (identity === undefined) return undefined;
   return Object.freeze({
     environment: identity.environment,
@@ -216,7 +174,7 @@ const sameWorkflowIdentity = (left: KestraFlowIdentity, right: KestraFlowIdentit
   left.workflowRevision === right.workflowRevision;
 
 /**
- * The namespace prefix #661 derives for every installation revision of one
+ * The namespace prefix the flow registration derives for every installation revision of one
  * environment, organisation and Application; the installation revision follows.
  */
 const applicationNamespacePrefix = (target: InstallationWorkflowInstallationIdentity): string =>
@@ -229,7 +187,7 @@ const applicationNamespacePrefix = (target: InstallationWorkflowInstallationIden
     "i",
   ].join(".");
 
-/** The exact namespace #661 derives for the target installation revision. */
+/** The exact namespace the flow registration derives for the target installation revision. */
 const installationNamespace = (target: InstallationWorkflowInstallationIdentity): string =>
   `${applicationNamespacePrefix(target)}${target.installationRevision}`;
 
@@ -278,7 +236,7 @@ type ParsedCandidate = Readonly<{
  */
 const parseCandidate = (candidate: unknown): ParsedCandidate | undefined => {
   if (!isRecord(candidate) || !hasOnlyKeys(candidate, ["identity", "flow"])) return undefined;
-  const identity = parseIdentity(candidate.identity);
+  const identity = parseKestraFlowIdentity(candidate.identity);
   if (identity === undefined) return undefined;
 
   const flow = candidate.flow;
@@ -324,7 +282,7 @@ type ParsedRegistration =
 const parseRegistrationIdentity = (
   value: Readonly<Record<string, unknown>>,
 ): KestraFlowIdentity | undefined =>
-  parseIdentity({
+  parseKestraFlowIdentity({
     environment: value.environment,
     organizationId: value.organizationId,
     applicationRootId: value.applicationRootId,
@@ -333,7 +291,7 @@ const parseRegistrationIdentity = (
     workflowRevision: value.workflowRevision,
   });
 
-/** Reads one exact #661 registration result; a changed-candidate refusal is the only refusal. */
+/** Reads one exact flow registration result; a changed-candidate refusal is the only refusal. */
 const parseRegistrationResult = (candidate: unknown): ParsedRegistration | undefined => {
   if (!isRecord(candidate)) return undefined;
 

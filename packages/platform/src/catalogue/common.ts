@@ -24,6 +24,7 @@ export const safeHttpsUrlMaximumLength = 2_048;
 const parsedHttpsUrl = (value: string): URL | undefined => {
   try {
     return new URL(value);
+    // guard-allow: silent-catch URL throws for text that is not an address; the format check reports it.
   } catch {
     return undefined;
   }
@@ -114,6 +115,7 @@ export const isSafeLinkAddress = (value: unknown): value is string => {
   let address: URL;
   try {
     address = new URL(value);
+    // guard-allow: silent-catch URL throws for text that is not an address; the caller refuses it as unsafe.
   } catch {
     return false;
   }

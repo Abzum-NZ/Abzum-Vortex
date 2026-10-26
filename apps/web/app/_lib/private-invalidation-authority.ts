@@ -165,6 +165,7 @@ export const createWebPrivateInvalidationChannelAuthority = (
   const currentPageAddressResult = (() => {
     try {
       return currentPageAddressSchema.safeParse(currentPageAddressInput);
+      // guard-allow: silent-catch Hostile browser inputs with throwing getters are refused as unavailable without inspecting them.
     } catch {
       // Hostile object inputs, including throwing getters, are neutral unavailable.
       return undefined;
@@ -173,6 +174,7 @@ export const createWebPrivateInvalidationChannelAuthority = (
   const targetApplicationKeyResult = (() => {
     try {
       return namespacedKeySchema.safeParse(targetApplicationKeyInput);
+      // guard-allow: silent-catch Hostile browser inputs with throwing getters are refused as unavailable without inspecting them.
     } catch {
       return undefined;
     }

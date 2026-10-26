@@ -203,7 +203,7 @@ begin
         (context_value ->> 'organizationAccountId')::uuid;
     end if;
 
-    -- #1061: the canonical link-target share-lock prelude is written once in
+    -- The canonical link-target share-lock prelude is written once in
     -- lock_record_change_targets_internal. Every created link's target row is
     -- locked here, before the data-version bump and edge pass below, so a
     -- multi-link create takes all its row locks before its data version and any

@@ -151,7 +151,7 @@ begin
       end loop;
     end if;
 
-    -- The other ids are decided together by the page read pass (#2668), from
+    -- The other ids are decided together by the page read pass, from
     -- the first record's exact facts, in sets of at most 200. The pass returns
     -- only the records it decided; every other id keeps the exact path below.
     if first_loaded is not null then

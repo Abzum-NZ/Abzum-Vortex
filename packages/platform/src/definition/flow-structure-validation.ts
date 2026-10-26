@@ -60,7 +60,7 @@ export type DeclarationView = Readonly<{
   required?: boolean;
 }>;
 
-export type Add = (
+type Add = (
   path: Path,
   ruleCode: DefinitionCompilerRefusalCode,
   family: DefinitionRuleFailureFamily,

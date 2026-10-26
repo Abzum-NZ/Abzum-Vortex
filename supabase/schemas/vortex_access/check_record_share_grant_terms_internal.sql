@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_access.check_record_share_grant_terms_internal(p_terms jsonb, p_context jsonb) RETURNS void
+CREATE OR REPLACE FUNCTION vortex_access.check_record_share_grant_terms_internal(p_terms jsonb, p_context jsonb) RETURNS void
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO ''
     AS $_$
@@ -168,7 +168,7 @@ begin
   -- current role of that organisation. A recipient on another cluster cannot be
   -- read from this database; its identities are recorded as proposed and are
   -- confirmed by that organisation's own acceptance under protected consent
-  -- (#154). Nothing here activates, so an unverified proposal confers nothing.
+  -- (the recipient organisation accepts it). Nothing here activates, so an unverified proposal confers nothing.
   if recipient_cluster = source_cluster then
     if not exists (
       select 1

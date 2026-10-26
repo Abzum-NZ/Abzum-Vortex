@@ -36,7 +36,7 @@ begin
   -- The caller resolved this exact installed action once for its whole step.
   action_context := p_action_context;
 
-  -- #569: a create-bearing command may also change the subject's own links.
+  -- A create-bearing command may also change the subject's own links.
   -- The inversion this used to guard against (the subject's relationship edge
   -- identities L6 before a created record's reference-number counter L4 and
   -- data version) is closed by the terminal writer, which reserves every

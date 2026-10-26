@@ -1,5 +1,6 @@
 import "server-only";
 
+import { localDate } from "./deadline-transitions";
 import type { ModuleField, recordTypeDefinitionSchema } from "../definition/module-contracts";
 import type { JsonValue } from "../catalogue/common";
 import {
@@ -29,25 +30,9 @@ type CalculateAndFinalizeInput = Readonly<{
   rules?: BeforeSaveRuleExecution | undefined;
 }>;
 
-const localDate = (instant: string, timeZone: string): string | undefined => {
+const localDateOf = (instant: string, timeZone: string): string | undefined => {
   const date = new Date(instant);
-  if (!Number.isFinite(date.valueOf())) return undefined;
-  try {
-    const parts = new Intl.DateTimeFormat("en-CA", {
-      timeZone,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }).formatToParts(date);
-    const value = (type: Intl.DateTimeFormatPartTypes) =>
-      parts.find((part) => part.type === type)?.value;
-    const year = value("year");
-    const month = value("month");
-    const day = value("day");
-    return year && month && day ? `${year}-${month}-${day}` : undefined;
-  } catch {
-    return undefined;
-  }
+  return Number.isFinite(date.valueOf()) ? localDate(date, timeZone) : undefined;
 };
 
 type CalculatedFieldValues =
@@ -168,7 +153,7 @@ export const calculateAndFinalize = ({
   const organizationLocalDate = needsOrganizationLocalDate
     ? timeZone === undefined
       ? undefined
-      : localDate(issuedAt, timeZone)
+      : localDateOf(issuedAt, timeZone)
     : issuedAt.slice(0, 10);
   if (organizationLocalDate === undefined)
     return {
@@ -228,7 +213,7 @@ export const operationClock = (
   const organizationLocalDate = needsOrganizationLocalDate
     ? timeZone === undefined
       ? undefined
-      : localDate(issuedAt, timeZone)
+      : localDateOf(issuedAt, timeZone)
     : issuedAt.slice(0, 10);
   return organizationLocalDate === undefined
     ? undefined

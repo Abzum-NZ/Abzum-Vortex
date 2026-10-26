@@ -234,7 +234,7 @@ type LinkDependency = Readonly<{
   parentTarget: Readonly<{ moduleRootId: string; recordTypeId: string }> | undefined;
 }>;
 
-export type RecordChoicePageResult =
+type RecordChoicePageResult =
   | Readonly<{
       kind: "completed";
       choices: readonly RecordChoice[];

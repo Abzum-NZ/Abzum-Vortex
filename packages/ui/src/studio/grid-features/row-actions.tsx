@@ -228,7 +228,7 @@ export function StudioRowActionsBindings({
 }
 
 /** The same declarations the runtime reads; all insertion and removal includes its flow binding. */
-export function StudioRowActionsEditor({
+function StudioRowActionsEditor({
   actions,
   choices,
   disabled,

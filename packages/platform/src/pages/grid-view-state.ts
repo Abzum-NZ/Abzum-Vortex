@@ -25,7 +25,7 @@ import {
  * they resized and the row density. It is presentation metadata the server stores per person and
  * placement; it never holds row data or a cursor. The query state (sort, filters, search, page)
  * stays in the page address (`RecordsTableQueryState`); a grid view is that query state read
- * through this layout, and named views (#3023) store both parts in one view document.
+ * through this layout, and named views store both parts in one view document.
  *
  * Which columns show is decided by the layout alone: the server reads the shown columns only, so a
  * hidden column's values never reach the browser, and the browser shows or hides a column it

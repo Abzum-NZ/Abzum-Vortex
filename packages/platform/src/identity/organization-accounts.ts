@@ -461,6 +461,7 @@ const decodeCursor = (after: unknown): OffboardingInventoryCursor | undefined =>
     let decoded: unknown;
     try {
       decoded = JSON.parse(Buffer.from(trimmed, "base64url").toString("utf8"));
+      // guard-allow: silent-catch A cursor that is not base64url JSON is refused as an invalid command.
     } catch {
       return invalidCommand();
     }
@@ -902,7 +903,7 @@ const executeTransferOffboardingOwnedRecords = async (
   const selector = readInventorySelector(command);
 
   try {
-    // Read a single bounded #563 page first. Each protected entry below
+    // Read a single bounded inventory page first. Each protected entry below
     // re-admits the offboarding scope and this page's access version for every
     // mutable item, while the fixed operation behind it rechecks installation,
     // lifecycle, ownership, transfer authority, target state and this exact

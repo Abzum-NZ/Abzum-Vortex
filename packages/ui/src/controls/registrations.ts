@@ -59,7 +59,7 @@ const controlPayloadParser = <Payload>(
 
 /**
  * The form container's own parser. Besides its own ready values and callbacks it declares the one
- * #591 draft-feedback result the page projection supplies, which is how located feedback reaches
+ * draft-feedback result the page projection supplies, which is how located feedback reaches
  * the form without the renderer ever naming it.
  */
 const FORM_PAYLOAD_PARSER: PlatformComponentPayloadParser = createPayloadParser({

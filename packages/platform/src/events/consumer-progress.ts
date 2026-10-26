@@ -1,7 +1,7 @@
 import "server-only";
 
 import { eventOccurrenceIdSchema, timestampSchema } from "../catalogue/identifiers";
-import { databaseCode, isNonNilUuidText } from "../catalogue/runtime-primitives";
+import { databaseCode, isNonNilUuidText, asRecord } from "../catalogue/runtime-primitives";
 import { dispatchOccurrenceSchema, type DispatchOccurrence } from "./occurrence-contracts";
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
 
@@ -77,16 +77,11 @@ const consumerKeyMatches = (value: unknown): value is string =>
 const timestampMatches = (value: unknown): value is string =>
   timestampSchema.safeParse(value).success;
 
-const record = (value: unknown): Readonly<Record<string, unknown>> | undefined =>
-  typeof value === "object" && value !== null && !Array.isArray(value)
-    ? (value as Readonly<Record<string, unknown>>)
-    : undefined;
-
 const exactRecord = <Key extends string>(
   value: unknown,
   keys: readonly Key[],
 ): Readonly<Record<Key, unknown>> | undefined => {
-  const candidate = record(value);
+  const candidate = asRecord(value);
   if (
     candidate === undefined ||
     Object.keys(candidate).length !== keys.length ||

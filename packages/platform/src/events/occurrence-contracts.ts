@@ -78,8 +78,7 @@ const declaredEventOccurrencePayloadSchema = z
   .strict();
 
 /**
- * Versioned occurrence data. It preserves the historical V1 envelope and keeps
- * the occurrence identity distinct from the reusable declaration identity.
+ * Versioned occurrence data. It keeps the occurrence identity distinct from the reusable declaration identity.
  * Definition-backed payload privacy and field-type checks are intentionally
  * performed by Event using Record's field semantics, not claimed by this shape alone.
  */

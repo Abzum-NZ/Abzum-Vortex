@@ -33,7 +33,7 @@ import type { OperationInputDeclaration } from "./flow-validation";
  */
 
 /** The operation's inputs by name, each with whether it is required and its declared type. */
-export type CallableOperationInputs = ReadonlyMap<string, OperationInputDeclaration>;
+type CallableOperationInputs = ReadonlyMap<string, OperationInputDeclaration>;
 
 /** Finds the operation a key names, or nothing when it names none. */
 type CallableOperationLookup = (key: string) => CallableOperationInputs | undefined;

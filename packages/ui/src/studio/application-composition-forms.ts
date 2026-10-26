@@ -24,7 +24,7 @@ const FORM_CONTEXT_REASON =
   "An input, a Submit button or a Reset button stays inside the form it belongs to.";
 
 type FormShapeRefusal = Readonly<{ reason: "nested_form" | "form_context" }>;
-export type StudioFormChangeRefusal = StudioPlacementReference | FormShapeRefusal;
+type StudioFormChangeRefusal = StudioPlacementReference | FormShapeRefusal;
 
 /** A refusal about where blocks sit, not about what removing them leaves behind. */
 export const studioFormShapeRefusal = (

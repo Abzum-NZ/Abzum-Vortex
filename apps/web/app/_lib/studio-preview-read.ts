@@ -26,7 +26,7 @@ import { loadOrganizationLauncher } from "./organization-context";
 import { getQueryContinuationKey } from "./query-continuation-key";
 
 /** The selection every read of a Studio preview runs under: the Application and the builder's preview of it. */
-export type StudioPreviewSelection = Readonly<{
+type StudioPreviewSelection = Readonly<{
   organizationId: OrganizationId;
   applicationRootId: ApplicationRootId;
   previewInstallationId: string;
@@ -42,7 +42,7 @@ export type StudioPreviewSelection = Readonly<{
  * Application's own permissions, the builder's own live access for people and every other system
  * projection, and no record-share authority.
  */
-export type StudioPreviewRead =
+type StudioPreviewRead =
   | Readonly<{
       kind: "available";
       /** The saved draft at exactly the requested revision. */

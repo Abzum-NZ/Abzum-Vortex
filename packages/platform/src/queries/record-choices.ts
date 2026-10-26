@@ -81,7 +81,7 @@ export type RecordChoiceRead =
     }>;
 
 /** The Query engine entry point the picker reads through; it authorises the viewer itself. */
-export type RecordChoiceQueryRunner = Readonly<{
+type RecordChoiceQueryRunner = Readonly<{
   run(
     session: IdentitySession,
     selection: OrganizationSelectionCandidate,
@@ -124,6 +124,7 @@ const decodePositions = (token: string): Positions | undefined => {
       JSON.parse(Buffer.from(token, "base64url").toString("utf8")),
     );
     return parsed.success ? parsed.data : undefined;
+    // guard-allow: silent-catch A choice token that does not decode is refused as invalid input.
   } catch {
     return undefined;
   }

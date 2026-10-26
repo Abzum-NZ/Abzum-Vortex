@@ -13,7 +13,7 @@ import type { RequestDatabaseTransaction } from "../db/request-transaction";
  * declaration alone, runs in the saving transaction under the saver's own access, and does not
  * trust what the form offered.
  */
-export type FieldDependencyRefusal = Readonly<{
+type FieldDependencyRefusal = Readonly<{
   childFieldId: string;
   parentFieldId: string;
   /** Why the pair was refused, for the log; the person is told only which field to choose again. */

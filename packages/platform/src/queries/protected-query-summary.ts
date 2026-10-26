@@ -28,6 +28,7 @@ const groupCursorEndsAt = (cursor: string | undefined, groupKey: string | undefi
   try {
     const parts: unknown = JSON.parse(cursor ?? "");
     return Array.isArray(parts) && parts.length === 3 && parts[2] === groupKey;
+    // guard-allow: silent-catch A cursor that is not JSON does not end at the group.
   } catch {
     return false;
   }

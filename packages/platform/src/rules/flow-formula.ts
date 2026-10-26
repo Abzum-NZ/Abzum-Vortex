@@ -253,6 +253,7 @@ const arithmetic = (
     const result = value("decimal_number", amount);
     if (preserveExactArithmetic) exactValues.set(result, exact);
     return result;
+    // guard-allow: silent-catch Arithmetic outside the exact decimal range has no formula value.
   } catch {
     return undefined;
   }

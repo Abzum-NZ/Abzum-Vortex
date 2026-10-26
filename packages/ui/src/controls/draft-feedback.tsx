@@ -11,9 +11,9 @@ import type {
 import type { TypedFieldValue } from "./projected-data";
 
 /**
- * #591: accessible presentation of located draft feedback.
+ * Accessible presentation of located draft feedback.
  *
- * The page projection computes one #590 `RuleDraftFeedbackProjection` from an
+ * The page projection computes one `RuleDraftFeedbackProjection` from an
  * exact draft and supplies it to the form. This layer never evaluates a rule,
  * maps a permanent field identity, performs a final save validation or calls an
  * operation: it locates each supplied message on the form's own field key,

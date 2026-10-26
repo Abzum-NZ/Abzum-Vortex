@@ -10,9 +10,10 @@ import {
 import { searchableFieldTypes } from "../definition/application-search-edit";
 import type { ModuleField, RecordTypeDefinition } from "../definition/module-contracts";
 import { searchIndexFieldDiscloses } from "./sensitivity-policy";
+import { isRecord } from "../catalogue/runtime-primitives";
 
 /**
- * Organisation-owned search documents (#643).
+ * Organisation-owned search documents.
  *
  * This module turns one organisation-owned Record snapshot plus the exact
  * searchable-field configuration into a versioned search document, or a deletion
@@ -206,18 +207,11 @@ const bounded = (text: string, limit: number): string => {
   return (last >= 0xd800 && last <= 0xdbff ? cut.slice(0, -1) : cut).trimEnd();
 };
 
-const isPlainObject = (value: unknown): value is Readonly<Record<string, unknown>> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
 /** Text, whole numbers, exact decimals, dates and money; yes/no values carry no words. */
 const scalarText = (value: unknown): string | undefined => {
   if (typeof value === "string") return value;
   if (typeof value === "number") return Number.isFinite(value) ? String(value) : undefined;
-  if (
-    isPlainObject(value) &&
-    typeof value.amount === "string" &&
-    typeof value.currency === "string"
-  )
+  if (isRecord(value) && typeof value.amount === "string" && typeof value.currency === "string")
     return `${value.amount} ${value.currency}`;
   return undefined;
 };
@@ -228,7 +222,7 @@ const richTextDepthLimit = 32;
 const richInlineText = (inlines: unknown, parts: string[], depth: number): void => {
   if (!Array.isArray(inlines) || depth > richTextDepthLimit) return;
   for (const inline of inlines) {
-    if (!isPlainObject(inline)) continue;
+    if (!isRecord(inline)) continue;
     if (inline.kind === "text" && typeof inline.text === "string") parts.push(inline.text);
     else if (inline.kind === "emphasis" || inline.kind === "link")
       richInlineText(inline.children, parts, depth + 1);
@@ -237,9 +231,9 @@ const richInlineText = (inlines: unknown, parts: string[], depth: number): void 
 
 const formattedText = (value: unknown): string[] => {
   const parts: string[] = [];
-  if (!isPlainObject(value) || !Array.isArray(value.blocks)) return parts;
+  if (!isRecord(value) || !Array.isArray(value.blocks)) return parts;
   for (const block of value.blocks) {
-    if (!isPlainObject(block)) continue;
+    if (!isRecord(block)) continue;
     if (block.kind === "paragraph" || block.kind === "heading")
       richInlineText(block.children, parts, 0);
     else if (
@@ -249,9 +243,8 @@ const formattedText = (value: unknown): string[] => {
       for (const item of block.items) richInlineText(item, parts, 0);
     else if (block.kind === "table" && Array.isArray(block.rows))
       for (const row of block.rows)
-        if (isPlainObject(row) && Array.isArray(row.cells))
-          for (const cell of row.cells)
-            if (isPlainObject(cell)) richInlineText(cell.children, parts, 0);
+        if (isRecord(row) && Array.isArray(row.cells))
+          for (const cell of row.cells) if (isRecord(cell)) richInlineText(cell.children, parts, 0);
   }
   return parts;
 };
@@ -285,7 +278,7 @@ const valueParts = (field: SearchableFieldConfigurationEntry, value: unknown): s
     case "table":
       return Array.isArray(value)
         ? value.flatMap((row) =>
-            isPlainObject(row)
+            isRecord(row)
               ? Object.keys(row)
                   .sort()
                   .flatMap((key) => {

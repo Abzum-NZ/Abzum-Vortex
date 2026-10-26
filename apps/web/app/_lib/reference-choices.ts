@@ -40,7 +40,7 @@ type ChoicePlacementSettings = Readonly<{
   labelFieldId: string;
 }>;
 
-export type ReferenceChoiceFormField = Readonly<{
+type ReferenceChoiceFormField = Readonly<{
   fieldKey: string;
   command: RecordReferenceChoiceCommand;
 }>;

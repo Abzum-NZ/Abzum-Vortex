@@ -68,7 +68,7 @@ import {
 import { FORM_CONTAINER_KEY, NESTED_FORM_REASON } from "./application-composition-forms";
 
 /** One place on a page or layout where a new block can go, as the palette and the add command know it. */
-export type AddPlace = {
+type AddPlace = {
   target: StudioCompositionAddTarget;
   region: Region;
   steps: readonly SlotStep[];
@@ -77,7 +77,7 @@ export type AddPlace = {
 };
 
 /** The area key of a layout's blocks among its places; a page's places use its slot address key. */
-export const LAYOUT_AREA = "layout";
+const LAYOUT_AREA = "layout";
 
 /**
  * Every place on one page or layout a new block can go: the top of each content area (a layout's
@@ -264,7 +264,7 @@ export const describeStudioCompositionAddTargets = (
   }
 };
 
-export const groupsTaken = (target: StudioCompositionAddTarget): string => {
+const groupsTaken = (target: StudioCompositionAddTarget): string => {
   const labels = [...new Set(target.choices.map((choice) => choice.groupLabel.toLowerCase()))];
   if (labels.length === 0) return "it takes no new blocks";
   const listed =
@@ -305,8 +305,9 @@ export const placeItem = (
 };
 
 /**
- * A new block of one release: a fresh block name, the catalogue's defaults for every setting not
- * given, an empty list for every fixed slot and the default layout.
+ * A new block of one release: a fresh block name, the settings given (the release's declared
+ * defaults fill every other setting when the source is read), an empty list for every fixed slot
+ * and the default layout.
  */
 export const newBlockItem = (
   catalogue: ImmutablePlatformBlockCatalogue,
@@ -352,9 +353,9 @@ export const newBlockItem = (
 };
 
 /**
- * Adds one new block at one place on a page: a fresh block name, the settings Studio owns, the
- * catalogue's defaults for every setting the person does not give, an empty list for every fixed slot and the default
- * layout. The required settings the catalogue has no default for, and the query of a data block,
+ * Adds one new block at one place on a page: a fresh block name, the settings Studio owns and the
+ * settings the person gives (the release's declared defaults fill the rest when the source is read),
+ * an empty list for every fixed slot and the default layout. The required settings the catalogue has no default for, and the query of a data block,
  * come with the command. The edited slot is judged as stored data, and a block release the source
  * does not depend on yet becomes a dependency.
  */

@@ -170,7 +170,7 @@ const viewerSafeRecordValuesReadCommandSchema = z
   .strict();
 
 /** The fields the viewer may read of one record, by field ID; a withheld field is absent. */
-export type ViewerSafeRecordValuesReadResult =
+type ViewerSafeRecordValuesReadResult =
   | Readonly<{ outcome: "read"; values: Readonly<Record<string, z.infer<typeof jsonValueSchema>>> }>
   | Readonly<{ outcome: "unavailable" }>;
 
@@ -287,10 +287,6 @@ const viewerSafeRecordLinkTitlesCommandSchema = z
       command.targets.reduce((total, target) => total + target.recordIds.length, 0) <=
       viewerSafeRecordLinkTitleRecordLimit,
   );
-
-export type ViewerSafeRecordLinkTitlesCommand = z.input<
-  typeof viewerSafeRecordLinkTitlesCommandSchema
->;
 
 type RecordLinkTitlesRow = DatabaseRow & {
   readonly active_installation: unknown;

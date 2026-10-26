@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useState, useSyncExternalStore } from "reac
 import type { ApplicationPageModel } from "../../../../../../_lib/application-page";
 
 /** How a change joins the browser history: a new entry (Back returns to it) or in place. */
-export type AddressEntry = "push" | "replace";
+type AddressEntry = "push" | "replace";
 
 /**
  * The address of the page on screen, held in memory: the one owner of every table's query state

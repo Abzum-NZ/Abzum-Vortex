@@ -68,13 +68,13 @@ const loadWorkspacePlace = async (
     return {
       kind: "refused",
       reason:
-        "This organisation has no App Store address. An organisation administrator sets it in Organisation Administration, Settings.",
+        "This organisation has no App Store address. An organisation administrator sets it in the organisation settings.",
     };
   if (settings.value === "invalid")
     return {
       kind: "refused",
       reason:
-        "This organisation's App Store address is not an application address. An organisation administrator corrects it in Organisation Administration, Settings.",
+        "This organisation's App Store address is not an application address. An organisation administrator corrects it in the organisation settings.",
     };
   const organizationPath = organizationAddressPath(
     entry.tenantShortName,

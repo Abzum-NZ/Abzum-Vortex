@@ -7,6 +7,7 @@ import {
   type ApplicationSourceDocument, type ConditionNode, type ModuleField,
   type SourceItem, type SourceItemVortex, type SourcePageData,
   applicationModuleKeys,
+  isRecord,
 } from "@vortex/platform/schema";
 import { validateStudioCondition, type StudioConditionControlsContext,
   type StudioConditionValidation, type StudioConditionValidationIssue } from "./condition-model";
@@ -30,8 +31,6 @@ export type StudioApplicationConditionContextResult =
   | Readonly<{ kind: "refused" | "conflict" | "temporarily_unavailable" }>;
 
 const supportedTypes = new Set(["text", "long_text", "choice", "whole_number", "yes_no", "date", "date_time"]);
-const object = (value: unknown): value is Record<string, unknown> =>
-  value !== null && typeof value === "object" && !Array.isArray(value);
 const exactKeys = (value: Record<string, unknown>, keys: readonly string[]): boolean =>
   Object.keys(value).length === keys.length && keys.every((key) => Object.hasOwn(value, key));
 const sourceAliasValid = (value: unknown): value is string => typeof value === "string" &&
@@ -41,7 +40,7 @@ const qualifiedFieldValid = (field: unknown): boolean =>
 
 /** Finite metadata only. This boundary validates data; it never grants permission. */
 export function parseStudioApplicationConditionContext(value: unknown): StudioApplicationConditionContext | undefined {
-  if (!object(value) || !exactKeys(value, ["organizationId", "rootId", "key", "draftRevision",
+  if (!isRecord(value) || !exactKeys(value, ["organizationId", "rootId", "key", "draftRevision",
     "sourceFingerprint", "publishedRevision", "createdAt", "updatedAt", "bindingsSignature",
     "resolutionFingerprint", "pageAlias", "recordReference", "fieldRecordReference", "recordTypeId", "module", "fields"]) ||
     !organizationIdSchema.safeParse(value.organizationId).success ||
@@ -53,7 +52,7 @@ export function parseStudioApplicationConditionContext(value: unknown): StudioAp
     !fingerprintSchema.safeParse(value.resolutionFingerprint).success || !sourceAliasValid(value.pageAlias) ||
     typeof value.recordReference !== "string" || !qualifiedFieldValid(`${value.recordReference}.field`) ||
     typeof value.fieldRecordReference !== "string" || !qualifiedFieldValid(`${value.fieldRecordReference}.field`) ||
-    !recordTypeIdSchema.safeParse(value.recordTypeId).success || !object(value.module) ||
+    !recordTypeIdSchema.safeParse(value.recordTypeId).success || !isRecord(value.module) ||
     !Array.isArray(value.fields) || value.fields.length > 500) return undefined;
   const module = value.module;
   if (!exactKeys(module, ["organizationId", "key", "rootId", "releaseRevision", "releaseVersion",
@@ -67,7 +66,7 @@ export function parseStudioApplicationConditionContext(value: unknown): StudioAp
   const identifiers = new Set<string>();
   const owners = new Set<string>();
   for (const item of value.fields) {
-    if (!object(item) || !exactKeys(item, ["field", "aliases", "preferredAlias", "componentOwner"]) ||
+    if (!isRecord(item) || !exactKeys(item, ["field", "aliases", "preferredAlias", "componentOwner"]) ||
       !Array.isArray(item.aliases) || item.aliases.length < 1 || item.aliases.length > 2 ||
       !builderKeySchema.safeParse(item.preferredAlias).success || !sourceAliasValid(item.componentOwner))
       return undefined;
@@ -92,7 +91,7 @@ export const sameStudioVisibilityValue = (left: unknown, right: unknown): boolea
   if (Object.is(left, right)) return true;
   if (Array.isArray(left) && Array.isArray(right)) return left.length === right.length &&
     left.every((entry, index) => sameStudioVisibilityValue(entry, right[index]));
-  if (!object(left) || !object(right)) return false;
+  if (!isRecord(left) || !isRecord(right)) return false;
   const keys = Object.keys(left);
   return keys.length === Object.keys(right).length && keys.every((key) =>
     Object.hasOwn(right, key) && sameStudioVisibilityValue(left[key], right[key]));

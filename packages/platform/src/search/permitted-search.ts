@@ -29,10 +29,10 @@ import {
 } from "./shared-result-policy";
 
 /**
- * Current-access filtering for search candidates (#645).
+ * Current-access filtering for search candidates.
  *
- * The organisation search index is built once from searchable fields (#643) and
- * refreshed by committed events (#644). It carries no access decision, so it can
+ * The organisation search index is built once from searchable fields (`document-store`) and
+ * refreshed by committed events (`event-consumer`). It carries no access decision, so it can
  * be stale the moment authority changes. This module turns one current Access
  * context, one search request and one bounded candidate document set into the
  * candidates a reader may actually see now, and it does so before any ranking,
@@ -54,7 +54,7 @@ import {
  * module never returns authoritative stored values.
  *
  * A shared source is not in the index at all, so its results arrive as the
- * request's own Shared result groups and are decided by #646 in the same
+ * request's own Shared result groups and are decided by the shared-result policy in the same
  * pre-ranking step, against the recipient's grant capability read at that
  * moment. Those decisions are returned beside the local candidates:
  * they are request-only projections carrying their own source identities, they
@@ -133,7 +133,7 @@ export type PermittedSearchInput = Readonly<{
    * identities are taken from this module's own parsed request, never from the
    * caller, so a shared group cannot widen the fields this search matches.
    * Omitted when the response has no shared content; running the source search
-   * itself is #739.
+   * itself is outside this request.
    */
   shared?: SharedResultPolicyRequest;
 }>;
@@ -253,7 +253,7 @@ const parseEntry = (value: unknown): SearchDocumentEntry | undefined => {
 };
 
 /**
- * The accepted candidate shape is exactly the #643 stored document. A deletion
+ * The accepted candidate shape is exactly the stored search document. A deletion
  * marker carries no content and is not a candidate here, so it is refused as an
  * invalid document rather than silently matching nothing.
  */
@@ -367,7 +367,7 @@ const noSharedCapability: SharedResultPolicyDependencies["readCurrentCapability"
  * Access removal therefore affects the next request without any index change. A
  * malformed candidate document, or the same record twice, refuses the whole
  * request, because a set built from the index must be exact. Shared-source
- * results are decided by #646 from the request's own groups and returned as
+ * results are decided by the shared-result policy from the request's own groups and returned as
  * `sharedGroups`; a malformed group refuses the request for the same reason,
  * while an excluded, unavailable or refused group leaves the local candidates
  * untouched.
@@ -391,7 +391,7 @@ export const permittedSearchCandidates = async (
   )
     return refusal("candidate_set_invalid");
 
-  // Shared-source content is decided by #646 in the same pre-ranking step, from
+  // Shared-source content is decided by the shared-result policy in the same pre-ranking step, from
   // the source's own approved projection and the recipient's grant capability
   // read now, so a shared result can never reach ranking, counting or paging
   // before the same boundary that filters the recipient's own index.

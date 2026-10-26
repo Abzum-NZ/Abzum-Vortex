@@ -5,6 +5,7 @@ import {
   type RecordTypeDefinition,
 } from "../definition/module-contracts";
 import { compareInstants, exactInstant, type ExactInstant } from "./exact-instant";
+import { isRecord } from "../catalogue/runtime-primitives";
 
 export type DeriveEarliestPendingDeadlineTransitionInput = Readonly<{
   recordType: RecordTypeDefinition;
@@ -17,9 +18,6 @@ export type PendingDeadlineTransition = Readonly<{
   calculationFieldId: string;
   transitionAt: string;
 }>;
-
-const isValueMap = (value: unknown): value is Readonly<Record<string, unknown>> =>
-  value !== null && typeof value === "object" && !Array.isArray(value);
 
 const fieldResultType = (field: ModuleField): string =>
   field.type === "calculation" || field.type === "total" ? field.settings.resultType : field.type;
@@ -57,7 +55,8 @@ const dateAfter = (value: string): string | undefined => {
   return after.toISOString().slice(0, 10);
 };
 
-const localDate = (date: Date, timeZone: string): string | undefined => {
+/** The calendar date of an instant in a time zone, or undefined for an unknown zone. */
+export const localDate = (date: Date, timeZone: string): string | undefined => {
   try {
     const parts = new Intl.DateTimeFormat("en-CA", {
       timeZone,
@@ -71,6 +70,7 @@ const localDate = (date: Date, timeZone: string): string | undefined => {
     const month = value("month");
     const day = value("day");
     return year && month && day ? `${year}-${month}-${day}` : undefined;
+    // guard-allow: silent-catch Intl throws for an unknown time zone; the caller treats the date as unknown.
   } catch {
     return undefined;
   }
@@ -116,7 +116,7 @@ export const deriveEarliestPendingDeadlineTransition = (
   const recordType = recordTypeDefinitionSchema.safeParse(input.recordType);
   if (
     !recordType.success ||
-    !isValueMap(input.finalAuthoritativeFieldValues) ||
+    !isRecord(input.finalAuthoritativeFieldValues) ||
     typeof input.organizationTimeZone !== "string"
   )
     return undefined;

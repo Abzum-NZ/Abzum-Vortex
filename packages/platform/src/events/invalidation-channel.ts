@@ -174,6 +174,7 @@ export const createPrivateInvalidationChannelAuthorizer = (
           organizationId: request.organizationId,
           applicationRootId: request.applicationRootId,
         });
+        // guard-allow: silent-catch A scope that cannot name a topic is refused as a scope mismatch.
       } catch {
         return refused("scope_mismatch");
       }

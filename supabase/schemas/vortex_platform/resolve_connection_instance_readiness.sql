@@ -176,7 +176,7 @@ $function$;
 comment on function vortex_platform.resolve_connection_instance_readiness(
   uuid, uuid, uuid, text, bigint, text
 ) is
-  '#408: Authoritative owner-projected Connection-instance readiness resolver. Fails closed on inactive, unhealthy, expired, mismatched destination, ungranted application, or stale revision/fingerprint.';
+  'Authoritative owner-projected Connection-instance readiness resolver. Fails closed on inactive, unhealthy, expired, mismatched destination, ungranted application, or stale revision/fingerprint.';
 
 revoke all on function
   vortex_platform.resolve_connection_instance_readiness(uuid, uuid, uuid, text, bigint, text) from public, anon, authenticated, service_role, vortex_runtime, vortex_request;

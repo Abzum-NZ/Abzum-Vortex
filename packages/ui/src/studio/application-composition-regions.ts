@@ -28,8 +28,8 @@ import type {
   StudioCompositionDestination,
 } from "./application-composition-model";
 
-export type SourceShell = ApplicationSourceDocument["body"]["shells"][number];
-export type SourcePage = ApplicationSourceDocument["body"]["pages"][number];
+type SourceShell = ApplicationSourceDocument["body"]["shells"][number];
+type SourcePage = ApplicationSourceDocument["body"]["pages"][number];
 /** One authored slot: its items in desktop order and its authored tablet and phone order. */
 export type Zone = { items: SourceItem[]; order: SourceSlotOrder | undefined };
 
@@ -51,13 +51,10 @@ export type Target = {
   responsiveOrder: boolean;
 };
 
-export type CompositionCatalogueTools = Readonly<{
+type CompositionCatalogueTools = Readonly<{
   releases: ReadonlyMap<string, PlatformBlockRelease>;
 }>;
-export const catalogueTools = new WeakMap<
-  ImmutablePlatformBlockCatalogue,
-  CompositionCatalogueTools
->();
+const catalogueTools = new WeakMap<ImmutablePlatformBlockCatalogue, CompositionCatalogueTools>();
 export const toolsFor = (catalogue: ImmutablePlatformBlockCatalogue): CompositionCatalogueTools => {
   let tools = catalogueTools.get(catalogue);
   if (tools === undefined) {
@@ -175,7 +172,7 @@ export const itemReading = (catalogue: ImmutablePlatformBlockCatalogue, item: So
   return readSourceItem(item, release);
 };
 
-export const targetFor = (
+const targetFor = (
   catalogue: ImmutablePlatformBlockCatalogue,
   source: ApplicationSourceDocument,
   alias: string,
@@ -311,9 +308,9 @@ export const sameDestination = (
       left.slotKey === right.slotKey;
 
 /** A working copy of one region's stored slot; commands edit it and commit it as a whole. */
-export type Working = { items: SourceItem[]; order: SourceSlotOrder | undefined };
+type Working = { items: SourceItem[]; order: SourceSlotOrder | undefined };
 /** One slot of a working copy: its items, its declared order and how to write both back. */
-export type ZoneHandle = Readonly<{
+type ZoneHandle = Readonly<{
   items: SourceItem[];
   order: SourceSlotOrder | undefined;
   set: (items: SourceItem[], order: SourceSlotOrder | undefined) => void;

@@ -664,8 +664,7 @@ const indexDraft = (draft: StudioApplicationSelectionDraft): SelectionIndex => {
 
 /**
  * Creates private, in-memory selection state keyed by authored identities.
- * The shared editor workspace and its revisioned draft operations belong to
- * [#545](https://github.com/Abzum-NZ/Abzum-Vortex/issues/545).
+ * The shared editor workspace and its revisioned draft operations live outside this store.
  */
 export const createStudioSemanticSelectionStore = (
   initialDraft: StudioApplicationSelectionDraft,

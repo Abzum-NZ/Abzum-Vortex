@@ -30,7 +30,7 @@ import { StudioReferencePicker } from "./studio-reference-picker";
  * of its own, only the authored `ConditionalFormatRule` parts.
  */
 
-export const conditionalFormatTokenLabels: Readonly<Record<ConditionalFormatToken, string>> = {
+const conditionalFormatTokenLabels: Readonly<Record<ConditionalFormatToken, string>> = {
   success: "Success",
   warning: "Warning",
   info: "Information",
@@ -89,7 +89,7 @@ const dateLabels: Readonly<Record<ConditionalFormattingDateParameter, string>> =
 };
 
 /** The relative dates a rule may compare a date with, as condition operands the controls offer. */
-export const conditionalFormatDateOperands: StudioConditionControlsContext["allowedOperands"] =
+const conditionalFormatDateOperands: StudioConditionControlsContext["allowedOperands"] =
   conditionalFormattingDateParameters.map((key) => ({
     operand: { source: "parameter" as const, key },
     label: dateLabels[key],
@@ -174,7 +174,7 @@ export function ConditionalFormatTokenPicker({
   );
 }
 
-export function ConditionalFormatSwitchRow({
+function ConditionalFormatSwitchRow({
   id,
   label,
   checked,

@@ -35,13 +35,14 @@ import {
 } from "./flow-execution-bindings";
 
 /**
- * #686 resolves one purpose-bound effective actor for a protected flow node, or refuses.
+ * Resolves one purpose-bound effective actor for a protected flow node, or refuses.
  *
  * A published Frontend Flow node declares a `runAs` choice. `current_user` always means the
  * original verified initiator, never the actor of the preceding overridden node. `specified_user`
  * and `system` additionally require one exact, currently active Access-owned execution-authority
- * binding (#685) that names this organisation, application release, flow, node, protected
- * operation and effective actor, plus who may invoke it, on which surface, with which inputs.
+ * binding (`flow-execution-bindings`) that names this organisation, application release, flow,
+ * node, protected operation and effective actor, plus who may invoke it, on which surface, with
+ * which inputs.
  *
  * Resolution happens before every protected node. It re-checks the invoker, the binding's current
  * revision, state and expiry, the exact actor and operation scope, the surface and declared input
@@ -54,7 +55,7 @@ import {
  * the binding and actor state Access reads there, so a revocation, replacement, expiry or actor
  * lifecycle change between planning and use refuses rather than running on an earlier read.
  *
- * Viewer-safe result handoff remains #687; this module does not execute the node, project its
+ * Viewer-safe result handoff is not part of this module; it does not execute the node, project its
  * result, or create a durable authority of its own.
  */
 
@@ -101,9 +102,10 @@ export const flowEffectiveActorStateSchema = z.enum(["active", "suspended", "clo
 /**
  * The trusted per-use inputs the owning flow runtime already resolved: the verified initiator
  * context, the run actor of the preceding node (absent at the flow start), the exact node request,
- * the active #685 binding read result for a delegated node, and the effective actor's current
- * lifecycle state. None of these come from the browser; the transaction path re-reads the binding
- * and actor state inside the fresh transaction rather than trusting this planning read.
+ * the active execution-authority binding read result for a delegated node, and the effective
+ * actor's current lifecycle state. None of these come from the browser; the transaction path
+ * re-reads the binding and actor state inside the fresh transaction rather than trusting this
+ * planning read.
  */
 export const flowEffectiveActorRequestSchema = z
   .object({

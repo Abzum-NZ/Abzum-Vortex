@@ -115,7 +115,7 @@ const requestSchema = z
  * The records the data blocks of one content area of a saved draft page show, by block name, for
  * exactly that draft revision, including a detail page's sample subject.
  */
-export type StudioCanvasRecordsResult =
+type StudioCanvasRecordsResult =
   | Readonly<{
       kind: "available";
       /** The builder's preview this was read from; its idle fill names the same preview. */

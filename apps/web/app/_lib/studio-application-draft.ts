@@ -153,7 +153,7 @@ export type StudioViewResources = Readonly<{
 }>;
 
 /** What one requested editor view draws from, projected from the saved revision's one compile. */
-export type StudioLoadedView = StudioViewResources &
+type StudioLoadedView = StudioViewResources &
   Readonly<{
     identityReservations: Awaited<ReturnType<typeof readSourceIdentityReservations>> | null;
     compiledFields: StudioCompiledFields | null;

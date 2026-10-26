@@ -23,23 +23,24 @@ import {
 } from "./document-store";
 
 /**
- * Event-driven search refresh (#644).
+ * Event-driven search refresh.
  *
- * One ordered batch of committed Event occurrences from #639 is turned into
- * idempotent document upserts and deletion markers through the #643 builder and
- * store command, or into a bounded rebuild checkpoint after a search
- * configuration or privacy-policy change. Delivery always re-reads the current
- * Record snapshot, including a soft-deleted one, and indexes it under that
- * snapshot's own concurrency version. The occurrence's record sequence is an
- * Event counter, not a Record version, so it never versions a document; a
- * stale or duplicate occurrence can therefore only re-store current state, and
- * #643 storage additionally ignores an older source version. Documents stay
+ * One ordered batch of committed Event occurrences from the event dispatcher
+ * claim is turned into idempotent document upserts and deletion markers
+ * through the search document builder and store command, or into a bounded
+ * rebuild checkpoint after a search configuration or privacy-policy change.
+ * Delivery always re-reads the current Record snapshot, including a
+ * soft-deleted one, and indexes it under that snapshot's own concurrency
+ * version. The occurrence's record sequence is an Event counter, not a Record
+ * version, so it never versions a document; a stale or duplicate occurrence
+ * can therefore only re-store current state, and search document storage
+ * additionally ignores an older source version. Documents stay
  * content-only: entries carry field identity, and read-time permission is
- * rechecked by #645, which is why this consumer never records or returns an
+ * rechecked by permitted search, which is why this consumer never records or returns an
  * access decision.
  */
 
-/** Consumer identity registered with the #641 dispatcher for organisation search indexing. */
+/** Consumer identity registered with the event dispatcher for organisation search indexing. */
 export const searchEventConsumerKey = "search.documents" as const;
 
 /** Normal-operation target from the search specification: changes appear within ten seconds. */
@@ -77,7 +78,7 @@ export class SearchEventConsumerError extends Error {
 }
 
 /**
- * The exact published record shape consumed by #643's configuration
+ * The exact published record shape consumed by the search document configuration
  * derivation. A record type that has not published a search-relevant field is
  * still a valid configuration: every field is then simply left out.
  */
@@ -87,7 +88,7 @@ export type SearchIndexRecordType = Pick<RecordTypeDefinition, "recordTypeId" | 
  * Server-side reads and the idempotent write the consumer needs. A loader never
  * receives a caller-chosen organisation or permission: the occurrence supplies
  * both the organisation and the record, and the store implementation must apply
- * #643's own version ordering rather than trusting the caller.
+ * the search document store's own version ordering rather than trusting the caller.
  *
  * `loadRecordSnapshot` returns the Record's current state in the occurrence's
  * organisation: an active record as `active`, a soft-deleted or removal-pending
@@ -232,7 +233,7 @@ export type PlanSearchRebuildInput = Readonly<{
 }>;
 
 /**
- * Delivery failure classification. Search emits the same names #640 recovery
+ * Delivery failure classification. Search emits the same names delivery recovery
  * accepts for its own failures rather than inventing a second vocabulary; every
  * value below is one of that closed set, so the dispatcher's
  * `failureClassificationMatches` accepts it unchanged.
@@ -245,7 +246,7 @@ export type SearchDeliveryFailureCode =
   | "unclassified";
 
 /**
- * One claimed occurrence handed to the consumer. This is structurally the #641
+ * One claimed occurrence handed to the consumer. This is structurally the event dispatcher's
  * `EventConsumerDelivery`, declared locally because a runtime service may not
  * depend on a same-tier service package.
  */
@@ -318,7 +319,7 @@ const batchInvalid = (): never => {
 
 /**
  * Re-validates and orders one batch. Occurrences must be strictly ordered by
- * instant then identity, matching the #639 claim order, and no two occurrences
+ * instant then identity, matching the event delivery claim order, and no two occurrences
  * for one record may arrive in non-increasing sequence. A violation refuses the
  * whole batch rather than indexing out of order.
  */
@@ -369,12 +370,12 @@ const occurrenceResult = (
 
 /**
  * Indexes exactly one occurrence: it re-reads the current record type and
- * snapshot, derives the exact #643 configuration, and stores the idempotent
+ * snapshot, derives the exact search document configuration, and stores the idempotent
  * document or deletion marker. A `deleted` occurrence is handled the same way:
  * the soft-deleted snapshot yields a content-free marker at the Record's own
  * deleting version, and a record restored since then is indexed as it now is.
  * The store command always carries the snapshot's concurrency version, so an
- * older occurrence can never seed an older document; #643 storage repeats that
+ * older occurrence can never seed an older document; search document storage repeats that
  * ordering check.
  */
 const indexOccurrence = async (
@@ -412,10 +413,10 @@ const indexOccurrence = async (
 };
 
 /**
- * Processes one ordered #639 batch and reports both per-occurrence outcomes and
+ * Processes one ordered event delivery batch and reports both per-occurrence outcomes and
  * how late the batch was indexed. A batch out of claim order, or with a
  * non-increasing sequence for one record, is refused whole. Re-delivery is
- * safe: every occurrence re-reads current state, and #643 storage replays the
+ * safe: every occurrence re-reads current state, and search document storage replays the
  * same version and ignores an older one.
  */
 export const consumeSearchEvents = async (
@@ -496,7 +497,7 @@ export const searchIndexFreshness = (input: SearchIndexFreshnessInput): SearchIn
 /**
  * Rebuilds at most one bounded page of a record type's documents under the
  * current configuration and privacy policy. Rebuilding reuses each snapshot's
- * existing version, so #643 storage classifies unchanged content as a replay and
+ * existing version, so search document storage classifies unchanged content as a replay and
  * replaces only documents whose searchable text or permitted fields changed.
  * The returned checkpoint is content-free and resumable across calls. A
  * checkpoint for another organisation or record type is refused, and every
@@ -592,7 +593,7 @@ export const planSearchRebuildPage = async (
 };
 
 /**
- * The #641 dispatcher-compatible consumer. A deterministic refusal is terminal so
+ * The event dispatcher's consumer. A deterministic refusal is terminal so
  * a malformed or shared-source occurrence cannot poison its record sequence; a
  * missing record type or snapshot is retryable because publication or a later
  * change can still make it indexable. Duplicate delivery is safe because the

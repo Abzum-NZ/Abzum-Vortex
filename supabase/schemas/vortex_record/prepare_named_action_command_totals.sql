@@ -183,7 +183,7 @@ begin
   -- requirement. Deciding it here, under the lock and before any write, turns
   -- an unreadable target into a clean refusal instead of a late rollback. The
   -- command's own subject is excluded: the named authority decided above is
-  -- sufficient for it, and requiring ordinary read would contradict #50.
+  -- sufficient for it, and requiring ordinary read would contradict that authority.
   for lock_entry in
     select item.value
     from pg_catalog.jsonb_array_elements(link_targets) with ordinality item(value, ordinality)

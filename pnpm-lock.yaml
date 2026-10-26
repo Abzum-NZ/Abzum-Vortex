@@ -200,9 +200,6 @@ catalogs:
     '@xyflow/react':
       specifier: 12.12.0
       version: 12.12.0
-    date-fns:
-      specifier: 4.4.0
-      version: 4.4.0
     exceljs:
       specifier: 4.4.0
       version: 4.4.0
@@ -425,15 +422,15 @@ importers:
       clsx:
         specifier: 2.1.1
         version: 2.1.1
-      date-fns:
-        specifier: 'catalog:'
-        version: 4.4.0
       lucide-react:
         specifier: 1.48.0
         version: 1.48.0(react@19.3.0)
       motion:
         specifier: 13.4.6
         version: 13.4.6(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      next:
+        specifier: 16.3.5
+        version: 16.3.5(@babel/core@7.29.7(supports-color@7.2.0))(@types/node@24.13.6)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       react:
         specifier: 'catalog:'
         version: 19.3.0

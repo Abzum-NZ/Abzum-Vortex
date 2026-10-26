@@ -18,7 +18,7 @@ import { useStudioDraftText } from "./use-studio-draft-text";
 type InspectorContext = ReturnType<typeof resolveStudioSelectionInspectorContext>;
 
 /** The name and description of the application or a page, edited into the draft as they are typed. */
-export type StudioLabelsForm = Readonly<{
+type StudioLabelsForm = Readonly<{
   isApplication: boolean;
   label: string;
   description: string;

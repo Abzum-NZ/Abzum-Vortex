@@ -361,7 +361,7 @@ export type FileRemovalStage = z.infer<typeof fileRemovalStageSchema>;
 
 /**
  * Safe request to coordinate permanent file object removal.
- * Requires an eligible #657 decision and a stable deletion key; carries no
+ * Requires an eligible file removal decision and a stable deletion key; carries no
  * private storage paths or credentials, and the service re-evaluates the
  * submitted decision before accepting a new intent.
  */

@@ -16,7 +16,7 @@ import {
 } from "./typed-input-validation";
 import type { JsonValue } from "../catalogue/common";
 
-export type ResolvedInputs = Extract<z.infer<typeof inputsReadSchema>, { outcome: "resolved" }>;
+type ResolvedInputs = Extract<z.infer<typeof inputsReadSchema>, { outcome: "resolved" }>;
 
 export type ResultRow = DatabaseRow & { readonly result: unknown };
 
@@ -83,7 +83,7 @@ export const conditionFieldIds = (condition: unknown, into: Set<string>): void =
   for (const item of Object.values(record)) conditionFieldIds(item, into);
 };
 
-export const readInputs = async (
+const readInputs = async (
   transaction: RequestDatabaseTransaction,
   command: Pick<ProtectedQueryCommand, "moduleRootId" | "queryId">,
 ) => {

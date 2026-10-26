@@ -2,7 +2,7 @@ import type { ComponentFlowBinding } from "@vortex/platform/schema";
 import type { FlowDispatchResult, FlowRuntime } from "./flow-runtime";
 
 /**
- * #588: the form block's wiring to the browser flow runtime (#1013). A form container emits one
+ * The form block's wiring to the browser flow runtime. A form container emits one
  * `form_submit` for a gesture (a Submit click or Enter in a field); this module turns that gesture
  * into exactly one `FlowRuntime.dispatch` of the flow bound to it. While a dispatch for a binding
  * is in flight every further event for that binding is ignored, so a double click cannot start a

@@ -44,7 +44,7 @@ import { StudioFlowValueControl } from "./studio-flow-value-control";
 
 type Entry = Readonly<{ name: string; source: StudioFlowValueSource }>;
 
-export type StudioFlowStepFormProps = Readonly<{
+type StudioFlowStepFormProps = Readonly<{
   id: string;
   fields: readonly StudioFlowPropertyField[];
   draft: StudioFlowStepDraft;
