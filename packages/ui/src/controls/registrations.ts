@@ -1,33 +1,19 @@
-import { PLATFORM_BLOCK_RELEASE_IDENTITIES } from "@vortex/platform/schema";
+import {
+  PLATFORM_BLOCK_RELEASE_IDENTITIES,
+  type FormDraftFeedbackSupply,
+  type FormFlowFeedback,
+} from "@vortex/platform/schema";
 import {
   createPayloadParser,
   type PlatformComponentPayloadParser,
   type PlatformComponentRegistration,
 } from "../registry";
-import type { DefinitionRenderErrorLocation } from "../definition-error";
 import {
-  parseBooleanInputPayload,
-  parseButtonPayload,
-  parseChoiceInputPayload,
-  parseControlData,
   parseControlEventHandlers,
-  parseDateInputPayload,
-  parseDialogPayload,
-  parseDrawerPayload,
-  parseFieldInputPayload,
-  parseFormPayload,
-  parseLinkInputPayload,
-  parseNumberInputPayload,
-  parseRichTextInputPayload,
-  parseTabsPayload,
-  parseTextInputPayload,
-  parseTableInputPayload,
-  parseAttachmentInputPayload,
+  readControlData,
+  readControlSupply,
   type AttachmentInputPayload,
   type TableInputPayload,
-  parseFormDraftFeedbackSupply,
-  parseFormFlowFeedback,
-  parseValidationPayload,
   type BooleanInputPayload,
   type ButtonPayload,
   type ChoiceInputPayload,
@@ -49,11 +35,9 @@ import {
  * declared semantic callbacks under `events`. Each block names one payload parser, so an accepted
  * payload shape is that block's alone and adding a control needs no renderer change.
  */
-const controlPayloadParser = <Payload>(
-  parseValues: (value: unknown, location: DefinitionRenderErrorLocation) => Payload,
-): PlatformComponentPayloadParser =>
+const controlPayloadParser = <Payload>(): PlatformComponentPayloadParser =>
   createPayloadParser({
-    data: (value, location) => parseControlData(value, parseValues, location),
+    data: (value, location) => readControlData<Payload>(value, location),
     events: (value, location) => parseControlEventHandlers(value, location),
   });
 
@@ -63,10 +47,12 @@ const controlPayloadParser = <Payload>(
  * the form without the renderer ever naming it.
  */
 const FORM_PAYLOAD_PARSER: PlatformComponentPayloadParser = createPayloadParser({
-  data: (value, location) => parseControlData<FormPayload>(value, parseFormPayload, location),
+  data: (value, location) => readControlData<FormPayload>(value, location),
   events: (value, location) => parseControlEventHandlers(value, location),
-  draftFeedback: (value, location) => parseFormDraftFeedbackSupply(value, location),
-  flowFeedback: (value, location) => parseFormFlowFeedback(value, location),
+  draftFeedback: (value, location) =>
+    readControlSupply<FormDraftFeedbackSupply>(value, "Draft feedback is invalid", location),
+  flowFeedback: (value, location) =>
+    readControlSupply<FormFlowFeedback>(value, "Flow feedback is invalid", location),
 });
 
 /** Exact registrations pairing each control block release with its React renderer. */
@@ -74,63 +60,63 @@ export const CONTROL_COMPONENT_REGISTRATIONS: readonly PlatformComponentRegistra
   Object.freeze([
     Object.freeze({
       releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.TEXT_INPUT_BLOCK_RELEASE,
-      parsePayload: controlPayloadParser<TextInputPayload>(parseTextInputPayload),
+      parsePayload: controlPayloadParser<TextInputPayload>(),
     }),
     Object.freeze({
       releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.LINK_INPUT_BLOCK_RELEASE,
-      parsePayload: controlPayloadParser<LinkInputPayload>(parseLinkInputPayload),
+      parsePayload: controlPayloadParser<LinkInputPayload>(),
     }),
     Object.freeze({
       releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.RICH_TEXT_INPUT_BLOCK_RELEASE,
-      parsePayload: controlPayloadParser<RichTextInputPayload>(parseRichTextInputPayload),
+      parsePayload: controlPayloadParser<RichTextInputPayload>(),
     }),
     Object.freeze({
       releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.NUMBER_INPUT_BLOCK_RELEASE,
-      parsePayload: controlPayloadParser<NumberInputPayload>(parseNumberInputPayload),
+      parsePayload: controlPayloadParser<NumberInputPayload>(),
     }),
     Object.freeze({
       releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.BOOLEAN_INPUT_BLOCK_RELEASE,
-      parsePayload: controlPayloadParser<BooleanInputPayload>(parseBooleanInputPayload),
+      parsePayload: controlPayloadParser<BooleanInputPayload>(),
     }),
     Object.freeze({
       releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.DATE_INPUT_BLOCK_RELEASE,
-      parsePayload: controlPayloadParser<DateInputPayload>(parseDateInputPayload),
+      parsePayload: controlPayloadParser<DateInputPayload>(),
     }),
     Object.freeze({
       releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.CHOICE_INPUT_BLOCK_RELEASE,
-      parsePayload: controlPayloadParser<ChoiceInputPayload>(parseChoiceInputPayload),
+      parsePayload: controlPayloadParser<ChoiceInputPayload>(),
     }),
     Object.freeze({
       releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.ATTACHMENT_INPUT_BLOCK_RELEASE,
-      parsePayload: controlPayloadParser<AttachmentInputPayload>(parseAttachmentInputPayload),
+      parsePayload: controlPayloadParser<AttachmentInputPayload>(),
     }),
     Object.freeze({
       releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.TABLE_INPUT_BLOCK_RELEASE,
-      parsePayload: controlPayloadParser<TableInputPayload>(parseTableInputPayload),
+      parsePayload: controlPayloadParser<TableInputPayload>(),
     }),
     Object.freeze({
       releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.FIELD_INPUT_BLOCK_RELEASE,
-      parsePayload: controlPayloadParser<FieldInputPayload>(parseFieldInputPayload),
+      parsePayload: controlPayloadParser<FieldInputPayload>(),
     }),
     Object.freeze({
       releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.VALIDATION_MESSAGE_BLOCK_RELEASE,
-      parsePayload: controlPayloadParser<ValidationPayload>(parseValidationPayload),
+      parsePayload: controlPayloadParser<ValidationPayload>(),
     }),
     Object.freeze({
       releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.BUTTON_BLOCK_RELEASE,
-      parsePayload: controlPayloadParser<ButtonPayload>(parseButtonPayload),
+      parsePayload: controlPayloadParser<ButtonPayload>(),
     }),
     Object.freeze({
       releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.TABS_BLOCK_RELEASE,
-      parsePayload: controlPayloadParser<TabsPayload>(parseTabsPayload),
+      parsePayload: controlPayloadParser<TabsPayload>(),
     }),
     Object.freeze({
       releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.DIALOG_BLOCK_RELEASE,
-      parsePayload: controlPayloadParser<DialogPayload>(parseDialogPayload),
+      parsePayload: controlPayloadParser<DialogPayload>(),
     }),
     Object.freeze({
       releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.DRAWER_BLOCK_RELEASE,
-      parsePayload: controlPayloadParser<DrawerPayload>(parseDrawerPayload),
+      parsePayload: controlPayloadParser<DrawerPayload>(),
     }),
     Object.freeze({
       releaseIdentity: PLATFORM_BLOCK_RELEASE_IDENTITIES.FORM_CONTAINER_BLOCK_RELEASE,

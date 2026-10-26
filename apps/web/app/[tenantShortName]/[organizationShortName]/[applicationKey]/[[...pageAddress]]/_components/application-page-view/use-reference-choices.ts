@@ -1,11 +1,7 @@
 import { isRecord } from "@vortex/platform/schema";
 import { useCallback, useEffect, type Dispatch, type SetStateAction, type RefObject } from "react";
 import type { useRouter } from "next/navigation";
-import {
-  type ControlSemanticEvent,
-  type ChoiceInputPayload,
-  parseChoiceInputPayload,
-} from "@vortex/ui";
+import type { ControlSemanticEvent, ChoiceInputPayload } from "@vortex/ui";
 import type { ReferenceChoiceSelectionEvidenceMap } from "@vortex/platform/schema";
 import type { ApplicationPageModel } from "../../../../../../_lib/application-page";
 import type { Notice } from "./types";
@@ -57,10 +53,14 @@ export function useReferenceChoices({
         (choiceRequestIdsRef.current[placementId] ?? 0) + 1;
   }, [model]);
 
+  // A choice page is the server's typed choice-input payload; only its kind is checked here.
   const parseChoicePage = useCallback(
-    (placementId: string, values: unknown): ChoiceInputPayload =>
-      parseChoiceInputPayload(values, { pageId: model.pageId, placementId }),
-    [model.pageId],
+    (placementId: string, values: unknown): ChoiceInputPayload => {
+      if (!isRecord(values) || values.kind !== "choice_input")
+        throw new Error(`Reference choices of placement ${placementId} are not a choice input`);
+      return values as ChoiceInputPayload;
+    },
+    [],
   );
 
   const choicePayloadFor = useCallback(
@@ -173,11 +173,14 @@ export function useReferenceChoices({
             ? { ...previous.optionEvidence, ...payload.optionEvidence }
             : (payload.optionEvidence ?? {});
           const optionEvidence = Object.fromEntries(
-            options.map((option) => [option.key, availableEvidence[option.key]]),
+            options.flatMap((option) => {
+              const evidence = availableEvidence[option.key];
+              return evidence === undefined ? [] : [[option.key, evidence] as const];
+            }),
           );
           return {
             ...current,
-            [stateKey]: parseChoicePage(placementId, {
+            [stateKey]: {
               kind: "choice_input",
               value: payload.value ?? null,
               options,
@@ -186,7 +189,7 @@ export function useReferenceChoices({
                 ? {}
                 : { nextContinuationToken: payload.nextContinuationToken }),
               ...(payload.error === undefined ? {} : { error: payload.error }),
-            }),
+            } satisfies ChoiceInputPayload,
           };
         });
       } catch (error) {

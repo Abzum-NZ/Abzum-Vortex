@@ -1,27 +1,7 @@
 import {
-  attachmentInputPayloadSchema,
-  booleanInputPayloadSchema,
-  buttonPayloadSchema,
-  choiceInputPayloadSchema,
   choiceOptionsSchema,
-  controlDataStateSchema,
-  dateInputPayloadSchema,
-  dialogPayloadSchema,
-  drawerPayloadSchema,
-  fieldInputPayloadSchema,
-  formDraftFeedbackSupplySchema,
-  formFlowFeedbackSchema,
-  formPayloadSchema,
   isRecord,
-  linkInputPayloadSchema,
-  numberInputPayloadSchema,
-  recordChoicePageSchema,
-  richTextInputPayloadSchema,
-  tableInputPayloadSchema,
-  tabsPayloadSchema,
-  textInputPayloadSchema,
   typedFieldValueSchema,
-  validationPayloadSchema,
   type AttachmentInputPayload,
   type BooleanInputPayload,
   type ButtonPayload,
@@ -33,6 +13,7 @@ import {
   type FormPayload,
   type LinkInputPayload,
   type NumberInputPayload,
+  type RecordChoicePage,
   type ReferenceChoiceSelectionEvidence,
   type RichTextInputPayload,
   type TableInputPayload,
@@ -127,8 +108,8 @@ export type ControlSemanticEvent =
 
 /**
  * A control's callback. Only `records_requested` answers with data: the page runtime reads one page
- * of pickable records for the link input that asked and returns it, which the input parses
- * fail-closed with {@link parseRecordChoicePage}.
+ * of pickable records for the link input that asked and returns it, which the input reads
+ * with {@link readRecordChoicePage}.
  */
 export type ControlEventHandler = (event: ControlSemanticEvent) => void | Promise<unknown>;
 
@@ -217,147 +198,51 @@ export const parseTypedFieldValue = controlParser<TypedFieldValue>(
   "A typed field value is invalid",
 );
 
-/** One page of pickable records as the page runtime returned it, validated fail-closed. */
-export const parseRecordChoicePage = controlParser(
-  recordChoicePageSchema,
-  "A record choice page is invalid",
-);
-
-/** The ready values a text input accepts. */
-export const parseTextInputPayload = controlParser<TextInputPayload>(
-  textInputPayloadSchema,
-  "Text input values are invalid",
-);
-
-/** The ready values a link input accepts. */
-export const parseLinkInputPayload = controlParser<LinkInputPayload>(
-  linkInputPayloadSchema,
-  "Link input values are invalid",
-);
-
-/** The ready values a structured rich-text input accepts. */
-export const parseRichTextInputPayload = controlParser<RichTextInputPayload>(
-  richTextInputPayloadSchema,
-  "Rich text input values are invalid",
-);
-
-/** The ready values a number input accepts. */
-export const parseNumberInputPayload = controlParser<NumberInputPayload>(
-  numberInputPayloadSchema,
-  "Number input values are invalid",
-);
-
-/** The ready values a boolean input accepts. */
-export const parseBooleanInputPayload = controlParser<BooleanInputPayload>(
-  booleanInputPayloadSchema,
-  "Yes/no input values are invalid",
-);
-
-/** The ready values a date input accepts. */
-export const parseDateInputPayload = controlParser<DateInputPayload>(
-  dateInputPayloadSchema,
-  "Date input values are invalid",
-);
-
-/** The ready values a choice input accepts. */
-export const parseChoiceInputPayload = controlParser<ChoiceInputPayload>(
-  choiceInputPayloadSchema,
-  "Choice input values are invalid",
-);
-
-/** The ready values a table input accepts. */
-export const parseTableInputPayload = controlParser<TableInputPayload>(
-  tableInputPayloadSchema,
-  "Table input values are invalid",
-);
-
-/** The ready values an attachment input accepts. */
-export const parseAttachmentInputPayload = controlParser<AttachmentInputPayload>(
-  attachmentInputPayloadSchema,
-  "Attachment values are invalid",
-);
-
 /**
- * The ready values an automatic field input accepts. It carries exactly the payload of the control
- * its referenced module field selected, so this one schema validates every control kind the input
- * may become and the renderer never invents a shape.
+ * One page of pickable records as the server answered a records request: an object with its
+ * choices. The page is the server's typed reply and is not parsed again here.
  */
-export const parseFieldInputPayload = controlParser<FieldInputPayload>(
-  fieldInputPayloadSchema,
-  "Field input values are invalid",
-);
-
-/** The ready values a validation message block accepts. */
-export const parseValidationPayload = controlParser<ValidationPayload>(
-  validationPayloadSchema,
-  "Validation values are invalid",
-);
-
-/** The ready values a button block accepts. */
-export const parseButtonPayload = controlParser<ButtonPayload>(
-  buttonPayloadSchema,
-  "Button values are invalid",
-);
-
-/** The ready values a tabs block accepts. */
-export const parseTabsPayload = controlParser<TabsPayload>(
-  tabsPayloadSchema,
-  "Tabs values are invalid",
-);
-
-/** The ready values a dialog block accepts. */
-export const parseDialogPayload = controlParser<DialogPayload>(
-  dialogPayloadSchema,
-  "Dialog values are invalid",
-);
-
-/** The ready values a drawer block accepts. */
-export const parseDrawerPayload = controlParser<DrawerPayload>(
-  drawerPayloadSchema,
-  "Drawer values are invalid",
-);
-
-/** The ready values a form container accepts. */
-export const parseFormPayload = controlParser<FormPayload>(
-  formPayloadSchema,
-  "Form values are invalid",
-);
-
-/** The one supplied draft-feedback result a form applies to its exact draft. */
-export const parseFormDraftFeedbackSupply = controlParser(
-  formDraftFeedbackSupplySchema,
-  "Draft feedback is invalid",
-);
-
-/** What a form shows after its flow ran: a message or a business refusal. */
-export const parseFormFlowFeedback = controlParser(
-  formFlowFeedbackSchema,
-  "Flow feedback is invalid",
-);
-
-const parseControlState = controlParser(
-  controlDataStateSchema,
-  "Projected control data is invalid",
-);
-
-/**
- * Validates one control's unknown projected state and returns its fail-closed shape. Only the
- * `ready` state reaches that block's own payload parser, so every accepted shape stays the
- * registration's own concern. Throws a located definition error for unknown or malformed input.
- */
-export const parseControlData = <Values>(
+export const readRecordChoicePage = (
   value: unknown,
-  parseValues: (value: unknown, location: DefinitionRenderErrorLocation) => Values,
+  location: DefinitionRenderErrorLocation = {},
+): RecordChoicePage =>
+  isRecord(value) && Array.isArray(value.choices)
+    ? (value as RecordChoicePage)
+    : fail("A record choice page is invalid", location);
+
+/**
+ * One runtime input a control receives besides its data (a form's draft feedback or flow
+ * feedback): absent, or the object the server's projection supplied for it.
+ */
+export const readControlSupply = <Supply>(
+  value: unknown,
+  message: string,
+  location: DefinitionRenderErrorLocation = {},
+): Supply | undefined =>
+  value === undefined ? undefined : isRecord(value) ? (value as Supply) : fail(message, location);
+
+/**
+ * One control's projected state. The renderer checks the envelope: an object with a known status,
+ * and values only in the ready state. The values are the payload the server built for that control
+ * with its typed projection; the renderer does not parse them again, in the server render or in
+ * the browser. Throws a located definition error for any other envelope.
+ */
+export const readControlData = <Values>(
+  value: unknown,
   location: DefinitionRenderErrorLocation = {},
 ): ControlDataState<Values> => {
-  const state = parseControlState(value, location);
+  const state = isRecord(value) ? value : fail("Projected control data is invalid", location);
   switch (state.status) {
     case "loading":
       return LOADING_STATE;
     case "disabled":
-      return state;
+      return state as ControlDataState<Values>;
     case "ready":
-      return Object.freeze({ status: "ready", values: parseValues(state.values, location) });
+      return Object.hasOwn(state, "values")
+        ? (state as ControlDataState<Values>)
+        : fail("Ready control data carries its values", location);
+    default:
+      return fail("Projected control data has an unknown status", location);
   }
 };
 
