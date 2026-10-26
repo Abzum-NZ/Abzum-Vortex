@@ -56,7 +56,13 @@ export function useApplicationAccountActions(): ApplicationAccountActions | null
 }
 
 /** Account actions placed in the application definition's configured top bar. */
-export function ApplicationAccountMenu(): ReactElement {
+/**
+ * The account menu. It offers switching organisation only when the shell shows no organisation
+ * menu, so there is one place to switch, labelled the same everywhere.
+ */
+export function ApplicationAccountMenu({
+  offerOrganizationSwitch = false,
+}: Readonly<{ offerOrganizationSwitch?: boolean }>): ReactElement {
   const actions = useApplicationAccountActions();
   const organizationName = actions?.organizationName;
   const account = actions?.account;
@@ -143,12 +149,14 @@ export function ApplicationAccountMenu(): ReactElement {
             Adopt release {releaseAdoption.offer.version}
           </DropdownMenuItem>
         )}
-        <DropdownMenuItem
-          disabled={actions === null}
-          onClick={() => void actions?.chooseOrganization()}
-        >
-          Choose organisation
-        </DropdownMenuItem>
+        {offerOrganizationSwitch ? (
+          <DropdownMenuItem
+            disabled={actions === null}
+            onClick={() => void actions?.chooseOrganization()}
+          >
+            Switch organisation
+          </DropdownMenuItem>
+        ) : null}
         <DropdownMenuItem disabled={actions === null} onClick={() => void actions?.signOut()}>
           Sign out
         </DropdownMenuItem>

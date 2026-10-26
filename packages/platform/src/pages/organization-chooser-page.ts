@@ -49,7 +49,7 @@ export const organizationChooserPlacementId = "a9e6994c-ddd1-4398-8997-ccba4df76
 /** The tiles of the invitations waiting for the signed-in person's verified email. */
 export const organizationInvitationsPlacementId = "89da0f62-c1a3-4283-bb88-c280808dc2b6";
 
-const heading = (placementId: string, text: string, level: "one" | "two") =>
+const heading = (placementId: string, text: string, level: "two" | "three") =>
   platformPageItem(HEADING_BLOCK_RELEASE, placementId, {
     text,
     level,
@@ -106,8 +106,8 @@ export const organizationChooserPage = chooserPage(
   "organization_chooser",
   "Organisations",
   [
-    heading(headingId, "Choose an organisation", "one"),
-    heading(detailId, "Select an organisation to open its applications and workspace.", "two"),
+    heading(headingId, "Choose an organisation", "two"),
+    heading(detailId, "Select an organisation to open its applications and workspace.", "three"),
     organizationTiles,
   ],
 );
@@ -118,8 +118,8 @@ export const organizationChooserWithInvitationsPage = chooserPage(
   "organization_chooser_with_invitations",
   "Organisations",
   [
-    heading(headingId, "Choose an organisation", "one"),
-    heading(detailId, "Open one of your organisations, or join one that invited you.", "two"),
+    heading(headingId, "Choose an organisation", "two"),
+    heading(detailId, "Open one of your organisations, or join one that invited you.", "three"),
     organizationTiles,
     invitationTiles,
   ],
@@ -131,8 +131,8 @@ export const organizationInvitationsPage = chooserPage(
   "organization_invitations",
   "Organisations",
   [
-    heading(headingId, "Join an organisation", "one"),
-    heading(detailId, "You have been invited. Join to open its applications.", "two"),
+    heading(headingId, "Join an organisation", "two"),
+    heading(detailId, "You have been invited. Join to open its applications.", "three"),
     invitationTiles,
   ],
 );
@@ -143,11 +143,11 @@ export const organizationChooserEmptyPage = chooserPage(
   "organization_chooser_empty",
   "Organisations",
   [
-    heading(headingId, "No organisations yet", "one"),
+    heading(headingId, "No organisations yet", "two"),
     heading(
       detailId,
       "Ask your administrator to invite the email address you signed in with. Invitations appear here.",
-      "two",
+      "three",
     ),
   ],
 );

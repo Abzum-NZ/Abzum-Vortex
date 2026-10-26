@@ -125,7 +125,7 @@ export const applicationLauncherOpenEventId = "open_application";
 const launcherItems = [
   platformPageItem(HEADING_BLOCK_RELEASE, "f0299e44-84f3-4ab1-a822-90b28584f001", {
     text: "Choose an application you can open",
-    level: "one",
+    level: "two",
   }),
   platformPageItem(
     APPLICATION_LAUNCHER_BLOCK_RELEASE,
