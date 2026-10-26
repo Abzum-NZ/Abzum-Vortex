@@ -12,6 +12,7 @@ import {
 } from "@vortex/platform/schema";
 import { PALETTE_GROUP_TITLES } from "../palette-groups";
 import { studioHasSlotStarter } from "./composition-starters";
+import { ensureStudioRecordQuery } from "./default-record-query";
 import { studioGroupedTablePreset, type StudioGroupedTablePreset } from "./grouped-table-preset";
 
 /**
@@ -593,6 +594,28 @@ export function studioQueryChoices(
     ...(borrowedFor(source, borrowed)?.queries ?? []),
   ]);
 }
+
+/** Record types offered in Data create or reuse their ordinary default query in the same edit. */
+export const studioRecordDataChoices = (
+  source: ApplicationSourceDocument,
+): readonly StudioQueryChoice[] =>
+  source.body.modules.flatMap((module) =>
+    module.record_types.flatMap((record) => {
+      if (
+        !record.standard_actions.includes("read") ||
+        record.fields.length === 0 ||
+        module.queries.length >= 100
+      )
+        return [];
+      const candidate = structuredClone(source);
+      const qualified = `${module.key}:${record.key}`;
+      const made = ensureStudioRecordQuery(candidate, qualified);
+      const choice = ownQueries(candidate, null).find(
+        (query) => query.reference === made.reference,
+      )!;
+      return [{ ...choice, reference: `record:${qualified}`, label: record.plural_name }];
+    }),
+  );
 
 /**
  * The module actions a block can run: those of the application's own Modules in the draft, then

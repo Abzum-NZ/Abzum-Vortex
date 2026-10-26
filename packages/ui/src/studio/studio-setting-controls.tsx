@@ -15,6 +15,7 @@ import {
   type ComponentSettingFailure,
   type SourceBlockPropertyValueContract,
 } from "@vortex/platform/schema";
+import { followFieldLabels } from "./follow-field-labels";
 import { studioTotalMeasureProperty } from "./grid-features/totals";
 import { Button } from "../components/button";
 import { Checkbox } from "../components/checkbox";
@@ -33,7 +34,7 @@ import {
   studioBorrowedGroup,
   type StudioReferencePickerOption,
 } from "./studio-reference-picker";
-import { StudioField, StudioHelp } from "./studio-field";
+import { StudioField } from "./studio-field";
 import { StudioEntryList, useStudioEntryKeys } from "./studio-entry-list";
 import { useConfirm } from "../components/confirm-dialog";
 import { StudioInspectorGroup } from "./studio-inspector-group";
@@ -49,6 +50,7 @@ import { Textarea } from "../components/textarea";
 import {
   studioActionChoices,
   studioQueryChoices,
+  studioRecordDataChoices,
   studioRelationshipChoices,
   studioSourceFields,
   studioSourceRecordTypes,
@@ -83,6 +85,7 @@ export type StudioSettingValues = Readonly<Record<string, SourceBlockPropertyVal
 export type StudioSettingChoices = Readonly<{
   fields: readonly StudioQueryField[];
   queries: readonly StudioQueryChoice[];
+  recordQueries?: readonly StudioQueryChoice[];
   totals: StudioQueryChoice["totals"];
   pages: readonly Readonly<{ key: string; label: string }>[];
   recordTypes: readonly Readonly<{ key: string; label: string }>[];
@@ -110,6 +113,7 @@ export const studioDraftChoices = (
       : { ...choice, borrowedFrom: applicationName(choice.borrowedFrom) };
   return {
     queries: studioQueryChoices(source, borrowed).map(named),
+    recordQueries: studioRecordDataChoices(source),
     totals: [],
     fields: studioSourceFields(source),
     pages: source.body.pages.map((page) => ({ key: page.key, label: page.name })),
@@ -130,7 +134,11 @@ export const studioBlockChoices = (
   query: string | null,
 ): StudioSettingChoices => {
   const chosen =
-    query === null ? undefined : draft.queries.find((candidate) => candidate.reference === query);
+    query === null
+      ? undefined
+      : [...draft.queries, ...(draft.recordQueries ?? [])].find(
+          (candidate) => candidate.reference === query,
+        );
   return query === null
     ? draft
     : {
@@ -1136,6 +1144,7 @@ const queryInputsDescription = (query: StudioQueryChoice): string | undefined =>
 export function StudioQueryPicker({
   id,
   queries,
+  recordQueries = [],
   value,
   onChange,
   onNewQuery,
@@ -1143,6 +1152,7 @@ export function StudioQueryPicker({
 }: Readonly<{
   id: string;
   queries: readonly StudioQueryChoice[];
+  recordQueries?: readonly StudioQueryChoice[] | undefined;
   value: string;
   onChange: (reference: string) => void;
   onNewQuery?: (() => void) | undefined;
@@ -1165,19 +1175,29 @@ export function StudioQueryPicker({
         disabled={disabled}
         unset="Choose data"
         onChange={onChange}
-        options={queries.map((query) => ({
-          ...borrowableOption(query),
-          description: queryInputsDescription(query),
-        }))}
+        options={[
+          ...recordQueries.map((query) => ({
+            value: query.reference,
+            label: query.label,
+            group: "Record types",
+            description: `Show all ${query.label.toLowerCase()}`,
+          })),
+          ...queries.map((query) => ({
+            ...borrowableOption(query),
+            description: queryInputsDescription(query),
+          })),
+        ]}
       />
-      {queries.length === 0 && (
+      {queries.length === 0 && recordQueries.length === 0 && (
         <p role="status" className="text-sm">
           {onNewQuery === undefined
             ? "Add a query in the Data tab first."
             : "Add a query with New query."}
         </p>
       )}
-      <StudioHelp hint="The records this block shows: a query of this application or one another application exposes." />
+      <p className="text-sm text-muted-foreground">
+        Choose a record type to show all its records, or use an existing query.
+      </p>
     </div>
   );
 }
@@ -1195,86 +1215,6 @@ type SettingFieldsProps = Readonly<{
   choices: StudioSettingChoices;
   disabled: boolean;
 }>;
-
-/** Remove copied field labels in one update, including every column affected by a query change. */
-const followFieldLabels = (
-  properties: readonly BlockPropertySchemaContract[],
-  values: StudioSettingValues,
-  previous: StudioSettingValues,
-  fields: readonly StudioQueryField[],
-  previousFields: readonly StudioQueryField[],
-): StudioSettingValues => {
-  let result = values;
-  const write = (key: string, value: SettingValue) => {
-    const next = { ...result };
-    if (value === undefined) delete next[key];
-    else next[key] = value;
-    result = next;
-  };
-  const fieldProperty = properties.find(
-    (property) => property.key === "field" && property.kind === "field_reference",
-  );
-  const labelProperty = properties.find(
-    (property) =>
-      property.key === "label" &&
-      property.kind === "text" &&
-      !property.required &&
-      property.defaultValue === undefined,
-  );
-  const oldField = fieldProperty === undefined ? undefined : previous.field;
-  const newField = fieldProperty === undefined ? undefined : values.field;
-  const oldLabel =
-    oldField?.kind === "field_reference"
-      ? previousFields.find((field) => field.reference === oldField.field)?.label
-      : undefined;
-  const newLabel =
-    newField?.kind === "field_reference"
-      ? fields.find((field) => field.reference === newField.field)?.label
-      : undefined;
-  const label = labelProperty === undefined ? undefined : values.label;
-  if (
-    label?.kind === "text" &&
-    previous.label?.kind === "text" &&
-    label.value === previous.label.value &&
-    label.value === oldLabel &&
-    oldField?.kind === "field_reference" &&
-    (newField?.kind !== "field_reference" ||
-      oldField.field !== newField.field ||
-      oldLabel !== newLabel)
-  )
-    write("label", undefined);
-
-  const visit = (
-    property: BlockPropertySchemaContract,
-    value: SettingValue,
-    before: SettingValue,
-  ): SettingValue => {
-    if (property.kind === "group" && value?.kind === "group") {
-      const children = followFieldLabels(
-        property.properties,
-        value.properties,
-        before?.kind === "group" ? before.properties : {},
-        fields,
-        previousFields,
-      );
-      return children === value.properties ? value : { ...value, properties: { ...children } };
-    }
-    if (property.kind === "list" && value?.kind === "list") {
-      const items = value.items.map((item, index) =>
-        visit(property.item, item, before?.kind === "list" ? before.items[index] : undefined)!,
-      );
-      return items.every((item, index) => item === value.items[index])
-        ? value
-        : { ...value, items };
-    }
-    return value;
-  };
-  for (const property of properties) {
-    const value = visit(property, values[property.key], previous[property.key]);
-    if (value !== values[property.key]) write(property.key, value);
-  }
-  return result;
-};
 
 export function StudioSettingFields(props: SettingFieldsProps): ReactElement {
   // Keep the previously committed choices: an inline query can disappear from the new choices.

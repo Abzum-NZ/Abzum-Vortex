@@ -251,7 +251,9 @@ export function ApplicationCompositionEditor(props: Props) {
         ...settingsInputs.settings,
         ...studioGridDataSettings(
           settingsModel.kind === "available" ? settingsModel.properties : [],
-          props.choices.queries.find((query) => query.reference === reference),
+          [...props.choices.queries, ...(props.choices.recordQueries ?? [])].find(
+            (query) => query.reference === reference,
+          ),
         ),
       },
     });
@@ -437,6 +439,7 @@ export function ApplicationCompositionEditor(props: Props) {
               <StudioQueryPicker
                 id={`${settingsId}-query`}
                 queries={props.choices.queries}
+                recordQueries={props.choices.recordQueries}
                 value={settingsInputs.query ?? ""}
                 disabled={props.disabled}
                 onNewQuery={

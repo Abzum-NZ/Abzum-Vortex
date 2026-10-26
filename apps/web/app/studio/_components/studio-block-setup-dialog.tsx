@@ -69,7 +69,7 @@ export function StudioBlockSetupDialog({
   choices: StudioSettingChoices;
   onClose: () => void;
 }>) {
-  const queries = draftChoices.queries;
+  const queries = [...draftChoices.queries, ...(draftChoices.recordQueries ?? [])];
   const [query, setQuery] = useState("");
   const [values, setValues] = useState<StudioCompositionSettings>({});
   // The Grouped table preset: the field it groups by and, for a date, the calendar unit.
@@ -201,7 +201,8 @@ export function StudioBlockSetupDialog({
           {choice.needsQuery && (
             <StudioQueryPicker
               id={`${formId}-query`}
-              queries={queries}
+              queries={draftChoices.queries}
+              recordQueries={draftChoices.recordQueries}
               value={query}
               disabled={false}
               onChange={(next) => {

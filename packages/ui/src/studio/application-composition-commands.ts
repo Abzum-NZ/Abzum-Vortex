@@ -28,6 +28,7 @@ import {
 } from "./board-source";
 import { applyStudioFlowCreate } from "./application-flow-create";
 import { ensureStudioBoardQuickAdd } from "./board-quick-add";
+import { resolveStudioDataQuery } from "./default-record-query";
 import { studioLayoutOutletPlacementUses } from "./application-layout-outlets";
 import { createStudioDiscoveryAdapter } from "./discovery-adapter";
 import {
@@ -344,7 +345,7 @@ const applySettings = (
   for (const [key, value] of Object.entries(stored))
     if (studioOwnsSetting(key)) settings[key] = value;
   restoreStudioGridFeatureBindings(settings, release.properties, source.body.flow_bindings, alias);
-  let query = input.query;
+  let query = resolveStudioDataQuery(source, input.query as string | null);
   if (query !== (target.item.props.vortex.query ?? null))
     Object.assign(
       settings,

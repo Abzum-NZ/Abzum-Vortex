@@ -9,6 +9,7 @@ import {
   type SourceItem,
 } from "@vortex/platform/schema";
 import { applyStudioFlowCreate, type StudioFlowCreateCommand } from "./application-flow-create";
+import { ensureStudioRecordQuery } from "./default-record-query";
 import { STUDIO_ROW_ACTION_EVENT_SETTING, studioRowActionEventId } from "./contextual-palette";
 import {
   blockItem,
@@ -349,50 +350,15 @@ const listQuery = (
   resolved: Resolved,
   columns: readonly Field[],
 ): Readonly<{ reference: string; select: readonly string[] }> => {
-  const module = plan.source.body.modules.find((entry) => entry.key === resolved.module.key)!;
-  const existing = module.queries.find(
-    (query) =>
-      query.record_type === resolved.record.key &&
-      query.inputs.length === 0 &&
-      query.filter === null &&
-      query.group_by.length === 0 &&
-      query.aggregates.length === 0 &&
-      query.select.includes(resolved.title.key),
+  const query = ensureStudioRecordQuery(
+    plan.source,
+    resolved.qualified,
+    columns.map((entry) => entry.key),
   );
-  if (existing !== undefined) {
-    plan.details.push(`It reads the existing query ${quoted(existing.label ?? existing.key)}.`);
-    return { reference: `${module.key}:${existing.key}`, select: existing.select };
-  }
-  if (module.queries.length >= 100)
-    refuse(
-      `${quoted(module.name)} already holds 100 queries, so no list query can be added for ${resolved.record.plural_name.toLowerCase()}.`,
-    );
-  const key = uniqueKey(
-    resolved.record.plural_name,
-    "",
-    new Set(module.queries.map((query) => query.key)),
-    40,
-  );
-  const query = {
-    id: freshAlias(plan, `qry_${key}`),
-    key,
-    label: resolved.record.plural_name,
-    exposure: "private",
-    record_type: resolved.record.key,
-    inputs: [],
-    select: columns.map((entry) => entry.key),
-    filter: null,
-    group_by: [],
-    aggregates: [],
-    sort: [{ field: resolved.title.key, direction: "ascending" }],
-    page_size: pageSize,
-    relationship_hops: 0,
-  } as unknown as Query;
-  module.queries.push(query);
   plan.details.push(
-    `A new query ${quoted(resolved.record.plural_name)} in ${quoted(module.name)} returns every ${lowerFirst(resolved.record.name)}, sorted by ${resolved.title.label}.`,
+    `${query.created ? "A new" : "The existing"} query returns all ${resolved.record.plural_name.toLowerCase()}, sorted by ${resolved.title.label}.`,
   );
-  return { reference: `${module.key}:${key}`, select: query.select };
+  return query;
 };
 
 /**

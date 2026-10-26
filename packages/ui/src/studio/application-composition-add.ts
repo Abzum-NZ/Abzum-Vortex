@@ -28,6 +28,7 @@ import {
   type StudioPaletteChoice,
 } from "./contextual-palette";
 import { studioGridDataSettings } from "./grid-features";
+import { resolveStudioDataQuery } from "./default-record-query";
 import {
   adjustedSlotOrder,
   freshBlockName,
@@ -417,13 +418,12 @@ export const applyAdd = (
 
   // The settings the person gave (the setup asks for each required one without a default), each
   // of its declared kind; every other setting takes its catalogue default.
+  const query = resolveStudioDataQuery(source, input.query as string | null);
   const settings = commandSettings(
     {
       ...studioGridDataSettings(
         release.properties,
-        studioQueryChoices(source, current.borrowed).find(
-          (query) => query.reference === input.query,
-        ),
+        studioQueryChoices(source, current.borrowed).find((choice) => choice.reference === query),
       ),
       ...(input.settings as Record<string, SourceBlockPropertyValueContract>),
     },
@@ -431,7 +431,6 @@ export const applyAdd = (
   );
   // Studio owns some settings and writes them itself, so a command never supplies them.
   if (Object.keys(settings).some(studioOwnsSetting)) return { kind: "invalid" };
-  const query = input.query;
   if (
     choice.needsQuery !== (query !== null) ||
     (query !== null && !studioQueryOffered(source, current.borrowed, query))
