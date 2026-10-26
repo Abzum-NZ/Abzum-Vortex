@@ -373,6 +373,7 @@ export const studioStarterFrame = (
   | Readonly<{ kind: "refused"; message: string }> => {
   try {
     const candidate = applicationSourceDocumentSchema.parse(structuredClone(source));
+    candidate.body.icon = "blocks";
     const shell = placeMenuShell(catalogue, candidate, "Main layout");
     const home = candidate.body.pages.find((page) => page.key === candidate.body.home_page);
     if (home === undefined)
