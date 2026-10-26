@@ -7,6 +7,7 @@ import {
   resolvePermittedApplicationAddress,
   type AddressedApplicationBundleRead,
   type ApplicationExperience,
+  type ApplicationLauncherRead,
   type InstalledRuntimeContext,
   type PermittedApplication,
   type PermittedApplicationsRead,
@@ -36,7 +37,7 @@ type ApplicationAddressResult =
   | Readonly<{ kind: "suspended_super_administrator_account" }>
   | Readonly<{
       kind: "organization_launcher";
-      read: Extract<PermittedApplicationsRead, { kind: "available" }>;
+      read: Extract<ApplicationLauncherRead, { kind: "available" }>;
     }>
   | Readonly<{
       kind: "application_page";
@@ -95,25 +96,24 @@ export const resolveApplicationAddress = cache(
   ): Promise<ApplicationAddressResult> => {
     if (isReservedTenantSegment(tenantShortName)) return { kind: "unavailable" };
 
+    if (applicationKey === undefined) {
+      const read = await loadPermittedApplicationsAtAddress(
+        session,
+        tenantShortName,
+        organizationShortName,
+      );
+      return read.kind === "available" ? { kind: "organization_launcher", read } : read;
+    }
+
     // An addressed page request resolves only the named application. The launcher
     // keeps the full permitted list so it can still show every application.
-    const addressed: AddressedApplicationBundleRead =
-      applicationKey === undefined
-        ? {
-            read: await loadPermittedApplicationsAtAddress(
-              session,
-              tenantShortName,
-              organizationShortName,
-            ),
-            experiences: [],
-          }
-        : await loadAddressedApplicationAtAddress(
-            session,
-            tenantShortName,
-            organizationShortName,
-            applicationKey,
-            pageProjection === "addressed" ? pageKey : undefined,
-          );
+    const addressed = await loadAddressedApplicationAtAddress(
+      session,
+      tenantShortName,
+      organizationShortName,
+      applicationKey,
+      pageProjection === "addressed" ? pageKey : undefined,
+    );
     const read = addressed.read;
     if (read.kind !== "available") return read;
 
@@ -129,7 +129,6 @@ export const resolveApplicationAddress = cache(
         ...(application === undefined ? {} : { application }),
       };
     }
-    if (resolved.application === null) return { kind: "organization_launcher", read };
     attributePageReadScope(read.organizationId, resolved.application.applicationRootId);
     return {
       kind: "application_page",
