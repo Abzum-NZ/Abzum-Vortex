@@ -14,7 +14,7 @@ declare
   checked_context jsonb;
   consistency jsonb;
 begin
-  checked_context := vortex_definition.validated_builder_evidence_read_context_internal();
+  checked_context := vortex_definition.validated_builder_read_context_internal();
   if p_root_id is null or p_expected_draft_revision is null
     or p_expected_draft_revision not between 1 and 9007199254740991
     or p_expected_source_fingerprint is null then

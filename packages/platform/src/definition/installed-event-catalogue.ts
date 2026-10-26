@@ -1,6 +1,6 @@
 import {
-  activeApplicationInstallationEvidenceSchema,
-  type ModuleInstallationBindingEvidence,
+  activeApplicationInstallationSchema,
+  type ModuleInstallationBinding,
 } from "../files/storage";
 import {
   applicationDefinitionConsumerReadResultSchema,
@@ -26,15 +26,13 @@ type ModuleRecordType = ModuleRead["content"]["recordTypes"][number];
 
 const applicationReadSchema = applicationDefinitionConsumerReadResultSchema;
 const moduleReadSchema = moduleDefinitionConsumerReadResultSchema;
-const rawInstallationEvidenceSchema = z
-  .object(activeApplicationInstallationEvidenceSchema.shape)
-  .strict();
+const rawInstallationEvidenceSchema = z.object(activeApplicationInstallationSchema.shape).strict();
 
 /**
  * Evidence read from the Module installation binding owner. It is input to this
  * pure projector, not caller-authored readiness or authentication evidence.
  */
-export type InstalledEventBindingEvidence = ModuleInstallationBindingEvidence;
+export type InstalledEventBindingEvidence = ModuleInstallationBinding;
 
 export type InstalledEventCatalogueInput = Readonly<{
   definitions: unknown;
@@ -110,7 +108,7 @@ export const resolveInstalledEventDefinitionContext = (
     throw new DefinitionError("INSTALLED_EVENT_BINDING_INACTIVE");
   if (!definitions.success || !rawInstallation.success)
     throw new DefinitionError("INVALID_INSTALLED_EVENT_INPUT");
-  const installation = activeApplicationInstallationEvidenceSchema.safeParse(rawInstallation.data);
+  const installation = activeApplicationInstallationSchema.safeParse(rawInstallation.data);
   if (!installation.success)
     throw unexpectedDefinitionFailure(
       "INSTALLED_EVENT_DEPENDENCY_MISMATCH",

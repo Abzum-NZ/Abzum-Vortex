@@ -20,7 +20,7 @@ import {
 } from "../application-contracts";
 import {
   definitionCompilationOutputSchema,
-  definitionPublicationHistoryEvidenceSchema,
+  definitionPublicationHistorySchema,
   definitionResolutionSnapshotSchema,
   sourceIdentityAssignmentSchema,
   type PublishedDefinitionHistory,
@@ -563,18 +563,18 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
         latest.publication.releaseVersion !== state.historyLatestReleaseVersion)
     )
       return invalidStorage("readCandidate found inconsistent stored evidence");
-    const historyEvidence = definitionPublicationHistoryEvidenceSchema.safeParse({
+    const releaseHistory = definitionPublicationHistorySchema.safeParse({
       kind: state.draft.kind,
       definitionKey: state.draft.key,
       rootId: String(state.draft.rootId),
       anchorReleaseRevision: anchor,
       latestRelease: latest ?? null,
     });
-    if (!historyEvidence.success) return invalidStorage(historyEvidence.error);
+    if (!releaseHistory.success) return invalidStorage(releaseHistory.error);
     return {
       draft: state.draft,
       identities: state.identities,
-      historyEvidence: historyEvidence.data,
+      releaseHistory: releaseHistory.data,
       savedConditionHistory:
         state.draft.kind === "module" ? await this.readSavedConditionHistory(rootId) : [],
       latestPlatformPins: platformPins(latestApplication?.stored.dependencyManifest ?? []),
@@ -827,8 +827,8 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
     if (
       candidate.draft.kind !== "application" ||
       candidate.draft.source.kind !== "application" ||
-      candidate.historyEvidence.kind !== "application" ||
-      candidate.historyEvidence.anchorReleaseRevision !== expectedAnchorReleaseRevision ||
+      candidate.releaseHistory.kind !== "application" ||
+      candidate.releaseHistory.anchorReleaseRevision !== expectedAnchorReleaseRevision ||
       candidate.draft.publishedRevision !== expectedAnchorReleaseRevision ||
       releaseRevision !== expectedAnchorReleaseRevision
     )

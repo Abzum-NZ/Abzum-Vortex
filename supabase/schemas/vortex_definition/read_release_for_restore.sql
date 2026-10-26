@@ -1,4 +1,4 @@
-create or replace function vortex_definition.read_restore_release_evidence(
+create or replace function vortex_definition.read_release_for_restore(
   p_kind text,
   p_root_id uuid,
   p_release_revision bigint
@@ -292,11 +292,11 @@ begin
 end
 $function$;
 
-revoke execute on function vortex_definition.read_restore_release_evidence(text, uuid, bigint)
+revoke execute on function vortex_definition.read_release_for_restore(text, uuid, bigint)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-grant execute on function vortex_definition.read_restore_release_evidence(text, uuid, bigint)
+grant execute on function vortex_definition.read_release_for_restore(text, uuid, bigint)
   to vortex_request;
-comment on function vortex_definition.read_restore_release_evidence(text, uuid, bigint) is
+comment on function vortex_definition.read_release_for_restore(text, uuid, bigint) is
   'Returns narrow private evidence needed to verify one immutable source before restoring its draft.';
 
-alter function vortex_definition.read_restore_release_evidence(p_kind text, p_root_id uuid, p_release_revision bigint) owner to vortex_owner;
+alter function vortex_definition.read_release_for_restore(p_kind text, p_root_id uuid, p_release_revision bigint) owner to vortex_owner;

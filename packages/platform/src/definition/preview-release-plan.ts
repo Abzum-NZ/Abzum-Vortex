@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { SessionContext } from "../access/identity-access";
-import type { DefinitionPublicationHistoryEvidence } from "./definition-compilation-contracts";
+import type { DefinitionPublicationHistory } from "./definition-compilation-contracts";
 import type { ExactDefinitionDependency } from "./definition-store-contracts";
 import type { PlatformPermissionSource } from "../access/platform-permissions";
 import { applicationModuleKeys } from "./application-module-sources";
@@ -172,7 +172,7 @@ export const planApplicationPreview = async (
   compile: () => Promise<
     Readonly<{
       releasePlan: ApplicationReleasePlan;
-      historyEvidence: DefinitionPublicationHistoryEvidence;
+      releaseHistory: DefinitionPublicationHistory;
     }>
   >,
 ): Promise<PreviewReleasePlan> => {
@@ -206,8 +206,8 @@ export const planApplicationPreview = async (
       return refuse("DEFINITION_DEPENDENCY_MISSING");
     return { rootId: page.rootId, currentReleaseRevision: page.anchorReleaseRevision };
   });
-  const { releasePlan: compiled, historyEvidence } = await compile();
-  assertReleasable(compiled, historyEvidence, permissions);
+  const { releasePlan: compiled, releaseHistory } = await compile();
+  assertReleasable(compiled, releaseHistory, permissions);
   return {
     accessVersion: context.accessVersion,
     application,

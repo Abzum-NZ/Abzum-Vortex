@@ -252,7 +252,7 @@ const publishOne = async (
         reader.readCandidate(rootId),
       );
     });
-    const latest = current?.historyEvidence.latestRelease;
+    const latest = current?.releaseHistory.latestRelease;
     if (current?.draft.draftRevision !== draftRevision)
       throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING");
     if (latest === undefined || latest === null)

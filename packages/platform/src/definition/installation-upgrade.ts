@@ -16,7 +16,7 @@ import type {
 } from "../access/identity-access";
 import type { ApplicationRootId, OrganizationId } from "../catalogue/identifiers";
 import { sameId } from "../catalogue/runtime-primitives";
-import type { ActiveApplicationInstallationEvidence } from "../files/storage";
+import type { ActiveApplicationInstallation } from "../files/storage";
 import { canonicalJson } from "./canonical-json";
 import type { SystemApplicationBoundReleaseSetResult } from "./definition-consumer-read";
 import { createDatabaseApplicationReleaseAdoptionReleaseSetService } from "./application-bound-release-set";
@@ -91,7 +91,7 @@ export type UpgradeSnapshot = Readonly<{
 }>;
 
 export type UpgradeState = Readonly<{
-  active: ActiveApplicationInstallationEvidence;
+  active: ActiveApplicationInstallation;
   activeReleaseSet: SystemApplicationBoundReleaseSetResult;
   selectedReleaseSet: SystemApplicationBoundReleaseSetResult;
   bindings: InstallationBindings;
@@ -124,7 +124,7 @@ const readCurrentInstallation = async (
   selector: UpgradeSelector,
 ): Promise<Pick<UpgradeState, "active" | "bindings">> => {
   await readInstallationOrdinaryRoot(transaction, selector.rootId);
-  let active: ActiveApplicationInstallationEvidence;
+  let active: ActiveApplicationInstallation;
   try {
     active = await readCurrentActiveApplicationInstallation(transaction);
   } catch (error) {

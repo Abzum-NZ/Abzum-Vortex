@@ -65,7 +65,7 @@ export const tenantAdministratorAssignmentIdSchema = stableId<"TenantAdministrat
 export const vortexSuperAdministratorAssignmentIdSchema =
   stableId<"VortexSuperAdministratorAssignmentId">();
 export const administrationDuplicateKeySchema = stableId<"AdministrationDuplicateKey">();
-export const administrationReceiptIdSchema = stableId<"AdministrationReceiptId">();
+export const administrationCorrelationIdSchema = stableId<"AdministrationCorrelationId">();
 export const meteringEventIdSchema = stableId<"MeteringEventId">();
 
 export const builderKeySchema = z

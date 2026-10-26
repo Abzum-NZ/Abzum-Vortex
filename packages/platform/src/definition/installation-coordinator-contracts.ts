@@ -13,7 +13,7 @@ import {
   type ApplicationRootId,
   type OrganizationId,
 } from "../catalogue/identifiers";
-import type { ModuleInstallationBindingEvidence } from "../files/storage";
+import type { ModuleInstallationBinding } from "../files/storage";
 import type { SystemApplicationBoundReleaseSetResult } from "./definition-consumer-read";
 import type { InstallationRuntimeBundleIndex } from "./installation-runtime-bundle";
 import type { ModuleContent } from "./module-contracts";
@@ -96,7 +96,7 @@ export type ActiveApplicationInstallationSummary = Readonly<{
   organizationId: OrganizationId;
   applicationRootId: ApplicationRootId;
   applicationReleaseRevision: number;
-  moduleBindings: readonly ModuleInstallationBindingEvidence[];
+  moduleBindings: readonly ModuleInstallationBinding[];
 }>;
 
 export type ApplicationInstallationPreparationResult = Readonly<{
@@ -106,7 +106,7 @@ export type ApplicationInstallationPreparationResult = Readonly<{
   applicationRootId: ApplicationRootId;
   applicationReleaseRevision: number;
   /** The provisioned, inactive bindings the activation will switch on. */
-  moduleBindings: readonly ModuleInstallationBindingEvidence[];
+  moduleBindings: readonly ModuleInstallationBinding[];
 }>;
 
 export type ApplicationInstallationActivationResult<InstalledEvents> = Readonly<{
@@ -121,7 +121,7 @@ export type ApplicationInstallationWithdrawalResult = Readonly<{
   organizationId: OrganizationId;
   applicationRootId: ApplicationRootId;
   applicationReleaseRevision: number;
-  moduleBindings: readonly ModuleInstallationBindingEvidence[];
+  moduleBindings: readonly ModuleInstallationBinding[];
   runtimeBundles: InstallationRuntimeBundleRemovalReport;
 }>;
 

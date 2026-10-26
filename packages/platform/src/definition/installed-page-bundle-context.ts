@@ -20,8 +20,8 @@ import {
   type ActiveInstallationBundleState,
 } from "./active-installation-bundle-repository";
 import {
-  activeApplicationInstallationEvidenceSchema,
-  type ActiveApplicationInstallationEvidence,
+  activeApplicationInstallationSchema,
+  type ActiveApplicationInstallation,
 } from "../files/storage";
 import {
   readInstallationRuntimeBundleSections,
@@ -319,9 +319,9 @@ const readActiveInstallationBundleState = async (
 
 const activeInstallationEvidence = (
   state: ActiveInstallationBundleState,
-): ActiveApplicationInstallationEvidence => {
+): ActiveApplicationInstallation => {
   const identity = state.identity;
-  const installation = activeApplicationInstallationEvidenceSchema.safeParse({
+  const installation = activeApplicationInstallationSchema.safeParse({
     organizationId: identity.organizationId,
     applicationRootId: identity.applicationRootId,
     applicationReleaseRevision: identity.applicationReleaseRevision,

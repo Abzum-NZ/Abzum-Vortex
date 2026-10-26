@@ -1,7 +1,7 @@
 import { z } from "zod";
 import {
   administrationDuplicateKeySchema,
-  administrationReceiptIdSchema,
+  administrationCorrelationIdSchema,
   actorIdSchema,
   builderKeySchema,
   clusterIdSchema,
@@ -138,7 +138,7 @@ export const configuredIdentityLifecycleRefusalCodeSchema = z.enum([
 
 const acceptedCommon = {
   outcome: z.enum(["accepted", "replayed"]),
-  correlationId: administrationReceiptIdSchema,
+  correlationId: administrationCorrelationIdSchema,
   acceptedAt: timestampSchema,
 };
 

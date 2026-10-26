@@ -1,4 +1,4 @@
-create or replace function vortex_definition.validated_builder_evidence_read_context_internal()
+create or replace function vortex_definition.validated_builder_read_context_internal()
 returns jsonb
 language plpgsql
 volatile
@@ -56,12 +56,12 @@ begin
 end
 $function$;
 
-revoke all on function vortex_definition.validated_builder_evidence_read_context_internal()
+revoke all on function vortex_definition.validated_builder_read_context_internal()
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
-comment on function vortex_definition.validated_builder_evidence_read_context_internal() is
+comment on function vortex_definition.validated_builder_read_context_internal() is
   'Returns the validated current system or human context for Definition evidence reads; human requests require definition-draft management permission.';
 
-alter function vortex_definition.validated_builder_evidence_read_context_internal() owner to vortex_owner;
+alter function vortex_definition.validated_builder_read_context_internal() owner to vortex_owner;
 
-grant execute on function vortex_definition.validated_builder_evidence_read_context_internal() to postgres;
+grant execute on function vortex_definition.validated_builder_read_context_internal() to postgres;

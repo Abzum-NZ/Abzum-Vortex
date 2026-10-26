@@ -20,7 +20,7 @@ as $function$
 declare
   checked_context jsonb;
 begin
-  checked_context := vortex_definition.validated_builder_evidence_read_context_internal();
+  checked_context := vortex_definition.validated_builder_read_context_internal();
   if checked_context ->> 'callerKind' is distinct from 'human'
     or checked_context ? 'applicationRootId' then
     raise exception using errcode = '42501',

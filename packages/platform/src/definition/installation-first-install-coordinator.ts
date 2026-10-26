@@ -14,7 +14,7 @@ import type {
   SelectedOrganizationScope,
 } from "../access/identity-access";
 import { sameId } from "../catalogue/runtime-primitives";
-import type { ModuleInstallationBindingEvidence } from "../files/storage";
+import type { ModuleInstallationBinding } from "../files/storage";
 import { canonicalJson } from "./canonical-json";
 import type { SystemApplicationBoundReleaseSetResult } from "./definition-consumer-read";
 import { DefinitionError } from "./definition-error";
@@ -68,7 +68,7 @@ type FirstInstallExpectation = Readonly<{
   selected: Readonly<{ definitionKey: string }>;
   registrationState: FirstInstallRegistrationState;
   registeredReleaseRevision: number | null;
-  moduleBindings: readonly ModuleInstallationBindingEvidence[];
+  moduleBindings: readonly ModuleInstallationBinding[];
 }>;
 
 function problem(kind: InstallationProblemShape["kind"]): never {
@@ -215,7 +215,7 @@ const exactFirstInstallBindings = (
 
 const sameFirstInstallBindings = (
   left: InstallationBindings,
-  right: readonly ModuleInstallationBindingEvidence[],
+  right: readonly ModuleInstallationBinding[],
 ): boolean => same(sortedBindingTuples(left.moduleBindings), sortedBindingTuples(right));
 
 const assertFirstInstallCoordinatorBoundary = (

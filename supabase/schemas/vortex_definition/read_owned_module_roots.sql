@@ -16,7 +16,7 @@ as $function$
 declare
   checked_context jsonb;
 begin
-  checked_context := vortex_definition.validated_builder_evidence_read_context_internal();
+  checked_context := vortex_definition.validated_builder_read_context_internal();
   if p_application_root_id is null or not exists (
     select 1
     from vortex_definition.roots as owner_root

@@ -17,9 +17,9 @@ import {
 } from "../catalogue/identifiers";
 import { sameId } from "../catalogue/runtime-primitives";
 import {
-  moduleInstallationBindingEvidenceSchema,
+  moduleInstallationBindingSchema,
   type ApplicationInstallationLifecycleResult,
-  type ModuleInstallationBindingEvidence,
+  type ModuleInstallationBinding,
   type ModuleInstallationStorageResult,
 } from "../files/storage";
 import type { SystemApplicationBoundReleaseSetResult } from "./definition-consumer-read";
@@ -52,7 +52,7 @@ const installationBindingsSchema = z
     organizationId: organizationIdSchema,
     applicationRootId: applicationRootIdSchema,
     registeredReleaseRevision: revisionSchema.nullable(),
-    moduleBindings: z.array(moduleInstallationBindingEvidenceSchema).max(10_000),
+    moduleBindings: z.array(moduleInstallationBindingSchema).max(10_000),
   })
   .strict();
 
@@ -206,7 +206,7 @@ export const readInstallationBindings = async (
 /** The single active release, if any. Mixed active releases are never guessed between. */
 export const activeRelease = (
   state: InstallationBindings,
-): Readonly<{ releaseRevision: number; bindings: ModuleInstallationBindingEvidence[] }> | null => {
+): Readonly<{ releaseRevision: number; bindings: ModuleInstallationBinding[] }> | null => {
   const active = state.moduleBindings.filter((binding) => binding.state === "active");
   if (active.length === 0) return null;
   const releaseRevision = active[0]!.applicationReleaseRevision;
@@ -216,7 +216,7 @@ export const activeRelease = (
 };
 
 export const expectedBindings = (
-  bindings: readonly Pick<ModuleInstallationBindingEvidence, "moduleRootId" | "bindingRevision">[],
+  bindings: readonly Pick<ModuleInstallationBinding, "moduleRootId" | "bindingRevision">[],
 ): ExpectedModuleBinding[] =>
   byModuleRoot(
     bindings.map((binding) => ({
@@ -319,7 +319,7 @@ export const summary = (
 export const requireExactBindings = (
   target: ReleaseTarget,
   pins: readonly ModulePin[],
-  bindings: readonly ModuleInstallationBindingEvidence[],
+  bindings: readonly ModuleInstallationBinding[],
   state: "active" | "detached" | "provisioned",
 ): void => {
   const byRoot = new Map(
@@ -414,7 +414,7 @@ export const changeContributions = async (
   target: ReleaseTarget,
   groups: readonly ContributionGroup[],
   bindings: readonly Pick<
-    ModuleInstallationBindingEvidence,
+    ModuleInstallationBinding,
     "moduleRootId" | "bindingRevision" | "applicationReleaseRevision" | "moduleReleaseRevision"
   >[],
   mode: "attach" | "detach",

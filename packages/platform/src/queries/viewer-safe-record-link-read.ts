@@ -8,7 +8,7 @@ import {
 import { jsonValueSchema } from "../catalogue/common";
 import { fieldIdSchema, recordIdSchema, revisionSchema } from "../catalogue/identifiers";
 import { sameId } from "../catalogue/runtime-primitives";
-import { activeApplicationInstallationEvidenceSchema } from "../files/storage";
+import { activeApplicationInstallationSchema } from "../files/storage";
 import {
   viewerSafeRecordLinkIdentitySchema,
   viewerSafeRecordLinkTitleSchema,
@@ -100,7 +100,7 @@ const currentInstallationMatches = (
   identity: ViewerSafeRecordLinkIdentity,
   applicationReleaseRevision: number,
 ): boolean => {
-  const installation = activeApplicationInstallationEvidenceSchema.safeParse(candidate);
+  const installation = activeApplicationInstallationSchema.safeParse(candidate);
   if (!installation.success)
     throw contractError("RECORD_LINK_INSTALLATION_INVALID", installation.error);
   return (

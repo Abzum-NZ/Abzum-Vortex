@@ -119,7 +119,7 @@ export const latestReleaseVersion = (
 ): string | null =>
   "currentReleaseVersion" in candidate
     ? candidate.currentReleaseVersion
-    : (candidate.historyEvidence.latestRelease?.publication.releaseVersion ?? null);
+    : (candidate.releaseHistory.latestRelease?.publication.releaseVersion ?? null);
 
 /**
  * Whether staging gives a stored inline Module root a new draft revision: its source changed, or
@@ -266,12 +266,12 @@ const releaseInlineModules = async (
     const impact = compareDefinitionVersionImpactWithEvidence({
       kind: "module",
       validationContractVersion: "3.0.0",
-      historyEvidence: module.historyEvidence,
+      releaseHistory: module.releaseHistory,
       candidate: output.canonical,
     });
     // A Module is released again when a Module it depends on was, even with no change of its own,
     // so every release in one Application pins each Module at exactly one release.
-    const latest = module.historyEvidence.latestRelease as {
+    const latest = module.releaseHistory.latestRelease as {
       dependencyManifest?: readonly { kind: string; rootId?: unknown; revision?: unknown }[];
     } | null;
     const latestPins = new Set(
@@ -290,7 +290,7 @@ const releaseInlineModules = async (
       (pins.length !== latestPins.size || pins.some((pin) => !latestPins.has(pin)));
     const released = impact.outcome !== "no_change" || repinned;
     const reasons = impact.outcome === "no_change" ? [] : impact.reasons;
-    if (released) assertReleasable(compiled, module.historyEvidence, catalogue.permissions);
+    if (released) assertReleasable(compiled, module.releaseHistory, catalogue.permissions);
     const append: DefinitionReleaseAppend = {
       draft: module.draft,
       compilationOutput: output,
@@ -352,12 +352,12 @@ const publicationReasons = (
   modules: readonly ModuleStep[],
   application: CompiledApplication,
 ): VersionImpactReason[] => {
-  const latest = candidate.historyEvidence.latestRelease;
+  const latest = candidate.releaseHistory.latestRelease;
   if (latest === null) return [];
   const own = compareDefinitionVersionImpactWithEvidence({
     kind: "application",
     validationContractVersion: applicationValidationContractVersion,
-    historyEvidence: candidate.historyEvidence,
+    releaseHistory: candidate.releaseHistory,
     candidate: application.output.canonical,
   });
   const ownedRootIds = new Set([...roots.values()].map((root) => String(root.rootId)));
@@ -417,7 +417,7 @@ export const planApplicationPublication = async (
   releaseNote: string,
   pinned?: readonly ExactDefinitionDependency[],
 ): Promise<ApplicationPublicationState> => {
-  const latestVersion = candidate.historyEvidence.latestRelease?.publication.releaseVersion;
+  const latestVersion = candidate.releaseHistory.latestRelease?.publication.releaseVersion;
   const provisional =
     latestVersion === undefined ? "1.0.0" : assignNextDefinitionVersion(latestVersion, "major");
   const pass = async (version: string, pins?: typeof pinned) => {
@@ -442,7 +442,7 @@ export const planApplicationPublication = async (
       ? "1.0.0"
       : assignNextDefinitionVersion(latestVersion, highestImpact(provisionalReasons));
   const { modules, application, reasons } = await pass(version, pinned);
-  assertReleasable(application, candidate.historyEvidence, catalogue.permissions);
+  assertReleasable(application, candidate.releaseHistory, catalogue.permissions);
   if (canonicalJson(reasons) !== canonicalJson(provisionalReasons))
     refuse("DEFINITION_VERSION_REFUSED");
   const confirmation = definitionPublicationConfirmationSchema.parse({

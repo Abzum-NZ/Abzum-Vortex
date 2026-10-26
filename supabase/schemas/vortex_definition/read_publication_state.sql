@@ -15,7 +15,7 @@ declare
   history_latest_release_revision bigint;
   history_latest_release_version text;
 begin
-  checked_context := vortex_definition.validated_builder_evidence_read_context_internal();
+  checked_context := vortex_definition.validated_builder_read_context_internal();
   context_organization_id := (checked_context ->> 'organizationId')::uuid;
   if p_root_id is null or p_root_id = '00000000-0000-0000-0000-000000000000'::uuid then
     raise exception using errcode = '22023',

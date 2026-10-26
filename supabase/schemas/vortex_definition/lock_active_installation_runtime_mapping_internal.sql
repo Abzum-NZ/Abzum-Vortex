@@ -176,7 +176,7 @@ begin
     or pg_catalog.jsonb_array_length(installation -> 'moduleBindings')<>active_count then
     raise exception using errcode='40001', message='Active Application pin closure changed';
   end if;
-  application_evidence:=vortex_definition.project_consumer_release_evidence('application',selected_app,selected_revision);
+  application_evidence:=vortex_definition.project_consumer_release('application',selected_app,selected_revision);
   release_identity:=pg_catalog.jsonb_build_object(
     'rootId',application_evidence -> 'rootId','definitionKey',application_evidence -> 'key',
     'releaseRevision',application_evidence -> 'releaseRevision','releaseVersion',application_evidence -> 'releaseVersion',
@@ -188,7 +188,7 @@ begin
     or release_identity is distinct from registered_identity then
     raise exception using errcode='23514', message='Active Application publication differs';
   end if;
-  select pg_catalog.jsonb_agg(vortex_definition.project_consumer_release_evidence(
+  select pg_catalog.jsonb_agg(vortex_definition.project_consumer_release(
     'module',(pin.value ->> 'moduleRootId')::uuid,(pin.value ->> 'moduleReleaseRevision')::bigint)
     order by (pin.value ->> 'moduleRootId')::uuid)
   into module_evidence from pg_catalog.jsonb_array_elements(bindings) as pin(value);

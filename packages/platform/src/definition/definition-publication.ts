@@ -13,7 +13,7 @@ import {
 } from "../catalogue/identifiers";
 import type {
   ApplicationCompilationOutput,
-  DefinitionPublicationHistoryEvidence,
+  DefinitionPublicationHistory,
 } from "./definition-compilation-contracts";
 import type { ApplicationSourceDocument } from "./definition-source";
 import {
@@ -81,7 +81,7 @@ const preparationReleaseNote = "Planned by publication preparation";
 
 export type ApplicationDraftCompilation = Readonly<{
   candidate: DefinitionDraftCandidate;
-  publicationHistory: DefinitionPublicationHistoryEvidence | undefined;
+  publicationHistory: DefinitionPublicationHistory | undefined;
   compilation: ApplicationCompilationOutput;
   /**
    * The one compile of this revision as a release plan: the Application with its request and
@@ -457,7 +457,7 @@ export const createDatabaseDefinitionPublicationService = (
         // Publication labels also need fields removed from the current candidate.
         const previousModules = await transaction.readModuleReleases(
           context.organizationId,
-          (candidate.historyEvidence.latestRelease?.dependencyManifest ?? [])
+          (candidate.releaseHistory.latestRelease?.dependencyManifest ?? [])
             .filter((dependency) => dependency.kind === "module")
             .map((dependency) => ({
               rootId: dependency.rootId,
@@ -515,7 +515,7 @@ export const createDatabaseDefinitionPublicationService = (
             state.compilationOutput.canonical,
             ...state.moduleOutputs.map((output) => output.canonical),
             ...usedModules.map((release) => release!.compilationOutput.canonical),
-            candidate.historyEvidence.latestRelease?.content,
+            candidate.releaseHistory.latestRelease?.content,
             ...previousModules.map((release) => release!.compilationOutput.canonical),
           ),
         });
@@ -653,19 +653,19 @@ export const createDatabaseDefinitionPublicationService = (
               catalogue,
               candidate,
             );
-            const historyEvidence =
+            const releaseHistory =
               compilation.publicationHistory ??
               applicationCandidate(
                 context,
                 await reader.readCandidate(command.data.rootId),
                 command.data,
-              ).historyEvidence;
+              ).releaseHistory;
             if (
-              historyEvidence.anchorReleaseRevision !== (candidate.draft.publishedRevision ?? null)
+              releaseHistory.anchorReleaseRevision !== (candidate.draft.publishedRevision ?? null)
             )
               return refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
-            retainApplicationDraftPublicationHistory(compilation, historyEvidence);
-            return { releasePlan: compilation.releasePlan, historyEvidence };
+            retainApplicationDraftPublicationHistory(compilation, releaseHistory);
+            return { releasePlan: compilation.releasePlan, releaseHistory };
           },
         );
       });

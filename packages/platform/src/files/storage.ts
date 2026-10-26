@@ -168,7 +168,7 @@ export const applicationInstallationDetachCommandSchema = z
   .strict();
 
 /** Exact persisted Module binding evidence; never caller-authored readiness. */
-export const moduleInstallationBindingEvidenceSchema = z
+export const moduleInstallationBindingSchema = z
   .object({
     organizationId: organizationIdSchema,
     applicationRootId: applicationRootIdSchema,
@@ -195,12 +195,12 @@ const previewStorageIdentitySchema = z
  * The complete active binding set selected from trusted human application context. A preview
  * request's installation is the preview's: its address and isolated storage come with it.
  */
-export const activeApplicationInstallationEvidenceSchema = z
+export const activeApplicationInstallationSchema = z
   .object({
     organizationId: organizationIdSchema,
     applicationRootId: applicationRootIdSchema,
     applicationReleaseRevision: revisionSchema,
-    moduleBindings: z.array(moduleInstallationBindingEvidenceSchema).min(1).max(10_000),
+    moduleBindings: z.array(moduleInstallationBindingSchema).min(1).max(10_000),
     previewInstallationId: z.uuid().optional(),
     storageIdentities: z.array(previewStorageIdentitySchema).max(10_000).optional(),
   })
@@ -268,7 +268,7 @@ export const applicationInstallationLifecycleResultSchema = z
       })
       .strict()
       .nullable(),
-    moduleBindings: z.array(moduleInstallationBindingEvidenceSchema).min(1).max(10_000),
+    moduleBindings: z.array(moduleInstallationBindingSchema).min(1).max(10_000),
   })
   .strict()
   .superRefine((value, context) => {
@@ -346,12 +346,8 @@ export type ApplicationInstallationActivationCommand = z.infer<
 export type ApplicationInstallationDetachCommand = z.infer<
   typeof applicationInstallationDetachCommandSchema
 >;
-export type ModuleInstallationBindingEvidence = z.infer<
-  typeof moduleInstallationBindingEvidenceSchema
->;
-export type ActiveApplicationInstallationEvidence = z.infer<
-  typeof activeApplicationInstallationEvidenceSchema
->;
+export type ModuleInstallationBinding = z.infer<typeof moduleInstallationBindingSchema>;
+export type ActiveApplicationInstallation = z.infer<typeof activeApplicationInstallationSchema>;
 export type ModuleInstallationStorageErrorCode = z.infer<
   typeof moduleInstallationStorageErrorCodeSchema
 >;

@@ -18,7 +18,7 @@ import type { PlatformPin } from "./platform-pins";
 import type {
   DefinitionCompilationOutput,
   ApplicationCompilationOutput,
-  DefinitionPublicationHistoryEvidence,
+  DefinitionPublicationHistory,
   DefinitionResolutionSnapshot,
   ModuleCompilationOutput,
 } from "./definition-compilation-contracts";
@@ -86,7 +86,7 @@ export type DefinitionDraftCandidate = DefinitionCandidateDraft &
  */
 export type DefinitionPublicationCandidate = DefinitionCandidateDraft &
   Readonly<{
-    historyEvidence: DefinitionPublicationHistoryEvidence;
+    releaseHistory: DefinitionPublicationHistory;
     savedConditionHistory: readonly SavedConditionLike[];
     /**
      * The platform service operations and connection types the latest release pins, as platformPins

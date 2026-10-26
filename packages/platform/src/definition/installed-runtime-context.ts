@@ -4,8 +4,8 @@ import type { PreparedApplicationPermissionRegistration } from "../access/permis
 import type { ApplicationRootId, OrganizationId } from "../catalogue/identifiers";
 import { sameId } from "../catalogue/runtime-primitives";
 import {
-  activeApplicationInstallationEvidenceSchema,
-  type ActiveApplicationInstallationEvidence,
+  activeApplicationInstallationSchema,
+  type ActiveApplicationInstallation,
 } from "../files/storage";
 import type { SystemApplicationBoundReleaseSetResult } from "./definition-consumer-read";
 import { prepareApplicationPermissionRegistrationForHumanRequest } from "../access/permission-registry-definition-adapter";
@@ -47,7 +47,7 @@ export type InstalledRuntimeContext = Readonly<{
   /** Prepared permission registration for that exact release set, for Page projection. */
   permissionRegistration: PreparedApplicationPermissionRegistration;
   /** The resolved active installation whose bindings were verified against the release set. */
-  installation: ActiveApplicationInstallationEvidence;
+  installation: ActiveApplicationInstallation;
   /**
    * The fields other installed Modules of the organisation contributed to the record types of
    * `releaseSet`, whose record types already list them after their own fields. Pages and flows read
@@ -111,16 +111,16 @@ export type HumanInstalledRuntimeScope = Readonly<{
  * organisation and application the request resolved.
  */
 export const readHumanActiveInstallation = async (
-  currentInstallation: Promise<ActiveApplicationInstallationEvidence>,
+  currentInstallation: Promise<ActiveApplicationInstallation>,
   scope: HumanInstalledRuntimeScope,
-): Promise<ActiveApplicationInstallationEvidence> => {
+): Promise<ActiveApplicationInstallation> => {
   let installationCandidate: unknown;
   try {
     installationCandidate = await currentInstallation;
   } catch (error) {
     throw installationFailure(error);
   }
-  const installation = activeApplicationInstallationEvidenceSchema.safeParse(installationCandidate);
+  const installation = activeApplicationInstallationSchema.safeParse(installationCandidate);
   if (!installation.success)
     throw new DefinitionError("INSTALLED_RUNTIME_CONTEXT_INTEGRITY_FAILED");
   if (
@@ -133,7 +133,7 @@ export const readHumanActiveInstallation = async (
 
 /** Assembles the human-request context from an installation and an already validated release set. */
 export const assembleHumanInstalledRuntimeContext = (
-  installation: ActiveApplicationInstallationEvidence,
+  installation: ActiveApplicationInstallation,
   releaseSet: SystemApplicationBoundReleaseSetResult,
   scope: HumanInstalledRuntimeScope,
   /**
@@ -176,7 +176,7 @@ export const assembleHumanInstalledRuntimeContext = (
  * relies on the release set's own single correlation being shared by every release in it.
  */
 const assembleContext = (
-  installation: ActiveApplicationInstallationEvidence,
+  installation: ActiveApplicationInstallation,
   releaseSet: SystemApplicationBoundReleaseSetResult,
   organizationId: string,
   expectedCorrelationId: string | undefined,

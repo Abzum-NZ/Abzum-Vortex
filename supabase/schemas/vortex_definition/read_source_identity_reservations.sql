@@ -9,7 +9,7 @@ declare
   checked_context jsonb;
   root_row vortex_definition.roots%rowtype;
 begin
-  checked_context := vortex_definition.validated_builder_evidence_read_context_internal();
+  checked_context := vortex_definition.validated_builder_read_context_internal();
   select root.* into root_row from vortex_definition.roots as root where root.root_id = p_root_id;
   if not found then
     raise exception using errcode = '23503', message = 'Definition root is missing';

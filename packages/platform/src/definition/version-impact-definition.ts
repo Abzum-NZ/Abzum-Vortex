@@ -2,7 +2,7 @@ import {
   applicationContentSchema,
   type PublishedApplicationDefinition,
 } from "./application-contracts";
-import type { DefinitionPublicationHistoryEvidence } from "./definition-compilation-contracts";
+import type { DefinitionPublicationHistory } from "./definition-compilation-contracts";
 import { unresolvedRecordTypeReferencePaths } from "./definitions";
 import { moduleContentSchema } from "./module-contracts";
 import {
@@ -138,7 +138,7 @@ const parseVersionImpactRequest = (input: unknown): SupportedVersionImpactReques
   return parsed.data;
 };
 
-const assertEvidenceContractVersions = (evidence: DefinitionPublicationHistoryEvidence): void => {
+const assertEvidenceContractVersions = (evidence: DefinitionPublicationHistory): void => {
   const allowed = "3.0.0";
   if (
     evidence.latestRelease !== null &&
@@ -150,7 +150,7 @@ const assertEvidenceContractVersions = (evidence: DefinitionPublicationHistoryEv
 const compareParsedDefinitionVersionImpact = (
   request: SupportedVersionImpactRequest,
   latest: HistoryRelease | undefined,
-  evidence?: DefinitionPublicationHistoryEvidence,
+  evidence?: DefinitionPublicationHistory,
 ): DefinitionVersionImpactResult => {
   if (
     unresolvedRecordTypeReferencePaths(
@@ -242,7 +242,7 @@ export const compareDefinitionVersionImpactWithEvidence = (
   input: Readonly<{
     kind: "module" | "application";
     validationContractVersion: "3.0.0";
-    historyEvidence: DefinitionPublicationHistoryEvidence;
+    releaseHistory: DefinitionPublicationHistory;
     candidate: unknown;
   }>,
 ): DefinitionVersionImpactResult => {
@@ -252,7 +252,7 @@ export const compareDefinitionVersionImpactWithEvidence = (
     history: [],
     candidate: input.candidate,
   });
-  const evidence = input.historyEvidence;
+  const evidence = input.releaseHistory;
   if (
     evidence.kind !== request.kind ||
     evidence.rootId !== request.candidate.envelope.rootId ||

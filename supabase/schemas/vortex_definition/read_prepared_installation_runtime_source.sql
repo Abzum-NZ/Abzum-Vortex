@@ -20,7 +20,7 @@ begin
     p_application_release_revision,
     p_expected_module_bindings
   );
-  select vortex_definition.project_consumer_release_evidence(
+  select vortex_definition.project_consumer_release(
     'application', p_application_root_id, p_application_release_revision
   ) into application_evidence;
   if application_evidence is null
@@ -31,7 +31,7 @@ begin
   end if;
 
   select coalesce(pg_catalog.jsonb_agg(
-      vortex_definition.project_consumer_release_evidence(
+      vortex_definition.project_consumer_release(
         'module', (pin.value ->> 'moduleRootId')::uuid,
         (pin.value ->> 'moduleReleaseRevision')::bigint
       ) order by (pin.value ->> 'moduleRootId')::uuid

@@ -382,7 +382,7 @@ export const createAccessAdministrationRoleOperations = ({
         };
         const row = requireOne(
           await transaction.query<RoleChangePreparationRow>`
-            select vortex_access.read_organization_role_change_evidence_for_administration(
+            select vortex_access.read_organization_role_change_for_administration(
               ${JSON.stringify(preparation)}::text::jsonb
             ) as preparation
           `,
@@ -489,7 +489,7 @@ export const createAccessAdministrationRoleOperations = ({
         };
         const row = requireOne(
           await transaction.query<RoleChangePreparationRow>`
-            select vortex_access.read_organization_role_change_evidence_for_administration(
+            select vortex_access.read_organization_role_change_for_administration(
               ${JSON.stringify(preparation)}::text::jsonb
             ) as preparation
           `,

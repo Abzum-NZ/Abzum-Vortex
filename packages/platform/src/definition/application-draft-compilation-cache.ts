@@ -1,5 +1,5 @@
 import type { ApplicationDraftCompilation } from "./definition-publication";
-import type { DefinitionPublicationHistoryEvidence } from "./definition-compilation-contracts";
+import type { DefinitionPublicationHistory } from "./definition-compilation-contracts";
 import type {
   DefinitionCandidateDraft,
   DefinitionDraftCandidate,
@@ -38,7 +38,7 @@ export const readRetainedApplicationDraftCandidate = (
 /** Immutable history is reusable while the live Application publication anchor is unchanged. */
 export const readRetainedApplicationPublicationHistory = (
   candidate: DefinitionCandidateDraft,
-): DefinitionPublicationHistoryEvidence | undefined => {
+): DefinitionPublicationHistory | undefined => {
   for (const compilation of [...applicationDraftCompilations.values()].reverse()) {
     if (
       compilation.candidate.draft.organizationId === candidate.draft.organizationId &&
@@ -54,7 +54,7 @@ export const readRetainedApplicationPublicationHistory = (
 /** Keep the authenticated history read with the compilation that uses it, in the same retention. */
 export const retainApplicationDraftPublicationHistory = (
   compilation: ApplicationDraftCompilation,
-  publicationHistory: DefinitionPublicationHistoryEvidence,
+  publicationHistory: DefinitionPublicationHistory,
 ): void => {
   for (const [key, retained] of applicationDraftCompilations) {
     if (retained === compilation && retained.publicationHistory === undefined) {

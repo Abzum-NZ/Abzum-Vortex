@@ -6,7 +6,7 @@ import { jsonValueSchema } from "../catalogue/common";
 import { fieldIdSchema, recordIdSchema, revisionSchema } from "../catalogue/identifiers";
 import { sameId } from "../catalogue/runtime-primitives";
 import type { ApplicationSearch } from "../definition/application-contracts";
-import { activeApplicationInstallationEvidenceSchema } from "../files/storage";
+import { activeApplicationInstallationSchema } from "../files/storage";
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
 import { protectedQueryRowCapabilitiesSchema } from "../queries/protected-query-contracts";
 import {
@@ -167,7 +167,7 @@ export const searchInstalledApplication = async (
         ].map((fieldId) => fieldId.toLowerCase()),
       );
       for (const row of rows) {
-        const installation = activeApplicationInstallationEvidenceSchema.parse(row.installation);
+        const installation = activeApplicationInstallationSchema.parse(row.installation);
         if (
           installation.applicationReleaseRevision !== input.applicationReleaseRevision ||
           !sameId(installation.organizationId, scope.organizationId) ||

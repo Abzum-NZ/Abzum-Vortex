@@ -11,7 +11,7 @@ declare
   checked_context jsonb;
   application_key text;
 begin
-  checked_context := vortex_definition.validated_builder_evidence_read_context_internal();
+  checked_context := vortex_definition.validated_builder_read_context_internal();
   if p_root_id is null or p_root_id = '00000000-0000-0000-0000-000000000000'::uuid then
     raise exception using errcode = '22023',
       message = 'Definition builder root key requires a non-nil root identifier';

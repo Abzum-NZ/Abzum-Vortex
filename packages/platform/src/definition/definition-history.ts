@@ -786,7 +786,7 @@ const historyStorage = (
     verifyRestored?: (draft: unknown) => Promise<StoredDefinitionDraft>,
   ): Promise<RestoreAttempt> {
     const evidenceRows = await transaction.query<RestoreEvidenceRow>`
-      select vortex_definition.read_restore_release_evidence(
+      select vortex_definition.read_release_for_restore(
         ${command.kind},
         ${command.rootId},
         ${command.targetReleaseRevision}
@@ -813,7 +813,7 @@ const historyStorage = (
 
     const verifiedDraft = await verifyRestored(restored);
     const currentEvidenceRows = await transaction.query<RestoreEvidenceRow>`
-      select vortex_definition.read_restore_release_evidence(
+      select vortex_definition.read_release_for_restore(
         ${command.kind},
         ${command.rootId},
         ${command.targetReleaseRevision}
