@@ -286,7 +286,6 @@ function BoardColumn({
               onClick={() => onRetry(bucket)}
             >
               Show cards
-              {bucket.values.rowCount === null ? "" : ` (${countText(bucket.values.rowCount)})`}
             </Button>
           )
         ) : page.rows.length === 0 ? (

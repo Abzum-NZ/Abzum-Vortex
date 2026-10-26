@@ -439,7 +439,7 @@ const historyEvidenceCommon = {
 };
 
 /** The latest immutable release of one definition, which the database anchors as current. */
-export const definitionPublicationHistoryEvidenceSchema = z
+export const definitionPublicationHistorySchema = z
   .discriminatedUnion("kind", [
     z
       .object({
@@ -520,7 +520,5 @@ export type ApplicationToolOperationReference = z.infer<
   typeof applicationToolOperationReferenceSchema
 >;
 export type PublishedDefinitionHistory = z.infer<typeof publishedDefinitionHistorySchema>;
-export type DefinitionPublicationHistoryEvidence = z.infer<
-  typeof definitionPublicationHistoryEvidenceSchema
->;
+export type DefinitionPublicationHistory = z.infer<typeof definitionPublicationHistorySchema>;
 export type DefinitionPublicationContext = z.infer<typeof definitionPublicationContextSchema>;

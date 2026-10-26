@@ -33,6 +33,16 @@ import {
   isPresentationOnlyApplicationExperience,
   pageDefinitionSchema,
 } from "./application-contracts";
+import {
+  applicationLauncherEntrySchema,
+  applicationLauncherReadSchema,
+  permittedApplicationSchema,
+  permittedApplicationsReadSchema,
+  type ApplicationLauncherEntry,
+  type ApplicationLauncherRead,
+  type PermittedApplication,
+  type PermittedApplicationsRead,
+} from "./application-launcher-read";
 import { createHumanOrganizationRequestService } from "../access/human-organization-request";
 import { decideOrganizationAccessBatch } from "../access/organization-access-decision-access";
 import { readCurrentOrganizationDefaultApplicationAfterAuthorization } from "../access/organization-runtime-settings-administration";
@@ -139,25 +149,6 @@ const addressCandidateReadSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("unavailable") }).strict(),
 ]);
 
-const permittedApplicationSchema = z
-  .object({
-    applicationRootId: applicationRootIdSchema,
-    key: namespacedKeySchema,
-    name: z.string().trim().min(1).max(120),
-    icon: z.string().trim().min(1).max(120),
-    homePageKey: builderKeySchema,
-    pageKeys: z.array(builderKeySchema).min(1).max(10_000),
-    /** The preview of this Application's draft that this address runs, if it is a preview. */
-    previewInstallationId: z.uuid().optional(),
-  })
-  .strict();
-
-/** Launcher links carry no page authority and cannot be used as an addressed projection. */
-const applicationLauncherEntrySchema = permittedApplicationSchema.omit({
-  pageKeys: true,
-  previewInstallationId: true,
-});
-
 /**
  * One application experience page the viewer may be shown in place of a page they cannot open:
  * the viewer may open that page itself, it is presentation-only, and it carries only the shell and
@@ -172,36 +163,6 @@ const applicationExperienceSchema = z
   })
   .strict();
 
-const permittedApplicationsReadSchema = z.discriminatedUnion("kind", [
-  z
-    .object({
-      kind: z.literal("available"),
-      organizationId: organizationIdSchema,
-      tenantShortName: builderKeySchema,
-      organizationShortName: builderKeySchema,
-      defaultApplicationRootId: applicationRootIdSchema.nullable(),
-      /** The viewer's own display name in this organisation; absent when the account has none. */
-      accountDisplayName: z.string().trim().min(1).max(120).optional(),
-      applications: z.array(permittedApplicationSchema).max(10_000),
-    })
-    .strict(),
-  z.object({ kind: z.literal("suspended_super_administrator_account") }).strict(),
-  z.object({ kind: z.literal("unavailable") }).strict(),
-  z.object({ kind: z.literal("temporarily_unavailable"), cause: z.string().optional() }).strict(),
-]);
-
-export type PermittedApplication = z.infer<typeof permittedApplicationSchema>;
-export type PermittedApplicationsRead = z.infer<typeof permittedApplicationsReadSchema>;
-const applicationLauncherReadSchema = z.discriminatedUnion("kind", [
-  permittedApplicationsReadSchema.options[0].extend({
-    applications: z.array(applicationLauncherEntrySchema).max(10_000),
-  }),
-  permittedApplicationsReadSchema.options[1],
-  permittedApplicationsReadSchema.options[2],
-  permittedApplicationsReadSchema.options[3],
-]);
-export type ApplicationLauncherEntry = z.infer<typeof applicationLauncherEntrySchema>;
-export type ApplicationLauncherRead = z.infer<typeof applicationLauncherReadSchema>;
 export type ApplicationExperience = z.infer<typeof applicationExperienceSchema>;
 
 const applicationLauncherEntry = (application: PermittedApplication): ApplicationLauncherEntry =>
@@ -966,22 +927,23 @@ const readAddressedActiveApplicationIdentity = async (
   const requests = createHumanOrganizationRequestService({
     identityAuthorityId: identityAuthorityId.data,
   });
-  const result = await requests.run(
+  const result = await requests.runChangeWithRefusal(
     session.data,
     { organizationId: organizationId.data },
     async (transaction, scope) => {
       if (scope.applicationRootId !== undefined)
         throw new Error("APPLICATION_ADDRESS_SCOPE_UNAVAILABLE");
       if (previewInstallationId !== undefined) {
-        const { createPreviewInstallationRepository } =
+        const { readPreviewApplicationIdentity } =
           await import("./preview-installation-repository");
         // A preview address names the preview; only a builder of its Application may open it.
-        const preview = await createPreviewInstallationRepository(transaction)
-          .readApplicationIdentity(previewInstallationId)
-          .catch((error: unknown) => {
-            logRefusal("application-address", "preview identity", "PREVIEW_ADDRESS_REFUSED", error);
-            return undefined;
-          });
+        const preview = await readPreviewApplicationIdentity(
+          transaction,
+          previewInstallationId,
+        ).catch((error: unknown) => {
+          logRefusal("application-address", "preview identity", "PREVIEW_ADDRESS_REFUSED", error);
+          return undefined;
+        });
         if (preview === undefined || !sameId(preview.organizationId, organizationId.data))
           return undefined;
         return {
@@ -1010,8 +972,11 @@ const readAddressedActiveApplicationIdentity = async (
         throw new Error("APPLICATION_ADDRESS_IDENTITY_UNAVAILABLE");
       return identity.data;
     },
+    // An address that names no application here is an answer, not a platform failure.
+    (code) => (code === "P0002" ? null : undefined),
   );
-  if (result.kind !== "available" || result.value === undefined) return undefined;
+  if (result.kind !== "available" || result.value === undefined || result.value === null)
+    return undefined;
   const identity: AddressedActiveApplicationIdentity = result.value;
   // A preview holding copies of live records opens only once they are decided again by the
   // builder's current live access in the installed Application; a refusal refuses the preview.
@@ -1021,9 +986,8 @@ const readAddressedActiveApplicationIdentity = async (
       session.data,
       { organizationId: organizationId.data, applicationRootId: identity.applicationRootId },
       async (transaction) => {
-        const { createPreviewInstallationRepository } =
-          await import("./preview-installation-repository");
-        await createPreviewInstallationRepository(transaction).reconcile(previewInstallationId);
+        const { reconcilePreviewInstallation } = await import("./preview-installation-repository");
+        await reconcilePreviewInstallation(transaction, previewInstallationId);
         return true;
       },
     );

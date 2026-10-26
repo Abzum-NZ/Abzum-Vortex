@@ -5,6 +5,10 @@ relationships, pages, permissions, actions, flows, connections, themes). Generic
 Next.js application render and execute those definitions for many organisations, with access
 enforced by the platform and the database.
 
+Operating procedure: every agent reads its own role procedure,
+C:/Users/vijay/Documents/Codex/2026-10-24/task-5/procedure/<role>.md (the launch spec names the
+role), before starting work.
+
 ## One way only
 
 Vortex is a fresh project with no backward compatibility. Every concern has exactly one format, one contract and one code path. Replace contracts and formats in place, convert shipped definitions in the same change, and rebuild existing data with a forward migration. Do not add converters, upgraders, dual readers, compatibility branches, legacy mirrors, or a second way of doing something that already has one. When you find two ways, remove one.
@@ -40,18 +44,14 @@ Environment variables are described in `README.md` and `apps/web/.env.example`.
 
 Local development runs on lanes: lighter Local Supabase stacks (no Studio, logs or edge runtime)
 under `VORTEX_LANES_ROOT` (default `A:/Apps/vortex-lanes`), each with every port of
-`supabase/config.toml` shifted by 1000 per lane (db3 API 56321, database 56322; db4 57321/57322;
-db5 58321/58322; db7 60321/60322; db8 61321/61322). `tooling/supabase/lane.mjs` lists the lanes it
-supports; lane 2 is blocked on this Windows host by dynamic port exclusion 55262–55361. Use only
-the lane you were given.
+`supabase/config.toml` shifted per lane. `node tooling/supabase/lane.mjs` lists the lanes this
+host supports and their ports. Use only the lane you were given.
 
-Lane data is retained by default. A destructive reset (`lane.mjs reset`, `pnpm db:reset` or
-`pnpm demo:setup`, which always resets its target database) is permitted only when the data's
-responsible owner has abandoned it, or it has been exported and a restore tested, or the user
-approved abandonment. Holding a lane does not authorize resetting its data. When `main` moves,
-forward migrate and rebuild the lane instead of resetting it. To set up without a reset, run
-`pnpm --filter @vortex/web demo:owner` and then `pnpm setup:local -- --local-development
---first-owner-identity-id <uuid>` with the printed identity.
+Lanes are disposable. Each lane has one holder. Reset only a lane you hold (`lane.mjs reset`,
+`pnpm db:reset` or `pnpm demo:setup`, which always resets its target database); never reset
+another agent's lane. When `main` moves, forward migrate the lane or reset it. To set up without a
+reset, run `pnpm --filter @vortex/web demo:owner` and then `pnpm setup:local --
+--local-development --first-owner-identity-id <uuid>` with the printed identity.
 
 ```
 node tooling/supabase/lane.mjs init <n>     # once: generate the lane config
@@ -59,8 +59,8 @@ node tooling/supabase/lane.mjs start <n>    # start the lane (stop <n> stops onl
 node tooling/supabase/lane.mjs env <n>      # lines for apps/web/.env.development.local
 node tooling/supabase/lane.mjs sync <n> .   # mirror this worktree's migrations and seed, no reset
 node node_modules/supabase/dist/supabase.js migration up --include-all --local --workdir <lane directory>  # forward migrate
-node tooling/supabase/lane.mjs reset <n> .  # destructive: mirror migrations and seed, then reset (rule above)
-VORTEX_SUPABASE_WORKDIR=<lane directory> pnpm demo:setup  # destructive: resets, then seeds (rule above)
+node tooling/supabase/lane.mjs reset <n> .  # destructive: mirror migrations and seed, then reset (your lane only)
+VORTEX_SUPABASE_WORKDIR=<lane directory> pnpm demo:setup  # destructive: resets, then seeds (your lane only)
 ```
 
 `env` prints `VORTEX_SUPABASE_URL`, `VORTEX_SUPABASE_PUBLISHABLE_KEY`,
@@ -90,9 +90,7 @@ The [target architecture](docs/build-plan/target-architecture.md) is binding: re
 - One renderer: pages are Puck data rendered with the one Puck config built on shadcn/ui. No other
   code path draws a block.
 - Reads serve the visible page first. Studio preview may continue an idle background fill after
-  visible reader demand is satisfied; never prefetch speculatively before it
-  ([#3079](https://github.com/Abzum-NZ/Abzum-Vortex/issues/3079),
-  [#3249](https://github.com/Abzum-NZ/Abzum-Vortex/pull/3249)).
+  visible reader demand is satisfied; never prefetch speculatively before it.
   This follows the owner's paging rule: background fill continues only after the visible page's
   requested data is served.
 - No absent-setting behaviour: defaults live in definitions (Puck `defaultProps`), not in renderers.
@@ -103,24 +101,14 @@ The [target architecture](docs/build-plan/target-architecture.md) is binding: re
   `null`/"unavailable"; log the cause.
 - No layers without two implementations; no source file over 1,500 lines (TypeScript and canonical `supabase/schemas/` files; migrations are exempt because they carry full function bodies, one per PR).
 - Every behaviour change is walked through in the running app on a local database lane before
-  merge; a reset for that walk follows the lane data rule above. Visible changes include
+  merge, on a lane you hold (reset only that lane). Visible changes include
   screenshots in the pull request.
 
 ## Guardrails
 
-`pnpm guard` has two tiers; `tooling/guard/config.ts` is the list of rules, each with an owner and a
-review-by date. Any blocking finding fails the run (there is no baseline):
-
-- Boundaries: `business-name`, `layering`, `ui-literal-style`, `query-input-name-matching`.
-- Contracts: `versioned-export`, `versioned-file`, `contract-version-parity`, `derived-id-parity`,
-  `definition-validation`, `grid-feature-definition`.
-- Database: `migration-mismatch`, `migration-orphan`, `migration-owner-role`,
-  `migration-version-duplicate`, `migration-version-order`, `sql-identifier-length`,
-  `sql-overload`, `function-uuid`.
-- Directives: `invalid-guard-allow`.
-
-Warnings: `file-size`, `silent-catch`, `catalogue-release-superseded`, `unused-guard-allow`. Unused
-code is `pnpm knip`'s job, not the guard's.
+`pnpm guard` has two tiers, blocking and warning. For the rules see `tooling/guard/config.ts` (each
+rule has an owner and a review-by date). Any blocking finding fails the run (there is no baseline).
+Unused code is `pnpm knip`'s job, not the guard's.
 
 Use `// guard-allow: <rule> <reason>` on the offending line or the line directly above it. SQL supports `-- guard-allow: <rule> <reason>`, and block comments support `/* guard-allow: <rule> <reason> */`. The rule must be a real guard rule and the reason must contain at least 10 characters. Each directive covers one occurrence; the guard counts used exceptions per rule. An exception is appropriate only when the finding is intentional and a direct fix is not suitable; the reviewer must agree with the stated reason. Unmatched directives warn, while an unknown rule or short reason blocks the run.
 

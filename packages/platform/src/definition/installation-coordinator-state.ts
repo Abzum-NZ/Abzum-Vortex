@@ -1,5 +1,6 @@
 import "server-only";
 
+import type { RequestDatabaseTransaction } from "../db/request-transaction";
 import type { PreparedApplicationRoleTemplates } from "../access/organization-access-catalogue";
 import type {
   PermissionRegistryDefinitionRelease,
@@ -16,9 +17,9 @@ import {
 } from "../catalogue/identifiers";
 import { sameId } from "../catalogue/runtime-primitives";
 import {
-  moduleInstallationBindingEvidenceSchema,
+  moduleInstallationBindingSchema,
   type ApplicationInstallationLifecycleResult,
-  type ModuleInstallationBindingEvidence,
+  type ModuleInstallationBinding,
   type ModuleInstallationStorageResult,
 } from "../files/storage";
 import type { SystemApplicationBoundReleaseSetResult } from "./definition-consumer-read";
@@ -26,7 +27,8 @@ import { fingerprintPermissionMeaning } from "../access/permission-fingerprints"
 import { BuilderAuthorityError } from "./builder-authority";
 import { InstallationProblem } from "./installation-authority";
 import {
-  createModuleInstallationStorageRepository,
+  changeModuleContributionStorage,
+  provisionModuleInstallationStorage,
   type ResolvedContributionBinding,
 } from "./storage-provisioning";
 import { z } from "zod";
@@ -36,7 +38,6 @@ import {
   unexpectedDefinitionFailure,
 } from "./definition-error";
 import {
-  type InstallerTransaction,
   applicationInstallationCoordinatorErrorCodes,
   type ApplicationInstallationCoordinatorErrorCode,
   type ActiveApplicationInstallationSummary,
@@ -51,7 +52,7 @@ const installationBindingsSchema = z
     organizationId: organizationIdSchema,
     applicationRootId: applicationRootIdSchema,
     registeredReleaseRevision: revisionSchema.nullable(),
-    moduleBindings: z.array(moduleInstallationBindingEvidenceSchema).max(10_000),
+    moduleBindings: z.array(moduleInstallationBindingSchema).max(10_000),
   })
   .strict();
 
@@ -175,7 +176,7 @@ export const toCoordinatorError = (
 };
 
 export const readInstallationBindings = async (
-  transaction: InstallerTransaction,
+  transaction: RequestDatabaseTransaction,
   organizationId: OrganizationId,
   applicationRootId: ApplicationRootId,
 ): Promise<InstallationBindings> => {
@@ -205,7 +206,7 @@ export const readInstallationBindings = async (
 /** The single active release, if any. Mixed active releases are never guessed between. */
 export const activeRelease = (
   state: InstallationBindings,
-): Readonly<{ releaseRevision: number; bindings: ModuleInstallationBindingEvidence[] }> | null => {
+): Readonly<{ releaseRevision: number; bindings: ModuleInstallationBinding[] }> | null => {
   const active = state.moduleBindings.filter((binding) => binding.state === "active");
   if (active.length === 0) return null;
   const releaseRevision = active[0]!.applicationReleaseRevision;
@@ -215,7 +216,7 @@ export const activeRelease = (
 };
 
 export const expectedBindings = (
-  bindings: readonly Pick<ModuleInstallationBindingEvidence, "moduleRootId" | "bindingRevision">[],
+  bindings: readonly Pick<ModuleInstallationBinding, "moduleRootId" | "bindingRevision">[],
 ): ExpectedModuleBinding[] =>
   byModuleRoot(
     bindings.map((binding) => ({
@@ -233,7 +234,7 @@ export const currentBindingRevisions = (state: InstallationBindings): Map<Module
   );
 
 export const changeAccess = async (
-  transaction: InstallerTransaction,
+  transaction: RequestDatabaseTransaction,
   activityId: string,
   applicationRootId: ApplicationRootId,
   change: "prepare" | "withdraw",
@@ -261,7 +262,7 @@ export const changeAccess = async (
 };
 
 export const recordOutcome = async (
-  transaction: InstallerTransaction,
+  transaction: RequestDatabaseTransaction,
   activityId: string,
   applicationRootId: ApplicationRootId,
   applicationReleaseRevision: number,
@@ -279,15 +280,14 @@ export const recordOutcome = async (
 
 /** Storage for every pinned Module release; commits only inactive, idempotent bindings. */
 export const provisionPins = async (
-  transaction: InstallerTransaction,
+  transaction: RequestDatabaseTransaction,
   target: ReleaseTarget,
   pins: readonly ModulePin[],
   current: ReadonlyMap<ModuleRootId, number>,
 ): Promise<ModuleInstallationStorageResult[]> => {
-  const storage = createModuleInstallationStorageRepository(transaction);
   const provisioned: ModuleInstallationStorageResult[] = [];
   for (const pin of pins) {
-    const result = await storage.provision({
+    const result = await provisionModuleInstallationStorage(transaction, {
       applicationRootId: target.applicationRootId,
       applicationReleaseRevision: target.applicationReleaseRevision,
       moduleRootId: pin.moduleRootId,
@@ -319,7 +319,7 @@ export const summary = (
 export const requireExactBindings = (
   target: ReleaseTarget,
   pins: readonly ModulePin[],
-  bindings: readonly ModuleInstallationBindingEvidence[],
+  bindings: readonly ModuleInstallationBinding[],
   state: "active" | "detached" | "provisioned",
 ): void => {
   const byRoot = new Map(
@@ -410,16 +410,15 @@ export const samePermissionAuthority = (
 ): boolean => sameUniqueEvidence(left, right, permissionIdentity, permissionAuthorityKey);
 
 export const changeContributions = async (
-  transaction: InstallerTransaction,
+  transaction: RequestDatabaseTransaction,
   target: ReleaseTarget,
   groups: readonly ContributionGroup[],
   bindings: readonly Pick<
-    ModuleInstallationBindingEvidence,
+    ModuleInstallationBinding,
     "moduleRootId" | "bindingRevision" | "applicationReleaseRevision" | "moduleReleaseRevision"
   >[],
   mode: "attach" | "detach",
 ): Promise<boolean> => {
-  const storage = createModuleInstallationStorageRepository(transaction);
   const byRoot = new Map(
     bindings.map((binding) => [canonicalModuleRootId(binding.moduleRootId), binding]),
   );
@@ -442,10 +441,7 @@ export const changeContributions = async (
       mode,
       contributions: group.contributions,
     };
-    const result =
-      mode === "attach"
-        ? await storage.attachContributions(command)
-        : await storage.detachContributions(command);
+    const result = await changeModuleContributionStorage(transaction, command, mode);
     const expectedIds = new Set(
       group.contributions.map((item) => item.contributionId.toLowerCase()),
     );

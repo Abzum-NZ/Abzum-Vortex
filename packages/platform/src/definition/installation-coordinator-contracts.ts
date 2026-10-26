@@ -13,14 +13,13 @@ import {
   type ApplicationRootId,
   type OrganizationId,
 } from "../catalogue/identifiers";
-import type { ModuleInstallationBindingEvidence } from "../files/storage";
+import type { ModuleInstallationBinding } from "../files/storage";
 import type { SystemApplicationBoundReleaseSetResult } from "./definition-consumer-read";
 import type { InstallationRuntimeBundleIndex } from "./installation-runtime-bundle";
 import type { ModuleContent } from "./module-contracts";
 import type { createHumanOrganizationRequestService } from "../access/human-organization-request";
 import type { PermissionRegistryDefinitionSetReader } from "../access/permission-registry-definition-adapter";
 import type { BuilderAuthority } from "./builder-authority";
-import type { createModuleInstallationStorageRepository } from "./storage-provisioning";
 import type { InstallationRuntimeBundleRemovalReport } from "./runtime-bundle-cleanup";
 import type { ResolvedContributionBinding } from "./storage-provisioning";
 import type { RequestDatabaseTransaction } from "../db/request-transaction";
@@ -31,7 +30,6 @@ type InstallerRequests = Pick<
   ReturnType<typeof createHumanOrganizationRequestService>,
   "runAccessChange" | "runChange"
 >;
-export type InstallerTransaction = Parameters<typeof createModuleInstallationStorageRepository>[0];
 
 export const applicationInstallationCoordinatorErrorCodes = [
   "INVALID_APPLICATION_INSTALLATION_COMMAND",
@@ -98,7 +96,7 @@ export type ActiveApplicationInstallationSummary = Readonly<{
   organizationId: OrganizationId;
   applicationRootId: ApplicationRootId;
   applicationReleaseRevision: number;
-  moduleBindings: readonly ModuleInstallationBindingEvidence[];
+  moduleBindings: readonly ModuleInstallationBinding[];
 }>;
 
 export type ApplicationInstallationPreparationResult = Readonly<{
@@ -108,7 +106,7 @@ export type ApplicationInstallationPreparationResult = Readonly<{
   applicationRootId: ApplicationRootId;
   applicationReleaseRevision: number;
   /** The provisioned, inactive bindings the activation will switch on. */
-  moduleBindings: readonly ModuleInstallationBindingEvidence[];
+  moduleBindings: readonly ModuleInstallationBinding[];
 }>;
 
 export type ApplicationInstallationActivationResult<InstalledEvents> = Readonly<{
@@ -123,7 +121,7 @@ export type ApplicationInstallationWithdrawalResult = Readonly<{
   organizationId: OrganizationId;
   applicationRootId: ApplicationRootId;
   applicationReleaseRevision: number;
-  moduleBindings: readonly ModuleInstallationBindingEvidence[];
+  moduleBindings: readonly ModuleInstallationBinding[];
   runtimeBundles: InstallationRuntimeBundleRemovalReport;
 }>;
 

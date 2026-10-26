@@ -1,17 +1,75 @@
 import {
-  builderKeySchema,
-  moduleFieldValueSchemas,
-  sourceModuleFieldValueSchemas,
-  exactDecimalTextSchema,
-  referenceChoiceSelectionEvidenceMapSchema,
-  groupIdSchema,
-  richTextDocumentSchema,
-  timestampSchema,
-  type BlockPropertyValueContract,
-  type ReferenceChoiceSelectionEvidence,
+  attachmentInputPayloadSchema,
+  booleanInputPayloadSchema,
+  buttonPayloadSchema,
+  choiceInputPayloadSchema,
+  choiceOptionsSchema,
+  controlDataStateSchema,
+  dateInputPayloadSchema,
+  dialogPayloadSchema,
+  drawerPayloadSchema,
+  fieldInputPayloadSchema,
+  formDraftFeedbackSupplySchema,
+  formFlowFeedbackSchema,
+  formPayloadSchema,
   isRecord,
+  linkInputPayloadSchema,
+  numberInputPayloadSchema,
+  recordChoicePageSchema,
+  richTextInputPayloadSchema,
+  tableInputPayloadSchema,
+  tabsPayloadSchema,
+  textInputPayloadSchema,
+  typedFieldValueSchema,
+  validationPayloadSchema,
+  type AttachmentInputPayload,
+  type BooleanInputPayload,
+  type ButtonPayload,
+  type ChoiceInputPayload,
+  type DateInputPayload,
+  type DialogPayload,
+  type DrawerPayload,
+  type FieldInputPayload,
+  type FormPayload,
+  type LinkInputPayload,
+  type NumberInputPayload,
+  type ReferenceChoiceSelectionEvidence,
+  type RichTextInputPayload,
+  type TableInputPayload,
+  type TabsPayload,
+  type TextInputPayload,
+  type TypedFieldValue,
+  type ValidationPayload,
 } from "@vortex/platform/schema";
 import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "../definition-error";
+
+export {
+  isIsoCalendarDate,
+  type AttachmentInputPayload,
+  type BooleanInputPayload,
+  type ButtonPayload,
+  type ChoiceInputPayload,
+  type ChoiceOption,
+  type DateInputPayload,
+  type DateTimeInputPayload,
+  type DialogPayload,
+  type DrawerPayload,
+  type FieldInputPayload,
+  type FormPayload,
+  type LinkInputPayload,
+  type NumberInputPayload,
+  type RecordChoiceOption,
+  type RecordChoicePage,
+  type RichTextInputPayload,
+  type SeveralChoicesInputPayload,
+  type TableInputPayload,
+  type TabsPayload,
+  type TextInputPayload,
+  type TypedFieldValue,
+  type TypedRecordReference,
+  type TypedTableValue,
+  type ValidationPayload,
+} from "@vortex/platform/schema";
 
 /** Every event name any control accepts; each block further narrows this to its own declaration. */
 export const CONTROL_EVENT_NAMES = Object.freeze([
@@ -28,49 +86,8 @@ export const CONTROL_EVENT_NAMES = Object.freeze([
 /** Declared semantic event names this form and action family can emit. */
 export type ControlSemanticEventName = (typeof CONTROL_EVENT_NAMES)[number];
 
-/** Closed set of typed values that form field inputs collect and emit. */
-export type TypedRichTextDocument = Extract<
-  BlockPropertyValueContract,
-  { kind: "rich_text" }
->["value"];
-
-/**
- * A link input's projected value: the stable `recordTypeId:recordId` reference of the linked
- * record, never the record's values. It grants no access to the referenced record.
- */
-export type TypedRecordReference = Readonly<{
-  recordTypeId: string;
-  recordId: string;
-}>;
-
-/** A field value containing the selected option values of a several_choices field. */
-type TypedSeveralChoicesValue = readonly string[];
-
-export type TypedTableValue = ReturnType<typeof moduleFieldValueSchemas.table.parse>;
-
-export type AttachmentInputPayload = Readonly<{
-  kind: "attachment_input";
-  value: readonly string[];
-  files: readonly Readonly<{ fileId: string; name: string }>[];
-  uploadUrl: string;
-  error?: string;
-}>;
-
-export type TableInputPayload = Readonly<{
-  kind: "table_input";
-  value?: TypedTableValue | null;
-  error?: string;
-}>;
-
-export type TypedFieldValue =
-  | string
-  | number
-  | boolean
-  | null
-  | TypedTableValue
-  | TypedSeveralChoicesValue
-  | TypedRecordReference
-  | TypedRichTextDocument;
+/** A structured rich-text document a rich-text input collects. */
+export type TypedRichTextDocument = NonNullable<RichTextInputPayload["value"]>;
 
 /**
  * One declared semantic event. Events are emitted only by a real user interaction, except
@@ -120,130 +137,6 @@ export type ControlEventHandlers = Readonly<
   Partial<Record<ControlSemanticEventName, ControlEventHandler>>
 >;
 
-/** One choice option available in a choice input. */
-export type ChoiceOption = Readonly<{ key: string; label: string }>;
-
-/** The ready values a text input accepts. */
-export type TextInputPayload = Readonly<{ kind: "text_input"; value?: string; error?: string }>;
-
-/**
- * The ready values a link input accepts: a stable record reference and the title the viewer may
- * read of it, never the record's other values.
- */
-export type LinkInputPayload = Readonly<{
-  kind: "link_input";
-  value?: TypedRecordReference | null;
-  /** The linked record's title as the viewer may read it; present exactly with a value. */
-  title?: string;
-  error?: string;
-}>;
-
-/** One record a link input offers: its identity, its title and its record type's name. */
-export type RecordChoiceOption = Readonly<{
-  recordTypeId: string;
-  recordId: string;
-  title: string;
-  typeLabel: string;
-}>;
-
-/** One page of pickable records, in the order the server read them. */
-export type RecordChoicePage = Readonly<{
-  choices: readonly RecordChoiceOption[];
-  nextContinuationToken?: string;
-}>;
-
-/** The ready values a structured rich-text input accepts. */
-export type RichTextInputPayload = Readonly<{
-  kind: "rich_text_input";
-  value?: TypedRichTextDocument | null;
-  error?: string;
-}>;
-
-/** The ready values a number input accepts. */
-export type NumberInputPayload = Readonly<{
-  kind: "number_input";
-  value?: string | number | null;
-  error?: string;
-}>;
-
-/** The ready values a boolean input accepts. */
-export type BooleanInputPayload = Readonly<{
-  kind: "boolean_input";
-  value?: boolean;
-  error?: string;
-}>;
-
-/** The ready values a date input accepts. */
-export type DateInputPayload = Readonly<{
-  kind: "date_input";
-  value?: string | null;
-  error?: string;
-}>;
-
-/** The ready values a time-zone-aware date-time input accepts. */
-export type DateTimeInputPayload = Readonly<{
-  kind: "date_time_input";
-  value?: string | null;
-  personTimeZone?: string;
-  organizationTimeZone?: string;
-  error?: string;
-}>;
-
-/** The ready values a choice input accepts. */
-export type ChoiceInputPayload = Readonly<{
-  kind: "choice_input";
-  value?: string | null;
-  options?: readonly ChoiceOption[];
-  optionEvidence?: Readonly<Record<string, ReferenceChoiceSelectionEvidence>>;
-  nextContinuationToken?: string;
-  error?: string;
-}>;
-
-/** The ready values a multi-choice input accepts. */
-export type SeveralChoicesInputPayload = Readonly<{
-  kind: "several_choices_input";
-  value?: TypedSeveralChoicesValue | null;
-  error?: string;
-}>;
-
-/**
- * The ready values an automatic field input accepts: exactly the payload of the control its
- * referenced module field selected, so a projected value is validated as that control's own shape.
- */
-export type FieldInputPayload =
-  | AttachmentInputPayload
-  | TextInputPayload
-  | LinkInputPayload
-  | RichTextInputPayload
-  | NumberInputPayload
-  | BooleanInputPayload
-  | DateInputPayload
-  | DateTimeInputPayload
-  | ChoiceInputPayload
-  | SeveralChoicesInputPayload
-  | TableInputPayload;
-
-/** The ready values a validation message block accepts. */
-export type ValidationPayload = Readonly<{ kind: "validation"; errors: readonly string[] }>;
-
-/** The ready values a button block accepts; a button carries no value of its own. */
-export type ButtonPayload = Readonly<{ kind: "button" }>;
-
-/** The ready values a tabs block accepts. */
-export type TabsPayload = Readonly<{ kind: "tabs"; activeTab?: string }>;
-
-/** The ready values a dialog block accepts. */
-export type DialogPayload = Readonly<{ kind: "dialog"; open: boolean }>;
-
-/** The ready values a drawer block accepts. */
-export type DrawerPayload = Readonly<{ kind: "drawer"; open: boolean }>;
-
-/** The ready values a form container accepts; a form's values come from its own fields. */
-export type FormPayload = Readonly<{
-  kind: "form";
-  ownerGroups?: readonly Readonly<{ groupId: string; label: string }>[];
-}>;
-
 export type TextInputData = ControlDataState<TextInputPayload>;
 export type LinkInputData = ControlDataState<LinkInputPayload>;
 export type RichTextInputData = ControlDataState<RichTextInputPayload>;
@@ -273,142 +166,45 @@ export type ControlDataState<Values> =
 // The data-free state carries no values, so one frozen instance serves every block's state type.
 const LOADING_STATE: ControlDataState<never> = Object.freeze({ status: "loading" });
 const EMPTY_CONTROL_HANDLERS: ControlEventHandlers = Object.freeze({});
-const ISO_CALENDAR_DATE = /^\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])$/;
 
 const fail = (message: string, location: DefinitionRenderErrorLocation): never => {
   throw new DefinitionRenderError("INVALID_COMPOSITION", message, location);
 };
 
-const requireRecord = (
-  value: unknown,
-  message: string,
-  location: DefinitionRenderErrorLocation,
-): Record<string, unknown> => (isRecord(value) ? value : fail(message, location));
+/** A Zod issue path as a property path: an index joins the property before it (`options[3]`). */
+const propertyPathOf = (path: readonly PropertyKey[]): string[] =>
+  path.reduce<string[]>((parts, segment) => {
+    const last = parts.at(-1);
+    return typeof segment === "number" && last !== undefined
+      ? [...parts.slice(0, -1), `${last}[${segment}]`]
+      : [...parts, String(segment)];
+  }, []);
 
-const requireExactKeys = (
-  value: Record<string, unknown>,
-  allowed: readonly string[],
-  location: DefinitionRenderErrorLocation,
-): void => {
-  for (const key of Object.keys(value)) {
-    if (!allowed.includes(key)) fail(`Unexpected projected control field '${key}'`, location);
-  }
-};
-
-const requireString = (
-  value: unknown,
-  message: string,
-  location: DefinitionRenderErrorLocation,
-): string => (typeof value === "string" ? value : fail(message, location));
-
-const requireNonEmptyString = (
-  value: unknown,
-  message: string,
-  location: DefinitionRenderErrorLocation,
-): string => {
-  const text = requireString(value, message, location);
-  return text.trim().length > 0 ? text : fail(message, location);
-};
-
-const requireBoolean = (
-  value: unknown,
-  message: string,
-  location: DefinitionRenderErrorLocation,
-): boolean => (typeof value === "boolean" ? value : fail(message, location));
-
-const requireBuilderKey = (
-  value: unknown,
-  message: string,
-  location: DefinitionRenderErrorLocation,
-): string => {
-  const parsed = builderKeySchema.safeParse(value);
-  return parsed.success ? parsed.data : fail(message, location);
-};
-
-const requireChoiceValue = (
-  value: unknown,
-  message: string,
-  location: DefinitionRenderErrorLocation,
-): string => {
-  const text = requireString(value, message, location);
-  return text.length >= 1 && text.length <= 120 ? text : fail(message, location);
-};
-
-const requireRecordReference = (
-  value: unknown,
-  location: DefinitionRenderErrorLocation,
-): TypedRecordReference => {
-  const record = requireRecord(value, "A record reference must be an object", location);
-  requireExactKeys(record, ["recordTypeId", "recordId"], location);
-  return Object.freeze({
-    recordTypeId: requireNonEmptyString(
-      record.recordTypeId,
-      "A record reference type identifier must be non-empty text",
-      location,
-    ),
-    recordId: requireNonEmptyString(
-      record.recordId,
-      "A record reference identifier must be non-empty text",
-      location,
-    ),
-  });
-};
-
-const parseRichTextDocument = (
-  value: unknown,
-  location: DefinitionRenderErrorLocation,
-): TypedRichTextDocument => {
-  const parsed = richTextDocumentSchema.safeParse(value);
-  return parsed.success
-    ? (parsed.data as TypedRichTextDocument)
-    : fail("Rich text content is not a valid structured document", location);
-};
-
-/** True for a real ISO calendar date such as 2026-02-28; 2026-02-30 is refused. */
-export const isIsoCalendarDate = (value: string): boolean => {
-  if (!ISO_CALENDAR_DATE.test(value)) return false;
-  const date = new Date(`${value}T00:00:00Z`);
-  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
-};
-
-const optionalError = (
-  record: Record<string, unknown>,
-  location: DefinitionRenderErrorLocation,
-): Readonly<{ error?: string }> =>
-  record.error === undefined
-    ? {}
-    : {
-        error: requireNonEmptyString(
-          record.error,
-          "A projected field error must be non-empty text",
-          location,
-        ),
+type ControlPayloadSchema<Output> = {
+  safeParse(value: unknown):
+    | { success: true; data: Output }
+    | {
+        success: false;
+        error: { issues: readonly { path: readonly PropertyKey[]; message: string }[] };
       };
-
-/** Parses bounded choice options, refusing duplicate values so every option has one identity. */
-export const parseChoiceOptions = (
-  value: unknown,
-  location: DefinitionRenderErrorLocation,
-): readonly ChoiceOption[] => {
-  if (!Array.isArray(value) || value.length > 200)
-    return fail("Choice options must be an array of at most 200 options", location);
-  const seen = new Set<string>();
-  return Object.freeze(
-    value.map((item) => {
-      const record = requireRecord(item, "A choice option must be an object", location);
-      requireExactKeys(record, ["key", "label"], location);
-      const key = requireChoiceValue(record.key, "A choice option value is invalid", location);
-      if (seen.has(key)) fail(`Duplicate choice option value '${key}'`, location);
-      seen.add(key);
-      const label = requireNonEmptyString(
-        record.label,
-        "A choice option label must be non-empty text",
-        location,
-      );
-      return Object.freeze({ key, label });
-    }),
-  );
 };
+
+/** One control payload parser: its platform schema, refused with a located error. */
+const controlParser =
+  <Output>(schema: ControlPayloadSchema<Output>, message: string) =>
+  (value: unknown, location: DefinitionRenderErrorLocation = {}): Output => {
+    const parsed = schema.safeParse(value);
+    if (parsed.success) return parsed.data;
+    const issue = parsed.error.issues[0];
+    const issuePath = propertyPathOf(issue?.path ?? []);
+    return fail(
+      `${message}: ${issue?.message ?? "invalid"}`,
+      issuePath.length === 0 ? location : { ...location, propertyPath: issuePath },
+    );
+  };
+
+/** Bounded choice options, refusing duplicate values so every option has one identity. */
+export const parseChoiceOptions = controlParser(choiceOptionsSchema, "Choice options are invalid");
 
 /**
  * One typed form field value exactly as a control input emits or collects it, validated
@@ -416,563 +212,137 @@ export const parseChoiceOptions = (
  * record contributes only its stable `recordTypeId:recordId` identity, and a document is structured
  * rich text.
  */
-export const parseTypedFieldValue = (
-  value: unknown,
-  location: DefinitionRenderErrorLocation = {},
-): TypedFieldValue => {
-  if (value === null) return null;
-  if (typeof value === "string" || typeof value === "boolean") return value;
-  if (typeof value === "number")
-    return Number.isFinite(value) ? value : fail("A typed number must be finite", location);
-  if (Array.isArray(value)) {
-    if (value.length > 0 && isRecord(value[0])) {
-      const table = sourceModuleFieldValueSchemas.table.max(1000).safeParse(value);
-      if (!table.success) return fail("A table value must contain typed rows", location);
-      return table.data;
-    }
-    if (value.length > 200)
-      return fail("A several-choice value cannot exceed 200 options", location);
-    const selected = value.map((item) =>
-      requireChoiceValue(item, "A several-choice value must contain option values", location),
-    );
-    if (new Set(selected).size !== selected.length)
-      return fail("A several-choice value cannot repeat an option", location);
-    return Object.freeze(selected);
-  }
-  if (!isRecord(value)) return fail("A typed field value must be a field value", location);
-  if (Object.hasOwn(value, "blocks")) return parseRichTextDocument(value, location);
-  if (Object.hasOwn(value, "recordTypeId") && Object.hasOwn(value, "recordId"))
-    return requireRecordReference(value, location);
-  return fail(
-    "A typed field value must be text, a number, a boolean, several-choice option values, a record reference or a document",
-    location,
-  );
-};
-
-/** The ready values a text input accepts. */
-export const parseTextInputPayload = (
-  value: unknown,
-  location: DefinitionRenderErrorLocation = {},
-): TextInputPayload => {
-  const record = requireRecord(value, "Projected control values must be an object", location);
-  if (record.kind !== "text_input")
-    return fail(`Expected 'text_input' projected values, got '${String(record.kind)}'`, location);
-  requireExactKeys(record, ["kind", "value", "error"], location);
-  return Object.freeze({
-    kind: "text_input",
-    ...(record.value === undefined
-      ? {}
-      : { value: requireString(record.value, "A text value must be text", location) }),
-    ...optionalError(record, location),
-  });
-};
-
-/** The ready values a link input accepts. */
-export const parseLinkInputPayload = (
-  value: unknown,
-  location: DefinitionRenderErrorLocation = {},
-): LinkInputPayload => {
-  const record = requireRecord(value, "Projected control values must be an object", location);
-  if (record.kind !== "link_input")
-    return fail(`Expected 'link_input' projected values, got '${String(record.kind)}'`, location);
-  requireExactKeys(record, ["kind", "value", "title", "error"], location);
-  const reference =
-    record.value === undefined || record.value === null
-      ? undefined
-      : requireRecordReference(record.value, location);
-  if ((reference === undefined) !== (record.title === undefined))
-    return fail("A linked record carries its title, and only a linked record does", location);
-  return Object.freeze({
-    kind: "link_input",
-    ...(record.value === undefined
-      ? {}
-      : reference === undefined
-        ? { value: null }
-        : {
-            value: reference,
-            title: requireNonEmptyString(
-              record.title,
-              "A linked record title must be text",
-              location,
-            ),
-          }),
-    ...optionalError(record, location),
-  });
-};
+export const parseTypedFieldValue = controlParser<TypedFieldValue>(
+  typedFieldValueSchema,
+  "A typed field value is invalid",
+);
 
 /** One page of pickable records as the page runtime returned it, validated fail-closed. */
-export const parseRecordChoicePage = (
-  value: unknown,
-  location: DefinitionRenderErrorLocation = {},
-): RecordChoicePage => {
-  const record = requireRecord(value, "A record choice page must be an object", location);
-  requireExactKeys(record, ["choices", "nextContinuationToken"], location);
-  if (!Array.isArray(record.choices) || record.choices.length > 4_000)
-    return fail("Record choices must be a bounded array", location);
-  const choices = record.choices.map((item: unknown) => {
-    const choice = requireRecord(item, "A record choice must be an object", location);
-    requireExactKeys(choice, ["recordTypeId", "recordId", "title", "typeLabel"], location);
-    const reference = requireRecordReference(
-      { recordTypeId: choice.recordTypeId, recordId: choice.recordId },
-      location,
-    );
-    return Object.freeze({
-      ...reference,
-      title: requireNonEmptyString(choice.title, "A record choice title must be text", location),
-      typeLabel: requireNonEmptyString(
-        choice.typeLabel,
-        "A record type name must be text",
-        location,
-      ),
-    });
-  });
-  return Object.freeze({
-    choices: Object.freeze(choices),
-    ...(record.nextContinuationToken === undefined
-      ? {}
-      : {
-          nextContinuationToken: requireNonEmptyString(
-            record.nextContinuationToken,
-            "A continuation must be text",
-            location,
-          ),
-        }),
-  });
-};
+export const parseRecordChoicePage = controlParser(
+  recordChoicePageSchema,
+  "A record choice page is invalid",
+);
+
+/** The ready values a text input accepts. */
+export const parseTextInputPayload = controlParser<TextInputPayload>(
+  textInputPayloadSchema,
+  "Text input values are invalid",
+);
+
+/** The ready values a link input accepts. */
+export const parseLinkInputPayload = controlParser<LinkInputPayload>(
+  linkInputPayloadSchema,
+  "Link input values are invalid",
+);
 
 /** The ready values a structured rich-text input accepts. */
-export const parseRichTextInputPayload = (
-  value: unknown,
-  location: DefinitionRenderErrorLocation = {},
-): RichTextInputPayload => {
-  const record = requireRecord(value, "Projected control values must be an object", location);
-  if (record.kind !== "rich_text_input")
-    return fail(
-      `Expected 'rich_text_input' projected values, got '${String(record.kind)}'`,
-      location,
-    );
-  requireExactKeys(record, ["kind", "value", "error"], location);
-  return Object.freeze({
-    kind: "rich_text_input",
-    ...(record.value === undefined
-      ? {}
-      : record.value === null
-        ? { value: null }
-        : { value: parseRichTextDocument(record.value, location) }),
-    ...optionalError(record, location),
-  });
-};
+export const parseRichTextInputPayload = controlParser<RichTextInputPayload>(
+  richTextInputPayloadSchema,
+  "Rich text input values are invalid",
+);
 
 /** The ready values a number input accepts. */
-export const parseNumberInputPayload = (
-  value: unknown,
-  location: DefinitionRenderErrorLocation = {},
-): NumberInputPayload => {
-  const record = requireRecord(value, "Projected control values must be an object", location);
-  if (record.kind !== "number_input")
-    return fail(`Expected 'number_input' projected values, got '${String(record.kind)}'`, location);
-  requireExactKeys(record, ["kind", "value", "error"], location);
-  if (
-    record.value !== undefined &&
-    record.value !== null &&
-    !(typeof record.value === "number" && Number.isFinite(record.value)) &&
-    !(typeof record.value === "string" && exactDecimalTextSchema.safeParse(record.value).success)
-  )
-    fail("A number value must be exact decimal text, a finite number or null", location);
-  return Object.freeze({
-    kind: "number_input",
-    ...(record.value === undefined ? {} : { value: record.value as string | number | null }),
-    ...optionalError(record, location),
-  });
-};
+export const parseNumberInputPayload = controlParser<NumberInputPayload>(
+  numberInputPayloadSchema,
+  "Number input values are invalid",
+);
 
 /** The ready values a boolean input accepts. */
-export const parseBooleanInputPayload = (
-  value: unknown,
-  location: DefinitionRenderErrorLocation = {},
-): BooleanInputPayload => {
-  const record = requireRecord(value, "Projected control values must be an object", location);
-  if (record.kind !== "boolean_input")
-    return fail(
-      `Expected 'boolean_input' projected values, got '${String(record.kind)}'`,
-      location,
-    );
-  requireExactKeys(record, ["kind", "value", "error"], location);
-  return Object.freeze({
-    kind: "boolean_input",
-    ...(record.value === undefined
-      ? {}
-      : {
-          value: requireBoolean(record.value, "A boolean value must be true or false", location),
-        }),
-    ...optionalError(record, location),
-  });
-};
+export const parseBooleanInputPayload = controlParser<BooleanInputPayload>(
+  booleanInputPayloadSchema,
+  "Yes/no input values are invalid",
+);
 
 /** The ready values a date input accepts. */
-export const parseDateInputPayload = (
-  value: unknown,
-  location: DefinitionRenderErrorLocation = {},
-): DateInputPayload => {
-  const record = requireRecord(value, "Projected control values must be an object", location);
-  if (record.kind !== "date_input")
-    return fail(`Expected 'date_input' projected values, got '${String(record.kind)}'`, location);
-  requireExactKeys(record, ["kind", "value", "error"], location);
-  if (
-    record.value !== undefined &&
-    record.value !== null &&
-    !(typeof record.value === "string" && isIsoCalendarDate(record.value))
-  )
-    fail("A date value must be an ISO calendar date or null", location);
-  return Object.freeze({
-    kind: "date_input",
-    ...(record.value === undefined ? {} : { value: record.value as string | null }),
-    ...optionalError(record, location),
-  });
-};
-
-/** Parses the offset-bearing instant a date-time field stores. */
-const parseDateTimeInputPayload = (
-  value: unknown,
-  location: DefinitionRenderErrorLocation = {},
-): DateTimeInputPayload => {
-  const record = requireRecord(value, "Projected control values must be an object", location);
-  if (record.kind !== "date_time_input")
-    return fail(
-      `Expected 'date_time_input' projected values, got '${String(record.kind)}'`,
-      location,
-    );
-  requireExactKeys(
-    record,
-    ["kind", "value", "personTimeZone", "organizationTimeZone", "error"],
-    location,
-  );
-  if (
-    record.value !== undefined &&
-    record.value !== null &&
-    !(typeof record.value === "string" && timestampSchema.safeParse(record.value).success)
-  )
-    fail("A date-time value must be an offset-bearing ISO timestamp or null", location);
-  for (const key of ["personTimeZone", "organizationTimeZone"] as const) {
-    const zone = record[key];
-    if (zone === undefined) continue;
-    if (typeof zone !== "string")
-      return fail("A date-time zone must be a valid IANA time zone", location);
-    if (zone.length > 100 || zone.length === 0)
-      return fail("A date-time zone must be a valid IANA time zone", location);
-    try {
-      new Intl.DateTimeFormat("en", { timeZone: zone });
-    } catch {
-      fail("A date-time zone must be a valid IANA time zone", location);
-    }
-  }
-  return Object.freeze({
-    kind: "date_time_input",
-    ...(record.value === undefined ? {} : { value: record.value as string | null }),
-    ...(record.personTimeZone === undefined
-      ? {}
-      : { personTimeZone: record.personTimeZone as string }),
-    ...(record.organizationTimeZone === undefined
-      ? {}
-      : { organizationTimeZone: record.organizationTimeZone as string }),
-    ...optionalError(record, location),
-  });
-};
+export const parseDateInputPayload = controlParser<DateInputPayload>(
+  dateInputPayloadSchema,
+  "Date input values are invalid",
+);
 
 /** The ready values a choice input accepts. */
-export const parseChoiceInputPayload = (
-  value: unknown,
-  location: DefinitionRenderErrorLocation = {},
-): ChoiceInputPayload => {
-  const record = requireRecord(value, "Projected control values must be an object", location);
-  if (record.kind !== "choice_input")
-    return fail(`Expected 'choice_input' projected values, got '${String(record.kind)}'`, location);
-  requireExactKeys(
-    record,
-    ["kind", "value", "options", "optionEvidence", "nextContinuationToken", "error"],
-    location,
-  );
-  const options =
-    record.options === undefined ? undefined : parseChoiceOptions(record.options, location);
-  let optionEvidence: Readonly<Record<string, ReferenceChoiceSelectionEvidence>> | undefined;
-  if (record.optionEvidence !== undefined) {
-    const parsed = referenceChoiceSelectionEvidenceMapSchema.safeParse(record.optionEvidence);
-    if (!parsed.success || options === undefined)
-      return fail(
-        "Choice option evidence must map projected options to Query page evidence",
-        location,
-      );
-    if (
-      options.some((option) => !Object.hasOwn(parsed.data, option.key)) ||
-      Object.keys(parsed.data).some((key) => !options.some((option) => option.key === key))
-    )
-      fail("Choice option evidence must match the projected options exactly", location);
-    optionEvidence = parsed.data;
-  }
-  const nextContinuationToken =
-    record.nextContinuationToken === undefined
-      ? undefined
-      : requireNonEmptyString(
-          record.nextContinuationToken,
-          "A choice continuation token must be non-empty text",
-          location,
-        );
-  if (record.value !== undefined && record.value !== null) {
-    const key = requireChoiceValue(
-      record.value,
-      "A choice value must be an option value",
-      location,
-    );
-    if (options !== undefined && !options.some((option) => option.key === key))
-      fail(`Choice value '${key}' is not a projected option`, location);
-  }
-  return Object.freeze({
-    kind: "choice_input",
-    ...(record.value === undefined ? {} : { value: record.value as string | null }),
-    ...(options === undefined ? {} : { options }),
-    ...(optionEvidence === undefined ? {} : { optionEvidence }),
-    ...(nextContinuationToken === undefined ? {} : { nextContinuationToken }),
-    ...optionalError(record, location),
-  });
-};
+export const parseChoiceInputPayload = controlParser<ChoiceInputPayload>(
+  choiceInputPayloadSchema,
+  "Choice input values are invalid",
+);
 
-/** Parses a multi-choice value as a bounded list of exact declared option values. */
-const parseSeveralChoicesInputPayload = (
-  value: unknown,
-  location: DefinitionRenderErrorLocation = {},
-): SeveralChoicesInputPayload => {
-  const record = requireRecord(value, "Projected control values must be an object", location);
-  if (record.kind !== "several_choices_input")
-    return fail(
-      `Expected 'several_choices_input' projected values, got '${String(record.kind)}'`,
-      location,
-    );
-  requireExactKeys(record, ["kind", "value", "error"], location);
-  let selected: TypedSeveralChoicesValue | null | undefined;
-  if (record.value === null) selected = null;
-  else if (record.value !== undefined) {
-    if (!Array.isArray(record.value) || record.value.length > 200)
-      return fail("Several-choice values must be a list of at most 200 option values", location);
-    const keys = record.value.map((item) =>
-      requireChoiceValue(item, "A several-choice value must contain option values", location),
-    );
-    if (new Set(keys).size !== keys.length)
-      return fail("A several-choice value cannot repeat an option", location);
-    selected = Object.freeze(keys);
-  }
-  return Object.freeze({
-    kind: "several_choices_input",
-    ...(selected === undefined ? {} : { value: selected }),
-    ...optionalError(record, location),
-  });
-};
+/** The ready values a table input accepts. */
+export const parseTableInputPayload = controlParser<TableInputPayload>(
+  tableInputPayloadSchema,
+  "Table input values are invalid",
+);
+
+/** The ready values an attachment input accepts. */
+export const parseAttachmentInputPayload = controlParser<AttachmentInputPayload>(
+  attachmentInputPayloadSchema,
+  "Attachment values are invalid",
+);
 
 /**
  * The ready values an automatic field input accepts. It carries exactly the payload of the control
- * its referenced module field selected, so this one parser validates every control kind the input
+ * its referenced module field selected, so this one schema validates every control kind the input
  * may become and the renderer never invents a shape.
  */
-export const parseTableInputPayload = (
-  value: unknown,
-  location: DefinitionRenderErrorLocation = {},
-): TableInputPayload => {
-  const record = requireRecord(value, "Projected control values must be an object", location);
-  requireExactKeys(record, ["kind", "value", "error"], location);
-  if (record.kind !== "table_input") return fail("Expected table input values", location);
-  const table =
-    record.value === undefined || record.value === null
-      ? record.value
-      : moduleFieldValueSchemas.table.max(1000).safeParse(record.value);
-  if (table !== undefined && table !== null && !table.success)
-    return fail("Projected table rows are invalid", location);
-  return {
-    kind: "table_input",
-    ...(table === undefined ? {} : { value: table === null ? null : table.data }),
-    ...optionalError(record, location),
-  };
-};
-
-export const parseAttachmentInputPayload = (
-  value: unknown,
-  location: DefinitionRenderErrorLocation = {},
-): AttachmentInputPayload => {
-  const record = requireRecord(value, "Attachment values must be an object", location);
-  requireExactKeys(record, ["kind", "value", "files", "uploadUrl", "error"], location);
-  if (
-    record.kind !== "attachment_input" ||
-    !Array.isArray(record.value) ||
-    !record.value.every((id) => typeof id === "string") ||
-    !Array.isArray(record.files) ||
-    typeof record.uploadUrl !== "string" ||
-    !record.uploadUrl.startsWith("/api/files/upload?")
-  )
-    return fail("Attachment values are invalid", location);
-  const files = record.files.map((item) => {
-    const file = requireRecord(item, "Attachment file must be an object", location);
-    requireExactKeys(file, ["fileId", "name"], location);
-    return {
-      fileId: requireNonEmptyString(file.fileId, "Attachment identity is required", location),
-      name: requireNonEmptyString(file.name, "Attachment name is required", location),
-    };
-  });
-  return {
-    kind: "attachment_input",
-    value: record.value as string[],
-    files,
-    uploadUrl: record.uploadUrl,
-    ...optionalError(record, location),
-  };
-};
-
-export const parseFieldInputPayload = (
-  value: unknown,
-  location: DefinitionRenderErrorLocation = {},
-): FieldInputPayload => {
-  const record = requireRecord(value, "Projected control values must be an object", location);
-  switch (record.kind) {
-    case "attachment_input":
-      return parseAttachmentInputPayload(value, location);
-    case "table_input":
-      return parseTableInputPayload(value, location);
-    case "text_input":
-      return parseTextInputPayload(value, location);
-    case "link_input":
-      return parseLinkInputPayload(value, location);
-    case "rich_text_input":
-      return parseRichTextInputPayload(value, location);
-    case "number_input":
-      return parseNumberInputPayload(value, location);
-    case "boolean_input":
-      return parseBooleanInputPayload(value, location);
-    case "date_input":
-      return parseDateInputPayload(value, location);
-    case "date_time_input":
-      return parseDateTimeInputPayload(value, location);
-    case "choice_input":
-      return parseChoiceInputPayload(value, location);
-    case "several_choices_input":
-      return parseSeveralChoicesInputPayload(value, location);
-    default:
-      return fail(
-        `An automatic field input cannot carry '${String(record.kind)}' projected values`,
-        location,
-      );
-  }
-};
+export const parseFieldInputPayload = controlParser<FieldInputPayload>(
+  fieldInputPayloadSchema,
+  "Field input values are invalid",
+);
 
 /** The ready values a validation message block accepts. */
-export const parseValidationPayload = (
-  value: unknown,
-  location: DefinitionRenderErrorLocation = {},
-): ValidationPayload => {
-  const record = requireRecord(value, "Projected control values must be an object", location);
-  if (record.kind !== "validation")
-    return fail(`Expected 'validation' projected values, got '${String(record.kind)}'`, location);
-  requireExactKeys(record, ["kind", "errors"], location);
-  if (!Array.isArray(record.errors)) return fail("Validation errors must be an array", location);
-  return Object.freeze({
-    kind: "validation",
-    errors: Object.freeze(
-      record.errors.map((error) =>
-        requireNonEmptyString(error, "A validation error must be non-empty text", location),
-      ),
-    ),
-  });
-};
+export const parseValidationPayload = controlParser<ValidationPayload>(
+  validationPayloadSchema,
+  "Validation values are invalid",
+);
 
 /** The ready values a button block accepts. */
-export const parseButtonPayload = (
-  value: unknown,
-  location: DefinitionRenderErrorLocation = {},
-): ButtonPayload => {
-  const record = requireRecord(value, "Projected control values must be an object", location);
-  if (record.kind !== "button")
-    return fail(`Expected 'button' projected values, got '${String(record.kind)}'`, location);
-  requireExactKeys(record, ["kind"], location);
-  return Object.freeze({ kind: "button" });
-};
+export const parseButtonPayload = controlParser<ButtonPayload>(
+  buttonPayloadSchema,
+  "Button values are invalid",
+);
 
 /** The ready values a tabs block accepts. */
-export const parseTabsPayload = (
-  value: unknown,
-  location: DefinitionRenderErrorLocation = {},
-): TabsPayload => {
-  const record = requireRecord(value, "Projected control values must be an object", location);
-  if (record.kind !== "tabs")
-    return fail(`Expected 'tabs' projected values, got '${String(record.kind)}'`, location);
-  requireExactKeys(record, ["kind", "activeTab"], location);
-  return Object.freeze({
-    kind: "tabs",
-    ...(record.activeTab === undefined
-      ? {}
-      : {
-          activeTab: requireBuilderKey(
-            record.activeTab,
-            "An active tab must be a tab key",
-            location,
-          ),
-        }),
-  });
-};
+export const parseTabsPayload = controlParser<TabsPayload>(
+  tabsPayloadSchema,
+  "Tabs values are invalid",
+);
 
 /** The ready values a dialog block accepts. */
-export const parseDialogPayload = (
-  value: unknown,
-  location: DefinitionRenderErrorLocation = {},
-): DialogPayload => {
-  const record = requireRecord(value, "Projected control values must be an object", location);
-  if (record.kind !== "dialog")
-    return fail(`Expected 'dialog' projected values, got '${String(record.kind)}'`, location);
-  requireExactKeys(record, ["kind", "open"], location);
-  return Object.freeze({
-    kind: "dialog",
-    open: requireBoolean(record.open, "Open state must be true or false", location),
-  });
-};
+export const parseDialogPayload = controlParser<DialogPayload>(
+  dialogPayloadSchema,
+  "Dialog values are invalid",
+);
 
 /** The ready values a drawer block accepts. */
-export const parseDrawerPayload = (
-  value: unknown,
-  location: DefinitionRenderErrorLocation = {},
-): DrawerPayload => {
-  const record = requireRecord(value, "Projected control values must be an object", location);
-  if (record.kind !== "drawer")
-    return fail(`Expected 'drawer' projected values, got '${String(record.kind)}'`, location);
-  requireExactKeys(record, ["kind", "open"], location);
-  return Object.freeze({
-    kind: "drawer",
-    open: requireBoolean(record.open, "Open state must be true or false", location),
-  });
-};
+export const parseDrawerPayload = controlParser<DrawerPayload>(
+  drawerPayloadSchema,
+  "Drawer values are invalid",
+);
 
 /** The ready values a form container accepts. */
-export const parseFormPayload = (
-  value: unknown,
-  location: DefinitionRenderErrorLocation = {},
-): FormPayload => {
-  const record = requireRecord(value, "Projected control values must be an object", location);
-  if (record.kind !== "form")
-    return fail(`Expected 'form' projected values, got '${String(record.kind)}'`, location);
-  requireExactKeys(record, ["kind", "ownerGroups"], location);
-  if (record.ownerGroups === undefined) return Object.freeze({ kind: "form" });
-  if (!Array.isArray(record.ownerGroups)) return fail("Owner Groups must be a list", location);
-  const ownerGroups = record.ownerGroups.map((candidate) => {
-    const group = requireRecord(candidate, "An owner Group must be an object", location);
-    requireExactKeys(group, ["groupId", "label"], location);
-    const groupId = groupIdSchema.safeParse(group.groupId);
-    if (!groupId.success) return fail("An owner Group identifier is invalid", location);
-    const label = requireString(group.label, "An owner Group label must be text", location);
-    if (label.length === 0) return fail("An owner Group label is empty", location);
-    return Object.freeze({ groupId: groupId.data, label });
-  });
-  if (new Set(ownerGroups.map((group) => group.groupId)).size !== ownerGroups.length)
-    return fail("An owner Group is repeated", location);
-  return Object.freeze({ kind: "form", ownerGroups: Object.freeze(ownerGroups) });
-};
+export const parseFormPayload = controlParser<FormPayload>(
+  formPayloadSchema,
+  "Form values are invalid",
+);
+
+/** The one supplied draft-feedback result a form applies to its exact draft. */
+export const parseFormDraftFeedbackSupply = controlParser(
+  formDraftFeedbackSupplySchema,
+  "Draft feedback is invalid",
+);
+
+/** What a form shows after its flow ran: a message or a business refusal. */
+export const parseFormFlowFeedback = controlParser(
+  formFlowFeedbackSchema,
+  "Flow feedback is invalid",
+);
+
+const parseControlState = controlParser(
+  controlDataStateSchema,
+  "Projected control data is invalid",
+);
 
 /**
- * Validates one control's unknown projected state and returns its frozen fail-closed shape. Only
- * the `ready` state reaches that block's own payload parser, so every accepted shape stays the
+ * Validates one control's unknown projected state and returns its fail-closed shape. Only the
+ * `ready` state reaches that block's own payload parser, so every accepted shape stays the
  * registration's own concern. Throws a located definition error for unknown or malformed input.
  */
 export const parseControlData = <Values>(
@@ -980,33 +350,14 @@ export const parseControlData = <Values>(
   parseValues: (value: unknown, location: DefinitionRenderErrorLocation) => Values,
   location: DefinitionRenderErrorLocation = {},
 ): ControlDataState<Values> => {
-  const record = requireRecord(value, "Projected control data must be an object", location);
-  switch (record.status) {
+  const state = parseControlState(value, location);
+  switch (state.status) {
     case "loading":
-      requireExactKeys(record, ["status"], location);
       return LOADING_STATE;
     case "disabled":
-      requireExactKeys(record, ["status", "reason"], location);
-      return Object.freeze({
-        status: "disabled",
-        ...(record.reason === undefined
-          ? {}
-          : {
-              reason: requireNonEmptyString(
-                record.reason,
-                "A disabled reason must be non-empty text",
-                location,
-              ),
-            }),
-      });
+      return state;
     case "ready":
-      requireExactKeys(record, ["status", "values"], location);
-      return Object.freeze({
-        status: "ready",
-        values: parseValues(record.values, location),
-      });
-    default:
-      return fail(`Unknown projected control status '${String(record.status)}'`, location);
+      return Object.freeze({ status: "ready", values: parseValues(state.values, location) });
   }
 };
 
@@ -1016,7 +367,9 @@ export const parseControlEventHandlers = (
   location: DefinitionRenderErrorLocation = {},
 ): ControlEventHandlers => {
   if (value === undefined) return EMPTY_CONTROL_HANDLERS;
-  const record = requireRecord(value, "Control semantic callbacks must be an object", location);
+  const record = isRecord(value)
+    ? value
+    : fail("Control semantic callbacks must be an object", location);
   const handlers: Partial<Record<ControlSemanticEventName, ControlEventHandler>> = {};
   for (const [name, handler] of Object.entries(record)) {
     if (!CONTROL_EVENT_NAMES.includes(name as ControlSemanticEventName))

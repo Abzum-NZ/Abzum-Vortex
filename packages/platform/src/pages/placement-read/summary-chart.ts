@@ -1,5 +1,6 @@
 import "server-only";
 
+import type { z } from "zod";
 import type { JsonValue } from "../../catalogue/common";
 import { describeFailure } from "../../catalogue/runtime-primitives";
 import type { BlockPropertyValueContract } from "../../definition/application-composition/block-property-values";
@@ -15,6 +16,12 @@ import {
   recordLinkPlainText,
   type ProjectedRecordLinks,
 } from "../component-data-projection";
+import type { DisplayScalarCell } from "../display-payload-parts";
+import type {
+  chartPayloadSchema,
+  chartPointSchema,
+  summaryPayloadSchema,
+} from "../display-payload-summary";
 import {
   logPlacementFailure,
   placementSettingsOf,
@@ -27,16 +34,13 @@ import {
 import type { PlacementReadInput } from "./types";
 
 /** One summary cell: the closed display values a summary shows, or unavailable when refused. */
-type SummaryCell =
-  | Readonly<{ kind: "number"; value: number }>
-  | Readonly<{ kind: "text"; text: string }>
-  | Readonly<{ kind: "boolean"; value: boolean }>
-  | Readonly<{ kind: "date"; iso: string }>
-  | Readonly<{ kind: "empty" }>
-  | Readonly<{ kind: "unavailable" }>;
+type SummaryCell = Extract<
+  DisplayScalarCell,
+  Readonly<{ kind: "number" | "text" | "boolean" | "date" | "empty" | "unavailable" }>
+>;
 
 /** One bar of a chart: a stable group key, its readable label, and the group's measure. */
-type ChartPoint = Readonly<{ key: string; label: string; value: number; text: string }>;
+type ChartPoint = z.input<typeof chartPointSchema>;
 
 export const summaryAggregateLabel = (alias: string): string =>
   alias
@@ -144,16 +148,7 @@ const projectChart = (input: {
   summary: ProtectedQuerySummaryCompleted;
   recordLinks?: ProjectedRecordLinks;
 }):
-  | Readonly<{
-      ok: true;
-      chart: Readonly<{
-        kind: "chart";
-        categoryLabel: string;
-        measureLabel: string;
-        points: readonly ChartPoint[];
-        moreGroups: boolean;
-      }>;
-    }>
+  | Readonly<{ ok: true; chart: z.input<typeof chartPayloadSchema> }>
   | Readonly<{
       ok: false;
       code: "chart_settings_invalid" | "chart_group_invalid" | "chart_measure_invalid";
@@ -349,7 +344,7 @@ export const readSummaryOrChart = async (
     data[placementId] = { status: "error" };
     return;
   }
-  const values: Array<{ key: string; label: string; value: SummaryCell }> = [];
+  const values: Array<z.input<typeof summaryPayloadSchema>["values"][number]> = [];
   for (const aggregate of declaredAggregates) {
     const field =
       aggregate.fieldId === undefined ? undefined : fields.get(aggregate.fieldId.toLowerCase());
@@ -372,5 +367,8 @@ export const readSummaryOrChart = async (
   data[placementId] =
     values.length === 0
       ? { status: "empty" }
-      : { status: "ready", values: { kind: "summary_values", values } };
+      : {
+          status: "ready",
+          values: { kind: "summary_values", values } satisfies z.input<typeof summaryPayloadSchema>,
+        };
 };

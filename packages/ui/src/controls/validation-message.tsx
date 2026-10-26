@@ -53,11 +53,7 @@ export function ValidationMessage(props: ValidationMessageProps): ReactElement {
     >
       {messages.length === 0 ? null : (
         <>
-          {title === undefined ? null : (
-            <AlertTitle className="mb-1">
-              {title}
-            </AlertTitle>
-          )}
+          {title === undefined ? null : <AlertTitle className="mb-1">{title}</AlertTitle>}
           <AlertDescription>
             {messages.length === 1 ? (
               <p className="m-0">{messages[0]}</p>

@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION vortex_access.private_management_scope_from_permission_evidence(p_permissions jsonb) RETURNS jsonb
+CREATE OR REPLACE FUNCTION vortex_access.private_management_scope_from_permission(p_permissions jsonb) RETURNS jsonb
     LANGUAGE plpgsql STABLE
     SET search_path TO ''
     AS $$
@@ -87,8 +87,8 @@ begin
 end
 $$;
 
-alter function vortex_access.private_management_scope_from_permission_evidence(p_permissions jsonb) owner to vortex_owner;
+alter function vortex_access.private_management_scope_from_permission(p_permissions jsonb) owner to vortex_owner;
 
-REVOKE ALL ON FUNCTION vortex_access.private_management_scope_from_permission_evidence(p_permissions jsonb) FROM PUBLIC;
+REVOKE ALL ON FUNCTION vortex_access.private_management_scope_from_permission(p_permissions jsonb) FROM PUBLIC;
 
-grant execute on function vortex_access.private_management_scope_from_permission_evidence(p_permissions jsonb) to postgres;
+grant execute on function vortex_access.private_management_scope_from_permission(p_permissions jsonb) to postgres;

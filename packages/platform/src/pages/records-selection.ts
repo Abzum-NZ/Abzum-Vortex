@@ -16,7 +16,8 @@ import { platformIdSchema, recordIdSchema, revisionSchema } from "../catalogue/i
 export const recordsSelectionMaximumIds = 200;
 export const recordsSelectionMaximumExclusions = 200;
 
-const selectionTokenSchema = z
+/** The sealed descriptor of every record a table read matches. */
+export const recordsSelectionTokenSchema = z
   .string()
   .min(1)
   .max(65_536)
@@ -35,7 +36,7 @@ export const recordsSelectionSchema = z.discriminatedUnion("kind", [
   z
     .object({
       kind: z.literal("matching"),
-      token: selectionTokenSchema,
+      token: recordsSelectionTokenSchema,
       excluded: z.array(recordIdSchema).max(recordsSelectionMaximumExclusions),
     })
     .strict(),
@@ -61,7 +62,7 @@ export type RecordsTableRequestRejection = z.infer<typeof recordsTableRequestRej
 
 /** The count behind "Select all matching records", read once, when the person asks for it. */
 export const recordsSelectionCountRequestSchema = z
-  .object({ ...placementCommandBase, token: selectionTokenSchema })
+  .object({ ...placementCommandBase, token: recordsSelectionTokenSchema })
   .strict();
 export type RecordsSelectionCountRequest = z.infer<typeof recordsSelectionCountRequestSchema>;
 
@@ -111,6 +112,27 @@ const countSchema = z.number().int().nonnegative();
 /** Maximum distinct authored warning messages carried by one bulk summary. */
 export const recordsTableBulkWarningMaximum = 100;
 
+/** What a finished bulk run reports: the records it covered, changed, refused and did not reach. */
+export const recordsTableBulkRunSummarySchema = z
+  .object({
+    total: countSchema,
+    done: countSchema,
+    warnings: z
+      .array(z.object({ message: z.string().min(1), count: z.number().int().min(1) }).strict())
+      .max(recordsTableBulkWarningMaximum),
+    refused: z
+      .array(
+        z.object({ reason: z.enum(recordsTableBulkRefusalReasons), count: countSchema }).strict(),
+      )
+      .max(recordsTableBulkRefusalReasons.length),
+    /** Records not reached: the run stopped at the action's limit or could not continue. */
+    notProcessed: countSchema,
+    /** The run stopped because more records matched than the action's limit. */
+    limited: z.boolean(),
+  })
+  .strict();
+export type RecordsTableBulkRunSummary = z.infer<typeof recordsTableBulkRunSummarySchema>;
+
 /**
  * The lines a bulk run streams back: progress after every batch, then one summary. `total` is the
  * number of records the selection held when the run resolved it; `changed` counts the records the
@@ -124,25 +146,7 @@ export const recordsTableBulkRunLineSchema = z.discriminatedUnion("kind", [
       processed: countSchema,
     })
     .strict(),
-  z
-    .object({
-      kind: z.literal("summary"),
-      total: countSchema,
-      done: countSchema,
-      warnings: z
-        .array(z.object({ message: z.string().min(1), count: z.number().int().min(1) }).strict())
-        .max(recordsTableBulkWarningMaximum),
-      refused: z
-        .array(
-          z.object({ reason: z.enum(recordsTableBulkRefusalReasons), count: countSchema }).strict(),
-        )
-        .max(recordsTableBulkRefusalReasons.length),
-      /** Records not reached: the run stopped at the action's limit or could not continue. */
-      notProcessed: countSchema,
-      /** The run stopped because more records matched than the action's limit. */
-      limited: z.boolean(),
-    })
-    .strict(),
+  recordsTableBulkRunSummarySchema.extend({ kind: z.literal("summary") }),
   recordsTableRequestRejectionSchema,
   z.object({ kind: z.literal("unavailable") }).strict(),
 ]);

@@ -108,7 +108,7 @@ begin
           message = 'First installation release is unavailable';
       end if;
 
-      application_evidence := vortex_definition.project_consumer_release_evidence(
+      application_evidence := vortex_definition.project_consumer_release(
         'application', p_application_root_id, p_application_release_revision
       );
       if application_evidence is null then
@@ -118,7 +118,7 @@ begin
 
       -- One authoritative immutable closure; no caller pins or current/latest lookup.
       select pg_catalog.count(*), coalesce(pg_catalog.jsonb_agg(
-        vortex_definition.project_consumer_release_evidence(
+        vortex_definition.project_consumer_release(
           'module', pin.target_root_id, pin.target_release_revision
         ) order by pin.target_root_id
       ), '[]'::jsonb)

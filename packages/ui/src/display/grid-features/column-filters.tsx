@@ -23,7 +23,7 @@ import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from "../../com
 import { Tooltip, TooltipContent, TooltipTrigger } from "../../components/tooltip";
 import { Icon } from "../../icons/icon";
 import { FormattedDate } from "../date-format-context";
-import type { DisplayEventHandlers, TableNarrowing } from "../projected-data";
+import type { DisplayEventHandlers, DisplayTableNarrowing } from "../projected-data";
 import { RecordChoicePicker } from "./record-choice-picker";
 import type {
   GridFeatureColumnProps,
@@ -39,7 +39,7 @@ const sameKey = (left: string, right: string): boolean =>
   left.toLowerCase() === right.toLowerCase();
 
 const appliedFilter = (
-  narrowing: TableNarrowing | undefined,
+  narrowing: DisplayTableNarrowing | undefined,
   fieldId: string,
 ): RecordsTableFieldFilter | undefined =>
   narrowing?.filters.find((filter) => sameKey(filter.fieldId, fieldId))?.filter;
@@ -77,7 +77,7 @@ function FilterSummary({
 }: Readonly<{
   field: RecordsTableFilterField;
   filter: RecordsTableFieldFilter;
-  narrowing: TableNarrowing | undefined;
+  narrowing: DisplayTableNarrowing | undefined;
 }>): ReactElement {
   switch (filter.kind) {
     case "empty":
@@ -449,7 +449,7 @@ function LinkEditor({
 }: Readonly<{
   field: RecordsTableFilterField;
   applied: Extract<RecordsTableFieldFilter, { kind: "link" }> | undefined;
-  narrowing: TableNarrowing | undefined;
+  narrowing: DisplayTableNarrowing | undefined;
   events: DisplayEventHandlers | undefined;
   onCommit: (filter: RecordsTableFieldFilter | undefined) => void;
 }>): ReactElement {
@@ -545,7 +545,7 @@ function FilterEditor({
   events,
 }: Readonly<{
   field: RecordsTableFilterField;
-  narrowing: TableNarrowing | undefined;
+  narrowing: DisplayTableNarrowing | undefined;
   events: DisplayEventHandlers | undefined;
 }>): ReactElement {
   const applied = appliedFilter(narrowing, field.fieldId);

@@ -21,7 +21,7 @@ begin
   end if;
   application_root_id := (checked_context ->> 'applicationRootId')::uuid;
 
-  select vortex_definition.project_consumer_release_evidence(
+  select vortex_definition.project_consumer_release(
     'application', root.root_id, p_application_release_revision
   ) into application_evidence
   from vortex_definition.roots as root
@@ -33,7 +33,7 @@ begin
   end if;
 
   select pg_catalog.jsonb_agg(
-    vortex_definition.project_consumer_release_evidence(
+    vortex_definition.project_consumer_release(
       'module', pin.target_root_id, pin.target_release_revision
     ) order by pin.target_root_id
   ) into module_evidence

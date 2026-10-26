@@ -7,7 +7,6 @@ export {
   parseControlData,
   parseControlEventHandlers,
   parseDateInputPayload,
-
   parseDialogPayload,
   parseDrawerPayload,
   parseFieldInputPayload,
@@ -16,7 +15,6 @@ export {
   parseRecordChoicePage,
   parseNumberInputPayload,
   parseRichTextInputPayload,
-
   parseTabsPayload,
   parseTextInputPayload,
   parseTypedFieldValue,
@@ -35,8 +33,6 @@ export {
   type ControlSemanticEventName,
   type DateInputData,
   type DateInputPayload,
-
-
   type DialogData,
   type DialogPayload,
   type DrawerData,
@@ -53,8 +49,6 @@ export {
   type NumberInputPayload,
   type RichTextInputData,
   type RichTextInputPayload,
-
-
   type TabsData,
   type TabsPayload,
   type TextInputData,
@@ -62,7 +56,6 @@ export {
   type TypedFieldValue,
   type TypedRecordReference,
   type TypedRichTextDocument,
-
   type ValidationData,
   type ValidationPayload,
 } from "./projected-data";
@@ -75,9 +68,7 @@ export { RichTextInput, type RichTextInputProps } from "./rich-text-input";
 export { NumberInput, type NumberInputProps } from "./number-input";
 export { BooleanInput, type BooleanInputProps } from "./boolean-input";
 export { DateInput, type DateInputProps } from "./date-input";
-;
 export { ChoiceInput, type ChoiceInputProps } from "./choice-input";
-;
 export { FieldInput, type FieldInputProps } from "./field-input";
 export { ValidationMessage, type ValidationMessageProps } from "./validation-message";
 export {
@@ -95,19 +86,9 @@ export { Button, type ButtonProps } from "./button";
 export { Tabs, type TabsProps } from "./tabs";
 export { Dialog, type DialogProps } from "./dialog";
 export { Drawer, type DrawerProps } from "./drawer";
-export {
-  FormContainer,
-  type FormContainerProps,
-  type FormFlowFeedback,
-} from "./form-container";
+export { FormContainer, type FormContainerProps, type FormFlowFeedback } from "./form-container";
 export { equalFormValue } from "./form-context";
-export {
-  UnsavedWorkProvider,
-  useUnsavedWorkGuard,
-  useUnsavedWorkRegistry,
-} from "./unsaved-work";
+export { UnsavedWorkProvider, useUnsavedWorkGuard, useUnsavedWorkRegistry } from "./unsaved-work";
 
 // Control Registrations & Registry
-export {
-  CONTROL_COMPONENT_REGISTRATIONS,
-} from "./registrations";
+export { CONTROL_COMPONENT_REGISTRATIONS } from "./registrations";

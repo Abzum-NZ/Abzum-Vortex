@@ -34,28 +34,10 @@ export {
 export * from "./storage-credentials";
 export { resolveFileStorageDestination, type FileStorageDestination } from "./storage-destination";
 export { createStoredUploadInspection } from "./upload-inspection";
-export {
-  createFileRemovalEligibilityService,
-  matchesProtectedLegalHold,
-  type FileHoldEvaluationScope,
-  type FileRemovalAuthorityResolution,
-  type FileRemovalEligibilityService,
-  type ResolveCurrentFileRemovalAuthority,
-} from "./removal-eligibility";
 export type {
   FileRemovalEligibilityDecision,
-  FileRemovalEligibilityRequest,
   FileRemovalRefusalReason,
 } from "./file-contracts";
-export {
-  createFileRemovalCoordinator,
-  type FilePreviewDeleter,
-  type FileRemovalCoordinator,
-  type FileRemovalCoordinatorDependencies,
-  type FileRemovalRepository,
-  type FileRemovalResult,
-  type FileStorageDeleter,
-} from "./object-removal";
 export {
   PENDING_UPLOAD_WINDOW_SECONDS,
   completeFileUpload,
@@ -72,7 +54,6 @@ export {
   type FileUploadCoordinatorDependencies,
   type FileUploadRenewalInput,
   type FileUploadRenewalResult,
-  type FileUploadRepository,
   type PendingUploadReservation,
   type PendingUploadState,
   type UploadAttachmentSettings,
@@ -98,7 +79,6 @@ export {
   type FileReadPurpose,
   type FileReadRefusal,
   type FileReadRefusalReason,
-  type FileReadRepository,
   type FileReadRequest,
   type FileReadResult,
   type FileReadStreamResponse,
@@ -111,17 +91,13 @@ export {
   type UpstreamStorageReadResult,
 } from "./read";
 export {
-  createSqlFileReadRepository,
   decideFileRead,
   locateFileApplication,
+  readFileForDownload,
   type FileApplicationLocation,
   type FileReadDecision,
   type FileReadSqlTransaction,
-} from "./read-repository";
-export {
-  createSqlVersionedFileMetadataRepository,
-  type VersionedFileMetadataRepository,
-} from "./versioned-metadata-repository";
+} from "./read";
 export {
   COMPONENT_BUNDLE_BUCKET,
   COMPONENT_BUNDLE_CONTENT_ADDRESS_LENGTH,

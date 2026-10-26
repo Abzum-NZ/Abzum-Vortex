@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { fail, requireExactKeys, requireRecord } from "./payload-parse";
+import { tableLevelResultSchema } from "@vortex/platform/schema";
 import {
-  parseTablePayload,
+  parseProjectedPart,
   type DisplayEventHandlers,
   type DisplayRow,
-  type TablePayload,
+  type DisplayTablePayload,
 } from "./projected-data";
-import type { TableGroups } from "./projected-grid-features";
+import type { DisplayTableGroups } from "./projected-data";
 
 const location = { propertyPath: ["groups"] };
 
@@ -17,7 +17,7 @@ type MemberPage = Readonly<{
    * The grid features the server projected with this page: a feature that depends on the rows
    * read (such as inline editing) follows the open group's page, not the collapsed groups' read.
    */
-  features: TablePayload["features"];
+  features: DisplayTablePayload["features"];
   next?: string;
   previous?: string;
   /** The page number within the open group, for the footer; the group is read a page at a time. */
@@ -40,36 +40,30 @@ const parseMembers = (
   page: number,
 ): Exclude<Members, Readonly<{ status: "loading" }>> | undefined => {
   if (value === undefined) return undefined;
-  const record = requireRecord(value, "A group's members must be an object", location);
-  switch (record.status) {
-    case "empty":
-    case "refused":
-    case "error":
-      requireExactKeys(record, ["status"], location);
-      return { status: record.status, key };
-    case "ready": {
-      requireExactKeys(record, ["status", "values"], location);
-      const payload = parseTablePayload(record.values, location);
-      return {
-        status: "ready",
-        refreshing: false,
-        page: {
-          key,
-          rows: payload.rows,
-          features: payload.features,
-          page,
-          ...(payload.nextContinuationToken === undefined
-            ? {}
-            : { next: payload.nextContinuationToken }),
-          ...(payload.previousContinuationToken === undefined
-            ? {}
-            : { previous: payload.previousContinuationToken }),
-        },
-      };
-    }
-    default:
-      return fail("A group's members have an unknown status", location);
-  }
+  const result = parseProjectedPart(
+    tableLevelResultSchema,
+    value,
+    "A group's members are invalid",
+    location,
+  );
+  if (result.status !== "ready") return { status: result.status, key };
+  const payload = result.values;
+  return {
+    status: "ready",
+    refreshing: false,
+    page: {
+      key,
+      rows: payload.rows,
+      features: payload.features,
+      page,
+      ...(payload.nextContinuationToken === undefined
+        ? {}
+        : { next: payload.nextContinuationToken }),
+      ...(payload.previousContinuationToken === undefined
+        ? {}
+        : { previous: payload.previousContinuationToken }),
+    },
+  };
 };
 
 /** The group a members state belongs to. */
@@ -77,14 +71,14 @@ export const memberKey = (members: Members): string =>
   members.status === "ready" ? members.page.key : members.key;
 
 export type GroupedTable = Readonly<{
-  groups: Extract<TableGroups, { status: "ready" }>;
+  groups: Extract<DisplayTableGroups, { status: "ready" }>;
   /** The open group's key; null while every group is closed. */
   expanded: string | null;
   members: Members | undefined;
   /** The open group's rows as the table shows them; empty while closed or reading. */
   rows: readonly DisplayRow[];
   /** The features projected with the open group's page; undefined while no page is shown. */
-  memberFeatures: TablePayload["features"] | undefined;
+  memberFeatures: DisplayTablePayload["features"] | undefined;
   toggle: (key: string) => void;
   /** Reads the open group's next or previous page. */
   move: (direction: "next" | "previous") => void;
@@ -99,7 +93,7 @@ export type GroupedTable = Readonly<{
  * the state again from what the server read; a reply for a group that is no longer open is dropped.
  */
 export function useGroupedTable(
-  values: TablePayload | undefined,
+  values: DisplayTablePayload | undefined,
   events: DisplayEventHandlers | undefined,
 ): GroupedTable | undefined {
   const groups = values?.groups?.status === "ready" ? values.groups : undefined;

@@ -9,18 +9,18 @@ import {
   type RequestDatabaseTransaction,
 } from "../db/request-transaction";
 import {
-  createEventConsumerProgressRepository,
+  acknowledgeEventConsumerOccurrence,
+  claimEventConsumerOccurrences,
+  renewEventConsumerLease,
   eventConsumerProgressLimits,
   type ClaimedEventOccurrence,
   type EventConsumerClaimResult,
-  type EventConsumerProgressRepository,
 } from "./consumer-progress";
 import {
-  createEventDeliveryRecoveryRepository,
+  reportEventDeliveryFailure,
   eventDeliveryFailureClassifications,
   eventDeliveryRecoveryLimits,
   type EventDeliveryFailureClassification,
-  type EventDeliveryRecoveryRepository,
 } from "./delivery-recovery";
 
 export const eventDispatcherLimits = Object.freeze({
@@ -537,14 +537,6 @@ export const createEventDispatcher = (
   const consumers = registerConsumers(dependencies.consumers);
   const run: EventDispatcherTransactionRunner =
     dependencies.runtimeTransaction ?? withRuntimeTransaction;
-  const progress = <Result>(
-    operation: (repository: EventConsumerProgressRepository) => Promise<Result>,
-  ): Promise<Result> =>
-    run((transaction) => operation(createEventConsumerProgressRepository(transaction)));
-  const recovery = <Result>(
-    operation: (repository: EventDeliveryRecoveryRepository) => Promise<Result>,
-  ): Promise<Result> =>
-    run((transaction) => operation(createEventDeliveryRecoveryRepository(transaction)));
   const logDeliveryError = (consumer: RegisteredConsumer, operation: string, error: unknown) => {
     const code = (error as { code?: unknown } | null)?.code;
     console.error("Event delivery interrupted", {
@@ -567,8 +559,8 @@ export const createEventDispatcher = (
     occurrenceId: string,
   ): Promise<string | undefined> => {
     try {
-      const renewal = await progress((repository) =>
-        repository.renewLease({
+      const renewal = await run((transaction) =>
+        renewEventConsumerLease(transaction, {
           consumerKey: consumer.consumerKey,
           ackCursor,
           occurrenceId,
@@ -592,13 +584,17 @@ export const createEventDispatcher = (
     if (outcome.kind === "continued") return "continued";
     try {
       if (outcome.kind === "completed") {
-        const acknowledgement = await progress((repository) =>
-          repository.acknowledge({ consumerKey: consumer.consumerKey, ackCursor, occurrenceId }),
+        const acknowledgement = await run((transaction) =>
+          acknowledgeEventConsumerOccurrence(transaction, {
+            consumerKey: consumer.consumerKey,
+            ackCursor,
+            occurrenceId,
+          }),
         );
         return acknowledgement.outcome === "claim_unavailable" ? "interrupted" : "acknowledged";
       }
-      const report = await recovery((repository) =>
-        repository.reportFailure({
+      const report = await run((transaction) =>
+        reportEventDeliveryFailure(transaction, {
           consumerKey: consumer.consumerKey,
           occurrenceId,
           claimCursor: ackCursor,
@@ -665,8 +661,8 @@ export const createEventDispatcher = (
   ): Promise<void> => {
     let claim: EventConsumerClaimResult;
     try {
-      claim = await progress((repository) =>
-        repository.claim({
+      claim = await run((transaction) =>
+        claimEventConsumerOccurrences(transaction, {
           consumerKey: consumer.consumerKey,
           batchSize,
           leaseSeconds: consumer.policy.leaseSeconds,

@@ -1,6 +1,5 @@
 import "server-only";
 
-import type { SessionContext } from "../access/identity-access";
 import type {
   BlockId,
   ConnectionTypeId,
@@ -19,7 +18,7 @@ import type { PlatformPin } from "./platform-pins";
 import type {
   DefinitionCompilationOutput,
   ApplicationCompilationOutput,
-  DefinitionPublicationHistoryEvidence,
+  DefinitionPublicationHistory,
   DefinitionResolutionSnapshot,
   ModuleCompilationOutput,
 } from "./definition-compilation-contracts";
@@ -87,7 +86,7 @@ export type DefinitionDraftCandidate = DefinitionCandidateDraft &
  */
 export type DefinitionPublicationCandidate = DefinitionCandidateDraft &
   Readonly<{
-    historyEvidence: DefinitionPublicationHistoryEvidence;
+    releaseHistory: DefinitionPublicationHistory;
     savedConditionHistory: readonly SavedConditionLike[];
     /**
      * The platform service operations and connection types the latest release pins, as platformPins
@@ -256,17 +255,6 @@ export interface DefinitionPublicationTransaction extends DefinitionPublicationR
   appendModuleRelease(release: DefinitionReleaseAppend): Promise<PublishDefinitionResult>;
   /** Must append the release and manifest and advance only this root's pointer atomically. */
   appendRelease(release: DefinitionReleaseAppend): Promise<PublishDefinitionResult>;
-}
-
-export interface DefinitionPublicationRepository {
-  read<Result>(
-    context: SessionContext,
-    operation: (reader: DefinitionPublicationReader) => Promise<Result>,
-  ): Promise<Result>;
-  transaction<Result>(
-    context: SessionContext,
-    operation: (transaction: DefinitionPublicationTransaction) => Promise<Result>,
-  ): Promise<Result>;
 }
 
 export type PreparedState = Readonly<{

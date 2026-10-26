@@ -3,6 +3,11 @@
 import type { ReactElement } from "react";
 import { Alert, AlertDescription, AlertTitle } from "../components/alert";
 import { equalFormValue, useFormScope } from "./form-context";
+import type {
+  FormDraftFeedback,
+  FormDraftFeedbackFieldState,
+  FormDraftFeedbackSupply,
+} from "@vortex/platform/schema";
 import type { TypedFieldValue } from "./projected-data";
 
 /**
@@ -24,42 +29,7 @@ export type FormDraftFeedbackMessage = Readonly<{
   text: string;
 }>;
 
-/** Located required, visible and disabled state for one form field in the draft. */
-export type FormDraftFeedbackFieldState = Readonly<{
-  fieldKey: string;
-  required: boolean;
-  disabled: boolean;
-  visible: boolean;
-}>;
-
-/**
- * Located requirement messages, form-level warnings and an optional refusal for
- * one exact draft. Every entry is already located on the form's own declared
- * field key by the supplying projection; this layer never remaps a field
- * identity and never invents authority from an input.
- */
-export type FormDraftFeedback = Readonly<{
-  /** Exact draft fingerprint this feedback was computed from. */
-  fingerprint: string;
-  fields: readonly FormDraftFeedbackFieldState[];
-  requirements: readonly Readonly<{ fieldKey: string; message: string }>[];
-  warnings: readonly string[];
-  refusal?: Readonly<{ message: string; fieldKey?: string }>;
-}>;
-
-/**
- * One supplied feedback result. `currentFingerprint` is the fingerprint of the
- * draft the form shows now; when it differs from `feedback.fingerprint` the
- * result is late or out of order and is discarded. `values` are the typed draft
- * values the projection used, keyed by the form's field key; the form compares
- * them to the current field values and discards feedback once a value diverges,
- * so an obsolete requirement, visibility or warning never stays on screen.
- */
-export type FormDraftFeedbackSupply = Readonly<{
-  currentFingerprint: string;
-  values: Readonly<Record<string, TypedFieldValue>>;
-  feedback: FormDraftFeedback;
-}>;
+export type { FormDraftFeedback, FormDraftFeedbackFieldState, FormDraftFeedbackSupply };
 
 /**
  * Located feedback applicable to one field, or nothing when none applies. A

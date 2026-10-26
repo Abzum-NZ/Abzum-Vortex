@@ -5,7 +5,7 @@ import {
   createBuilderAuthority,
   createDatabaseDefinitionPublicationService,
   createPreviewInstallationCoordinator,
-  createPreviewInstallationRepository,
+  readBuilderPreviewInstallation,
   DefinitionError,
   dropRetiredPreviewStorage,
   previewApplicationKey,
@@ -227,8 +227,7 @@ const readPreviewStateIn = (
         return { kind: "refused", reason: "permission_refused" } as const;
       throw error;
     }
-    const preview =
-      await createPreviewInstallationRepository(transaction).readBuilderPreview(rootId);
+    const preview = await readBuilderPreviewInstallation(transaction, rootId);
     if (
       preview !== undefined &&
       (!sameId(preview.applicationRootId, rootId) ||

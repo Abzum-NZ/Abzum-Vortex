@@ -2,7 +2,7 @@ import "server-only";
 
 import { pageIdSchema } from "../catalogue/identifiers";
 import { sameId } from "../catalogue/runtime-primitives";
-import { activeApplicationInstallationEvidenceSchema } from "../files/storage";
+import { activeApplicationInstallationSchema } from "../files/storage";
 import { inspectApplicationPageReplacements } from "../pages/application-page-replacement";
 import type { PageDefinition } from "./application-contracts";
 import { z } from "zod";
@@ -55,7 +55,7 @@ const verifyContext = (context: InstalledRuntimeContext): void => {
   const installation = context.installation;
   const registration = context.permissionRegistration;
   const registeredRelease = registration.applicationRelease;
-  if (!activeApplicationInstallationEvidenceSchema.safeParse(installation).success) unavailable();
+  if (!activeApplicationInstallationSchema.safeParse(installation).success) unavailable();
   if (
     !sameId(application.organizationId, context.organizationId) ||
     !sameId(application.rootId, context.applicationRootId) ||

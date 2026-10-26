@@ -206,7 +206,7 @@ begin
     end if;
     authority_after := authority_before;
   else
-    authority_after := vortex_access.private_management_scope_from_permission_evidence(
+    authority_after := vortex_access.private_management_scope_from_permission(
       candidate -> 'permissions'
     );
   end if;

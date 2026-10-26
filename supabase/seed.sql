@@ -17,12 +17,3 @@ insert into vortex_access.system_actor_grants (
   'dispatch_event_occurrences'
 );
 
--- Terminal derived-value failures use the dispatcher's existing scoped recovery operation.
-insert into vortex_access.system_actor_grants (
-  system_actor_grant_id, system_actor_id, operation_key, scope_key
-)
-select pg_catalog.gen_random_uuid(), system_actor_id, 'recover_consumer_occurrence_claim',
-  'installation-derived-values'
-from vortex_access.system_actor_grants
-where operation_key = 'dispatch_event_occurrences' and state = 'active'
-  and organization_id is null and flow_id is null and scope_key is null;

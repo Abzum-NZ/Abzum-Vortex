@@ -7,9 +7,9 @@ import {
 } from "@vortex/platform/schema";
 import type {
   DisplaySemanticEvent,
-  TableExportRun,
-  TableExportScope,
-  TablePayload,
+  DisplayTableExportRun,
+  DisplayTableExportScope,
+  DisplayTablePayload,
 } from "@vortex/ui";
 import type { ApplicationPageModel } from "../../../../../../_lib/application-page";
 import { recordsTableAddress } from "./records-table-address";
@@ -64,10 +64,10 @@ export function useRecordsExport({
   /** The sealed descriptor and unticked records of "every matching record", when selected. */
   matchingOf: (
     placementId: string,
-    table: TablePayload,
+    table: DisplayTablePayload,
   ) => Readonly<{ token: string; excluded: readonly string[] }> | undefined;
 }>) {
-  const [runs, setRuns] = useState<Readonly<Record<string, TableExportRun>>>({});
+  const [runs, setRuns] = useState<Readonly<Record<string, DisplayTableExportRun>>>({});
   const controllers = useRef(new Map<string, AbortController>());
 
   // Another page of the application ends an export and forgets its result.
@@ -80,21 +80,24 @@ export function useRecordsExport({
     };
   }, [navigationKey]);
 
-  const record = useCallback((placementId: string, run: TableExportRun | undefined): void => {
-    setRuns((current) => {
-      const next = { ...current };
-      if (run === undefined) delete next[placementId];
-      else next[placementId] = run;
-      return next;
-    });
-  }, []);
+  const record = useCallback(
+    (placementId: string, run: DisplayTableExportRun | undefined): void => {
+      setRuns((current) => {
+        const next = { ...current };
+        if (run === undefined) delete next[placementId];
+        else next[placementId] = run;
+        return next;
+      });
+    },
+    [],
+  );
 
   const start = useCallback(
     async (
       placementId: string,
-      table: TablePayload,
+      table: DisplayTablePayload,
       held: SelectedRecords | undefined,
-      scope: TableExportScope,
+      scope: DisplayTableExportScope,
       format: RecordsTableExportFormat,
     ): Promise<void> => {
       if (controllers.current.has(placementId)) return;
@@ -196,7 +199,7 @@ export function useRecordsExport({
   );
 
   const eventsFor = useCallback(
-    (placementId: string, table: TablePayload, held: SelectedRecords | undefined) => ({
+    (placementId: string, table: DisplayTablePayload, held: SelectedRecords | undefined) => ({
       export_requested: (event: DisplaySemanticEvent) => {
         if (event.event !== "export_requested") return;
         return start(placementId, table, held, event.scope, event.format);

@@ -1,4 +1,4 @@
-create or replace function vortex_definition.read_preview_release_evidence()
+create or replace function vortex_definition.read_preview_release()
 returns jsonb
 language plpgsql
 volatile
@@ -15,13 +15,13 @@ begin
     raise exception using errcode = '42501', message = 'Preview installation address is required';
   end if;
 
-  application_value := vortex_definition.project_consumer_release_evidence(
+  application_value := vortex_definition.project_consumer_release(
     'application',
     (installation_value ->> 'applicationRootId')::uuid,
     (installation_value ->> 'applicationReleaseRevision')::bigint
   );
   select pg_catalog.jsonb_agg(
-    vortex_definition.project_consumer_release_evidence(
+    vortex_definition.project_consumer_release(
       'module',
       (binding.value ->> 'moduleRootId')::uuid,
       (binding.value ->> 'moduleReleaseRevision')::bigint
@@ -46,11 +46,11 @@ begin
 end
 $function$;
 
-alter function vortex_definition.read_preview_release_evidence() owner to vortex_owner;
+alter function vortex_definition.read_preview_release() owner to vortex_owner;
 
-revoke all on function vortex_definition.read_preview_release_evidence()
+revoke all on function vortex_definition.read_preview_release()
   from public, anon, authenticated, service_role, vortex_runtime;
-grant execute on function vortex_definition.read_preview_release_evidence()
+grant execute on function vortex_definition.read_preview_release()
   to vortex_request;
-comment on function vortex_definition.read_preview_release_evidence() is
+comment on function vortex_definition.read_preview_release() is
   'The exact release evidence of the preview the validated human Application request runs, from which its provisioning projects the release set the runtime renders.';

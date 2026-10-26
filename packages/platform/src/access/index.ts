@@ -9,11 +9,6 @@ export {
 } from "./definition-draft-write";
 
 export {
-  createStoredApplicationPermissionSource,
-  type StoredApplicationPermissionSourceDependencies,
-  type StoredApplicationPermissionSourceEvidence,
-} from "./stored-application-permission-source";
-export {
   applicationRoleTemplatePreparationErrorCodes,
   ApplicationRoleTemplatePreparationError,
   createApplicationRoleTemplateAdapter,
@@ -22,7 +17,6 @@ export {
   type ApplicationRoleTemplateAdapterDependencies,
   type ApplicationRoleTemplatePreparationErrorCode,
   type PrepareApplicationRoleRegistrationCandidateCommand,
-  type PrepareCurrentApplicationRoleTemplatesCommand,
 } from "./application-role-template-adapter";
 export {
   acceptOrganizationInvitation,
@@ -72,11 +66,6 @@ export {
   type OrganizationAccessOperationResult,
 } from "./organization-access-decision-access";
 export {
-  createOrganizationDirectRecordShareService,
-  type FixedOrganizationDirectRecordShareAdapter,
-  type OrganizationDirectRecordShareDependencies,
-} from "./organization-direct-record-share";
-export {
   createRecordShareGrantService,
   type RecordShareGrantDependencies,
   type RecordShareGrantState,
@@ -94,7 +83,6 @@ export {
   type OrganizationRoleChangeEvidenceErrorCode,
 } from "./organization-role-change-evidence";
 export {
-  createPermissionRegistryDefinitionAdapter,
   PermissionRegistryPreparationError,
   permissionRegistryPreparationErrorCodes,
   prepareApplicationPermissionRegistrationForHumanRequest,
@@ -119,13 +107,6 @@ export {
   type BuilderAuthorityDependencies,
   type BuilderTargetFactsReader,
 } from "./builder-authority";
-export {
-  createPermissionRegistryPrivateRepository,
-  PermissionRegistryRepositoryError,
-  permissionRegistryRepositoryErrorCodes,
-  type PermissionRegistryPrivateRepository,
-  type PermissionRegistryRepositoryErrorCode,
-} from "./permission-registry-repository";
 export {
   capabilityAllocationCommandSchema,
   capabilityAllocationResultSchema,

@@ -181,21 +181,21 @@ export function publicationCompatibilityRule(
     const history = context.publishedHistories?.find(
       (candidate) => candidate.definitionKey === key && candidate.kind === output.kind,
     );
-    const historyEvidence = context.publishedHistoryEvidence?.find(
+    const releaseHistory = context.publishedHistoryEvidence?.find(
       (candidate) => candidate.definitionKey === key && candidate.kind === output.kind,
     );
-    if (!history && !historyEvidence) {
+    if (!history && !releaseHistory) {
       failures.push(
         failure(output, "vortex.definition.prior_published_version_required", "required_value"),
       );
       continue;
     }
     try {
-      const result = historyEvidence
+      const result = releaseHistory
         ? compareDefinitionVersionImpactWithEvidence({
             kind: output.kind,
             validationContractVersion: output.validationContractVersion,
-            historyEvidence,
+            releaseHistory,
             candidate: output.canonical,
           })
         : output.kind === "module" && history?.kind === "module"

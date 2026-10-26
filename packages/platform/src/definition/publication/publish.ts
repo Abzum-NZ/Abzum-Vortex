@@ -20,7 +20,7 @@ import {
 } from "../application-contracts";
 import {
   definitionCompilationOutputSchema,
-  definitionPublicationHistoryEvidenceSchema,
+  definitionPublicationHistorySchema,
   definitionResolutionSnapshotSchema,
   sourceIdentityAssignmentSchema,
   type PublishedDefinitionHistory,
@@ -64,17 +64,10 @@ import {
   hasAuthenticResolutionFingerprint,
   hasAuthenticStoredCustomerDefinitionRelease,
 } from "../definition-release-integrity";
-import type { BuilderAuthority } from "../builder-authority";
-import {
-  createImmutableDefinitionPublicationCatalogue,
-  type ImmutableDefinitionPublicationCatalogueDefinition,
-} from "./read";
-import { createDefinitionPublicationService } from "../definition-publication";
 import type {
   DefinitionDraftCandidate,
   DefinitionPublicationCandidate,
   DefinitionPublicationReader,
-  DefinitionPublicationRepository,
   DefinitionPublicationTransaction,
   DefinitionReleaseAppend,
   OwnedModuleRoot,
@@ -570,18 +563,18 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
         latest.publication.releaseVersion !== state.historyLatestReleaseVersion)
     )
       return invalidStorage("readCandidate found inconsistent stored evidence");
-    const historyEvidence = definitionPublicationHistoryEvidenceSchema.safeParse({
+    const releaseHistory = definitionPublicationHistorySchema.safeParse({
       kind: state.draft.kind,
       definitionKey: state.draft.key,
       rootId: String(state.draft.rootId),
       anchorReleaseRevision: anchor,
       latestRelease: latest ?? null,
     });
-    if (!historyEvidence.success) return invalidStorage(historyEvidence.error);
+    if (!releaseHistory.success) return invalidStorage(releaseHistory.error);
     return {
       draft: state.draft,
       identities: state.identities,
-      historyEvidence: historyEvidence.data,
+      releaseHistory: releaseHistory.data,
       savedConditionHistory:
         state.draft.kind === "module" ? await this.readSavedConditionHistory(rootId) : [],
       latestPlatformPins: platformPins(latestApplication?.stored.dependencyManifest ?? []),
@@ -834,8 +827,8 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
     if (
       candidate.draft.kind !== "application" ||
       candidate.draft.source.kind !== "application" ||
-      candidate.historyEvidence.kind !== "application" ||
-      candidate.historyEvidence.anchorReleaseRevision !== expectedAnchorReleaseRevision ||
+      candidate.releaseHistory.kind !== "application" ||
+      candidate.releaseHistory.anchorReleaseRevision !== expectedAnchorReleaseRevision ||
       candidate.draft.publishedRevision !== expectedAnchorReleaseRevision ||
       releaseRevision !== expectedAnchorReleaseRevision
     )
@@ -1286,12 +1279,19 @@ const safeRepositoryOperation = async <Result>(
   }
 };
 
+/** Opens publication reads and writes over the request transaction, mapping storage failures. */
 export const createDatabaseDefinitionPublicationRepository = (
   transaction: RequestDatabaseTransaction,
-): DefinitionPublicationRepository => ({
-  read: (context, operation) =>
+) => ({
+  read: <Result>(
+    context: SessionContext,
+    operation: (reader: DefinitionPublicationReader) => Promise<Result>,
+  ): Promise<Result> =>
     safeRepositoryOperation(() => operation(new DatabasePublicationReader(transaction, context))),
-  transaction: (context, operation) =>
+  transaction: <Result>(
+    context: SessionContext,
+    operation: (transaction: DefinitionPublicationTransaction) => Promise<Result>,
+  ): Promise<Result> =>
     safeRepositoryOperation(() =>
       operation(new DatabasePublicationTransaction(transaction, context)),
     ),
@@ -1312,39 +1312,3 @@ export const readAuthenticatedApplicationPageAdoptionRelease = (
       expectedAnchorReleaseRevision,
     ),
   );
-
-/** Builds the production publication service from the database repository and one platform release catalogue. */
-export const createDatabaseDefinitionPublicationService = (
-  catalogueDefinition: ImmutableDefinitionPublicationCatalogueDefinition,
-  transaction: RequestDatabaseTransaction,
-  authority: BuilderAuthority,
-) => {
-  const service = createDefinitionPublicationService(
-    createDatabaseDefinitionPublicationRepository(transaction),
-    createImmutableDefinitionPublicationCatalogue(catalogueDefinition),
-    authority,
-  );
-  const compiling = async <Result>(operation: () => Promise<Result>): Promise<Result> => {
-    const [settings] = await transaction.query<{ idle_timeout: string }>`
-      select pg_catalog.current_setting('idle_in_transaction_session_timeout') as idle_timeout
-    `;
-    if (settings === undefined) throw new Error("Publication transaction settings are unavailable");
-    // Compilation can legitimately spend longer than a request's idle backstop between queries.
-    // Only this publication operation receives the exception; rollback clears it on failure.
-    await transaction.query`
-      select pg_catalog.set_config('idle_in_transaction_session_timeout', '0', true)
-    `;
-    const result = await operation();
-    await transaction.query`
-      select pg_catalog.set_config('idle_in_transaction_session_timeout', ${settings.idle_timeout}, true)
-    `;
-    return result;
-  };
-  return {
-    ...service,
-    prepare: (...args: Parameters<typeof service.prepare>) =>
-      compiling(() => service.prepare(...args)),
-    publish: (...args: Parameters<typeof service.publish>) =>
-      compiling(() => service.publish(...args)),
-  };
-};

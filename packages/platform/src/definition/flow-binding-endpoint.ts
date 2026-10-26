@@ -142,7 +142,7 @@ type FlowBindingEndpointDependencies = Readonly<{
     installation: InstalledFlowBindings,
   ) => Pick<FlowOrchestrator, "start" | "resume">;
   /**
-   * THE SEAM for #588's form-submit adapter (`createPrivateFormSubmitAdapter`): turns what a form
+   * THE SEAM for #588's form-submit adapter (`adaptPrivateFormSubmit`): turns what a form
    * submission supplies, and the record the form was rendered for, into the caller inputs of a
    * `form_submit` binding. Until it is supplied a `form_submit` binding is refused, so there is
    * never a second, ad hoc submit path.

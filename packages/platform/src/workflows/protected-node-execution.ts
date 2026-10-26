@@ -1,5 +1,13 @@
 import "server-only";
 
+import {
+  beginProtectedNodeEffect,
+  completeProtectedNodeEffect,
+  readProtectedNodeRun,
+  refreshProtectedNodeRunState,
+  replayProtectedNodeEffect,
+} from "./protected-node-store";
+
 import { jsonValueSchema, type JsonValue } from "../catalogue/common";
 import { builderKeySchema, workflowNodeIdSchema, workflowRunIdSchema } from "../catalogue/identifiers";
 import { findPlatformServiceOperation, PLATFORM_SERVICE_OPERATIONS } from "../catalogue/platform-service-operation-catalogue";
@@ -12,7 +20,6 @@ import { flowTaskChildLists, type FlowTask } from "./flow-contracts";
 import { flowTaskRegistry } from "./flow-task-registry";
 import { flowValueSchema, type FlowReference, type FlowValue } from "./flow-values";
 import { evaluateFlowFormula, type FlowRuntimeValue } from "../rules/flow-formula";
-import type { RequestDatabaseTransaction } from "../db/request-transaction";
 import { z } from "zod";
 import {
   resolveDurableActorContext,
@@ -152,18 +159,6 @@ export const protectedNodeRegisteredRunSchema = z
 
 export type ProtectedNodeRegisteredRun = z.infer<typeof protectedNodeRegisteredRunSchema>;
 
-/** The narrow run-store API. Kestra identifiers remain private to this server-side adapter. */
-export type ProtectedNodeRunStore = Readonly<{
-  read: (runId: string) => Promise<ProtectedNodeRegisteredRun | undefined>;
-  /** The #666 flow-start owner calls this seam after accepting the private Kestra mapping. */
-  write: (record: unknown) => Promise<boolean>;
-  refreshLastKnownState?: (
-    runId: string,
-    state: WorkflowExecutionReference["lastKnownState"],
-    refreshedAt: string,
-  ) => Promise<void>;
-}>;
-
 export class ProtectedNodeRunStoreError extends Error {
   constructor(readonly code: string, options?: ErrorOptions) {
     super(code, options);
@@ -189,21 +184,9 @@ export type ProtectedNodeEffectClaim =
   | Readonly<{ kind: "in_progress" }>
   | Readonly<{ kind: "unavailable" }>;
 
-type ProtectedNodeEffectReplay =
+export type ProtectedNodeEffectReplay =
   | Extract<ProtectedNodeEffectClaim, { kind: "completed" | "in_progress" | "unavailable" }>
   | Readonly<{ kind: "missing" }>;
-
-/** The existing private flow-effect ledger; the application action remains the owning transaction. */
-export type ProtectedNodeEffectLedger = Readonly<{
-  replay: (key: ProtectedNodeEffectKey, operationKey: string) => Promise<ProtectedNodeEffectReplay>;
-  begin: (transaction: RequestDatabaseTransaction, key: ProtectedNodeEffectKey, operationKey: string) => Promise<ProtectedNodeEffectClaim>;
-  complete: (
-    transaction: RequestDatabaseTransaction,
-    key: ProtectedNodeEffectKey,
-    outcome: string,
-    outputs: Readonly<Record<string, unknown>>,
-  ) => Promise<boolean>;
-}>;
 
 export type ProtectedNodeOperationIdentity = z.infer<typeof protectedOperationIdentitySchema>;
 
@@ -234,8 +217,6 @@ export type ProtectedNodeExecutionDependencies = Readonly<{
   callbackKey: () => Uint8Array | undefined;
   correlationId: () => string;
   clock?: () => Date;
-  runs: ProtectedNodeRunStore;
-  effects: ProtectedNodeEffectLedger;
   operations: ProtectedNodeOperationExecutor;
   readKestraState: (binding: ProtectedNodeRunRecord["kestra"]) => Promise<unknown>;
 }>;
@@ -517,7 +498,7 @@ export const createProtectedNodeExecution = (dependencies: ProtectedNodeExecutio
 
       let registeredRun: ProtectedNodeRegisteredRun | undefined;
       try {
-        const storedCandidate = await dependencies.runs.read(envelope.data.runId);
+        const storedCandidate = await readProtectedNodeRun(envelope.data.runId);
         registeredRun = storedCandidate === undefined
           ? undefined
           : parseRegisteredRun(storedCandidate, envelope.data.runId);
@@ -605,7 +586,7 @@ export const createProtectedNodeExecution = (dependencies: ProtectedNodeExecutio
       };
       let prior: ProtectedNodeEffectReplay;
       try {
-        prior = await dependencies.effects.replay(effectKey, context.purpose.operationKey);
+        prior = await replayProtectedNodeEffect(effectKey, context.purpose.operationKey);
       } catch (error) {
         console.error("[flows] protected node effect replay failed EFFECT_STORE_REPLAY_FAILED", {
           cause: error,
@@ -632,7 +613,7 @@ export const createProtectedNodeExecution = (dependencies: ProtectedNodeExecutio
         actorContext: context,
         inputs,
         effect: async (transaction, executeOperation): Promise<ProtectedNodeCallbackResponse> => {
-          const claim = await dependencies.effects.begin(transaction, effectKey, context.purpose.operationKey);
+          const claim = await beginProtectedNodeEffect(transaction, effectKey, context.purpose.operationKey);
           if (claim.kind === "unavailable")
             throw new Error("PROTECTED_EFFECT_UNAVAILABLE");
           if (claim.kind === "in_progress")
@@ -675,7 +656,7 @@ export const createProtectedNodeExecution = (dependencies: ProtectedNodeExecutio
               break;
           }
           response = safeResponse(response);
-          const stored = await dependencies.effects.complete(transaction, effectKey, ledgerOutcome(response), { response });
+          const stored = await completeProtectedNodeEffect(transaction, effectKey, ledgerOutcome(response), { response });
           if (!stored) throw new Error("PROTECTED_EFFECT_RESULT_UNAVAILABLE");
           return response;
         },
@@ -696,7 +677,7 @@ export const createProtectedNodeExecution = (dependencies: ProtectedNodeExecutio
         };
       let registeredRun: ProtectedNodeRegisteredRun | undefined;
       try {
-        const storedCandidate = await dependencies.runs.read(parsedRunId.data);
+        const storedCandidate = await readProtectedNodeRun(parsedRunId.data);
         registeredRun = storedCandidate === undefined
           ? undefined
           : parseRegisteredRun(storedCandidate, parsedRunId.data);
@@ -730,7 +711,7 @@ export const createProtectedNodeExecution = (dependencies: ProtectedNodeExecutio
           lastRefreshedAt: refreshedAt,
         });
         try {
-          await dependencies.runs.refreshLastKnownState?.(reference.runId, state, refreshedAt);
+          await refreshProtectedNodeRunState(reference.runId, state, refreshedAt);
         } catch (error) {
           // A failed cache write does not make Kestra's successful live answer stale.
           console.error(`[workflow] protected run status refresh failed: ${describeFailure(error)}`);

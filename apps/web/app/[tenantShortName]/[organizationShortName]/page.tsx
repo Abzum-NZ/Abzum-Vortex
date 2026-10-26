@@ -17,9 +17,8 @@ import {
 } from "@vortex/platform/server";
 import { OrganizationLauncherPage } from "./_components/organization-launcher-page";
 import {
-  suspendedOrganizationAccount,
-  TemporarilyUnavailableAddress,
-  unavailableAddress,
+  OrganizationAddressState,
+  SignInTemporarilyUnavailable,
 } from "./_components/address-states";
 import { openPermittedApplication } from "./_components/open-application";
 import { continueSessionOrEnd } from "../../auth/_lib/session-redirect";
@@ -60,8 +59,9 @@ export default async function OrganizationPage({ params }: OrganizationPageProps
   }
 
   if (identity.kind === "temporarily_unavailable")
-    return <TemporarilyUnavailableAddress retryHref={retryHref} />;
+    return <SignInTemporarilyUnavailable retryHref={retryHref} />;
   if (email === undefined) throw new Error("Active identity session resolved without an email");
+  const context = { session: identity.session, email, tenantShortName, organizationShortName };
 
   const resolved = await resolveApplicationAddress(
     identity.session,
@@ -69,10 +69,21 @@ export default async function OrganizationPage({ params }: OrganizationPageProps
     organizationShortName,
   );
   if (resolved.kind === "temporarily_unavailable")
-    return <TemporarilyUnavailableAddress retryHref={retryHref} />;
+    return (
+      <OrganizationAddressState
+        context={context}
+        state={{ kind: "temporarily_unavailable", retryHref }}
+      />
+    );
   if (resolved.kind === "suspended_super_administrator_account")
-    return suspendedOrganizationAccount;
-  if (resolved.kind !== "organization_launcher") return unavailableAddress;
+    return <OrganizationAddressState context={context} state={{ kind: "suspended" }} />;
+  if (resolved.kind !== "organization_launcher")
+    return (
+      <OrganizationAddressState
+        context={context}
+        state={{ kind: "unavailable", back: "chooser" }}
+      />
+    );
 
   const defaultApplication = resolved.read.applications.find(
     (application) => application.applicationRootId === resolved.read.defaultApplicationRootId,

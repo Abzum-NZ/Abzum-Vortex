@@ -51,7 +51,7 @@ import {
   createPrivateFormDraftService,
   privateFormDraftLimits,
   type PrivateFormDraft,
-  type PrivateFormDraftAuthorityAdapter,
+  type LoadPrivateFormDraftAuthority,
   type PrivateFormDraftFieldValidation,
   type PrivateFormDraftScope,
   type PrivateFormDraftServiceDependencies,
@@ -613,10 +613,9 @@ const pageAccess = (
   });
 };
 
-const createAuthorityAdapter = (
-  dependencies: GuidedFormDependencies,
-): PrivateFormDraftAuthorityAdapter => ({
-  async load(transaction, scope, form) {
+const guidedFormAuthorityLoader =
+  (dependencies: GuidedFormDependencies): LoadPrivateFormDraftAuthority =>
+  async (transaction, scope, form) => {
     const context = await dependencies.readContext(transaction, scope);
     if (context === undefined) return undefined;
     const pages = context.releaseSet.application.content.pages.filter((candidate) =>
@@ -691,13 +690,12 @@ const createAuthorityAdapter = (
         ...(Object.keys(fieldChoices).length === 0 ? {} : { fieldChoices }),
       },
     };
-  },
-});
+  };
 
 export const createGuidedFormDraftService = (dependencies: GuidedFormDependencies) => {
   const serviceDependencies: PrivateFormDraftServiceDependencies = {
     identityAuthorityId: dependencies.identityAuthorityId,
-    authority: createAuthorityAdapter(dependencies),
+    loadAuthority: guidedFormAuthorityLoader(dependencies),
   };
   return createPrivateFormDraftService(serviceDependencies);
 };

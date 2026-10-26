@@ -34,13 +34,12 @@ import {
 import {
   composeStorageAuthorityResolvers,
   createReadStorageAuthorityResolver,
-  type UpstreamStorageReader,
-} from "./read";
-import {
-  createSqlFileReadRepository,
   decideFileRead,
   locateFileApplication,
-} from "./read-repository";
+  readFileForDownload,
+  recordFileDownloadGrant,
+  type UpstreamStorageReader,
+} from "./read";
 import {
   decodeStructuredRecordImport,
   type StructuredRecordImportDecodeResult,
@@ -491,8 +490,7 @@ export const createFileRecordImportSourceService = (
             return sourceRefusal("file_not_found");
           }
 
-          const repository = createSqlFileReadRepository(transaction);
-          const initialCandidate = await repository.readFile(fileId.data);
+          const initialCandidate = await readFileForDownload(transaction, fileId.data);
           const initialFile =
             initialCandidate === null ? null : validCanonicalFile(initialCandidate);
           if (
@@ -512,7 +510,7 @@ export const createFileRecordImportSourceService = (
             activeKeyId: dependencies.activeKeyId,
             keys: dependencies.keys,
             resolveCurrentAuthority: composeStorageAuthorityResolvers({
-              read: createReadStorageAuthorityResolver(repository, clock),
+              read: createReadStorageAuthorityResolver(transaction, clock),
             }),
             clock,
           });
@@ -537,7 +535,7 @@ export const createFileRecordImportSourceService = (
               ),
             ).toISOString(),
           });
-          await repository.recordDownloadGrant({ grant, correlationId, purpose: "download" });
+          await recordFileDownloadGrant(transaction, { grant, correlationId, purpose: "download" });
           const credential = await bridge.mintStorageOperationCredential({
             request: { operation: "read", grant },
             ttlSeconds: MAXIMUM_FILE_STORAGE_OPERATION_SECONDS,
@@ -634,8 +632,7 @@ export const createFileRecordImportSourceService = (
       { organizationId: organization.data.organizationId, applicationRootId },
       async (transaction, scope) => {
         const finalDecision = await decideFileRead(transaction, fileId.data);
-        const repository = createSqlFileReadRepository(transaction);
-        const finalCandidate = await repository.readFile(fileId.data);
+        const finalCandidate = await readFileForDownload(transaction, fileId.data);
         const finalFile = finalCandidate === null ? null : validCanonicalFile(finalCandidate);
         if (
           finalFile === null ||

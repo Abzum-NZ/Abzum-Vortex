@@ -178,15 +178,15 @@ export const createDraftModuleOverlay = (
     return {
       draft,
       identities: identityAssignments(rootId, source, previous?.identities ?? []),
-      historyEvidence:
-        previous?.historyEvidence ??
+      releaseHistory:
+        previous?.releaseHistory ??
         ({
           kind: "module",
           definitionKey: source.key,
           rootId,
           anchorReleaseRevision: null,
           latestRelease: null,
-        } as DefinitionPublicationCandidate["historyEvidence"]),
+        } as DefinitionPublicationCandidate["releaseHistory"]),
       savedConditionHistory: previous?.savedConditionHistory ?? [],
       latestPlatformPins: previous?.latestPlatformPins ?? [],
     };
@@ -235,7 +235,7 @@ export const createDraftModuleOverlay = (
             draft: held.draft,
             identities: held.identities,
             currentReleaseVersion:
-              held.historyEvidence.latestRelease?.publication.releaseVersion ?? null,
+              held.releaseHistory.latestRelease?.publication.releaseVersion ?? null,
           };
     },
     readOwnedModuleRoots: (applicationRootId) => reader.readOwnedModuleRoots(applicationRootId),

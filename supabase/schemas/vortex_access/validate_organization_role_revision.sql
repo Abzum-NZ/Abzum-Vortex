@@ -1,4 +1,4 @@
-create or replace function vortex_access.validate_organization_role_revision_evidence()
+create or replace function vortex_access.validate_organization_role_revision()
 returns trigger
 language plpgsql
 security definer
@@ -250,14 +250,14 @@ begin
   return null;
 end
 $function$;
-alter function vortex_access.validate_organization_role_revision_evidence() owner to vortex_owner;
+alter function vortex_access.validate_organization_role_revision() owner to vortex_owner;
 
 
-revoke execute on function vortex_access.validate_organization_role_revision_evidence()
+revoke execute on function vortex_access.validate_organization_role_revision()
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
-comment on function vortex_access.validate_organization_role_revision_evidence() is
+comment on function vortex_access.validate_organization_role_revision() is
   'Deferred evidence check of one organisation role revision and its accepted permission entries. Definer, because it fires at commit under the request role, which has no table access.';
 
-alter function vortex_access.validate_organization_role_revision_evidence()
+alter function vortex_access.validate_organization_role_revision()
   owner to vortex_owner;

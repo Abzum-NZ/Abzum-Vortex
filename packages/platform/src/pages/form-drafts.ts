@@ -525,16 +525,14 @@ export type PrivateFormDraftAuthority = Readonly<{
  * the same protected transaction, and returns `undefined` when that release
  * does not declare them, so a draft is never resumed against a changed form.
  */
-export interface PrivateFormDraftAuthorityAdapter {
-  load(
-    transaction: RequestDatabaseTransaction,
-    scope: SelectedOrganizationScope,
-    form: PrivateFormDraftScope,
-  ): Promise<PrivateFormDraftAuthority | undefined>;
-}
+export type LoadPrivateFormDraftAuthority = (
+  transaction: RequestDatabaseTransaction,
+  scope: SelectedOrganizationScope,
+  form: PrivateFormDraftScope,
+) => Promise<PrivateFormDraftAuthority | undefined>;
 
 export type PrivateFormDraftServiceDependencies = HumanOrganizationRequestDependencies &
-  Readonly<{ authority: PrivateFormDraftAuthorityAdapter }>;
+  Readonly<{ loadAuthority: LoadPrivateFormDraftAuthority }>;
 
 const formScope = (command: PrivateFormDraftScope): PrivateFormDraftScope => ({
   formId: command.formId,
@@ -580,7 +578,7 @@ export const createPrivateFormDraftService = (
     unavailable: Result,
     operation: (projection: PrivateFormDraftProjection) => Promise<Result>,
   ): Promise<Result> => {
-    const authority = await dependencies.authority.load(transaction, scope, formScope(form));
+    const authority = await dependencies.loadAuthority(transaction, scope, formScope(form));
     if (authority === undefined) return unavailable;
     const checked = await runOrganizationAccessOperation(
       transaction,

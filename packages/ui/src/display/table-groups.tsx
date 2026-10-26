@@ -8,7 +8,7 @@ import { Empty, EmptyHeader, EmptyTitle } from "../components/empty";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../components/tooltip";
 import { Icon } from "../icons/icon";
 import { cn } from "../lib/utils";
-import type { TableGroup } from "./projected-grid-features";
+import type { DisplayTableGroup } from "./projected-data";
 import { TableTotals, TotalValues } from "./table-totals";
 import type { GridGroupCell } from "./table-grid";
 import { memberKey, type GroupedTable } from "./table-groups-state";
@@ -172,7 +172,7 @@ function GroupSection({
   children,
 }: Readonly<{
   id: string;
-  group: TableGroup;
+  group: DisplayTableGroup;
   columns: readonly Readonly<{ key: string; label: string }>[];
   cells: readonly GridGroupCell[] | undefined;
   rowIndex: number;
@@ -253,7 +253,7 @@ function GroupSection({
 function GroupPager({
   grouped,
   group,
-}: Readonly<{ grouped: GroupedTable; group: TableGroup }>): ReactElement | null {
+}: Readonly<{ grouped: GroupedTable; group: DisplayTableGroup }>): ReactElement | null {
   const state = grouped.members;
   if (state?.status !== "ready") return null;
   const { rows, next, previous, page } = state.page;

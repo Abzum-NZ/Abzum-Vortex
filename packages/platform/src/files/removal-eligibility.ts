@@ -1,20 +1,18 @@
 import "server-only";
 
 import { createHash } from "node:crypto";
-import { describeFailure, sameId } from "../catalogue/runtime-primitives";
+import { sameId } from "../catalogue/runtime-primitives";
 import {
   fileRemovalAuthoritySnapshotSchema,
   fileRemovalEligibilityDecisionSchema,
-  fileRemovalEligibilityRequestSchema,
   type FileRemovalAuthoritySnapshot,
   type FileRemovalEligibilityDecision,
-  type FileRemovalEligibilityRequest,
   type FileRemovalOwnerBinding,
   type FileRemovalRefusalReason,
   type ProtectedLegalHoldReference,
 } from "./file-contracts";
 
-export type FileHoldEvaluationScope = Readonly<{
+type FileHoldEvaluationScope = Readonly<{
   tenantId: string;
   organizationId: string;
   fileId: string;
@@ -35,7 +33,7 @@ const sameOwner = (left: FileRemovalOwnerBinding, right: FileRemovalOwnerBinding
   left.recordRevision === right.recordRevision;
 
 /** A hold protects only data in its exact tenant and organisation-owned scope. */
-export const matchesProtectedLegalHold = (
+const matchesProtectedLegalHold = (
   hold: ProtectedLegalHoldReference,
   fileScope: FileHoldEvaluationScope,
 ): boolean => {
@@ -274,71 +272,3 @@ export const evaluateResolvedFileRemovalAuthority = (
   candidate: unknown,
   now: Date,
 ): FileRemovalEligibilityDecision => evaluateFileRemovalEligibility(candidate, now);
-
-export type FileRemovalAuthorityResolution =
-  | Readonly<{ available: true; authority: FileRemovalAuthoritySnapshot }>
-  | Readonly<{ available: false }>;
-
-export type ResolveCurrentFileRemovalAuthority = (
-  request: FileRemovalEligibilityRequest,
-) => Promise<FileRemovalAuthorityResolution>;
-
-export type FileRemovalEligibilityService = Readonly<{
-  decideFileRemovalEligibility(candidate: unknown): Promise<FileRemovalEligibilityDecision>;
-}>;
-
-/**
- * Creates the authoritative File-service decision boundary. A caller can name
- * only a file; the injected resolver supplies every current ownership, relation,
- * hold and recovery-policy fact, and the injected server clock supplies time.
- */
-export const createFileRemovalEligibilityService = (
-  dependencies: Readonly<{
-    resolveCurrentAuthority: ResolveCurrentFileRemovalAuthority;
-    clock?: () => Date;
-  }>,
-): FileRemovalEligibilityService => {
-  if (typeof dependencies.resolveCurrentAuthority !== "function") {
-    throw new Error("File removal eligibility requires a current-authority resolver");
-  }
-  const clock = dependencies.clock ?? (() => new Date());
-
-  return Object.freeze({
-    decideFileRemovalEligibility: async (
-      candidate: unknown,
-    ): Promise<FileRemovalEligibilityDecision> => {
-      let now: Date;
-      try {
-        now = clock();
-      } catch (error) {
-        console.error(`[files] FILE_REMOVAL_CLOCK_UNAVAILABLE: ${describeFailure(error)}`);
-        return refused("authority_unavailable", new Date().toISOString());
-      }
-      const nowMilliseconds = now.getTime();
-      const decidedAt = Number.isFinite(nowMilliseconds)
-        ? now.toISOString()
-        : new Date().toISOString();
-      if (!Number.isFinite(nowMilliseconds)) {
-        return refused("authority_unavailable", decidedAt);
-      }
-
-      const request = fileRemovalEligibilityRequestSchema.safeParse(candidate);
-      if (!request.success) return refused("malformed_input", decidedAt);
-
-      let resolution: FileRemovalAuthorityResolution;
-      try {
-        resolution = await dependencies.resolveCurrentAuthority(request.data);
-      } catch (error) {
-        console.error(`[files] FILE_REMOVAL_AUTHORITY_UNAVAILABLE: ${describeFailure(error)}`);
-        return refused("authority_unavailable", decidedAt);
-      }
-      if (!resolution.available) return refused("authority_unavailable", decidedAt);
-      const authority = fileRemovalAuthoritySnapshotSchema.safeParse(resolution.authority);
-      if (!authority.success) return refused("authority_unavailable", decidedAt);
-      if (!sameId(authority.data.fileId, request.data.fileId)) {
-        return refused("ownership_mismatch", decidedAt);
-      }
-      return evaluateResolvedFileRemovalAuthority(authority.data, now);
-    },
-  });
-};

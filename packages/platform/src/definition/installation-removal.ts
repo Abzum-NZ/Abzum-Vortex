@@ -9,7 +9,7 @@ import {
   revisionSchema,
 } from "../catalogue/identifiers";
 import { sameId } from "../catalogue/runtime-primitives";
-import { moduleInstallationBindingEvidenceSchema } from "../files/storage";
+import { moduleInstallationBindingSchema } from "../files/storage";
 import { canonicalJson } from "./canonical-json";
 import {
   installationProblem,
@@ -32,7 +32,7 @@ const removalExpectedSchema = z
     organizationId: organizationIdSchema,
     applicationRootId: applicationRootIdSchema,
     applicationReleaseRevision: revisionSchema,
-    moduleBindings: z.array(moduleInstallationBindingEvidenceSchema).min(1).max(10_000),
+    moduleBindings: z.array(moduleInstallationBindingSchema).min(1).max(10_000),
   })
   .strict();
 

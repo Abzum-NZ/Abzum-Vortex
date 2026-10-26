@@ -251,59 +251,52 @@ const requireReadyUniquenessIndexes = async (
   }
 };
 
-export interface ApplicationInstallationLifecycleRepository {
-  activate(
-    command: ApplicationInstallationActivationCommand,
-  ): Promise<ApplicationInstallationLifecycleResult>;
-  detach(
-    command: ApplicationInstallationDetachCommand,
-  ): Promise<ApplicationInstallationLifecycleResult>;
-}
-
-/** Calls only the two fixed Application-wide lifecycle operations. */
-export const createApplicationInstallationLifecycleRepository = (
+/** Activates one Application installation through the fixed Application-wide lifecycle operation. */
+export const activateApplicationInstallation = async (
   transaction: RequestDatabaseTransaction,
-): ApplicationInstallationLifecycleRepository =>
-  Object.freeze({
-    async activate(commandCandidate: ApplicationInstallationActivationCommand) {
-      const command = applicationInstallationActivationCommandSchema.safeParse(commandCandidate);
-      if (!command.success)
-        throw new DefinitionError("INVALID_APPLICATION_INSTALLATION_LIFECYCLE_COMMAND");
-      try {
-        const activated = parseResult(
-          await transaction.query<LifecycleRow>`
-            select vortex_definition.activate_application_installation(
-              ${command.data.applicationRootId}::uuid,
-              ${command.data.applicationReleaseRevision}::bigint,
-              ${JSON.stringify(command.data.expectedModuleBindings)}::text::jsonb
-            ) as lifecycle_result
-          `,
-        );
-        await ensureLifecyclePolicies(transaction, command.data, activated);
-        await requireExecutableLifecyclePolicies(transaction, command.data, activated);
-        await requireReadyUniquenessIndexes(transaction, command.data, activated);
-        return activated;
-      } catch (error) {
-        throw mapFailure(error);
-      }
-    },
+  commandCandidate: ApplicationInstallationActivationCommand,
+): Promise<ApplicationInstallationLifecycleResult> => {
+  const command = applicationInstallationActivationCommandSchema.safeParse(commandCandidate);
+  if (!command.success)
+    throw new DefinitionError("INVALID_APPLICATION_INSTALLATION_LIFECYCLE_COMMAND");
+  try {
+    const activated = parseResult(
+      await transaction.query<LifecycleRow>`
+        select vortex_definition.activate_application_installation(
+          ${command.data.applicationRootId}::uuid,
+          ${command.data.applicationReleaseRevision}::bigint,
+          ${JSON.stringify(command.data.expectedModuleBindings)}::text::jsonb
+        ) as lifecycle_result
+      `,
+    );
+    await ensureLifecyclePolicies(transaction, command.data, activated);
+    await requireExecutableLifecyclePolicies(transaction, command.data, activated);
+    await requireReadyUniquenessIndexes(transaction, command.data, activated);
+    return activated;
+  } catch (error) {
+    throw mapFailure(error);
+  }
+};
 
-    async detach(commandCandidate: ApplicationInstallationDetachCommand) {
-      const command = applicationInstallationDetachCommandSchema.safeParse(commandCandidate);
-      if (!command.success)
-        throw new DefinitionError("INVALID_APPLICATION_INSTALLATION_LIFECYCLE_COMMAND");
-      try {
-        return parseResult(
-          await transaction.query<LifecycleRow>`
-            select vortex_definition.detach_application_installation(
-              ${command.data.applicationRootId}::uuid,
-              ${command.data.applicationReleaseRevision}::bigint,
-              ${JSON.stringify(command.data.expectedModuleBindings)}::text::jsonb
-            ) as lifecycle_result
-          `,
-        );
-      } catch (error) {
-        throw mapFailure(error);
-      }
-    },
-  });
+/** Detaches one Application installation through the fixed Application-wide lifecycle operation. */
+export const detachApplicationInstallation = async (
+  transaction: RequestDatabaseTransaction,
+  commandCandidate: ApplicationInstallationDetachCommand,
+): Promise<ApplicationInstallationLifecycleResult> => {
+  const command = applicationInstallationDetachCommandSchema.safeParse(commandCandidate);
+  if (!command.success)
+    throw new DefinitionError("INVALID_APPLICATION_INSTALLATION_LIFECYCLE_COMMAND");
+  try {
+    return parseResult(
+      await transaction.query<LifecycleRow>`
+        select vortex_definition.detach_application_installation(
+          ${command.data.applicationRootId}::uuid,
+          ${command.data.applicationReleaseRevision}::bigint,
+          ${JSON.stringify(command.data.expectedModuleBindings)}::text::jsonb
+        ) as lifecycle_result
+      `,
+    );
+  } catch (error) {
+    throw mapFailure(error);
+  }
+};

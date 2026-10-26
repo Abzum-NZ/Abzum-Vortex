@@ -13,23 +13,21 @@ import {
   TableRow,
 } from "../../components/table";
 import { cellValueToText, DisplayCellView } from "../cell";
+import { rowDetailResultSchema } from "@vortex/platform/schema";
+import { fail } from "../payload-parse";
 import {
-  fail,
-  requireArray,
-  requireExactKeys,
-  requireNonEmptyString,
-  requireRecord,
-} from "../payload-parse";
-import {
-  isInternalAddress,
-  parseFields,
-  type DisplayCellValue,
+  parseProjectedPart,
   type DisplayColumn,
-  type DisplayField,
+  type DisplayDetailCell,
+  type DisplayDetailField,
 } from "../projected-data";
 import type { GridFeatureModule, GridFeatureRowProps } from "./registry";
 
-type RelatedRow = Readonly<{ recordId: string; href?: string; fields: readonly DisplayField[] }>;
+type RelatedRow = Readonly<{
+  recordId: string;
+  href?: string;
+  fields: readonly DisplayDetailField[];
+}>;
 type RelatedPage = Readonly<{
   columns: readonly DisplayColumn[];
   rows: readonly RelatedRow[];
@@ -54,61 +52,25 @@ const location = { propertyPath: ["related_records"] };
  */
 const parseOutcome = (value: unknown): Outcome | undefined => {
   if (value === undefined) return undefined;
-  const record = requireRecord(value, "Related records must be an object", location);
-  switch (record.status) {
-    case "empty":
-    case "refused":
-    case "error":
-      requireExactKeys(record, ["status"], location);
-      return { status: record.status };
-    case "ready": {
-      requireExactKeys(record, ["status", "columns", "rows", "nextContinuationToken"], location);
-      const columns = requireArray(record.columns, "Related columns must be a list", location).map(
-        (column) => {
-          const entry = requireRecord(column, "A related column must be an object", location);
-          requireExactKeys(entry, ["key", "label"], location);
-          return {
-            key: requireNonEmptyString(entry.key, "A related column needs its key", location),
-            label: requireNonEmptyString(entry.label, "A related column needs its label", location),
-          };
-        },
-      );
-      const rows = requireArray(record.rows, "Related rows must be a list", location).map(
-        (row): RelatedRow => {
-          const entry = requireRecord(row, "A related row must be an object", location);
-          requireExactKeys(entry, ["recordId", "href", "fields"], location);
-          const href = entry.href;
-          if (href !== undefined && !isInternalAddress(href))
-            fail("A related record's page must be in this application", location);
-          return {
-            recordId: requireNonEmptyString(
-              entry.recordId,
-              "A related row needs its record",
-              location,
-            ),
-            ...(href === undefined ? {} : { href: href as string }),
-            fields: parseFields(entry.fields, location),
-          };
-        },
-      );
-      const next = record.nextContinuationToken;
-      return {
-        status: "ready",
-        page: {
-          columns,
-          rows,
-          ...(next === undefined
-            ? {}
-            : { next: requireNonEmptyString(next, "The next page needs its token", location) }),
-        },
-      };
-    }
-    default:
-      return fail("Related records have an unknown status", location);
-  }
+  const result = parseProjectedPart(
+    rowDetailResultSchema,
+    value,
+    "Related records are invalid",
+    location,
+  );
+  if (result.status !== "ready") return { status: result.status };
+  const next = result.nextContinuationToken;
+  return {
+    status: "ready",
+    page: {
+      columns: result.columns,
+      rows: result.rows,
+      ...(next === undefined ? {} : { next }),
+    },
+  };
 };
 
-const cellOf = (row: RelatedRow, column: DisplayColumn): DisplayCellValue =>
+const cellOf = (row: RelatedRow, column: DisplayColumn): DisplayDetailCell =>
   row.fields.find((field) => field.key.toLowerCase() === column.key.toLowerCase())?.value ?? {
     kind: "empty",
   };

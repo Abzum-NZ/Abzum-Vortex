@@ -1,5 +1,8 @@
 import "server-only";
 
+import type { z } from "zod";
+import type { rowDetailRowSchema, RowDetailResult } from "../display-payload-table";
+
 import type { IdentitySession, OrganizationSelectionCandidate } from "../../access/identity-access";
 import { sameId } from "../../catalogue/runtime-primitives";
 import type { BlockPropertyValueContract } from "../../definition/application-composition/block-property-values";
@@ -15,7 +18,6 @@ import { protectedQueryCommandSchema } from "../../queries/protected-query-contr
 import {
   collectRecordLinks,
   projectRecordDetailData,
-  type ProjectedCellValue,
   type RecordLinkResolver,
 } from "../component-data-projection";
 import type { PageSubjectReadResult } from "../page-subject-read";
@@ -30,26 +32,7 @@ import type { RecordsTableQueryRunner } from "../records-table-query";
 import { logRecordsTableRequestRefusal, recordsTableRequestRefusal } from "./index";
 
 /** One related record of an expanded row: its own record page, when the viewer may open it. */
-export type RowDetailRow = Readonly<{
-  recordId: string;
-  href?: string;
-  fields: readonly Readonly<{ key: string; label: string; value: ProjectedCellValue }>[];
-}>;
-
-/**
- * One page of an expanded row's related records. A refusal and an error carry nothing, so the
- * panel cannot show records the read did not authorise; the cause stays in the server log.
- */
-export type RowDetailResult =
-  | Readonly<{
-      status: "ready";
-      columns: readonly Readonly<{ key: string; label: string }>[];
-      rows: readonly RowDetailRow[];
-      nextContinuationToken?: string;
-    }>
-  | Readonly<{ status: "empty" }>
-  | Readonly<{ status: "refused" }>
-  | Readonly<{ status: "error" }>;
+export type RowDetailRow = z.input<typeof rowDetailRowSchema>;
 
 /** One expanded row's read: the installed placement, the row the browser named and the services. */
 export type RowDetailRequest = Readonly<{

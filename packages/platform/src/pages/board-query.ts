@@ -1,5 +1,8 @@
 import "server-only";
 
+import type { z } from "zod";
+import type { boardPayloadSchema } from "./display-payload-board";
+
 import { formatDecimal, formatMoney } from "./value-format";
 
 import {
@@ -44,7 +47,7 @@ import {
 } from "../definition/application-composition/records-table-features/column-filters";
 import type { ConditionalFormatStyle } from "../definition/application-composition/records-table-features/conditional-formatting";
 import { boardColumnReadRequestSchema } from "../definition/application-contracts";
-import { pipelineMovesFrom, type PipelineStageTone } from "../definition/record-type-pipelines";
+import { pipelineMovesFrom } from "../definition/record-type-pipelines";
 import { exactDecimalTextSchema, moneyValueSchema } from "../records/module-field-values";
 import { richTextDocumentSchema } from "../records/rich-text";
 import type { RecordsTableFilterValue } from "./records-table-filters";
@@ -200,6 +203,21 @@ const boardFormattingStyles = (
     : {};
 
 /**
+ * One bucket in its read state: an untouched bucket carries no count, totals or cards; a read one
+ * carries all three, and is undefined when its page is missing.
+ */
+const boardBucket = (
+  rowCount: number | null,
+  aggregates: readonly BoardMetric[],
+  page: BoardPagePayload | null,
+) =>
+  rowCount === null
+    ? { state: "unread" as const, rowCount: null, aggregates: [] as const, page: null }
+    : page === null
+      ? undefined
+      : { state: "read" as const, rowCount, aggregates, page };
+
+/**
  * One page of cards with only the card's own fields. The rules of the board's formatting are
  * evaluated here, on the rows the engine returned under the viewer's field policy; a value read
  * only for a rule never leaves, and a card that withholds a field a rule reads is not styled by it.
@@ -338,51 +356,10 @@ type BoardCardRow = Readonly<{
   /** The rule that formats the whole card, when one matched. */
   format?: Readonly<{ row: string }>;
 }>;
-type BoardPagePayload = Readonly<{
-  rows: readonly BoardCardRow[];
-  nextContinuationToken?: string;
-}>;
-type BoardBucketValues = Readonly<{
-  state: "unread" | "read";
-  rowCount: number | null;
-  aggregates: readonly BoardMetric[];
-  page: BoardPagePayload | null;
-}>;
-/** One pipeline stage as a board column: its colour role, where a card may go and who owns it. */
-type BoardStageValues = Readonly<{
-  value: string;
-  label: string;
-  tone: PipelineStageTone;
-  moves: readonly string[];
-  gatedBy?: string;
-  /** A new record may start in this stage: the start stage or one it moves to, owned by no action. */
-  addable: boolean;
-}>;
+type BoardPagePayload = NonNullable<BoardPlacementValues["unassigned"]["page"]>;
 
-/** The board's ready values; the caller validates them with the board payload parser. */
-export type BoardPlacementValues = Readonly<{
-  kind: "board";
-  plan: Extract<ProtectedBoardArrangementResult, { arrangement: "board" }>["plan"];
-  choiceFieldId: string;
-  /** The key the record save names the choice field by when a card moves to another column. */
-  choiceFieldKey: string;
-  choiceFieldRequired: boolean;
-  /** The cards a column should not exceed; a column over it warns. */
-  wipLimit?: number;
-  quickAdd: boolean;
-  /** The fields people may filter the cards by and the filters this read applied; absent when off. */
-  filters?: Readonly<{
-    fields: readonly RecordsTableFilterField[];
-    applied: readonly RecordsTableFilterValue[];
-  }>;
-  /** The styles cards name through `format`; absent when the board has no Formatting. */
-  formatting?: Readonly<{ styles: Readonly<Record<string, ConditionalFormatStyle>> }>;
-  cardTitleFieldId: string;
-  cardFieldIds: readonly string[];
-  columns: readonly (BoardBucketValues & BoardStageValues)[];
-  /** Cards with no stage yet, and the stages they may move to: the start stage and its moves. */
-  unassigned: BoardBucketValues & Readonly<{ moves: readonly string[] }>;
-}>;
+/** The board's ready values, typed by the schema the browser parses them with. */
+export type BoardPlacementValues = z.input<typeof boardPayloadSchema>;
 
 export type BoardPlacementFailureCause =
   | "board_context_refused"
@@ -611,6 +588,12 @@ export const projectBoardPlacement = async (
             ? []
             : projectMetrics(binding.query.aggregates, board.totals, column.aggregates, fieldsById);
         if (stage === undefined || bucketAggregates === undefined) return [];
+        const bucket = boardBucket(
+          column.rowCount,
+          bucketAggregates,
+          projectPage(column.page, cardFieldIds, fieldsById, input.formatting, recordLinks),
+        );
+        if (bucket === undefined) return [];
         const owner = owners.find((action) => action.setsChoiceOption === column.value);
         return [
           {
@@ -622,10 +605,7 @@ export const projectBoardPlacement = async (
             ),
             ...(owner === undefined ? {} : { gatedBy: owner.label }),
             addable: owner === undefined && starts.includes(column.value),
-            state: column.rowCount === null ? ("unread" as const) : ("read" as const),
-            rowCount: column.rowCount,
-            aggregates: bucketAggregates,
-            page: projectPage(column.page, cardFieldIds, fieldsById, input.formatting, recordLinks),
+            ...bucket,
           },
         ];
       });
@@ -640,6 +620,18 @@ export const projectBoardPlacement = async (
           );
     if (unassignedAggregates === undefined || columns.length !== arranged.columns.length)
       return unavailable("board_metrics_invalid");
+    const unassignedBucket = boardBucket(
+      arranged.unassigned.rowCount,
+      unassignedAggregates,
+      projectPage(
+        arranged.unassigned.page,
+        cardFieldIds,
+        fieldsById,
+        input.formatting,
+        recordLinks,
+      ),
+    );
+    if (unassignedBucket === undefined) return unavailable("board_arrangement_mismatch");
 
     const choiceField = fieldsById.get(lower(choiceFieldId));
     if (choiceField === undefined) return unavailable("board_arrangement_mismatch");
@@ -668,16 +660,7 @@ export const projectBoardPlacement = async (
           moves: starts.filter((target) =>
             arranged.columns.some((candidate) => candidate.value === target),
           ),
-          state: arranged.unassigned.rowCount === null ? "unread" : "read",
-          rowCount: arranged.unassigned.rowCount,
-          aggregates: unassignedAggregates,
-          page: projectPage(
-            arranged.unassigned.page,
-            cardFieldIds,
-            fieldsById,
-            input.formatting,
-            recordLinks,
-          ),
+          ...unassignedBucket,
         },
       },
     };

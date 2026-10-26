@@ -16,8 +16,8 @@ import { isSafeLinkAddress } from "@vortex/platform/schema";
 import {
   isInternalAddress,
   isWebLinkAddress,
-  type DisplayCellValue,
-  type DisplayTableFieldValue,
+  type DisplayDetailCell,
+  type DisplayTableField,
 } from "./projected-data";
 import { RichTextDocumentView, richTextToPlainText } from "./rich-text";
 
@@ -33,7 +33,7 @@ const rowCountText = (count: number): string =>
  * with the declared column headings; a table with no rows says so, and one with more rows than are
  * shown says how many it holds.
  */
-function TableFieldView({ value }: Readonly<{ value: DisplayTableFieldValue }>): ReactElement {
+function TableFieldView({ value }: Readonly<{ value: DisplayTableField }>): ReactElement {
   if (value.rows.length === 0)
     return <span className="vortex-cell-empty text-muted-foreground">{NO_ROWS_TEXT}</span>;
   return (
@@ -74,7 +74,7 @@ function TableFieldView({ value }: Readonly<{ value: DisplayTableFieldValue }>):
  * Extracts a plain text representation from any display cell value.
  * Useful for accessible names, aria-labels and tooltips.
  */
-export function cellValueToText(value: DisplayCellValue, options?: DateFormatOptions): string {
+export function cellValueToText(value: DisplayDetailCell, options?: DateFormatOptions): string {
   switch (value.kind) {
     case "text":
       return value.text;
@@ -107,18 +107,12 @@ export function cellValueToText(value: DisplayCellValue, options?: DateFormatOpt
  * Pure display renderer for one closed cell value.
  * Emits pure React elements without script execution or raw HTML injection.
  */
-export function DisplayCellView({
-  value,
-}: Readonly<{ value: DisplayCellValue }>): ReactElement {
+export function DisplayCellView({ value }: Readonly<{ value: DisplayDetailCell }>): ReactElement {
   switch (value.kind) {
     case "text":
       return <span className="vortex-cell-text">{value.text}</span>;
     case "number":
-      return (
-        <span className="vortex-cell-number">
-          {value.formatted ?? String(value.value)}
-        </span>
-      );
+      return <span className="vortex-cell-number">{value.formatted ?? String(value.value)}</span>;
     case "boolean":
       return (
         <span className="vortex-cell-boolean" data-vortex-boolean={String(value.value)}>

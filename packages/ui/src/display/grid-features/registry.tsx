@@ -37,10 +37,14 @@ import {
   type RecordsTableFeatureProjection,
   type RecordsTableSortState,
 } from "@vortex/platform/schema";
-import type { DisplayEventHandlers, DisplayRow, TableNarrowing } from "../projected-data";
+import type {
+  DisplayEventHandlers,
+  DisplayRow,
+  DisplayTableNarrowing,
+  DisplayTablePayload,
+} from "../projected-data";
 import type { RowExpansionKind } from "../row-expansion";
 import type { RowLine, SubRowsKind, SubRowsOpen } from "../sub-rows";
-import type { TableSelectionParts } from "../projected-grid-features";
 import type { GridColumn, GridLayoutControls } from "../table-layout";
 import { GridToolbarScope } from "./toolbar";
 
@@ -67,9 +71,12 @@ export type GridFeatureContext = Readonly<{
    * The selection beyond the shown page: the read's sealed descriptor of every matching record and
    * the scope and bulk run the page holds. `paged` says the query has pages besides this one.
    */
-  selection: TableSelectionParts;
+  selection: Pick<
+    DisplayTablePayload,
+    "selectionToken" | "selectionScope" | "bulkRun" | "exportRun" | "actionAvailability"
+  >;
   paged: boolean;
-  narrowing: TableNarrowing | undefined;
+  narrowing: DisplayTableNarrowing | undefined;
   /** The order the page was read in, when it is the viewer's own or the authored default. */
   sort: RecordsTableSortState | undefined;
   /** The layout as the person has it now, including a change not yet stored. */

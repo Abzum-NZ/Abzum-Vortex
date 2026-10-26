@@ -18,7 +18,7 @@ import {
 import { toast } from "../../components/sonner";
 import { Spinner } from "../../components/spinner";
 import { Icon } from "../../icons/icon";
-import type { TableExportRun, TableExportScope } from "../projected-grid-features";
+import type { DisplayTableExportRun, DisplayTableExportScope } from "../projected-data";
 import type {
   GridFeatureContext,
   GridFeatureModule,
@@ -50,7 +50,7 @@ const selectionOf = (
 
 const request = (
   context: GridFeatureContext,
-  scope: TableExportScope,
+  scope: DisplayTableExportScope,
   format: RecordsTableExportFormat,
 ): void => {
   void context.events?.export_requested?.({ event: "export_requested", scope, format });
@@ -63,7 +63,7 @@ function ExportScopeItem({
   label,
 }: Readonly<{
   context: GridFeatureContext;
-  scope: TableExportScope;
+  scope: DisplayTableExportScope;
   label: string;
 }>): ReactElement {
   const formats = context.features.export?.formats ?? [];
@@ -88,7 +88,7 @@ function ExportScopeItem({
 }
 
 /** The one sentence of a finished, stopped or refused export, shown once as a toast. */
-function useExportToast(run: TableExportRun | undefined): void {
+function useExportToast(run: DisplayTableExportRun | undefined): void {
   const announced = useRef<string | undefined>(undefined);
   useEffect(() => {
     if (run === undefined || run.status === "running" || announced.current === run.runId) return;

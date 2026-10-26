@@ -9,22 +9,35 @@ import {
   type SystemApplicationBoundReleaseSetResult,
 } from "./definition-consumer-read";
 import {
+  installationRuntimeBundleKeySchema,
   installationRuntimeBundlePagesSectionSchema,
-  type installationRuntimeBundleSections,
+  installationRuntimeBundleSections,
   type InstallationRuntimeBundleSourceManifest,
 } from "./installation-runtime-bundle";
-import type { RequestDatabaseTransaction } from "../db/request-transaction";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
 import {
-  createActiveInstallationBundleRepository,
   activeInstallationBundleStateSchema,
   type ActiveInstallationBundleState,
 } from "./active-installation-bundle-repository";
+import {
+  activeApplicationInstallationSchema,
+  type ActiveApplicationInstallation,
+} from "../files/storage";
+import {
+  readInstallationRuntimeBundleSections,
+  type InstallationRuntimeBundleSections,
+} from "./installation-runtime-bundle-app";
+import {
+  DefinitionError,
+  classifyDatabaseError,
+  unexpectedDefinitionFailure,
+} from "./definition-error";
 import { z } from "zod";
 import {
   assembleHumanInstalledRuntimeContext,
   readHumanActiveInstallation,
   requireInstalledRuntimeContext,
-  type HumanInstalledRuntimeContextDependencies,
+  type HumanInstalledRuntimeScope,
   type InstalledRuntimeContext,
 } from "./installed-runtime-context";
 import { readInstalledRecordContributions } from "./installed-record-contributions";
@@ -248,9 +261,120 @@ const identityMatchesReleaseSet = (
   }
 };
 
+type ActiveBundleStateRow = DatabaseRow & { readonly bundle_state: unknown };
+
+type ActiveInstallationBundleErrorCode =
+  | "ACTIVE_INSTALLATION_BUNDLE_REFUSED"
+  | "ACTIVE_INSTALLATION_BUNDLE_UNAVAILABLE"
+  | "ACTIVE_INSTALLATION_BUNDLE_INTEGRITY_FAILED"
+  | "ACTIVE_INSTALLATION_BUNDLE_STORAGE_FAILED";
+
+const activeBundleFailure = (
+  error: unknown,
+): DefinitionError<ActiveInstallationBundleErrorCode> => {
+  if (error instanceof DefinitionError) return error;
+  const kind = classifyDatabaseError(error);
+  if (kind === "refused" || kind === "invalid")
+    return new DefinitionError("ACTIVE_INSTALLATION_BUNDLE_REFUSED", { cause: error });
+  if (kind === "not_found")
+    return new DefinitionError("ACTIVE_INSTALLATION_BUNDLE_UNAVAILABLE", { cause: error });
+  return unexpectedDefinitionFailure(
+    "ACTIVE_INSTALLATION_BUNDLE_STORAGE_FAILED",
+    error,
+    "installed-page-bundle-context",
+  );
+};
+
+/** Reads the active format-2 bundle state under the verified HUMAN request transaction. */
+const readActiveInstallationBundleState = async (
+  transaction: RequestDatabaseTransaction,
+): Promise<ActiveInstallationBundleState> => {
+  try {
+    const rows = await transaction.query<ActiveBundleStateRow>`
+      select vortex_definition.read_active_installation_bundle_identity() as bundle_state
+    `;
+    if (rows.length !== 1 || rows[0] === undefined)
+      throw new DefinitionError("ACTIVE_INSTALLATION_BUNDLE_UNAVAILABLE");
+    const parsed = activeInstallationBundleStateSchema.safeParse(rows[0].bundle_state);
+    if (!parsed.success)
+      throw unexpectedDefinitionFailure(
+        "ACTIVE_INSTALLATION_BUNDLE_INTEGRITY_FAILED",
+        parsed.error,
+        "installed-page-bundle-context",
+      );
+    const roots = parsed.data.identity.moduleBindings.map((binding) => binding.moduleRootId);
+    if (
+      new Set(roots.map((root) => root.toLowerCase())).size !== roots.length ||
+      parsed.data.identity.moduleBindings.some(
+        (binding, index) =>
+          index > 0 && roots[index - 1]!.toLowerCase() >= binding.moduleRootId.toLowerCase(),
+      )
+    )
+      throw new DefinitionError("ACTIVE_INSTALLATION_BUNDLE_INTEGRITY_FAILED");
+    return parsed.data;
+  } catch (error) {
+    throw activeBundleFailure(error);
+  }
+};
+
+const activeInstallationEvidence = (
+  state: ActiveInstallationBundleState,
+): ActiveApplicationInstallation => {
+  const identity = state.identity;
+  const installation = activeApplicationInstallationSchema.safeParse({
+    organizationId: identity.organizationId,
+    applicationRootId: identity.applicationRootId,
+    applicationReleaseRevision: identity.applicationReleaseRevision,
+    moduleBindings: identity.moduleBindings.map((binding) => ({
+      organizationId: identity.organizationId,
+      applicationRootId: identity.applicationRootId,
+      applicationReleaseRevision: identity.applicationReleaseRevision,
+      moduleRootId: binding.moduleRootId,
+      bindingRevision: binding.bindingRevision,
+      moduleReleaseRevision: binding.moduleReleaseRevision,
+      state: binding.state,
+    })),
+  });
+  if (!installation.success)
+    throw unexpectedDefinitionFailure(
+      "ACTIVE_INSTALLATION_BUNDLE_INTEGRITY_FAILED",
+      installation.error,
+      "installed-page-bundle-context",
+    );
+  return installation.data;
+};
+
+const readActiveInstallationBundleSections = async (
+  transaction: RequestDatabaseTransaction,
+  state: ActiveInstallationBundleState,
+): Promise<InstallationRuntimeBundleSections> => {
+  if (state.bundleIndex === null)
+    throw new DefinitionError("ACTIVE_INSTALLATION_BUNDLE_UNAVAILABLE");
+  try {
+    const keyCandidate = installationRuntimeBundleKeySchema.safeParse({
+      applicationRootId: state.identity.applicationRootId,
+      applicationReleaseRevision: state.identity.applicationReleaseRevision,
+      bundleFormatVersion: 2,
+    });
+    if (!keyCandidate.success)
+      throw unexpectedDefinitionFailure(
+        "ACTIVE_INSTALLATION_BUNDLE_INTEGRITY_FAILED",
+        keyCandidate.error,
+        "installed-page-bundle-context",
+      );
+    return await readInstallationRuntimeBundleSections(
+      transaction,
+      keyCandidate.data,
+      installationRuntimeBundleSections,
+    );
+  } catch (error) {
+    throw activeBundleFailure(error);
+  }
+};
+
 type HumanInstalledPageBundleContextDependencies = Readonly<{
   transaction: RequestDatabaseTransaction;
-  scope: HumanInstalledRuntimeContextDependencies["scope"];
+  scope: HumanInstalledRuntimeScope;
 }>;
 
 /**
@@ -261,7 +385,6 @@ type HumanInstalledPageBundleContextDependencies = Readonly<{
 export const createHumanInstalledPageBundleContextLoader = (
   dependencies: HumanInstalledPageBundleContextDependencies,
 ) => {
-  const repository = createActiveInstallationBundleRepository(dependencies.transaction);
   return Object.freeze({
     async load(): Promise<InstalledRuntimeContext> {
       // A preview request runs the preview's stored release set, never the live bundle.
@@ -269,18 +392,22 @@ export const createHumanInstalledPageBundleContextLoader = (
         const { loadHumanPreviewRuntimeContext } = await import("./preview-runtime-context");
         return loadHumanPreviewRuntimeContext(dependencies.transaction, dependencies.scope);
       }
-      const installation = await readHumanActiveInstallation({
-        activeInstallationReader: repository,
-        scope: dependencies.scope,
-      });
-      const state = await repository.readCurrentState();
+      const statePromise = readActiveInstallationBundleState(dependencies.transaction);
+      const installation = await readHumanActiveInstallation(
+        statePromise.then(activeInstallationEvidence),
+        dependencies.scope,
+      );
+      const state = await statePromise;
       const bundleIndex = state.bundleIndex;
       if (bundleIndex === null) throw new Error("INSTALLED_PAGE_BUNDLE_INDEX_UNAVAILABLE");
       const key = installedPageBundleKey(state.identity);
       const cached = installedPageBundles.get(key);
       let bundle: InstalledPageBundle;
       if (cached === undefined) {
-        const { sections, textLength } = await repository.readSections(state);
+        const { sections, textLength } = await readActiveInstallationBundleSections(
+          dependencies.transaction,
+          state,
+        );
         bundle = bundleFromSections(sections, state.identity.correlationId);
         identityMatchesReleaseSet(state, bundle.releaseSet);
         retainInstalledPageBundle(key, bundle, textLength);

@@ -108,10 +108,13 @@ export const readPageProjections = cache(
     session: IdentitySession,
     context: InstalledRuntimeContext,
     pageId: string,
-    subjectRecordId: string | undefined,
+    addressedSubjectId: string | undefined,
     selectedPlacementIds: ReadonlySet<string> | undefined,
     navigation: boolean,
   ) => {
+    // Only a well-formed record identity reaches a read; any other address names no record.
+    const parsedSubjectId = recordIdSchema.safeParse(addressedSubjectId);
+    const subjectRecordId = parsedSubjectId.success ? parsedSubjectId.data : undefined;
     const dependencies = requestDependencies();
     const selection: OrganizationSelectionCandidate = runtimeContextSelection(context);
     const definition = context.releaseSet.application.content.pages.find((page) =>

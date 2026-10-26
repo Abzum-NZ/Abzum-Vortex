@@ -51,65 +51,42 @@ export type FixedAuthenticatedNavigationProjection = Readonly<{
   sourceCorrelationId: string;
 }>;
 
-export interface FixedAuthenticatedNavigationProjectionAdapter<Command> {
-  load(
-    transaction: RequestDatabaseTransaction,
-    scope: SelectedOrganizationScope,
-    command: Command,
-  ): Promise<FixedAuthenticatedNavigationProjection>;
-}
-
-export type AuthenticatedNavigationProjectionDependencies<Command> =
-  HumanOrganizationRequestDependencies &
-    Readonly<{ adapter: FixedAuthenticatedNavigationProjectionAdapter<Command> }>;
-
 /**
  * Evaluates each distinct navigation permission through the same live Access decision path as
  * page capability, then projects the ordered tree. Every item the viewer does not currently
  * hold is dropped with its heading when that leaves the heading empty. Missing evidence is a
  * refusal to project, never a silently visible item.
  */
-export const createAuthenticatedNavigationProjectionService = <Command>(
-  dependencies: AuthenticatedNavigationProjectionDependencies<Command>,
-) => {
-  const requests = createHumanOrganizationRequestService(dependencies);
-  return Object.freeze({
-    project: (
-      session: IdentitySession,
-      candidate: OrganizationSelectionCandidate,
-      command: Command,
-    ): Promise<HumanOrganizationRequestResult<ProjectedNavigation>> =>
-      requests.run(session, candidate, async (transaction, scope) => {
-        const loaded = await dependencies.adapter.load(transaction, scope, command);
-        const bindings = loaded.permissionBindings;
-        const correlations = new Set([loaded.sourceCorrelationId.toLowerCase()]);
-        const decisions: Record<string, boolean> = {};
-        const permissionKeys = collectNavigationPermissionKeys(loaded.navigation);
-        const declarations = permissionKeys.map((permissionKey) => {
-          const binding = Object.hasOwn(bindings, permissionKey)
-            ? bindings[permissionKey]
-            : undefined;
-          if (binding === undefined || binding.permissionKey !== permissionKey)
-            throw new Error("NAVIGATION_PERMISSION_BINDING_UNAVAILABLE");
-          return binding.declaration;
-        });
-        // Every distinct permission is decided through the same live eligibility evaluation, all in
-        // one statement of this request instead of one round trip each. Each decision is still
-        // bound to this request's scope and access version, and its correlation must be this one
-        // request's.
-        const evaluated = await decideOrganizationAccessBatch(transaction, scope, declarations);
-        if (evaluated.length !== permissionKeys.length)
-          throw new Error("NAVIGATION_PERMISSION_EVIDENCE_UNAVAILABLE");
-        for (const [index, permissionKey] of permissionKeys.entries()) {
-          const decision = evaluated[index];
-          if (decision === undefined) throw new Error("NAVIGATION_PERMISSION_EVIDENCE_UNAVAILABLE");
-          correlations.add(decision.correlationId.toLowerCase());
-          decisions[permissionKey] = decision.allowed;
-        }
-        if (correlations.size !== 1) throw new Error("NAVIGATION_PERMISSION_EVIDENCE_UNAVAILABLE");
-        return projectNavigation(loaded.navigation, decisions);
-      }),
+const projectDecidedNavigation = async (
+  transaction: RequestDatabaseTransaction,
+  scope: SelectedOrganizationScope,
+  loaded: FixedAuthenticatedNavigationProjection,
+): Promise<ProjectedNavigation> => {
+  const bindings = loaded.permissionBindings;
+  const correlations = new Set([loaded.sourceCorrelationId.toLowerCase()]);
+  const decisions: Record<string, boolean> = {};
+  const permissionKeys = collectNavigationPermissionKeys(loaded.navigation);
+  const declarations = permissionKeys.map((permissionKey) => {
+    const binding = Object.hasOwn(bindings, permissionKey) ? bindings[permissionKey] : undefined;
+    if (binding === undefined || binding.permissionKey !== permissionKey)
+      throw new Error("NAVIGATION_PERMISSION_BINDING_UNAVAILABLE");
+    return binding.declaration;
   });
+  // Every distinct permission is decided through the same live eligibility evaluation, all in
+  // one statement of this request instead of one round trip each. Each decision is still
+  // bound to this request's scope and access version, and its correlation must be this one
+  // request's.
+  const evaluated = await decideOrganizationAccessBatch(transaction, scope, declarations);
+  if (evaluated.length !== permissionKeys.length)
+    throw new Error("NAVIGATION_PERMISSION_EVIDENCE_UNAVAILABLE");
+  for (const [index, permissionKey] of permissionKeys.entries()) {
+    const decision = evaluated[index];
+    if (decision === undefined) throw new Error("NAVIGATION_PERMISSION_EVIDENCE_UNAVAILABLE");
+    correlations.add(decision.correlationId.toLowerCase());
+    decisions[permissionKey] = decision.allowed;
+  }
+  if (correlations.size !== 1) throw new Error("NAVIGATION_PERMISSION_EVIDENCE_UNAVAILABLE");
+  return projectNavigation(loaded.navigation, decisions);
 };
 
 /**
@@ -270,20 +247,15 @@ export const createStoredNavigationProjectionService = (
       return { kind: "temporarily_unavailable" };
     }
     const stored = fixed;
-    return createAuthenticatedNavigationProjectionService({
-      ...requestDependencies,
-      adapter: {
-        load: async (_transaction, scope) => {
-          if (
-            scope.applicationRootId === undefined ||
-            !sameId(scope.organizationId, context.organizationId) ||
-            !sameId(scope.applicationRootId, applicationRootId)
-          )
-            throw new Error("STORED_NAVIGATION_HUMAN_SCOPE_UNAVAILABLE");
-          return stored;
-        },
-      },
-    }).project(session, candidate, undefined);
+    return requests.run(session, candidate, async (transaction, scope) => {
+      if (
+        scope.applicationRootId === undefined ||
+        !sameId(scope.organizationId, context.organizationId) ||
+        !sameId(scope.applicationRootId, applicationRootId)
+      )
+        throw new Error("STORED_NAVIGATION_HUMAN_SCOPE_UNAVAILABLE");
+      return projectDecidedNavigation(transaction, scope, stored);
+    });
   };
 
   return Object.freeze({ project });

@@ -5,7 +5,7 @@ import { registerRuntimePreview } from "./runtime-preview";
 import { correlationIdSchema } from "../catalogue/common";
 import { recordTypeIdSchema, revisionSchema, timestampSchema } from "../catalogue/identifiers";
 import { sameId } from "../catalogue/runtime-primitives";
-import { activeApplicationInstallationEvidenceSchema } from "../files/storage";
+import { activeApplicationInstallationSchema } from "../files/storage";
 import {
   systemApplicationBoundReleaseSetResultSchema,
   type SystemApplicationBoundReleaseSetResult,
@@ -14,7 +14,7 @@ import type { PreparedApplicationPermissionRegistration } from "../access/permis
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
 import {
   assembleHumanInstalledRuntimeContext,
-  type HumanInstalledRuntimeContextDependencies,
+  type HumanInstalledRuntimeScope,
   type InstalledRuntimeContext,
 } from "./installed-runtime-context";
 import { DefinitionError } from "./definition-error";
@@ -29,7 +29,7 @@ import {
 
 const previewRuntimeSourceSchema = z
   .object({
-    installation: activeApplicationInstallationEvidenceSchema,
+    installation: activeApplicationInstallationSchema,
     draftRevision: revisionSchema,
     expiresAt: timestampSchema,
     correlationId: correlationIdSchema,
@@ -96,7 +96,7 @@ const previewRelease = (
  */
 export const loadHumanPreviewRuntimeContext = async (
   transaction: RequestDatabaseTransaction,
-  scope: HumanInstalledRuntimeContextDependencies["scope"],
+  scope: HumanInstalledRuntimeScope,
 ): Promise<InstalledRuntimeContext> => {
   const held =
     scope.previewInstallationId === undefined
@@ -163,7 +163,7 @@ export const loadHumanPreviewRuntimeContext = async (
 
 const previewReleaseEvidenceSchema = z
   .object({
-    installation: activeApplicationInstallationEvidenceSchema,
+    installation: activeApplicationInstallationSchema,
     correlationId: correlationIdSchema,
     application: storedConsumerReleaseEvidenceSchema,
     modules: z.array(storedConsumerReleaseEvidenceSchema).min(1).max(10_000),
@@ -197,7 +197,7 @@ export const writePreviewRuntimeReleaseSet = async (
 ): Promise<void> => {
   await addressPreviewInstallation(transaction, previewInstallationId);
   const rows = await transaction.query<DatabaseRow & { readonly evidence: unknown }>`
-    select vortex_definition.read_preview_release_evidence() as evidence
+    select vortex_definition.read_preview_release() as evidence
   `;
   const evidence = previewReleaseEvidenceSchema.parse(
     rows.length === 1 ? rows[0]?.evidence : undefined,

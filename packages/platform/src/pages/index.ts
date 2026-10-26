@@ -21,13 +21,13 @@ export {
   organizationLauncherPlacementId,
   organizationLauncherShell,
 } from "./organization-launcher-page";
-
 export {
-  createAuthenticatedPageCapabilityService,
-  type AuthenticatedPageCapabilityDependencies,
-  type FixedAuthenticatedPageCapability,
-  type FixedAuthenticatedPageCapabilityAdapter,
-} from "./authenticated-page-capability";
+  organizationAddressStateActionPlacementId,
+  organizationAddressStatePage,
+  type OrganizationAddressState,
+} from "./organization-address-state-page";
+
+export { type FixedAuthenticatedPageCapability } from "./authenticated-page-capability";
 export {
   projectPageCapability,
   type PageCapabilityState,
@@ -77,11 +77,8 @@ export {
   type StoredPageCapabilitySelection,
 } from "./stored-page-capability";
 export {
-  createAuthenticatedNavigationProjectionService,
   createStoredNavigationProjectionService,
-  type AuthenticatedNavigationProjectionDependencies,
   type FixedAuthenticatedNavigationProjection,
-  type FixedAuthenticatedNavigationProjectionAdapter,
   type NavigationPermissionBinding,
   type StoredNavigationProjectionDependencies,
 } from "./navigation-projection";
@@ -157,18 +154,15 @@ export {
 export {
   readRecordsTableRowDetail,
   type RowDetailRequest,
-  type RowDetailResult,
   type RowDetailRow,
 } from "./records-table-features/master-detail";
+export type { RowDetailResult } from "./display-payload-table";
 export {
   readRecordsTablePivot,
-  type PivotCell,
-  type PivotDrill,
   type PivotRequest,
-  type PivotResult,
-  type PivotRow,
   type RecordsTablePivotQueryRunner,
 } from "./records-table-features/pivot";
+export type { PivotCell, PivotDrill, PivotResult, PivotRow } from "./display-payload-pivot";
 export { readPageSubjectInTransaction } from "./page-subject-read";
 export {
   createPageSubjectReader,
@@ -216,27 +210,13 @@ export {
   type UpdatePrivateFormDraftCommand,
   createPrivateFormDraftService,
   type PrivateFormDraftAuthority,
-  type PrivateFormDraftAuthorityAdapter,
+  type LoadPrivateFormDraftAuthority,
   type PrivateFormDraftServiceDependencies,
 } from "./form-drafts";
 export {
-  createPrivateFormContinuationAdapter,
-  type PrivateFormContinuationAdapter,
-  type PrivateFormContinuationDependencies,
-  type PrivateFormContinuationDraft,
-  type PrivateFormContinuationDraftDisposition,
-  type PrivateFormContinuationDraftPort,
-  type PrivateFormContinuationInput,
-  type PrivateFormContinuationResult,
-} from "./form-continuation";
-export {
-  createPageFormRequestAdapter,
-  createPrivateFormSubmitAdapter,
+  adaptPrivateFormSubmit,
   readPrivateFormSubmission,
-  type PageFormRequestAdapter,
-  type PageFormRequestDependencies,
   type PrivateFormSubmission,
-  type PrivateFormSubmitAdapter,
 } from "./form-request";
 export {
   buildQueryNoticeQueryBinding,

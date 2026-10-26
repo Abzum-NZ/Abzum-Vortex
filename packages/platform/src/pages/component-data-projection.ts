@@ -1,5 +1,6 @@
 import "server-only";
 
+import type { z } from "zod";
 import type { JsonValue } from "../catalogue/common";
 import type { BlockPropertyValueContract } from "../definition/application-composition/block-property-values";
 import {
@@ -13,12 +14,19 @@ import type { RecordsTableTotal } from "../definition/application-composition/re
 import type { tableCellTypeKeys } from "../records/module-field-values";
 import { gridLayoutVisibleFieldIds, type GridLayoutState } from "./grid-view-state";
 import type { RecordsTableFeatureProjection } from "./records-table-feature-projection";
-import type { RecordsTableFilterValue } from "./records-table-filters";
-import type { RecordsTablePivotView, RecordsTableSortState } from "./records-table-state";
+import type { RecordsTablePivotView } from "./records-table-state";
 import type {
   ProtectedQueryFieldBounds,
   ProtectedQueryRow,
 } from "../queries/protected-query-contracts";
+import type { displayDetailCellSchema, displayTableFieldSchema } from "./display-payload-parts";
+import type { recordDetailPayloadSchema } from "./display-payload-record-detail";
+import type {
+  displayTableGroupSchema,
+  displayTableGroupsSchema,
+  displayTableNarrowingSchema,
+  tableReadValuesSchema,
+} from "./display-payload-table";
 import { isExactDecimal } from "./value-format";
 import {
   asRecordLink,
@@ -42,23 +50,15 @@ import {
   type RecordsTableRowFormat,
 } from "./records-table-features";
 
-/**
- * One closed display value. It is structurally the value the shared display components render, so
- * the payload passes their projected-data parser unchanged; this module never imports the UI.
- */
-export type ProjectedCellValue = ProjectedScalarCellValue | ProjectedTableField;
+/** One closed display value of a record detail field, as the display payload schema accepts it. */
+export type ProjectedCellValue = z.infer<typeof displayDetailCellSchema>;
 
 /**
  * A table field's stored rows as a record detail shows them: its declared columns in declared order
  * with readable headings, at most the first page of rows with each row's cells for exactly those
  * columns, each a scalar display value, and how many rows the field holds in total.
  */
-export type ProjectedTableField = Readonly<{
-  kind: "field_table";
-  columns: readonly Readonly<{ key: string; label: string }>[];
-  rows: readonly Readonly<Record<string, ProjectedScalarCellValue>>[];
-  rowCount: number;
-}>;
+export type ProjectedTableField = z.infer<typeof displayTableFieldSchema>;
 
 /** The resolved links of one page, keyed by `recordLinkLabelKey`; absent when the read failed. */
 export type ProjectedRecordLinks = ReadonlyMap<string, ProjectedRecordLink>;
@@ -146,95 +146,18 @@ const isListRow = (row: TableSourceRow): row is ListRow =>
   row.revision !== undefined && row.capabilities !== undefined;
 
 /** One group of a grouped table: its key, its label and how many records it holds right now. */
-export type ProjectedTableGroup = Readonly<{
-  /** The canonical key of the group's value (see `recordsTableGroupKey`), never a display label. */
-  key: string;
-  label: string;
-  count: number;
-  totals?: readonly RecordsTableTotal[];
-  /** The group of records that hold no value, or whose value the viewer cannot see. */
-  unassigned?: true;
-}>;
+export type ProjectedTableGroup = z.input<typeof displayTableGroupSchema>;
 
-/**
- * The groups a grouped table was read with. `ready` carries one bounded count per group, read with
- * the table's own filters, search and access; `too_many` says the filtered records are more than a
- * grouped read counts, so the table shows its records flat until the viewer narrows them.
- */
-export type ProjectedTableGroups =
-  | Readonly<{
-      status: "ready";
-      fieldId: string;
-      groups: readonly ProjectedTableGroup[];
-      /** The records the groups hold together, as the same read counted them. */
-      total: number;
-      /** The key of the open group; absent while every group is closed. */
-      expanded?: string;
-      /**
-       * Where this page of groups sits: `first` when no group page precedes it, and `next` the
-       * opaque position that reads the following page (absent on the last page).
-       */
-      page: Readonly<{ first: boolean; next?: string }>;
-    }>
-  | Readonly<{ status: "too_many" }>;
+/** The groups a grouped table was read with, or the statement that there are too many to count. */
+export type ProjectedTableGroups = z.input<typeof displayTableGroupsSchema>;
 
-export type ProjectedTableValues = Readonly<{
-  kind: "table";
-  /** Declared sort fields readable on every record under this read's field policy. */
-  sortableFields: readonly string[];
-  columns: readonly Readonly<{ key: string; label: string }>[];
-  /**
-   * The declared columns the read did not request, in declared order: their headings only, never a
-   * value, so the person can show one again (which reads the page again with that column).
-   */
-  hiddenColumns: readonly Readonly<{ key: string; label: string }>[];
-  /** The person's layout of this grid: order, shown columns, widths and density. */
-  layout: GridLayoutState;
-  rows: readonly ProjectedTableRow[];
-  /** Present when the table is grouped: its rows are then the open group's members only. */
-  groups?: ProjectedTableGroups;
-  totals?: readonly RecordsTableTotal[];
-  /** The grid features this viewer may use on this read; absent when every feature is off. */
-  features?: RecordsTableFeatureProjection;
-  /** The order the page was read in, when it is the viewer's or the authored default sort. */
-  sort?: RecordsTableSortState;
-  /**
-   * The search and filters the page was read with, so the table shows them in its controls and
-   * tells a page that matched nothing apart from a table that has no records.
-   */
-  narrowing?: RecordsTableNarrowing;
-  page?: number;
-  hasNextPage?: boolean;
-  nextContinuationToken?: string;
-  /** The read's scan budget ran out before the page filled: more records may match on the next page. */
-  scanLimited?: boolean;
-  hasPreviousPage?: boolean;
-  previousContinuationToken?: string;
-  /**
-   * The sealed "every matching record" descriptor of this read, present only when bulk actions are
-   * on: the browser hands it back to select every matching record without listing them.
-   */
-  selectionToken?: string;
-}>;
+/** The table page the server reads for one placement, typed by the schema the browser parses. */
+export type ProjectedTableValues = z.input<typeof tableReadValuesSchema>;
 
 /** The viewer's search and filters a table page was read with; both empty when it was not narrowed. */
-export type RecordsTableNarrowing = Readonly<{
-  search: string | null;
-  filters: readonly RecordsTableFilterValue[];
-  /**
-   * The titles of the records the link filters name, read under the viewer's access in the page's
-   * one batched link read (record identity to title); a record the viewer may not read is
-   * "Restricted record".
-   */
-  recordTitles?: Readonly<Record<string, string>>;
-}>;
+export type RecordsTableNarrowing = z.input<typeof displayTableNarrowingSchema>;
 
-export type ProjectedRecordDetailValues = Readonly<{
-  kind: "record_detail";
-  recordId: string;
-  fields: readonly Readonly<{ key: string; label: string; value: ProjectedCellValue }>[];
-  heading?: ProjectedScalarCellValue;
-}>;
+export type ProjectedRecordDetailValues = z.infer<typeof recordDetailPayloadSchema>;
 
 /**
  * The display payload for one placement. Only `ready` carries values; a refusal never does, so a

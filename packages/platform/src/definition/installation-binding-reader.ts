@@ -4,11 +4,11 @@ import { z } from "zod";
 import { applicationRootIdSchema, organizationIdSchema } from "../catalogue/identifiers";
 import { sameId } from "../catalogue/runtime-primitives";
 import {
-  activeApplicationInstallationEvidenceSchema,
-  moduleInstallationBindingEvidenceSchema,
+  activeApplicationInstallationSchema,
+  moduleInstallationBindingSchema,
   type ActiveApplicationInstallationErrorCode,
-  type ActiveApplicationInstallationEvidence,
-  type ModuleInstallationBindingEvidence,
+  type ActiveApplicationInstallation,
+  type ModuleInstallationBinding,
 } from "../files/storage";
 import { canonicalJson } from "./canonical-json";
 import type { SystemApplicationBoundReleaseSetResult } from "./definition-consumer-read";
@@ -44,44 +44,35 @@ const mapFailure = (error: unknown): DefinitionError<ActiveApplicationInstallati
   }
 };
 
-export interface ActiveApplicationInstallationRepository {
-  readCurrent(): Promise<ActiveApplicationInstallationEvidence>;
-}
-
 /** Reads only the active installation selected by trusted human application context. */
-export const createActiveApplicationInstallationRepository = (
+export const readCurrentActiveApplicationInstallation = async (
   transaction: RequestDatabaseTransaction,
-): ActiveApplicationInstallationRepository =>
-  Object.freeze({
-    async readCurrent() {
-      try {
-        const rows = await transaction.query<ActiveInstallationRow>`
-          select vortex_definition.read_current_active_installation() as active_installation
-        `;
-        if (rows.length !== 1 || rows[0] === undefined || rows[0].active_installation === null)
-          throw new DefinitionError("ACTIVE_APPLICATION_INSTALLATION_UNAVAILABLE");
-        const result = activeApplicationInstallationEvidenceSchema.safeParse(
-          rows[0].active_installation,
-        );
-        if (!result.success)
-          throw unexpectedDefinitionFailure(
-            "ACTIVE_APPLICATION_INSTALLATION_INCOMPLETE",
-            result.error,
-            "installation-binding-reader",
-          );
-        return result.data;
-      } catch (error) {
-        throw mapFailure(error);
-      }
-    },
-  });
+): Promise<ActiveApplicationInstallation> => {
+  try {
+    const rows = await transaction.query<ActiveInstallationRow>`
+      select vortex_definition.read_current_active_installation() as active_installation
+    `;
+    if (rows.length !== 1 || rows[0] === undefined || rows[0].active_installation === null)
+      throw new DefinitionError("ACTIVE_APPLICATION_INSTALLATION_UNAVAILABLE");
+    const result = activeApplicationInstallationSchema.safeParse(rows[0].active_installation);
+    if (!result.success)
+      throw unexpectedDefinitionFailure(
+        "ACTIVE_APPLICATION_INSTALLATION_INCOMPLETE",
+        result.error,
+        "installation-binding-reader",
+      );
+    return result.data;
+  } catch (error) {
+    throw mapFailure(error);
+  }
+};
 
 export const installationBindingsSchema = z
   .object({
     organizationId: organizationIdSchema,
     applicationRootId: applicationRootIdSchema,
     registeredReleaseRevision: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).nullable(),
-    moduleBindings: z.array(moduleInstallationBindingEvidenceSchema).max(10_000),
+    moduleBindings: z.array(moduleInstallationBindingSchema).max(10_000),
   })
   .strict();
 
@@ -116,7 +107,7 @@ export const readInstallationBindings = async (
   return parsed.data;
 };
 
-const bindingTuple = (binding: ModuleInstallationBindingEvidence): readonly unknown[] => [
+const bindingTuple = (binding: ModuleInstallationBinding): readonly unknown[] => [
   binding.organizationId.toLowerCase(),
   binding.applicationRootId.toLowerCase(),
   binding.moduleRootId.toLowerCase(),
@@ -128,7 +119,7 @@ const bindingTuple = (binding: ModuleInstallationBindingEvidence): readonly unkn
 
 /** Bindings as order-independent tuples, so two binding sets compare by exact content. */
 export const sortedBindingTuples = (
-  bindings: readonly ModuleInstallationBindingEvidence[],
+  bindings: readonly ModuleInstallationBinding[],
 ): readonly (readonly unknown[])[] =>
   bindings.map(bindingTuple).sort((left, right) => {
     const leftKey = JSON.stringify(left);
@@ -157,9 +148,9 @@ export const releaseSetModuleTuples = (
 
 export const sameActiveBindings = (
   candidate: unknown,
-  expected: readonly ModuleInstallationBindingEvidence[],
+  expected: readonly ModuleInstallationBinding[],
 ): boolean => {
-  const parsed = z.array(moduleInstallationBindingEvidenceSchema).max(10_000).safeParse(candidate);
+  const parsed = z.array(moduleInstallationBindingSchema).max(10_000).safeParse(candidate);
   return (
     parsed.success &&
     canonicalJson(sortedBindingTuples(parsed.data)) === canonicalJson(sortedBindingTuples(expected))

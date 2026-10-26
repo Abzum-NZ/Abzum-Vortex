@@ -18,7 +18,7 @@ declare
   entries jsonb;
   next_after bigint;
 begin
-  checked_context := vortex_definition.validated_builder_evidence_read_context_internal();
+  checked_context := vortex_definition.validated_builder_read_context_internal();
   if p_key is null
     or pg_catalog.char_length(p_key) not between 3 and 120
     or p_key !~ '^[a-z][a-z0-9]*(?:_[a-z0-9]+)*(?:\.[a-z][a-z0-9]*(?:_[a-z0-9]+)*)+$'

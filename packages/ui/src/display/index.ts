@@ -11,13 +11,13 @@ export {
   parseSummaryPayload,
   parseTablePayload,
   parseTextPayload,
-  type DisplayCellValue,
+  type DisplayDetailCell,
   type DisplayColumn,
   type DisplayDataState,
   type DisplayEventHandler,
   type DisplayInlineEditResult,
   type DisplayEventHandlers,
-  type DisplayField,
+  type DisplayDetailField,
   type DisplayRefusalReason,
   type DisplayRichTextBlock,
   type DisplayRichTextDocument,
@@ -40,18 +40,17 @@ export {
   type SummaryData,
   type SummaryPayload,
   type TableData,
-  type TablePayload,
+  type DisplayTablePayload,
   type TextData,
   type TextPayload,
 } from "./projected-data";
 export type {
-  TableBulkRun,
-  TableBulkRunSummary,
-  TableExportRun,
-  TableExportScope,
-  TableSelectionParts,
-  TableSelectionScope,
-} from "./projected-grid-features";
+  DisplayTableBulkRun,
+  RecordsTableBulkRunSummary,
+  DisplayTableExportRun,
+  DisplayTableExportScope,
+  DisplayTableSelectionScope,
+} from "./projected-data";
 
 // Rich Text Rendering
 export { RichTextDocumentView, richTextToPlainText } from "./rich-text";

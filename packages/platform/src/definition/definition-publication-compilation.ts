@@ -6,7 +6,7 @@ import {
   moduleCompilationRequestSchema,
   savedConditionRevisionAssignmentSchema,
   type DefinitionCompilationOutput,
-  type DefinitionPublicationHistoryEvidence,
+  type DefinitionPublicationHistory,
   type SavedConditionRevisionAssignment,
 } from "./definition-compilation-contracts";
 import {
@@ -97,7 +97,7 @@ const assertFinalPublicationValidation = (
     | z.output<typeof moduleCompilationRequestSchema>,
   output: Exclude<DefinitionCompilationOutput, { kind: "connection_type" }>,
   dependencyOutputs: readonly DefinitionCompilationOutput[],
-  historyEvidence: DefinitionPublicationHistoryEvidence,
+  releaseHistory: DefinitionPublicationHistory,
   permissions: PlatformPermissionSource,
 ): void => {
   const validation = validateDefinitionSet({
@@ -105,7 +105,7 @@ const assertFinalPublicationValidation = (
     requests: [request],
     outputs: [output],
     dependencyOutputs,
-    publishedHistoryEvidence: [historyEvidence],
+    publishedHistoryEvidence: [releaseHistory],
   });
   if (!validation.valid) {
     const first = validation.failures[0]!;
@@ -129,7 +129,7 @@ const deriveSavedConditionRevisionsFromHistory = (
   candidate: DefinitionPublicationCandidate,
   conditions: readonly SavedConditionLike[],
 ): SavedConditionRevisionAssignment[] => {
-  const evidence = candidate.historyEvidence;
+  const evidence = candidate.releaseHistory;
   if (evidence.kind !== "module") return refuse("DEFINITION_HISTORY_INVALID");
   const latestReleaseIds = new Set(
     (evidence.latestRelease?.content.sharingConditions ?? []).map(
@@ -261,7 +261,7 @@ export const assertReleasable = (
     output: PublishableCompilationOutput;
     dependencyOutputs: readonly DefinitionCompilationOutput[];
   }>,
-  historyEvidence: DefinitionPublicationHistoryEvidence,
+  releaseHistory: DefinitionPublicationHistory,
   permissions: PlatformPermissionSource,
 ): void => {
   const output = compiled.output;
@@ -274,7 +274,7 @@ export const assertReleasable = (
     compiled.request,
     output,
     compiled.dependencyOutputs,
-    historyEvidence,
+    releaseHistory,
     permissions,
   );
 };
@@ -335,17 +335,17 @@ export const validateCandidate = (
   const candidate: DefinitionPublicationCandidate = {
     draft: validatedDraft(context, supplied.draft, command),
     identities: supplied.identities,
-    historyEvidence: supplied.historyEvidence,
+    releaseHistory: supplied.releaseHistory,
     savedConditionHistory: supplied.savedConditionHistory,
     latestPlatformPins: supplied.latestPlatformPins,
   };
   if (
-    candidate.historyEvidence.kind !== candidate.draft.kind ||
-    candidate.historyEvidence.definitionKey !== candidate.draft.key ||
-    String(candidate.historyEvidence.rootId) !== String(candidate.draft.rootId)
+    candidate.releaseHistory.kind !== candidate.draft.kind ||
+    candidate.releaseHistory.definitionKey !== candidate.draft.key ||
+    String(candidate.releaseHistory.rootId) !== String(candidate.draft.rootId)
   )
     refuse("DEFINITION_HISTORY_INVALID");
-  const latest = candidate.historyEvidence.latestRelease;
+  const latest = candidate.releaseHistory.latestRelease;
   // validatedDraft already authenticated this source's fingerprint.
   if (candidate.draft.publishedRevision !== latest?.publication.revision)
     refuse("DEFINITION_HISTORY_INVALID");

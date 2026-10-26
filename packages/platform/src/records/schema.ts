@@ -5,5 +5,4 @@ export * from "./record-lifecycle-policy";
 export * from "./record-ownership-mode";
 export * from "./record-links";
 export * from "./records";
-export * from "./record-share-operations";
 export * from "./safe-error-contracts";

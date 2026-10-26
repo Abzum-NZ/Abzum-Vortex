@@ -8,7 +8,7 @@ import {
 import { organizationIdSchema, sameId, type StoredDefinitionDraft } from "@vortex/platform/schema";
 import {
   BuilderAuthorityError,
-  createDatabaseDefinitionHistoryService,
+  createDefinitionHistoryService,
   readLiveHumanContext,
   requireBuilderAuthority,
   type LiveHumanContext,
@@ -192,7 +192,7 @@ export async function restoreStudioApplicationDraft(
             kind: "draft_change",
             rootId: command.data.selector.rootId,
           });
-          const service = createDatabaseDefinitionHistoryService(
+          const service = createDefinitionHistoryService(
             installedReleaseCatalogue,
             transaction,
             authority,

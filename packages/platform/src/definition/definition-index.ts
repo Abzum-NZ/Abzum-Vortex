@@ -42,17 +42,16 @@ export {
   type DefinitionPublicationCatalogue,
   type DefinitionReleaseAppend,
   type DefinitionPublicationTransaction,
-  type DefinitionPublicationRepository,
   type PreparedDefinitionPublication,
 } from "./definition-publication-contracts";
 export {
   type ApplicationDraftCompilation,
   type ApplicationDraftConditionContext,
-  createDefinitionPublicationService,
+  createDatabaseDefinitionPublicationService,
 } from "./definition-publication";
 export * from "./publication/publish";
 export * from "./publication/read";
 export * from "./application-bound-release-set";
 export * from "./prepared-installation-runtime-source";
 export * from "./application-release-adoption";
-export { createDatabaseDefinitionHistoryService } from "./definition-history-composition";
+export { createDefinitionHistoryService } from "./definition-history";

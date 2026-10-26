@@ -1,4 +1,4 @@
-create or replace function vortex_definition.project_consumer_release_evidence(
+create or replace function vortex_definition.project_consumer_release(
   p_kind text,
   p_root_id uuid,
   p_release_revision bigint
@@ -90,12 +90,12 @@ as $function$
     and root.kind = p_kind
 $function$;
 
-revoke all on function vortex_definition.project_consumer_release_evidence(text, uuid, bigint)
+revoke all on function vortex_definition.project_consumer_release(text, uuid, bigint)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-grant execute on function vortex_definition.project_consumer_release_evidence(text, uuid, bigint) to vortex_owner;
-comment on function vortex_definition.project_consumer_release_evidence(text, uuid, bigint) is
+grant execute on function vortex_definition.project_consumer_release(text, uuid, bigint) to vortex_owner;
+comment on function vortex_definition.project_consumer_release(text, uuid, bigint) is
   'Owner-private projection of one exact immutable release; performs no scope selection.';
 
-alter function vortex_definition.project_consumer_release_evidence(p_kind text, p_root_id uuid, p_release_revision bigint) owner to vortex_owner;
+alter function vortex_definition.project_consumer_release(p_kind text, p_root_id uuid, p_release_revision bigint) owner to vortex_owner;
 
-grant execute on function vortex_definition.project_consumer_release_evidence(p_kind text, p_root_id uuid, p_release_revision bigint) to postgres;
+grant execute on function vortex_definition.project_consumer_release(p_kind text, p_root_id uuid, p_release_revision bigint) to postgres;

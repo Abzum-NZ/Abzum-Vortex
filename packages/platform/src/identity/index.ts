@@ -48,11 +48,7 @@ export {
   suspendTenant,
   type ConfiguredTenantAdministrationDependencies,
 } from "./configured-tenant-administration";
-export {
-  createDefaultIdentitySessionService,
-  createIdentitySessionService,
-  type IdentitySessionServiceDependencies,
-} from "./identity-session";
+export { createIdentitySessionService } from "./identity-session";
 export {
   createOrganizationAccountStore,
   ensureIdentityProjection,
@@ -91,11 +87,6 @@ export {
   createOrganizationLauncherService,
   type OrganizationLauncherServiceDependencies,
 } from "./organization-launcher";
-export {
-  createOrganizationSetupReceiptReader,
-  readOrganizationSetupReceipt,
-  type OrganizationSetupReceiptReaderDependencies,
-} from "./organization-setup-receipt-identity";
 export {
   createOrganizationRuntimeSettingsStore,
   initializeOrganizationRuntimeSettings,

@@ -21,38 +21,38 @@ import {
 import type { permittedApplicationsToListValues } from "@vortex/ui";
 import { signOut } from "../../../auth/actions";
 
-export function OrganizationLauncherPage({
-  page,
-  shell,
-  placementId,
-  values,
-  organizationName,
-  organizationShortName,
-  account,
-  openApplication,
-  openEventId,
-  studio,
-  launcherHref,
-  platformBlockReleases,
-  fieldInputControlReleases,
-  platformThemeTokens,
-}: Readonly<{
+type OrganizationShellPageProps = Readonly<{
   page: PageDefinition;
   shell: ApplicationShell;
-  placementId: string;
-  values: ReturnType<typeof permittedApplicationsToListValues>;
   /** The organisation's display name; its short name is the address segment shown beside it. */
   organizationName: string;
   organizationShortName: string;
   account: ApplicationAccount;
-  openApplication: (event: DisplaySemanticEvent) => Promise<void>;
-  openEventId: string;
-  studio?: Readonly<{ href: string; tileId: string }>;
   launcherHref: string;
   platformBlockReleases: readonly PlatformBlockRelease[];
   fieldInputControlReleases: FieldInputControlReleaseMap;
   platformThemeTokens: PlatformThemeTokens;
-}>): ReactElement {
+}>;
+
+/**
+ * A platform page in the organisation shell: the header with the organisation switcher, the
+ * account menu (with sign out) and the appearance toggle, around the page's own blocks.
+ */
+function OrganizationShellPage({
+  page,
+  shell,
+  organizationName,
+  organizationShortName,
+  account,
+  launcherHref,
+  platformBlockReleases,
+  fieldInputControlReleases,
+  platformThemeTokens,
+  runtimeInputs,
+}: OrganizationShellPageProps &
+  Readonly<{
+    runtimeInputs: (router: ReturnType<typeof useRouter>) => Readonly<Record<string, unknown>>;
+  }>): ReactElement {
   const router = useRouter();
   const registry = useMemo(
     () => createPlatformComponentRegistryForReleases(platformBlockReleases),
@@ -85,25 +85,69 @@ export function OrganizationLauncherPage({
           organizationShortName,
           pageName: page.name,
         }}
-        runtimeInputs={{
-          [placementId]: {
-            data: { status: "ready", values },
-            events: {
-              row_action: (event: DisplaySemanticEvent) => {
-                if (event.event !== "row_action" || event.eventId !== openEventId) {
-                  console.error("[launcher] open refused: ROW_ACTION_EVENT_UNKNOWN");
-                  return;
-                }
-                if (studio !== undefined && event.recordId === studio.tileId) {
-                  router.push(studio.href);
-                  return;
-                }
-                return openApplication(event);
-              },
-            },
-          },
-        }}
+        runtimeInputs={runtimeInputs(router)}
       />
     </ApplicationAccountActionsProvider>
+  );
+}
+
+/** The organisation launcher: one tile per application the signed-in person may open. */
+export function OrganizationLauncherPage({
+  placementId,
+  values,
+  openApplication,
+  openEventId,
+  studio,
+  ...shellPage
+}: OrganizationShellPageProps &
+  Readonly<{
+    placementId: string;
+    values: ReturnType<typeof permittedApplicationsToListValues>;
+    openApplication: (event: DisplaySemanticEvent) => Promise<void>;
+    openEventId: string;
+    studio?: Readonly<{ href: string; tileId: string }>;
+  }>): ReactElement {
+  return (
+    <OrganizationShellPage
+      {...shellPage}
+      runtimeInputs={(router) => ({
+        [placementId]: {
+          data: { status: "ready", values },
+          events: {
+            row_action: (event: DisplaySemanticEvent) => {
+              if (event.event !== "row_action" || event.eventId !== openEventId) {
+                console.error("[launcher] open refused: ROW_ACTION_EVENT_UNKNOWN");
+                return;
+              }
+              if (studio !== undefined && event.recordId === studio.tileId) {
+                router.push(studio.href);
+                return;
+              }
+              return openApplication(event);
+            },
+          },
+        },
+      })}
+    />
+  );
+}
+
+/** An address that shows no application page: what happened and its one way forward. */
+export function OrganizationAddressStatePage({
+  actionPlacementId,
+  actionHref,
+  addressState,
+  ...shellPage
+}: OrganizationShellPageProps &
+  Readonly<{ actionPlacementId: string; actionHref: string; addressState: string }>): ReactElement {
+  return (
+    <div className="contents" data-vortex-address-state={addressState}>
+      <OrganizationShellPage
+        {...shellPage}
+        runtimeInputs={(router) => ({
+          [actionPlacementId]: { events: { action: () => router.push(actionHref) } },
+        })}
+      />
+    </div>
   );
 }

@@ -11,7 +11,7 @@ import type {
   ApplicationCompilationRequest,
   ModuleCompilationRequest,
   PublishedDefinitionHistory,
-  DefinitionPublicationHistoryEvidence,
+  DefinitionPublicationHistory,
 } from "../definition-compilation-contracts";
 import {
   type DefinitionSourceDocument,
@@ -100,7 +100,7 @@ export type DefinitionSetValidationContext = Readonly<{
   rawSources?: readonly unknown[];
   dependencyOutputs?: readonly Output[];
   publishedHistories?: readonly PublishedDefinitionHistory[];
-  publishedHistoryEvidence?: readonly DefinitionPublicationHistoryEvidence[];
+  publishedHistoryEvidence?: readonly DefinitionPublicationHistory[];
 }>;
 
 /**

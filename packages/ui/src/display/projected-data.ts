@@ -15,52 +15,62 @@ import {
   type DisplaySemanticEventName,
 } from "./display-events";
 import {
-  jsonValueSchema,
-  recordsTableTotalsSchema,
-  type RecordsTableTotal,
-  type JsonValue,
-  moduleFieldValueSchemas,
-  fieldIdSchema,
-  richTextDocumentSchema,
-  timestampSchema,
-  isSafeLinkAddress,
+  richTextPayloadSchema,
+  textPayloadSchema,
+  type RichTextPayload,
+  type TextPayload,
+  type DisplaySummaryMetric,
+  summaryPayloadSchema,
+  type SummaryPayload,
+  displayDataStateSchema,
+  displayFieldsSchema,
+  displayScalarCellSchema,
+  recordDetailPayloadSchema,
+  type RecordDetailPayload,
+  launcherRowsPayloadSchema,
+  type LauncherRowsPayload,
+  type DisplayDataState,
+  type DisplayDetailField,
   type BlockPropertyValueContract,
-  type ConditionalFormatStyle,
-  type PipelineStageTone,
-  type RecordsTableFeatureProjection,
-  type RecordsTableRowFormat,
-  type RecordsTableFilterField,
-  type RecordsTableFilterValue,
-  type RecordsTableSortKey,
-  type RecordsTableSortState,
-  RECORDS_TABLE_MAXIMUM_SORT_KEYS,
-  gridLayoutStateSchema,
-  recordsTableFeatureProjectionSchema,
-  type GridLayoutState,
-  isRecord,
+  tablePayloadSchema,
+  type DisplayTablePayload,
+  type BoardPayload,
 } from "@vortex/platform/schema";
 import type { DefinitionRenderErrorLocation } from "../definition-error";
-import { parseRowFormat } from "./projected-format";
-import {
-  parseTableGroups,
-  parseTableNarrowing,
-  parseTableSelectionParts,
-  parseSelectedRecordIds,
-  type TableGroups,
-  type TableSelectionParts,
-} from "./projected-grid-features";
-import {
-  fail,
-  requireRecord,
-  requireExactKeys,
-  requireString,
-  requireNonEmptyString,
-  requireArray,
-  requireFieldKey,
-  requirePositiveInteger,
-  requireBuilderKey,
-  requireFiniteNumber,
-} from "./payload-parse";
+import { fail, requireRecord } from "./payload-parse";
+
+export {
+  isInternalAddress,
+  type BoardBucketPayload,
+  type BoardColumnPayload,
+  type BoardPage,
+  type BoardPayload,
+  type CalendarPayload,
+  type CalendarView,
+  type DisplayColumn,
+  type DisplayDataState,
+  type DisplayDetailCell,
+  type DisplayDetailField,
+  type DisplayRefusalReason,
+  type DisplayRow,
+  type DisplayScalarCell,
+  type DisplaySummaryMetric,
+  type DisplayTableBulkRun,
+  type DisplayTableExportRun,
+  type DisplayTableExportScope,
+  type DisplayTableField,
+  type DisplayTableGroup,
+  type DisplayTableGroups,
+  type DisplayTableNarrowing,
+  type DisplayTablePayload,
+  type DisplayTableSelectionScope,
+  type LauncherRowsPayload,
+  type RecordDetailPayload,
+  type RecordsTableBulkRunSummary,
+  type RichTextPayload,
+  type SummaryPayload,
+  type TextPayload,
+} from "@vortex/platform/schema";
 
 /**
  * Validated structured rich-text document from the shared closed rich-text contract.
@@ -80,352 +90,31 @@ export type DisplayRichTextInline = Extract<
   { kind: "paragraph" }
 >["children"][number];
 
-/**
- * Closed projected display value rendered inside a cell, field, group or summary.
- * Every variant carries only a permitted presentation value; none can execute or fetch.
- * A table field's rows are accepted only as a record-detail field value.
- */
-export type DisplayCellValue = DisplayScalarCellValue | DisplayTableFieldValue;
-
-/**
- * A table field's rows on a record detail: its declared columns with readable headings, the first
- * page of rows with each row's scalar cells keyed by exactly those columns, and the field's total
- * row count, never fewer than the rows shown.
- */
-export type DisplayTableFieldValue = Readonly<{
-  kind: "field_table";
-  columns: readonly DisplayColumn[];
-  rows: readonly Readonly<Record<string, DisplayScalarCellValue>>[];
-  rowCount: number;
-}>;
-
-/** One display value that is not itself a table. */
-export type DisplayScalarCellValue =
-  | Readonly<{ kind: "text"; text: string }>
-  | Readonly<{ kind: "number"; value: number; formatted?: string }>
-  | Readonly<{ kind: "boolean"; value: boolean }>
-  | Readonly<{ kind: "date"; iso: string }> // ISO calendar date or offset timestamp
-  | Readonly<{ kind: "choice"; key: string; label: string }>
-  | Readonly<{ kind: "link"; address: string; label: string }>
-  | Readonly<{ kind: "rich_text"; document: DisplayRichTextDocument }>
-  | Readonly<{ kind: "record_link"; label: string; href?: string }> // href is an address in this application
-  | Readonly<{ kind: "restricted" }> // a linked record the viewer may not read
-  | Readonly<{ kind: "unavailable" }> // a linked record whose label could not be read
-  | Readonly<{ kind: "empty" }>;
-
-/** The record action kinds a row may report as available to the viewer. */
-const displayRowActionKinds = ["update", "delete", "restore"] as const;
-type DisplayRowActionKind = (typeof displayRowActionKinds)[number];
-
-/**
- * The per-row capabilities the Query engine decided for the viewer: the fields it may change on
- * this row and the record actions it may take. They only hide controls; the server re-checks
- * every change and action.
- */
-type DisplayRowCapabilities = Readonly<{
-  changeableFieldIds: readonly string[];
-  actions: readonly DisplayRowActionKind[];
-}>;
-
-/**
- * One permission-projected row addressed by its stable record identity. A Records table row also
- * carries the record revision an inline edit sends and its per-row capabilities; either is absent
- * when the payload does not carry it, and is never inferred.
- */
-export type DisplayRow = Readonly<{
-  recordId: string;
-  revision?: number;
-  capabilities?: DisplayRowCapabilities;
-  /** The record type title projected under the viewer's current access. */
-  title?: Readonly<{ fieldId: string; value: DisplayCellValue }>;
-  /**
-   * The stored value of each field the viewer may edit on this row (null when empty), as the
-   * field's own contract spells it. An editor starts from this, never from a displayed cell.
-   */
-  edit?: Readonly<Record<string, JsonValue>>;
-  cells: Readonly<Record<string, DisplayCellValue>>;
-  /** The style keys and measures the table's formatting gives the row, decided on the server. */
-  format?: RecordsTableRowFormat;
-  /**
-   * A tree row the viewer may read a matching child of, decided on the server; "unknown" when the
-   * server stopped before deciding, so the child level is read when the row is opened.
-   */
-  hasChildren?: true | "unknown";
-  /** The exact text of each readable number and money cell, for the range copy (see the server). */
-  exact?: Readonly<Record<string, string>>;
-}>;
-
-/** One declared table column; only declared columns are ever rendered. */
-export type DisplayColumn = Readonly<{ key: string; label: string }>;
-
-/** One labelled record-detail field. */
-export type DisplayField = Readonly<{ key: string; label: string; value: DisplayCellValue }>;
-
-/** One summary-block aggregate, which may be unavailable on its own. */
-export type DisplaySummaryMetric = Readonly<{
-  key: string;
-  label: string;
-  value: DisplayCellValue | Readonly<{ kind: "unavailable" }>;
-}>;
-
-/** The ready values a plain-text block renders. */
-export type TextPayload = Readonly<{ kind: "text"; value: DisplayCellValue }>;
-
-/** The ready values a structured rich-text block renders. */
-export type RichTextPayload = Readonly<{ kind: "rich_text"; document: DisplayRichTextDocument }>;
-
-/** The ready rows a launcher or link-tile block renders. */
-export type LauncherRowsPayload = Readonly<{
-  kind: "launcher_rows";
-  rows: readonly DisplayRow[];
-  headingKey: string;
-  secondaryKey?: string;
-}>;
-
-/** The viewer's search and filters one table page was read with. */
-export type TableNarrowing = Readonly<{
-  search: string | null;
-  filters: readonly RecordsTableFilterValue[];
-  /** The titles of the records the link filters name (record identity to title). */
-  recordTitles?: Readonly<Record<string, string>>;
-}>;
-
-/** The ready values a table block renders. */
-export type TablePayload = Readonly<{
-  kind: "table";
-  /** Declared sort fields readable on every record for this viewer. */
-  sortableFields: readonly string[];
-  columns: readonly DisplayColumn[];
-  /**
-   * The declared columns the page was read without, in declared order: headings only. Showing one
-   * reads the page again with it; hiding a shown column narrows the next read.
-   */
-  hiddenColumns: readonly DisplayColumn[];
-  /** The person's layout of the grid: column order, shown columns, widths and density. */
-  layout: GridLayoutState;
-  rows: readonly DisplayRow[];
-  /**
-   * Present when the table is grouped: the groups and their counts. The rows are then the open
-   * group's members only, so a closed table carries none.
-   */
-  groups?: TableGroups;
-  totals?: readonly RecordsTableTotal[];
-  /**
-   * The grid features the server projected for this viewer and read; absent when every feature is
-   * off. The table draws a feature only from this projection, never from its settings alone.
-   */
-  features?: RecordsTableFeatureProjection;
-  selectedRecordIds?: readonly string[];
-  /**
-   * The order the page was read in, when it is the viewer's sort or the authored default sort;
-   * absent when the bound query's own order applies. A key may name a sorted field that is not a
-   * visible column.
-   */
-  sort?: RecordsTableSortState;
-  /**
-   * The order the page address asks for while the page read in it is still on its way; the sort
-   * controls show it and a next sort gesture builds on it. Absent once the rows read in that order
-   * are shown, so `sort` alone names the order of the rows on screen.
-   */
-  requestedSort?: RecordsTableSortState;
-  /**
-   * The search and filters the page was read with; the table shows them in its controls and tells
-   * a page that matched nothing apart from a table with no records.
-   */
-  narrowing?: TableNarrowing;
-  page?: number;
-  pageCount?: number;
-  hasNextPage?: boolean;
-  nextContinuationToken?: string;
-  /** The read's scan budget ran out before the page filled: more records may match on the next page. */
-  scanLimited?: boolean;
-  hasPreviousPage?: boolean;
-  previousContinuationToken?: string;
-}> &
-  TableSelectionParts;
-
-export type CalendarView = "month" | "week" | "agenda";
-
-/** One permitted query row placed on a calendar day and shown with its declared title field. */
-type CalendarItemPayload = Readonly<{
-  recordId: string;
-  start: string;
-  end: string | null;
-  title: string;
-}>;
-
-/** The server-computed bounded window and arranged calendar items for one placement. */
-export type CalendarPayload = Readonly<{
-  kind: "calendar";
-  view: CalendarView;
-  date: string;
-  windowStart: string;
-  windowEnd: string;
-  timeZone: string;
-  endExclusive: boolean;
-  truncated: boolean;
-  items: readonly CalendarItemPayload[];
-}>;
-
-/** The ready values a record-detail block renders. */
-export type RecordDetailPayload = Readonly<{
-  kind: "record_detail";
-  recordId: string;
-  fields: readonly DisplayField[];
-  heading?: DisplayCellValue;
-}>;
-
-/** The ready values a summary-values block renders. */
-export type SummaryPayload = Readonly<{
-  kind: "summary_values";
-  values: readonly DisplaySummaryMetric[];
-}>;
-
-/** One fetched page of cards in a protected board bucket. */
-export type BoardPage = Readonly<{
-  rows: readonly Readonly<{
-    recordId: string;
-    revision: number;
-    capabilities: DisplayRowCapabilities;
-    /** Only currently readable declared card fields are present, each with its safe label. */
-    fields: readonly DisplayField[];
-    /** The key of the Formatting rule that styles the whole card, decided by the server. */
-    format?: Readonly<{ row: string }>;
-  }>[];
-  nextContinuationToken?: string;
-}>;
-
-/** Exact current protected totals plus a bounded page, or null when this bucket was untouched. */
-export type BoardBucketPayload = Readonly<{
-  state: "unread" | "reading" | "read";
-  rowCount: number | null;
-  aggregates: readonly DisplaySummaryMetric[];
-  page: BoardPage | null;
-}>;
-
-/**
- * One installed choice column in its pipeline's stage order: its colour role from the theme, the
- * stages a card in it may move to, the named action that owns it, if one does, and whether a new
- * record may start in it.
- */
-export type BoardColumnPayload = BoardBucketPayload &
-  Readonly<{
-    value: string;
-    label: string;
-    tone: PipelineStageTone;
-    moves: readonly string[];
-    gatedBy?: string;
-    /** A new record may start in this stage, so quick add offers it. */
-    addable: boolean;
-  }>;
-
-/** The ready values a Data grid in Board mode renders. */
-export type BoardPayload = Readonly<{
-  kind: "board";
-  plan: Readonly<{
-    moduleRootId: string;
-    moduleReleaseVersion: string;
-    queryId: string;
-  }>;
-  choiceFieldId: string;
-  /** The key a card move names the choice field by when it asks for the record to be saved. */
-  choiceFieldKey: string;
-  choiceFieldRequired: boolean;
-  /** The cards a column should not exceed; a column holding more warns. */
-  wipLimit?: number;
-  /** Each stage column offers adding a card there. */
-  quickAdd: boolean;
-  /**
-   * The fields people may filter the cards by and the filters this read applied; absent when the
-   * board offers no filters. The board shows them and reports changes; the server narrows.
-   */
-  filters?: Readonly<{
-    fields: readonly RecordsTableFilterField[];
-    applied: readonly RecordsTableFilterValue[];
-  }>;
-  /** The styles cards name through `format`; absent when the board has no Formatting. */
-  formatting?: Readonly<{ styles: Readonly<Record<string, ConditionalFormatStyle>> }>;
-  cardTitleFieldId: string;
-  /** The only field identities a card may carry; readable values and labels may be omitted. */
-  cardFieldIds: readonly string[];
-  columns: readonly BoardColumnPayload[];
-  /** Cards with no stage yet, and the stages they may move to: the start stage and its moves. */
-  unassigned: BoardBucketPayload & Readonly<{ moves: readonly string[] }>;
-}>;
-
 export type TextData = DisplayDataState<TextPayload>;
 export type RichTextData = DisplayDataState<RichTextPayload>;
 export type LauncherRowsData = DisplayDataState<LauncherRowsPayload>;
-export type TableData = DisplayDataState<TablePayload>;
+export type TableData = DisplayDataState<DisplayTablePayload>;
 export type RecordDetailData = DisplayDataState<RecordDetailPayload>;
 export type SummaryData = DisplayDataState<SummaryPayload>;
 export type BoardData = DisplayDataState<BoardPayload>;
-
-/** Fixed, data-free refusal reasons; a refused state never carries a value. */
-export type DisplayRefusalReason =
-  | "not_permitted"
-  | "access_ended"
-  | "not_found"
-  | "value_out_of_range"
-  | "dataset_limit_exceeded"
-  | "grouping_unavailable"
-  | "filter_field_not_filterable"
-  | "filter_unavailable"
-  | "filter_field_repeated"
-  | "filter_value_invalid"
-  | "filter_date_out_of_range"
-  | "filter_value_mismatch"
-  | "sort_field_not_sortable"
-  | "search_unavailable"
-  | "table_address_invalid";
-
-/**
- * Explicit, data-safe state for one placement, parameterised by that block's own ready values.
- * Only the `ready` state carries values; loading, empty, refused and error cannot leak data. Each
- * block names its own state type, so no closed union of every accepted payload exists centrally.
- */
-export type DisplayDataState<Values> =
-  | Readonly<{ status: "loading" }>
-  | Readonly<{ status: "empty" }>
-  /** A required query input has no value yet: the authored or fixed message, no query was run. */
-  | Readonly<{ status: "awaiting_input"; message: string }>
-  | Readonly<{ status: "refused"; reason: DisplayRefusalReason }>
-  | Readonly<{ status: "error" }>
-  | Readonly<{ status: "ready"; values: Values }>;
-
-const DISPLAY_REFUSAL_REASONS: readonly DisplayRefusalReason[] = [
-  "not_permitted",
-  "access_ended",
-  "not_found",
-  "value_out_of_range",
-  "dataset_limit_exceeded",
-  "grouping_unavailable",
-  "filter_field_not_filterable",
-  "filter_unavailable",
-  "filter_field_repeated",
-  "filter_value_invalid",
-  "filter_date_out_of_range",
-  "filter_value_mismatch",
-  "sort_field_not_sortable",
-  "search_unavailable",
-  "table_address_invalid",
-];
 
 // The data-free states carry no values, so one frozen instance serves every block's state type.
 const LOADING_STATE: DisplayDataState<never> = Object.freeze({ status: "loading" });
 const EMPTY_STATE: DisplayDataState<never> = Object.freeze({ status: "empty" });
 const ERROR_STATE: DisplayDataState<never> = Object.freeze({ status: "error" });
-const EMPTY_CELL: DisplayScalarCellValue = Object.freeze({ kind: "empty" });
-const RESTRICTED_CELL: DisplayScalarCellValue = Object.freeze({ kind: "restricted" });
-const UNAVAILABLE_CELL: DisplayScalarCellValue = Object.freeze({ kind: "unavailable" });
-
-/** An address inside this application: an absolute path, never another origin or a script. */
-export const isInternalAddress = (value: unknown): value is string =>
-  typeof value === "string" && /^\/(?![/\\])\S*$/.test(value);
 
 /** A web link opens in a new page; a mail or telephone link hands over to the viewer's own app. */
 export const isWebLinkAddress = (value: string): boolean => /^https?:/i.test(value);
-const ISO_CALENDAR_DATE = /^\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])$/;
+
+/** A Zod issue path as a property path: an index joins the property before it (`rows[3]`). */
+const propertyPathOf = (path: readonly PropertyKey[]): string[] =>
+  path.reduce<string[]>((parts, segment) => {
+    const last = parts.at(-1);
+    return typeof segment === "number" && last !== undefined
+      ? [...parts.slice(0, -1), `${last}[${segment}]`]
+      : [...parts, String(segment)];
+  }, []);
+
 /**
  * @internal Parses one part of a payload with the platform schema that also describes what the
  * server builds; a refusal names the part and the setting that does not fit.
@@ -446,767 +135,79 @@ export const parseProjectedPart = <Output>(
   const parsed = schema.safeParse(value);
   if (parsed.success) return parsed.data;
   const issue = parsed.error.issues[0];
-  const path = (issue?.path ?? []).map(String);
-  return fail(`${message}: ${issue?.message ?? "invalid"}`, location, path);
-};
-
-const parseRichTextDocument = (
-  value: unknown,
-  location: DefinitionRenderErrorLocation,
-): DisplayRichTextDocument => {
-  const parsed = richTextDocumentSchema.safeParse(value);
-  return parsed.success
-    ? (parsed.data as DisplayRichTextDocument)
-    : fail("Projected rich text must satisfy the structured rich-text contract", location);
-};
-
-const parseCellValue = (
-  value: unknown,
-  location: DefinitionRenderErrorLocation,
-): DisplayScalarCellValue => {
-  const record = requireRecord(value, "A projected display value must be a closed value", location);
-  switch (record.kind) {
-    case "text":
-      requireExactKeys(record, ["kind", "text"], location);
-      return Object.freeze({
-        kind: "text",
-        text: requireString(record.text, "A text display value requires text", location),
-      });
-    case "number": {
-      requireExactKeys(record, ["kind", "value", "formatted"], location);
-      const numeric = requireFiniteNumber(
-        record.value,
-        "A number display value requires a finite number",
-        location,
-      );
-      return record.formatted === undefined
-        ? Object.freeze({ kind: "number", value: numeric })
-        : Object.freeze({
-            kind: "number",
-            value: numeric,
-            formatted: requireString(
-              record.formatted,
-              "A formatted number display value requires text",
-              location,
-            ),
-          });
-    }
-    case "boolean":
-      requireExactKeys(record, ["kind", "value"], location);
-      return typeof record.value === "boolean"
-        ? Object.freeze({ kind: "boolean", value: record.value })
-        : fail("A boolean display value requires a boolean", location);
-    case "date": {
-      requireExactKeys(record, ["kind", "iso"], location);
-      const iso = requireNonEmptyString(
-        record.iso,
-        "A date display value requires an ISO date or timestamp",
-        location,
-      );
-      const isDate = ISO_CALENDAR_DATE.test(iso) && !Number.isNaN(Date.parse(iso));
-      return isDate || timestampSchema.safeParse(iso).success
-        ? Object.freeze({ kind: "date", iso })
-        : fail("A date display value must be an ISO date or offset timestamp", location);
-    }
-    case "choice": {
-      requireExactKeys(record, ["kind", "key", "label"], location);
-      const key = moduleFieldValueSchemas.choice.safeParse(record.key);
-      if (!key.success)
-        return fail("A choice display value requires a valid stored value", location);
-      return Object.freeze({
-        kind: "choice",
-        key: key.data,
-        label: requireNonEmptyString(
-          record.label,
-          "A choice display value requires a label",
-          location,
-        ),
-      });
-    }
-    case "link": {
-      requireExactKeys(record, ["kind", "address", "label"], location);
-      return isSafeLinkAddress(record.address)
-        ? Object.freeze({
-            kind: "link",
-            address: record.address,
-            label: requireNonEmptyString(
-              record.label,
-              "A link display value requires a label",
-              location,
-            ),
-          })
-        : fail("A link display value requires a safe web, mail or telephone address", location);
-    }
-    case "rich_text":
-      requireExactKeys(record, ["kind", "document"], location);
-      return Object.freeze({
-        kind: "rich_text",
-        document: parseRichTextDocument(record.document, location),
-      });
-    case "record_link": {
-      const label = requireNonEmptyString(
-        record.label,
-        "A record link display value requires a label",
-        location,
-      );
-      if (record.href === undefined) {
-        requireExactKeys(record, ["kind", "label"], location);
-        return Object.freeze({ kind: "record_link", label });
-      }
-      requireExactKeys(record, ["kind", "label", "href"], location);
-      return isInternalAddress(record.href)
-        ? Object.freeze({ kind: "record_link", label, href: record.href })
-        : fail("A record link display value requires an address inside this application", location);
-    }
-    case "restricted":
-      requireExactKeys(record, ["kind"], location);
-      return RESTRICTED_CELL;
-    case "unavailable":
-      requireExactKeys(record, ["kind"], location);
-      return UNAVAILABLE_CELL;
-    case "empty":
-      requireExactKeys(record, ["kind"], location);
-      return EMPTY_CELL;
-    default:
-      return fail(`Unknown projected display value kind '${String(record.kind)}'`, location);
-  }
+  return fail(
+    `${message}: ${issue?.message ?? "invalid"}`,
+    location,
+    propertyPathOf(issue?.path ?? []),
+  );
 };
 
 /**
- * A record-detail field value: a scalar value, or a table field's rows. A table's columns are
- * distinct and labelled, and every row carries exactly those column keys, each a scalar value; a
- * nested table, an unknown row key and a missing cell are refused.
+ * @internal A block's ready values parser: its platform payload schema, refused with a located
+ * error.
  */
-const parseDetailFieldValue = (
-  value: unknown,
-  location: DefinitionRenderErrorLocation,
-): DisplayCellValue => {
-  if (!isRecord(value) || value.kind !== "field_table") return parseCellValue(value, location);
-  requireExactKeys(value, ["kind", "columns", "rows", "rowCount"], location);
-  const columns = parseColumns(value.columns, location);
-  if (columns.length === 0) fail("A table field value requires its declared columns", location);
-  const keys = columns.map((column) => column.key);
-  const rows = requireArray(value.rows, "A table field value requires its rows", location).map(
-    (row, index) => {
-      const rowLocation = { ...location, propertyPath: [`rows[${index}]`] };
-      const cells = requireRecord(row, "A table field row must be an object", rowLocation);
-      requireExactKeys(cells, keys, rowLocation);
-      return Object.freeze(
-        Object.fromEntries(
-          keys.map((key) => {
-            if (!Object.prototype.hasOwnProperty.call(cells, key))
-              fail(`A table field row requires a cell for column '${key}'`, rowLocation);
-            return [key, parseCellValue(cells[key], { ...rowLocation, propertyPath: [key] })];
-          }),
-        ),
-      );
-    },
-  );
-  const rowCount = value.rowCount;
-  if (typeof rowCount !== "number" || !Number.isSafeInteger(rowCount) || rowCount < rows.length)
-    fail("A table field value requires its total row count", location);
-  return Object.freeze({ kind: "field_table", columns, rows: Object.freeze(rows), rowCount });
-};
-
-/** @internal Shared with the board payload parser. */
-export const parseRowCapabilities = (
-  value: unknown,
-  location: DefinitionRenderErrorLocation,
-): DisplayRowCapabilities => {
-  const record = requireRecord(value, "Row capabilities must be an object", location);
-  requireExactKeys(record, ["changeableFieldIds", "actions"], location);
-  const changeable = requireArray(
-    record.changeableFieldIds,
-    "Row capabilities require a changeable field list",
-    location,
-  ).map((fieldId) =>
-    requireFieldKey(fieldId, `Invalid changeable field '${String(fieldId)}'`, location),
-  );
-  if (new Set(changeable.map((fieldId) => fieldId.toLowerCase())).size !== changeable.length)
-    fail("Each changeable field is reported once", location);
-  const actions = requireArray(
-    record.actions,
-    "Row capabilities require an action list",
-    location,
-  ).map(
-    (action) =>
-      displayRowActionKinds.find((kind) => kind === action) ??
-      fail(`Unknown row action '${String(action)}'`, location),
-  );
-  if (new Set(actions).size !== actions.length) fail("Each row action is reported once", location);
-  return Object.freeze({
-    changeableFieldIds: Object.freeze(changeable),
-    actions: Object.freeze(actions),
-  });
-};
-
-/** The stored values of a row's editable fields: JSON in the field's own contract, keyed by field. */
-const parseEditValues = (
-  value: unknown,
-  location: DefinitionRenderErrorLocation,
-): Readonly<Record<string, JsonValue>> => {
-  const record = requireRecord(value, "A projected row's edit values must be an object", location);
-  const values: Record<string, JsonValue> = {};
-  for (const [key, held] of Object.entries(record)) {
-    const field = requireFieldKey(key, `Invalid projected edit key '${key}'`, location);
-    if (!jsonValueSchema.safeParse(held).success)
-      fail(`A projected edit value for '${field}' is not JSON`, location);
-    values[field] = held as JsonValue;
-  }
-  return Object.freeze(values);
-};
-
-/** The exact number and money texts of a row's cells, keyed by column. */
-const parseExactValues = (
-  value: unknown,
-  location: DefinitionRenderErrorLocation,
-): Readonly<Record<string, string>> => {
-  const record = requireRecord(value, "A projected row's exact values must be an object", location);
-  const values: Record<string, string> = {};
-  for (const [key, held] of Object.entries(record)) {
-    const field = requireFieldKey(key, `Invalid projected exact key '${key}'`, location);
-    values[field] = requireNonEmptyString(held, "A projected exact value must be text", location);
-  }
-  return Object.freeze(values);
-};
-
-const parseRows = (
-  value: unknown,
-  location: DefinitionRenderErrorLocation,
-): readonly DisplayRow[] => {
-  const items = requireArray(value, "Projected rows must be an array", location);
-  const seen = new Set<string>();
-  return Object.freeze(
-    items.map((item, index) => {
-      const rowLocation = { ...location, propertyPath: [`rows[${index}]`] };
-      const record = requireRecord(item, "A projected row must be an object", rowLocation);
-      requireExactKeys(
-        record,
-        [
-          "recordId",
-          "revision",
-          "capabilities",
-          "title",
-          "edit",
-          "cells",
-          "format",
-          "hasChildren",
-          "exact",
-        ],
-        rowLocation,
-      );
-      if (
-        record.hasChildren !== undefined &&
-        record.hasChildren !== true &&
-        record.hasChildren !== "unknown"
-      )
-        fail("A projected row can only say it has or may have children", rowLocation);
-      const recordId = requireNonEmptyString(
-        record.recordId,
-        "A projected row requires a stable record identity",
-        rowLocation,
-      );
-      if (seen.has(recordId)) fail(`Duplicate projected row identity '${recordId}'`, rowLocation);
-      seen.add(recordId);
-      const cellsRecord = requireRecord(
-        record.cells,
-        "A projected row requires a cells object",
-        rowLocation,
-      );
-      const cells: Record<string, DisplayCellValue> = {};
-      for (const [key, cell] of Object.entries(cellsRecord)) {
-        const cellKey = requireFieldKey(key, `Invalid projected cell key '${key}'`, rowLocation);
-        cells[cellKey] = parseCellValue(cell, { ...rowLocation, propertyPath: [cellKey] });
-      }
-      let title: DisplayRow["title"];
-      if (record.title !== undefined) {
-        const titleRecord = requireRecord(
-          record.title,
-          "A projected title must be an object",
-          rowLocation,
-        );
-        requireExactKeys(titleRecord, ["fieldId", "value"], rowLocation);
-        title = Object.freeze({
-          fieldId: requireFieldKey(
-            titleRecord.fieldId,
-            "A projected title requires its field identity",
-            rowLocation,
-          ),
-          value: parseCellValue(titleRecord.value, {
-            ...rowLocation,
-            propertyPath: ["title", "value"],
-          }),
-        });
-      }
-      const revision =
-        record.revision === undefined
-          ? undefined
-          : requirePositiveInteger(
-              record.revision,
-              "A projected row revision must be a positive integer",
-              rowLocation,
-            );
-      if (revision !== undefined && !Number.isSafeInteger(revision))
-        fail("A projected row revision must be a safe integer", rowLocation);
-      const capabilities =
-        record.capabilities === undefined
-          ? undefined
-          : parseRowCapabilities(record.capabilities, {
-              ...rowLocation,
-              propertyPath: [`rows[${index}]`, "capabilities"],
-            });
-      const edit =
-        record.edit === undefined
-          ? undefined
-          : parseEditValues(record.edit, {
-              ...rowLocation,
-              propertyPath: [`rows[${index}]`, "edit"],
-            });
-      const format =
-        record.format === undefined
-          ? undefined
-          : parseRowFormat(record.format, {
-              ...rowLocation,
-              propertyPath: [`rows[${index}]`, "format"],
-            });
-      const exact =
-        record.exact === undefined
-          ? undefined
-          : parseExactValues(record.exact, {
-              ...rowLocation,
-              propertyPath: [`rows[${index}]`, "exact"],
-            });
-      return Object.freeze({
-        recordId,
-        ...(exact === undefined ? {} : { exact }),
-        ...(revision === undefined ? {} : { revision }),
-        ...(capabilities === undefined ? {} : { capabilities }),
-        ...(edit === undefined ? {} : { edit }),
-        ...(title === undefined ? {} : { title }),
-        cells: Object.freeze(cells),
-        ...(format === undefined ? {} : { format }),
-        ...(record.hasChildren === true || record.hasChildren === "unknown"
-          ? { hasChildren: record.hasChildren }
-          : {}),
-      });
-    }),
-  );
-};
-
-const parseColumns = (
-  value: unknown,
-  location: DefinitionRenderErrorLocation,
-  property = "columns",
-  seen = new Set<string>(),
-): readonly DisplayColumn[] => {
-  const items = requireArray(value, "Projected columns must be an array", location);
-  return Object.freeze(
-    items.map((item, index) => {
-      const columnLocation = { ...location, propertyPath: [`${property}[${index}]`] };
-      const record = requireRecord(item, "A projected column must be an object", columnLocation);
-      requireExactKeys(record, ["key", "label"], columnLocation);
-      const key = requireFieldKey(
-        record.key,
-        "A projected column requires a stable key",
-        columnLocation,
-      );
-      if (seen.has(key)) fail(`Duplicate projected column key '${key}'`, columnLocation);
-      seen.add(key);
-      return Object.freeze({
-        key,
-        label: requireNonEmptyString(
-          record.label,
-          "A projected column requires a label",
-          columnLocation,
-        ),
-      });
-    }),
-  );
-};
+export const projectedValuesParser =
+  <Output>(schema: Parameters<typeof parseProjectedPart<Output>>[0], message: string) =>
+  (value: unknown, location: DefinitionRenderErrorLocation = {}): Output =>
+    parseProjectedPart(schema, value, message, location);
 
 /** @internal Shared with the pivot feature, whose cells are summary values. */
 export const parseSummaryValue = (
   value: unknown,
   location: DefinitionRenderErrorLocation,
-): DisplaySummaryMetric["value"] => {
-  if (isRecord(value) && value.kind === "unavailable") {
-    requireExactKeys(value, ["kind"], location);
-    return Object.freeze({ kind: "unavailable" });
-  }
-  return parseCellValue(value, location);
-};
-
-const parseSummaryEntries = <Value>(
-  value: unknown,
-  location: DefinitionRenderErrorLocation,
-  parseValue: (value: unknown, location: DefinitionRenderErrorLocation) => Value,
-): readonly Readonly<{ key: string; label: string; value: Value }>[] => {
-  const items = requireArray(value, "Projected summary values must be an array", location);
-  const seen = new Set<string>();
-  return Object.freeze(
-    items.map((item, index) => {
-      const summaryLocation = { ...location, propertyPath: [`values[${index}]`] };
-      const record = requireRecord(item, "A summary value must be an object", summaryLocation);
-      requireExactKeys(record, ["key", "label", "value"], summaryLocation);
-      const key = requireBuilderKey(
-        record.key,
-        "A summary value requires a stable key",
-        summaryLocation,
-      );
-      if (seen.has(key)) fail(`Duplicate summary value key '${key}'`, summaryLocation);
-      seen.add(key);
-      return Object.freeze({
-        key,
-        label: requireNonEmptyString(
-          record.label,
-          "A summary value requires a label",
-          summaryLocation,
-        ),
-        value: parseValue(record.value, summaryLocation),
-      });
-    }),
+): DisplaySummaryMetric["value"] =>
+  parseProjectedPart(
+    displayScalarCellSchema,
+    value,
+    "A projected display value is invalid",
+    location,
   );
-};
-
-/** @internal Shared with the board payload parser. */
-export const parseSummaryMetrics = (
-  value: unknown,
-  location: DefinitionRenderErrorLocation,
-): readonly DisplaySummaryMetric[] => parseSummaryEntries(value, location, parseSummaryValue);
 
 /**
- * @internal Shared with the board payload parser. A board card's fields are scalar; only a record
- * detail passes the detail value parser that also accepts a table field's rows.
+ * @internal Shared with the master-detail panel: labelled fields with scalar values. Only a record
+ * detail accepts a table field's rows.
  */
 export const parseFields = (
   value: unknown,
   location: DefinitionRenderErrorLocation,
-  parseValue: (
-    value: unknown,
-    location: DefinitionRenderErrorLocation,
-  ) => DisplayCellValue = parseCellValue,
-): readonly DisplayField[] => {
-  const items = requireArray(value, "Projected detail fields must be an array", location);
-  const seen = new Set<string>();
-  return Object.freeze(
-    items.map((item, index) => {
-      const fieldLocation = { ...location, propertyPath: [`fields[${index}]`] };
-      const record = requireRecord(item, "A detail field must be an object", fieldLocation);
-      requireExactKeys(record, ["key", "label", "value"], fieldLocation);
-      const key = requireFieldKey(
-        record.key,
-        "A detail field requires a stable key",
-        fieldLocation,
-      );
-      if (seen.has(key)) fail(`Duplicate detail field key '${key}'`, fieldLocation);
-      seen.add(key);
-      return Object.freeze({
-        key,
-        label: requireNonEmptyString(
-          record.label,
-          "A detail field requires a label",
-          fieldLocation,
-        ),
-        value: parseValue(record.value, fieldLocation),
-      });
-    }),
-  );
-};
+): readonly DisplayDetailField[] =>
+  parseProjectedPart(displayFieldsSchema, value, "Projected fields are invalid", location);
 
 /** The ready values a plain-text block accepts. */
-export const parseTextPayload = (
-  value: unknown,
-  location: DefinitionRenderErrorLocation = {},
-): TextPayload => {
-  const record = requireRecord(value, "Projected display values must be an object", location);
-  if (record.kind !== "text")
-    return fail(`Expected 'text' projected values, got '${String(record.kind)}'`, location);
-  requireExactKeys(record, ["kind", "value"], location);
-  return Object.freeze({ kind: "text", value: parseCellValue(record.value, location) });
-};
+export const parseTextPayload = projectedValuesParser(
+  textPayloadSchema,
+  "Projected text values are invalid",
+);
 
 /** The ready values a structured rich-text block accepts. */
-export const parseRichTextPayload = (
-  value: unknown,
-  location: DefinitionRenderErrorLocation = {},
-): RichTextPayload => {
-  const record = requireRecord(value, "Projected display values must be an object", location);
-  if (record.kind !== "rich_text")
-    return fail(`Expected 'rich_text' projected values, got '${String(record.kind)}'`, location);
-  requireExactKeys(record, ["kind", "document"], location);
-  return Object.freeze({
-    kind: "rich_text",
-    document: parseRichTextDocument(record.document, location),
-  });
-};
+export const parseRichTextPayload = projectedValuesParser(
+  richTextPayloadSchema,
+  "Projected rich text values are invalid",
+);
 
-/** The ready rows a launcher or link-tile block accepts. */
-export const parseLauncherRowsPayload = (
-  value: unknown,
-  location: DefinitionRenderErrorLocation = {},
-): LauncherRowsPayload => {
-  const record = requireRecord(value, "Projected display values must be an object", location);
-  if (record.kind !== "launcher_rows")
-    return fail(
-      `Expected 'launcher_rows' projected values, got '${String(record.kind)}'`,
-      location,
-    );
-  requireExactKeys(record, ["kind", "rows", "headingKey", "secondaryKey"], location);
-  const rows = parseRows(record.rows, location);
-  return Object.freeze({
-    kind: "launcher_rows",
-    rows,
-    headingKey: requireBuilderKey(
-      record.headingKey,
-      "Projected launcher rows require a heading key",
-      location,
-    ),
-    ...(record.secondaryKey === undefined
-      ? {}
-      : {
-          secondaryKey: requireBuilderKey(
-            record.secondaryKey,
-            "The projected launcher secondary key is invalid",
-            location,
-          ),
-        }),
-  });
-};
-
-/** The order of a table's rows: one to twenty distinct fields, each ascending or descending. */
-const parseTableSort = (
-  value: unknown,
-  location: DefinitionRenderErrorLocation,
-): RecordsTableSortState => {
-  const sortRecord = requireRecord(value, "Projected sort is invalid", location);
-  requireExactKeys(sortRecord, ["keys", "explicit"], location);
-  if (typeof sortRecord.explicit !== "boolean")
-    fail("A projected sort must say whether the viewer chose it", location);
-  const items = requireArray(sortRecord.keys, "Projected sort keys must be an array", location);
-  if (items.length === 0 || items.length > RECORDS_TABLE_MAXIMUM_SORT_KEYS)
-    fail("A projected sort holds between one and twenty keys", location);
-  const keys = items.map((item): RecordsTableSortKey => {
-    const key = requireRecord(item, "A projected sort key must be an object", location);
-    requireExactKeys(key, ["fieldId", "direction"], location);
-    const fieldId = requireFieldKey(key.fieldId, "A projected sort key requires a field", location);
-    if (key.direction !== "ascending" && key.direction !== "descending")
-      fail("A projected sort direction must be ascending or descending", location);
-    return Object.freeze({ fieldId, direction: key.direction });
-  });
-  if (new Set(keys.map((key) => key.fieldId.toLowerCase())).size !== keys.length)
-    fail("A projected sort names each field once", location);
-  return Object.freeze({ keys: Object.freeze(keys), explicit: sortRecord.explicit });
-};
+/** The ready rows a launcher block accepts. */
+export const parseLauncherRowsPayload = projectedValuesParser(
+  launcherRowsPayloadSchema,
+  "Projected launcher rows are invalid",
+);
 
 /** The ready values a table block accepts. */
-export const parseTablePayload = (
-  value: unknown,
-  location: DefinitionRenderErrorLocation = {},
-): TablePayload => {
-  const record = requireRecord(value, "Projected display values must be an object", location);
-  if (record.kind !== "table")
-    return fail(`Expected 'table' projected values, got '${String(record.kind)}'`, location);
-  requireExactKeys(
-    record,
-    [
-      "kind",
-      "sortableFields",
-      "columns",
-      "hiddenColumns",
-      "layout",
-      "rows",
-      "groups",
-      "totals",
-      "features",
-      "selectedRecordIds",
-      "sort",
-      "requestedSort",
-      "narrowing",
-      "page",
-      "pageCount",
-      "hasNextPage",
-      "nextContinuationToken",
-      "scanLimited",
-      "hasPreviousPage",
-      "previousContinuationToken",
-      "selectionToken",
-      "selectionScope",
-      "bulkRun",
-      "exportRun",
-      "actionAvailability",
-    ],
-    location,
-  );
-  // A column is either shown or hidden, never both.
-  const seenColumns = new Set<string>();
-  const sortableFields = requireArray(
-    record.sortableFields,
-    "Projected sortable fields must be an array",
-    location,
-  ).map((field) =>
-    parseProjectedPart(fieldIdSchema, field, "A projected sortable field is invalid", location),
-  );
-  const columns = parseColumns(record.columns, location, "columns", seenColumns);
-  const hiddenColumns = parseColumns(record.hiddenColumns, location, "hiddenColumns", seenColumns);
-  const layout = gridLayoutStateSchema.safeParse(record.layout);
-  if (!layout.success) fail("A projected table layout is invalid", location);
-  // The layout arranges exactly the declared columns the page carries, shown or hidden.
-  const layoutKeys = new Set(layout.data.layout.columns.map((column) => column.fieldId));
-  const carriedKeys = new Set([...seenColumns].map((key) => key.toLowerCase()));
-  if (layoutKeys.size !== carriedKeys.size || [...carriedKeys].some((key) => !layoutKeys.has(key)))
-    fail("A projected table layout must arrange exactly the declared columns", location);
-  const rows = parseRows(record.rows, location);
-  for (const [index, row] of rows.entries())
-    if (row.title === undefined)
-      fail("A projected table row requires its record type title", {
-        ...location,
-        propertyPath: [`rows[${index}]`, "title"],
-      });
-  const selection = parseSelectedRecordIds(record.selectedRecordIds, location);
-  const page =
-    record.page === undefined
-      ? undefined
-      : requirePositiveInteger(record.page, "Projected page must be a positive integer", location);
-  const pageCount =
-    record.pageCount === undefined
-      ? undefined
-      : requirePositiveInteger(
-          record.pageCount,
-          "Projected pageCount must be a positive integer",
-          location,
-        );
-  if (pageCount !== undefined && (page === undefined || page > pageCount))
-    fail("Projected pagination requires a page within pageCount", location);
-  if (record.hasNextPage !== undefined && typeof record.hasNextPage !== "boolean")
-    fail("Projected hasNextPage must be a boolean", location);
-  const hasNextPage = record.hasNextPage as boolean | undefined;
-  if (record.hasPreviousPage !== undefined && typeof record.hasPreviousPage !== "boolean")
-    fail("Projected hasPreviousPage must be a boolean", location);
-  const hasPreviousPage = record.hasPreviousPage as boolean | undefined;
-  if (record.scanLimited !== undefined && typeof record.scanLimited !== "boolean")
-    fail("Projected scanLimited must be a boolean", location);
-  const scanLimited = record.scanLimited as boolean | undefined;
-  let nextContinuationToken: string | undefined;
-  if (record.nextContinuationToken !== undefined) {
-    nextContinuationToken = requireNonEmptyString(
-      record.nextContinuationToken,
-      "A table continuation token must be a non-empty string",
-      location,
-    );
-    if (nextContinuationToken.length > 65_536)
-      fail("A table continuation token is too long", location);
-  }
-  if (scanLimited === true && !hasNextPage)
-    fail("A scan-limited page requires a next page", location);
-  if (
-    (hasNextPage === true) !== (nextContinuationToken !== undefined) ||
-    ((hasNextPage !== undefined || nextContinuationToken !== undefined) && page === undefined)
-  )
-    fail("Table continuation state is incomplete", location);
-  let previousContinuationToken: string | undefined;
-  if (record.previousContinuationToken !== undefined) {
-    previousContinuationToken = requireNonEmptyString(
-      record.previousContinuationToken,
-      "A table previous token must be a non-empty string",
-      location,
-    );
-    if (previousContinuationToken.length > 65_536)
-      fail("A table previous token is too long", location);
-  }
-  if ((hasPreviousPage === true) !== (previousContinuationToken !== undefined))
-    fail("Table previous state is incomplete", location);
-  const sort = record.sort === undefined ? undefined : parseTableSort(record.sort, location);
-  const requestedSort =
-    record.requestedSort === undefined ? undefined : parseTableSort(record.requestedSort, location);
-  const narrowing =
-    record.narrowing === undefined ? undefined : parseTableNarrowing(record.narrowing, location);
-  const features =
-    record.features === undefined
-      ? undefined
-      : parseProjectedPart(
-          recordsTableFeatureProjectionSchema,
-          record.features,
-          "Projected table features are invalid",
-          location,
-        );
-  const groups =
-    record.groups === undefined ? undefined : parseTableGroups(record.groups, location);
-  const selectionParts = parseTableSelectionParts(record, location);
-  return Object.freeze({
-    kind: "table",
-    sortableFields,
-    columns,
-    hiddenColumns,
-    layout: layout.data,
-    rows,
-    ...(groups === undefined ? {} : { groups }),
-    ...(record.totals === undefined
-      ? {}
-      : {
-          totals: parseProjectedPart(
-            recordsTableTotalsSchema,
-            record.totals,
-            "Projected grid totals are invalid",
-            location,
-          ),
-        }),
-    ...(features === undefined ? {} : { features }),
-    ...selectionParts,
-    ...(selection === undefined ? {} : { selectedRecordIds: selection }),
-    ...(sort === undefined ? {} : { sort }),
-    ...(requestedSort === undefined ? {} : { requestedSort }),
-    ...(narrowing === undefined ? {} : { narrowing }),
-    ...(page === undefined ? {} : { page }),
-    ...(pageCount === undefined ? {} : { pageCount }),
-    ...(hasNextPage === undefined ? {} : { hasNextPage }),
-    ...(nextContinuationToken === undefined ? {} : { nextContinuationToken }),
-    ...(scanLimited === undefined ? {} : { scanLimited }),
-    ...(hasPreviousPage === undefined ? {} : { hasPreviousPage }),
-    ...(previousContinuationToken === undefined ? {} : { previousContinuationToken }),
-  });
-};
+export const parseTablePayload = projectedValuesParser(
+  tablePayloadSchema,
+  "Projected table values are invalid",
+);
 
 /** The ready values a record-detail block accepts. */
-export const parseRecordDetailPayload = (
-  value: unknown,
-  location: DefinitionRenderErrorLocation = {},
-): RecordDetailPayload => {
-  const record = requireRecord(value, "Projected display values must be an object", location);
-  if (record.kind !== "record_detail")
-    return fail(
-      `Expected 'record_detail' projected values, got '${String(record.kind)}'`,
-      location,
-    );
-  requireExactKeys(record, ["kind", "recordId", "fields", "heading"], location);
-  return Object.freeze({
-    kind: "record_detail",
-    recordId: requireNonEmptyString(
-      record.recordId,
-      "A projected record detail requires a stable record identity",
-      location,
-    ),
-    fields: parseFields(record.fields, location, parseDetailFieldValue),
-    ...(record.heading === undefined ? {} : { heading: parseCellValue(record.heading, location) }),
-  });
-};
+export const parseRecordDetailPayload = projectedValuesParser(
+  recordDetailPayloadSchema,
+  "Projected record detail values are invalid",
+);
 
 /** The ready values a summary-values block accepts. */
-export const parseSummaryPayload = (
-  value: unknown,
-  location: DefinitionRenderErrorLocation = {},
-): SummaryPayload => {
-  const record = requireRecord(value, "Projected display values must be an object", location);
-  if (record.kind !== "summary_values")
-    return fail(
-      `Expected 'summary_values' projected values, got '${String(record.kind)}'`,
-      location,
-    );
-  requireExactKeys(record, ["kind", "values"], location);
-  return Object.freeze({
-    kind: "summary_values",
-    values: parseSummaryMetrics(record.values, location),
-  });
-};
+export const parseSummaryPayload = projectedValuesParser(
+  summaryPayloadSchema,
+  "Projected summary values are invalid",
+);
 
 /**
  * Validates one block's unknown projected state and returns its frozen fail-closed shape. Only the
@@ -1219,42 +220,23 @@ export const parseDisplayData = <Values>(
   parseValues: (value: unknown, location: DefinitionRenderErrorLocation) => Values,
   location: DefinitionRenderErrorLocation = {},
 ): DisplayDataState<Values> => {
-  const record = requireRecord(value, "Projected display data must be an object", location);
-  switch (record.status) {
+  const state = parseProjectedPart(
+    displayDataStateSchema,
+    value,
+    "Projected display data is invalid",
+    location,
+  );
+  switch (state.status) {
     case "loading":
-      requireExactKeys(record, ["status"], location);
       return LOADING_STATE;
     case "empty":
-      requireExactKeys(record, ["status"], location);
       return EMPTY_STATE;
-    case "awaiting_input": {
-      requireExactKeys(record, ["status", "message"], location);
-      const message = record.message;
-      if (typeof message !== "string" || message.trim() === "" || message.length > 300)
-        return fail("An awaiting display state must carry its message", location);
-      return Object.freeze({ status: "awaiting_input", message });
-    }
-    case "refused": {
-      requireExactKeys(record, ["status", "reason"], location);
-      const reason = record.reason;
-      if (
-        typeof reason !== "string" ||
-        !DISPLAY_REFUSAL_REASONS.includes(reason as DisplayRefusalReason)
-      )
-        return fail("A refused display state must use a fixed refusal reason", location);
-      return Object.freeze({ status: "refused", reason: reason as DisplayRefusalReason });
-    }
     case "error":
-      requireExactKeys(record, ["status"], location);
       return ERROR_STATE;
     case "ready":
-      requireExactKeys(record, ["status", "values"], location);
-      return Object.freeze({
-        status: "ready",
-        values: parseValues(record.values, location),
-      });
+      return Object.freeze({ status: "ready", values: parseValues(state.values, location) });
     default:
-      return fail(`Unknown projected display status '${String(record.status)}'`, location);
+      return state;
   }
 };
 

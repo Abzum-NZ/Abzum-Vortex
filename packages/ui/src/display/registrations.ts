@@ -21,7 +21,7 @@ import {
   type RecordDetailPayload,
   type RichTextPayload,
   type SummaryPayload,
-  type TablePayload,
+  type DisplayTablePayload,
   type TextPayload,
 } from "./projected-data";
 import { QUERY_NOTICE_PAYLOAD_PARSER } from "./query-notice";
@@ -48,11 +48,13 @@ const RICH_TEXT_PAYLOAD_PARSER = displayPayloadParser<RichTextPayload>(parseRich
 const parseGridPayload = (
   value: unknown,
   location: DefinitionRenderErrorLocation,
-): TablePayload | BoardPayload =>
+): DisplayTablePayload | BoardPayload =>
   typeof value === "object" && value !== null && (value as { kind?: unknown }).kind === "board"
     ? parseBoardPayload(value, location)
     : parseTablePayload(value, location);
-const TABLE_PAYLOAD_PARSER = displayPayloadParser<TablePayload | BoardPayload>(parseGridPayload);
+const TABLE_PAYLOAD_PARSER = displayPayloadParser<DisplayTablePayload | BoardPayload>(
+  parseGridPayload,
+);
 const CALENDAR_PAYLOAD_PARSER = displayPayloadParser<CalendarPayload>(parseCalendarPayload);
 const RECORD_DETAIL_PAYLOAD_PARSER =
   displayPayloadParser<RecordDetailPayload>(parseRecordDetailPayload);

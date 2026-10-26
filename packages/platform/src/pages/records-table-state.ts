@@ -133,7 +133,8 @@ const TOKEN_PATTERN = /^[A-Za-z0-9_-]{1,65536}$/;
  * page address, and what each belongs to. `query` is a table's query state and its saved view: a
  * change rereads only that table. `display` is a view of the same query state (the pivot, the open
  * group): changing it reads no rows. `calendar` is a calendar's period: a change reads the page
- * again. Placement identities are UUIDs, so they never hold a dot.
+ * again. A placement is named by its address token (see `placementAddressToken`), which never
+ * holds a dot.
  */
 const ADDRESS_PARAMETERS = {
   sort: { prefix: "sort.", part: "query" },
@@ -149,20 +150,33 @@ const ADDRESS_PARAMETERS = {
 } as const;
 type AddressParameterKind = keyof typeof ADDRESS_PARAMETERS;
 
+const ADDRESS_TOKEN_PATTERN = /^[0-9a-f]{8}$/i;
+
+/**
+ * The short name a placement's parameters carry in the page address: the first eight hexadecimal
+ * digits of its identity, so an address reads `search.bdad601d=port` instead of repeating the
+ * whole identity. It needs no page context, so the server read and every client writer derive the
+ * same name. A per-page position would not: the projection hides placements a role cannot see, so
+ * the same position would name another table for another person. Placement identities are
+ * random or hashed, so two tables of one page share a token only by a one-in-four-billion chance.
+ */
+export const placementAddressToken = (placementId: string): string =>
+  placementId.slice(0, 8).toLowerCase();
+
 /** The address parameter of one kind for a placement, in the spelling this codec writes. */
 export const addressParameter = (kind: AddressParameterKind, placementId: string): string =>
-  `${ADDRESS_PARAMETERS[kind].prefix}${placementId}`;
+  `${ADDRESS_PARAMETERS[kind].prefix}${placementAddressToken(placementId)}`;
 
-/** The kind and placement (lower-cased) an address parameter holds, or undefined for any other. */
+/** The kind and placement token (lower-cased) an address parameter holds, or undefined. */
 const addressParameterOwner = (
   name: string,
-): Readonly<{ kind: AddressParameterKind; placementId: string }> | undefined => {
+): Readonly<{ kind: AddressParameterKind; token: string }> | undefined => {
   for (const [kind, { prefix }] of Object.entries(ADDRESS_PARAMETERS)) {
     if (!name.startsWith(prefix)) continue;
-    const placementId = name.slice(prefix.length).split(".")[0];
-    return placementId === undefined || !FIELD_ID_PATTERN.test(placementId)
+    const token = name.slice(prefix.length).split(".")[0];
+    return token === undefined || !ADDRESS_TOKEN_PATTERN.test(token)
       ? undefined
-      : { kind: kind as AddressParameterKind, placementId: placementId.toLowerCase() };
+      : { kind: kind as AddressParameterKind, token: token.toLowerCase() };
   }
   return undefined;
 };
@@ -177,15 +191,19 @@ const groupParameter = (placementId: string): string => addressParameter("group"
 const expandParameter = (placementId: string): string => addressParameter("expand", placementId);
 
 /**
- * The placement whose table state an address parameter holds, lower-cased, or undefined for a
- * parameter that is not table state.
+ * The placement token whose table state an address parameter holds, lower-cased, or undefined for
+ * a parameter that is not table state.
  */
 export const recordsTableParameterPlacement = (name: string): string | undefined => {
   const owner = addressParameterOwner(name);
   return owner !== undefined && ADDRESS_PARAMETERS[owner.kind].part === "query"
-    ? owner.placementId
+    ? owner.token
     : undefined;
 };
+
+/** Whether an address parameter holds table state of this placement. */
+export const isRecordsTableParameterOf = (placementId: string, name: string): boolean =>
+  recordsTableParameterPlacement(name) === placementAddressToken(placementId);
 
 const sameId = (left: string, right: string): boolean => left.toLowerCase() === right.toLowerCase();
 
@@ -196,11 +214,11 @@ const placementEntries = (
 ): Map<string, string> => {
   const owned = new Map<string, string>();
   for (const [name, value] of entries) {
-    const owner = recordsTableParameterPlacement(name);
-    if (owner === undefined || !sameId(owner, placementId)) continue;
+    if (!isRecordsTableParameterOf(placementId, name)) continue;
     const prefix = ADDRESS_PARAMETERS[addressParameterOwner(name)!.kind].prefix;
-    // Names are kept in the canonical spelling of this placement identity.
-    const key = `${prefix}${placementId}${name.slice(prefix.length + placementId.length)}`;
+    const token = placementAddressToken(placementId);
+    // Names are kept in the canonical spelling of this placement's token.
+    const key = `${prefix}${token}${name.slice(prefix.length + token.length)}`;
     if (!owned.has(key)) owned.set(key, value);
   }
   return owned;
@@ -375,11 +393,7 @@ export const readRecordsTableQueryState = (
   const addressed = [...entries];
   const filtersSeen = new Set<string>();
   for (const [name] of addressed) {
-    if (
-      !name.startsWith("filter.") ||
-      recordsTableParameterPlacement(name) !== placementId.toLowerCase()
-    )
-      continue;
+    if (!name.startsWith("filter.") || !isRecordsTableParameterOf(placementId, name)) continue;
     const key = name.toLowerCase();
     if (filtersSeen.has(key)) return { kind: "malformed", part: "filter" };
     filtersSeen.add(key);
@@ -538,7 +552,7 @@ export const applyRecordsTableQueryChange = (
     if (view === undefined) return;
     const queried = [...parameters.keys()].some(
       (name) =>
-        recordsTableParameterPlacement(name) === placementId.toLowerCase() &&
+        isRecordsTableParameterOf(placementId, name) &&
         ["sort.", "filter.", "search."].some((prefix) => name.toLowerCase().startsWith(prefix)),
     );
     set(viewParameter(placementId), queried ? view.viewId : `${view.viewId}${VIEW_CLEARED_SUFFIX}`);
@@ -612,7 +626,7 @@ export const applyRecordsTableView = (
   }> | null,
 ): void => {
   for (const name of [...parameters.keys()])
-    if (recordsTableParameterPlacement(name) === placementId.toLowerCase()) parameters.delete(name);
+    if (isRecordsTableParameterOf(placementId, name)) parameters.delete(name);
   if (view === null) return;
   applyRecordsTableQueryChange(parameters, placementId, { kind: "view", viewId: view.viewId });
   if (view.sort.length > 0)

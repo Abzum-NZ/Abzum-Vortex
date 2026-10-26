@@ -1,5 +1,6 @@
 import "server-only";
 
+import type { RequestDatabaseTransaction } from "../db/request-transaction";
 import { randomUUID } from "node:crypto";
 import {
   identitySessionSchema,
@@ -27,7 +28,10 @@ import {
   type BuilderConferredPermission,
   type BuilderOperation,
 } from "./builder-authority";
-import { createApplicationInstallationLifecycleRepository } from "./installation-lifecycle";
+import {
+  activateApplicationInstallation,
+  detachApplicationInstallation,
+} from "./installation-lifecycle";
 import { createInstallationRuntimeBundleCleanupRepository } from "./runtime-bundle-cleanup";
 import type { ResolvedContributionBinding } from "./storage-provisioning";
 import { canonicalJson } from "./canonical-json-definition";
@@ -37,7 +41,6 @@ import {
 } from "./installation-runtime-bundle-app";
 import type { DefinitionError } from "./definition-error";
 import {
-  type InstallerTransaction,
   type ApplicationInstallationCoordinatorErrorCode,
   applicationInstallationPreparationRequestSchema,
   applicationInstallationActivationRequestSchema,
@@ -125,15 +128,7 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
   const roleTemplates =
     humanDefinitionAccess !== undefined || dependencies.definitionReader === undefined
       ? undefined
-      : createApplicationRoleTemplateAdapter({
-          definitionReader: dependencies.definitionReader,
-          // Registration-candidate preparation reads only immutable Definition evidence; the live
-          // registry is read and locked by the Access coordinator inside the installer's transaction.
-          permissionRegistryFacts: {
-            lookupMany: () => Promise.reject(fail("APPLICATION_INSTALLATION_FAILED")),
-            readApplicationSnapshot: () => Promise.reject(fail("APPLICATION_INSTALLATION_FAILED")),
-          },
-        });
+      : createApplicationRoleTemplateAdapter({ definitionReader: dependencies.definitionReader });
 
   /**
    * Only registration changes hold Access exclusively. Storage and runtime reads hold it shared.
@@ -146,7 +141,7 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
     organizationId: OrganizationId,
     builderOperation: BuilderOperation,
     operation: (
-      transaction: InstallerTransaction,
+      transaction: RequestDatabaseTransaction,
       authority: BuilderAuthority,
       scope: SelectedOrganizationScope,
     ) => Promise<Result>,
@@ -598,7 +593,7 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
    * registration costs no Access-version advance.
    */
   const alignAccess = async (
-    transaction: InstallerTransaction,
+    transaction: RequestDatabaseTransaction,
     authority: BuilderAuthority,
     state: InstallationBindings,
     applicationRootId: ApplicationRootId,
@@ -888,8 +883,8 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
                   accessVersion: access.accessVersion,
                 });
           if (mode === "already_active") {
+            // The exact active bindings were checked before Access was aligned.
             const installation = activeSummary(request, state);
-            requireExactBindings(request, pins, installation.moduleBindings, "active");
             await changeContributions(
               transaction,
               request,
@@ -908,7 +903,6 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
             };
           }
 
-          const lifecycle = createApplicationInstallationLifecycleRepository(transaction);
           const current = currentBindingRevisions(state);
           if (active !== null) {
             if (
@@ -919,7 +913,7 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
               throw fail("APPLICATION_INSTALLATION_STALE");
             requireExactBindings(oldTarget, oldExact.pins, active.bindings, "active");
             const detached = requireLifecycleResult(
-              await lifecycle.detach({
+              await detachApplicationInstallation(transaction, {
                 applicationRootId: request.applicationRootId,
                 applicationReleaseRevision: active.releaseRevision,
                 expectedModuleBindings: expectedBindings(active.bindings),
@@ -977,7 +971,7 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
             installOperation(request.applicationRootId, exact, false),
           );
           const activated = requireLifecycleResult(
-            await lifecycle.activate({
+            await activateApplicationInstallation(transaction, {
               applicationRootId: request.applicationRootId,
               applicationReleaseRevision: request.applicationReleaseRevision,
               expectedModuleBindings: expectedBindings(provisioned),
@@ -1076,7 +1070,7 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
           // Terminate the complete homogeneous active/provisioned set, or replay a detached set.
           // Retained storage is not evidence that a withdrawn prepared installation is still live.
           const detached = requireLifecycleResult(
-            await createApplicationInstallationLifecycleRepository(transaction).detach({
+            await detachApplicationInstallation(transaction, {
               applicationRootId: request.applicationRootId,
               applicationReleaseRevision: request.applicationReleaseRevision,
               expectedModuleBindings: expectedBindings(releaseBindings),

@@ -168,7 +168,7 @@ Tables are private. The application calls `security definer` functions with `set
 
 ## 6. Guardrails that keep it this way
 
-Static checks run in CI on every pull request and locally with `pnpm guard`. They are lint-style rules, not tests. Any blocking finding fails the build; an intentional exception carries a reviewed `guard-allow` comment. `tooling/guard/config.ts` is the list of rules and their tiers; AGENTS.md summarises them.
+Static checks run in CI on every pull request and locally with `pnpm guard`. They are lint-style rules, not tests. Any blocking finding fails the build; an intentional exception carries a reviewed `guard-allow` comment. `tooling/guard/config.ts` is the list of rules and their tiers.
 
 ### Running app as the gate
 
