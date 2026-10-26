@@ -457,7 +457,9 @@ export function ApplicationShellRoot({
           tabIndex={-1}
           data-vortex-application-shell-content=""
           className="vortex-puck-slot min-w-0 flex-1 focus:outline-none"
-          style={contentStyle}
+          style={
+            { ...contentStyle, "--vortex-content-padding": contentStyle.padding } as CSSProperties
+          }
         >
           {/* Every page has one level-1 heading: the page's name. Its blocks' headings follow it. */}
           {runtime === undefined ? null : <h1 className="sr-only">{runtime.pageName}</h1>}
