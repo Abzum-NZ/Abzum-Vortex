@@ -780,7 +780,16 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
               label="Totals for all matching records"
             />
           ) : null}
-          {!ready || values === undefined || pivotOpen || grouped !== undefined ? null : (
+          {!ready ||
+          values === undefined ||
+          pivotOpen ||
+          grouped !== undefined ||
+          !(
+            (values.pageCount !== undefined && values.pageCount > 1) ||
+            values.hasNextPage === true ||
+            values.hasPreviousPage === true ||
+            (values.page !== undefined && values.page > 1)
+          ) ? null : (
             <div className="mt-2 flex shrink-0 flex-wrap items-center justify-between gap-2">
               <p className="m-0 text-xs text-muted-foreground tabular-nums">
                 {/* A keyset table marks every later page as page 2 (it never counts rows), so only
