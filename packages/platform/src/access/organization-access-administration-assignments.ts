@@ -1,5 +1,7 @@
 import "server-only";
 
+import { z } from "zod";
+
 import {
   activityIdSchema,
   delegationAuthorityIdSchema,
@@ -15,18 +17,6 @@ import {
   changeOrganizationAdministrationDelegationAuthorityResultSchema,
   changeOrganizationAdministrationRoleAssignmentResultSchema,
   changeOrganizationAdministrationRoleActivationResultSchema,
-  listOrganizationAdministrationDelegationAuthoritiesCommandSchema,
-  listOrganizationAdministrationDelegationAuthoritiesResultSchema,
-  listOrganizationAdministrationRoleActivationsCommandSchema,
-  listOrganizationAdministrationRoleActivationsResultSchema,
-  listOrganizationAdministrationRoleAssignmentsCommandSchema,
-  listOrganizationAdministrationRoleAssignmentsResultSchema,
-  readOrganizationAdministrationDelegationAuthorityCommandSchema,
-  readOrganizationAdministrationDelegationAuthorityResultSchema,
-  readOrganizationAdministrationRoleActivationCommandSchema,
-  readOrganizationAdministrationRoleActivationResultSchema,
-  readOrganizationAdministrationRoleAssignmentCommandSchema,
-  readOrganizationAdministrationRoleAssignmentResultSchema,
   deactivateOrganizationAdministrationRoleActivationCommandSchema,
   revokeOrganizationAdministrationDelegationAuthorityCommandSchema,
   revokeOrganizationAdministrationRoleAssignmentCommandSchema,
@@ -34,18 +24,6 @@ import {
   type ChangeOrganizationAdministrationRoleAssignmentResult,
   type ChangeOrganizationAdministrationDelegationAuthorityResult,
   type ChangeOrganizationAdministrationRoleActivationResult,
-  type ListOrganizationAdministrationDelegationAuthoritiesCommand,
-  type ListOrganizationAdministrationDelegationAuthoritiesResult,
-  type ListOrganizationAdministrationRoleActivationsCommand,
-  type ListOrganizationAdministrationRoleActivationsResult,
-  type ListOrganizationAdministrationRoleAssignmentsCommand,
-  type ListOrganizationAdministrationRoleAssignmentsResult,
-  type ReadOrganizationAdministrationDelegationAuthorityCommand,
-  type ReadOrganizationAdministrationDelegationAuthorityResult,
-  type ReadOrganizationAdministrationRoleActivationCommand,
-  type ReadOrganizationAdministrationRoleActivationResult,
-  type ReadOrganizationAdministrationRoleAssignmentCommand,
-  type ReadOrganizationAdministrationRoleAssignmentResult,
   type RevokeOrganizationAdministrationRoleAssignmentCommand,
   type DeactivateOrganizationAdministrationRoleActivationCommand,
   type RevokeOrganizationAdministrationDelegationAuthorityCommand,
@@ -69,18 +47,39 @@ import {
   mapRecordedRefusal,
 } from "./organization-access-administration-shared";
 import type {
-  RoleAssignmentPageRow,
-  RoleAssignmentDetailRow,
   RoleAssignmentChangeRow,
   DelegationAuthorityChangeRow,
   StewardshipAppointmentRow,
   RoleActivationChangeRow,
-  DelegationAuthorityPageRow,
-  DelegationAuthorityDetailRow,
-  RoleActivationPageRow,
-  RoleActivationDetailRow,
   AccessAdministrationContext,
 } from "./organization-access-administration-shared";
+
+/** One role assignment as the protected role assignments projection shows it. */
+const projectedAssignmentSchema = z.object({
+  organization_id: z.string(),
+  record_id: roleAssignmentIdSchema,
+  attribute_values: z
+    .object({
+      role_id: z.string(),
+      assignee_kind: z.enum(["organization_account", "group"]),
+      organization_account_id: z.string().nullable(),
+      assignment_kind: z.string(),
+      state: z.string(),
+      temporal_state: z.enum(["active", "scheduled", "expired", "revoked"]),
+    })
+    .loose(),
+});
+
+type ProjectedRoleAssignment = Readonly<{
+  roleAssignmentId: string;
+  roleId: string;
+  organizationAccountId: string | null;
+  assignmentKind: string;
+  state: string;
+  temporalState: z.infer<typeof projectedAssignmentSchema>["attribute_values"]["temporal_state"];
+}>;
+
+const projectedPageSize = 200;
 
 export const createAccessAdministrationAssignmentOperations = ({
   requests,
@@ -89,6 +88,43 @@ export const createAccessAdministrationAssignmentOperations = ({
   newActivityId,
 }: AccessAdministrationContext) => {
   return {
+    /**
+     * One keyset page (at most 200, in assignment id order) of the organisation's role assignments,
+     * read through the protected role assignments projection under the assignment ledger scope.
+     */
+    listRoleAssignments: async (
+      session: IdentitySession,
+      candidate: OrganizationSelectionCandidate,
+      afterRoleAssignmentId: string | undefined,
+    ): Promise<HumanOrganizationRequestResult<readonly ProjectedRoleAssignment[]>> =>
+      requests.run(session, candidate, async (transaction, scope) => {
+        const rows = await transaction.query`
+          select organization_id, record_id, attribute_values
+          from vortex_access.list_organization_role_assignments_projection(
+            null, 'record_id', 'ascending',
+            ${
+              afterRoleAssignmentId === undefined
+                ? null
+                : JSON.stringify({ recordId: afterRoleAssignmentId })
+            }::text::jsonb,
+            ${projectedPageSize}::integer, null
+          )
+        `;
+        return rows.map((row) => {
+          const parsed = projectedAssignmentSchema.parse(row);
+          if (!sameId(parsed.organization_id, scope.organizationId))
+            throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
+          return {
+            roleAssignmentId: parsed.record_id,
+            roleId: parsed.attribute_values.role_id,
+            organizationAccountId: parsed.attribute_values.organization_account_id,
+            assignmentKind: parsed.attribute_values.assignment_kind,
+            state: parsed.attribute_values.state,
+            temporalState: parsed.attribute_values.temporal_state,
+          };
+        });
+      }),
+
     assignRoleAssignment: async (
       session: IdentitySession,
       candidate: OrganizationSelectionCandidate,
@@ -560,296 +596,6 @@ export const createAccessAdministrationAssignmentOperations = ({
           return parsed.data;
         }),
       );
-    },
-
-    listRoleAssignments: async (
-      session: IdentitySession,
-      candidate: OrganizationSelectionCandidate,
-      commandCandidate: ListOrganizationAdministrationRoleAssignmentsCommand,
-    ): Promise<
-      HumanOrganizationRequestResult<ListOrganizationAdministrationRoleAssignmentsResult>
-    > => {
-      const command =
-        listOrganizationAdministrationRoleAssignmentsCommandSchema.safeParse(commandCandidate);
-      if (!command.success)
-        return refuseAdministration(
-          "listRoleAssignments",
-          "ACCESS_ADMIN_COMMAND_INVALID",
-          { kind: "unavailable" } as const,
-          command.error,
-        );
-
-      return requests.run(session, candidate, async (transaction, scope) => {
-        const row = requireOne(
-          await transaction.query<RoleAssignmentPageRow>`
-            select organization_id, assignments, next_after_role_assignment_id,
-              access_version
-            from vortex_access.list_organization_role_assignments_for_administration(
-              ${command.data.afterRoleAssignmentId ?? null}::uuid,
-              ${command.data.pageSize}::integer
-            )
-          `,
-        );
-        if (
-          typeof row.organization_id !== "string" ||
-          !sameId(row.organization_id, scope.organizationId) ||
-          databaseRevision(row.access_version) !== scope.accessVersion ||
-          !Array.isArray(row.assignments)
-        )
-          throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
-
-        return listOrganizationAdministrationRoleAssignmentsResultSchema.parse({
-          assignments: row.assignments.map(normalizeAssignmentLedgerFact),
-          ...(row.next_after_role_assignment_id === null ||
-          row.next_after_role_assignment_id === undefined
-            ? {}
-            : { nextAfterRoleAssignmentId: row.next_after_role_assignment_id }),
-          accessVersion: databaseRevision(row.access_version),
-        });
-      });
-    },
-
-    readRoleAssignment: async (
-      session: IdentitySession,
-      candidate: OrganizationSelectionCandidate,
-      commandCandidate: ReadOrganizationAdministrationRoleAssignmentCommand,
-    ): Promise<
-      HumanOrganizationRequestResult<ReadOrganizationAdministrationRoleAssignmentResult>
-    > => {
-      const command =
-        readOrganizationAdministrationRoleAssignmentCommandSchema.safeParse(commandCandidate);
-      if (!command.success)
-        return refuseAdministration(
-          "readRoleAssignment",
-          "ACCESS_ADMIN_COMMAND_INVALID",
-          { kind: "unavailable" } as const,
-          command.error,
-        );
-
-      return requests.run(session, candidate, async (transaction, scope) => {
-        const row = requireOne(
-          await transaction.query<RoleAssignmentDetailRow>`
-            select organization_id, outcome, assignment_summary, access_version
-            from vortex_access.read_organization_role_assignment_for_administration(
-              ${command.data.roleAssignmentId}::uuid
-            )
-          `,
-        );
-        if (
-          typeof row.organization_id !== "string" ||
-          !sameId(row.organization_id, scope.organizationId) ||
-          databaseRevision(row.access_version) !== scope.accessVersion
-        )
-          throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
-
-        const result = readOrganizationAdministrationRoleAssignmentResultSchema.parse({
-          outcome: row.outcome,
-          ...(row.assignment_summary === null || row.assignment_summary === undefined
-            ? {}
-            : { assignment: normalizeAssignmentLedgerFact(row.assignment_summary) }),
-          accessVersion: databaseRevision(row.access_version),
-        });
-        if (
-          result.outcome === "available" &&
-          !sameId(result.assignment.roleAssignmentId, command.data.roleAssignmentId)
-        )
-          throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
-        return result;
-      });
-    },
-
-    listDelegationAuthorities: async (
-      session: IdentitySession,
-      candidate: OrganizationSelectionCandidate,
-      commandCandidate: ListOrganizationAdministrationDelegationAuthoritiesCommand,
-    ): Promise<
-      HumanOrganizationRequestResult<ListOrganizationAdministrationDelegationAuthoritiesResult>
-    > => {
-      const command =
-        listOrganizationAdministrationDelegationAuthoritiesCommandSchema.safeParse(
-          commandCandidate,
-        );
-      if (!command.success)
-        return refuseAdministration(
-          "listDelegationAuthorities",
-          "ACCESS_ADMIN_COMMAND_INVALID",
-          { kind: "unavailable" } as const,
-          command.error,
-        );
-
-      return requests.run(session, candidate, async (transaction, scope) => {
-        const row = requireOne(
-          await transaction.query<DelegationAuthorityPageRow>`
-            select organization_id, delegations,
-              next_after_delegation_authority_id, access_version
-            from vortex_access.list_organization_delegation_authorities_for_administration(
-              ${command.data.afterDelegationAuthorityId ?? null}::uuid,
-              ${command.data.pageSize}::integer
-            )
-          `,
-        );
-        if (
-          typeof row.organization_id !== "string" ||
-          !sameId(row.organization_id, scope.organizationId) ||
-          databaseRevision(row.access_version) !== scope.accessVersion ||
-          !Array.isArray(row.delegations)
-        )
-          throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
-
-        return listOrganizationAdministrationDelegationAuthoritiesResultSchema.parse({
-          delegations: row.delegations.map(normalizeAssignmentLedgerFact),
-          ...(row.next_after_delegation_authority_id === null ||
-          row.next_after_delegation_authority_id === undefined
-            ? {}
-            : { nextAfterDelegationAuthorityId: row.next_after_delegation_authority_id }),
-          accessVersion: databaseRevision(row.access_version),
-        });
-      });
-    },
-
-    readDelegationAuthority: async (
-      session: IdentitySession,
-      candidate: OrganizationSelectionCandidate,
-      commandCandidate: ReadOrganizationAdministrationDelegationAuthorityCommand,
-    ): Promise<
-      HumanOrganizationRequestResult<ReadOrganizationAdministrationDelegationAuthorityResult>
-    > => {
-      const command =
-        readOrganizationAdministrationDelegationAuthorityCommandSchema.safeParse(commandCandidate);
-      if (!command.success)
-        return refuseAdministration(
-          "readDelegationAuthority",
-          "ACCESS_ADMIN_COMMAND_INVALID",
-          { kind: "unavailable" } as const,
-          command.error,
-        );
-
-      return requests.run(session, candidate, async (transaction, scope) => {
-        const row = requireOne(
-          await transaction.query<DelegationAuthorityDetailRow>`
-            select organization_id, outcome, delegation_summary, access_version
-            from vortex_access.read_organization_delegation_authority_for_administration(
-              ${command.data.delegationAuthorityId}::uuid
-            )
-          `,
-        );
-        if (
-          typeof row.organization_id !== "string" ||
-          !sameId(row.organization_id, scope.organizationId) ||
-          databaseRevision(row.access_version) !== scope.accessVersion
-        )
-          throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
-
-        const result = readOrganizationAdministrationDelegationAuthorityResultSchema.parse({
-          outcome: row.outcome,
-          ...(row.delegation_summary === null || row.delegation_summary === undefined
-            ? {}
-            : { delegation: normalizeAssignmentLedgerFact(row.delegation_summary) }),
-          accessVersion: databaseRevision(row.access_version),
-        });
-        if (
-          result.outcome === "available" &&
-          !sameId(result.delegation.delegationAuthorityId, command.data.delegationAuthorityId)
-        )
-          throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
-        return result;
-      });
-    },
-
-    listRoleActivations: async (
-      session: IdentitySession,
-      candidate: OrganizationSelectionCandidate,
-      commandCandidate: ListOrganizationAdministrationRoleActivationsCommand,
-    ): Promise<
-      HumanOrganizationRequestResult<ListOrganizationAdministrationRoleActivationsResult>
-    > => {
-      const command =
-        listOrganizationAdministrationRoleActivationsCommandSchema.safeParse(commandCandidate);
-      if (!command.success)
-        return refuseAdministration(
-          "listRoleActivations",
-          "ACCESS_ADMIN_COMMAND_INVALID",
-          { kind: "unavailable" } as const,
-          command.error,
-        );
-
-      return requests.run(session, candidate, async (transaction, scope) => {
-        const row = requireOne(
-          await transaction.query<RoleActivationPageRow>`
-            select organization_id, activations, next_after_role_activation_id,
-              access_version
-            from vortex_access.list_organization_role_activations_for_administration(
-              ${command.data.afterRoleActivationId ?? null}::uuid,
-              ${command.data.pageSize}::integer
-            )
-          `,
-        );
-        if (
-          typeof row.organization_id !== "string" ||
-          !sameId(row.organization_id, scope.organizationId) ||
-          databaseRevision(row.access_version) !== scope.accessVersion ||
-          !Array.isArray(row.activations)
-        )
-          throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
-
-        return listOrganizationAdministrationRoleActivationsResultSchema.parse({
-          activations: row.activations.map(normalizeRoleActivation),
-          ...(row.next_after_role_activation_id === null ||
-          row.next_after_role_activation_id === undefined
-            ? {}
-            : { nextAfterRoleActivationId: row.next_after_role_activation_id }),
-          accessVersion: databaseRevision(row.access_version),
-        });
-      });
-    },
-
-    readRoleActivation: async (
-      session: IdentitySession,
-      candidate: OrganizationSelectionCandidate,
-      commandCandidate: ReadOrganizationAdministrationRoleActivationCommand,
-    ): Promise<
-      HumanOrganizationRequestResult<ReadOrganizationAdministrationRoleActivationResult>
-    > => {
-      const command =
-        readOrganizationAdministrationRoleActivationCommandSchema.safeParse(commandCandidate);
-      if (!command.success)
-        return refuseAdministration(
-          "readRoleActivation",
-          "ACCESS_ADMIN_COMMAND_INVALID",
-          { kind: "unavailable" } as const,
-          command.error,
-        );
-
-      return requests.run(session, candidate, async (transaction, scope) => {
-        const row = requireOne(
-          await transaction.query<RoleActivationDetailRow>`
-            select organization_id, outcome, activation_summary, access_version
-            from vortex_access.read_organization_role_activation_for_administration(
-              ${command.data.roleActivationId}::uuid
-            )
-          `,
-        );
-        if (
-          typeof row.organization_id !== "string" ||
-          !sameId(row.organization_id, scope.organizationId) ||
-          databaseRevision(row.access_version) !== scope.accessVersion
-        )
-          throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
-
-        const result = readOrganizationAdministrationRoleActivationResultSchema.parse({
-          outcome: row.outcome,
-          ...(row.activation_summary === null || row.activation_summary === undefined
-            ? {}
-            : { activation: normalizeRoleActivation(row.activation_summary) }),
-          accessVersion: databaseRevision(row.access_version),
-        });
-        if (
-          result.outcome === "available" &&
-          !sameId(result.activation.roleActivationId, command.data.roleActivationId)
-        )
-          throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
-        return result;
-      });
     },
   };
 };

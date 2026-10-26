@@ -19,7 +19,7 @@ import type {
   ProtectedQueryFieldBounds,
   ProtectedQueryRow,
 } from "../queries/protected-query-contracts";
-import type { displayDetailCellSchema, displayTableFieldSchema } from "./display-payload-parts";
+import type { displayDetailCellSchema } from "./display-payload-parts";
 import type { recordDetailPayloadSchema } from "./display-payload-record-detail";
 import type {
   displayTableGroupSchema,
@@ -52,13 +52,6 @@ import {
 
 /** One closed display value of a record detail field, as the display payload schema accepts it. */
 export type ProjectedCellValue = z.infer<typeof displayDetailCellSchema>;
-
-/**
- * A table field's stored rows as a record detail shows them: its declared columns in declared order
- * with readable headings, at most the first page of rows with each row's cells for exactly those
- * columns, each a scalar display value, and how many rows the field holds in total.
- */
-export type ProjectedTableField = z.infer<typeof displayTableFieldSchema>;
 
 /** The resolved links of one page, keyed by `recordLinkLabelKey`; absent when the read failed. */
 export type ProjectedRecordLinks = ReadonlyMap<string, ProjectedRecordLink>;

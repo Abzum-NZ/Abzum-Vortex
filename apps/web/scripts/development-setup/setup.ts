@@ -419,7 +419,7 @@ export const runDevelopmentSetup = async (
   await grantFirstOwnerApplicationRoles(
     {
       identityAuthorityId,
-      organizationId: system.organizationId,
+      system,
       stewardIdentityId,
       stewardOrganizationAccountId: provisioned.organizationAccountId,
       applicationKeys: manifest.applicationKeys,

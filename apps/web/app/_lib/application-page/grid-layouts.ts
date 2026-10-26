@@ -29,7 +29,7 @@ import type { SearchParameters } from "./types";
  * The person's stored layouts and saved views of a page's data grids, read once before any grid
  * reads its rows.
  */
-export type PageGridLayouts = Readonly<{
+type PageGridLayouts = Readonly<{
   storage: GridLayoutStorage;
   stored: StoredGridViews;
   /**
@@ -50,7 +50,7 @@ const NONE: StoredGridViews = {
 };
 
 /** One data grid of the page whose layout and views are read. */
-export type PageGrid = Readonly<{
+type PageGrid = Readonly<{
   placementId: string;
   recordTypeId: string;
   /** The saved view the address selects for this grid, when it names one. */

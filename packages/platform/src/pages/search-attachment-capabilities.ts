@@ -57,7 +57,7 @@ export type ReadOnlyAttachmentFileEvidence =
   | Readonly<{ kind: "unavailable" }>;
 
 /** Why a projection was refused; the page reader logs it so a refusal always has a cause. */
-export type ReadOnlyAttachmentRefusalReason =
+type ReadOnlyAttachmentRefusalReason =
   | "owner_tuple_invalid"
   | "field_value_absent"
   | "field_value_invalid"

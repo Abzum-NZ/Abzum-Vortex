@@ -13,7 +13,7 @@ import { collectActionFlowTasks, flowLibraryOf } from "../../rules/action-flow-r
 import { projectNamedActionAvailability } from "./named-action-availability";
 
 type RowActions = NonNullable<RecordsTableFeatureProjection["rowActions"]>;
-export type RowActionInstallation = Readonly<{
+type RowActionInstallation = Readonly<{
   bindings: readonly ComponentFlowBinding[];
   flows: ReadonlyMap<string, unknown>;
   namedActions: ReadonlyMap<string, FlowNamedAction>;

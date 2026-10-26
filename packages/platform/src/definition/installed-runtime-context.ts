@@ -64,11 +64,17 @@ export type InstalledRuntimeContext = Readonly<{
 /** Contexts this loader assembled; a structurally identical object from anywhere else is refused. */
 const assembledContexts = new WeakSet<object>();
 
+/** True only for a context this loader assembled; a structurally identical forgery is not one. */
+export const isInstalledRuntimeContext = (
+  candidate: unknown,
+): candidate is InstalledRuntimeContext =>
+  typeof candidate === "object" && candidate !== null && assembledContexts.has(candidate);
+
 /** Returns the context only when this loader assembled it, so a consumer cannot be handed a forgery. */
 export const requireInstalledRuntimeContext = (candidate: unknown): InstalledRuntimeContext => {
-  if (typeof candidate !== "object" || candidate === null || !assembledContexts.has(candidate))
+  if (!isInstalledRuntimeContext(candidate))
     throw new DefinitionError("INSTALLED_RUNTIME_CONTEXT_REFUSED");
-  return candidate as InstalledRuntimeContext;
+  return candidate;
 };
 
 const failure = (code: InstalledRuntimeContextErrorCode, cause: unknown) =>

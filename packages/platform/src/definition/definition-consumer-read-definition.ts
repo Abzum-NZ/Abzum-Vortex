@@ -22,6 +22,7 @@ import {
 import { assertModuleContractPair } from "./definition-source";
 import type { ExactDefinitionDependency } from "./definition-store-contracts";
 import { stableDefinitionReleaseVersionSchema } from "./version-impact";
+import { flowRefusalFeedbackSentences } from "../workflows/flow-refusal-feedback";
 import { z } from "zod";
 import type { DefinitionPublicationCatalogue } from "./definition-publication-contracts";
 import {
@@ -299,8 +300,7 @@ export const projectStoredConsumerRelease = async (
       throw new DefinitionError("DEFINITION_RELEASE_INTEGRITY_FAILED");
     if (catalogueVerification === "superseded")
       throw new DefinitionError("DEFINITION_DEPENDENCY_SUPERSEDED", {
-        sentence:
-          "Republish required: this release uses superseded platform definitions. Republish the application, then install or upgrade to the new release.",
+        sentence: flowRefusalFeedbackSentences.application_republish_required,
       });
   }
 

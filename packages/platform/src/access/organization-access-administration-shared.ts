@@ -12,13 +12,6 @@ import type { createHumanOrganizationRequestService } from "./human-organization
 import type { HumanOrganizationRequestResult } from "./human-organization-request";
 import { prepareOrganizationRoleChangeEvidence } from "./organization-role-change-evidence";
 
-export type GroupPageRow = DatabaseRow & {
-  organization_id: unknown;
-  groups: unknown;
-  next_after_group_id: unknown;
-  access_version: unknown;
-};
-
 export type GroupDetailRow = DatabaseRow & {
   organization_id: unknown;
   outcome: unknown;
@@ -33,49 +26,10 @@ export type GroupChangeRow = DatabaseRow & {
   access_version: unknown;
 };
 
-export type MembershipPageRow = DatabaseRow & {
-  organization_id: unknown;
-  group_id: unknown;
-  memberships: unknown;
-  next_after_membership_id: unknown;
-  access_version: unknown;
-};
-
-export type MembershipDetailRow = DatabaseRow & {
-  organization_id: unknown;
-  outcome: unknown;
-  membership_summary: unknown;
-  access_version: unknown;
-};
-
 export type MembershipChangeRow = DatabaseRow & {
   outcome: unknown;
   organization_id: unknown;
   membership_summary: unknown;
-  access_version: unknown;
-};
-
-export type PermissionPageRow = DatabaseRow & {
-  organization_id: unknown;
-  permissions: unknown;
-  next_after_application_root_id: unknown;
-  next_after_owner_kind: unknown;
-  next_after_owner_id: unknown;
-  next_after_permission_id: unknown;
-  access_version: unknown;
-};
-
-export type PermissionDetailRow = DatabaseRow & {
-  organization_id: unknown;
-  outcome: unknown;
-  permission_summary: unknown;
-  access_version: unknown;
-};
-
-export type RolePageRow = DatabaseRow & {
-  organization_id: unknown;
-  roles: unknown;
-  next_after_role_id: unknown;
   access_version: unknown;
 };
 
@@ -90,35 +44,6 @@ export type RoleChangeRow = DatabaseRow & {
   outcome: unknown;
   organization_id: unknown;
   role_summary: unknown;
-  access_version: unknown;
-};
-
-export type ApplicationRoleTemplatePageRow = DatabaseRow & {
-  organization_id: unknown;
-  templates: unknown;
-  next_after_application_root_id: unknown;
-  next_after_source_role_id: unknown;
-  access_version: unknown;
-};
-
-export type ApplicationRoleTemplateDetailRow = DatabaseRow & {
-  organization_id: unknown;
-  outcome: unknown;
-  template_summary: unknown;
-  access_version: unknown;
-};
-
-export type RoleAssignmentPageRow = DatabaseRow & {
-  organization_id: unknown;
-  assignments: unknown;
-  next_after_role_assignment_id: unknown;
-  access_version: unknown;
-};
-
-export type RoleAssignmentDetailRow = DatabaseRow & {
-  organization_id: unknown;
-  outcome: unknown;
-  assignment_summary: unknown;
   access_version: unknown;
 };
 
@@ -150,34 +75,6 @@ export type StewardshipAppointmentRow = DatabaseRow & {
 export type RoleActivationChangeRow = DatabaseRow & {
   outcome: unknown;
   organization_id: unknown;
-  activation_summary: unknown;
-  access_version: unknown;
-};
-
-export type DelegationAuthorityPageRow = DatabaseRow & {
-  organization_id: unknown;
-  delegations: unknown;
-  next_after_delegation_authority_id: unknown;
-  access_version: unknown;
-};
-
-export type DelegationAuthorityDetailRow = DatabaseRow & {
-  organization_id: unknown;
-  outcome: unknown;
-  delegation_summary: unknown;
-  access_version: unknown;
-};
-
-export type RoleActivationPageRow = DatabaseRow & {
-  organization_id: unknown;
-  activations: unknown;
-  next_after_role_activation_id: unknown;
-  access_version: unknown;
-};
-
-export type RoleActivationDetailRow = DatabaseRow & {
-  organization_id: unknown;
-  outcome: unknown;
   activation_summary: unknown;
   access_version: unknown;
 };
@@ -284,35 +181,6 @@ export const sameAssignee = (
     : requested.assigneeKind === "group" &&
       requested.groupId !== undefined &&
       sameId(assignee.groupId, requested.groupId);
-
-export const samePermissionReference = (
-  left: Readonly<{
-    applicationRootId?: string | undefined;
-    ownerKind: string;
-    ownerId: string;
-    permissionId: string;
-  }>,
-  right: Readonly<{
-    applicationRootId?: string | undefined;
-    ownerKind: string;
-    ownerId: string;
-    permissionId: string;
-  }>,
-): boolean =>
-  left.ownerKind === right.ownerKind &&
-  sameId(left.ownerId, right.ownerId) &&
-  sameId(left.permissionId, right.permissionId) &&
-  (left.applicationRootId === undefined) === (right.applicationRootId === undefined) &&
-  (left.applicationRootId === undefined ||
-    right.applicationRootId === undefined ||
-    sameId(left.applicationRootId, right.applicationRootId));
-
-export const sameApplicationRoleTemplateReference = (
-  left: Readonly<{ applicationRootId: string; sourceRoleId: string }>,
-  right: Readonly<{ applicationRootId: string; sourceRoleId: string }>,
-): boolean =>
-  sameId(left.applicationRootId, right.applicationRootId) &&
-  sameId(left.sourceRoleId, right.sourceRoleId);
 
 export const requireOne = <Row>(rows: readonly Row[]): Row => {
   if (rows.length !== 1 || rows[0] === undefined)

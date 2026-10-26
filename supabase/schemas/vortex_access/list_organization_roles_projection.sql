@@ -138,8 +138,8 @@ end
 $function$;
 
 revoke all on function vortex_access.list_organization_roles_projection(uuid[], text, text, jsonb, integer, jsonb)
-  from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
+  from public, anon, authenticated, service_role, vortex_runtime;
 grant execute on function vortex_access.list_organization_roles_projection(uuid[], text, text, jsonb, integer, jsonb)
-  to vortex_owner, vortex_record_adapter, postgres;
+  to vortex_owner, vortex_record_adapter, vortex_request, postgres;
 alter function vortex_access.list_organization_roles_projection(uuid[], text, text, jsonb, integer, jsonb)
   owner to vortex_owner;

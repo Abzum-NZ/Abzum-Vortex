@@ -36,7 +36,7 @@ import { z } from "zod";
 import {
   assembleHumanInstalledRuntimeContext,
   readHumanActiveInstallation,
-  requireInstalledRuntimeContext,
+  isInstalledRuntimeContext,
   type HumanInstalledRuntimeScope,
   type InstalledRuntimeContext,
 } from "./installed-runtime-context";
@@ -465,12 +465,10 @@ const retainPageCompositions = <Context extends InstalledRuntimeContext>(
 export const isTrustedInstalledPageBundleContext = (
   contextCandidate: unknown,
 ): contextCandidate is InstalledRuntimeContext => {
-  try {
-    const context = requireInstalledRuntimeContext(contextCandidate);
-    return installedPageBundleIdentities.has(context);
-  } catch {
-    return false;
-  }
+  return (
+    isInstalledRuntimeContext(contextCandidate) &&
+    installedPageBundleIdentities.has(contextCandidate)
+  );
 };
 
 /** Returns only the canonical precomposition held by this request's assembled App context. */
@@ -478,12 +476,8 @@ export const readInstalledPageComposition = (
   contextCandidate: unknown,
   pageId: string,
 ): ResolvedPageComposition | undefined => {
-  try {
-    const context = requireInstalledRuntimeContext(contextCandidate);
-    return installedPageCompositions.get(context)?.get(pageId.toLowerCase());
-  } catch {
-    return undefined;
-  }
+  if (!isInstalledRuntimeContext(contextCandidate)) return undefined;
+  return installedPageCompositions.get(contextCandidate)?.get(pageId.toLowerCase());
 };
 
 /** Confirms that a Page projection uses the exact precomposition from this assembled context. */
@@ -492,16 +486,12 @@ export const isTrustedInstalledPageComposition = (
   compositionCandidate: unknown,
 ): compositionCandidate is ResolvedPageComposition => {
   if (typeof compositionCandidate !== "object" || compositionCandidate === null) return false;
-  try {
-    const context = requireInstalledRuntimeContext(contextCandidate);
-    const compositions = installedPageCompositions.get(context);
-    return (
-      compositions !== undefined &&
-      [...compositions.values()].some((composition) => composition === compositionCandidate)
-    );
-  } catch {
-    return false;
-  }
+  if (!isInstalledRuntimeContext(contextCandidate)) return false;
+  const compositions = installedPageCompositions.get(contextCandidate);
+  return (
+    compositions !== undefined &&
+    [...compositions.values()].some((composition) => composition === compositionCandidate)
+  );
 };
 
 /** Matches the exact source and active pins used to assemble this Page context. */
@@ -511,64 +501,61 @@ export const matchesInstalledPageBundleIdentity = (
   expectedAccessVersion?: number,
   expectedOrganizationAccountId?: string,
 ): boolean => {
-  try {
-    const context = requireInstalledRuntimeContext(contextCandidate);
-    const expected = installedPageBundleIdentities.get(context);
-    const parsed = activeInstallationBundleStateSchema.safeParse(stateCandidate);
-    if (expected === undefined || !parsed.success) return false;
-    const state = parsed.data;
-    const bundleIndex = state.bundleIndex;
-    if (state.repairNeeded || bundleIndex === null) return false;
-    const application = context.releaseSet.application;
-    if (
-      state.identity.organizationId !== expected.organizationId ||
-      state.identity.applicationRootId !== expected.applicationRootId ||
-      state.identity.applicationReleaseRevision !== expected.applicationReleaseRevision ||
-      (expectedAccessVersion !== undefined &&
-        state.identity.accessVersion !== expectedAccessVersion) ||
-      (expectedOrganizationAccountId !== undefined &&
-        state.identity.organizationAccountId !== expectedOrganizationAccountId) ||
-      state.identity.pinFingerprint !== expected.pinFingerprint ||
-      bundleIndex.pinFingerprint !== expected.pinFingerprint ||
-      canonicalJson(bundleIndex.sourceManifest) !== canonicalJson(expected.sourceManifest) ||
-      application.organizationId !== state.identity.organizationId ||
-      application.rootId !== state.identity.applicationRootId ||
-      application.releaseRevision !== state.identity.applicationReleaseRevision ||
-      application.definitionKey !== state.identity.registeredApplication.definitionKey ||
-      application.releaseVersion !== state.identity.registeredApplication.releaseVersion ||
-      application.validationContractVersion !==
-        state.identity.registeredApplication.validationContractVersion ||
-      application.contentFingerprint !== state.identity.registeredApplication.contentFingerprint ||
-      application.resolutionFingerprint !==
-        state.identity.registeredApplication.resolutionFingerprint ||
-      canonicalJson(state.identity.moduleBindings) !== canonicalJson(expected.moduleBindings) ||
-      canonicalJson(state.identity.pinFacts) !== canonicalJson(expected.pinFacts)
-    )
-      return false;
-    const modules = [...context.releaseSet.modules].sort((left, right) =>
-      left.rootId.toLowerCase() < right.rootId.toLowerCase()
-        ? -1
-        : left.rootId.toLowerCase() > right.rootId.toLowerCase()
-          ? 1
-          : 0,
-    );
-    if (modules.length !== state.identity.pinFacts.length) return false;
-    return modules.every((module, index) => {
-      const binding = state.identity.moduleBindings[index];
-      const pin = state.identity.pinFacts[index];
-      return (
-        binding !== undefined &&
-        pin !== undefined &&
-        module.organizationId === state.identity.organizationId &&
-        module.rootId === binding.moduleRootId &&
-        module.releaseRevision === binding.moduleReleaseRevision &&
-        module.rootId === pin.moduleRootId &&
-        module.releaseRevision === pin.moduleReleaseRevision &&
-        module.contentFingerprint === pin.contentFingerprint &&
-        module.resolutionFingerprint === pin.resolutionFingerprint
-      );
-    });
-  } catch {
+  if (!isInstalledRuntimeContext(contextCandidate)) return false;
+  const context = contextCandidate;
+  const expected = installedPageBundleIdentities.get(context);
+  const parsed = activeInstallationBundleStateSchema.safeParse(stateCandidate);
+  if (expected === undefined || !parsed.success) return false;
+  const state = parsed.data;
+  const bundleIndex = state.bundleIndex;
+  if (state.repairNeeded || bundleIndex === null) return false;
+  const application = context.releaseSet.application;
+  if (
+    state.identity.organizationId !== expected.organizationId ||
+    state.identity.applicationRootId !== expected.applicationRootId ||
+    state.identity.applicationReleaseRevision !== expected.applicationReleaseRevision ||
+    (expectedAccessVersion !== undefined &&
+      state.identity.accessVersion !== expectedAccessVersion) ||
+    (expectedOrganizationAccountId !== undefined &&
+      state.identity.organizationAccountId !== expectedOrganizationAccountId) ||
+    state.identity.pinFingerprint !== expected.pinFingerprint ||
+    bundleIndex.pinFingerprint !== expected.pinFingerprint ||
+    canonicalJson(bundleIndex.sourceManifest) !== canonicalJson(expected.sourceManifest) ||
+    application.organizationId !== state.identity.organizationId ||
+    application.rootId !== state.identity.applicationRootId ||
+    application.releaseRevision !== state.identity.applicationReleaseRevision ||
+    application.definitionKey !== state.identity.registeredApplication.definitionKey ||
+    application.releaseVersion !== state.identity.registeredApplication.releaseVersion ||
+    application.validationContractVersion !==
+      state.identity.registeredApplication.validationContractVersion ||
+    application.contentFingerprint !== state.identity.registeredApplication.contentFingerprint ||
+    application.resolutionFingerprint !==
+      state.identity.registeredApplication.resolutionFingerprint ||
+    canonicalJson(state.identity.moduleBindings) !== canonicalJson(expected.moduleBindings) ||
+    canonicalJson(state.identity.pinFacts) !== canonicalJson(expected.pinFacts)
+  )
     return false;
-  }
+  const modules = [...context.releaseSet.modules].sort((left, right) =>
+    left.rootId.toLowerCase() < right.rootId.toLowerCase()
+      ? -1
+      : left.rootId.toLowerCase() > right.rootId.toLowerCase()
+        ? 1
+        : 0,
+  );
+  if (modules.length !== state.identity.pinFacts.length) return false;
+  return modules.every((module, index) => {
+    const binding = state.identity.moduleBindings[index];
+    const pin = state.identity.pinFacts[index];
+    return (
+      binding !== undefined &&
+      pin !== undefined &&
+      module.organizationId === state.identity.organizationId &&
+      module.rootId === binding.moduleRootId &&
+      module.releaseRevision === binding.moduleReleaseRevision &&
+      module.rootId === pin.moduleRootId &&
+      module.releaseRevision === pin.moduleReleaseRevision &&
+      module.contentFingerprint === pin.contentFingerprint &&
+      module.resolutionFingerprint === pin.resolutionFingerprint
+    );
+  });
 };
