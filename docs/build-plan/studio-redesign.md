@@ -480,7 +480,7 @@ Running in parallel without shared files:
   - The app canvas is unchanged: theme, radius and font are computed from the app's selection.
   - The ring is at least 3:1 in light.
 - **Walk:**
-  1. Open the CRM-like app at 1440, light then dark: Structure tab.
+  1. Open a Studio-authored app with several record types at 1440, light then dark: Structure tab.
   2. Force a conflict (edit the same draft in two tabs): the dialog appears, then "Load the latest draft".
   3. Sign out in another tab, then edit: the session dialog appears; sign in again and the change retries.
   4. Publish: dialog, then toast.

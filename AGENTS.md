@@ -51,8 +51,7 @@ Lanes are disposable. Each lane has one holder. Reset only a lane you hold (`lan
 `pnpm db:reset` or `pnpm demo:setup`, which always resets its target database); never reset
 another agent's lane. When `main` moves, forward migrate the lane or reset it. To set up without a
 reset, run `pnpm --filter @vortex/web demo:owner` and then `pnpm setup:local --
---local-development --first-owner-identity-id <uuid>` with the printed identity and without
-`--seed-demo`.
+--local-development --first-owner-identity-id <uuid>` with the printed identity.
 
 ```
 node tooling/supabase/lane.mjs init <n>     # once: generate the lane config
