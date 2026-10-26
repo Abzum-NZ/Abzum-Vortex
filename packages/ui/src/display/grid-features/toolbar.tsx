@@ -249,20 +249,35 @@ export type GridToolbarProps = Readonly<{
   fullScreen: GridFullScreen | undefined;
 }>;
 
-type ToolbarArea = "supplement" | "overflow";
+type ToolbarArea = "supplement";
 type ToolbarSlots = Record<ToolbarArea, HTMLElement | null>;
 const ToolbarContext = createContext<Readonly<{
   slots: ToolbarSlots;
   setSlot: (area: ToolbarArea, element: HTMLElement | null) => void;
+  find: (() => void) | undefined;
+  setFind: (action: (() => void) | undefined) => void;
 }> | null>(null);
 
 /** Interactions stay with the grid while their controls fill its one toolbar. */
 export function GridToolbarScope({ children }: Readonly<{ children: ReactNode }>): ReactElement {
-  const [slots, setSlots] = useState<ToolbarSlots>({ supplement: null, overflow: null });
+  const [slots, setSlots] = useState<ToolbarSlots>({ supplement: null });
+  const [find, holdFind] = useState<(() => void) | undefined>(undefined);
+  const setFind = useCallback((action: (() => void) | undefined): void => {
+    holdFind(() => action);
+  }, []);
   const setSlot = useCallback((area: ToolbarArea, element: HTMLElement | null): void => {
     setSlots((held) => (held[area] === element ? held : { ...held, [area]: element }));
   }, []);
-  return <ToolbarContext value={{ slots, setSlot }}>{children}</ToolbarContext>;
+  return <ToolbarContext value={{ slots, setSlot, find, setFind }}>{children}</ToolbarContext>;
+}
+
+/** Menu items render under their menu's context; the grid interaction supplies the command. */
+export function useGridToolbarFind(action: () => void): void {
+  const setFind = useContext(ToolbarContext)?.setFind;
+  useEffect(() => {
+    setFind?.(action);
+    return () => setFind?.(undefined);
+  }, [action, setFind]);
 }
 
 export function GridToolbarSlot({
@@ -293,10 +308,6 @@ export function GridToolbar({
   const setSlot = toolbar?.setSlot;
   const supplementRef = useCallback(
     (element: HTMLDivElement | null) => setSlot?.("supplement", element),
-    [setSlot],
-  );
-  const overflowRef = useCallback(
-    (element: HTMLDivElement | null) => setSlot?.("overflow", element),
     [setSlot],
   );
   const fullScreenLabel = fullScreen?.active === true ? "Exit full screen" : "Full screen";
@@ -386,7 +397,12 @@ export function GridToolbar({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="min-w-48">
               {overflowItems}
-              <div ref={overflowRef} />
+              {toolbar?.find === undefined ? null : (
+                <DropdownMenuItem onClick={toolbar.find}>
+                  <Icon name="search" aria-hidden="true" />
+                  Find on page
+                </DropdownMenuItem>
+              )}
               {fullScreen === undefined ? null : (
                 <DropdownMenuItem
                   aria-keyshortcuts={FULL_SCREEN_ARIA_KEYS}

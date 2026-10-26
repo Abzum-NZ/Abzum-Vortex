@@ -1,16 +1,15 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState, type ReactElement } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactElement } from "react";
 import { Button } from "../../components/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../../components/dialog";
-import { DropdownMenuItem } from "../../components/dropdown-menu";
 import { Input } from "../../components/input";
 import { Icon } from "../../icons/icon";
 import { cellValueToText } from "../cell";
 import { useDateFormatOptions } from "../date-format-context";
 import { GRID_ROOT } from "../table-interaction";
 import type { GridFeatureInteractionProps } from "./registry";
-import { GridToolbarSlot } from "./toolbar";
+import { useGridToolbarFind } from "./toolbar";
 
 type Match = Readonly<{ row: number; field: string }>;
 const matchClasses = [
@@ -31,6 +30,11 @@ export default function Find({ context, surface }: GridFeatureInteractionProps):
   const [index, setIndex] = useState(0);
   const input = useRef<HTMLInputElement>(null);
   const previous = useRef<Match | undefined>(undefined);
+  const openFromToolbar = useCallback(() => {
+    previous.current = undefined;
+    setOpen(true);
+  }, []);
+  useGridToolbarFind(openFromToolbar);
   const latest = useRef(surface);
   latest.current = surface;
   const label = useId();
@@ -124,17 +128,6 @@ export default function Find({ context, surface }: GridFeatureInteractionProps):
   };
   return (
     <>
-      <GridToolbarSlot area="overflow">
-        <DropdownMenuItem
-          onClick={() => {
-            previous.current = undefined;
-            setOpen(true);
-          }}
-        >
-          <Icon name="search" aria-hidden="true" />
-          Find on page
-        </DropdownMenuItem>
-      </GridToolbarSlot>
       <Dialog
         open={open}
         onOpenChange={(next) => {
