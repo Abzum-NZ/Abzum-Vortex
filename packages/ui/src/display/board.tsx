@@ -120,7 +120,7 @@ function ColumnMetrics({
 }: Readonly<{ metrics: BoardBucketPayload["aggregates"] }>): ReactElement | null {
   if (metrics.length === 0) return null;
   return (
-    <div role="group" aria-label="Protected totals" className="flex flex-col">
+    <div role="group" aria-label="Totals" className="flex flex-col">
       {metrics.map((metric) => (
         <p key={metric.key} className="m-0 text-muted-foreground" data-vortex-board-metric="true">
           {metric.label}:{" "}
@@ -230,11 +230,6 @@ function BoardColumn({
             </Button>
           )}
         </h3>
-        {bucket.stage?.gatedBy === undefined ? null : (
-          <Badge variant="outline" title={`Moving a card here runs ${bucket.stage.gatedBy}`}>
-            Runs {bucket.stage.gatedBy}
-          </Badge>
-        )}
         {bucket.values.rowCount === null ? null : (
           <p className="m-0 text-muted-foreground">
             {countText(bucket.values.rowCount)}{" "}
@@ -261,9 +256,21 @@ function BoardColumn({
       </header>
       <div className="flex flex-col gap-3">
         {page === null ? (
-          <p className="text-sm text-muted-foreground" role="status">
-            {pending ? "Loading cards…" : "Cards have not been loaded."}
-          </p>
+          pending ? (
+            <p className="text-sm text-muted-foreground" role="status">
+              Loading cards…
+            </p>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={anyPending || events?.page_changed === undefined}
+              onClick={() => onRetry(bucket)}
+            >
+              Show cards
+              {bucket.values.rowCount === null ? "" : ` (${countText(bucket.values.rowCount)})`}
+            </Button>
+          )
         ) : page.rows.length === 0 ? (
           <p className="text-sm text-muted-foreground" role="status">
             {emptyMessage}
@@ -352,10 +359,13 @@ function BoardColumn({
                         </p>
                       ) : null}
                       {details.map((field) => (
-                        <div key={field.key} className="flex min-w-0 justify-between gap-2">
-                          <span className="min-w-0 text-muted-foreground">{field.label}</span>
-                          {/* A formatted text value is block content, so its container is too. */}
-                          <div className="shrink-0 whitespace-nowrap text-right">
+                        <div
+                          key={field.key}
+                          role="group"
+                          aria-label={`${field.label}: ${cellValueToText(field.value)}`}
+                          className="min-w-0 text-sm text-muted-foreground"
+                        >
+                          <div className="min-w-0 break-words">
                             <DisplayCellView value={field.value} />
                           </div>
                         </div>
@@ -378,7 +388,7 @@ function BoardColumn({
             })}
           </ul>
         )}
-        {pending ? (
+        {pending && page !== null ? (
           <p role="status" className="text-sm text-muted-foreground">
             Loading more cards…
           </p>
@@ -528,6 +538,27 @@ export function BoardView(props: DisplayRenderProps<BoardPayload>): ReactElement
   const draggedRef = useRef<BoardMoveCard | undefined>(undefined);
   const [draggingFrom, setDraggingFrom] = useState<BoardBucket>();
   const [chosenKey, setChosenKey] = useState<string>();
+  const columnsRef = useRef<HTMLDivElement>(null);
+  const [overflow, setOverflow] = useState({ start: false, end: false });
+  useEffect(() => {
+    const element = columnsRef.current;
+    if (element === null) return;
+    const update = (): void => {
+      const start = element.scrollLeft > 1;
+      const end = element.scrollLeft + element.clientWidth < element.scrollWidth - 1;
+      setOverflow((held) => (held.start === start && held.end === end ? held : { start, end }));
+    };
+    const observer = new ResizeObserver(update);
+    observer.observe(element);
+    const content = element.firstElementChild;
+    if (content !== null) observer.observe(content);
+    element.addEventListener("scroll", update, { passive: true });
+    update();
+    return () => {
+      observer.disconnect();
+      element.removeEventListener("scroll", update);
+    };
+  }, [values]);
 
   const buckets: BoardBucket[] =
     values === undefined
@@ -808,34 +839,77 @@ export function BoardView(props: DisplayRenderProps<BoardPayload>): ReactElement
               </Button>
             ))}
           </div>
-          <div
-            className="relative min-w-0 overflow-x-auto"
-            role="region"
-            aria-label={`${accessibleName} columns`}
-            tabIndex={0}
-          >
-            <div className="flex min-w-max items-start gap-3 pb-2 max-md:min-w-0">
-              {buckets.map((bucket) => (
-                <BoardColumn
-                  key={bucket.key}
-                  bucket={bucket}
-                  wipLimit={values.wipLimit}
-                  active={bucket.key === activeKey}
-                  cardFieldIds={values.cardFieldIds}
-                  formatting={values.formatting}
-                  emptyMessage={emptyMessage}
-                  events={events}
-                  rowActions={rowActions}
-                  pending={pendingKeys.has(bucket.key)}
-                  anyPending={pendingKeys.size > 0}
-                  failed={failedKeys.has(bucket.key)}
-                  onContinue={continueBucket}
-                  onRetry={(bucket) => void readBuckets([bucket])}
-                  onAdd={values.quickAdd && cardAdded !== undefined ? addCard : undefined}
-                  mover={mover}
-                  choiceFieldId={values.choiceFieldId}
-                />
-              ))}
+          <div className="relative min-w-0">
+            {overflow.start ? (
+              <div className="pointer-events-none absolute inset-y-0 left-0 z-10 flex w-12 items-center bg-linear-to-r from-background to-transparent max-md:hidden">
+                <Button
+                  variant="secondary"
+                  size="icon-sm"
+                  className="pointer-events-auto"
+                  aria-label="Scroll to previous columns"
+                  onClick={() =>
+                    columnsRef.current?.scrollBy({
+                      left: -320,
+                      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+                        ? "instant"
+                        : "smooth",
+                    })
+                  }
+                >
+                  <Icon name="chevron-left" aria-hidden="true" />
+                </Button>
+              </div>
+            ) : null}
+            {overflow.end ? (
+              <div className="pointer-events-none absolute inset-y-0 right-0 z-10 flex w-12 items-center justify-end bg-linear-to-l from-background to-transparent max-md:hidden">
+                <Button
+                  variant="secondary"
+                  size="icon-sm"
+                  className="pointer-events-auto"
+                  aria-label="Scroll to next columns"
+                  onClick={() =>
+                    columnsRef.current?.scrollBy({
+                      left: 320,
+                      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+                        ? "instant"
+                        : "smooth",
+                    })
+                  }
+                >
+                  <Icon name="chevron-right" aria-hidden="true" />
+                </Button>
+              </div>
+            ) : null}
+            <div
+              ref={columnsRef}
+              className="relative min-w-0 overflow-x-auto"
+              role="region"
+              aria-label={`${accessibleName} columns`}
+              tabIndex={0}
+            >
+              <div className="flex min-w-max items-start gap-3 pb-2 max-md:min-w-0">
+                {buckets.map((bucket) => (
+                  <BoardColumn
+                    key={bucket.key}
+                    bucket={bucket}
+                    wipLimit={values.wipLimit}
+                    active={bucket.key === activeKey}
+                    cardFieldIds={values.cardFieldIds}
+                    formatting={values.formatting}
+                    emptyMessage={emptyMessage}
+                    events={events}
+                    rowActions={rowActions}
+                    pending={pendingKeys.has(bucket.key)}
+                    anyPending={pendingKeys.size > 0}
+                    failed={failedKeys.has(bucket.key)}
+                    onContinue={continueBucket}
+                    onRetry={(bucket) => void readBuckets([bucket])}
+                    onAdd={values.quickAdd && cardAdded !== undefined ? addCard : undefined}
+                    mover={mover}
+                    choiceFieldId={values.choiceFieldId}
+                  />
+                ))}
+              </div>
             </div>
           </div>
         </section>
