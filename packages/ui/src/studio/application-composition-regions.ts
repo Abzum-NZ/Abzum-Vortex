@@ -54,10 +54,7 @@ export type Target = {
 type CompositionCatalogueTools = Readonly<{
   releases: ReadonlyMap<string, PlatformBlockRelease>;
 }>;
-const catalogueTools = new WeakMap<
-  ImmutablePlatformBlockCatalogue,
-  CompositionCatalogueTools
->();
+const catalogueTools = new WeakMap<ImmutablePlatformBlockCatalogue, CompositionCatalogueTools>();
 export const toolsFor = (catalogue: ImmutablePlatformBlockCatalogue): CompositionCatalogueTools => {
   let tools = catalogueTools.get(catalogue);
   if (tools === undefined) {

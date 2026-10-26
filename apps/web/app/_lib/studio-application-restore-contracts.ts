@@ -66,7 +66,6 @@ export const studioApplicationRestoreCommandResultSchema = z.union([
 ]);
 
 export type StudioPersonLabel = z.infer<typeof studioPersonLabelSchema>;
-type StudioApplicationRestoreSelector = z.infer<typeof studioApplicationRestoreSelectorSchema>;
 /** Why a restore did not run. */
 export type StudioApplicationRestoreFailure = Readonly<{ kind: "refused" | "conflict" | "temporarily_unavailable" }>;
 export type StudioApplicationRestoreCommand = z.infer<typeof studioApplicationRestoreCommandSchema>;

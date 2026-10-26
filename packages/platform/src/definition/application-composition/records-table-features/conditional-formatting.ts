@@ -91,8 +91,7 @@ export type ConditionalFormatStyle = Readonly<{
  * A rule's condition as the table's settings spell it: the authored short form with qualified
  * fields in a draft, the canonical condition tree with field identities in a release.
  */
-type ConditionalFormatCondition =
-  ConditionNode | z.infer<typeof sourceQualifiedConditionSchema>;
+type ConditionalFormatCondition = ConditionNode | z.infer<typeof sourceQualifiedConditionSchema>;
 
 /**
  * One rule: a condition, its target (the whole row or chosen cells) and the style it gives. Rules
