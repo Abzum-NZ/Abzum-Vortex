@@ -76,6 +76,7 @@ export const ensureStudioRecordSheet = (
   );
   const boundFlow = source.body.flows.find((flow) => flow.key === binding?.flow);
   if (
+    binding !== undefined &&
     boundFlow?.tasks.some(
       (task) =>
         task.type === "interface.set_panel" &&
@@ -84,8 +85,10 @@ export const ensureStudioRecordSheet = (
         task.properties.state?.kind === "literal" &&
         task.properties.state.literal.value === "open",
     )
-  )
+  ) {
+    target.item.props.row_click = { mode: "flow", event_id: binding.event_id };
     return;
+  }
   source.body.flow_bindings = source.body.flow_bindings.filter((entry) => entry !== binding);
   const result = applyStudioFlowCreate(
     source,
@@ -95,9 +98,15 @@ export const ensureStudioRecordSheet = (
       event: "row_clicked",
       name: `Open ${query.recordTypeLabel} side sheet`.slice(0, 100),
       description: `Opens the record side sheet for the clicked ${query.recordTypeLabel}.`,
-      inputs: {},
+      inputs: {
+        record_id: {
+          type: "record_reference",
+          required: true,
+          recordTypeIds: [query.recordType],
+        },
+      },
       outputs: {},
-      bindingInputs: {},
+      bindingInputs: { record_id: { kind: "caller", name: "record_id" } },
       tasks: [
         {
           id: "open_panel",
