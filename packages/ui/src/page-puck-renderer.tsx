@@ -134,7 +134,7 @@ export type PagePuckRendererProps = Readonly<{
   composition: RenderedPage;
   /**
    * Explicit breakpoint for preview canvases, rendered with that breakpoint's inline geometry and
-   * order. Omit it for a live page, which adapts to the visitor's width (#1010).
+   * order. Omit it for a live page, which adapts to the visitor's width.
    */
   breakpoint?: Breakpoint;
   registry: PlatformComponentRegistry;
@@ -178,7 +178,7 @@ export type PagePuckRendererProps = Readonly<{
   onPrefetchPage?: (pageId: string) => void;
   /** Internal page identity currently shown, for a navigation placement's current-page state. */
   currentPageId?: string;
-  /** Resolved #594 application theme; without one the readable platform defaults apply. */
+  /** Resolved application theme; without one the readable platform defaults apply. */
   theme?: ApplicationTheme | undefined;
   /** Organisation or viewer BCP 47 locale for date presentation. */
   locale?: string | undefined;

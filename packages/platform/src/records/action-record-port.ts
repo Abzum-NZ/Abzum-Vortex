@@ -1207,7 +1207,7 @@ export type NamedActionBatchResult =
 export const namedActionBatchMaximum = 200;
 
 /**
- * The record port of the flow runner for named actions (#1063). The runner has already resolved the
+ * The record port of the flow runner for named actions. The runner has already resolved the
  * exact release's action flow, checked its invocation permission and supplied the flow run; this
  * port owns what needs the database: the action's preparation and permission decision, the typed
  * inputs, the relationship totals, the before-save rules, and the one apply record changes call that

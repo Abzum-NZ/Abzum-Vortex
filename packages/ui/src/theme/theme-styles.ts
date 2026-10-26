@@ -1,9 +1,9 @@
 import { LAYOUT_ONLY_STYLES_CSS } from "../layout-styles";
 
 /**
- * Platform stylesheet for every shared #580-#582 component state. It reads only the fixed
+ * Platform stylesheet for every shared component state. It reads only the fixed
  * variables from `generateThemeCssVariables`; text is always painted on the surface or fill
- * #594 validated it against, and hover/pressed feedback uses the element's own validated
+ * theme validation checked it against, and hover/pressed feedback uses the element's own validated
  * foreground rather than new colours. The platform motion tokens below are the only timing
  * values platform motion reads, and they stop under reduced motion. Application definitions
  * contribute token values only.

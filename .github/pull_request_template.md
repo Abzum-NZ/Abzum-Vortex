@@ -5,7 +5,7 @@ Describe the behaviour implemented and its scope.
 
 ## Walkthrough
 
-Pages exercised on a freshly reset local database (sign-in, then each affected page), with screenshots when the change is visible.
+Pages exercised on a local database lane you hold (sign-in, then each affected page), with screenshots when the change is visible.
 
 ## Checklist ([target architecture](../docs/build-plan/target-architecture.md))
 

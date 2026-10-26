@@ -10,6 +10,7 @@ import { moneyValueSchema } from "./module-field-values";
 import { compareFlowText, evaluateFlowFormula } from "../rules/flow-formula";
 import { evaluateTypedCondition } from "../rules/typed-condition";
 import { persistedRecordFieldValueMatches } from "./field-values";
+import { isRecord } from "../catalogue/runtime-primitives";
 
 type TotalField = Extract<ModuleField, { type: "total" }>;
 
@@ -70,9 +71,6 @@ const issue = (
   path,
   ...(currencyCodes === undefined ? {} : { currencyCodes }),
 });
-
-const isValueMap = (candidate: unknown): candidate is Readonly<Record<string, unknown>> =>
-  candidate !== null && typeof candidate === "object" && !Array.isArray(candidate);
 
 const fieldResultType = (field: ModuleField | undefined): string | undefined =>
   field?.type === "calculation" || field?.type === "total"
@@ -359,7 +357,7 @@ export const evaluateRecordTotals = (
       !Array.isArray(candidate.records) ||
       candidate.records.some(
         (record: Readonly<{ fieldValues: Readonly<Record<string, unknown>> }>) =>
-          !isValueMap(record?.fieldValues),
+          !isRecord(record?.fieldValues),
       ) ||
       !relationshipReaches(parsedSource.data, candidate.relationshipId, target.recordTypeId)
     )
@@ -458,6 +456,7 @@ export const evaluateRecordTotals = (
             })
           )
             continue;
+          // guard-allow: silent-catch A condition that cannot be evaluated is reported as a refused total.
         } catch {
           fieldIssue = issue("condition_refused", field.fieldId);
           break;

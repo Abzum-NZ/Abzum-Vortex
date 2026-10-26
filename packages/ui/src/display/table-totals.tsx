@@ -3,7 +3,7 @@
 import type { ReactElement } from "react";
 import { recordsTableAggregateLabels, type RecordsTableTotal } from "@vortex/platform/schema";
 
-export const totalText = (total: RecordsTableTotal): string => {
+const totalText = (total: RecordsTableTotal): string => {
   switch (total.state) {
     case "value":
       return total.text!;

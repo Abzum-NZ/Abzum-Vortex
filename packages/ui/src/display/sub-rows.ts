@@ -83,7 +83,7 @@ export type SubRowsControls = Readonly<{
  * a row command changed; it is undefined for a write over rows the table does not name one by one
  * (a bulk run), after which every level held beneath the page is read again.
  */
-export type RowWrite = Readonly<{ recordId: string | undefined }>;
+type RowWrite = Readonly<{ recordId: string | undefined }>;
 
 /**
  * The table's event handlers, reporting each settled write on a row (an inline edit, a row edit or a

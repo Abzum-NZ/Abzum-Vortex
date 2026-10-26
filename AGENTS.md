@@ -23,7 +23,7 @@ Vortex is a fresh project with no backward compatibility. Every concern has exac
 | `packages/definitions` | Shipped application and module definitions                                      |
 | `supabase`             | Config, `schemas/` (canonical function files), `migrations/`, seed              |
 | `workflows/kestra`     | Operational flows and scripts                                                   |
-| `tooling`              | Development tools (catalogue, style and font emitters, local database helpers)  |
+| `tooling`              | Development tools (guard, local database lanes, off-theme detector, tsconfigs)  |
 | `docs`                 | Specification (`docs/specification`), roadmap and decisions (`docs/build-plan`) |
 
 ## Run locally

@@ -71,7 +71,7 @@ export const protectedOperationResponseSchema = z
   .strict();
 
 /**
- * #662: one exact inactive workflow flow registration named by installation
+ * One exact inactive workflow flow registration named by installation
  * activation readiness evidence. It carries only permanent identity, the
  * generated provider identifiers and the stored candidate fingerprint; it never
  * carries the candidate's task bodies.
@@ -88,7 +88,7 @@ export const installationWorkflowRegisteredFlowSchema = z
   })
   .strict();
 
-/** #662: a registered flow named by a schedule reconciliation, without its diagnostic detail. */
+/** A registered flow named by a schedule reconciliation, without its diagnostic detail. */
 export const installationWorkflowFlowReferenceSchema = z
   .object({
     workflowRevision: revisionSchema,
@@ -98,12 +98,12 @@ export const installationWorkflowFlowReferenceSchema = z
   .strict();
 
 /**
- * #662: the complete verified inactive flow set of one installation candidate.
- * `installationRevision` is the Application release revision that the #64
+ * The complete verified inactive flow set of one installation candidate.
+ * `installationRevision` is the Application release revision that the installation
  * activation acts on, so readiness evidence and the activation target cannot
  * drift apart. Every workflow of the release appears exactly once in canonical
  * workflow-revision order. `kestraInstance` names the application Kestra
- * instance (#1152), the only provider a schedule change may target; the
+ * instance, the only provider a schedule change may target; the
  * operations instance cannot be expressed.
  */
 export const installationWorkflowActivationEvidenceSchema = z
@@ -135,7 +135,7 @@ export const installationWorkflowActivationEvidenceSchema = z
   });
 
 /**
- * #662: why an installation candidate could not become ready. The reason is
+ * Why an installation candidate could not become ready. The reason is
  * stable reporting metadata: it never selects a flow or grants activation.
  */
 export const installationWorkflowReadinessRefusalReasons = [
@@ -154,7 +154,7 @@ export const installationWorkflowReadinessRefusalReasonSchema = z.enum(
 export type InstallationWorkflowReadinessRefusalReason =
   (typeof installationWorkflowReadinessRefusalReasons)[number];
 
-/** #662: the idempotent schedule reconciliation steps taken after activation or withdrawal. */
+/** The idempotent schedule reconciliation steps taken after activation or withdrawal. */
 export const installationWorkflowScheduleActions = ["enable", "disable"] as const;
 
 export const installationWorkflowScheduleActionSchema = z.enum(
@@ -171,7 +171,7 @@ export const installationWorkflowScheduleChangeSchema = z
   .strict();
 
 /**
- * #662: one accepted start retained through an ordinary upgrade, pinned to the
+ * One accepted start retained through an ordinary upgrade, pinned to the
  * exact Application release and workflow revision it was accepted under. A newer
  * installation pointer never retargets it.
  */
@@ -184,7 +184,7 @@ export const installationWorkflowRetainedStartSchema = z
   .strict();
 
 /**
- * #662: the ready or refused result of installation activation readiness. A
+ * The ready or refused result of installation activation readiness. A
  * refusal is never activation evidence, so the previously active exact release
  * stays selected; a ready result additionally names the schedule reconciliation
  * and every accepted start the upgrade leaves pinned.
@@ -206,7 +206,7 @@ export const installationWorkflowActivationPlanSchema = z.discriminatedUnion("ou
     .strict(),
 ]);
 
-/** #662: how one accepted start is settled when its installation is withdrawn. */
+/** How one accepted start is settled when its installation is withdrawn. */
 export const installationWorkflowWithdrawalDecisions = [
   "refused_before_start",
   "cancellation_requested",
@@ -216,7 +216,7 @@ export const installationWorkflowWithdrawalDecisionSchema = z.enum(
   installationWorkflowWithdrawalDecisions,
 );
 
-/** #662: one accepted start retained by a withdrawal, pinned to its accepted revision. */
+/** One accepted start retained by a withdrawal, pinned to its accepted revision. */
 export const installationWorkflowWithdrawalStartSchema = z
   .object({
     runId: workflowRunIdSchema,
@@ -227,12 +227,12 @@ export const installationWorkflowWithdrawalStartSchema = z
   .strict();
 
 /**
- * #662: the reconciliation a withdrawal records. New acceptance, including every
+ * The reconciliation a withdrawal records. New acceptance, including every
  * scheduled wake-up, is blocked; the withdrawn release's schedules are disabled;
  * and every accepted start is retained with an explicit refusal or cancellation
  * request rather than discarded. Execution, mapping, intent and activity history
  * remain available to explain each outcome. Schedules are disabled only on the
- * application Kestra instance (#1152).
+ * application Kestra instance.
  */
 export const installationWorkflowWithdrawalReconciliationSchema = z
   .object({

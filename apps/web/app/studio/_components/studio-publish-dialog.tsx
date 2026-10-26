@@ -16,7 +16,7 @@ import { Textarea } from "@vortex/ui/components/textarea";
 import { Spinner } from "@vortex/ui/components/spinner";
 import { PublicationSummary, type PublicationComponentLabel } from "./publication-summary";
 
-export type StudioPublishDialogProps = Readonly<{
+type StudioPublishDialogProps = Readonly<{
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** The latest edits are still being saved: only the saved draft is published, so the dialog waits. */

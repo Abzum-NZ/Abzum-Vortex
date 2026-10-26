@@ -48,8 +48,7 @@ export const maximumFlowConfirmationDetailLines = 500;
  * registry (`flow-task-registry.ts`: which task types exist, where they run, their typed
  * properties, and the publication placement check), the value-type catalogue, permanent-identity
  * compilation and cross-definition validation are separate contracts that only read the shapes
- * declared here. Value types currently reuse `workflowValueTypeSchema`
- * until the value-type catalogue replaces it.
+ * declared here.
  */
 export const flowContractVersion = "1.0.0" as const;
 

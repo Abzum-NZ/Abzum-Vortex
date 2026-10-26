@@ -196,7 +196,7 @@ export const factsValueType = (
  * the fields it selects and the inputs a binding fills. Identities are spelled as the table's
  * settings spell them: qualified references in a draft, canonical identities in a release.
  */
-export type RecordsTableRelatedQueryFacts = Readonly<{
+type RecordsTableRelatedQueryFacts = Readonly<{
   query: string;
   label: string;
   recordType: string;
@@ -372,7 +372,7 @@ export const recordsTableFeatureRefusalCodes = [
   "definition_records_table_board",
   "definition_records_table_export",
 ] as const;
-export type RecordsTableFeatureRefusalCode = (typeof recordsTableFeatureRefusalCodes)[number];
+type RecordsTableFeatureRefusalCode = (typeof recordsTableFeatureRefusalCodes)[number];
 
 /**
  * One refusal a feature can give: its stable code, its place in the validation catalogue, and the
@@ -432,7 +432,7 @@ export type GridFeatureSettingsDeclaration = Readonly<{
 }>;
 
 /** What a feature check knows beside its own state: the table's other features and its shape. */
-export type GridFeatureCheckContext = Readonly<{
+type GridFeatureCheckContext = Readonly<{
   features: RecordsTableFeatures;
   presentation: "grid" | "cards";
   /** The table's own page size; a tree's opened levels share one row budget with it. */

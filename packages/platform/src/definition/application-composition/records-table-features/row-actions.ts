@@ -78,7 +78,7 @@ export const recordsTableRowActionIcons = [
 
 /** The record action kinds a configured row or bulk action may require of the viewer. */
 export const recordsTableActionCapabilities = ["update", "delete", "restore"] as const;
-export type RecordsTableActionCapability = (typeof recordsTableActionCapabilities)[number];
+type RecordsTableActionCapability = (typeof recordsTableActionCapabilities)[number];
 
 const textSchema = z.string().min(1);
 const rowActionSchema = z

@@ -10,11 +10,11 @@ import {
   type ShadcnFontOption,
 } from "@vortex/platform/schema";
 
-/** Resolved #594 application theme, as materialised in application content. */
+/** Resolved application theme, as materialised in application content. */
 export type ApplicationTheme = ApplicationContent["theme"];
 type ThemeTokenValue = ApplicationTheme["tokens"][string];
 
-/** Resolved, validated #594 theme tokens keyed by builder key. */
+/** Resolved, validated theme tokens keyed by builder key. */
 type ThemeTokens = Readonly<Record<string, ThemeTokenValue>>;
 export type PlatformThemeTokens = PlatformThemeRelease["tokens"];
 
@@ -101,7 +101,7 @@ const FONT_FALLBACK = 'system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans
 const isColorValue = (value: string): boolean => HEX_COLOR.test(value) || OKLCH_COLOR.test(value);
 
 /**
- * Surface keys in the exact order #594 selects the surface its text, brand and focus
+ * Surface keys in the exact order theme validation selects the surface its text, brand and focus
  * contrast checks run against. The painted surface must be that same surface.
  */
 const SURFACE_PRIORITY = [
@@ -237,8 +237,8 @@ function tokenOfKind<Kind extends ThemeTokenValue["kind"]>(
 }
 
 /**
- * Mirrors #594's surface selection: the colour pair the shared vocabulary declares with the
- * background role, so painted text is always on its validated surface. Token names never
+ * Mirrors the theme's validated surface selection: the colour pair the shared vocabulary declares
+ * with the background role, so painted text is always on its validated surface. Token names never
  * choose the surface; the priority order only settles which declared background role wins.
  */
 function themeSurface(tokens: ThemeTokens): ColorPair | undefined {
@@ -251,7 +251,7 @@ function themeSurface(tokens: ThemeTokens): ColorPair | undefined {
   return selected === undefined ? undefined : colorPair(tokens, selected);
 }
 
-/** A fill and its #594-validated foreground from the vocabulary pair `<key>_foreground`. */
+/** A fill and its validated foreground from the vocabulary pair `<key>_foreground`. */
 function filledPair(tokens: ThemeTokens, key: string): readonly [ColorPair, ColorPair] | undefined {
   const fill = colorPair(tokens, key);
   const foreground = colorPair(tokens, `${key}_foreground`);
@@ -260,11 +260,11 @@ function filledPair(tokens: ThemeTokens, key: string): readonly [ColorPair, Colo
 
 /**
  * Generates the complete, bounded CSS-variable map for shared components from resolved
- * #594 tokens. Every colour carries both appearances through `light-dark()`, so one map
+ * theme tokens. Every colour carries both appearances through `light-dark()`, so one map
  * serves light, dark and system selection through the container's `color-scheme`.
  *
  * Token keys are the shared vocabulary's roles (one key per role, no aliases):
- * - colour: the #594-selected `background` with `text`; `muted_text`; `border_color`; `primary`
+ * - colour: the validated `background` with `text`; `muted_text`; `border_color`; `primary`
  *   (accent); the filled pairs `primary`, `secondary`, `danger` with `<key>_foreground`;
  *   `danger_text`, `warning_text`, `info_text`, `success_text`.
  * - typography `body` and `heading`; spacing `space_xs`..`space_lg`; corners
@@ -285,7 +285,7 @@ function filledPair(tokens: ThemeTokens, key: string): readonly [ColorPair, Colo
  * packages/ui/src/styles/globals.css follows the same resolved mode, so `.dark` and `prefers-color-scheme`
  * selections resolve the same map.
  *
- * A colour is applied only where #594 validated it against what is painted beneath it;
+ * A colour is applied only where theme validation checked it against what is painted beneath it;
  * otherwise the registered platform theme's value for that role is kept. Only validated hex or
  * oklch() colours, finite numbers and builder-key font families are emitted, so a definition
  * cannot inject CSS.
@@ -310,7 +310,7 @@ function generateThemeCssVariables(
   const appSurface = themeSurface(tokens);
   const appText = colorPair(tokens, "text");
   // Surface and text change together so body text is never painted on an unvalidated surface.
-  // #594 refuses a theme without a declared background, so without one no surface-relative
+  // Validation refuses a theme without a declared background, so without one no surface-relative
   // theme colour is trusted and the registered platform values are painted instead.
   const surfaceValidated = appSurface !== undefined && appText !== undefined;
   const surface = (surfaceValidated ? appSurface : undefined) ?? DEFAULT_SURFACE;
@@ -364,7 +364,7 @@ function generateThemeCssVariables(
   // otherwise from the registered platform release, so the bridge holds no second palette.
   const shadcnColour = (role: PlatformThemeTokenRoleKey): string =>
     colorValue(colorPair(tokens, role) ?? platformColor(platformTokens, role));
-  // A fill and its #594-validated foreground change together, so a foreground is never painted on
+  // A fill and its validated foreground change together, so a foreground is never painted on
   // a fill it was not judged against.
   const shadcnFill = (role: ShadcnFilledRole): readonly [fill: string, foreground: string] => {
     const [fill, foreground]: readonly [ColorPair, ColorPair] = filledPair(tokens, role) ?? [
@@ -381,7 +381,7 @@ function generateThemeCssVariables(
   const [sidebarAccent, sidebarAccentForeground] = shadcnFill("sidebar_accent");
 
   return Object.freeze({
-    // Visible focus is never thinner than #594's 1px minimum.
+    // Visible focus is never thinner than theme validation's 1px minimum.
     "--vortex-focus-width":
       (focus === undefined ? undefined : rem(focus.widthRem, 0.0625)) ?? "0.125rem",
     "--vortex-font-family": bodyFamily,
@@ -430,14 +430,14 @@ function generateThemeCssVariables(
     "--accent": accent,
     "--accent-foreground": accentForeground,
     "--destructive": colorValue(danger?.[0] ?? PLATFORM_DEFAULTS.danger),
-    // Status text and rules paint the semantic roles #594 judged against the surface; chart
+    // Status text and rules paint the semantic roles validation judged against the surface; chart
     // colours are for charts only.
     "--success": onSurface("success_text", platformColor(platformTokens, "success_text")),
     "--warning": onSurface("warning_text", platformColor(platformTokens, "warning_text")),
     "--info": onSurface("info_text", platformColor(platformTokens, "info_text")),
     "--border": colorValue(borderColor ?? PLATFORM_DEFAULTS.border),
     "--input": shadcnColour("input"),
-    // The ring paints visible focus, so it is the focus token's colour that #594 checked.
+    // The ring paints visible focus, so it is the focus token's colour that validation checked.
     "--ring": colorValue(focusColor ?? (surfaceValidated ? text : PLATFORM_DEFAULTS.focus)),
     "--chart-1": shadcnColour("chart_1"),
     "--chart-2": shadcnColour("chart_2"),

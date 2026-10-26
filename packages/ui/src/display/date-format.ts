@@ -52,7 +52,7 @@ const INPUT_PARTS: Intl.DateTimeFormatOptions = {
   second: "2-digit",
   hourCycle: "h23",
 };
-export type DateFormatStyle =
+type DateFormatStyle =
   "auto" | "full" | "time" | "weekday" | "month" | "shortMonth" | "calendarDay" | "input";
 const MAXIMUM_CACHED_FORMATTERS = 64;
 const formatters = new Map<string, Intl.DateTimeFormat>();

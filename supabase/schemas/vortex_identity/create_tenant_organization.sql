@@ -261,10 +261,10 @@ begin
   ) as changed;
 
   set constraints
-    vortex_access.organization_role_revisions_evidence
+    vortex_access.organization_role_revisions_checked
     immediate;
   set constraints
-    vortex_access.organization_role_revisions_evidence
+    vortex_access.organization_role_revisions_checked
     deferred;
 
   select pg_catalog.array_agg(subject_id order by subject_id),

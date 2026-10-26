@@ -34,7 +34,7 @@ export const startIntentCommandSchema = z
         .strict(),
     ]),
     flowId: flowIdSchema,
-    /** An Event occurrence; action invocation proof is reserved for #1398 and #667. */
+    /** An Event occurrence; action invocation proof is not yet accepted. */
     source: z.discriminatedUnion("kind", [
       z.object({ kind: z.literal("event"), id: z.uuid() }).strict(),
       z.object({ kind: z.literal("action"), id: z.uuid() }).strict(),

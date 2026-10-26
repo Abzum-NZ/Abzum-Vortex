@@ -24,7 +24,7 @@ import { Separator } from "@vortex/ui/components/separator";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@vortex/ui/components/tooltip";
 import { Kbd } from "@vortex/ui/components/kbd";
 
-export type StudioLocation = Readonly<{
+type StudioLocation = Readonly<{
   organizationName: string;
   organizationHref: string;
   applicationName: string;

@@ -8,7 +8,7 @@ import { Label } from "@vortex/ui/components/label";
 import { Icon } from "@vortex/ui";
 import { useStudioDraftText } from "./use-studio-draft-text";
 
-export type QueryInputChoice = Readonly<{ value: string; label: string }>;
+type QueryInputChoice = Readonly<{ value: string; label: string }>;
 
 /** The label of one choice, applied as it is typed. Its value stays: bindings refer to it. */
 function ChoiceLabel({

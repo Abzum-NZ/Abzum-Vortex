@@ -11,7 +11,7 @@ import {
 import { jsonValueSchema, type JsonValue } from "../catalogue/common";
 import { builderKeySchema, workflowNodeIdSchema, workflowRunIdSchema } from "../catalogue/identifiers";
 import { findPlatformServiceOperation, PLATFORM_SERVICE_OPERATIONS } from "../catalogue/platform-service-operation-catalogue";
-import { describeFailure } from "../catalogue/runtime-primitives";
+import { describeFailure, asRecord } from "../catalogue/runtime-primitives";
 import { protectedOperationReferenceSetSchema } from "../definition/application-flow-bindings";
 import { stableDefinitionReleaseVersionSchema } from "../definition/version-impact";
 import { protectedOperationRequestSchema, workflowExecutionReferenceSchema, type WorkflowExecutionReference } from "../rules/automation-contracts";
@@ -236,10 +236,6 @@ const responseSchema = z
   })
   .strict();
 
-const objectRecord = (value: unknown): Readonly<Record<string, unknown>> | undefined =>
-  typeof value === "object" && value !== null && !Array.isArray(value)
-    ? (value as Readonly<Record<string, unknown>>)
-    : undefined;
 
 const sameIdentity = (left: string, right: string): boolean => left.toLowerCase() === right.toLowerCase();
 
@@ -282,9 +278,9 @@ const isUnavailableTaskType = (taskType: string): boolean =>
 /** Task properties use the closed FlowValue literal wrapper for fixed values. */
 const literalValue = (candidate: unknown): unknown => {
   if (typeof candidate === "string") return candidate;
-  const wrapped = objectRecord(candidate);
+  const wrapped = asRecord(candidate);
   if (wrapped?.kind !== "literal") return undefined;
-  const literal = objectRecord(wrapped.literal);
+  const literal = asRecord(wrapped.literal);
   return literal && Object.hasOwn(literal, "value") ? literal.value : undefined;
 };
 
@@ -292,7 +288,7 @@ const registeredOperationForBinding = (
   candidate: unknown,
   binding: ProtectedNodeRunRecord["nodes"][number],
 ): ProtectedNodeOperationIdentity | undefined => {
-  const properties = objectRecord(candidate);
+  const properties = asRecord(candidate);
   const requestedKey = literalValue(properties?.operation);
   if (typeof requestedKey !== "string" || binding.operation === undefined) return undefined;
 
@@ -316,9 +312,9 @@ const registeredOperationForBinding = (
 };
 
 const operationInputs = (candidate: unknown): Readonly<Record<string, unknown>> | undefined => {
-  const properties = objectRecord(candidate);
+  const properties = asRecord(candidate);
   if (properties === undefined) return undefined;
-  const resolved = objectRecord(properties.inputs);
+  const resolved = asRecord(properties.inputs);
   return resolved === undefined ? undefined : Object.freeze({ ...resolved });
 };
 
@@ -452,8 +448,8 @@ const kestraStateMap: Readonly<Record<string, WorkflowExecutionReference["lastKn
 };
 
 const statusState = (candidate: unknown): WorkflowExecutionReference["lastKnownState"] | undefined => {
-  const execution = objectRecord(candidate);
-  const state = objectRecord(execution?.state);
+  const execution = asRecord(candidate);
+  const state = asRecord(execution?.state);
   const current = state?.current;
   return typeof current === "string" ? kestraStateMap[current] : undefined;
 };
@@ -536,7 +532,7 @@ export const createProtectedNodeExecution = (dependencies: ProtectedNodeExecutio
           return { outcome: "permanent_refusal", safeCode: "callback_refused" };
         if (context.purpose.attempt > maximumCallbackAttempts)
           return { outcome: "permanent_refusal", safeCode: "attempt_limit" };
-        const properties = objectRecord(envelope.data.inputs.properties);
+        const properties = asRecord(envelope.data.inputs.properties);
         const value = evaluateValue(
           properties?.expression,
           envelope.data.inputs.runtime_scope,

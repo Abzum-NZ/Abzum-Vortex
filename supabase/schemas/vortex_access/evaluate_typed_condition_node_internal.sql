@@ -170,9 +170,9 @@ begin
   elsif operand_types[1] = operand_types[2] then shared_type := operand_types[1];
   end if;
 
-  -- V2 decimal operands may pair with whole JSON-number literals or legacy
-  -- number parameters only when those values are integers, exactly as the
-  -- TypeScript V2 evaluator lifts them into exact base ten.
+  -- Whole-number and decimal operands compare as decimals only when every
+  -- non-null value is an exact decimal, as typed-condition-semantics.ts lifts
+  -- them into exact base ten.
   if shared_type is null
     and operand_types[1] in ('whole_number', 'decimal_number')
     and operand_types[2] in ('whole_number', 'decimal_number') then

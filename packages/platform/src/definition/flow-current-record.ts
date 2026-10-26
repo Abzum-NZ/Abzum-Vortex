@@ -15,7 +15,7 @@ import type { InstalledFlowBindings } from "./flow-binding-endpoint";
 import type { FlowCurrentRecordRead } from "./flow-orchestrator-types";
 
 /**
- * Reads the record an interactive flow runs for (#2840): the one way a flow reads the record a page
+ * Reads the record an interactive flow runs for: the one way a flow reads the record a page
  * shows or a card that was moved. The read is the protected Record projection under the
  * initiator's current access, behind the exact installation the flow was resolved from, so the
  * field-level read policy applies: a field the initiator may not read reads as empty. Each field

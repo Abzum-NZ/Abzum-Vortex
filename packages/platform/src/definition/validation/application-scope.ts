@@ -9,7 +9,7 @@ import { walkPageComposition, walkPlacementData } from "../../pages/placement-wa
 import { placementSettings } from "../application-composition-catalogue";
 
 /** One placed item as validation reads it: its props, its Vortex metadata and its settings. */
-export type PlacementEntry = Readonly<{
+type PlacementEntry = Readonly<{
   props: JsonObject;
   vortex: JsonObject;
   settings: JsonObject;

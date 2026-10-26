@@ -66,7 +66,7 @@ begin
   into target_ids
   from pg_catalog.jsonb_array_elements(p_targets) with ordinality as target(value, ordinality);
 
-  -- The page read pass the list read uses (#2668): the first readable record
+  -- The page read pass the list read uses: the first readable record
   -- is decided exactly and supplies the installation-wide facts; the other
   -- records are decided together from them. A record the pass does not decide
   -- (missing, inaccessible or relationship-routed) keeps the exact

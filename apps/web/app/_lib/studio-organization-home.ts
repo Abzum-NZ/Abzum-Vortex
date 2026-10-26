@@ -14,7 +14,7 @@ import { resolveIdentitySession } from "../auth/_lib/session-server";
 import { humanOrganizationRequests } from "./server-composition";
 import { platformPermissionSource } from "./platform-permission-source";
 
-export type StudioOrganizationHomeResult =
+type StudioOrganizationHomeResult =
   | Readonly<{
       kind: "available";
       organizationId: OrganizationId;

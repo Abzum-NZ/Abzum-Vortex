@@ -24,7 +24,7 @@ import {
 
 /**
  * The authored form of a flow inside a module or application source, and the result of compiling
- * a set of them (architecture decision 1; issue #984).
+ * a set of them (architecture decision 1).
  *
  * The authored flow has exactly the canonical flow's shape (`flow-contracts.ts`), with one
  * difference: wherever the canonical flow holds a permanent identity, the source holds a readable

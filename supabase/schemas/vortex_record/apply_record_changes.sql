@@ -1083,7 +1083,7 @@ begin
     -- share-locked in relationship identity order here, after each target has
     -- passed the same access decision the writer re-checks and before any
     -- source data version or relationship edge identity is taken. Keeping all
-    -- target row locks in one place replaces the per-writer #858 corrections.
+    -- target row locks in one place means no writer orders them on its own.
     perform vortex_record.lock_record_change_targets_internal(
       meta -> 'recordType', organization_id_value, final_values
     );

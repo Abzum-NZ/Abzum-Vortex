@@ -7,7 +7,7 @@ import { peopleDirectory, type LinkCardinality } from "@vortex/platform/schema";
 type LinkTarget = Readonly<{ key: string; label: string; titleLabel: string | undefined }>;
 
 /** The record types a link field's settings point at, in order. */
-export const linkSettingTargets = (settings: StudioSettingValues): readonly string[] => {
+const linkSettingTargets = (settings: StudioSettingValues): readonly string[] => {
   const single = settings.target;
   if (single?.kind === "record_type_reference") return [single.record_type];
   const list = settings.targets;

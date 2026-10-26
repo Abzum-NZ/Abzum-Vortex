@@ -17,7 +17,7 @@ import {
 } from "../catalogue/identifiers";
 
 /**
- * The web-independent form request and continuation contract of an interactive flow (#544).
+ * The web-independent form request and continuation contract of an interactive flow.
  *
  * The flow orchestrator (App) implements `FormContinuationService`; the web page layer, an MCP
  * client or any future client calls it through dependency injection, so App never imports Page and
@@ -96,7 +96,7 @@ export const formContinuationReceiptSchema = z
   })
   .strict();
 
-/** The private draft revision an answer was made from (#587); the draft itself stays with Page. */
+/** The private draft revision an answer was made from; the draft itself stays with Page. */
 export const formContinuationDraftEvidenceSchema = z
   .object({ draftId: platformIdSchema, revision: revisionSchema })
   .strict();

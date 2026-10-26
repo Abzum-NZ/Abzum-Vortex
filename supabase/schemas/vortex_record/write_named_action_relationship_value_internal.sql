@@ -145,7 +145,7 @@ begin
   );
 
   -- The one substitution. Executing a permitted named action must not require
-  -- ordinary read authority on its own subject (#50 section 4), so when the
+  -- ordinary read authority on its own subject, so when the
   -- selected target is exactly this command's subject the decision is taken on
   -- the installed named declaration instead. The loader re-resolves the active
   -- installation, the owner kind/id/release revision, the action id and the

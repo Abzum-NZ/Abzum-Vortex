@@ -15,7 +15,7 @@ import {
 } from "@vortex/platform/schema";
 
 /** One placement of a form surface: its Vortex metadata and its typed settings. */
-export type FormSurfacePlacement = Readonly<{
+type FormSurfacePlacement = Readonly<{
   vortex: Record<string, unknown>;
   settings: Readonly<Record<string, unknown>>;
 }>;

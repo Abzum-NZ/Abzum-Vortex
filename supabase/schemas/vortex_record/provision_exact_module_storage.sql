@@ -60,8 +60,7 @@ begin
   where release.root_id = p_module_root_id
     and release.release_revision = p_module_release_revision
     and root.kind = 'module';
-  -- Module V3 reuses the Module V2 record-type content, so both validation
-  -- contracts allocate identical storage. The source contract must agree with
+  -- The source contract must agree with
   -- the validation contract, and the embedded identity is compared with
   -- IS DISTINCT FROM so an absent JSON member cannot evade the gate.
   if release_row.validation_contract_version <> all (vortex_definition.accepted_contract_version('module'))

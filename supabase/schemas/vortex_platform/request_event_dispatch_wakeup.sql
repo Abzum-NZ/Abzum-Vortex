@@ -24,8 +24,8 @@ begin
   if endpoint_url !~ '^https://[^[:space:]]+$' then
     return null;
   end if;
-  -- The bearer must have the exact printable-ASCII shape and length the #641
-  -- route accepts; anything else would only queue a doomed request.
+  -- The bearer must have the exact printable-ASCII shape and length the
+  -- dispatcher wake-up route accepts; anything else would only queue a doomed request.
   if bearer_credential !~ '^[!-~]+$'
     or pg_catalog.octet_length(bearer_credential) not between 32 and 512 then
     return null;

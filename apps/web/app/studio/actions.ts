@@ -196,7 +196,7 @@ export async function createStudioApplication(organizationId: string, candidate:
 }
 
 /** What one autosave came to: the platform's answer, or a conflict that names the newer saved draft. */
-export type StudioSaveApplicationResult =
+type StudioSaveApplicationResult =
   | Awaited<ReturnType<typeof saveHumanApplicationDraft>>
   | Readonly<{
       kind: "conflict";

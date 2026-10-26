@@ -1,7 +1,7 @@
 /**
- * Component refresh subscriber for the private invalidation channels (#615).
+ * Component refresh subscriber for the private invalidation channels.
  *
- * #614 publishes a bounded, content-free notice on one private Supabase
+ * The invalidation publisher sends a bounded, content-free notice on one private Supabase
  * Realtime Broadcast topic per organisation and application. This module is the
  * subscriber half: it accepts a received Broadcast message, strictly parses the
  * notice envelope, maps the notice's target identity to the mounted placements
@@ -30,6 +30,7 @@ import {
 } from "../catalogue/identifiers";
 import { liveInvalidationSchema, type LiveInvalidation } from "./occurrence-contracts";
 import type { PrivateInvalidationTopicScope } from "./invalidation-channel";
+import { asRecord } from "../catalogue/runtime-primitives";
 
 /**
  * Only a bound is needed for a placement identity; the resolved composition
@@ -112,11 +113,6 @@ export interface PrivateInvalidationSubscriber {
 }
 
 const emptyStalePlacements: readonly string[] = Object.freeze([]);
-
-const asRecord = (value: unknown): Readonly<Record<string, unknown>> | undefined =>
-  typeof value === "object" && value !== null && !Array.isArray(value)
-    ? (value as Readonly<Record<string, unknown>>)
-    : undefined;
 
 /**
  * Realtime wraps a Broadcast payload and adds a transport `id` that is not part

@@ -138,6 +138,7 @@ class RequestOwnedBridge extends Duplex {
         written.resolve();
         this.writes.delete(written.promise);
       });
+      // guard-allow: silent-catch A throwing socket write is reported as the closed-connection database error.
     } catch {
       this.retainTerminal();
       complete(requestDatabaseError("DATABASE_OWNED_CONNECTION_CLOSED"));
@@ -315,6 +316,7 @@ export class RequestOwnedSocketFactory {
         socket.once(event, ready);
         try {
           start();
+          // guard-allow: silent-catch A throwing socket start fails this phase, which reports the connection error.
         } catch {
           fail();
         }
@@ -342,6 +344,7 @@ export class RequestOwnedSocketFactory {
             if (error) fail();
             written.resolve();
           });
+          // guard-allow: silent-catch A throwing socket write fails this phase, which reports the connection error.
         } catch {
           fail();
           written.resolve();

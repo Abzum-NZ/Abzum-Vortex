@@ -5,14 +5,13 @@ import { Temporal } from "@js-temporal/polyfill";
 import { Buffer } from "node:buffer";
 import { createHash } from "node:crypto";
 
-import { applicationRootIdSchema, builderKeySchema, organizationIdSchema, revisionSchema } from "../catalogue/identifiers";
+import { builderKeySchema } from "../catalogue/identifiers";
 import { isRecord } from "../catalogue/runtime-primitives";
-import { stableDefinitionReleaseVersionSchema } from "../definition/version-impact";
 import { flowIdSchema, flowScheduleRecurrenceSchema, flowSchema, type FlowDefinition, type FlowTrigger } from "./flow-contracts";
 
 import { logRefusal } from "../catalogue/runtime-primitives";
 
-import type { KestraFlowCompilerEnvironment, KestraFlowIdentity } from "./kestra-compiler";
+import { parseKestraFlowIdentity, type KestraFlowIdentity } from "./kestra-compiler";
 
 type ScheduleRecurrence = Extract<FlowTrigger, { type: "Schedule" }>["recurrence"];
 
@@ -54,54 +53,11 @@ const maximumExaminedSlots = 10_000;
 const maximumIanaOffsetMs = dayMs;
 
 const inputKeys = ["identity", "flowId", "triggerId", "recurrence", "afterUtc", "throughUtc"];
-const identityKeys = [
-  "environment",
-  "organizationId",
-  "applicationRootId",
-  "applicationVersion",
-  "installationRevision",
-  "workflowRevision",
-];
 
 const hasOnlyKeys = (
   value: Readonly<Record<string, unknown>>,
   allowed: readonly string[],
 ): boolean => Object.keys(value).every((key) => allowed.includes(key));
-
-const isEnvironment = (value: unknown): value is KestraFlowCompilerEnvironment =>
-  value === "local" || value === "testing" || value === "production";
-
-const parseIdentity = (candidate: unknown): KestraFlowIdentity | undefined => {
-  if (!isRecord(candidate) || !hasOnlyKeys(candidate, identityKeys)) return undefined;
-  if (!isEnvironment(candidate.environment)) return undefined;
-
-  const organizationId = organizationIdSchema.safeParse(candidate.organizationId);
-  const applicationRootId = applicationRootIdSchema.safeParse(candidate.applicationRootId);
-  const applicationVersion = stableDefinitionReleaseVersionSchema.safeParse(
-    candidate.applicationVersion,
-  );
-  const installationRevision = revisionSchema.safeParse(candidate.installationRevision);
-  const workflowRevision = revisionSchema.safeParse(candidate.workflowRevision);
-  if (
-    !organizationId.success ||
-    !applicationRootId.success ||
-    !applicationVersion.success ||
-    !installationRevision.success ||
-    !workflowRevision.success
-  )
-    return undefined;
-
-  return {
-    environment: candidate.environment,
-    organizationId: organizationId.data.toLowerCase() as KestraFlowIdentity["organizationId"],
-    applicationRootId: applicationRootId.data.toLowerCase() as KestraFlowIdentity[
-      "applicationRootId"
-    ],
-    applicationVersion: applicationVersion.data,
-    installationRevision: installationRevision.data,
-    workflowRevision: workflowRevision.data,
-  };
-};
 
 const civilEpoch = (
   year: number,
@@ -339,7 +295,7 @@ const computeNextScheduleOccurrence = (candidate: unknown): ScheduleOccurrenceRe
   try {
     if (!isRecord(candidate) || !hasOnlyKeys(candidate, inputKeys)) return refused("invalid_input");
 
-    const identity = parseIdentity(candidate.identity);
+    const identity = parseKestraFlowIdentity(candidate.identity);
     if (!identity) return refused("invalid_identity");
 
     const flowId = flowIdSchema.safeParse(candidate.flowId);

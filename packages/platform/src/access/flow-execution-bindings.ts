@@ -33,8 +33,8 @@ import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-tran
  * organisation-wide delegation authority; a bounded role-management delegation cannot create
  * execution authority.
  *
- * The binding carries no executable endpoint and performs no execution; #686 resolves the effective
- * actor from it at each protected node.
+ * The binding carries no executable endpoint and performs no execution; `flow-effective-actor`
+ * resolves the effective actor from it at each protected node.
  */
 
 /** The exact published scope a binding authorises. A binding never applies outside this tuple. */

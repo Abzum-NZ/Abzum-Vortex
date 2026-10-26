@@ -3,9 +3,6 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   agentRules: false,
   reactStrictMode: true,
-  typescript: {
-    tsconfigPath: "tsconfig.build.json",
-  },
   experimental: {
     // Pages are composed per viewer from current permissions and records, so the client router
     // never reuses a dynamic page it fetched earlier: every navigation reads the page fresh. This

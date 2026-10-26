@@ -234,6 +234,7 @@ export const decodeRecordsTableFieldFilter = (
   const list = (text: string): string[] | undefined => {
     try {
       return text.split(",").map((value) => decodeURIComponent(value));
+      // guard-allow: silent-catch Malformed percent-encoding in an address parameter is refused as invalid input.
     } catch {
       return undefined;
     }

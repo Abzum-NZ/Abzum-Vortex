@@ -54,7 +54,7 @@ import { compareDefinitionVersionImpactWithEvidence } from "./version-impact-def
  * ever see Application versions; a Module release is an internal part of one.
  */
 
-export type ApplicationPublicationState = PreparedState &
+type ApplicationPublicationState = PreparedState &
   Readonly<{
     moduleOutputs: readonly ModuleOutput[];
     moduleReleases: readonly DefinitionReleaseAppend[];

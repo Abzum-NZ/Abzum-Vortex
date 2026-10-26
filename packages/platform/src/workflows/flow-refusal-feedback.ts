@@ -43,11 +43,11 @@ export const flowRefusalFeedbackSentences: Readonly<Record<FlowRefusalFeedbackCo
   application_not_newer:
     "There is no newer application release to install. Review the latest published release before trying again.",
   applications_manage_required:
-    "Installing or upgrading applications needs the Manage applications permission. An organisation steward can give you a role that has it in IAM.",
+    "Installing or upgrading applications needs the Manage applications permission. An organisation steward can give you a role that has it.",
   installation_delegation_required:
-    "Installing this application needs app-installation authority over the permissions its roles grant. An organisation steward can grant it in IAM > People with Grant app-installation authority.",
+    "Installing this application needs app-installation authority over the permissions its roles grant. An organisation steward can grant you app-installation authority.",
   assignments_manage_required:
-    "Taking this application's role yourself needs the Manage access assignments permission. Install without taking the role, or ask an organisation steward for that permission in IAM.",
+    "Taking this application's role yourself needs the Manage access assignments permission. Install without taking the role, or ask an organisation steward for that permission.",
   invitation_already_pending:
     "An invitation to this email is already waiting to be accepted. Revoke it first to send a new one.",
 };

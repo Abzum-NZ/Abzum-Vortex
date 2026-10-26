@@ -11,6 +11,7 @@ import { formatExactDecimal, parseExactDecimal } from "./exact-decimal";
 import { moneyValueSchema } from "./module-field-values";
 import { evaluateFlowFormula, type FlowFormulaScope } from "../rules/flow-formula";
 import { persistedRecordFieldValueMatches } from "./field-values";
+import { isRecord } from "../catalogue/runtime-primitives";
 
 type CalculationField = Extract<ModuleField, { type: "calculation" }>;
 export type RecordCalculationClock = Readonly<{
@@ -53,9 +54,6 @@ export type EvaluateRecordCalculationsResult =
       success: false;
       issues: readonly RecordCalculationIssue[];
     }>;
-
-const isValueMap = (candidate: unknown): candidate is Readonly<Record<string, unknown>> =>
-  candidate !== null && typeof candidate === "object" && !Array.isArray(candidate);
 
 const validCalendarDate = (candidate: string): boolean => {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(candidate);
@@ -171,7 +169,7 @@ export const evaluateRecordCalculations = (
       : { success: true as const, data: input.recordType };
   if (
     !parsedRecordType.success ||
-    !isValueMap(input.authoritativeFieldValues) ||
+    !isRecord(input.authoritativeFieldValues) ||
     typeof input.clock?.instant !== "string" ||
     !timestampSchema.safeParse(input.clock.instant).success ||
     typeof input.clock?.organizationLocalDate !== "string" ||

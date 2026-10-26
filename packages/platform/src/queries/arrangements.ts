@@ -454,6 +454,7 @@ const calendarZone = (timeZone: string): Intl.DateTimeFormat | undefined => {
       minute: "numeric",
       second: "numeric",
     });
+    // guard-allow: silent-catch Intl throws for an unknown time zone; the caller refuses the arrangement.
   } catch {
     return undefined;
   }

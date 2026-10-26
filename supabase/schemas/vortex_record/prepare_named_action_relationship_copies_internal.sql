@@ -244,7 +244,7 @@ begin
   end loop;
 
   -- Every linked row's share lock, in one canonical order, still ahead of
-  -- every counter, data version and edge identity (#858).
+  -- every counter, data version and edge identity.
   for lock_row in
     select distinct
       (copy.value #>> '{value,recordTypeId}')::uuid as record_type_id,
