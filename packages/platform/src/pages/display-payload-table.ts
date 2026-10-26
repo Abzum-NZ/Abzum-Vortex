@@ -26,9 +26,9 @@ import {
 } from "./records-table-state";
 
 /*
- * The ready values of a Records table block. The server types the page it reads with these schemas
- * and the browser parses the payload with the same ones; the page runtime adds only the selection
- * scope, bulk run, export, action availability, held selection and requested sort it follows.
+ * The ready values of a Records table block. The server validates its page with these schemas;
+ * the browser checks its envelope and renders it. The page runtime adds only the selection scope,
+ * bulk run, export, action availability, held selection and requested sort it follows.
  */
 
 const wholeCountSchema = z.number().int().nonnegative();
@@ -428,6 +428,8 @@ export const tableLevelResultSchema = z.discriminatedUnion("status", [
   statusOnly("refused"),
   statusOnly("error"),
 ]);
+/** A tree level or a group's members as the page receives them. */
+export type TableLevelReply = z.output<typeof tableLevelResultSchema>;
 
 /** One related record of an expanded row: its own record page, when the viewer may open it. */
 export const rowDetailRowSchema = z
@@ -461,3 +463,5 @@ export const rowDetailResultSchema = z.discriminatedUnion("status", [
   statusOnly("error"),
 ]);
 export type RowDetailResult = z.input<typeof rowDetailResultSchema>;
+/** A related-records read as the page receives it. */
+export type RowDetailReply = z.output<typeof rowDetailResultSchema>;

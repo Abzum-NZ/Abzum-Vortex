@@ -9,6 +9,7 @@ import {
 } from "../../definition/application-composition/records-table-features/grouping";
 import { readRecordsTableQueryState, type RecordsTablePageRequest } from "../records-table-state";
 import { resolveRecordsTableView } from "./records-table-view";
+import { tableReadValuesSchema } from "../display-payload-table";
 import type { RecordsTableGroupRead } from "../records-table-features/grouping";
 import { decideRecordTypeExport } from "../records-table-features/record-type-access";
 import {
@@ -24,6 +25,7 @@ import {
   type ConditionalFormattingContext,
 } from "../records-table-features";
 import {
+  readyPlacementData,
   fieldChoiceLabelsOf,
   fieldDateTypesOf,
   fieldEditorsOf,
@@ -441,9 +443,11 @@ export const readRecordsTable = async (
             },
             ...(timeZone === undefined ? {} : { timeZone }),
           });
-    data[placementId] = {
-      status: "ready",
-      values: selectionToken === undefined ? values : { ...values, selectionToken },
-    };
+    data[placementId] = readyPlacementData(
+      read.address,
+      placementId,
+      tableReadValuesSchema,
+      selectionToken === undefined ? values : { ...values, selectionToken },
+    );
   }
 };

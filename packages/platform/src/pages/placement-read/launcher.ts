@@ -8,6 +8,7 @@ import {
   type ProtectedQueryRow,
 } from "../../queries/protected-query-contracts";
 import {
+  readyPlacementData,
   logPlacementFailure,
   placementSettingsOf,
   queryRecordType,
@@ -16,6 +17,7 @@ import {
   type PlacementReadEntry,
 } from "./shared";
 import type { LauncherQueryRow, PlacementReadInput } from "./types";
+import { launcherRowsPayloadSchema } from "../display-payload-launcher";
 
 const launcherCellKey = (
   settings: Readonly<Record<string, BlockPropertyValueContract>>,
@@ -127,8 +129,10 @@ export const readLauncher = async (
     }
     return { applicationKey: cells.key?.text, cells };
   });
-  data[placementId] = {
-    status: "ready",
-    values: read.services.launcherValues(launcherRows, permittedApplicationKeys, nameKey, iconKey),
-  };
+  data[placementId] = readyPlacementData(
+    read.address,
+    placementId,
+    launcherRowsPayloadSchema,
+    read.services.launcherValues(launcherRows, permittedApplicationKeys, nameKey, iconKey),
+  );
 };

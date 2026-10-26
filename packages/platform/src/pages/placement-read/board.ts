@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { JsonValue } from "../../catalogue/common";
-import { describeFailure, sameId } from "../../catalogue/runtime-primitives";
+import { sameId } from "../../catalogue/runtime-primitives";
 import type { RecordsTableContract } from "../../definition/application-composition/records-display";
 import type { RecordsTableBoardMode } from "../../definition/application-composition/records-table-features";
 import { buildRecordsTableNarrowing } from "../records-table-query";
@@ -13,11 +13,13 @@ import {
 } from "../records-table-features";
 import { readRecordsTableQueryState, readRecordsTableView } from "../records-table-state";
 import { projectBoardPlacement } from "../board-query";
+import { boardPayloadSchema } from "../display-payload-board";
 import { filterTimeZone } from "./records-table";
 import {
   fieldFilterTargetsOf,
   fieldLabelsOf,
   logPlacementFailure,
+  readyPlacementData,
   type PlacementModule,
   type PlacementQuery,
   type PlacementReadEntry,
@@ -163,17 +165,12 @@ export const readBoard = async (
     ...(columnRead === undefined ? {} : { read: columnRead }),
   });
   if (projection.outcome === "ready") {
-    try {
-      read.data[placementId] = read.services.boardData(projection.values);
-    } catch (error) {
-      logPlacementFailure(
-        read.address,
-        placementId,
-        "board_payload_invalid",
-        describeFailure(error),
-      );
-      read.data[placementId] = { status: "error" };
-    }
+    read.data[placementId] = readyPlacementData(
+      read.address,
+      placementId,
+      boardPayloadSchema,
+      projection.values,
+    );
     return;
   }
   logPlacementFailure(read.address, placementId, projection.cause, projection.detail);

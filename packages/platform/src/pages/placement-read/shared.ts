@@ -103,7 +103,7 @@ export type PlacementFailureReason =
   | "edit_field_unprojected"
   | "create_field_default_unprojected"
   | BoardPlacementFailureCause
-  | "board_payload_invalid"
+  | "placement_payload_invalid"
   | "table_state_malformed"
   | "table_formatting_time_zone_unavailable"
   | "table_columns_withheld";
@@ -130,6 +130,42 @@ export const logPlacementFailure = (
   console.error(
     `[page] data placement not loaded: application=${address.application.key} page=${address.pageKey} placement=${placementId} reason=${reason}${detail === undefined ? "" : ` cause=${detail}`}`,
   );
+};
+
+/** A block's payload contract: the platform schema its ready values must satisfy. */
+export type PlacementPayloadContract = Readonly<{
+  safeParse(values: unknown):
+    | Readonly<{ success: true; data: unknown }>
+    | Readonly<{
+        success: false;
+        error: Readonly<{
+          issues: readonly Readonly<{ path: readonly PropertyKey[]; message: string }>[];
+        }>;
+      }>;
+}>;
+
+/**
+ * A block's ready state as the server publishes it: its values checked once against the block's own
+ * payload contract, where they are built, so the renderer can render them without parsing them
+ * again. A payload that fails its contract is a defect: the cause (the issue's path and message,
+ * never a value) is logged and the placement shows its error state.
+ */
+export const readyPlacementData = (
+  address: PlacementLogPlace,
+  placementId: string,
+  contract: PlacementPayloadContract,
+  values: unknown,
+): PageDataState => {
+  const checked = contract.safeParse(values);
+  if (checked.success) return { status: "ready", values: checked.data };
+  const issue = checked.error.issues[0];
+  logPlacementFailure(
+    address,
+    placementId,
+    "placement_payload_invalid",
+    `${(issue?.path ?? []).map(String).join(".")}: ${issue?.message ?? "invalid"}`,
+  );
+  return { status: "error" };
 };
 
 export const firstParameter = (

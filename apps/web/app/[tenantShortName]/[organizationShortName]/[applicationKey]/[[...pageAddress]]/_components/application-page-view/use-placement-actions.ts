@@ -1,6 +1,6 @@
 import { useCallback, type Dispatch, type SetStateAction, type RefObject } from "react";
 import type { useRouter } from "next/navigation";
-import type { createFlowRuntime, parseTablePayload } from "@vortex/ui";
+import type { createFlowRuntime, DisplayTablePayload } from "@vortex/ui";
 import type { DisplaySemanticEvent, FlowDispatchResult } from "@vortex/ui";
 import {
   type ComponentRequestGeneration,
@@ -163,7 +163,7 @@ export function usePlacementActions({
     async (
       placementId: string,
       event: DisplaySemanticEvent,
-      table: ReturnType<typeof parseTablePayload>,
+      table: DisplayTablePayload,
     ): Promise<void> => {
       if (
         busy ||

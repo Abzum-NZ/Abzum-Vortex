@@ -1,4 +1,3 @@
-export { parseCalendarPayload } from "./calendar-payload";
 export {
   DISPLAY_EVENT_NAMES,
   type DisplayBatchEditAnswer,
@@ -14,27 +13,17 @@ import {
   type DisplayEventHandlers,
   type DisplaySemanticEventName,
 } from "./display-events";
-import {
-  richTextPayloadSchema,
-  textPayloadSchema,
-  type RichTextPayload,
-  type TextPayload,
-  type DisplaySummaryMetric,
-  summaryPayloadSchema,
-  type SummaryPayload,
-  displayDataStateSchema,
-  displayFieldsSchema,
-  displayScalarCellSchema,
-  recordDetailPayloadSchema,
-  type RecordDetailPayload,
-  launcherRowsPayloadSchema,
-  type LauncherRowsPayload,
-  type DisplayDataState,
-  type DisplayDetailField,
-  type BlockPropertyValueContract,
-  tablePayloadSchema,
-  type DisplayTablePayload,
-  type BoardPayload,
+import { displayRefusalReasons } from "@vortex/platform/schema";
+import type {
+  RichTextPayload,
+  TextPayload,
+  SummaryPayload,
+  RecordDetailPayload,
+  LauncherRowsPayload,
+  DisplayDataState,
+  BlockPropertyValueContract,
+  DisplayTablePayload,
+  BoardPayload,
 } from "@vortex/platform/schema";
 import type { DefinitionRenderErrorLocation } from "../definition-error";
 import { fail, requireRecord } from "./payload-parse";
@@ -106,123 +95,77 @@ const ERROR_STATE: DisplayDataState<never> = Object.freeze({ status: "error" });
 /** A web link opens in a new page; a mail or telephone link hands over to the viewer's own app. */
 export const isWebLinkAddress = (value: string): boolean => /^https?:/i.test(value);
 
-/** A Zod issue path as a property path: an index joins the property before it (`rows[3]`). */
-const propertyPathOf = (path: readonly PropertyKey[]): string[] =>
-  path.reduce<string[]>((parts, segment) => {
-    const last = parts.at(-1);
-    return typeof segment === "number" && last !== undefined
-      ? [...parts.slice(0, -1), `${last}[${segment}]`]
-      : [...parts, String(segment)];
-  }, []);
+/** Text a closed envelope carries: more than white space, within its bound. */
+const isBoundedText = (value: unknown, maximum: number): value is string =>
+  typeof value === "string" && value.trim().length > 0 && value.length <= maximum;
+
+/** The keys one status of a closed envelope carries: each required key, and only those allowed. */
+type EnvelopeShape = Readonly<{
+  required: readonly string[];
+  optional?: readonly string[];
+  check?: (record: Readonly<Record<string, unknown>>) => boolean;
+}>;
+
+const STATUS_ONLY: EnvelopeShape = Object.freeze({ required: [] });
 
 /**
- * @internal Parses one part of a payload with the platform schema that also describes what the
- * server builds; a refusal names the part and the setting that does not fit.
+ * Checks a closed envelope from the server: an object whose status is one of the given ones, with
+ * exactly that status's keys and their own small checks. The content of a ready envelope is the
+ * payload the server validated where it built it, so it is not parsed again here.
  */
-export const parseProjectedPart = <Output>(
-  schema: {
-    safeParse(value: unknown):
-      | { success: true; data: Output }
-      | {
-          success: false;
-          error: { issues: readonly { path: readonly PropertyKey[]; message: string }[] };
-        };
-  },
+const readEnvelope = (
   value: unknown,
+  shapes: Readonly<Record<string, EnvelopeShape>>,
   message: string,
   location: DefinitionRenderErrorLocation,
-): Output => {
-  const parsed = schema.safeParse(value);
-  if (parsed.success) return parsed.data;
-  const issue = parsed.error.issues[0];
-  return fail(
-    `${message}: ${issue?.message ?? "invalid"}`,
-    location,
-    propertyPathOf(issue?.path ?? []),
-  );
+): Readonly<Record<string, unknown>> => {
+  const record = requireRecord(value, message, location);
+  const status = record.status;
+  const shape =
+    typeof status === "string" && Object.hasOwn(shapes, status) ? shapes[status] : undefined;
+  if (shape === undefined) return fail(`${message}: unknown status`, location, ["status"]);
+  const allowed = new Set(["status", ...shape.required, ...(shape.optional ?? [])]);
+  for (const key of Object.keys(record))
+    if (!allowed.has(key)) return fail(`${message}: unexpected '${key}'`, location, [key]);
+  for (const key of shape.required)
+    if (!Object.hasOwn(record, key)) return fail(`${message}: missing '${key}'`, location, [key]);
+  if (shape.check !== undefined && !shape.check(record)) return fail(message, location);
+  return record;
 };
 
-/**
- * @internal A block's ready values parser: its platform payload schema, refused with a located
- * error.
- */
-export const projectedValuesParser =
-  <Output>(schema: Parameters<typeof parseProjectedPart<Output>>[0], message: string) =>
-  (value: unknown, location: DefinitionRenderErrorLocation = {}): Output =>
-    parseProjectedPart(schema, value, message, location);
-
-/** @internal Shared with the pivot feature, whose cells are summary values. */
-export const parseSummaryValue = (
-  value: unknown,
-  location: DefinitionRenderErrorLocation,
-): DisplaySummaryMetric["value"] =>
-  parseProjectedPart(
-    displayScalarCellSchema,
-    value,
-    "A projected display value is invalid",
-    location,
-  );
+const DISPLAY_STATE_SHAPES: Readonly<Record<string, EnvelopeShape>> = Object.freeze({
+  loading: STATUS_ONLY,
+  empty: STATUS_ONLY,
+  error: STATUS_ONLY,
+  awaiting_input: {
+    required: ["message"],
+    check: (state) => isBoundedText(state.message, 300),
+  },
+  refused: {
+    required: ["reason"],
+    check: (state) =>
+      typeof state.reason === "string" &&
+      (displayRefusalReasons as readonly string[]).includes(state.reason),
+  },
+  ready: { required: ["values"] },
+});
 
 /**
- * @internal Shared with the master-detail panel: labelled fields with scalar values. Only a record
- * detail accepts a table field's rows.
+ * One block's projected state. The renderer checks the closed envelope: a known status with exactly
+ * its own keys, a refusal reason the platform names and a bounded awaiting-input message; only the
+ * ready state carries values. The values are the payload the server checked against the block's
+ * contract where it built it; the renderer does not parse them again, in the server render or in
+ * the browser. A block whose values carry what the browser itself must refuse (a closed disclosure
+ * shape, a link target, a time zone it cannot show) names `readValues` for that check.
  */
-export const parseFields = (
+export const readDisplayData = <Values>(
   value: unknown,
-  location: DefinitionRenderErrorLocation,
-): readonly DisplayDetailField[] =>
-  parseProjectedPart(displayFieldsSchema, value, "Projected fields are invalid", location);
-
-/** The ready values a plain-text block accepts. */
-export const parseTextPayload = projectedValuesParser(
-  textPayloadSchema,
-  "Projected text values are invalid",
-);
-
-/** The ready values a structured rich-text block accepts. */
-export const parseRichTextPayload = projectedValuesParser(
-  richTextPayloadSchema,
-  "Projected rich text values are invalid",
-);
-
-/** The ready rows a launcher block accepts. */
-export const parseLauncherRowsPayload = projectedValuesParser(
-  launcherRowsPayloadSchema,
-  "Projected launcher rows are invalid",
-);
-
-/** The ready values a table block accepts. */
-export const parseTablePayload = projectedValuesParser(
-  tablePayloadSchema,
-  "Projected table values are invalid",
-);
-
-/** The ready values a record-detail block accepts. */
-export const parseRecordDetailPayload = projectedValuesParser(
-  recordDetailPayloadSchema,
-  "Projected record detail values are invalid",
-);
-
-/** The ready values a summary-values block accepts. */
-export const parseSummaryPayload = projectedValuesParser(
-  summaryPayloadSchema,
-  "Projected summary values are invalid",
-);
-
-/**
- * Validates one block's unknown projected state and returns its frozen fail-closed shape. Only the
- * `ready` state reaches that block's own payload parser, so every accepted shape stays the
- * registration's own concern. Throws a located definition error for any unknown, malformed or
- * over-sharing input.
- */
-export const parseDisplayData = <Values>(
-  value: unknown,
-  parseValues: (value: unknown, location: DefinitionRenderErrorLocation) => Values,
   location: DefinitionRenderErrorLocation = {},
+  readValues?: (values: unknown, location: DefinitionRenderErrorLocation) => Values,
 ): DisplayDataState<Values> => {
-  const state = parseProjectedPart(
-    displayDataStateSchema,
+  const state = readEnvelope(
     value,
+    DISPLAY_STATE_SHAPES,
     "Projected display data is invalid",
     location,
   );
@@ -234,11 +177,75 @@ export const parseDisplayData = <Values>(
     case "error":
       return ERROR_STATE;
     case "ready":
-      return Object.freeze({ status: "ready", values: parseValues(state.values, location) });
+      return readValues === undefined
+        ? (state as DisplayDataState<Values>)
+        : Object.freeze({ status: "ready", values: readValues(state.values, location) });
     default:
-      return state;
+      return state as DisplayDataState<Values>;
   }
 };
+
+/** A tree level's or a group's members reply: the table's ready values, or a bare status. */
+const TABLE_LEVEL_SHAPES: Readonly<Record<string, EnvelopeShape>> = Object.freeze({
+  ready: { required: ["values"] },
+  empty: STATUS_ONLY,
+  refused: STATUS_ONLY,
+  error: STATUS_ONLY,
+});
+
+/** A related-records reply: its columns and rows, or a bare status that carries nothing. */
+const ROW_DETAIL_SHAPES: Readonly<Record<string, EnvelopeShape>> = Object.freeze({
+  ready: {
+    required: ["columns", "rows"],
+    optional: ["nextContinuationToken"],
+    check: (reply) => Array.isArray(reply.columns) && Array.isArray(reply.rows),
+  },
+  empty: STATUS_ONLY,
+  refused: STATUS_ONLY,
+  error: STATUS_ONLY,
+});
+
+/** A pivot page reply, or a refusal with its message, or a bare status. */
+const PIVOT_SHAPES: Readonly<Record<string, EnvelopeShape>> = Object.freeze({
+  ready: {
+    required: [
+      "rowLabel",
+      "columnLabel",
+      "measureLabel",
+      "columns",
+      "rows",
+      "totalRecords",
+      "rowGroupCount",
+    ],
+    optional: ["columnTotals", "grandTotal", "nextCursor"],
+    check: (reply) => Array.isArray(reply.columns) && Array.isArray(reply.rows),
+  },
+  empty: STATUS_ONLY,
+  refused: {
+    required: ["message"],
+    check: (reply) => isBoundedText(reply.message, Number.MAX_SAFE_INTEGER),
+  },
+  error: STATUS_ONLY,
+});
+
+/** One read a grid feature asked its host for, by the reply's own closed envelope. */
+export const REPLY_ENVELOPES = Object.freeze({
+  tableLevel: TABLE_LEVEL_SHAPES,
+  rowDetail: ROW_DETAIL_SHAPES,
+  pivot: PIVOT_SHAPES,
+});
+
+/**
+ * One read a grid feature asked its host for (a tree level, a group's members, related records, a
+ * pivot page), as the server returned it: its closed envelope is checked here; its content is the
+ * reply the server checked against its contract where it built it.
+ */
+export const readProjectedResult = <Result extends Readonly<{ status: string }>>(
+  value: unknown,
+  envelope: Readonly<Record<string, EnvelopeShape>>,
+  message: string,
+  location: DefinitionRenderErrorLocation,
+): Result => readEnvelope(value, envelope, message, location) as unknown as Result;
 
 const EMPTY_HANDLERS: DisplayEventHandlers = Object.freeze({});
 

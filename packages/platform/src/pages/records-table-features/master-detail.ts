@@ -1,7 +1,11 @@
 import "server-only";
 
 import type { z } from "zod";
-import type { rowDetailRowSchema, RowDetailResult } from "../display-payload-table";
+import {
+  rowDetailResultSchema,
+  type rowDetailRowSchema,
+  type RowDetailResult,
+} from "../display-payload-table";
 
 import type { IdentitySession, OrganizationSelectionCandidate } from "../../access/identity-access";
 import { sameId } from "../../catalogue/runtime-primitives";
@@ -77,6 +81,15 @@ const refuse = (reason: string): RowDetailResult => {
 export const readRecordsTableRowDetail = async (
   request: RowDetailRequest,
 ): Promise<RowDetailResult> => {
+  // The reply is checked against its contract once, here, so the page renders it as it is.
+  const reply = await projectRowDetail(request);
+  const checked = rowDetailResultSchema.safeParse(reply);
+  if (checked.success) return checked.data;
+  const issue = checked.error.issues[0];
+  return fail(`reply_invalid ${(issue?.path ?? []).map(String).join(".")}: ${issue?.message}`);
+};
+
+const projectRowDetail = async (request: RowDetailRequest): Promise<RowDetailResult> => {
   const { context, placement } = request;
   const contract = recordsTableContractOrLog(placementSettingsOf(placement), "row detail");
   const feature = contract?.features.masterDetail;

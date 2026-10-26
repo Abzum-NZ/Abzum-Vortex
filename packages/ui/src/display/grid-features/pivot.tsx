@@ -1,11 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactElement } from "react";
-import {
-  pivotResultSchema,
-  recordsTablePivotFeature,
-  type PivotPage,
-} from "@vortex/platform/schema";
+import { recordsTablePivotFeature, type PivotPage, type PivotReply } from "@vortex/platform/schema";
 import { Alert, AlertDescription } from "../../components/alert";
 import { Button } from "../../components/button";
 import { Empty, EmptyHeader, EmptyTitle } from "../../components/empty";
@@ -23,7 +19,7 @@ import {
 import { cn } from "../../lib/utils";
 import { cellValueToText, DisplayCellView } from "../cell";
 import { useDateFormatOptions } from "../date-format-context";
-import { parseProjectedPart } from "../projected-data";
+import { REPLY_ENVELOPES, readProjectedResult } from "../projected-data";
 import type { GridFeatureModule, GridFeaturePointProps } from "./registry";
 
 type Page = PivotPage;
@@ -50,7 +46,12 @@ const location = { propertyPath: [recordsTablePivotFeature.property] };
  */
 const parseOutcome = (value: unknown): Outcome | undefined => {
   if (value === undefined) return undefined;
-  const result = parseProjectedPart(pivotResultSchema, value, "A pivot is invalid", location);
+  const result = readProjectedResult<PivotReply>(
+    value,
+    REPLY_ENVELOPES.pivot,
+    "A pivot is invalid",
+    location,
+  );
   if (result.status !== "ready") return result;
   const { status, ...page } = result;
   return { status, page };
