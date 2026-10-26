@@ -10,7 +10,12 @@ import {
   type SourceItemVortex,
 } from "@vortex/platform/schema";
 import { operationsModules } from "./module";
-import { operationsRunbooks, runbookPageKey, runbookPageText } from "./runbooks";
+import {
+  operationsRunbooks,
+  runbookPageKey,
+  runbookPageText,
+  runbookTechnicalDetails,
+} from "./runbooks";
 
 type JsonObject = Record<string, unknown>;
 
@@ -23,6 +28,7 @@ const {
   RECORD_DETAIL_BLOCK_RELEASE,
   RICH_TEXT_INPUT_BLOCK_RELEASE,
   TABLE_BLOCK_RELEASE,
+  TABS_BLOCK_RELEASE,
   TEXT_BLOCK_RELEASE,
   TEXT_INPUT_BLOCK_RELEASE,
 } = PLATFORM_BLOCK_RELEASE_IDENTITIES;
@@ -233,26 +239,33 @@ const runbookPages = operationsRunbooks.map((runbook) => {
     type: "dashboard",
     permission: "application.operations.open",
     blocks: slot({
-      [`${pageKey}_text`]: textBlock(runbook.title, runbookPageText(runbook)),
+      [`${pageKey}_tabs`]: placement(
+        TABS_BLOCK_RELEASE,
+        {
+          title: runbook.title,
+          items: [
+            { key: "runbook", label: "Runbook" },
+            { key: "technical_details", label: "Technical details" },
+          ],
+        },
+        {
+          tab_runbook: slot({
+            [`${pageKey}_text`]: textBlock(runbook.title, runbookPageText(runbook)),
+          }),
+          tab_technical_details: slot({
+            [`${pageKey}_technical`]: textBlock(
+              "Technical details",
+              runbookTechnicalDetails(runbook),
+            ),
+          }),
+        },
+      ),
     }),
   };
 });
 
 const pages = [
   ...runbookPages,
-  {
-    id: "page_operations_signals",
-    key: "operations_signals",
-    name: "Open signals",
-    type: "dashboard",
-    permission: "application.operations.open",
-    blocks: slot({
-      operations_signals_text: textBlock(
-        "Open alert signals",
-        "Open alert signals are recorded and deduplicated by the platform alert sink and hold no customer content. They cannot be listed here yet: signals will appear on this page once they become a system record type. Until then, create an incident from the Create incident page, or open an incident from the Incidents page and attach a signal to it by its deduplication key.",
-      ),
-    }),
-  },
   {
     id: "page_operations_incidents",
     key: "operations_incidents",
@@ -490,9 +503,7 @@ const theme = {
  * deduplication key does not match the incident's, so a repeated signal updates the one incident it
  * belongs to. One Runbooks page per spec 19 critical code carries concrete operator steps keyed by
  * the incident's `runbook_reference`. No workflow, schedule or system path creates or changes an
- * incident. Open alert signals are recorded by the alert sink, but no record type or protected read
- * model exposes them yet, so the open-signals page is honest text rather than an unbound table. No
- * page or action grants customer-content access, and no action approves itself.
+ * incident. No page or action grants customer-content access, and no action approves itself.
  */
 export const operationsApplication: ApplicationSourceDocument =
   applicationSourceDocumentSchema.parse({
@@ -505,7 +516,7 @@ export const operationsApplication: ApplicationSourceDocument =
       description:
         "Operational incidents with timelines, scope, containment, recovery, evidence, communication, cause, follow-up and verification, plus one reachable runbook for each critical alert code. Operators create incidents, attach alert signals to open incidents, and acknowledge, escalate or resolve them under their own permission.",
       icon: "activity",
-      home_page: "operations_signals",
+      home_page: "operations_incidents",
       modules: operationsModules,
       uses: [],
       permissions: [
@@ -561,7 +572,7 @@ export const operationsApplication: ApplicationSourceDocument =
           key: "operations_operator",
           default_member: true,
           name: "Operations operator",
-          home_page: "operations_signals",
+          home_page: "operations_incidents",
           permissions: [
             "application.operations.open",
             createAction,
@@ -588,14 +599,6 @@ export const operationsApplication: ApplicationSourceDocument =
           label: "Operations",
           icon: "activity",
           children: [
-            {
-              id: "nav_operations_signals",
-              type: "page",
-              label: "Open signals",
-              icon: "life-buoy",
-              page: "operations_signals",
-              permission: "application.operations.open",
-            },
             {
               id: "nav_operations_incidents",
               type: "page",

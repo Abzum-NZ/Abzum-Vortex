@@ -590,7 +590,7 @@
                   "props": {
                     "id": "overview_text",
                     "title": "Organisation overview",
-                    "text": "Review organisation accounts, invitations, runtime settings, notices and privacy request cases. Account, invitation and runtime-settings displays are read live from protected Identity and Access read models. Role grants, group membership and assignments are managed in the IAM application.",
+                    "text": "Review organisation accounts, invitations, runtime settings, notices and privacy request cases. Role grants, Group membership and assignments are managed in the IAM application.",
                     "vortex": {
                       "block": {
                         "block_id": "addfad00-1b11-4674-83fa-913667f87e79",
@@ -635,7 +635,7 @@
                   "props": {
                     "id": "accounts_text",
                     "title": "Organisation accounts",
-                    "text": "Organisation accounts are read live from protected Identity and Access data; no account directory is copied into this application. Role grants run in the IAM application, never here.",
+                    "text": "People with an account in this organisation. Roles are granted in the IAM application.",
                     "vortex": {
                       "block": {
                         "block_id": "addfad00-1b11-4674-83fa-913667f87e79",
@@ -766,7 +766,7 @@
                   "props": {
                     "id": "invitations_text",
                     "title": "Invitations",
-                    "text": "Pending and past invitations are read live from protected Identity and Access data. Invitations carrying intended role assignments follow the governed IAM journey; this application offers no grant control.",
+                    "text": "Pending and past invitations. To give an invited person roles, use the IAM application.",
                     "vortex": {
                       "block": {
                         "block_id": "addfad00-1b11-4674-83fa-913667f87e79",
@@ -989,7 +989,7 @@
                   "props": {
                     "id": "settings_text",
                     "title": "Runtime settings",
-                    "text": "View the organisation's runtime settings. Select the settings record to edit it through the protected record save.",
+                    "text": "View the organisation's runtime settings. Select the settings record to change it.",
                     "vortex": {
                       "block": {
                         "block_id": "addfad00-1b11-4674-83fa-913667f87e79",

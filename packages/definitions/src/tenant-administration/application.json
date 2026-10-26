@@ -374,7 +374,7 @@
                   "props": {
                     "id": "overview_text",
                     "title": "Tenant overview",
-                    "text": "Review the organisations in this tenant. Select an organisation to see its details, or use Tenant structure for its protected actions. Tenant administrators are listed on their own page.",
+                    "text": "Review the organisations in this tenant. Select an organisation to see its details, or use Tenant structure to add or move organisations. Tenant administrators are listed on their own page.",
                     "vortex": {
                       "block": {
                         "block_id": "addfad00-1b11-4674-83fa-913667f87e79",
@@ -1086,7 +1086,7 @@
                   "props": {
                     "id": "administrators_text",
                     "title": "Tenant administrators",
-                    "text": "Tenant administrators are read live from protected Identity data under your current authority; nothing is copied into application records. Granting and revoking tenant-administrator access runs through IAM, never from this application.",
+                    "text": "People who administer this tenant. Tenant administrator access is granted and revoked in IAM.",
                     "vortex": {
                       "block": {
                         "block_id": "addfad00-1b11-4674-83fa-913667f87e79",

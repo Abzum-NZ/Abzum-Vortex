@@ -766,6 +766,7 @@
                         "props": {
                           "id": "bookmark_entry_application_key",
                           "field": "vortex.landing_zone:tile.application_key",
+                          "help_text": "The application to open, named as in its web address, for example vortex.app.iam.",
                           "vortex": {
                             "block": {
                               "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
@@ -790,6 +791,7 @@
                         "props": {
                           "id": "bookmark_entry_page_key",
                           "field": "vortex.landing_zone:tile.page_key",
+                          "help_text": "The page to open, named as in its web address, for example iam_people. Leave empty to open the application's home page.",
                           "vortex": {
                             "block": {
                               "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
@@ -814,6 +816,7 @@
                         "props": {
                           "id": "bookmark_entry_record_type",
                           "field": "vortex.landing_zone:tile.record_type",
+                          "help_text": "The kind of record to open, for example vortex.module:asset.",
                           "vortex": {
                             "block": {
                               "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
@@ -838,6 +841,7 @@
                         "props": {
                           "id": "bookmark_entry_record_id",
                           "field": "vortex.landing_zone:tile.record_id",
+                          "help_text": "The record to open. Copy it from the record's web address.",
                           "vortex": {
                             "block": {
                               "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
@@ -1063,7 +1067,7 @@
                   "props": {
                     "id": "saved_tiles_summary",
                     "title": "Saved configuration",
-                    "text": "This bounded view shows at most 200 saved tile records returned by the permitted Records query.",
+                    "text": "Your saved tiles.",
                     "vortex": {
                       "block": {
                         "block_id": "addfad00-1b11-4674-83fa-913667f87e79",
