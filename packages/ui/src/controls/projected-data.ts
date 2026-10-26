@@ -219,29 +219,41 @@ export const readControlSupply = <Supply>(
 ): Supply | undefined =>
   value === undefined ? undefined : isRecord(value) ? (value as Supply) : fail(message, location);
 
+/** The keys each control state carries besides its status: exactly these, nothing else. */
+const CONTROL_STATE_KEYS: Readonly<
+  Record<string, Readonly<{ required: readonly string[]; optional: readonly string[] }>>
+> = Object.freeze({
+  loading: { required: [], optional: [] },
+  disabled: { required: [], optional: ["reason"] },
+  ready: { required: ["values"], optional: [] },
+});
+
 /**
- * One control's projected state. The renderer checks the envelope: an object with a known status,
- * and values only in the ready state. The values are the payload the server built for that control
- * with its typed projection; the renderer does not parse them again, in the server render or in
- * the browser. Throws a located definition error for any other envelope.
+ * One control's projected state. The renderer checks the closed envelope: a known status with
+ * exactly its own keys (a disabled reason is non-blank text), and values only in the ready state.
+ * The values are the payload the server checked against the control's contract where it built it;
+ * the renderer does not parse them again, in the server render or in the browser.
  */
 export const readControlData = <Values>(
   value: unknown,
   location: DefinitionRenderErrorLocation = {},
 ): ControlDataState<Values> => {
   const state = isRecord(value) ? value : fail("Projected control data is invalid", location);
-  switch (state.status) {
-    case "loading":
-      return LOADING_STATE;
-    case "disabled":
-      return state as ControlDataState<Values>;
-    case "ready":
-      return Object.hasOwn(state, "values")
-        ? (state as ControlDataState<Values>)
-        : fail("Ready control data carries its values", location);
-    default:
-      return fail("Projected control data has an unknown status", location);
-  }
+  const status = state.status;
+  const keys =
+    typeof status === "string" && Object.hasOwn(CONTROL_STATE_KEYS, status)
+      ? CONTROL_STATE_KEYS[status]
+      : undefined;
+  if (keys === undefined) return fail("Projected control data has an unknown status", location);
+  const allowed = new Set(["status", ...keys.required, ...keys.optional]);
+  if (
+    Object.keys(state).some((key) => !allowed.has(key)) ||
+    keys.required.some((key) => !Object.hasOwn(state, key)) ||
+    (state.reason !== undefined &&
+      (typeof state.reason !== "string" || state.reason.trim().length === 0))
+  )
+    return fail("Projected control data is invalid", location);
+  return status === "loading" ? LOADING_STATE : (state as ControlDataState<Values>);
 };
 
 /** Validates unknown semantic callbacks for one placement keyed by a known event name. */
