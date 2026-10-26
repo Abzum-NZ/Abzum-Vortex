@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_access.check_record_share_grant_terms_internal(p_terms jsonb, p_context jsonb) RETURNS void
+CREATE OR REPLACE FUNCTION vortex_access.check_record_share_grant_terms_internal(p_terms jsonb, p_context jsonb) RETURNS void
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO ''
     AS $_$

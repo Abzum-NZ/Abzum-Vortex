@@ -157,13 +157,13 @@ begin
     ) as adopted;
   end if;
 
-  -- #33 queues this evidence trigger. Validate it while the privileged boundary
-  -- is still active so a runtime-role commit cannot bypass or fail its reads.
+  -- The role revision check trigger is deferred. Validate it while the privileged
+  -- boundary is still active so a runtime-role commit cannot bypass or fail its reads.
   set constraints
-    vortex_access.organization_role_revisions_evidence
+    vortex_access.organization_role_revisions_checked
     immediate;
   set constraints
-    vortex_access.organization_role_revisions_evidence
+    vortex_access.organization_role_revisions_checked
     deferred;
 
   select pg_catalog.array_agg(subject_id order by subject_id),
