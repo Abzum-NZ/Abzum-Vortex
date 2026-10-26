@@ -10,7 +10,6 @@ import {
   type ApplicationRootId,
   type PlatformId,
 } from "../catalogue/identifiers";
-import { sameId } from "../catalogue/runtime-primitives";
 import type { NavigationItem } from "../definition/application-contracts";
 import {
   type ProjectedNavigation,

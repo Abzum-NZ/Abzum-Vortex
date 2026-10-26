@@ -144,7 +144,10 @@ export const readPageProjections = cache(
       if (!navigation) {
         const projected = await pages.project(session, selection);
         return projected.kind === "available"
-          ? ({ kind: "available", value: { page: projected.value } } as const)
+          ? ({
+              kind: "available",
+              value: { page: projected.value, navigation: undefined },
+            } as const)
           : projected;
       }
       return pages.projectWithNavigation(session, selection);
