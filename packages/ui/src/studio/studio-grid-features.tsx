@@ -431,10 +431,10 @@ export function StudioGridFeatures({
                   />
                 </ItemActions>
               </Item>
-              {enabled && declaration !== undefined
+              {enabled && declaration !== undefined && check?.kind !== "not_possible"
                 ? studioSettingProblems({ [key]: current }, [declaration]).map((sentence) => (
                     <p key={sentence} role="alert" className="text-sm text-destructive">
-                      {sentence}
+                      {sentence.replace(`${label}, `, `${label}: `)}
                     </p>
                   ))
                 : null}

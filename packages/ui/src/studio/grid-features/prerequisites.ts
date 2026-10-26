@@ -1,4 +1,5 @@
 import {
+  canonicalJson,
   recordsTableColumnFiltersFeature,
   recordsTableInlineEditFeature,
   recordsTablePivotFeature,
@@ -84,6 +85,8 @@ export const studioGridPrerequisites = (
       },
     };
   } else if (key === recordsTableTotalsFeature.key) {
+    const measures = own.measures;
+    if (measures?.kind === "list" && measures.items.length > 0) return undefined;
     const field = facts.fields.find(
       (field) =>
         ["whole_number", "decimal_number", "money"].includes(field.type) &&
@@ -114,5 +117,6 @@ export const studioGridPrerequisites = (
     own.fields = fieldsValue([field.field]);
   } else return undefined;
   properties[key] = { ...current, properties: own };
-  return { ...whole, properties };
+  const next = { ...whole, properties };
+  return canonicalJson(next) === canonicalJson(whole) ? undefined : next;
 };
