@@ -108,6 +108,13 @@ begin
     pg_catalog.jsonb_build_object(
       'key', role_revision.role_key,
       'label', role_revision.label,
+      'application_name', (
+        select release.application_address ->> 'name'
+        from vortex_definition.releases as release
+        where release.root_id = role.application_root_id
+        order by release.release_revision desc
+        limit 1
+      ),
       'lifecycle', role_revision.lifecycle,
       'role_kind', role.role_kind,
       'privilege_classification', role_revision.privilege_classification,

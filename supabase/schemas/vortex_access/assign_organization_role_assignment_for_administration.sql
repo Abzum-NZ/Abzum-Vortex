@@ -36,6 +36,10 @@ declare
   decision record;
   changed record;
   changed_summary jsonb;
+  existing_assignment_id uuid;
+  summary_assignment_id uuid;
+  changed_at_value timestamptz;
+  changed_access_version bigint;
   checked_at timestamptz;
   activity_result text;
 begin
@@ -220,13 +224,39 @@ begin
       message = 'Organization role revision requires acceptance before assignment';
   end if;
 
-  select result.* into strict changed
-  from vortex_access.coordinate_organization_role_assignment_change(
-    'grant', context_organization_id, p_role_assignment_id, null,
-    p_role_id, p_expected_role_revision, p_assignee_kind,
-    p_organization_account_id, p_group_id, p_assignment_kind,
-    p_starts_at, p_expires_at, context_account_id, context_correlation_id
-  ) as result;
+  -- One live assignment of a role per assignee: the same role assigned again to the same assignee
+  -- with an overlapping live period returns the assignment already in force instead of a second row.
+  select existing.role_assignment_id into existing_assignment_id
+  from vortex_access.organization_role_assignments as existing
+  where existing.organization_id = context_organization_id
+    and existing.role_id = p_role_id
+    and existing.assignee_kind = p_assignee_kind
+    and existing.organization_account_id is not distinct from p_organization_account_id
+    and existing.group_id is not distinct from p_group_id
+    and existing.assignment_kind = p_assignment_kind
+    and existing.state = 'live'
+    and existing.role_assignment_id <> p_role_assignment_id
+    and existing.starts_at < coalesce(p_expires_at, 'infinity'::timestamptz)
+    and coalesce(existing.expires_at, 'infinity'::timestamptz) > p_starts_at
+  order by existing.starts_at, existing.role_assignment_id
+  limit 1;
+
+  if existing_assignment_id is null then
+    select result.* into strict changed
+    from vortex_access.coordinate_organization_role_assignment_change(
+      'grant', context_organization_id, p_role_assignment_id, null,
+      p_role_id, p_expected_role_revision, p_assignee_kind,
+      p_organization_account_id, p_group_id, p_assignment_kind,
+      p_starts_at, p_expires_at, context_account_id, context_correlation_id
+    ) as result;
+    summary_assignment_id := p_role_assignment_id;
+    changed_at_value := changed.changed_at;
+    changed_access_version := changed.access_version;
+  else
+    summary_assignment_id := existing_assignment_id;
+    changed_at_value := pg_catalog.clock_timestamp();
+    changed_access_version := context_access_version;
+  end if;
 
   checked_at := pg_catalog.clock_timestamp();
   select pg_catalog.jsonb_strip_nulls(pg_catalog.jsonb_build_object(
@@ -272,12 +302,14 @@ begin
     and organization_group.organization_id = assignment.organization_id
     and organization_group.group_id = assignment.group_id
   where assignment.organization_id = context_organization_id
-    and assignment.role_assignment_id = p_role_assignment_id;
+    and assignment.role_assignment_id = summary_assignment_id;
 
   activity_result := vortex_record.append_organization_activity_entry(
-    context_organization_id, p_activity_id, changed.changed_at,
-    'organization_account', context_account_id, 'grant_role_assignment',
-    array[p_role_assignment_id]::uuid[], array[]::uuid[], vortex_platform.channel(),
+    context_organization_id, p_activity_id, changed_at_value,
+    'organization_account', context_account_id,
+    case when existing_assignment_id is null
+      then 'grant_role_assignment' else 'role_already_assigned' end,
+    array[summary_assignment_id]::uuid[], array[]::uuid[], vortex_platform.channel(),
     context_correlation_id, 'completed'
   );
   if activity_result is distinct from 'inserted' then
@@ -286,7 +318,7 @@ begin
   end if;
 
   return query select 'completed'::text, context_organization_id, changed_summary,
-    changed.access_version;
+    changed_access_version;
 end
 $function$;
 

@@ -6,7 +6,7 @@
   "body": {
     "name": "Tenant Administration",
     "description": "Tenant structure and direct protected actions for a tenant administrator.",
-    "icon": "building-2",
+    "icon": "sitemap",
     "home_page": "tenant_administrators",
     "uses": [
       {
@@ -127,7 +127,7 @@
             "id": "nav_overview",
             "type": "page",
             "label": "Overview",
-            "icon": "building-2",
+            "icon": "layout-dashboard",
             "page": "tenant_overview",
             "permission": "application.tenant_administration.open"
           },
@@ -135,7 +135,7 @@
             "id": "nav_structure",
             "type": "page",
             "label": "Tenant structure",
-            "icon": "building-2",
+            "icon": "sitemap",
             "page": "tenant_structure",
             "permission": "application.tenant_administration.open"
           }
@@ -145,13 +145,13 @@
         "id": "nav_access",
         "type": "heading",
         "label": "Access",
-        "icon": "grid",
+        "icon": "shield",
         "children": [
           {
             "id": "nav_administrators",
             "type": "page",
             "label": "Tenant administrators",
-            "icon": "building-2",
+            "icon": "user-check",
             "page": "tenant_administrators",
             "permission": "application.tenant_administration.open"
           }
@@ -369,11 +369,35 @@
             "props": {
               "slot_primary": [
                 {
-                  "type": "platform.renderer.text",
+                  "type": "platform.renderer.heading",
                   "props": {
                     "id": "overview_text",
-                    "title": "Tenant overview",
-                    "text": "Review the organisations in this tenant. Select an organisation to see its details, or use Tenant structure for its protected actions. Tenant administrators are listed on their own page.",
+                    "text": "Tenant overview",
+                    "level": "two",
+                    "vortex": {
+                      "block": {
+                        "block_id": "78bfeead-a38d-424a-81b9-7cd553b92bcc",
+                        "release_version": "1.1.0"
+                      },
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "type": "platform.renderer.text",
+                  "props": {
+                    "id": "overview_text_description",
+                    "text": "Review the organisations in this tenant. Select an organisation to see its details, or use Tenant structure to add or move organisations. Tenant administrators are listed on their own page.",
                     "vortex": {
                       "block": {
                         "block_id": "addfad00-1b11-4674-83fa-913667f87e79",
@@ -399,6 +423,7 @@
                     "presentation": "grid",
                     "id": "overview_organizations_region",
                     "title": "Organisations in this tenant",
+                    "empty_message": "No organisations yet",
                     "row_click": {
                       "event_id": "event_open_organization_detail",
                       "mode": "flow"
@@ -481,6 +506,7 @@
                     "presentation": "grid",
                     "id": "structure_region",
                     "title": "Tenant structure",
+                    "empty_message": "No organisations yet",
                     "row_click": {
                       "event_id": "event_open_organization_detail",
                       "mode": "flow"
@@ -1016,7 +1042,8 @@
                   "type": "platform.renderer.record_detail",
                   "props": {
                     "id": "tenant_organization_detail",
-                    "heading_source": "title",
+                    "heading_source": "field",
+                    "heading_field": "vortex.system_directory:organization.display_name",
                     "title": "Organisation details",
                     "detail_fields": [
                       {
@@ -1081,11 +1108,35 @@
             "props": {
               "slot_primary": [
                 {
-                  "type": "platform.renderer.text",
+                  "type": "platform.renderer.heading",
                   "props": {
                     "id": "administrators_text",
-                    "title": "Tenant administrators",
-                    "text": "Tenant administrators are read live from protected Identity data under your current authority; nothing is copied into application records. Granting and revoking tenant-administrator access runs through IAM, never from this application.",
+                    "text": "Tenant administrators",
+                    "level": "two",
+                    "vortex": {
+                      "block": {
+                        "block_id": "78bfeead-a38d-424a-81b9-7cd553b92bcc",
+                        "release_version": "1.1.0"
+                      },
+                      "responsive": {
+                        "desktop": {
+                          "visible": true,
+                          "width": {
+                            "kind": "fill"
+                          },
+                          "height": {
+                            "kind": "content"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "type": "platform.renderer.text",
+                  "props": {
+                    "id": "administrators_text_description",
+                    "text": "People who administer this tenant. Tenant administrator access is granted and revoked in IAM.",
                     "vortex": {
                       "block": {
                         "block_id": "addfad00-1b11-4674-83fa-913667f87e79",
@@ -1111,6 +1162,7 @@
                     "presentation": "grid",
                     "id": "administrators_region",
                     "title": "Tenant administrators",
+                    "empty_message": "No tenant administrators yet",
                     "row_click": {
                       "event_id": "event_open_tenant_administrator_detail",
                       "mode": "flow"

@@ -294,6 +294,7 @@ export const runtimeInputWithFormDefault = (
     number: "number_input",
     boolean: "boolean_input",
     date: "date_input",
+    date_time: "date_time_input",
     choice: "choice_input",
   };
   const kind = control === undefined ? undefined : payloadKind[control];
@@ -310,6 +311,15 @@ export const runtimeInputWithFormDefault = (
     control === "date" &&
     value !== null &&
     (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value))
+  )
+    return input;
+  // A date-time default is an offset-bearing ISO timestamp (a Flow `date_time` value).
+  if (
+    control === "date_time" &&
+    value !== null &&
+    (typeof value !== "string" ||
+      Number.isNaN(Date.parse(value)) ||
+      !/(Z|[+-]\d{2}:\d{2})$/.test(value))
   )
     return input;
   if (control === "choice") {
