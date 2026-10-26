@@ -1,5 +1,16 @@
 import type { BlockId, SemanticVersion } from "../catalogue/identifiers";
 import type { PlatformBlockRelease } from "./application-composition/platform-block-release";
+import { compiledItemSettings } from "./application-composition/page-composition";
+import { releaseSettingDeclarations } from "./application-composition/platform-block-release";
+import { sameCanonicalValue } from "./canonical-json-definition";
+import type { PrepareDefinitionPublicationResult } from "./definition-store-contracts";
+
+type ComponentLabel = Readonly<
+  Omit<PrepareDefinitionPublicationResult["componentLabels"][number], "componentId" | "pageId"> & {
+    componentId: string;
+    pageId?: string;
+  }
+>;
 
 const textKeys = ["label", "name", "singularLabel"] as const;
 const identityKeyPattern = /^(?:[a-z]+(?:[A-Z][a-z]*)*)Id$/;
@@ -97,7 +108,7 @@ const blockLabel = (release: PlatformBlockRelease, props: Record<string, unknown
     (property) => property.kind === "text" && text(props[property.key]) !== undefined,
   );
   const itemLabel = label ?? (firstText === undefined ? undefined : text(props[firstText.key]));
-  return itemLabel === undefined ? release.name : `${release.name}: ${itemLabel}`;
+  return itemLabel ?? release.name;
 };
 
 /**
@@ -112,7 +123,7 @@ export const componentLabelsOf = async (
     releaseVersion: SemanticVersion,
   ) => Promise<PlatformBlockRelease | undefined>,
   ...documents: readonly unknown[]
-): Promise<ReadonlyArray<Readonly<{ componentId: string; label: string }>>> => {
+): Promise<readonly ComponentLabel[]> => {
   const blocks = new Map<string, Readonly<{ blockId: BlockId; releaseVersion: SemanticVersion }>>();
   const scan = (value: unknown): void => {
     if (Array.isArray(value)) {
@@ -208,5 +219,107 @@ export const componentLabelsOf = async (
     for (const entry of Object.values(record)) labelBindings(entry);
   };
   for (const document of documents) labelBindings(document);
-  return [...labels].map(([componentId, label]) => ({ componentId, label }));
+
+  // The candidate Application is first; its previous release follows the candidate's Modules.
+  const contents = documents.flatMap((document) => {
+    const record = asRecord(document);
+    const content = asRecord(record?.content) ?? record;
+    return content === undefined ? [] : [content];
+  });
+  const applications = contents.filter(
+    (content) => Array.isArray(content.pages) && Array.isArray(content.roles),
+  );
+  const current = applications[0];
+  const previous = applications[1];
+  const details = new Map<string, Omit<ComponentLabel, "componentId" | "label">>();
+  const permissionLabels = new Map<string, string>();
+  for (const content of contents)
+    for (const permission of (content.permissions as Record<string, unknown>[] | undefined) ?? [])
+      if (
+        typeof permission.key === "string" &&
+        text(permission.label) !== undefined &&
+        !permissionLabels.has(permission.key)
+      )
+        permissionLabels.set(permission.key, text(permission.label)!);
+  for (const role of (current?.roles as Record<string, unknown>[] | undefined) ?? []) {
+    const old = ((previous?.roles as Record<string, unknown>[] | undefined) ?? []).find(
+      (entry) => String(entry.roleId).toLowerCase() === String(role.roleId).toLowerCase(),
+    );
+    if (old === undefined) continue;
+    const before = new Set(old.permissionKeys as string[]);
+    const after = new Set(role.permissionKeys as string[]);
+    const names = (keys: readonly string[]) =>
+      keys.flatMap((key) => {
+        const label = permissionLabels.get(key);
+        return label === undefined ? [] : [label];
+      });
+    details.set(String(role.roleId).toLowerCase(), {
+      addedAccess: names([...after].filter((key) => !before.has(key))),
+      removedAccess: names([...before].filter((key) => !after.has(key))),
+    });
+  }
+  const navigation = (items: readonly Record<string, unknown>[]): void => {
+    for (const item of items) {
+      if (item.type === "page" && typeof item.id === "string" && typeof item.pageId === "string")
+        details.set(item.id.toLowerCase(), { pageId: item.pageId.toLowerCase() });
+      if (Array.isArray(item.children)) navigation(item.children as Record<string, unknown>[]);
+    }
+  };
+  navigation((current?.navigation as Record<string, unknown>[] | undefined) ?? []);
+  const placements = (content: Record<string, unknown> | undefined) => {
+    const result = new Map<string, NonNullable<ReturnType<typeof blockReference>>>();
+    const visitBlocks = (value: unknown): void => {
+      if (Array.isArray(value)) {
+        value.forEach(visitBlocks);
+        return;
+      }
+      const record = asRecord(value);
+      if (record === undefined) return;
+      const block = blockReference(record);
+      if (block !== undefined) result.set(block.id.toLowerCase(), block);
+      Object.values(record).forEach(visitBlocks);
+    };
+    visitBlocks(content);
+    return result;
+  };
+  const oldPlacements = placements(previous);
+  const enabled = (value: unknown): boolean => {
+    const group = asRecord(value);
+    const setting = asRecord(asRecord(group?.properties)?.enabled);
+    return group?.kind === "group" && setting?.kind === "boolean" && setting.value === true;
+  };
+  for (const [id, block] of placements(current)) {
+    const old = oldPlacements.get(id);
+    const release = releases.get(`${block.blockId}@${block.releaseVersion}`)!;
+    if (old === undefined) continue;
+    const changedSettings = releaseSettingDeclarations(release).filter(
+      (property) =>
+        !sameCanonicalValue(old.props[property.key] ?? null, block.props[property.key] ?? null),
+    );
+    if (
+      changedSettings.length > 0 &&
+      changedSettings.every((property) => property.kind === "text" || property.kind === "rich_text")
+    )
+      details.set(id, { wordingChanged: true });
+    if (release.rendererKey !== "platform.renderer.table") continue;
+    const oldRelease = releases.get(`${old.blockId}@${old.releaseVersion}`)!;
+    const before = compiledItemSettings(old.props, oldRelease).features;
+    const after = compiledItemSettings(block.props, release).features;
+    const declaration = release.properties.find((property) => property.key === "features");
+    if (after?.kind !== "group" || declaration?.kind !== "group") continue;
+    const beforeProperties = before?.kind === "group" ? before.properties : {};
+    details.set(id, {
+      ...details.get(id),
+      addedCapabilities: declaration.properties.flatMap((feature) =>
+        enabled(after.properties[feature.key]) && !enabled(beforeProperties[feature.key])
+          ? [feature.label]
+          : [],
+      ),
+    });
+  }
+  return [...labels].map(([componentId, label]) => ({
+    componentId,
+    label,
+    ...details.get(componentId),
+  }));
 };
