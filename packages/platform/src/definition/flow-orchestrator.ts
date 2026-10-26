@@ -31,7 +31,7 @@ import {
   type FlowRunState,
   type FlowRunStep,
 } from "../rules/flow-interpreter";
-import type { FlowContinuationStore } from "./flow-continuation-store";
+import { consumeFlowContinuation, issueFlowContinuation } from "./flow-continuation-store";
 import { reportUnexpectedFailure } from "./definition-error";
 import {
   carriesSensitive,
@@ -197,12 +197,12 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
     const state: FlowRunState = { ...step.state };
     delete (state as { triggerRecord?: unknown }).triggerRecord;
     const token = newToken();
-    let stored: Awaited<ReturnType<FlowContinuationStore["issue"]>> | undefined;
+    let stored: Awaited<ReturnType<typeof issueFlowContinuation>> | undefined;
     try {
       // A run holding a sensitive value (in a task output, variable or intent) is never stored, so
       // it ends here instead of waiting for the person.
       if (!carriesSensitive(state, run.sensitive))
-        stored = await dependencies.continuations.issue({
+        stored = await issueFlowContinuation({
           tokenHash: sha256(token),
           runId: step.state.runId,
           organizationId: selection.organizationId,
@@ -579,7 +579,7 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
         // A different release is refused before the continuation is spent.
         if (expectation !== undefined && expectation.releaseKey !== prepared.release.releaseKey)
           return refused;
-        const stored = await dependencies.continuations.consume({
+        const stored = await consumeFlowContinuation({
           tokenHash: sha256(continuation),
           organizationId: selection.organizationId,
           identityId: session.identityId,

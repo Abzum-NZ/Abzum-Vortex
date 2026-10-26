@@ -26,7 +26,11 @@ import type {
   FlowRunState,
   FlowTaskOutcome,
 } from "../rules/flow-interpreter";
-import type { FlowEffectLedger, FlowEffectPrincipal } from "./flow-continuation-store";
+import {
+  beginFlowEffect,
+  completeFlowEffect,
+  type FlowEffectPrincipal,
+} from "./flow-continuation-store";
 import { reportUnexpectedFailure } from "./definition-error";
 import {
   aliasSelectedRecordValues,
@@ -784,9 +788,9 @@ export const createFlowTaskRunner = (
       taskPath: call.taskPath,
       iteration: call.iteration,
     } as const;
-    let claim: Awaited<ReturnType<FlowEffectLedger["begin"]>>;
+    let claim: Awaited<ReturnType<typeof beginFlowEffect>>;
     try {
-      claim = await dependencies.ledger.begin(key);
+      claim = await beginFlowEffect(key);
     } catch (error) {
       reportUnexpectedFailure("effect ledger claim", error);
       // Nothing was claimed, so nothing ran.
@@ -870,7 +874,7 @@ export const createFlowTaskRunner = (
         : { warnings: ran.warnings.map(({ code, message }) => ({ code, message })) }),
     };
     try {
-      await dependencies.ledger.complete(key, ran.result.outcome, stored);
+      await completeFlowEffect(key, ran.result.outcome, stored);
     } catch (error) {
       reportUnexpectedFailure("effect ledger completion", error);
       // The effect ran. Leaving the claim open makes any repeat report it uncertain, never re-run it.

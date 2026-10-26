@@ -24,29 +24,6 @@ type FlowContinuationBinding = Readonly<{
   releaseKey: string;
 }>;
 
-export type FlowContinuationStore = Readonly<{
-  /** Stores the run state under the hash of a fresh token; false when it could not be stored. */
-  issue: (
-    input: FlowContinuationBinding &
-      Readonly<{
-        tokenHash: string;
-        runId: string;
-        state: Readonly<Record<string, unknown>>;
-        elapsedMilliseconds: number;
-        lifetimeSeconds: number;
-      }>,
-  ) => Promise<Readonly<{ expiresAt: string }> | undefined>;
-  /**
-   * Returns the stored run once. Unknown, expired, already used, foreign and wrong-release tokens
-   * are all `undefined`.
-   */
-  consume: (
-    input: FlowContinuationBinding & Readonly<{ tokenHash: string }>,
-  ) => Promise<
-    Readonly<{ runId: string; state: unknown; elapsedMilliseconds: number }> | undefined
-  >;
-}>;
-
 export type FlowEffectPrincipal =
   | Readonly<{ kind: "person"; id: string }>
   | Readonly<{ kind: "specified_account"; id: string }>
@@ -68,15 +45,6 @@ type FlowEffectClaim =
   | Readonly<{ kind: "in_progress" }>
   | Readonly<{ kind: "unavailable" }>;
 
-/** Duplicate protection binds each run/task/iteration to its verified principal and trigger. */
-export type FlowEffectLedger = Readonly<{
-  begin: (key: FlowEffectKey) => Promise<FlowEffectClaim>;
-  complete: (
-    key: FlowEffectKey,
-    outcome: string,
-    outputs: Readonly<Record<string, unknown>>,
-  ) => Promise<boolean>;
-}>;
 
 const expiryRowSchema = z.object({ expires_at: z.union([z.date(), z.string()]) });
 const consumeRowSchema = z.object({ result: z.unknown() });
@@ -104,104 +72,123 @@ const completionRowSchema = z.object({ completed: z.boolean() });
 
 const asJson = (value: unknown): string => JSON.stringify(value);
 
-/** The database-backed continuation store and effect ledger. */
-export const createDatabaseFlowStores = (): Readonly<{
-  continuations: FlowContinuationStore;
-  ledger: FlowEffectLedger;
-}> =>
-  Object.freeze({
-    continuations: Object.freeze<FlowContinuationStore>({
-      async issue(input) {
-        const rows = await withRuntimeTransaction(
-          (transaction) =>
-            transaction.query`
-            select vortex_platform.issue_flow_continuation(
-              ${input.tokenHash}::text,
-              ${input.runId}::uuid,
-              ${input.organizationId}::uuid,
-              ${input.identityId}::uuid,
-              ${input.flowId}::uuid,
-              ${input.releaseKey}::text,
-              ${asJson(input.state)}::text::jsonb,
-              ${input.elapsedMilliseconds}::integer,
-              ${input.lifetimeSeconds}::integer
-            ) as expires_at
-          `,
-        );
-        const row = expiryRowSchema.safeParse(rows[0]);
-        if (rows.length !== 1 || !row.success) return undefined;
-        const expiresAt =
-          row.data.expires_at instanceof Date
-            ? row.data.expires_at.toISOString()
-            : row.data.expires_at;
-        return { expiresAt };
-      },
-      async consume(input) {
-        const rows = await withRuntimeTransaction(
-          (transaction) =>
-            transaction.query`
-            select vortex_platform.consume_flow_continuation(
-              ${input.tokenHash}::text,
-              ${input.organizationId}::uuid,
-              ${input.identityId}::uuid,
-              ${input.flowId}::uuid,
-              ${input.releaseKey}::text
-            ) as result
-          `,
-        );
-        const row = consumeRowSchema.safeParse(rows[0]);
-        if (rows.length !== 1 || !row.success) return undefined;
-        const result = consumeResultSchema.safeParse(row.data.result);
-        if (!result.success || result.data.kind !== "available") return undefined;
-        return {
-          runId: result.data.runId,
-          state: result.data.state,
-          elapsedMilliseconds: result.data.elapsedMilliseconds,
-        };
-      },
-    }),
-    ledger: Object.freeze<FlowEffectLedger>({
-      async begin(key) {
-        const rows = await withRuntimeTransaction(
-          (transaction) =>
-            transaction.query`
-            select vortex_platform.begin_flow_effect(
-              ${key.runId}::uuid,
-              ${key.organizationId}::uuid,
-              ${key.principal.kind}::text,
-              ${key.principal.id}::uuid,
-              ${key.origin}::text,
-              ${key.originId}::uuid,
-              ${key.taskPath}::text,
-              ${key.iteration}::text
-            ) as result
-          `,
-        );
-        const row = claimRowSchema.safeParse(rows[0]);
-        if (rows.length !== 1 || !row.success) return { kind: "unavailable" };
-        const claim = claimResultSchema.safeParse(row.data.result);
-        return claim.success ? claim.data : { kind: "unavailable" };
-      },
-      async complete(key, outcome, outputs) {
-        const rows = await withRuntimeTransaction(
-          (transaction) =>
-            transaction.query`
-            select vortex_platform.complete_flow_effect(
-              ${key.runId}::uuid,
-              ${key.organizationId}::uuid,
-              ${key.principal.kind}::text,
-              ${key.principal.id}::uuid,
-              ${key.origin}::text,
-              ${key.originId}::uuid,
-              ${key.taskPath}::text,
-              ${key.iteration}::text,
-              ${outcome}::text,
-              ${asJson(outputs)}::text::jsonb
-            ) as completed
-          `,
-        );
-        const row = completionRowSchema.safeParse(rows[0]);
-        return rows.length === 1 && row.success && row.data.completed;
-      },
-    }),
-  });
+/*
+ * The database-backed continuation store and effect ledger of flow runs. Each operation runs in
+ * its own runtime transaction.
+ */
+
+/** Stores the run state under the hash of a fresh token; undefined when it could not be stored. */
+export const issueFlowContinuation = async (
+  input: FlowContinuationBinding &
+    Readonly<{
+      tokenHash: string;
+      runId: string;
+      state: Readonly<Record<string, unknown>>;
+      elapsedMilliseconds: number;
+      lifetimeSeconds: number;
+    }>,
+): Promise<Readonly<{ expiresAt: string }> | undefined> => {
+  const rows = await withRuntimeTransaction(
+    (transaction) =>
+      transaction.query`
+      select vortex_platform.issue_flow_continuation(
+        ${input.tokenHash}::text,
+        ${input.runId}::uuid,
+        ${input.organizationId}::uuid,
+        ${input.identityId}::uuid,
+        ${input.flowId}::uuid,
+        ${input.releaseKey}::text,
+        ${asJson(input.state)}::text::jsonb,
+        ${input.elapsedMilliseconds}::integer,
+        ${input.lifetimeSeconds}::integer
+      ) as expires_at
+    `,
+  );
+  const row = expiryRowSchema.safeParse(rows[0]);
+  if (rows.length !== 1 || !row.success) return undefined;
+  const expiresAt =
+    row.data.expires_at instanceof Date ? row.data.expires_at.toISOString() : row.data.expires_at;
+  return { expiresAt };
+};
+
+/**
+ * Returns the stored run once. Unknown, expired, already used, foreign and wrong-release tokens
+ * are all `undefined`.
+ */
+export const consumeFlowContinuation = async (
+  input: FlowContinuationBinding & Readonly<{ tokenHash: string }>,
+): Promise<
+  Readonly<{ runId: string; state: unknown; elapsedMilliseconds: number }> | undefined
+> => {
+  const rows = await withRuntimeTransaction(
+    (transaction) =>
+      transaction.query`
+      select vortex_platform.consume_flow_continuation(
+        ${input.tokenHash}::text,
+        ${input.organizationId}::uuid,
+        ${input.identityId}::uuid,
+        ${input.flowId}::uuid,
+        ${input.releaseKey}::text
+      ) as result
+    `,
+  );
+  const row = consumeRowSchema.safeParse(rows[0]);
+  if (rows.length !== 1 || !row.success) return undefined;
+  const result = consumeResultSchema.safeParse(row.data.result);
+  if (!result.success || result.data.kind !== "available") return undefined;
+  return {
+    runId: result.data.runId,
+    state: result.data.state,
+    elapsedMilliseconds: result.data.elapsedMilliseconds,
+  };
+};
+
+/** Claims one run/task/iteration effect for its verified principal and trigger, once. */
+export const beginFlowEffect = async (key: FlowEffectKey): Promise<FlowEffectClaim> => {
+  const rows = await withRuntimeTransaction(
+    (transaction) =>
+      transaction.query`
+      select vortex_platform.begin_flow_effect(
+        ${key.runId}::uuid,
+        ${key.organizationId}::uuid,
+        ${key.principal.kind}::text,
+        ${key.principal.id}::uuid,
+        ${key.origin}::text,
+        ${key.originId}::uuid,
+        ${key.taskPath}::text,
+        ${key.iteration}::text
+      ) as result
+    `,
+  );
+  const row = claimRowSchema.safeParse(rows[0]);
+  if (rows.length !== 1 || !row.success) return { kind: "unavailable" };
+  const claim = claimResultSchema.safeParse(row.data.result);
+  return claim.success ? claim.data : { kind: "unavailable" };
+};
+
+/** Records the outcome of a claimed effect; false when it could not be recorded. */
+export const completeFlowEffect = async (
+  key: FlowEffectKey,
+  outcome: string,
+  outputs: Readonly<Record<string, unknown>>,
+): Promise<boolean> => {
+  const rows = await withRuntimeTransaction(
+    (transaction) =>
+      transaction.query`
+      select vortex_platform.complete_flow_effect(
+        ${key.runId}::uuid,
+        ${key.organizationId}::uuid,
+        ${key.principal.kind}::text,
+        ${key.principal.id}::uuid,
+        ${key.origin}::text,
+        ${key.originId}::uuid,
+        ${key.taskPath}::text,
+        ${key.iteration}::text,
+        ${outcome}::text,
+        ${asJson(outputs)}::text::jsonb
+      ) as completed
+    `,
+  );
+  const row = completionRowSchema.safeParse(rows[0]);
+  return rows.length === 1 && row.success && row.data.completed;
+};

@@ -48,7 +48,6 @@ import type {
   FlowLibrary,
   FlowRuntimeValues,
 } from "../rules/flow-interpreter";
-import type { FlowContinuationStore, FlowEffectLedger } from "./flow-continuation-store";
 import type { ProtectedOperationExecutor } from "./protected-operation-executor";
 
 /**
@@ -300,8 +299,6 @@ export type FlowOrchestratorDependencies = Readonly<{
       selector: ViewerSafeRecordPinSelector,
     ): Promise<ViewerSafeRecordPinAcquisitionResult>;
   }>;
-  continuations: FlowContinuationStore;
-  ledger: FlowEffectLedger;
   /**
    * Resolves the flows of the release the organisation runs for a flow id, from trusted
    * installation state. `undefined` refuses the start without saying why.

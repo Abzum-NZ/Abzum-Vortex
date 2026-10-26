@@ -50,7 +50,6 @@ import { createNamedActionRecordPort } from "../records/action-record-port";
 import { createRecordSaveService } from "../records/save-record";
 import type { createDatabaseApplicationBoundReleaseSetService } from "./application-bound-release-set";
 import { readPermittedApplicationsAtAddress } from "./application-address";
-import { createDatabaseFlowStores } from "./flow-continuation-store";
 import { createFlowCurrentRecordReader } from "./flow-current-record";
 import { createFlowOrchestrator } from "./flow-orchestrator";
 import type { FlowNamedAction, FlowRecordType, FlowRelease } from "./flow-orchestrator-types";
@@ -580,7 +579,6 @@ export async function invokeInstalledFlow(
         ),
     },
   });
-  const stores = createDatabaseFlowStores();
   // #1369, #1370: Save record tasks and named actions run through the record service's own
   // protected paths, under the initiator's verified request and in their own transactions.
   const records = createRecordSaveService(requestDependencies);
@@ -896,8 +894,6 @@ export async function invokeInstalledFlow(
           return false;
         }
       },
-      continuations: stores.continuations,
-      ledger: stores.ledger,
       // The release was read from the trusted installation for this exact request.
       resolveRelease: async () => release,
       ...(runId === undefined ? {} : { newRunId: () => runId }),
