@@ -107,6 +107,8 @@ export type FlowCompilationResolver = Readonly<{
   query: (alias: string) => ResolvedFlowIdentity;
   page: (alias: string) => ResolvedFlowIdentity;
   form: (alias: string) => ResolvedFlowIdentity;
+  /** A page placement the flow addresses, such as the panel it opens. */
+  placement: (alias: string) => ResolvedFlowIdentity;
   connectionBinding: (alias: string) => ResolvedFlowIdentity;
   executionBinding: (alias: string) => ResolvedFlowIdentity;
   /** Places a refusal on the flow, when the caller can. */
@@ -298,6 +300,8 @@ const resolveProperty = (
       return identity((alias) => ctx.resolver.recordType(alias));
     case "form_id":
       return identity((alias) => ctx.resolver.form(alias));
+    case "placement_id":
+      return identity((alias) => ctx.resolver.placement(alias));
     case "query_id":
       return identity((alias) => ctx.resolver.query(alias));
     case "page_id":
