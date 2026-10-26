@@ -15,6 +15,7 @@ Working instructions are in [AGENTS.md](../../AGENTS.md).
 | [Module installation and record storage](module-record-provisioning.md) | Installation and storage sequencing |
 | [Access operations and their consumers](access-consumer-handoffs.md) | Administration and IAM consumers |
 | [Landing Zone application](landing-zone-application.md) | The Landing Zone application definition |
+| [Architecture review, 26 October 2026](architecture-review-2026-10-26.md) | Review findings and what each became |
 
 Every behaviour change is walked through in the running app on a local database lane before merge.
 Pull requests that change what users see include screenshots.
