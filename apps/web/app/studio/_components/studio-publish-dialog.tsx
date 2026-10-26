@@ -14,7 +14,7 @@ import {
 import { Label } from "@vortex/ui/components/label";
 import { Textarea } from "@vortex/ui/components/textarea";
 import { Spinner } from "@vortex/ui/components/spinner";
-import { PublicationSummary } from "./publication-summary";
+import { PublicationSummary, type PublicationComponentLabel } from "./publication-summary";
 
 export type StudioPublishDialogProps = Readonly<{
   open: boolean;
@@ -29,7 +29,7 @@ export type StudioPublishDialogProps = Readonly<{
   publishing: boolean;
   prepared: Readonly<{
     confirmation: DefinitionPublicationConfirmation;
-    componentLabels: readonly Readonly<{ componentId: string; label: string }>[];
+    componentLabels: readonly PublicationComponentLabel[];
   }> | null;
   revision: number;
   pageReview: ReactNode;
