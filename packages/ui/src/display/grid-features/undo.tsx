@@ -35,12 +35,7 @@ export default function Undo({
     void Promise.resolve(request({ event: "batch_edit_requested", action: "state" })).then(
       (answer) => {
         const held = answer as DisplayBatchEditAnswer | undefined;
-        if (current && held !== undefined)
-          setDepth((previous) =>
-            previous.undo === held.undoDepth && previous.redo === held.redoDepth
-              ? previous
-              : { undo: held.undoDepth, redo: held.redoDepth },
-          );
+        if (current && held !== undefined) setDepth({ undo: held.undoDepth, redo: held.redoDepth });
       },
       (error: unknown) => console.error("[grid] the undo stack could not be read", error),
     );
