@@ -18,3 +18,4 @@ export * from "./named-action-availability-schema";
 export * from "./records-table-feature-projection";
 export type { RecordsTableRowFormat } from "./records-table-features";
 export { projectInlineEditedCell } from "./cell-projection";
+export * from "./display-payload-parts";

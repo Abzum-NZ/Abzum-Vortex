@@ -1,8 +1,10 @@
+import type { z } from "zod";
 import { isSafeLinkAddress, type JsonValue } from "../catalogue/common";
 import { timestampSchema } from "../catalogue/identifiers";
 import type { RecordsDisplayFormat } from "../definition/application-composition/records-display";
 import type { RecordLinkReference } from "../definition/viewer-safe-record-link";
 import { richTextDocumentSchema } from "../records/rich-text";
+import type { displayScalarCellSchema } from "./display-payload-parts";
 import type { RecordsTableInlineEditor } from "./records-table-feature-projection";
 import { formatDecimal, formatMoney, isExactDecimal } from "./value-format";
 
@@ -12,26 +14,17 @@ import { formatDecimal, formatMoney, isExactDecimal } from "./value-format";
  * just saved, so the cell looks exactly as the next read will show it.
  */
 
-/** One display value that is not itself a table. */
-export type ProjectedScalarCellValue =
-  | Readonly<{ kind: "text"; text: string }>
-  | Readonly<{ kind: "choice"; key: string; label: string }>
-  | Readonly<{ kind: "number"; value: number; formatted: string }>
-  | Readonly<{ kind: "boolean"; value: boolean }>
-  | Readonly<{ kind: "date"; iso: string }>
-  | Readonly<{ kind: "link"; address: string; label: string }>
-  | Readonly<{ kind: "rich_text"; document: ReturnType<typeof richTextDocumentSchema.parse> }>
-  | ProjectedRecordLink
-  | Readonly<{ kind: "unavailable" }>
-  | Readonly<{ kind: "empty" }>;
+/** One display value that is not itself a table, as the display payload schema accepts it. */
+export type ProjectedScalarCellValue = z.infer<typeof displayScalarCellSchema>;
 
 /**
  * A linked record as the viewer may see it: its label, with the address of its detail page only
  * when the viewer may open that page, or a neutral `restricted` that carries nothing of the record.
  */
-export type ProjectedRecordLink =
-  | Readonly<{ kind: "record_link"; label: string; href?: string }>
-  | Readonly<{ kind: "restricted" }>;
+export type ProjectedRecordLink = Extract<
+  ProjectedScalarCellValue,
+  Readonly<{ kind: "record_link" | "restricted" }>
+>;
 
 /** A stored link value is exactly a record type identity and a record identity. */
 export const asRecordLink = (value: JsonValue): RecordLinkReference | undefined => {
