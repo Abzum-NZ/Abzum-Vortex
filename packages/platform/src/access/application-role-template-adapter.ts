@@ -18,13 +18,7 @@ import {
   type PreparedApplicationRoleTemplate,
   type PreparedApplicationRoleTemplates,
 } from "./organization-access-catalogue";
-import type {
-  ApplicationPermissionCatalogueSnapshot,
-  PermissionCatalogueEntry,
-  PermissionRegistryEntryCandidate,
-  PreparedApplicationPermissionRegistration,
-} from "./permission-registry";
-import { canonicalJson } from "../definition/canonical-json";
+import type { PreparedApplicationPermissionRegistration } from "./permission-registry";
 import {
   PermissionRegistryPreparationError,
   prepareApplicationPermissionRegistrationForHumanRequest,
@@ -32,7 +26,6 @@ import {
   verifyPreparedApplicationPermissionRegistration,
   type PermissionRegistryDefinitionSetReader,
 } from "./permission-registry-definition-adapter";
-import type { PermissionRegistryPrivateRepository } from "./permission-registry-repository";
 import { isLiveSystemContext } from "./private-system-context";
 
 export const applicationRoleTemplatePreparationErrorCodes = [
@@ -41,7 +34,6 @@ export const applicationRoleTemplatePreparationErrorCodes = [
   "APPLICATION_ROLE_TEMPLATE_DEFINITION_UNAVAILABLE",
   "APPLICATION_ROLE_TEMPLATE_DEFINITION_EVIDENCE_INVALID",
   "APPLICATION_ROLE_TEMPLATE_PERMISSION_OWNERSHIP_AMBIGUOUS",
-  "APPLICATION_ROLE_TEMPLATE_ACTIVE_REGISTRATION_UNAVAILABLE",
 ] as const;
 
 export type ApplicationRoleTemplatePreparationErrorCode =
@@ -62,16 +54,8 @@ export type PrepareApplicationRoleRegistrationCandidateCommand = Readonly<{
   releaseRevision: number;
 }>;
 
-export type PrepareCurrentApplicationRoleTemplatesCommand = Readonly<{
-  applicationRootId: ApplicationRootId;
-}>;
-
 export interface ApplicationRoleTemplateAdapterDependencies {
   readonly definitionReader: PermissionRegistryDefinitionSetReader;
-  readonly permissionRegistryFacts: Pick<
-    PermissionRegistryPrivateRepository,
-    "lookupMany" | "readApplicationSnapshot"
-  >;
 }
 
 type ApplicationDefinitionRead = Extract<DefinitionConsumerReadResult, { kind: "application" }>;
@@ -125,28 +109,6 @@ const mapPermissionPreparationError = (error: unknown): never => {
       throw evidenceError(error);
   }
 };
-
-const candidateEvidenceKey = (
-  candidate: Omit<PermissionRegistryEntryCandidate, "sourceRelease"> & {
-    sourceRelease: Omit<
-      PermissionRegistryEntryCandidate["sourceRelease"],
-      "contentFingerprint" | "resolutionFingerprint"
-    >;
-  },
-): string =>
-  // The stored entry identifies its immutable release by revision; release hashes
-  // are checked against that release when the registration snapshot is read.
-  canonicalJson({
-    ...candidate,
-    sourceRelease: {
-      kind: candidate.sourceRelease.kind,
-      definitionKey: candidate.sourceRelease.definitionKey,
-      rootId: candidate.sourceRelease.rootId,
-      releaseRevision: candidate.sourceRelease.releaseRevision,
-      releaseVersion: candidate.sourceRelease.releaseVersion,
-      validationContractVersion: candidate.sourceRelease.validationContractVersion,
-    },
-  });
 
 const resolveTemplate = (
   template: ApplicationRole,
@@ -259,40 +221,6 @@ export const prepareApplicationRoleTemplatesForHumanRequest = (
   );
 };
 
-const registrationMatchesSnapshot = (
-  registration: PreparedApplicationPermissionRegistration,
-  snapshot: ApplicationPermissionCatalogueSnapshot | undefined,
-): snapshot is NonNullable<typeof snapshot> =>
-  snapshot !== undefined &&
-  snapshot.organizationId === registration.organizationId &&
-  snapshot.applicationRootId === registration.applicationRootId &&
-  canonicalJson(snapshot.applicationRelease) === canonicalJson(registration.applicationRelease) &&
-  snapshot.catalogueFingerprint === registration.applicationCatalogueFingerprint &&
-  canonicalJson(snapshot.permissionIds) === canonicalJson(registration.applicationPermissionIds);
-
-const sourcePermissionIdentity = (
-  permission: Pick<
-    PermissionRegistryEntryCandidate,
-    "applicationRootId" | "ownerKind" | "ownerId" | "permission"
-  >,
-): string =>
-  `${permission.applicationRootId}:${permission.ownerKind}:${permission.ownerId}:${permission.permission.permissionId}`;
-
-const uniqueSourcePermissions = (
-  candidate: PreparedApplicationRoleTemplates,
-): PermissionRegistryEntryCandidate[] => {
-  const unique = new Map<string, PermissionRegistryEntryCandidate>();
-  for (const prepared of candidate.templates)
-    for (const permission of prepared.sourcePermissions) {
-      const identity = sourcePermissionIdentity(permission);
-      if (!unique.has(identity)) unique.set(identity, permission);
-    }
-  return [...unique.values()];
-};
-
-/** Fixed I/O batch size, not an application permission or template limit. */
-const applicationRoleTemplateFactReadBatchSize = 500;
-
 export const createApplicationRoleTemplateAdapter = (
   dependencies: ApplicationRoleTemplateAdapterDependencies,
 ) => {
@@ -352,127 +280,6 @@ export const createApplicationRoleTemplateAdapter = (
         evidence.permissionRegistration,
         evidence.application,
       );
-    },
-
-    async prepareCurrentActive(
-      contextCandidate: SessionContext,
-      commandCandidate: PrepareCurrentApplicationRoleTemplatesCommand,
-    ): Promise<PreparedApplicationRoleTemplates> {
-      const context = parseContext(contextCandidate);
-      const applicationRootId = parseApplicationRootId(commandCandidate?.applicationRootId);
-      let initialSnapshot: ApplicationPermissionCatalogueSnapshot | undefined;
-      try {
-        initialSnapshot = await dependencies.permissionRegistryFacts.readApplicationSnapshot({
-          organizationId: context.organizationId,
-          applicationRootId,
-        });
-      } catch (error) {
-        throw new ApplicationRoleTemplatePreparationError(
-          "APPLICATION_ROLE_TEMPLATE_ACTIVE_REGISTRATION_UNAVAILABLE",
-          { cause: error },
-        );
-      }
-      if (initialSnapshot === undefined)
-        throw new ApplicationRoleTemplatePreparationError(
-          "APPLICATION_ROLE_TEMPLATE_ACTIVE_REGISTRATION_UNAVAILABLE",
-        );
-
-      const evidence = await prepareDefinitionEvidence(
-        context,
-        applicationRootId,
-        initialSnapshot.applicationRelease.releaseRevision,
-      );
-      if (!registrationMatchesSnapshot(evidence.permissionRegistration, initialSnapshot))
-        throw evidenceError();
-      const candidate = buildCandidate(
-        {
-          kind: "current_active_registration",
-          registrationRevision: initialSnapshot.registrationRevision,
-        },
-        evidence.permissionRegistration,
-        evidence.application,
-      );
-
-      const permissions = uniqueSourcePermissions(candidate);
-      for (
-        let start = 0;
-        start < permissions.length;
-        start += applicationRoleTemplateFactReadBatchSize
-      ) {
-        const batch = permissions.slice(start, start + applicationRoleTemplateFactReadBatchSize);
-        let entries: readonly PermissionCatalogueEntry[];
-        try {
-          entries = await dependencies.permissionRegistryFacts.lookupMany(
-            batch.map((permission) => ({
-              organizationId: context.organizationId,
-              applicationRootId: permission.applicationRootId,
-              ownerKind: permission.ownerKind,
-              ownerId: permission.ownerId,
-              permissionId: permission.permission.permissionId,
-            })),
-          );
-        } catch (error) {
-          throw new ApplicationRoleTemplatePreparationError(
-            "APPLICATION_ROLE_TEMPLATE_ACTIVE_REGISTRATION_UNAVAILABLE",
-            { cause: error },
-          );
-        }
-        const found = new Map<string, string>();
-        for (const entry of entries) {
-          if (
-            entry.organizationId !== context.organizationId ||
-            entry.registrationRevision !== initialSnapshot.registrationRevision ||
-            entry.applicationRootId === undefined ||
-            entry.ownerKind === "platform" ||
-            entry.sourceRelease.kind === "platform_catalogue"
-          )
-            throw new ApplicationRoleTemplatePreparationError(
-              "APPLICATION_ROLE_TEMPLATE_ACTIVE_REGISTRATION_UNAVAILABLE",
-            );
-          found.set(
-            sourcePermissionIdentity({
-              applicationRootId: entry.applicationRootId,
-              ownerKind: entry.ownerKind,
-              ownerId: entry.ownerId,
-              permission: entry.permission,
-            }),
-            candidateEvidenceKey({
-              applicationRootId: entry.applicationRootId,
-              ownerKind: entry.ownerKind,
-              ownerId: entry.ownerId,
-              permission: entry.permission,
-              sourceRelease: entry.sourceRelease,
-              meaningFingerprint: entry.meaningFingerprint,
-            }),
-          );
-        }
-        for (const permission of batch)
-          if (found.get(sourcePermissionIdentity(permission)) !== candidateEvidenceKey(permission))
-            throw new ApplicationRoleTemplatePreparationError(
-              "APPLICATION_ROLE_TEMPLATE_ACTIVE_REGISTRATION_UNAVAILABLE",
-            );
-      }
-
-      let finalSnapshot: ApplicationPermissionCatalogueSnapshot | undefined;
-      try {
-        finalSnapshot = await dependencies.permissionRegistryFacts.readApplicationSnapshot({
-          organizationId: context.organizationId,
-          applicationRootId,
-        });
-      } catch (error) {
-        throw new ApplicationRoleTemplatePreparationError(
-          "APPLICATION_ROLE_TEMPLATE_ACTIVE_REGISTRATION_UNAVAILABLE",
-          { cause: error },
-        );
-      }
-      if (
-        finalSnapshot === undefined ||
-        canonicalJson(finalSnapshot) !== canonicalJson(initialSnapshot)
-      )
-        throw new ApplicationRoleTemplatePreparationError(
-          "APPLICATION_ROLE_TEMPLATE_ACTIVE_REGISTRATION_UNAVAILABLE",
-        );
-      return candidate;
     },
   });
 };

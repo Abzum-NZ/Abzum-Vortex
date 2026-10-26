@@ -125,15 +125,7 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
   const roleTemplates =
     humanDefinitionAccess !== undefined || dependencies.definitionReader === undefined
       ? undefined
-      : createApplicationRoleTemplateAdapter({
-          definitionReader: dependencies.definitionReader,
-          // Registration-candidate preparation reads only immutable Definition evidence; the live
-          // registry is read and locked by the Access coordinator inside the installer's transaction.
-          permissionRegistryFacts: {
-            lookupMany: () => Promise.reject(fail("APPLICATION_INSTALLATION_FAILED")),
-            readApplicationSnapshot: () => Promise.reject(fail("APPLICATION_INSTALLATION_FAILED")),
-          },
-        });
+      : createApplicationRoleTemplateAdapter({ definitionReader: dependencies.definitionReader });
 
   /**
    * Only registration changes hold Access exclusively. Storage and runtime reads hold it shared.
