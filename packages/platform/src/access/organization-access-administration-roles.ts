@@ -614,7 +614,7 @@ export const createAccessAdministrationRoleOperations = ({
           select organization_id, record_id, revision, attribute_values
           from vortex_access.list_organization_roles_projection(
             null, 'record_id', 'ascending',
-            ${afterRoleId === undefined ? null : JSON.stringify({ recordId: afterRoleId })}::jsonb,
+            ${afterRoleId === undefined ? null : JSON.stringify({ recordId: afterRoleId })}::text::jsonb,
             ${projectedPageSize}::integer, null
           )
         `;

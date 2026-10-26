@@ -106,7 +106,7 @@ export const createAccessAdministrationAssignmentOperations = ({
               afterRoleAssignmentId === undefined
                 ? null
                 : JSON.stringify({ recordId: afterRoleAssignmentId })
-            }::jsonb,
+            }::text::jsonb,
             ${projectedPageSize}::integer, null
           )
         `;
