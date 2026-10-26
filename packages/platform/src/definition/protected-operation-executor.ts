@@ -797,7 +797,7 @@ const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Obj
           role_name: value.assignment.role.label,
           assignee_name:
             value.assignment.assignee.kind === "organization_account"
-              ? value.assignment.assignee.displayName
+              ? (value.assignment.assignee.displayName ?? "This person")
               : value.assignment.assignee.label,
           revision: value.assignment.revision,
           access_version: value.accessVersion,

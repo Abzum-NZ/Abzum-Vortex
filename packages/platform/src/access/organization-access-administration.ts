@@ -556,7 +556,8 @@ export const organizationAdministrationAssignmentSubjectSchema = z.discriminated
     .object({
       kind: z.literal("organization_account"),
       organizationAccountId: organizationAccountIdSchema,
-      displayName: z.string().trim().min(1).max(120),
+      // A person who has just joined has no display name until they set their profile.
+      displayName: z.string().trim().min(1).max(120).optional(),
     })
     .strict(),
   z
