@@ -37,10 +37,7 @@ import { createHumanOrganizationRequestService } from "../access/human-organizat
 import { createRequestBoundTenantGovernanceService } from "../identity/tenant-governance-request-bound";
 import { createReferenceChoiceService } from "../queries/reference-choice-service";
 import { createViewerSafeRecordLinkReadService } from "../queries/viewer-safe-record-link-read";
-import {
-  createPageFormRequestAdapter,
-  createPrivateFormSubmitAdapter,
-} from "../pages/form-request";
+import { adaptPrivateFormSubmit } from "../pages/form-request";
 import { createPageSubjectReader } from "../pages/page-subject-read";
 import { logRecordsTableRequestRefusal } from "../pages/records-table-features";
 import { requireProjectedPlacement } from "../pages/projected-placement-gate";
@@ -1072,40 +1069,37 @@ export async function invokeInstalledFlow(
         ? {}
         : { selectedRecordReadProjections: installed.selectedRecordReadProjections }),
     };
-    // The Page request adapter forwards the exact evidence unchanged; the #544 interface is the
-    // only place that compares it with trusted state and consumes the single-use continuation.
-    const pageFormRequests = createPageFormRequestAdapter({
-      continuation: createFormContinuationService({
-        orchestrator: orchestratorFor(release, undefined, installed),
-        resolveInstallation: async ({ installation, flowId, node }) => {
-          // Another application is foreign, not stale: it gets the neutral refusal.
-          if (
-            installation.applicationRootId.toLowerCase() !==
-            installed.applicationRootId.toLowerCase()
-          ) {
-            logFlowRefusal("FORM_CONTINUATION_FOREIGN_APPLICATION");
-            return { kind: "unavailable" };
-          }
-          if (installation.installationReleaseRevision !== installed.installationRevision) {
-            logFlowRefusal("FORM_CONTINUATION_STALE_INSTALLATION");
-            return { kind: "stale" };
-          }
-          const flow = installed.flows.get(flowId);
-          if (flow === undefined) {
-            logFlowRefusal("FORM_CONTINUATION_FLOW_NOT_INSTALLED");
-            return { kind: "unavailable" };
-          }
-          if (node !== undefined && !declaresPausedNode(flow, node)) {
-            logFlowRefusal("FORM_CONTINUATION_NODE_NOT_DECLARED");
-            return { kind: "unavailable" };
-          }
-          return { kind: "current", releaseKey: installed.releaseKey };
-        },
-      }),
+    // The exact evidence goes to the #544 interface unchanged: it is the only place that compares
+    // it with trusted state and consumes the single-use continuation.
+    const formContinuation = createFormContinuationService({
+      orchestrator: orchestratorFor(release, undefined, installed),
+      resolveInstallation: async ({ installation, flowId, node }) => {
+        // Another application is foreign, not stale: it gets the neutral refusal.
+        if (
+          installation.applicationRootId.toLowerCase() !== installed.applicationRootId.toLowerCase()
+        ) {
+          logFlowRefusal("FORM_CONTINUATION_FOREIGN_APPLICATION");
+          return { kind: "unavailable" };
+        }
+        if (installation.installationReleaseRevision !== installed.installationRevision) {
+          logFlowRefusal("FORM_CONTINUATION_STALE_INSTALLATION");
+          return { kind: "stale" };
+        }
+        const flow = installed.flows.get(flowId);
+        if (flow === undefined) {
+          logFlowRefusal("FORM_CONTINUATION_FLOW_NOT_INSTALLED");
+          return { kind: "unavailable" };
+        }
+        if (node !== undefined && !declaresPausedNode(flow, node)) {
+          logFlowRefusal("FORM_CONTINUATION_NODE_NOT_DECLARED");
+          return { kind: "unavailable" };
+        }
+        return { kind: "current", releaseKey: installed.releaseKey };
+      },
     });
     const answer = request.answer;
     if (request.target.awaiting !== "form") {
-      if (answer.kind !== "submit") return pageFormRequests.resume(session, selection, request);
+      if (answer.kind !== "submit") return formContinuation.continue(session, selection, request);
       logFlowRefusal("FORM_CONTINUATION_SUBMIT_WITHOUT_FORM_PAUSE");
       return { kind: "refused", reason: "unavailable" };
     }
@@ -1142,7 +1136,7 @@ export async function invokeInstalledFlow(
       logFlowRefusal("FORM_CONTINUATION_FORM_NOT_PROJECTED");
       return { kind: "refused", reason: "unavailable" };
     }
-    if (answer.kind !== "submit") return pageFormRequests.resume(session, selection, request);
+    if (answer.kind !== "submit") return formContinuation.continue(session, selection, request);
     const values = await dependencies.resolveFormValues({
       service: referenceChoices,
       session,
@@ -1158,7 +1152,7 @@ export async function invokeInstalledFlow(
       logFlowRefusal("FORM_CONTINUATION_VALUES_NOT_RESOLVED");
       return { kind: "refused", reason: "unavailable" };
     }
-    return pageFormRequests.resume(session, selection, {
+    return formContinuation.continue(session, selection, {
       ...request,
       answer: { kind: "submit", values },
     });
@@ -1260,7 +1254,6 @@ export async function invokeInstalledFlow(
     }
   }
 
-  const adaptFormSubmit = createPrivateFormSubmitAdapter();
   const endpoint = createFlowBindingEndpoint({
     readInstallation:
       invocation.kind === "binding" ? async () => bindingInstallation : readInstalled,
@@ -1376,7 +1369,7 @@ export async function invokeInstalledFlow(
         if (resolved === undefined) return undefined;
         const adapterInputs: Record<string, unknown> = { ...callerInputs };
         delete adapterInputs.choiceEvidence;
-        const adaptedInputs = adaptFormSubmit(
+        const adaptedInputs = adaptPrivateFormSubmit(
           binding,
           { ...adapterInputs, values: resolved.values },
           subject,
@@ -1444,7 +1437,7 @@ export async function invokeInstalledFlow(
         return undefined;
       const resolved = await resolveValues(draft.values);
       if (resolved === undefined) return undefined;
-      const adaptedInputs = adaptFormSubmit(
+      const adaptedInputs = adaptPrivateFormSubmit(
         binding,
         {
           values: resolved.values,

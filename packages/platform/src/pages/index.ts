@@ -224,13 +224,9 @@ export {
   type PrivateFormContinuationResult,
 } from "./form-continuation";
 export {
-  createPageFormRequestAdapter,
-  createPrivateFormSubmitAdapter,
+  adaptPrivateFormSubmit,
   readPrivateFormSubmission,
-  type PageFormRequestAdapter,
-  type PageFormRequestDependencies,
   type PrivateFormSubmission,
-  type PrivateFormSubmitAdapter,
 } from "./form-request";
 export {
   buildQueryNoticeQueryBinding,
