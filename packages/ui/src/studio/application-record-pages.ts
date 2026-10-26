@@ -37,8 +37,8 @@ import {
  *
  * Nothing is generated at runtime: every block, query, flow, event and binding is written into the
  * draft by the one add-page, block, flow-create and binding paths, and can then be edited like any
- * other. A companion page that exists is linked both ways (adding the create form puts a New
- * button on the existing list); a companion that does not exist yet is named in the plan.
+ * other. A list includes its missing detail and create pages; existing companions are reused.
+ * Adding a companion separately connects it to the record type's existing pages.
  */
 
 export type StudioRecordPageKind = "list" | "detail" | "form_create" | "form_edit" | "guided";
@@ -1428,6 +1428,12 @@ export const addRecordPage = (
       `${resolved.record.plural_name} already have ${/^[aeiou]/.test(kindWords[command.type]) ? "an" : "a"} ${kindWords[command.type]}: ${quoted(existing.name)}. Open it in Structure and change it there.`,
     );
   const plan: Plan = { source: candidate, details: [], taken: takenIds(candidate) };
+  if (command.type === "list") {
+    const companionCommand = { ...command, addToMenu: false };
+    if (found.detail === undefined) addDetail(context, plan, resolved, companionCommand);
+    if (found.create === undefined && resolved.record.standard_actions.includes("create"))
+      addForm(context, plan, resolved, companionCommand, "create");
+  }
   const page =
     command.type === "list"
       ? addList(context, plan, resolved, command, listName)
