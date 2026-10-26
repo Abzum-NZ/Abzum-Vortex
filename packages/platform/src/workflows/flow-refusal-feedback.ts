@@ -71,10 +71,9 @@ const platformGuidanceCodes: ReadonlySet<string> = new Set<FlowRefusalFeedbackCo
 export const refusalKeepsPlatformGuidance = (code: string | undefined): boolean =>
   code !== undefined && platformGuidanceCodes.has(code);
 
-/** Definition-authored guidance and a page to open within the current organization. */
-export const flowRefusalPresentationSchema = z
+/** Definition-authored guidance for one refusal and a page to open within the current organization. */
+const authoredRefusalGuidanceSchema = z
   .object({
-    code: flowRefusalFeedbackCodeSchema,
     message: z.string().min(1).max(300),
     link_label: z.string().min(1).max(100),
     destination: z
@@ -82,6 +81,17 @@ export const flowRefusalPresentationSchema = z
       .strict(),
   })
   .strict();
+
+/** A protected operation call's `refusal_feedback`: the authored guidance for each refusal code. */
+export const flowRefusalGuidanceByCodeSchema = z.partialRecord(
+  flowRefusalFeedbackCodeSchema,
+  authoredRefusalGuidanceSchema,
+);
+
+/** The authored guidance a refusal carries, under the refusal's own code. */
+const flowRefusalPresentationSchema = authoredRefusalGuidanceSchema.extend({
+  code: flowRefusalFeedbackCodeSchema,
+});
 
 /** The closed reasons a submitted form field needs correcting. */
 export const flowFieldCorrectionCodeSchema = z.enum([
