@@ -973,15 +973,16 @@ const readAddressedActiveApplicationIdentity = async (
       if (scope.applicationRootId !== undefined)
         throw new Error("APPLICATION_ADDRESS_SCOPE_UNAVAILABLE");
       if (previewInstallationId !== undefined) {
-        const { createPreviewInstallationRepository } =
+        const { readPreviewApplicationIdentity } =
           await import("./preview-installation-repository");
         // A preview address names the preview; only a builder of its Application may open it.
-        const preview = await createPreviewInstallationRepository(transaction)
-          .readApplicationIdentity(previewInstallationId)
-          .catch((error: unknown) => {
-            logRefusal("application-address", "preview identity", "PREVIEW_ADDRESS_REFUSED", error);
-            return undefined;
-          });
+        const preview = await readPreviewApplicationIdentity(
+          transaction,
+          previewInstallationId,
+        ).catch((error: unknown) => {
+          logRefusal("application-address", "preview identity", "PREVIEW_ADDRESS_REFUSED", error);
+          return undefined;
+        });
         if (preview === undefined || !sameId(preview.organizationId, organizationId.data))
           return undefined;
         return {
@@ -1021,9 +1022,8 @@ const readAddressedActiveApplicationIdentity = async (
       session.data,
       { organizationId: organizationId.data, applicationRootId: identity.applicationRootId },
       async (transaction) => {
-        const { createPreviewInstallationRepository } =
-          await import("./preview-installation-repository");
-        await createPreviewInstallationRepository(transaction).reconcile(previewInstallationId);
+        const { reconcilePreviewInstallation } = await import("./preview-installation-repository");
+        await reconcilePreviewInstallation(transaction, previewInstallationId);
         return true;
       },
     );

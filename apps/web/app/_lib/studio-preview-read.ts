@@ -1,7 +1,7 @@
 import "server-only";
 
 import {
-  createPreviewInstallationRepository,
+  reconcilePreviewInstallation,
   type HumanOrganizationRequestDependencies,
   type InstalledRuntimeContext,
   type StoredApplicationDefinitionDraft,
@@ -100,9 +100,7 @@ export const openStudioPreviewRead = async (
         session,
         application,
         async (transaction) => {
-          await createPreviewInstallationRepository(transaction).reconcile(
-            preview.previewInstallationId,
-          );
+          await reconcilePreviewInstallation(transaction, preview.previewInstallationId);
           return true;
         },
       );

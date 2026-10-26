@@ -25,7 +25,11 @@ import {
   type PreviewSeedResult,
 } from "./preview-installation-contracts";
 import { readLiveHumanContext } from "../access/live-context";
-import { createPreviewInstallationRepository } from "./preview-installation-repository";
+import {
+  createPreviewInstallation,
+  refreshPreviewInstallation,
+  seedPreviewInstallation,
+} from "./preview-installation-repository";
 import type { PreviewReleasePlan } from "./preview-release-plan";
 import {
   addressPreviewInstallation,
@@ -235,8 +239,7 @@ export const createPreviewInstallationCoordinator = (
         session.data,
         { organizationId },
         applicationRootId,
-        (transaction) =>
-          createPreviewInstallationRepository(transaction).create(request.data, releases),
+        (transaction) => createPreviewInstallation(transaction, request.data, releases),
         signal,
       );
       const { previewInstallationId } = created;
@@ -283,7 +286,8 @@ export const createPreviewInstallationCoordinator = (
         { organizationId, applicationRootId },
         applicationRootId,
         async (transaction, _authority, context) => {
-          const seeded = await createPreviewInstallationRepository(transaction).seed(
+          const seeded = await seedPreviewInstallation(
+            transaction,
             previewInstallationId,
             request.data.demand,
           );
@@ -338,10 +342,7 @@ export const createPreviewInstallationCoordinator = (
         { organizationId, applicationRootId, previewInstallationId },
         applicationRootId,
         async (transaction) => {
-          const refreshed = await createPreviewInstallationRepository(transaction).refresh(
-            request.data,
-            releases,
-          );
+          const refreshed = await refreshPreviewInstallation(transaction, request.data, releases);
           await writePreviewRuntimeReleaseSet(
             transaction,
             dependencies.releaseCatalogue,
