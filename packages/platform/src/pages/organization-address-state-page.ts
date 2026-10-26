@@ -46,7 +46,7 @@ export const organizationAddressStatePage = (state: OrganizationAddressState): P
   pageDefinitionSchema.parse({
     type: "dashboard",
     pageId: statePageIds[state.key],
-    key: `organization_address_${state.key}`,
+    key: `address_${state.key}`,
     name: state.title,
     // Shown to any signed-in person; the state itself discloses nothing about the address.
     accessPermissionKey: "platform.organization.launcher.open",
