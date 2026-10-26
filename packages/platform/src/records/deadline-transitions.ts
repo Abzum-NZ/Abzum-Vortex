@@ -55,7 +55,8 @@ const dateAfter = (value: string): string | undefined => {
   return after.toISOString().slice(0, 10);
 };
 
-const localDate = (date: Date, timeZone: string): string | undefined => {
+/** The calendar date of an instant in a time zone, or undefined for an unknown zone. */
+export const localDate = (date: Date, timeZone: string): string | undefined => {
   try {
     const parts = new Intl.DateTimeFormat("en-CA", {
       timeZone,
@@ -69,6 +70,7 @@ const localDate = (date: Date, timeZone: string): string | undefined => {
     const month = value("month");
     const day = value("day");
     return year && month && day ? `${year}-${month}-${day}` : undefined;
+    // guard-allow: silent-catch Intl throws for an unknown time zone; the caller treats the date as unknown.
   } catch {
     return undefined;
   }

@@ -657,6 +657,7 @@ const canonicalLanguageTagSchema = z
   .refine((value) => {
     try {
       return Intl.getCanonicalLocales(value)[0] === value;
+      // guard-allow: silent-catch Intl throws for a malformed language tag; the refinement reports it as invalid input.
     } catch {
       return false;
     }

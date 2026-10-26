@@ -117,6 +117,7 @@ const getSavepointOperation = (
   try {
     const operation = (transaction as Partial<SavepointRequestDatabaseTransaction>).withSavepoint;
     return typeof operation === "function" ? operation : undefined;
+    // guard-allow: silent-catch A transaction object without a readable savepoint operation simply has none.
   } catch {
     return undefined;
   }

@@ -65,6 +65,7 @@ export const openToken = (
       decipher.final(),
     ]).toString("utf8");
     return { kind: "opened", payload: JSON.parse(text) };
+    // guard-allow: silent-catch Any decryption or parse failure means the token is not authentic and is refused.
   } catch {
     return { kind: "refused", cause: "token_not_authentic" };
   }

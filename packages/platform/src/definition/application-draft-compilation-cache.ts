@@ -182,6 +182,7 @@ export const compileApplicationDraftOnce = async (
   if (running !== undefined) {
     try {
       return await running;
+      // guard-allow: silent-catch A failed shared compilation is compiled again by this caller, which reports its own failure.
     } catch {
       return compile();
     }

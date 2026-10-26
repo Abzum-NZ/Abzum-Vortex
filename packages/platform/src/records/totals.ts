@@ -456,6 +456,7 @@ export const evaluateRecordTotals = (
             })
           )
             continue;
+          // guard-allow: silent-catch A condition that cannot be evaluated is reported as a refused total.
         } catch {
           fieldIssue = issue("condition_refused", field.fieldId);
           break;
