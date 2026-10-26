@@ -3,7 +3,7 @@ import { withPageReadAttribution } from "../../../../_lib/page-read-attribution"
 
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
-import { notFound, redirect } from "next/navigation";
+import { redirect } from "next/navigation";
 import { splitProjectedPage } from "@vortex/platform/schema";
 import type { ApplicationAccount, DisplaySemanticEvent } from "@vortex/ui";
 import { DEFAULT_PLATFORM_THEME_RELEASE, DefinitionError } from "@vortex/platform/server";
@@ -12,11 +12,9 @@ import { ApplicationExperiencePage } from "./_components/application-experience-
 import { ApplicationPageView } from "./_components/application-page-view";
 import { BarePage } from "../_components/bare-page";
 import {
-  PageNotOpenAddress,
-  PreviewNotRunnableAddress,
-  suspendedOrganizationAccount,
-  TemporarilyUnavailableAddress,
-  unavailableAddress,
+  OrganizationAddressState,
+  PageSubjectNotFound,
+  SignInTemporarilyUnavailable,
 } from "../../_components/address-states";
 import {
   applicationLauncherEventIds,
@@ -193,12 +191,29 @@ async function readApplicationAddressPage({ params, searchParams }: ApplicationA
   if (identity.kind === "temporarily_unavailable")
     return (
       <BarePage>
-        <TemporarilyUnavailableAddress retryHref={retryHref} />
+        <SignInTemporarilyUnavailable retryHref={retryHref} />
       </BarePage>
     );
 
   if (email === undefined) throw new Error("Active identity session resolved without an email");
-  if (pageSegments.length > 1) return <BarePage>{unavailableAddress}</BarePage>;
+  const context = { session: identity.session, email, tenantShortName, organizationShortName };
+  const temporarilyUnavailable = (
+    <BarePage>
+      <OrganizationAddressState
+        context={context}
+        state={{ kind: "temporarily_unavailable", retryHref }}
+      />
+    </BarePage>
+  );
+  if (pageSegments.length > 1)
+    return (
+      <BarePage>
+        <OrganizationAddressState
+          context={context}
+          state={{ kind: "unavailable", back: "organization" }}
+        />
+      </BarePage>
+    );
 
   const resolved = await resolveApplicationAddress(
     identity.session,
@@ -207,14 +222,13 @@ async function readApplicationAddressPage({ params, searchParams }: ApplicationA
     applicationKey,
     pageSegments[0],
   );
-  if (resolved.kind === "temporarily_unavailable")
+  if (resolved.kind === "temporarily_unavailable") return temporarilyUnavailable;
+  if (resolved.kind === "suspended_super_administrator_account")
     return (
       <BarePage>
-        <TemporarilyUnavailableAddress retryHref={retryHref} />
+        <OrganizationAddressState context={context} state={{ kind: "suspended" }} />
       </BarePage>
     );
-  if (resolved.kind === "suspended_super_administrator_account")
-    return <BarePage>{suspendedOrganizationAccount}</BarePage>;
 
   if (resolved.kind !== "application_page") {
     // A refused page and a missing page of an application the viewer may open both show that
@@ -226,19 +240,23 @@ async function readApplicationAddressPage({ params, searchParams }: ApplicationA
     if (experience === undefined)
       return (
         <BarePage>
-          {permitted === undefined ? (
-            unavailableAddress
-          ) : (
-            <PageNotOpenAddress
-              applicationName={permitted.name}
-              homeHref={addressPath(
-                tenantShortName,
-                organizationShortName,
-                permitted.key,
-                permitted.homePageKey,
-              )}
-            />
-          )}
+          <OrganizationAddressState
+            context={context}
+            state={
+              permitted === undefined
+                ? { kind: "unavailable", back: "organization" }
+                : {
+                    kind: "page_not_open",
+                    applicationName: permitted.name,
+                    homeHref: addressPath(
+                      tenantShortName,
+                      organizationShortName,
+                      permitted.key,
+                      permitted.homePageKey,
+                    ),
+                  }
+            }
+          />
         </BarePage>
       );
     const launcher = await loadOrganizationLauncher(identity.session);
@@ -304,23 +322,35 @@ async function readApplicationAddressPage({ params, searchParams }: ApplicationA
       includeNavigation: (await headers()).get("rsc") === "1",
     },
   );
-  if (page.kind === "temporarily_unavailable")
-    return (
-      <BarePage>
-        <TemporarilyUnavailableAddress retryHref={retryHref} />
-      </BarePage>
-    );
+  if (page.kind === "temporarily_unavailable") return temporarilyUnavailable;
   if (page.kind === "not_runnable")
     return (
       <BarePage>
-        <PreviewNotRunnableAddress
-          sentence={page.sentence}
-          // Only a draft preview, which always has its installed context, cannot run.
-          studioHref={`/studio/${encodeURIComponent(resolved.installedContext!.organizationId)}/${encodeURIComponent(resolved.application.applicationRootId)}`}
+        <OrganizationAddressState
+          context={context}
+          state={{
+            kind: "preview_not_runnable",
+            sentence: page.sentence,
+            // Only a draft preview, which always has its installed context, cannot run.
+            studioHref: `/studio/${encodeURIComponent(resolved.installedContext!.organizationId)}/${encodeURIComponent(resolved.application.applicationRootId)}`,
+          }}
         />
       </BarePage>
     );
-  if (page.kind === "unavailable") notFound();
+  // The page exists and may be opened, but its addressed record or parameters cannot be shown: the
+  // state renders inside the application frame, which stays mounted around the page.
+  if (page.kind === "unavailable")
+    return (
+      <PageSubjectNotFound
+        applicationName={resolved.application.name}
+        homeHref={addressPath(
+          tenantShortName,
+          organizationShortName,
+          resolved.application.key,
+          resolved.application.homePageKey,
+        )}
+      />
+    );
 
   const launcherEvents = applicationLauncherEventIds(page.model.page.composition);
   async function openApplication(event: DisplaySemanticEvent): Promise<void> {

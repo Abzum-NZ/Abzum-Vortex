@@ -21,6 +21,11 @@ export {
   organizationLauncherPlacementId,
   organizationLauncherShell,
 } from "./organization-launcher-page";
+export {
+  organizationAddressStateActionPlacementId,
+  organizationAddressStatePage,
+  type OrganizationAddressState,
+} from "./organization-address-state-page";
 
 export {
   createAuthenticatedPageCapabilityService,

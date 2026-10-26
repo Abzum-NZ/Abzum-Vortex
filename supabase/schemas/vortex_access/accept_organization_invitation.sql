@@ -7,6 +7,7 @@ declare
   invitation vortex_identity.organization_invitations%rowtype;
   accepted record;
   resulting_version bigint;
+  member_role record;
 begin
   if p_invitation_id is null
     or not vortex_platform.is_non_nil_uuid(p_invitation_id::text)
@@ -115,6 +116,59 @@ begin
         when 'reactivated' then 'organization_account_reactivated'
       end
     ) as incremented;
+
+    -- Every member can open the organisation's default application: an account that becomes
+    -- active through an invitation is given that application's default member role, under the
+    -- invitation of the person who invited them.
+    select role.role_id, role.live_revision into member_role
+    from vortex_identity.organization_runtime_settings as settings
+    join vortex_access.organization_roles as role
+      on role.organization_id = settings.organization_id
+      and role.application_root_id = settings.default_application_root_id
+      and role.role_kind = 'application'
+    join vortex_access.organization_role_revisions as revision
+      on revision.organization_id = role.organization_id
+      and revision.role_id = role.role_id
+      and revision.revision = role.live_revision
+    where settings.organization_id = accepted.organization_id
+      and revision.lifecycle = 'active'
+      and revision.assignment_policy = 'standing'
+      and exists (
+        select 1
+        from vortex_definition.installation_bindings as binding
+        join vortex_definition.releases as release
+          on release.root_id = binding.application_root_id
+          and release.release_revision = binding.application_release_revision
+        cross join lateral pg_catalog.jsonb_array_elements(
+          release.compilation_output -> 'canonical' -> 'content' -> 'roles'
+        ) as release_role
+        where binding.organization_id = settings.organization_id
+          and binding.application_root_id = settings.default_application_root_id
+          and binding.state = 'active'
+          and release_role ->> 'defaultMember' = 'true'
+          and release_role ->> 'roleId' = role.source_role_id::text
+      )
+      and not exists (
+        select 1
+        from vortex_access.organization_role_assignments as assignment
+        where assignment.organization_id = role.organization_id
+          and assignment.role_id = role.role_id
+          and assignment.assignee_kind = 'organization_account'
+          and assignment.organization_account_id = accepted.organization_account_id
+          and assignment.state = 'live'
+      )
+    for update of role;
+
+    if found then
+      select changed.access_version into resulting_version
+      from vortex_access.coordinate_organization_role_assignment_change(
+        'grant', accepted.organization_id, pg_catalog.gen_random_uuid(), null,
+        member_role.role_id, member_role.live_revision, 'organization_account',
+        accepted.organization_account_id, null, 'standing',
+        pg_catalog.clock_timestamp(), null,
+        invitation.invited_by_organization_account_id, p_correlation_id
+      ) as changed;
+    end if;
   elsif accepted.outcome in ('accepted', 'already_accepted') then
     select version.current_version into resulting_version
     from vortex_access.organization_access_versions as version
