@@ -26,9 +26,9 @@ import {
 } from "./records-table-state";
 
 /*
- * The ready values of a Records table block. The server types the page it reads with these schemas
- * and the browser parses the payload with the same ones; the page runtime adds only the selection
- * scope, bulk run, export, action availability, held selection and requested sort it follows.
+ * The ready values of a Records table block. The server validates its page with these schemas;
+ * the browser checks its envelope and renders it. The page runtime adds only the selection scope,
+ * bulk run, export, action availability, held selection and requested sort it follows.
  */
 
 const wholeCountSchema = z.number().int().nonnegative();
