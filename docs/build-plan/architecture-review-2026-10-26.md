@@ -85,7 +85,7 @@ Status: **Fixed** (merged with #3584, commit named), **Batch 2** (ARCH, `arch-ba
 
 ## Review of #3584 (RV-3584: 0 blocking, 9 should-fix, 26 nits)
 
-All 35 are fixed on `arch-batch`; the database ones in migration 20261026120000.
+All 35 are fixed on `arch-batch`; the database ones in migration 20261026120000. Walked on db3 `:3630` after setup republished the shipped applications: S4 (a second invitation is refused, one pending row), S7, S8 (summary first, focus on the first field), N11, N17 (one h1 and one `main` per page; Studio offers levels 2 to 4), N18 ("open for 11 more days"), N19 (joining a closed invitation says why), N20 (Escape keeps the dialog and says how to leave), N21, N22. Scripts and screenshots: `task-5/arch/walk/rv3584*.mjs`, `walk/out/rv-*.png`.
 
 | Id | Change |
 |---|---|
