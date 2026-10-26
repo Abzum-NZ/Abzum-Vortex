@@ -2696,7 +2696,7 @@
   "TABLE_BLOCK_RELEASE": {
     "blockId": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
     "key": "platform.display.table",
-    "releaseVersion": "2.1.0",
+    "releaseVersion": "2.0.0",
     "name": "Data grid",
     "description": "Records in rows and columns, with sorting, search, filters and row actions.",
     "icon": "table",
