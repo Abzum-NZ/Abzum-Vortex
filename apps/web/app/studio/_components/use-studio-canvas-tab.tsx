@@ -1,7 +1,7 @@
 "use client";
 import { useIntentPreload } from "../_lib/use-intent-preload";
 import dynamic from "next/dynamic";
-import { Suspense, useCallback, useMemo, useRef, useState, type ReactNode } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   applicationSourceDocumentSchema,
   describeFailure,
@@ -170,7 +170,7 @@ export function useStudioCanvasTab({
   const [querySheet, setQuerySheet] = useState<Readonly<{
     use: (reference: string) => void;
   }> | null>(null);
-  const [canvasZoom, setCanvasZoom] = useState<StudioCanvasZoom>(100);
+  const [canvasZoom, setCanvasZoom] = useState<StudioCanvasZoom>("fit");
   const [breakpoint, setBreakpoint] = useState<StudioCanvasBreakpoint>("desktop");
   // The canvas previews the application in light or dark; the running application keeps its own toggle.
   const [appearance, setAppearance] = useState<"light" | "dark">("light");
@@ -275,6 +275,35 @@ export function useStudioCanvasTab({
     canvasPageAlias === undefined
       ? undefined
       : source.body.pages.find((page) => page.id === canvasPageAlias);
+  const addressRestored = useRef(false);
+  useEffect(() => {
+    const restore = () => {
+      const url = new URL(window.location.href);
+      const page = source.body.pages.find((entry) => entry.key === url.searchParams.get("page"));
+      if (page === undefined) return;
+      const block = url.searchParams.get("block");
+      const owner = block === null ? undefined : placementOwners.get(block);
+      draft.select(
+        block !== null &&
+          (owner?.kind === "shell" || (owner?.kind === "page" && owner.pageAlias === page.id))
+          ? { kind: "placement", placementAlias: block }
+          : { kind: "page", pageAlias: page.id },
+      );
+    };
+    if (!addressRestored.current) {
+      addressRestored.current = true;
+      restore();
+    } else if (canvasPage !== undefined) {
+      const url = new URL(window.location.href);
+      url.searchParams.set("page", canvasPage.key);
+      if (selected?.kind === "placement") url.searchParams.set("block", selected.placementAlias);
+      else url.searchParams.delete("block");
+      if (url.href !== window.location.href)
+        window.history.replaceState(window.history.state, "", url);
+    }
+    window.addEventListener("popstate", restore);
+    return () => window.removeEventListener("popstate", restore);
+  }, [canvasPage, selected, source, placementOwners, draft.select]);
   const canvasPageRef = useRef(canvasPage?.id);
   canvasPageRef.current = canvasPage?.id;
   // New blocks go to the selected layout, otherwise to the page on the canvas.
