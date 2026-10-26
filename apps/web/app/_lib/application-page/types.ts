@@ -191,6 +191,11 @@ export type ApplicationPageLoaderAddress = Readonly<{
    * of reading the bundle a second time.
    */
   installedContext?: InstalledRuntimeContext;
+  /**
+   * The application navigation the address resolution of this request decided for the viewer.
+   * A whole-page load shows it; a placement read shows no menu.
+   */
+  navigation?: ProjectedNavigation;
 }>;
 
 export type SearchParameters = Readonly<Record<string, string | readonly string[] | undefined>>;

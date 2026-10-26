@@ -1,7 +1,9 @@
 import "server-only";
 
 import type { z } from "zod";
+import type { SelectedOrganizationScope } from "../access/identity-access";
 import type { JsonValue } from "../catalogue/common";
+import type { RequestDatabaseTransaction } from "../db/request-transaction";
 import type { BlockPropertyValueContract } from "../definition/application-composition/block-property-values";
 import {
   readRecordDetailContract,
@@ -63,6 +65,16 @@ export type ProjectedRecordLinks = ReadonlyMap<string, ProjectedRecordLink>;
 export type RecordLinkResolver = (
   links: readonly RecordLinkReference[],
 ) => Promise<ProjectedRecordLinks | undefined>;
+
+/**
+ * Reads the labels of the linked records one read returned inside that read's own HUMAN request
+ * transaction, so the titles take no request of their own. A failure fails the read it rides on.
+ */
+export type RecordLinkTitler = (
+  transaction: RequestDatabaseTransaction,
+  scope: SelectedOrganizationScope,
+  links: readonly RecordLinkReference[],
+) => Promise<ProjectedRecordLinks>;
 
 /** The distinct linked records among the given stored values. */
 export const collectRecordLinkValues = (

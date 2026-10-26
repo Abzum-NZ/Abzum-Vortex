@@ -14,7 +14,7 @@ import {
 } from "@vortex/platform/server";
 import { loadPermittedApplicationsAtAddress } from "./organization-context";
 import { getIdentityAuthorityConfiguration } from "../auth/_lib/authority-configuration";
-import type { IdentitySession } from "@vortex/platform/schema";
+import type { IdentitySession, ProjectedNavigation } from "@vortex/platform/schema";
 import { platformPermissionSource } from "./platform-permission-source";
 import { mapWebError } from "./web-error-mapper";
 import { attributePageReadScope } from "./page-read-attribution";
@@ -50,6 +50,11 @@ type ApplicationAddressResult =
        * application against. The page loader reuses it instead of reading the bundle again.
        */
       installedContext?: InstalledRuntimeContext;
+      /**
+       * The application navigation the viewer may see, decided in the address request's own batch
+       * with the page's access; absent for a placement refresh, which shows no menu.
+       */
+      navigation?: ProjectedNavigation;
     }>;
 
 // One addressed read per server render: the layout and the page of one request share it.
@@ -136,6 +141,7 @@ export const resolveApplicationAddress = cache(
       application: resolved.application,
       pageKey: resolved.pageKey,
       ...(addressed.context === undefined ? {} : { installedContext: addressed.context }),
+      ...(addressed.navigation === undefined ? {} : { navigation: addressed.navigation }),
     };
   },
 );

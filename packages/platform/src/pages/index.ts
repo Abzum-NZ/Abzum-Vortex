@@ -76,12 +76,6 @@ export {
   type StoredPageCapabilityDependencies,
   type StoredPageCapabilitySelection,
 } from "./stored-page-capability";
-export {
-  createStoredNavigationProjectionService,
-  type FixedAuthenticatedNavigationProjection,
-  type NavigationPermissionBinding,
-  type StoredNavigationProjectionDependencies,
-} from "./navigation-projection";
 export { recordLinkLabelKey } from "../definition/app-index";
 export {
   projectRecordDetailData,
@@ -95,6 +89,7 @@ export {
   type ProjectedRecordDetailValues,
   type ProjectedRecordLinks,
   type RecordLinkResolver,
+  type RecordLinkTitler,
   type TableFieldColumn,
   type ProjectedTableGroup,
   type ProjectedTableGroups,

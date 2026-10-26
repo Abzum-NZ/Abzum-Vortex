@@ -129,6 +129,7 @@ export const createFlowInvocationHandler =
               read: address.read,
               application: address.application,
               pageKey: guided.pageKey,
+              ...(address.navigation === undefined ? {} : { navigation: address.navigation }),
             },
             subject === undefined ? {} : { record_id: subject.recordId },
           );
