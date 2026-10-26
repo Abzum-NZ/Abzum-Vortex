@@ -177,37 +177,31 @@ export const recordsTableTotalsFeature: RecordsTableFeatureDefinition<
     if (state.measures.length < 1 || state.measures.length > 6)
       return featureNotPossible(
         featureRefusal,
-        "Choose between one and six measures for this grid.",
+        state.measures.length === 0
+          ? "Choose the column to add up."
+          : "Choose at most six columns to total.",
       );
     const keys = new Set<string>();
+    const reasons: string[] = [];
     for (const measure of state.measures) {
       const field = factsOf(facts, measure.field);
       if (
         field === undefined ||
         !facts.columnFieldIds.some((column) => column.toLowerCase() === measure.field.toLowerCase())
-      )
-        return featureNotPossible(
-          featureRefusal,
-          "Each total needs a column the bound query reads.",
-        );
+      ) {
+        reasons.push("Each total needs a column the bound query reads.");
+        continue;
+      }
       if (!recordsTableAggregateSupportsType(measure.operation, field.type))
-        return featureNotPossible(
-          featureRefusal,
+        reasons.push(
           `Choose a stored number or money field for ${field.label}, or use Count on a stored field.`,
         );
       if (measure.operation === "distinct_count" && !field.filterable)
-        return featureNotPossible(
-          featureRefusal,
-          `Distinct count needs ${field.label} to be filterable.`,
-        );
+        reasons.push(`Distinct count needs ${field.label} to be filterable.`);
       const key = `${measure.field.toLowerCase()}:${measure.operation}`;
-      if (keys.has(key))
-        return featureNotPossible(
-          featureRefusal,
-          "Each column and operation can be totalled once.",
-        );
+      if (keys.has(key)) reasons.push("Each column and operation can be totalled once.");
       keys.add(key);
     }
-    return featureAvailable;
+    return reasons.length === 0 ? featureAvailable : featureNotPossible(featureRefusal, reasons);
   },
 };

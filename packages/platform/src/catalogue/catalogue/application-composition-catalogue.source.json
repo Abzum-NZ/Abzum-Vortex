@@ -2696,7 +2696,7 @@
   "TABLE_BLOCK_RELEASE": {
     "blockId": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
     "key": "platform.display.table",
-    "releaseVersion": "2.0.0",
+    "releaseVersion": "2.1.0",
     "name": "Data grid",
     "description": "Records in rows and columns, with sorting, search, filters and row actions.",
     "icon": "table",
@@ -3157,7 +3157,7 @@
         "kind": "group",
         "key": "row_click",
         "label": "Row click",
-        "help": "What clicking a row does; the click is held as a binding to a flow, which decides whether it opens the record page, opens a panel or runs another flow",
+        "help": "Run a bound workflow, or open the selected record in a Drawer containing its record details. Studio creates the side sheet when you choose it.",
         "required": false,
         "properties": [
           {
@@ -3176,7 +3176,7 @@
               },
               {
                 "key": "select",
-                "label": "Select record"
+                "label": "Open the record in a side sheet"
               }
             ]
           },

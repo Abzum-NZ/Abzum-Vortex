@@ -167,7 +167,7 @@ const featureSettings = {
 const featureRefusal: GridFeatureRefusal = {
   code: "definition_records_table_column_filters",
   order: 37,
-  message: "Column filters need a field the query can filter by.",
+  message: "Add a field to filter by.",
   guidance:
     "Choose stored fields the bound query selects and its record type allows filtering by, or turn Column filters off.",
 };
@@ -250,11 +250,11 @@ export const recordsTableColumnFiltersFeature: RecordsTableFeatureDefinition<
         ? featureAvailable
         : featureNotPossible(featureRefusal);
     if (state.fields.length === 0) return featureNotPossible(featureRefusal);
-    for (const field of state.fields) {
+    const reasons = state.fields.flatMap((field) => {
       const refusal = fieldRefusal(facts, field);
-      if (refusal !== undefined) return refusal;
-    }
-    return featureAvailable;
+      return refusal?.kind === "not_possible" ? [refusal.reason] : [];
+    });
+    return reasons.length === 0 ? featureAvailable : featureNotPossible(featureRefusal, reasons);
   },
 };
 

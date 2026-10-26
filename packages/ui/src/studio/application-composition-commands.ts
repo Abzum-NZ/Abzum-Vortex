@@ -13,7 +13,8 @@ import {
   repeatableSlotKey,
   isRepeatableSlotIdentity,
   conditionalFormatRuleFields,
-  recordsTableFeaturesOrLog,
+  readRecordsTableFeatures,
+  recordsTableInlineEditFeature,
   type ApplicationSourceDocument,
   type PlatformBlockRelease,
   type SourceBlockPropertyValueContract,
@@ -28,11 +29,16 @@ import {
 } from "./board-source";
 import { applyStudioFlowCreate } from "./application-flow-create";
 import { ensureStudioBoardQuickAdd } from "./board-quick-add";
+import { StructureRefusal } from "./application-structure-common";
+import { resolveStudioDataQuery } from "./default-record-query";
+import { ensureStudioRecordSheet } from "./application-record-sheet";
+import { placed } from "./application-record-pages";
 import { studioLayoutOutletPlacementUses } from "./application-layout-outlets";
 import { createStudioDiscoveryAdapter } from "./discovery-adapter";
 import {
   studioOwnsSetting,
   studioQueryOffered,
+  studioQueryChoices,
   studioReleaseReadsQuery,
 } from "./contextual-palette";
 import {
@@ -44,7 +50,7 @@ import {
   removeFlowBindingsOf,
 } from "./stored-composition";
 import { studioFormChangeRefusal, studioFormShapeRefusal } from "./application-composition-forms";
-import { restoreStudioGridFeatureBindings } from "./grid-features";
+import { restoreStudioGridFeatureBindings, studioGridDataSettings } from "./grid-features";
 import type { StudioSemanticSelection } from "./semantic-selection";
 import type {
   StudioCompositionBreakpoint,
@@ -343,7 +349,29 @@ const applySettings = (
   for (const [key, value] of Object.entries(stored))
     if (studioOwnsSetting(key)) settings[key] = value;
   restoreStudioGridFeatureBindings(settings, release.properties, source.body.flow_bindings, alias);
-  let query = input.query;
+  let query = resolveStudioDataQuery(source, input.query as string | null);
+  const storedQuery = target.item.props.vortex.query ?? null;
+  if (query !== storedQuery) {
+    const choices = studioQueryChoices(source, current.borrowed);
+    const { title, ...data } = studioGridDataSettings(
+      release.properties,
+      choices.find((choice) => choice.reference === query),
+    );
+    Object.assign(settings, data);
+    // The title follows the data only while it is the previous data's default and no Heading
+    // directly above the grid already names it.
+    const previous = choices.find((choice) => choice.reference === storedQuery);
+    const holder = placed(source, alias);
+    const above = holder?.siblings[holder.siblings.indexOf(holder.item) - 1];
+    const authored = stored["title"];
+    if (
+      title !== undefined &&
+      above?.type !== "platform.renderer.heading" &&
+      (authored === undefined ||
+        (authored.kind === "text" && authored.value === previous?.recordTypePluralLabel))
+    )
+      settings["title"] = title;
+  }
   if (
     query !== null &&
     (!readsQuery(release, target.item) || !studioQueryOffered(source, current.borrowed, query))
@@ -353,10 +381,9 @@ const applySettings = (
   // pipeline binds the grid to the query that groups by it (an existing one, or a new one written
   // like any other query, editable in Data); every other board setting is judged against it.
   const board = boardModeOf(settings);
-  const formatting = recordsTableFeaturesOrLog(
-    settings["features"] as never,
-    "studio board rules",
-  )?.conditionalFormatting;
+  const readFeatures = readRecordsTableFeatures(settings["features"] as never);
+  const formatting =
+    readFeatures.kind === "read" ? readFeatures.features.conditionalFormatting : undefined;
   const ruleFields =
     board !== undefined && formatting?.enabled
       ? [
@@ -382,6 +409,11 @@ const applySettings = (
     query = made.query;
   }
   if (board !== undefined && query !== null) ensureStudioBoardTotals(source, board, query);
+  const rowClick = settings.row_click;
+  const sideSheet =
+    rowClick?.kind === "group" &&
+    rowClick.properties.mode?.kind === "choice" &&
+    rowClick.properties.mode.value === "select";
   try {
     const working = workingCopy(target.region);
     const item = workingItem(working, target.steps, alias);
@@ -398,6 +430,7 @@ const applySettings = (
         reason: `${release.name} can't take these settings. ${slotProblem}.`,
       };
     commitWorking(current.catalogue, target.region, working);
+    if (sideSheet) ensureStudioRecordSheet(current.catalogue, source, alias);
     validateStoredApplicationOutlets(current.catalogue, source);
   } catch (error) {
     if (error instanceof StoredCompositionRefusal) {
@@ -441,6 +474,33 @@ const applySettings = (
     const added = ensureStudioBoardQuickAdd(flowed, alias, board);
     if (added.kind === "refused") return added;
     flowed = added.source;
+  }
+  if (
+    readFeatures.kind === "read" &&
+    readFeatures.features.inlineEdit.enabled &&
+    query !== null &&
+    !flowed.body.flow_bindings.some(
+      (binding) => binding.control === alias && binding.event === recordsTableInlineEditFeature.key,
+    )
+  ) {
+    const chosen = studioQueryChoices(flowed, current.borrowed).find(
+      (entry) => entry.reference === query,
+    );
+    if (chosen === undefined)
+      return { kind: "refused", reason: "Inline editing: choose the grid's data first." };
+    const made = applyStudioFlowCreate(
+      flowed,
+      {
+        kind: "action",
+        controlAlias: alias,
+        name: `Save ${chosen.recordTypeLabel.toLowerCase()} (${alias})`,
+        recordType: chosen.recordType,
+        event: recordsTableInlineEditFeature.key,
+      },
+      current.borrowed,
+    );
+    if (made.kind !== "applied") return made;
+    flowed = made.source;
   }
   if (flowed !== source) return { kind: "applied", source: flowed };
   const parsed = applicationSourceDocumentSchema.parse(source);
@@ -829,7 +889,7 @@ export const applyStudioCompositionCommand = (
     return { kind: "applied", source: parsed };
   } catch (error) {
     console.error("[studio] composition command could not be applied", error);
-    if (error instanceof StoredCompositionRefusal)
+    if (error instanceof StoredCompositionRefusal || error instanceof StructureRefusal)
       return { kind: "refused", reason: error.message };
     return { kind: "invalid" };
   }

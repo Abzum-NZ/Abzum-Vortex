@@ -12,7 +12,6 @@ import {
   StoredCompositionRefusal,
   removeFlowBindingsOf,
   validateStoredShell,
-  validateStoredZone,
 } from "./stored-composition";
 import {
   studioPlacementRemovalReference,
@@ -43,6 +42,7 @@ import {
 import { addRecordPage, type StudioRecordPageCommand } from "./application-record-pages";
 import { movePage, type StudioPageLayoutCommand } from "./application-page-layout";
 import { editLayoutOutlet, type StudioLayoutOutletCommand } from "./application-layout-outlets";
+import { applyStudioMenuCommand } from "./application-menu-commands";
 export {
   studioLayoutOutletTargets,
   studioLayoutOutletPlacementUses,
@@ -362,7 +362,8 @@ const addShell = (
 /**
  * A new application's starting frame, written into its definition: one layout with the
  * application menu (list pages added later go in it, and leave it when removed), and the home page
- * in that layout with a text saying what to do next. New pages start in the home page's layout.
+ * in that layout and in its menu. Authoring guidance belongs to the canvas, not the page source.
+ * New pages start in the home page's layout.
  */
 export const studioStarterFrame = (
   catalogue: ImmutablePlatformBlockCatalogue,
@@ -372,38 +373,20 @@ export const studioStarterFrame = (
   | Readonly<{ kind: "refused"; message: string }> => {
   try {
     const candidate = applicationSourceDocumentSchema.parse(structuredClone(source));
+    candidate.body.icon = "blocks";
     const shell = placeMenuShell(catalogue, candidate, "Main layout");
     const home = candidate.body.pages.find((page) => page.key === candidate.body.home_page);
     if (home === undefined)
       return refuse("The application's home page is missing, so it has no frame to start in.");
-    const text = blockRelease(catalogue, PLATFORM_BLOCK_RELEASE_IDENTITIES.TEXT_BLOCK_RELEASE);
-    if (text === undefined)
-      return refuse("The block catalogue has no text block for the home page.");
-    const items = [
-      blockItem(
-        text,
-        "home_next_steps",
-        {
-          title: `Welcome to ${candidate.body.name}`.slice(0, 120),
-          text:
-            "This application has nothing to show yet. To build it, open it in Studio: add a record type in Data, " +
-            "then add a List page for it in Structure. Each list page gets an entry in the menu. " +
-            "Replace this text with your own home page when you are ready.",
-        },
-        {},
-      ),
-    ];
-    try {
-      validateStoredZone(catalogue, { items });
-    } catch (error) {
-      if (!(error instanceof StoredCompositionRefusal)) throw error;
-      console.error("[studio] starter home page refused", error.message);
-      refuse("The home page could not be built from the block catalogue.");
-    }
     const composition = emptyPageData(candidate, shell.id);
-    (composition.root.props as Record<string, unknown>)[shell.content_slots[0]!.id] = items;
     home.composition = composition as unknown as Page["composition"];
-    return { kind: "applied", source: judged(candidate) };
+    const menu = applyStudioMenuCommand(judged(candidate), {
+      kind: "add_entry",
+      pageKey: home.key,
+      headingAlias: null,
+    });
+    if (menu.kind === "refused") return menu;
+    return { kind: "applied", source: menu.source };
   } catch (error) {
     if (error instanceof StructureRefusal) return { kind: "refused", message: error.message };
     throw error;
