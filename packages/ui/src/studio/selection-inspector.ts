@@ -7,6 +7,7 @@ import {
   type ApplicationSourceDocument,
   type SourceItem,
   type SourcePageData,
+  isRecord,
 } from "@vortex/platform/schema";
 import { studioFlowLabel, studioFlowTaskEntries, type StudioSemanticSelection } from "./semantic-selection";
 
@@ -60,8 +61,6 @@ const refused = (
   reason: Extract<StudioSelectionInspectorResolution, { status: "refused" }>["reason"],
 ): StudioSelectionInspectorResolution => result({ status: "refused", reason });
 
-const isObjectRecord = (value: unknown): value is Record<string, unknown> =>
-  value !== null && typeof value === "object" && !Array.isArray(value);
 
 const hasExactKeys = (value: Record<string, unknown>, expected: readonly string[]): boolean => {
   const actual = Reflect.ownKeys(value);
@@ -75,7 +74,7 @@ const parseSelection = (
   selection: unknown,
 ): ParsedSelection | null | undefined => {
   if (selection === null) return null;
-  if (!isObjectRecord(selection)) return undefined;
+  if (!isRecord(selection)) return undefined;
 
   switch (selection.kind) {
     case "application": {
@@ -207,7 +206,7 @@ export const resolveStudioSelectionInspectorContext = (
   selection: StudioSemanticSelection | null,
 ): StudioSelectionInspectorResolution => {
   try {
-    if (!isObjectRecord(draft)) return refused("invalid_context");
+    if (!isRecord(draft)) return refused("invalid_context");
     const parsedRoot = applicationRootIdSchema.safeParse(draft.rootId);
     if (!parsedRoot.success) return refused("invalid_context");
 
