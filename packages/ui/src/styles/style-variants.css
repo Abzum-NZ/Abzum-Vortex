@@ -3260,7 +3260,7 @@
 
 @scope ([data-vortex-style="sera"]) to (:scope [data-vortex-style]) {
 :scope .cn-empty-title {
-  text-transform: uppercase;
+  text-transform: none;
 }
 }
 

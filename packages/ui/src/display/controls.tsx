@@ -269,7 +269,14 @@ export function PaginationControl({
   accessibleName: string;
   events: DisplayEventHandlers | undefined;
 }>): ReactElement | null {
-  if (page === undefined) return null;
+  if (
+    page === undefined ||
+    (page <= 1 &&
+      (pageCount === undefined || pageCount <= 1) &&
+      hasNextPage !== true &&
+      hasPreviousPage !== true)
+  )
+    return null;
   const onPage = events?.page_changed;
   // A keyset preview has neither a page count nor paging actions to present.
   if (onPage === undefined && pageCount === undefined) return null;
