@@ -26,6 +26,8 @@ import {
   DropdownMenuItem,
   DropdownMenuGroup,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "../components/dropdown-menu";
@@ -34,6 +36,7 @@ import { Skeleton } from "../components/skeleton";
 import { SidebarProvider, SidebarTrigger } from "../components/sidebar";
 import { FlowSurfaceContext } from "../flow-runtime/flow-surface-context";
 import { Icon } from "../icons/icon";
+import { resolveVortexIconName } from "../icons/icon-names";
 import { AppearanceToggle } from "./appearance-toggle";
 import { ApplicationAccountMenu, useApplicationAccountActions } from "./account-actions";
 
@@ -48,7 +51,7 @@ export type ApplicationWebMcpRuntime = Readonly<{
 
 export type ApplicationSwitcherData = Readonly<{
   state: "available" | "unavailable" | "temporarily_unavailable";
-  applications: readonly Readonly<{ key: string; name: string; href: string }>[];
+  applications: readonly Readonly<{ key: string; name: string; href: string; icon?: string }>[];
 }>;
 
 export type ApplicationSwitcherSource = () => Promise<ApplicationSwitcherData>;
@@ -316,16 +319,28 @@ function ApplicationSwitcher({
             No other applications
           </div>
         ) : (
-          switcher.applications.map((application) => (
-            <DropdownMenuItem
-              key={application.key}
-              onClick={() => void actions?.openApplication(application.href)}
-              disabled={actions === null}
-              data-active={application.name === applicationName ? "true" : undefined}
-            >
-              {application.name}
-            </DropdownMenuItem>
-          ))
+          <DropdownMenuRadioGroup
+            value={
+              switcher.applications.find((application) => application.name === applicationName)
+                ?.key ?? ""
+            }
+          >
+            {switcher.applications.map((application) => (
+              <DropdownMenuRadioItem
+                key={application.key}
+                value={application.key}
+                onClick={() => void actions?.openApplication(application.href)}
+                disabled={actions === null}
+              >
+                <Icon
+                  name={resolveVortexIconName(application.icon ?? "") ?? "circle"}
+                  aria-hidden="true"
+                  data-icon="inline-start"
+                />
+                {application.name}
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
         )}
       </DropdownMenuContent>
     </DropdownMenu>
