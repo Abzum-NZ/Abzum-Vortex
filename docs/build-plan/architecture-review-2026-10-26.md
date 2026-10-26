@@ -41,8 +41,8 @@ Status: **Fixed** (merged with #3584, commit named), **Batch 2** (ARCH, `arch-ba
 | #3563 relabel refused at upgrade | Fixed 6a155da6 | storage meaning follows publication (20261025194000). Walked: relabel published 1.0.1 and upgraded |
 | #3582 filterable link refused at upgrade | Fixed 6a155da6 | as above. Walked: filtering off (2.0.0) and on (2.1.0) both upgrade, records intact |
 | #3581 Studio duplicate input, Board, Auto-size | Fixed 505564ab, 644f724c, f502e5d6 | duplicate disabled on field inputs, scoped block error, publication refuses a field shown twice, Board starts on a stage field, Studio names why a draft cannot run. Walked |
-| #3549 T116 default-view provenance | Fixed e694621f | `based_on_default_view_id` (20261025195000) |
-| #3539 T146 chart link group | Fixed a4f7a5b7 | |
+| #3549 T116 default-view provenance | Fixed e694621f, 33c7f9ce | `based_on_default_view_id` (20261025195000) |
+| #3539 T146 chart link group | Fixed a4f7a5b7, 374e2c30 | |
 | #3540 T104 block setup values | Fixed 78201ab4 | |
 | #3541 T056 agent preview | Fixed 07f929c3 | |
 | #3548 dependency release | Batch 2 | |
