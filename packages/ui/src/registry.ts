@@ -1,13 +1,9 @@
 import type { ComponentType, MouseEvent, ReactNode } from "react";
-import {
-  immutablePlatformBlockCatalogueSchema,
-  platformBlockReleaseSchema,
-  type ApplicationCompositionPolicy,
-  type BlockPropertyValueContract,
-  type FieldInputControlKey,
-  type ImmutablePlatformBlockCatalogue,
-  type PlatformBlockRelease,
-  type ProjectedNavigation,
+import type {
+  BlockPropertyValueContract,
+  FieldInputControlKey,
+  PlatformBlockRelease,
+  ProjectedNavigation,
 } from "@vortex/platform/schema";
 import {
   DefinitionRenderError,
@@ -278,19 +274,7 @@ export interface PlatformComponentRegistry {
    * List all block releases, matching the catalogue validation snapshot format.
    */
   getReleases(): readonly PlatformBlockRelease[];
-
-  /**
-   * Export the registered releases to an immutable platform block catalogue for pure compilation snapshots.
-   */
-  toPlatformBlockCatalogue(
-    compositionPolicy?: ApplicationCompositionPolicy,
-  ): ImmutablePlatformBlockCatalogue;
 }
-
-const DEFAULT_COMPOSITION_POLICY: ApplicationCompositionPolicy = {
-  maximumDepth: 32,
-  maximumPlacements: 512,
-};
 
 const deepFreeze = <Value>(value: Value): Value => {
   if (value === null || typeof value !== "object" || Object.isFrozen(value)) return value;
@@ -299,8 +283,8 @@ const deepFreeze = <Value>(value: Value): Value => {
 };
 
 /**
- * Creates a browser-safe immutable platform component registry.
- * Validates each metadata release against the contract schema at registration boundary.
+ * Creates a browser-safe immutable platform component registry: one registration per exact release,
+ * each with a renderer key and a payload parser, keys and identities one to one.
  */
 export function createPlatformComponentRegistry(
   registrations: Iterable<PlatformComponentRegistration> = [],
@@ -331,19 +315,9 @@ export function createPlatformComponentRegistry(
         { releaseVersion },
       );
     }
-    const parsedMetadata = platformBlockReleaseSchema.safeParse(candidateMetadata);
-    if (!parsedMetadata.success) {
-      throw new DefinitionRenderError(
-        "INVALID_COMPOSITION",
-        `Invalid platform block release metadata for '${candidateMetadata.blockId}': ${parsedMetadata.error.message}`,
-        {
-          blockId: candidateMetadata.blockId,
-          releaseVersion: candidateMetadata.releaseVersion,
-        },
-      );
-    }
-
-    const metadata = deepFreeze(parsedMetadata.data);
+    // The release is the platform's shipped catalogue entry or one the server read from the
+    // installed bundle it validated; the registry checks how releases bind, not their contract.
+    const metadata = deepFreeze(candidateMetadata);
     if (!metadata.rendererKey || metadata.rendererKey.trim().length === 0) {
       throw new DefinitionRenderError(
         "ABSENT_RENDERER_KEY",
@@ -416,26 +390,6 @@ export function createPlatformComponentRegistry(
 
     getReleases(): readonly PlatformBlockRelease[] {
       return frozenReleases;
-    },
-
-    toPlatformBlockCatalogue(
-      compositionPolicy: ApplicationCompositionPolicy = DEFAULT_COMPOSITION_POLICY,
-    ): ImmutablePlatformBlockCatalogue {
-      const parsed = immutablePlatformBlockCatalogueSchema.safeParse({
-        compositionPolicy,
-        releases: [...frozenReleases].sort(
-          (first, second) =>
-            first.blockId.localeCompare(second.blockId) ||
-            first.releaseVersion.localeCompare(second.releaseVersion),
-        ),
-      });
-      if (!parsed.success) {
-        throw new DefinitionRenderError(
-          "INVALID_COMPOSITION",
-          `Invalid platform block catalogue: ${parsed.error.message}`,
-        );
-      }
-      return deepFreeze(parsed.data);
     },
   };
 

@@ -20,8 +20,6 @@ import {
   type RecordLinkTitler,
 } from "@vortex/platform/server";
 import { applicationLauncherQueryRowsToListValues } from "@vortex/ui/launcher/bindings";
-import { parseBoardPayload } from "@vortex/ui/display/board-payload";
-import { parseDisplayData } from "@vortex/ui/display/projected-data";
 import {
   describeFailure,
   type IdentitySession,
@@ -214,7 +212,6 @@ export const createPlacementReadServices = (
     readSubject,
     records: subjects,
     launcherValues: applicationLauncherQueryRowsToListValues,
-    boardData: (values) => parseDisplayData({ status: "ready", values }, parseBoardPayload),
   });
   return {
     queries,

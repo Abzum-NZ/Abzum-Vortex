@@ -6,8 +6,8 @@ import { richTextDocumentSchema } from "../records/rich-text";
 
 /*
  * The parts every display block payload shares: the state one placement is in and the closed
- * display values its cells, fields and summaries carry. The server types what it builds with these
- * schemas and the browser parses the payload with the same ones, so the two cannot drift apart.
+ * display values its cells, fields and summaries carry. Server producers validate their payloads
+ * with these schemas; the browser checks closed envelopes and the rules specific to its rendering.
  */
 
 /** Adds one issue for every item whose key an earlier item already used. */
@@ -244,8 +244,8 @@ export const displayRefusalReasons = [
 export type DisplayRefusalReason = (typeof displayRefusalReasons)[number];
 
 /**
- * The explicit, data-safe state of one placement. Only `ready` carries values, which each block
- * parses with its own payload schema; loading, empty, refused and error cannot leak data.
+ * The explicit, data-safe state of one placement. Only `ready` carries values, validated by the
+ * server producer against the block's payload schema; other states carry only their declared metadata.
  */
 export const displayDataStateSchema = z.discriminatedUnion("status", [
   z

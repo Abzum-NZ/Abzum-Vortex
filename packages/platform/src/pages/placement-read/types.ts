@@ -84,8 +84,6 @@ export type PlacementReadServices = Readonly<{
     nameKey: string,
     iconKey: string,
   ) => z.input<typeof launcherRowsPayloadSchema>;
-  /** A board's ready state, checked against the board block's own payload contract. */
-  boardData: (values: unknown) => PageDataState;
 }>;
 
 /** One page's placement read: what the server decided for this request, shared by every block. */
