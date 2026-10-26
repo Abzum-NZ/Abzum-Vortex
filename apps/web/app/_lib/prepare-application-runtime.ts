@@ -5,7 +5,10 @@ import type { LoaderTree } from "next/dist/server/lib/app-dir-module";
 
 /** Initialise the built page modules, without rendering a page or reading a viewer's data. */
 export async function prepareApplicationRuntime(): Promise<void> {
-  if (process.env.NODE_ENV !== "production") return;
+  // Only a long-lived server gains from this. A Vercel function instance serves its own routes from
+  // a fresh process and need not carry the other pages' entries, so loading them there only adds
+  // to its cold start.
+  if (process.env.NODE_ENV !== "production" || process.env.VERCEL !== undefined) return;
   const [{ createRequire }, { readFile }, { resolve }] = await Promise.all([
     import("node:module"),
     import("node:fs/promises"),

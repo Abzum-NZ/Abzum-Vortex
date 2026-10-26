@@ -255,6 +255,13 @@ function ApplicationSwitcher({
     intentStarted.current = true;
     intentRead.current = read();
   };
+  // Intent that ends without an open discards its list, so a later open reads current authority.
+  const dropIntent = () => {
+    if (intentRead.current === undefined) return;
+    intentRead.current = undefined;
+    requestToken.current += 1;
+    setSwitcher(undefined);
+  };
   return (
     <DropdownMenu
       onOpenChange={(open) => {
@@ -275,6 +282,8 @@ function ApplicationSwitcher({
         aria-label={`Application: ${applicationName}`}
         onPointerEnter={readOnIntent}
         onFocus={readOnIntent}
+        onPointerLeave={dropIntent}
+        onBlur={dropIntent}
         render={
           <Button variant="ghost" size="sm" className="max-w-56 max-sm:min-h-11 max-sm:min-w-11" />
         }
