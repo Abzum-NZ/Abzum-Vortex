@@ -8,6 +8,7 @@ import {
   authoredRecordsTableEventAvailable,
   builderKeySchema,
   flowContractVersion,
+  defaultSaveFlowSource,
   sourcePageItems,
   validateFlow,
   type ApplicationSourceDocument,
@@ -497,6 +498,36 @@ const created = (
   };
 };
 
+/** Labels remain distinct across application and module flows, as their keys already do. */
+const uniqueFlowName = (
+  source: ApplicationSourceDocument,
+  wanted: string,
+  controlAlias?: string,
+): string => {
+  const taken = new Set(
+    [...source.body.flows, ...source.body.modules.flatMap((module) => module.flows)].map((flow) =>
+      (flow.labels?.name ?? flow.key).toLowerCase(),
+    ),
+  );
+  if (!taken.has(wanted.toLowerCase())) return wanted;
+  const page = source.body.pages.find((entry) =>
+    sourcePageItems(entry.composition).some((item) => item.props.id === controlAlias),
+  );
+  const item =
+    page === undefined
+      ? undefined
+      : sourcePageItems(page.composition).find((entry) => entry.props.id === controlAlias);
+  const place =
+    page === undefined
+      ? "flow"
+      : `${page.name} ${item?.type === "platform.renderer.table" ? "grid" : "action"}`;
+  for (let index = 1; ; index += 1) {
+    const suffix = ` (${place}${index === 1 ? "" : ` ${index}`})`;
+    const name = `${wanted.slice(0, 100 - suffix.length)}${suffix}`;
+    if (!taken.has(name.toLowerCase())) return name;
+  }
+};
+
 export const applyStudioFlowCreate = (
   source: Readonly<ApplicationSourceDocument>,
   command: StudioFlowCreateCommand,
@@ -524,9 +555,14 @@ export const applyStudioFlowCreate = (
         ),
       );
     }
-    const name = command.name.trim();
-    if (name.length < 1 || name.length > 100)
+    const wantedName = command.name.trim();
+    if (wantedName.length < 1 || wantedName.length > 100)
       return { kind: "refused", reason: "Name the flow, in at most 100 characters." };
+    const name = uniqueFlowName(
+      candidate,
+      wantedName,
+      command.kind === "before_save" ? undefined : command.controlAlias,
+    );
     if (command.kind === "before_save") {
       if (!command.message.trim())
         return { kind: "refused", reason: "Write the warning message before adding the rule." };
@@ -607,29 +643,17 @@ export const applyStudioFlowCreate = (
     ) {
       // A board's card move and a table's inline edit each save the changed value of one record
       // through the one Save record task: the record and the changed field with its new value.
-      flow = interactiveFlow(key, name, {
-        outputs: {},
+      flow = {
+        ...defaultSaveFlowSource({
+          id: key,
+          key,
+          recordType: command.recordType,
+          mode: "update",
+          ownershipMode: "none",
+        }),
+        labels: { name },
         recordInput: "record",
-        inputs: {
-          record: { type: "record_reference", required: true, recordTypeIds: [command.recordType] },
-          values: { type: "json", required: true },
-        },
-        tasks: [
-          {
-            id: command.event === "card_moved" ? "save_stage" : "save_edit",
-            type: "record.save",
-            version: "1.0.0",
-            properties: {
-              record_type: {
-                kind: "literal",
-                literal: { type: "text", value: command.recordType },
-              },
-              record: { kind: "reference", reference: { source: "input", name: "record" } },
-              values: { kind: "reference", reference: { source: "input", name: "values" } },
-            },
-          },
-        ] as SourceFlow["tasks"],
-      });
+      };
       binding = bindControl(
         candidate,
         command.controlAlias,
