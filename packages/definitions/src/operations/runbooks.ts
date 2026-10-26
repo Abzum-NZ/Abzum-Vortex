@@ -40,11 +40,7 @@ const runbookReferences = Object.freeze({
 } as const);
 
 /** The bounded operator actions every incident exposes, named on each runbook page. */
-const operationsRunbookActionSet = Object.freeze([
-  "Acknowledge",
-  "Escalate",
-  "Resolve",
-]);
+const operationsRunbookActionSet = Object.freeze(["Acknowledge", "Escalate", "Resolve"]);
 
 export const operationsRunbooks: readonly OperationsRunbook[] = Object.freeze([
   {

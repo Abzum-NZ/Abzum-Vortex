@@ -284,18 +284,6 @@
                         "pin": "unpinned"
                       },
                       {
-                        "field": "vortex.app_store:store_application.record_update_status",
-                        "label": "Existing records",
-                        "visible": true,
-                        "pin": "unpinned"
-                      },
-                      {
-                        "field": "vortex.app_store:store_application.records_processed",
-                        "label": "Records processed",
-                        "visible": true,
-                        "pin": "unpinned"
-                      },
-                      {
                         "field": "vortex.app_store:store_application.installed_version",
                         "label": "Installed version",
                         "visible": true,
@@ -405,11 +393,11 @@
                       },
                       {
                         "field": "vortex.app_store:store_application.record_update_status",
-                        "label": "Existing records"
+                        "label": "Record update"
                       },
                       {
                         "field": "vortex.app_store:store_application.records_processed",
-                        "label": "Records processed"
+                        "label": "Records updated"
                       },
                       {
                         "field": "vortex.app_store:store_application.installed_version",
@@ -843,7 +831,70 @@
                                             {
                                               "op": "literal",
                                               "type": "text",
-                                              "value": " is installed with its roles. Give people their roles in IAM; people with a role find the application in the launcher."
+                                              "value": " is installed."
+                                            },
+                                            {
+                                              "op": "if",
+                                              "condition": {
+                                                "op": "reference",
+                                                "reference": {
+                                                  "source": "task_output",
+                                                  "task": "install",
+                                                  "key": "result",
+                                                  "path": ["member_role_granted"]
+                                                }
+                                              },
+                                              "then": {
+                                                "op": "join",
+                                                "parts": [
+                                                  {
+                                                    "op": "literal",
+                                                    "type": "text",
+                                                    "value": " You now have the "
+                                                  },
+                                                  {
+                                                    "op": "reference",
+                                                    "reference": {
+                                                      "source": "task_output",
+                                                      "task": "review",
+                                                      "key": "result",
+                                                      "path": ["member_role_name"]
+                                                    }
+                                                  },
+                                                  {
+                                                    "op": "literal",
+                                                    "type": "text",
+                                                    "value": " role."
+                                                  }
+                                                ]
+                                              },
+                                              "else": {
+                                                "op": "literal",
+                                                "type": "text",
+                                                "value": ""
+                                              }
+                                            },
+                                            {
+                                              "op": "if",
+                                              "condition": {
+                                                "op": "reference",
+                                                "reference": {
+                                                  "source": "task_output",
+                                                  "task": "install",
+                                                  "key": "result",
+                                                  "path": ["member_role_granted"]
+                                                }
+                                              },
+                                              "then": {
+                                                "op": "literal",
+                                                "type": "text",
+                                                "value": " Give other people their roles in IAM; people with a role find the application in the launcher."
+                                              },
+                                              "else": {
+                                                "op": "literal",
+                                                "type": "text",
+                                                "value": " Give people their roles in IAM; people with a role find the application in the launcher."
+                                              }
                                             }
                                           ]
                                         }
@@ -1615,51 +1666,7 @@
                           "type": "choice",
                           "value": "current"
                         },
-                        "tasks": [
-                          {
-                            "id": "up_to_date",
-                            "type": "interface.show_message",
-                            "version": "1.0.0",
-                            "properties": {
-                              "message": {
-                                "kind": "formula",
-                                "formula": {
-                                  "op": "join",
-                                  "parts": [
-                                    {
-                                      "op": "reference",
-                                      "reference": {
-                                        "source": "task_output",
-                                        "task": "review",
-                                        "key": "result",
-                                        "path": ["application_name"]
-                                      }
-                                    },
-                                    {
-                                      "op": "literal",
-                                      "type": "text",
-                                      "value": " is up to date: version "
-                                    },
-                                    {
-                                      "op": "reference",
-                                      "reference": {
-                                        "source": "task_output",
-                                        "task": "review",
-                                        "key": "result",
-                                        "path": ["installed_version"]
-                                      }
-                                    },
-                                    {
-                                      "op": "literal",
-                                      "type": "text",
-                                      "value": " is in use."
-                                    }
-                                  ]
-                                }
-                              }
-                            }
-                          }
-                        ]
+                        "tasks": []
                       },
                       {
                         "key": "unavailable",

@@ -28,7 +28,11 @@ import {
 } from "./installation-first-install-app";
 import { createFirstInstallCoordinator } from "./installation-first-install-coordinator";
 import { activateFirstInstall, readMemberRoleAssignable } from "./installation-first-install-roles";
-import { releaseMemberRole, type ApplicationRoleChange } from "./installation-role-templates";
+import {
+  releaseMemberRole,
+  type ApplicationRoleChange,
+  type ApplicationRoleTemplate,
+} from "./installation-role-templates";
 import { readApplicationRemoval, removeApplication } from "./installation-removal";
 import {
   readUpgradeAuthorizedState,
@@ -213,6 +217,53 @@ const roleChangeLine = (change: ApplicationRoleChange): string =>
     ? `${change.name}, a new role nobody holds yet, lets people: ${change.changes.join(", ")}`
     : `${change.name}, held by ${change.holders} ${change.holders === 1 ? "person or Group" : "people or Groups"}: ${change.changes.join("; ")}`;
 
+/** The standard record actions as people say them, in the order a sentence lists them. */
+const standardActionVerbs: Readonly<Record<string, string>> = {
+  read: "view",
+  create: "create",
+  update: "edit",
+  soft_delete: "delete",
+  restore: "restore",
+  export: "export",
+};
+
+const joinWords = (words: readonly string[]): string =>
+  words.length < 2
+    ? (words[0] ?? "")
+    : `${words.slice(0, -1).join(", ")} and ${words[words.length - 1]}`;
+
+/**
+ * One sentence for what a role lets people do: the standard actions on each record type are
+ * gathered into one clause ("view, create and edit assets") and every other permission follows by
+ * its label.
+ */
+const roleSummary = (role: ApplicationRoleTemplate): string => {
+  const clauses = new Map<string, { plural: string; verbs: Set<string> }>();
+  const others: string[] = [];
+  for (const permission of role.permissions) {
+    const separator = permission.key.lastIndexOf(".");
+    const verb = standardActionVerbs[permission.key.slice(separator + 1)];
+    const plural = /^Allows the standard .+ operation for (.+)\.$/.exec(permission.description)?.[1];
+    if (verb === undefined || plural === undefined) {
+      others.push(permission.label.charAt(0).toLowerCase() + permission.label.slice(1));
+      continue;
+    }
+    const clause = clauses.get(permission.key.slice(0, separator)) ?? { plural, verbs: new Set() };
+    clause.verbs.add(verb);
+    clauses.set(permission.key.slice(0, separator), clause);
+  }
+  const order = Object.values(standardActionVerbs);
+  const parts = [
+    ...[...clauses.values()].map(
+      ({ plural, verbs }) => `${joinWords(order.filter((verb) => verbs.has(verb)))} ${plural}`,
+    ),
+    ...others,
+  ];
+  return parts.length === 0
+    ? `${role.name} has no permissions yet.`
+    : `${role.name} can ${parts.join("; ")}.`;
+};
+
 /**
  * A first install: every role the version offers (installing makes each an organisation role that
  * nobody holds until it is assigned), and whether the installer may take the default member role.
@@ -228,10 +279,7 @@ const installReview = async (
     application_name: candidate.releaseSet.application.content.name,
     release_version: candidate.snapshot.selected.releaseVersion,
     release_note: candidate.snapshot.latest.releaseNote,
-    roles: roles.map(
-      (role) =>
-        `${role.name}: ${role.permissions.map((permission) => permission.description).join(" ")}`,
-    ),
+    roles: roles.map(roleSummary),
     member_role_name: releaseMemberRole(roles).name,
     member_role_assignable: await readMemberRoleAssignable(
       environment,
