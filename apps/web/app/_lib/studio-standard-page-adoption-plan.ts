@@ -611,72 +611,111 @@ const normalizedSource = (
   source: ApplicationSourceDocument,
   identities: readonly SourceIdentityAssignment[],
   omittedPageIds: readonly string[],
-  target: PageAdoptionTarget,
+  omittedBlockReleases: ReadonlySet<string>,
 ): unknown => {
   const omitted = new Set(omittedPageIds.map((id) => id.toLowerCase()));
+  const omittedKeys = new Set(
+    source.body.pages
+      .filter((page) => omitted.has(sourcePageIdentifier(source, identities, page).toLowerCase()))
+      .map((page) => page.key),
+  );
   const pages = source.body.pages.filter(
     (page) => !omitted.has(sourcePageIdentifier(source, identities, page).toLowerCase()),
   );
   const marker = "__page_adoption_target__";
-  let body = { ...source.body, pages };
-  if (target.kind === "application_home") body = { ...body, home_page: marker };
-  if (target.kind === "role_home")
-    body = {
-      ...body,
-      roles: body.roles.map((role) =>
-        sameId(identityForComponent(source, identities, "role", role.id), target.id)
-          ? { ...role, home_page: marker }
-          : role,
-      ),
-    };
-  if (target.kind === "navigation") {
-    const normalize = (items: readonly SourceNavigationItem[]): SourceNavigationItem[] =>
-      items.map((item) => {
-        if (item.type === "heading") return { ...item, children: normalize(item.children) };
-        if (item.type !== "page") return item;
-        return sameId(
-          identityForComponent(source, identities, "navigation_item", item.id),
-          target.id,
-        )
+  const normalize = (items: readonly SourceNavigationItem[]): SourceNavigationItem[] =>
+    items.map((item) =>
+      item.type === "heading"
+        ? { ...item, children: normalize(item.children) }
+        : item.type === "page" && omittedKeys.has(item.page)
           ? { ...item, page: marker }
-          : item;
-      });
-    body = { ...body, navigation: normalize(body.navigation) };
-  }
-  return { ...source, body };
+          : item,
+    );
+  return {
+    ...source,
+    body: {
+      ...source.body,
+      pages,
+      home_page: omittedKeys.has(source.body.home_page) ? marker : source.body.home_page,
+      roles: source.body.roles.map((role) =>
+        omittedKeys.has(role.home_page) ? { ...role, home_page: marker } : role,
+      ),
+      navigation: normalize(source.body.navigation),
+      platform_block_dependencies: source.body.platform_block_dependencies.filter(
+        (dependency) =>
+          !omittedBlockReleases.has(
+            `${dependency.block_id.toLowerCase()}@${dependency.release_version}`,
+          ),
+      ),
+    },
+  };
 };
 
 const normalizedCanonical = (
   content: ApplicationContent,
   omittedPageIds: readonly string[],
-  target: PageAdoptionTarget,
+  omittedBlockReleases: ReadonlySet<string>,
 ): unknown => {
   const omitted = new Set(omittedPageIds.map((id) => id.toLowerCase()));
   const marker = pageIdSchema.parse(omittedPageIds[0]);
   const pages = content.pages.filter((page) => !omitted.has(String(page.pageId).toLowerCase()));
-  let normalized: ApplicationContent = { ...content, pages };
-  if (target.kind === "application_home") normalized = { ...normalized, homePageId: marker };
-  if (target.kind === "role_home")
-    normalized = {
-      ...normalized,
-      roles: normalized.roles.map((role) =>
-        sameId(role.roleId, target.id) ? { ...role, homePageId: marker } : role,
-      ),
-    };
-  if (target.kind === "navigation") {
-    const normalize = (
-      items: readonly ApplicationContent["navigation"][number][],
-    ): ApplicationContent["navigation"] =>
-      items.map((item) =>
-        item.type === "heading"
-          ? { ...item, children: normalize(item.children) }
-          : item.type === "page" && sameId(item.id, target.id)
-            ? { ...item, pageId: marker }
-            : item,
-      );
-    normalized = { ...normalized, navigation: normalize(normalized.navigation) };
+  const normalize = (
+    items: readonly ApplicationContent["navigation"][number][],
+  ): ApplicationContent["navigation"] =>
+    items.map((item) =>
+      item.type === "heading"
+        ? { ...item, children: normalize(item.children) }
+        : item.type === "page" && omitted.has(String(item.pageId).toLowerCase())
+          ? { ...item, pageId: marker }
+          : item,
+    );
+  return {
+    ...content,
+    pages,
+    homePageId: omitted.has(String(content.homePageId).toLowerCase()) ? marker : content.homePageId,
+    roles: content.roles.map((role) =>
+      omitted.has(String(role.homePageId).toLowerCase()) ? { ...role, homePageId: marker } : role,
+    ),
+    navigation: normalize(content.navigation),
+    platformBlockDependencies: content.platformBlockDependencies.filter(
+      (dependency) =>
+        !omittedBlockReleases.has(
+          `${dependency.blockId.toLowerCase()}@${dependency.releaseVersion}`,
+        ),
+    ),
+  };
+};
+
+/** Releases introduced solely for the replacement are irrelevant once that page is omitted. */
+const replacementOnlyBlockReleases = (
+  current: ApplicationContent,
+  published: ApplicationContent,
+  replacementPageId: string,
+): ReadonlySet<string> => {
+  const replacement = new Set<string>();
+  const retained = new Set(
+    published.platformBlockDependencies.map(
+      (dependency) => `${dependency.blockId.toLowerCase()}@${dependency.releaseVersion}`,
+    ),
+  );
+  const visit = (items: readonly CompiledItem[], releases: Set<string>): void => {
+    for (const item of items) {
+      const block = item.props.vortex.block;
+      releases.add(`${block.blockId.toLowerCase()}@${block.releaseVersion}`);
+      for (const [, children] of compiledItemSlots(item)) visit(children, releases);
+    }
+  };
+  for (const page of current.pages) {
+    const releases = sameId(page.pageId, replacementPageId) ? replacement : retained;
+    const compositions =
+      "stepContent" in page.composition
+        ? Object.values(page.composition.stepContent)
+        : [page.composition];
+    for (const composition of compositions)
+      for (const [, items] of compiledPageZones(composition)) visit(items, releases);
   }
-  return normalized;
+  for (const shell of current.shells) visit(shell.layout.content, retained);
+  return new Set([...replacement].filter((release) => !retained.has(release)));
 };
 
 export const buildPageAdoptionPlan = (
@@ -802,27 +841,32 @@ export const buildPageAdoptionPlan = (
   )
     return invalid();
 
+  const omittedBlockReleases = replacementOnlyBlockReleases(
+    currentContent,
+    release.compilationOutput.canonical.content,
+    replacementPageId,
+  );
   const normalizedCurrentSource = normalizedSource(
     draft.source,
     currentIdentities,
     [originalPageId, replacementPageId],
-    target,
+    omittedBlockReleases,
   );
   const normalizedCandidateSource = normalizedSource(
     release.authoredSource,
     release.identities,
     [originalPageId],
-    target,
+    new Set(),
   );
   const normalizedCurrentContent = normalizedCanonical(
     currentContent,
     [originalPageId, replacementPageId],
-    target,
+    omittedBlockReleases,
   );
   const normalizedCandidateContent = normalizedCanonical(
     release.compilationOutput.canonical.content,
     [originalPageId],
-    target,
+    new Set(),
   );
   if (
     canonicalJson(normalizedCurrentSource) !== canonicalJson(normalizedCandidateSource) ||
