@@ -22,6 +22,19 @@ const calendarLabel = (
   return label;
 };
 
+/**
+ * The first day of the week for a locale, as react-day-picker counts it (Sunday is 0). A locale
+ * that carries no week information keeps the picker's own default.
+ */
+const firstWeekday = (locale: string | undefined): 0 | 1 | 2 | 3 | 4 | 5 | 6 | undefined => {
+  if (locale === undefined) return undefined;
+  // `getWeekInfo` is in every supported browser but not yet in TypeScript's library typings.
+  const { firstDay } = (
+    new Intl.Locale(locale) as Intl.Locale & { getWeekInfo(): { firstDay: number } }
+  ).getWeekInfo();
+  return (firstDay % 7) as 0 | 1 | 2 | 3 | 4 | 5 | 6;
+};
+
 function Calendar({
   className,
   classNames,
@@ -50,6 +63,7 @@ function Calendar({
       )}
       captionLayout={captionLayout}
       locale={locale}
+      weekStartsOn={firstWeekday(formatLocale)}
       formatters={{
         formatMonthDropdown: (date) => calendarLabel(date, formatLocale, "shortMonth"),
         ...formatters,
