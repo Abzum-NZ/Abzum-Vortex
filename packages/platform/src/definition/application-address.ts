@@ -44,7 +44,6 @@ import {
 import { z } from "zod";
 import { createHumanInstalledPageBundleContextLoader } from "./installed-page-bundle-context";
 import type { InstalledRuntimeContext } from "./installed-runtime-context";
-import { createPreviewInstallationRepository } from "./preview-installation-repository";
 import {
   previewApplicationKey,
   previewInstallationIdOfApplicationKey,
@@ -974,6 +973,8 @@ const readAddressedActiveApplicationIdentity = async (
       if (scope.applicationRootId !== undefined)
         throw new Error("APPLICATION_ADDRESS_SCOPE_UNAVAILABLE");
       if (previewInstallationId !== undefined) {
+        const { createPreviewInstallationRepository } =
+          await import("./preview-installation-repository");
         // A preview address names the preview; only a builder of its Application may open it.
         const preview = await createPreviewInstallationRepository(transaction)
           .readApplicationIdentity(previewInstallationId)
@@ -1020,6 +1021,8 @@ const readAddressedActiveApplicationIdentity = async (
       session.data,
       { organizationId: organizationId.data, applicationRootId: identity.applicationRootId },
       async (transaction) => {
+        const { createPreviewInstallationRepository } =
+          await import("./preview-installation-repository");
         await createPreviewInstallationRepository(transaction).reconcile(previewInstallationId);
         return true;
       },

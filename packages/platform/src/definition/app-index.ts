@@ -56,7 +56,7 @@ export {
   runtimeContextSelection,
   runtimePreviewOf,
   type RuntimePreview,
-} from "./preview-runtime-context";
+} from "./runtime-preview";
 export { previewApplicationKey } from "./preview-application-key";
 
 export { createProtectedOperationExecutor } from "./protected-operation-executor";
