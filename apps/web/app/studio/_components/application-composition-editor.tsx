@@ -249,11 +249,16 @@ export function ApplicationCompositionEditor(props: Props) {
       query: reference === "" ? null : reference,
       settings: {
         ...settingsInputs.settings,
-        ...studioGridDataSettings(
-          settingsModel.kind === "available" ? settingsModel.properties : [],
-          [...props.choices.queries, ...(props.choices.recordQueries ?? [])].find(
-            (query) => query.reference === reference,
-          ),
+        // The settings command decides whether the title follows the new data.
+        ...Object.fromEntries(
+          Object.entries(
+            studioGridDataSettings(
+              settingsModel.kind === "available" ? settingsModel.properties : [],
+              [...props.choices.queries, ...(props.choices.recordQueries ?? [])].find(
+                (query) => query.reference === reference,
+              ),
+            ),
+          ).filter(([key]) => key !== "title"),
         ),
       },
     });

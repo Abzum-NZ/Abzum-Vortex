@@ -375,7 +375,8 @@ export const checkRecordsTableFeature = (
         : (definition.boardCheck?.(state, facts.board) ?? featureAvailable);
     return definition.check(state, facts, context);
   })();
-  return assessed.kind === "available"
+  // Each refusal names its feature once, whether or not its own sentence already starts with it.
+  return assessed.kind === "available" || assessed.reason.startsWith(definition.label)
     ? assessed
     : {
         ...assessed,

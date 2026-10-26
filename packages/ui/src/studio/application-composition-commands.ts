@@ -32,6 +32,7 @@ import { ensureStudioBoardQuickAdd } from "./board-quick-add";
 import { StructureRefusal } from "./application-structure-common";
 import { resolveStudioDataQuery } from "./default-record-query";
 import { ensureStudioRecordSheet } from "./application-record-sheet";
+import { placed } from "./application-record-pages";
 import { studioLayoutOutletPlacementUses } from "./application-layout-outlets";
 import { createStudioDiscoveryAdapter } from "./discovery-adapter";
 import {
@@ -349,14 +350,28 @@ const applySettings = (
     if (studioOwnsSetting(key)) settings[key] = value;
   restoreStudioGridFeatureBindings(settings, release.properties, source.body.flow_bindings, alias);
   let query = resolveStudioDataQuery(source, input.query as string | null);
-  if (query !== (target.item.props.vortex.query ?? null))
-    Object.assign(
-      settings,
-      studioGridDataSettings(
-        release.properties,
-        studioQueryChoices(source, current.borrowed).find((choice) => choice.reference === query),
-      ),
+  const storedQuery = target.item.props.vortex.query ?? null;
+  if (query !== storedQuery) {
+    const choices = studioQueryChoices(source, current.borrowed);
+    const { title, ...data } = studioGridDataSettings(
+      release.properties,
+      choices.find((choice) => choice.reference === query),
     );
+    Object.assign(settings, data);
+    // The title follows the data only while it is the previous data's default and no Heading
+    // directly above the grid already names it.
+    const previous = choices.find((choice) => choice.reference === storedQuery);
+    const holder = placed(source, alias);
+    const above = holder?.siblings[holder.siblings.indexOf(holder.item) - 1];
+    const authored = stored["title"];
+    if (
+      title !== undefined &&
+      above?.type !== "platform.renderer.heading" &&
+      (authored === undefined ||
+        (authored.kind === "text" && authored.value === previous?.recordTypePluralLabel))
+    )
+      settings["title"] = title;
+  }
   if (
     query !== null &&
     (!readsQuery(release, target.item) || !studioQueryOffered(source, current.borrowed, query))
