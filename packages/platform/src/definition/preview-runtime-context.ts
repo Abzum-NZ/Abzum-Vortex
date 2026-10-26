@@ -14,7 +14,7 @@ import type { PreparedApplicationPermissionRegistration } from "../access/permis
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
 import {
   assembleHumanInstalledRuntimeContext,
-  type HumanInstalledRuntimeContextDependencies,
+  type HumanInstalledRuntimeScope,
   type InstalledRuntimeContext,
 } from "./installed-runtime-context";
 import { DefinitionError } from "./definition-error";
@@ -96,7 +96,7 @@ const previewRelease = (
  */
 export const loadHumanPreviewRuntimeContext = async (
   transaction: RequestDatabaseTransaction,
-  scope: HumanInstalledRuntimeContextDependencies["scope"],
+  scope: HumanInstalledRuntimeScope,
 ): Promise<InstalledRuntimeContext> => {
   const held =
     scope.previewInstallationId === undefined

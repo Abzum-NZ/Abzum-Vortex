@@ -61,14 +61,6 @@ export type InstalledRuntimeContext = Readonly<{
   viewerOrganizationAccountId?: string;
 }>;
 
-/**
- * Protected Module read of the active installation selected by the trusted human application
- * context, such as `readCurrentActiveApplicationInstallation` over the resolved request.
- */
-type InstalledRuntimeActiveInstallationReader = Readonly<{
-  readCurrent(): Promise<ActiveApplicationInstallationEvidence>;
-}>;
-
 /** Contexts this loader assembled; a structurally identical object from anywhere else is refused. */
 const assembledContexts = new WeakSet<object>();
 
@@ -100,36 +92,31 @@ const installationFailure = (error: unknown): DefinitionError<InstalledRuntimeCo
 };
 
 /**
- * The inputs of a human-request context. The installation comes from the protected
- * active-installation read under one already-resolved human request transaction whose organisation
- * and application scope Access verified for the signed-in person. It mints no system context or
- * actor and widens no grant: the assembled context only names the exact installed release, and
- * every page, navigation and data decision still runs through Access for that person.
+ * The scope of a human-request context: the organisation and application the human request scope
+ * resolved for this person, and the preview of that application the request runs instead of its
+ * installation, if any. The installation comes from the protected active-installation read under
+ * that one already-resolved human request transaction. It mints no system context or actor and
+ * widens no grant: the assembled context only names the exact installed release, and every page,
+ * navigation and data decision still runs through Access for that person.
  */
-export type HumanInstalledRuntimeContextDependencies = Readonly<{
-  activeInstallationReader: InstalledRuntimeActiveInstallationReader;
-  /**
-   * The organisation and application the human request scope resolved for this person, and the
-   * preview of that application the request runs instead of its installation, if any.
-   */
-  scope: Readonly<{
-    organizationId: string;
-    organizationAccountId: string;
-    applicationRootId: string;
-    previewInstallationId?: string;
-  }>;
+export type HumanInstalledRuntimeScope = Readonly<{
+  organizationId: string;
+  organizationAccountId: string;
+  applicationRootId: string;
+  previewInstallationId?: string;
 }>;
 
-/** Reads the active installation and proves it belongs to the organisation and application the request resolved. */
+/**
+ * Waits for the protected active-installation read and proves the installation belongs to the
+ * organisation and application the request resolved.
+ */
 export const readHumanActiveInstallation = async (
-  dependencies: Pick<
-    HumanInstalledRuntimeContextDependencies,
-    "activeInstallationReader" | "scope"
-  >,
+  currentInstallation: Promise<ActiveApplicationInstallationEvidence>,
+  scope: HumanInstalledRuntimeScope,
 ): Promise<ActiveApplicationInstallationEvidence> => {
   let installationCandidate: unknown;
   try {
-    installationCandidate = await dependencies.activeInstallationReader.readCurrent();
+    installationCandidate = await currentInstallation;
   } catch (error) {
     throw installationFailure(error);
   }
@@ -137,8 +124,8 @@ export const readHumanActiveInstallation = async (
   if (!installation.success)
     throw new DefinitionError("INSTALLED_RUNTIME_CONTEXT_INTEGRITY_FAILED");
   if (
-    !sameId(installation.data.organizationId, dependencies.scope.organizationId) ||
-    !sameId(installation.data.applicationRootId, dependencies.scope.applicationRootId)
+    !sameId(installation.data.organizationId, scope.organizationId) ||
+    !sameId(installation.data.applicationRootId, scope.applicationRootId)
   )
     throw new DefinitionError("INSTALLED_RUNTIME_CONTEXT_REFUSED");
   return installation.data;
@@ -148,7 +135,7 @@ export const readHumanActiveInstallation = async (
 export const assembleHumanInstalledRuntimeContext = (
   installation: ActiveApplicationInstallationEvidence,
   releaseSet: SystemApplicationBoundReleaseSetResult,
-  scope: HumanInstalledRuntimeContextDependencies["scope"],
+  scope: HumanInstalledRuntimeScope,
   /**
    * Prepares the registration for the validated release set. A caller holding an immutable,
    * already validated release may reuse the registration it prepared for that same release; the

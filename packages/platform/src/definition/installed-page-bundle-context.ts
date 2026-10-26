@@ -37,7 +37,7 @@ import {
   assembleHumanInstalledRuntimeContext,
   readHumanActiveInstallation,
   requireInstalledRuntimeContext,
-  type HumanInstalledRuntimeContextDependencies,
+  type HumanInstalledRuntimeScope,
   type InstalledRuntimeContext,
 } from "./installed-runtime-context";
 import { readInstalledRecordContributions } from "./installed-record-contributions";
@@ -374,7 +374,7 @@ const readActiveInstallationBundleSections = async (
 
 type HumanInstalledPageBundleContextDependencies = Readonly<{
   transaction: RequestDatabaseTransaction;
-  scope: HumanInstalledRuntimeContextDependencies["scope"];
+  scope: HumanInstalledRuntimeScope;
 }>;
 
 /**
@@ -393,12 +393,10 @@ export const createHumanInstalledPageBundleContextLoader = (
         return loadHumanPreviewRuntimeContext(dependencies.transaction, dependencies.scope);
       }
       const statePromise = readActiveInstallationBundleState(dependencies.transaction);
-      const installation = await readHumanActiveInstallation({
-        activeInstallationReader: {
-          readCurrent: async () => activeInstallationEvidence(await statePromise),
-        },
-        scope: dependencies.scope,
-      });
+      const installation = await readHumanActiveInstallation(
+        statePromise.then(activeInstallationEvidence),
+        dependencies.scope,
+      );
       const state = await statePromise;
       const bundleIndex = state.bundleIndex;
       if (bundleIndex === null) throw new Error("INSTALLED_PAGE_BUNDLE_INDEX_UNAVAILABLE");
