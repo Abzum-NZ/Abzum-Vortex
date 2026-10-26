@@ -43,7 +43,7 @@ import {
   type InstallationProblemShape,
 } from "./installation-authority";
 import {
-  createActiveApplicationInstallationRepository,
+  readCurrentActiveApplicationInstallation,
   readInstallationBindings,
   readInstallationReleaseSet,
   releaseSetModuleTuples,
@@ -126,7 +126,7 @@ const readCurrentInstallation = async (
   await readInstallationOrdinaryRoot(transaction, selector.rootId);
   let active: ActiveApplicationInstallationEvidence;
   try {
-    active = await createActiveApplicationInstallationRepository(transaction).readCurrent();
+    active = await readCurrentActiveApplicationInstallation(transaction);
   } catch (error) {
     const code =
       typeof error === "object" && error !== null && "code" in error
@@ -485,8 +485,7 @@ export const readUpgradeActiveObservation = async (
           issuedAt,
           scopeCandidate,
         );
-        const active =
-          await createActiveApplicationInstallationRepository(transaction).readCurrent();
+        const active = await readCurrentActiveApplicationInstallation(transaction);
         if (
           !sameId(active.organizationId, organizationId) ||
           !sameId(active.applicationRootId, rootId)

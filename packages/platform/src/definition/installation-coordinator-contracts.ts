@@ -20,7 +20,6 @@ import type { ModuleContent } from "./module-contracts";
 import type { createHumanOrganizationRequestService } from "../access/human-organization-request";
 import type { PermissionRegistryDefinitionSetReader } from "../access/permission-registry-definition-adapter";
 import type { BuilderAuthority } from "./builder-authority";
-import type { createModuleInstallationStorageRepository } from "./storage-provisioning";
 import type { InstallationRuntimeBundleRemovalReport } from "./runtime-bundle-cleanup";
 import type { ResolvedContributionBinding } from "./storage-provisioning";
 import type { RequestDatabaseTransaction } from "../db/request-transaction";
@@ -31,7 +30,6 @@ type InstallerRequests = Pick<
   ReturnType<typeof createHumanOrganizationRequestService>,
   "runAccessChange" | "runChange"
 >;
-export type InstallerTransaction = Parameters<typeof createModuleInstallationStorageRepository>[0];
 
 export const applicationInstallationCoordinatorErrorCodes = [
   "INVALID_APPLICATION_INSTALLATION_COMMAND",

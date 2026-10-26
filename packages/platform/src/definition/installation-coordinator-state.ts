@@ -1,5 +1,6 @@
 import "server-only";
 
+import type { RequestDatabaseTransaction } from "../db/request-transaction";
 import type { PreparedApplicationRoleTemplates } from "../access/organization-access-catalogue";
 import type {
   PermissionRegistryDefinitionRelease,
@@ -26,7 +27,8 @@ import { fingerprintPermissionMeaning } from "../access/permission-fingerprints"
 import { BuilderAuthorityError } from "./builder-authority";
 import { InstallationProblem } from "./installation-authority";
 import {
-  createModuleInstallationStorageRepository,
+  changeModuleContributionStorage,
+  provisionModuleInstallationStorage,
   type ResolvedContributionBinding,
 } from "./storage-provisioning";
 import { z } from "zod";
@@ -36,7 +38,6 @@ import {
   unexpectedDefinitionFailure,
 } from "./definition-error";
 import {
-  type InstallerTransaction,
   applicationInstallationCoordinatorErrorCodes,
   type ApplicationInstallationCoordinatorErrorCode,
   type ActiveApplicationInstallationSummary,
@@ -175,7 +176,7 @@ export const toCoordinatorError = (
 };
 
 export const readInstallationBindings = async (
-  transaction: InstallerTransaction,
+  transaction: RequestDatabaseTransaction,
   organizationId: OrganizationId,
   applicationRootId: ApplicationRootId,
 ): Promise<InstallationBindings> => {
@@ -233,7 +234,7 @@ export const currentBindingRevisions = (state: InstallationBindings): Map<Module
   );
 
 export const changeAccess = async (
-  transaction: InstallerTransaction,
+  transaction: RequestDatabaseTransaction,
   activityId: string,
   applicationRootId: ApplicationRootId,
   change: "prepare" | "withdraw",
@@ -261,7 +262,7 @@ export const changeAccess = async (
 };
 
 export const recordOutcome = async (
-  transaction: InstallerTransaction,
+  transaction: RequestDatabaseTransaction,
   activityId: string,
   applicationRootId: ApplicationRootId,
   applicationReleaseRevision: number,
@@ -279,15 +280,14 @@ export const recordOutcome = async (
 
 /** Storage for every pinned Module release; commits only inactive, idempotent bindings. */
 export const provisionPins = async (
-  transaction: InstallerTransaction,
+  transaction: RequestDatabaseTransaction,
   target: ReleaseTarget,
   pins: readonly ModulePin[],
   current: ReadonlyMap<ModuleRootId, number>,
 ): Promise<ModuleInstallationStorageResult[]> => {
-  const storage = createModuleInstallationStorageRepository(transaction);
   const provisioned: ModuleInstallationStorageResult[] = [];
   for (const pin of pins) {
-    const result = await storage.provision({
+    const result = await provisionModuleInstallationStorage(transaction, {
       applicationRootId: target.applicationRootId,
       applicationReleaseRevision: target.applicationReleaseRevision,
       moduleRootId: pin.moduleRootId,
@@ -410,7 +410,7 @@ export const samePermissionAuthority = (
 ): boolean => sameUniqueEvidence(left, right, permissionIdentity, permissionAuthorityKey);
 
 export const changeContributions = async (
-  transaction: InstallerTransaction,
+  transaction: RequestDatabaseTransaction,
   target: ReleaseTarget,
   groups: readonly ContributionGroup[],
   bindings: readonly Pick<
@@ -419,7 +419,6 @@ export const changeContributions = async (
   >[],
   mode: "attach" | "detach",
 ): Promise<boolean> => {
-  const storage = createModuleInstallationStorageRepository(transaction);
   const byRoot = new Map(
     bindings.map((binding) => [canonicalModuleRootId(binding.moduleRootId), binding]),
   );
@@ -442,10 +441,7 @@ export const changeContributions = async (
       mode,
       contributions: group.contributions,
     };
-    const result =
-      mode === "attach"
-        ? await storage.attachContributions(command)
-        : await storage.detachContributions(command);
+    const result = await changeModuleContributionStorage(transaction, command, mode);
     const expectedIds = new Set(
       group.contributions.map((item) => item.contributionId.toLowerCase()),
     );

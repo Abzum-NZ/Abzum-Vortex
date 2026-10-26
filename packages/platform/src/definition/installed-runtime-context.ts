@@ -63,7 +63,7 @@ export type InstalledRuntimeContext = Readonly<{
 
 /**
  * Protected Module read of the active installation selected by the trusted human application
- * context, such as `createActiveApplicationInstallationRepository` bound to the resolved request.
+ * context, such as `readCurrentActiveApplicationInstallation` over the resolved request.
  */
 type InstalledRuntimeActiveInstallationReader = Readonly<{
   readCurrent(): Promise<ActiveApplicationInstallationEvidence>;

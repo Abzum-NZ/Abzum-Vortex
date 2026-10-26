@@ -268,79 +268,62 @@ const parseContributionResult = (
   });
 };
 
-export interface ModuleInstallationStorageRepository {
-  provision(command: ModuleInstallationStorageCommand): Promise<ModuleInstallationStorageResult>;
-  attachContributions(
-    command: ModuleContributionStorageCommand,
-  ): Promise<ModuleContributionStorageResult>;
-  detachContributions(
-    command: ModuleContributionStorageCommand,
-  ): Promise<ModuleContributionStorageResult>;
-}
-
 /**
- * Calls the sole request-visible storage coordinator. The supplied transaction
- * already carries trusted request context; neither SQL nor physical names are inputs.
+ * Provisions one module's installation storage through the sole request-visible storage
+ * coordinator. The supplied transaction already carries trusted request context; neither SQL nor
+ * physical names are inputs.
  */
-export const createModuleInstallationStorageRepository = (
+export const provisionModuleInstallationStorage = async (
   transaction: RequestDatabaseTransaction,
-): ModuleInstallationStorageRepository => {
-  const mutateContributions = async (
-    commandCandidate: ModuleContributionStorageCommand,
-    mode: "attach" | "detach",
-  ): Promise<ModuleContributionStorageResult> => {
-    const command = parseContributionCommand(commandCandidate);
-    if (command === undefined || command.mode !== mode)
-      throw new DefinitionError("INVALID_MODULE_INSTALLATION_STORAGE_COMMAND");
-    try {
-      const rows = await transaction.query<ContributionRow>`
-        select *
-        from vortex_definition.provision_module_contribution_storage(
-          ${command.applicationRootId}::uuid,
-          ${command.applicationReleaseRevision}::bigint,
-          ${command.moduleRootId}::uuid,
-          ${command.moduleReleaseRevision}::bigint,
-          ${command.expectedBindingRevision}::bigint,
-          ${mode}::text,
-          ${JSON.stringify(command.contributions)}::text::jsonb
-        )
-      `;
-      if (rows.length !== 1 || rows[0] === undefined)
-        throw new DefinitionError("RECORD_STORAGE_PROVISIONING_FAILED");
-      return parseContributionResult(rows[0], mode);
-    } catch (error) {
-      throw mapFailure(error);
-    }
-  };
+  commandCandidate: ModuleInstallationStorageCommand,
+): Promise<ModuleInstallationStorageResult> => {
+  const command = moduleInstallationStorageCommandSchema.safeParse(commandCandidate);
+  if (!command.success) throw new DefinitionError("INVALID_MODULE_INSTALLATION_STORAGE_COMMAND");
+  try {
+    const rows = await transaction.query<ProvisionRow>`
+      select *
+      from vortex_definition.provision_module_installation_storage(
+        ${command.data.applicationRootId}::uuid,
+        ${command.data.applicationReleaseRevision}::bigint,
+        ${command.data.moduleRootId}::uuid,
+        ${command.data.moduleReleaseRevision}::bigint,
+        ${command.data.expectedBindingRevision}::bigint
+      )
+    `;
+    if (rows.length !== 1 || rows[0] === undefined)
+      throw new DefinitionError("RECORD_STORAGE_PROVISIONING_FAILED");
+    return parseResult(rows[0]);
+  } catch (error) {
+    throw mapFailure(error);
+  }
+};
 
-  return Object.freeze({
-    async provision(commandCandidate: ModuleInstallationStorageCommand) {
-      const command = moduleInstallationStorageCommandSchema.safeParse(commandCandidate);
-      if (!command.success)
-        throw new DefinitionError("INVALID_MODULE_INSTALLATION_STORAGE_COMMAND");
-      try {
-        const rows = await transaction.query<ProvisionRow>`
-          select *
-          from vortex_definition.provision_module_installation_storage(
-            ${command.data.applicationRootId}::uuid,
-            ${command.data.applicationReleaseRevision}::bigint,
-            ${command.data.moduleRootId}::uuid,
-            ${command.data.moduleReleaseRevision}::bigint,
-            ${command.data.expectedBindingRevision}::bigint
-          )
-        `;
-        if (rows.length !== 1 || rows[0] === undefined)
-          throw new DefinitionError("RECORD_STORAGE_PROVISIONING_FAILED");
-        return parseResult(rows[0]);
-      } catch (error) {
-        throw mapFailure(error);
-      }
-    },
-    attachContributions(commandCandidate: ModuleContributionStorageCommand) {
-      return mutateContributions(commandCandidate, "attach");
-    },
-    detachContributions(commandCandidate: ModuleContributionStorageCommand) {
-      return mutateContributions(commandCandidate, "detach");
-    },
-  });
+/** Attaches or detaches one module's contribution storage through the same coordinator. */
+export const changeModuleContributionStorage = async (
+  transaction: RequestDatabaseTransaction,
+  commandCandidate: ModuleContributionStorageCommand,
+  mode: "attach" | "detach",
+): Promise<ModuleContributionStorageResult> => {
+  const command = parseContributionCommand(commandCandidate);
+  if (command === undefined || command.mode !== mode)
+    throw new DefinitionError("INVALID_MODULE_INSTALLATION_STORAGE_COMMAND");
+  try {
+    const rows = await transaction.query<ContributionRow>`
+      select *
+      from vortex_definition.provision_module_contribution_storage(
+        ${command.applicationRootId}::uuid,
+        ${command.applicationReleaseRevision}::bigint,
+        ${command.moduleRootId}::uuid,
+        ${command.moduleReleaseRevision}::bigint,
+        ${command.expectedBindingRevision}::bigint,
+        ${mode}::text,
+        ${JSON.stringify(command.contributions)}::text::jsonb
+      )
+    `;
+    if (rows.length !== 1 || rows[0] === undefined)
+      throw new DefinitionError("RECORD_STORAGE_PROVISIONING_FAILED");
+    return parseContributionResult(rows[0], mode);
+  } catch (error) {
+    throw mapFailure(error);
+  }
 };

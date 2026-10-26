@@ -16,7 +16,7 @@ import {
   type PrivateInvalidationChannelAuthorizer,
   type PrivateInvalidationTopicScope,
 } from "@vortex/platform/server";
-import { createActiveApplicationInstallationRepository } from "@vortex/platform/server";
+import { readCurrentActiveApplicationInstallation } from "@vortex/platform/server";
 import type { IdentityVerificationExecution } from "@vortex/platform/server";
 import { z } from "zod";
 import { resolveApplicationAddress } from "./application-address";
@@ -240,8 +240,7 @@ export const createWebPrivateInvalidationChannelAuthority = (
         targetScope,
         async (transaction, checkedScope) => ({
           scope: checkedScope,
-          installation:
-            await createActiveApplicationInstallationRepository(transaction).readCurrent(),
+          installation: await readCurrentActiveApplicationInstallation(transaction),
         }),
       );
       execution?.checkpoint();

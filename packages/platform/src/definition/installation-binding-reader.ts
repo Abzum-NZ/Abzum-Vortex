@@ -44,37 +44,30 @@ const mapFailure = (error: unknown): DefinitionError<ActiveApplicationInstallati
   }
 };
 
-export interface ActiveApplicationInstallationRepository {
-  readCurrent(): Promise<ActiveApplicationInstallationEvidence>;
-}
-
 /** Reads only the active installation selected by trusted human application context. */
-export const createActiveApplicationInstallationRepository = (
+export const readCurrentActiveApplicationInstallation = async (
   transaction: RequestDatabaseTransaction,
-): ActiveApplicationInstallationRepository =>
-  Object.freeze({
-    async readCurrent() {
-      try {
-        const rows = await transaction.query<ActiveInstallationRow>`
-          select vortex_definition.read_current_active_installation() as active_installation
-        `;
-        if (rows.length !== 1 || rows[0] === undefined || rows[0].active_installation === null)
-          throw new DefinitionError("ACTIVE_APPLICATION_INSTALLATION_UNAVAILABLE");
-        const result = activeApplicationInstallationEvidenceSchema.safeParse(
-          rows[0].active_installation,
-        );
-        if (!result.success)
-          throw unexpectedDefinitionFailure(
-            "ACTIVE_APPLICATION_INSTALLATION_INCOMPLETE",
-            result.error,
-            "installation-binding-reader",
-          );
-        return result.data;
-      } catch (error) {
-        throw mapFailure(error);
-      }
-    },
-  });
+): Promise<ActiveApplicationInstallationEvidence> => {
+  try {
+    const rows = await transaction.query<ActiveInstallationRow>`
+      select vortex_definition.read_current_active_installation() as active_installation
+    `;
+    if (rows.length !== 1 || rows[0] === undefined || rows[0].active_installation === null)
+      throw new DefinitionError("ACTIVE_APPLICATION_INSTALLATION_UNAVAILABLE");
+    const result = activeApplicationInstallationEvidenceSchema.safeParse(
+      rows[0].active_installation,
+    );
+    if (!result.success)
+      throw unexpectedDefinitionFailure(
+        "ACTIVE_APPLICATION_INSTALLATION_INCOMPLETE",
+        result.error,
+        "installation-binding-reader",
+      );
+    return result.data;
+  } catch (error) {
+    throw mapFailure(error);
+  }
+};
 
 export const installationBindingsSchema = z
   .object({
