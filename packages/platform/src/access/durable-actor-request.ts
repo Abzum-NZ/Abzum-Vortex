@@ -31,7 +31,7 @@ import {
 import { z } from "zod";
 
 /**
- * #663: one Access-resolved request transaction for a verified durable workflow
+ * One Access-resolved request transaction for a verified durable workflow
  * actor context.
  *
  * The Workflow service verifies the signed run/node/attempt envelope against the

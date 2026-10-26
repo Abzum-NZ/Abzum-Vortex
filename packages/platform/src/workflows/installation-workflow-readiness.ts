@@ -16,8 +16,8 @@ import type {
 import { workflowServiceKestraInstanceKind } from "./kestra-instance";
 
 /**
- * #662: installation activation and withdrawal readiness over the #661 flow
- * registrations.
+ * Installation activation and withdrawal readiness over the stored workflow flow
+ * registrations (`flow-registration`).
  *
  * The compiler builds each exact published workflow of one Application release
  * into a deterministic inactive Kestra candidate and the registration stores it
@@ -39,13 +39,13 @@ import { workflowServiceKestraInstanceKind } from "./kestra-instance";
  * Every flow this module names must sit in the generated namespace of the
  * target's own environment, organisation and Application, so neither evidence
  * nor a schedule change can reach another organisation's flows. Both results
- * name the application Kestra instance (#1152) as their only provider target;
+ * name the application Kestra instance as their only provider target;
  * the operations instance cannot be expressed.
  *
  * This module is pure. It performs no I/O, calls no Kestra API, compiles no
  * flow, and never invents an identity, revision, fingerprint or authority from
  * its inputs: every value is either the exact permanent identity the caller
- * supplied or the exact stored registration #661 produced.
+ * supplied or the exact stored flow registration produced.
  */
 
 export const installationWorkflowReadinessErrorCodes = [
@@ -80,7 +80,7 @@ export type InstallationWorkflowInstallationIdentity = Readonly<{
   installationRevision: number;
 }>;
 
-/** One expected workflow: its exact #661 identity and compiled inactive candidate. */
+/** One expected workflow: its exact flow registration identity and compiled inactive candidate. */
 export type InstallationWorkflowExpectedCandidate = KestraFlowRegistrationCommand;
 
 /** One accepted start intent the installation retains. */
@@ -174,7 +174,7 @@ const sameWorkflowIdentity = (left: KestraFlowIdentity, right: KestraFlowIdentit
   left.workflowRevision === right.workflowRevision;
 
 /**
- * The namespace prefix #661 derives for every installation revision of one
+ * The namespace prefix the flow registration derives for every installation revision of one
  * environment, organisation and Application; the installation revision follows.
  */
 const applicationNamespacePrefix = (target: InstallationWorkflowInstallationIdentity): string =>
@@ -187,7 +187,7 @@ const applicationNamespacePrefix = (target: InstallationWorkflowInstallationIden
     "i",
   ].join(".");
 
-/** The exact namespace #661 derives for the target installation revision. */
+/** The exact namespace the flow registration derives for the target installation revision. */
 const installationNamespace = (target: InstallationWorkflowInstallationIdentity): string =>
   `${applicationNamespacePrefix(target)}${target.installationRevision}`;
 
@@ -291,7 +291,7 @@ const parseRegistrationIdentity = (
     workflowRevision: value.workflowRevision,
   });
 
-/** Reads one exact #661 registration result; a changed-candidate refusal is the only refusal. */
+/** Reads one exact flow registration result; a changed-candidate refusal is the only refusal. */
 const parseRegistrationResult = (candidate: unknown): ParsedRegistration | undefined => {
   if (!isRecord(candidate)) return undefined;
 

@@ -13,7 +13,7 @@ import { searchIndexFieldDiscloses } from "./sensitivity-policy";
 import { isRecord } from "../catalogue/runtime-primitives";
 
 /**
- * Organisation-owned search documents (#643).
+ * Organisation-owned search documents.
  *
  * This module turns one organisation-owned Record snapshot plus the exact
  * searchable-field configuration into a versioned search document, or a deletion

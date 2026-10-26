@@ -152,7 +152,7 @@ export const roleAssignmentPolicySchema = z.discriminatedUnion("kind", [
     .strict(),
 ]);
 
-/** Role-scoped immutable activation-policy revision; #34 remains the sole decision boundary. */
+/** Role-scoped immutable activation-policy revision; effective access is the sole decider. */
 export const roleActivationPolicyRevisionSchema = z
   .object({
     organizationId: organizationIdSchema,
@@ -522,7 +522,7 @@ const addRoleActivationIssues = (
     });
 };
 
-/** Protected activation evidence only; #34 remains the sole effective-access decision boundary. */
+/** Protected activation evidence only; effective access remains the sole decision boundary. */
 export const roleActivationSchema = z
   .object({
     roleActivationId: roleActivationIdSchema,
@@ -696,7 +696,7 @@ export const projectLiveApplicationRolePermissions = (
           entry.permission.actionKind !== "export",
       );
 
-/** Immutable server-prepared #22/#32 handoff. It contains evidence, never an authority decision. */
+/** Server-prepared application role template handoff: evidence, never an authority decision. */
 export const preparedApplicationRoleTemplatesSchema = z
   .object({
     contractVersion: z.literal("1.0.0"),

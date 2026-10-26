@@ -464,7 +464,7 @@ const guidedClickId = (draftId: string, revision: number, bindingId: string): st
 
 /**
 /**
- * Whether an installed flow declares the paused node a continuation target names (#544): a task
+ * Whether an installed flow declares the paused node a continuation target names: a task
  * with that id anywhere in the flow and, for a form, a Show form task whose literal form matches
  * or whose dynamic form is checked against the active authored release. The stored run still pins
  * the exact node; this refuses a target the installed flow could never pause at before spending
@@ -576,7 +576,7 @@ export async function invokeInstalledFlow(
         ),
     },
   });
-  // #1369, #1370: Save record tasks and named actions run through the record service's own
+  // Save record tasks and named actions run through the record service's own
   // protected paths, under the initiator's verified request and in their own transactions.
   const records = createRecordSaveService(requestDependencies);
   const subjectReader = createPageSubjectReader(requestDependencies);
@@ -1046,7 +1046,7 @@ export async function invokeInstalledFlow(
   };
 
   /**
-   * #588: the #544 continuation interface over a fresh orchestrator bound to the trusted release.
+   * The form continuation interface over a fresh orchestrator bound to the trusted release.
    * It re-reads the active installation and checks the caller's target against it before the
    * orchestrator consumes the single-use continuation, so Page never duplicates that validation.
    */
@@ -1069,8 +1069,8 @@ export async function invokeInstalledFlow(
         ? {}
         : { selectedRecordReadProjections: installed.selectedRecordReadProjections }),
     };
-    // The exact evidence goes to the #544 interface unchanged: it is the only place that compares
-    // it with trusted state and consumes the single-use continuation.
+    // The exact evidence goes to the form continuation interface unchanged: it is the only place
+    // that compares it with trusted state and consumes the single-use continuation.
     const formContinuation = createFormContinuationService({
       orchestrator: orchestratorFor(release, undefined, installed),
       resolveInstallation: async ({ installation, flowId, node }) => {

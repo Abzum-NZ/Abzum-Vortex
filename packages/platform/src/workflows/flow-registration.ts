@@ -49,7 +49,7 @@ export const protectedRunRegisteredReleaseSchema = z
   });
 
 /**
- * #947: inactive workflow flow registrations, stored through Postgres.
+ * Inactive workflow flow registrations, stored through Postgres.
  *
  * `compileKestraFlow` compiles one exact published durable flow and its
  * installation identity into an inactive candidate. This module persists

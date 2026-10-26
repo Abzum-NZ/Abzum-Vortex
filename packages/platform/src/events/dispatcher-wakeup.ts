@@ -208,7 +208,7 @@ export const createEventDispatchBacklogReader = (
   });
 
 /**
- * Wake-up and recovery entry over the same bounded #641 dispatcher route. Both
+ * Wake-up and recovery entry over the same bounded event dispatcher route. Both
  * a database webhook hint and a scheduled recovery tick authenticate with the
  * same configured dispatcher credential and run the identical claim, deliver,
  * acknowledge and retry operation. Successful nonempty batches are claimed

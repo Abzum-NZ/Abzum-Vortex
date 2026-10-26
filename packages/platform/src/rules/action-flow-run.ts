@@ -13,7 +13,7 @@ import {
 import { isRecord } from "../catalogue/runtime-primitives";
 
 /**
- * Runs the compiled `transaction` flow of a named action (#1062) for the record it acts on and
+ * Runs the compiled `transaction` flow of a named action for the record it acts on and
  * collects the record changes it asks for, so the host applies every one of them in one
  * `apply_record_changes` call inside its own transaction (architecture decision "Every record task
  * calls one protected operation"). The run is the one flow interpreter: the precondition If task,

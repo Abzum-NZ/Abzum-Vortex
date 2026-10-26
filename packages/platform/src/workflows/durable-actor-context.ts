@@ -11,7 +11,7 @@ import { z } from "zod";
 import { kestraProtectedOperationContractVersion } from "./kestra-compiler";
 
 /**
- * #663: the durable actor context of one protected workflow operation.
+ * The durable actor context of one protected workflow operation.
  *
  * Kestra calls the protected-operation endpoint with a signed envelope naming
  * the run, node and attempt. This module turns that envelope plus the retained
@@ -22,7 +22,7 @@ import { kestraProtectedOperationContractVersion } from "./kestra-compiler";
  * What it establishes, and what it deliberately does not:
  *
  * - The envelope proof is an HMAC-SHA256 over the canonical envelope with the
- *   application instance's callback key (#1152). A valid proof proves only that
+ *   application instance's callback key. A valid proof proves only that
  *   the application Kestra instance sent this exact, unexpired envelope. It
  *   confers no authority and names no actor.
  * - The retained run is trusted server state read by the caller: the exact run,
@@ -168,7 +168,7 @@ export type DurableActorContextResolution =
 
 export type DurableActorContextDependencies = Readonly<{
   /**
-   * The application instance's callback signing key (#1152), resolved by trusted
+   * The application instance's callback signing key, resolved by trusted
    * wiring. It is never read from the environment or logged here.
    */
   callbackKey: () => Uint8Array | undefined;

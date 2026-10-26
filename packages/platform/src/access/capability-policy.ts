@@ -37,7 +37,7 @@ import {
 } from "./human-organization-request";
 
 /*
- * Entitlement limits (#1384, owner decision of 27 Sep 2026):
+ * Entitlement limits (owner decision of 27 Sep 2026):
  *
  * - The configured system operator publishes capability policies and retains
  *   the context-free ceiling bootstrap path. An active named Vortex super
@@ -865,7 +865,7 @@ export const revokeCapabilityLimitAllocation = async (
  * Resolves only the tenant and organisation the request context already
  * established. The limit is the lowest of the platform ceiling and the tenant
  * and organisation allocations beneath it; the result names which one applied
- * and carries the ceiling. #650 owns admission.
+ * and carries the ceiling. The entitlement check owns admission.
  */
 export const resolveEffectiveCapabilityPolicy = async (
   transaction: RequestDatabaseTransaction,
@@ -916,7 +916,7 @@ export const resolveEffectiveCapabilityPolicy = async (
   return parsed.data;
 };
 
-/** Preserve the shared entitlement request shape while keeping admission in #650. */
+/** Preserve the shared entitlement request shape; admission stays with the entitlement check. */
 export const resolveEffectiveCapabilityPolicyForEntitlement = async (
   transaction: RequestDatabaseTransaction,
   requestCandidate: EntitlementCheckRequest,

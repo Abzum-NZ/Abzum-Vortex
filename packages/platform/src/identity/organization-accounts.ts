@@ -902,7 +902,7 @@ const executeTransferOffboardingOwnedRecords = async (
   const selector = readInventorySelector(command);
 
   try {
-    // Read a single bounded #563 page first. Each protected entry below
+    // Read a single bounded inventory page first. Each protected entry below
     // re-admits the offboarding scope and this page's access version for every
     // mutable item, while the fixed operation behind it rechecks installation,
     // lifecycle, ownership, transfer authority, target state and this exact

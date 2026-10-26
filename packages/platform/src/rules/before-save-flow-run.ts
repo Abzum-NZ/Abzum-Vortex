@@ -5,7 +5,7 @@ import { startFlowRun, type FlowRuntimeValues } from "./flow-interpreter";
 
 /**
  * Runs the `BeforeSave` flows of one record type for one save attempt with the one flow
- * interpreter (#2947). The flows are the compiled `transaction` flows of the exact Module release
+ * interpreter. The flows are the compiled `transaction` flows of the exact Module release
  * the save resolved; nothing here reads a record, a release or a session. The interpreter reports
  * the warnings and requirements the rule tasks raise and the refusal of the first `rule.refuse`
  * that runs, and this host turns them into the save's outcome. Requirements are declarations for

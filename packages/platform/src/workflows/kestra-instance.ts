@@ -2,7 +2,7 @@ import { isRecord } from "../catalogue/runtime-primitives";
 import "server-only";
 
 /**
- * #1152: the one Kestra instance the Workflow service may target.
+ * The one Kestra instance the Workflow service may target.
  *
  * Customer durable flows run on a separate application Kestra instance. Kestra's
  * open-source edition lets any namespace read any instance secret, so that

@@ -1,7 +1,7 @@
 /**
- * Component refresh subscriber for the private invalidation channels (#615).
+ * Component refresh subscriber for the private invalidation channels.
  *
- * #614 publishes a bounded, content-free notice on one private Supabase
+ * The invalidation publisher sends a bounded, content-free notice on one private Supabase
  * Realtime Broadcast topic per organisation and application. This module is the
  * subscriber half: it accepts a received Broadcast message, strictly parses the
  * notice envelope, maps the notice's target identity to the mounted placements

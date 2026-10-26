@@ -62,7 +62,7 @@ export const kestraProtectedOperationContractVersion = "1.0.0";
 /**
  * The single generic Kestra callback task every effect, every condition and
  * every formula compiles to. The platform plugin merges resolved typed inputs
- * and evaluator scope into the #664 request contract, signs it with the fixed
+ * and evaluator scope into the protected-operation request contract, signs it with the fixed
  * callback key, and calls the protected-operation endpoint once per attempt.
  */
 export const kestraProtectedCallbackTaskType = "io.kestra.plugin.vortex.ProtectedCallback";

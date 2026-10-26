@@ -982,7 +982,7 @@ export const createStoredPageCapabilityService = (
      * The target is definition or record data and grants nothing. An external address is available
      * once it satisfies the bounded HTTPS contract and is never fetched. An application is
      * available only when the viewer can currently open its release home page or a role home page
-     * of this installed release (the homes the #599 launcher opens at; the destination still
+     * of this installed release (the homes the application launcher opens at; the destination still
      * chooses its own home when opened); a page only when the viewer can currently open that page.
      * A target in another application is resolved by that application's own installed service.
      * Missing, refused, withdrawn and out-of-release targets, and a viewer whose current authority

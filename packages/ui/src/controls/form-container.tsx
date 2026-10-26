@@ -50,7 +50,7 @@ import {
 } from "../components/select";
 
 /**
- * A form container accepts its own projected data and declared callbacks, plus one supplied #591
+ * A form container accepts its own projected data and declared callbacks, plus one supplied
  * draft-feedback result. All three are ordinary runtime inputs: the form container's registration
  * validates them fail-closed, so the page projection supplies the feedback and the page renderer
  * never names it. The control never computes or reinterprets a rule itself.

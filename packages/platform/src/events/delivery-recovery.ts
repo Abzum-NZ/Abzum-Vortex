@@ -42,14 +42,14 @@ export class EventDeliveryRecoveryError extends Error {
 }
 
 /**
- * Input identifies an existing #639 claim by the same exact consumer and
+ * Input identifies an existing event delivery claim by the same exact consumer and
  * occurrence identity the claim was issued under, authenticated by its claim
  * cursor. This never claims fresh work.
  *
  * `maxAttempts` counts total reported attempts including this one, so a budget
  * of one makes the first reported failure terminal. `retryBackoffSeconds` is
  * how long the reclaim lease is held before the same claim becomes eligible
- * for #639's ordinary reclaim again.
+ * for ordinary claim reclaim again.
  */
 export type EventDeliveryFailureReportInput = Readonly<{
   consumerKey: string;

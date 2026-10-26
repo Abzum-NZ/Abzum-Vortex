@@ -33,7 +33,7 @@ import {
 } from "../catalogue/identifiers";
 
 /**
- * #587: Page-owned private revisioned form drafts.
+ * Page-owned private revisioned form drafts.
  *
  * A draft is one person's unfinished input for one exact form of one exact
  * installed application release. It is deliberately not a business record: it

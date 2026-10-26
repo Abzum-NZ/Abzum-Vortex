@@ -359,11 +359,11 @@ const storedPolicyMatchesCommand = (
       stored.expectedConnectionHealthOutcome === submitted.expectedConnectionHealthOutcome);
 
 /**
- * Protected current record-type lifecycle policy storage (#566). Reuses the
+ * Protected current record-type lifecycle policy storage. Reuses the
  * existing `human-organization-request` current-human-organisation-
  * administration context and the exact `recordTypeLifecyclePolicySchema` /
- * `organizationLifecycleLimitsSchema` contracts; it does not implement #567
- * activation/recovery integration or #568 preview/removal handoff.
+ * `organizationLifecycleLimitsSchema` contracts; it does not implement
+ * activation/recovery integration or the preview/removal handoff.
  */
 export const createRecordTypeLifecyclePolicyService = (
   dependencies: RecordTypeLifecyclePolicyServiceDependencies,
@@ -434,7 +434,7 @@ export const createRecordTypeLifecyclePolicyService = (
 };
 
 /**
- * The pure #567 recovery-eligibility decision. It is re-exported here so the
+ * The pure recovery-eligibility decision. It is re-exported here so the
  * Record lifecycle-policy runtime is the single callable surface for it; the
  * decision itself observes and changes nothing, and owns no restore, totals,
  * due-metadata, Activity, Event or receipt behaviour.

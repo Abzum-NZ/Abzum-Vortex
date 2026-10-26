@@ -22,7 +22,7 @@ export { LinkTiles } from "./link-tiles";
 // Launcher Registrations & Registry
 export { LAUNCHER_COMPONENT_REGISTRATIONS } from "./registrations";
 
-// Link Navigation and the Navigate task (#1013)
+// Link Navigation and the Navigate task
 export {
   activateLinkTarget,
   externalLinkActivation,

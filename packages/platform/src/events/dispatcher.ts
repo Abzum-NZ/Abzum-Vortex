@@ -58,7 +58,7 @@ export class EventDispatcherError extends Error {
 /**
  * How one registered consumer is delivered to. `leaseSeconds` is the claim
  * held for, and renewed by, each delivery; `maxAttempts` and
- * `retryBackoffSeconds` are the bounded retry policy handed to #640.
+ * `retryBackoffSeconds` are the bounded retry policy handed to delivery recovery.
  */
 export type EventConsumerDeliveryPolicy = Readonly<{
   leaseSeconds: number;
@@ -463,7 +463,7 @@ type ConsumerOutcome =
     }>;
 
 // Anything other than an exact, known outcome is unsafe: it is never taken as
-// completion, and is reported to #640 as an unclassified retryable failure.
+// completion, and is reported to delivery recovery as an unclassified retryable failure.
 const unsafeOutcome: ConsumerOutcome = Object.freeze({
   kind: "failed",
   terminal: false,
@@ -515,12 +515,12 @@ const dispatchStatus = (tally: Tally): EventDispatchStatus => {
 };
 
 /**
- * Bounded dispatcher over #639 claims and #640 failure recovery. Only the
+ * Bounded dispatcher over event delivery claims and delivery failure recovery. Only the
  * consumers registered at construction can be invoked. One dispatch claims at
  * most `batchLimit` occurrences in total, shared across the selected
  * consumers, and invokes each consumer strictly in claim order.
  *
- * Per-record sequence is enforced by #639 storage: a claim never contains an
+ * Per-record sequence is enforced by claim storage: a claim never contains an
  * occurrence whose earlier record sequence is unacknowledged, and a failed or
  * interrupted occurrence is never acknowledged here, so later occurrences for
  * that record stay withheld until it is delivered or recovered. Every claim is
@@ -595,7 +595,7 @@ export const createEventDispatcher = (
           occurrenceId,
           claimCursor: ackCursor,
           failureCode: outcome.failureCode,
-          // A budget of one makes this reported failure terminal in #640.
+          // A budget of one makes this reported failure terminal in delivery recovery.
           maxAttempts: outcome.terminal
             ? eventDeliveryRecoveryLimits.minimumRetryAttempts
             : consumer.policy.maxAttempts,

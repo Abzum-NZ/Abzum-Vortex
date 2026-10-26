@@ -4,9 +4,9 @@ import { personalDataClassSchema, type PersonalDataClass } from "../catalogue/ca
 import { isRecord } from "../catalogue/runtime-primitives";
 
 /**
- * Shared derived-data exclusion policy for the organisation search index (#95).
+ * Shared derived-data exclusion policy for the organisation search index.
  *
- * The #643 document builder already leaves out a field whose published
+ * The search document builder already leaves out a field whose published
  * classification is sensitive, whose type carries no searchable words, or whose
  * personal-data class the organisation privacy policy does not permit. That is
  * not enough for a derived value: a calculated or totalled field can be
@@ -19,12 +19,12 @@ import { isRecord } from "../catalogue/runtime-primitives";
  * It fails closed. An unknown or malformed classification, a missing or
  * dangling input, an input cycle, or a recipient-copied shared-source record
  * makes the field ineligible. Access changes are handled at read time by the
- * current-field recheck (#645), not by widening what may be indexed: a field
+ * current-field recheck (`permitted-search`), not by widening what may be indexed: a field
  * withheld now is dropped from candidates even when its index entry is stale.
  *
  * Invalidation: a classification change is a published definition change, so a
  * rebuilt configuration drops or keeps the field and the document's content
- * fingerprint changes, which the #643 store classifies as a rebuild. A derived
+ * fingerprint changes, which the search document store classifies as a rebuild. A derived
  * total whose aggregate-source field belongs to another record type cannot have
  * its inputs proven from this record type alone, so it is treated as unknown
  * and left out until that proof is available.

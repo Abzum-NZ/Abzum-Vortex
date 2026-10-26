@@ -24,7 +24,7 @@ import type { FlowProtectedTaskCall } from "../rules/flow-interpreter";
 import { isRecord } from "../catalogue/runtime-primitives";
 
 /**
- * What the record service owns about running a named action as a flow (#1063): checking the action's
+ * What the record service owns about running a named action as a flow: checking the action's
  * typed inputs against their declarations, giving the flow the record and inputs it reads, and
  * turning the record tasks the flow collected into the one mutation list `apply_record_changes`
  * applies. The flow itself is run by the flow interpreter; nothing here decides a precondition.

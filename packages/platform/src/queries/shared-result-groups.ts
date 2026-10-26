@@ -15,7 +15,7 @@ import {
 import { federatedRefusalCodeSchema } from "../connections/integration-contracts";
 
 /**
- * Request-only Shared result groups (#646).
+ * Request-only Shared result groups.
  *
  * Application search may add one Shared result group for each active sharing
  * grant the recipient knows from its non-content grant mirrors, and never more
@@ -27,7 +27,7 @@ import { federatedRefusalCodeSchema } from "../connections/integration-contracts
  * Module revision and one record type, and it carries no persisted state, so a
  * group can never become a recipient search document, a cache entry, a
  * recipient-owned record or a copy of a source record. Remote execution of the
- * source search is #739 and the signed gateway is #738; this contract only
+ * source search and the signed gateway are outside it; this contract only
  * describes what one source response may contribute to one response.
  */
 
