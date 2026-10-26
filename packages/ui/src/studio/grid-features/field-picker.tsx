@@ -50,13 +50,14 @@ export function StudioGridFieldPicker({
                 <Label htmlFor={switchId}>{field.label}</Label>
               </ItemTitle>
               {field.reason === undefined ? null : (
-                <ItemDescription>{field.reason}</ItemDescription>
+                <ItemDescription id={`${switchId}-reason`}>{field.reason}</ItemDescription>
               )}
             </ItemContent>
             <ItemActions>
               <Switch
                 id={switchId}
                 checked={selected}
+                aria-describedby={field.reason === undefined ? undefined : `${switchId}-reason`}
                 disabled={disabled || (!selected && field.reason !== undefined)}
                 onCheckedChange={(on) =>
                   onChange(on ? [...chosen, field.key] : chosen.filter((key) => key !== field.key))

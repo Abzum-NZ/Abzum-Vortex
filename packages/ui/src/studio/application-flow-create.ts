@@ -8,6 +8,7 @@ import {
   authoredRecordsTableEventAvailable,
   builderKeySchema,
   flowContractVersion,
+  defaultSaveFlowSource,
   sourcePageItems,
   validateFlow,
   type ApplicationSourceDocument,
@@ -607,29 +608,17 @@ export const applyStudioFlowCreate = (
     ) {
       // A board's card move and a table's inline edit each save the changed value of one record
       // through the one Save record task: the record and the changed field with its new value.
-      flow = interactiveFlow(key, name, {
-        outputs: {},
+      flow = {
+        ...defaultSaveFlowSource({
+          id: key,
+          key,
+          recordType: command.recordType,
+          mode: "update",
+          ownershipMode: "none",
+        }),
+        labels: { name },
         recordInput: "record",
-        inputs: {
-          record: { type: "record_reference", required: true, recordTypeIds: [command.recordType] },
-          values: { type: "json", required: true },
-        },
-        tasks: [
-          {
-            id: command.event === "card_moved" ? "save_stage" : "save_edit",
-            type: "record.save",
-            version: "1.0.0",
-            properties: {
-              record_type: {
-                kind: "literal",
-                literal: { type: "text", value: command.recordType },
-              },
-              record: { kind: "reference", reference: { source: "input", name: "record" } },
-              values: { kind: "reference", reference: { source: "input", name: "values" } },
-            },
-          },
-        ] as SourceFlow["tasks"],
-      });
+      };
       binding = bindControl(
         candidate,
         command.controlAlias,

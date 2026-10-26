@@ -3,7 +3,7 @@ import {
   MODULE_QUERY_MAXIMUM_TOTALS,
   MODULE_MAXIMUM_QUERIES,
   queryNumericTotalFieldTypes,
-  recordsTableFeaturesOrLog,
+  readRecordsTableFeatures,
   type ApplicationSourceDocument,
   type RecordsTableBoardFacts,
   type RecordsTableBoardMode,
@@ -21,8 +21,8 @@ const studioBoardQueryUnavailable =
 export const boardModeOf = (
   settings: Readonly<Record<string, SourceBlockPropertyValueContract>>,
 ): RecordsTableBoardMode | undefined => {
-  const features = recordsTableFeaturesOrLog(settings["features"] as never, "studio board mode");
-  return features?.board.enabled ? features.board : undefined;
+  const read = readRecordsTableFeatures(settings["features"] as never);
+  return read.kind === "read" && read.features.board.enabled ? read.features.board : undefined;
 };
 
 /** Card fields come from the selected pipeline's record type, before its query is written. */

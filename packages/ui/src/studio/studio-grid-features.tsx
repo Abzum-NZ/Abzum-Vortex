@@ -9,7 +9,9 @@ import {
   recordsTableColumnFiltersFeature,
 } from "@vortex/platform/schema";
 
-import { useId, useState, type ReactElement } from "react";
+import { useId, type ReactElement } from "react";
+import { Button } from "../components/button";
+import { studioGridPrerequisites } from "./grid-features/prerequisites";
 import {
   checkRecordsTableFeature,
   plainSourceSettingValue,
@@ -102,7 +104,6 @@ export const studioGridFeaturesProperty = (
 export function StudioGridFeatures({
   idPrefix,
   property,
-  problem,
   value,
   presentation,
   query,
@@ -119,7 +120,6 @@ export function StudioGridFeatures({
   onChange,
 }: Readonly<{
   idPrefix: string;
-  problem: string;
   /** The table release's `features` group declaration. */
   property: Extract<BlockPropertySchemaContract, { kind: "group" }>;
   /** The authored features group; unset uses the catalogue default (every feature off). */
@@ -145,7 +145,6 @@ export function StudioGridFeatures({
   onChange: (next: SourceBlockPropertyValueContract) => void;
 }>): ReactElement {
   const ownId = useId();
-  const [changedFeature, setChangedFeature] = useState<RecordsTableFeatureKey | undefined>();
   const authored = value?.kind === "group" ? value.properties : {};
   const catalogueDefault = (key: RecordsTableFeatureKey): GroupValue => {
     const declared = property.properties.find((feature) => feature.key === key)?.defaultValue;
@@ -256,7 +255,6 @@ export function StudioGridFeatures({
     };
   };
   const write = (key: RecordsTableFeatureKey, next: GroupValue): void => {
-    setChangedFeature(key);
     const candidate = { ...whole, properties: { ...whole.properties, [key]: next } };
     // New list entries need their catalogue defaults before the composition command checks the
     // typed value's round trip. Keep invalid user input in the inspector's ordinary validation path.
@@ -357,6 +355,10 @@ export function StudioGridFeatures({
               ? declaration.properties.filter((setting) => setting.key !== "enabled")
               : [];
           const current = featureValue(key);
+          const fix =
+            enabled && (check?.kind === "not_possible" || incomplete.has(key))
+              ? studioGridPrerequisites(key, whole, facts)
+              : undefined;
           const editor = studioGridFeatureEditors[key];
           const settingValues: StudioSettingValues = Object.fromEntries(
             Object.entries(current.properties).filter(([setting]) => setting !== "enabled"),
@@ -369,6 +371,8 @@ export function StudioGridFeatures({
                     <Label htmlFor={switchId}>{label}</Label>
                     {blocked !== undefined ? (
                       <Badge variant="outline">Not possible</Badge>
+                    ) : incomplete.has(key) ? (
+                      <Badge variant="outline">Not ready</Badge>
                     ) : check === undefined ? null : check.kind === "available" ? (
                       <Badge
                         variant="outline"
@@ -377,7 +381,7 @@ export function StudioGridFeatures({
                         Available
                       </Badge>
                     ) : (
-                      <Badge variant="outline">Not possible</Badge>
+                      <Badge variant="outline">{enabled ? "Not ready" : "Not possible"}</Badge>
                     )}
                   </ItemTitle>
                   <ItemDescription>
@@ -385,6 +389,26 @@ export function StudioGridFeatures({
                   </ItemDescription>
                 </ItemContent>
                 <ItemActions>
+                  {fix === undefined ? null : (
+                    <Button
+                      type="button"
+                      size="xs"
+                      variant="outline"
+                      disabled={disabled}
+                      aria-label={`Fix ${label}`}
+                      onClick={() => {
+                        const normalized = typedSourceSettingValue(
+                          plainSourceSettingValue(fix),
+                          property,
+                          [property.key],
+                          [],
+                        );
+                        onChange(normalized ?? fix);
+                      }}
+                    >
+                      Fix
+                    </Button>
+                  )}
                   <Switch
                     id={switchId}
                     checked={enabled}
@@ -407,11 +431,6 @@ export function StudioGridFeatures({
                   />
                 </ItemActions>
               </Item>
-              {problem !== "" && changedFeature === key ? (
-                <p role="alert" className="text-sm text-destructive">
-                  {problem}
-                </p>
-              ) : null}
               {enabled && declaration !== undefined
                 ? studioSettingProblems({ [key]: current }, [declaration]).map((sentence) => (
                     <p key={sentence} role="alert" className="text-sm text-destructive">

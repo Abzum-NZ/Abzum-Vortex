@@ -13,7 +13,8 @@ import {
   repeatableSlotKey,
   isRepeatableSlotIdentity,
   conditionalFormatRuleFields,
-  recordsTableFeaturesOrLog,
+  readRecordsTableFeatures,
+  recordsTableInlineEditFeature,
   type ApplicationSourceDocument,
   type PlatformBlockRelease,
   type SourceBlockPropertyValueContract,
@@ -363,10 +364,9 @@ const applySettings = (
   // pipeline binds the grid to the query that groups by it (an existing one, or a new one written
   // like any other query, editable in Data); every other board setting is judged against it.
   const board = boardModeOf(settings);
-  const formatting = recordsTableFeaturesOrLog(
-    settings["features"] as never,
-    "studio board rules",
-  )?.conditionalFormatting;
+  const readFeatures = readRecordsTableFeatures(settings["features"] as never);
+  const formatting =
+    readFeatures.kind === "read" ? readFeatures.features.conditionalFormatting : undefined;
   const ruleFields =
     board !== undefined && formatting?.enabled
       ? [
@@ -451,6 +451,33 @@ const applySettings = (
     const added = ensureStudioBoardQuickAdd(flowed, alias, board);
     if (added.kind === "refused") return added;
     flowed = added.source;
+  }
+  if (
+    readFeatures.kind === "read" &&
+    readFeatures.features.inlineEdit.enabled &&
+    query !== null &&
+    !flowed.body.flow_bindings.some(
+      (binding) => binding.control === alias && binding.event === recordsTableInlineEditFeature.key,
+    )
+  ) {
+    const chosen = studioQueryChoices(flowed, current.borrowed).find(
+      (entry) => entry.reference === query,
+    );
+    if (chosen === undefined)
+      return { kind: "refused", reason: "Inline editing: choose the grid's data first." };
+    const made = applyStudioFlowCreate(
+      flowed,
+      {
+        kind: "action",
+        controlAlias: alias,
+        name: `Save ${chosen.recordTypeLabel.toLowerCase()} (${alias})`,
+        recordType: chosen.recordType,
+        event: recordsTableInlineEditFeature.key,
+      },
+      current.borrowed,
+    );
+    if (made.kind !== "applied") return made;
+    flowed = made.source;
   }
   if (flowed !== source) return { kind: "applied", source: flowed };
   const parsed = applicationSourceDocumentSchema.parse(source);

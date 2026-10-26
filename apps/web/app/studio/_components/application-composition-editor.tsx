@@ -527,7 +527,6 @@ export function ApplicationCompositionEditor(props: Props) {
         <StudioGridFeatures
           idPrefix={`${settingsId}-features`}
           property={featuresProperty}
-          problem={problemArea === "features" ? settings.problem : ""}
           tableSettings={settingsInputs.settings}
           canvasArrangement={canvasMatches ? props.canvasArrangement?.state : undefined}
           canvasStale={props.canvasArrangement !== undefined && !canvasMatches}
