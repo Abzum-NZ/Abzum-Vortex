@@ -3,7 +3,7 @@ import "server-only";
 import type { AppPageModule } from "next/dist/server/route-modules/app-page/module";
 import type { LoaderTree } from "next/dist/server/lib/app-dir-module";
 
-/** Initialise the built page modules, without rendering a page or reading a viewer's data. */
+/** Initialise the built page modules and public database access before requests are accepted. */
 export async function prepareApplicationRuntime(): Promise<void> {
   if (process.env.NODE_ENV !== "production") return;
   const [{ createRequire }, { readFile }, { resolve }] = await Promise.all([
@@ -53,5 +53,24 @@ export async function prepareApplicationRuntime(): Promise<void> {
         loadedClientModules.add(reference.id);
       }
     }
+  }
+  // This public operation has no viewer or tenant selection. It prepares the shared driver and
+  // connection; private application definitions and records are read only on visible demand.
+  const { readPrivacyNotice } = await import("@vortex/platform/server");
+  try {
+    await readPrivacyNotice();
+  } catch (error) {
+    // An operator can publish the first notice after startup; its absence already disables
+    // public registration. The database connection has still been opened and rolled back safely.
+    if (
+      error instanceof Error &&
+      "code" in error &&
+      error.code === "55000" &&
+      error.message === "privacy_notice_unavailable"
+    ) {
+      console.info("[startup] Public privacy notice is unpublished; database connection prepared.");
+      return;
+    }
+    throw error;
   }
 }
