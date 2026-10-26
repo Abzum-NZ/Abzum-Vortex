@@ -1117,7 +1117,7 @@
                     "presentation": "grid",
                     "id": "managed_saved_tiles",
                     "title": "Saved tile configuration",
-                    "empty_message": "No saved tile records were returned.",
+                    "empty_message": "No saved tiles yet",
                     "refused_message": "Saved tiles are unavailable for this account.",
                     "error_message": "Saved tiles could not be read.",
                     "columns": [

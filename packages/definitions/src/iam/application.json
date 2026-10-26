@@ -8,37 +8,6 @@
     "description": "Roles and Groups. People request, review, grant and remove access, and manage active privileged roles. Effective assignments always come from the protected Access source.",
     "icon": "users",
     "home_page": "iam_overview",
-    "search": {
-      "enabled": true,
-      "record_types": [
-        {
-          "record_type": "vortex.iam.core:access_request",
-          "fields": [
-            {
-              "field": "vortex.iam.core:access_request.request_number",
-              "priority": "first"
-            },
-            {
-              "field": "vortex.iam.core:access_request.title",
-              "priority": "first"
-            }
-          ],
-          "title_field": "vortex.iam.core:access_request.title",
-          "target_page": "iam_access_request_detail"
-        },
-        {
-          "record_type": "vortex.system_directory:person",
-          "fields": [
-            {
-              "field": "vortex.system_directory:person.display_name",
-              "priority": "first"
-            }
-          ],
-          "title_field": "vortex.system_directory:person.display_name",
-          "target_page": "iam_person_detail"
-        }
-      ]
-    },
     "uses": [
       {
         "application": "vortex.app.organisation_administration",
@@ -674,33 +643,7 @@
                 "gap": "medium",
                 "padding": "medium",
                 "content_width": "fill",
-                "header": [
-                  {
-                    "type": "platform.renderer.application_search",
-                    "props": {
-                      "id": "application_search",
-                      "placeholder": "Search this application",
-                      "submit_label": "Search",
-                      "vortex": {
-                        "block": {
-                          "block_id": "d5ecf8af-a6c4-4f0a-93e1-2c6d0a56a726",
-                          "release_version": "1.0.0"
-                        },
-                        "responsive": {
-                          "desktop": {
-                            "visible": true,
-                            "width": {
-                              "kind": "fill"
-                            },
-                            "height": {
-                              "kind": "content"
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
-                ],
+                "header": [],
                 "content": [
                   {
                     "type": "platform.renderer.container",
@@ -1145,6 +1088,7 @@
                       "mode": "flow"
                     },
                     "title": "People (organisation accounts)",
+                    "empty_message": "No people yet",
                     "row_actions": [
                       {
                         "event_id": "event_make_steward",
@@ -1360,6 +1304,7 @@
                     "presentation": "grid",
                     "id": "iam_roles_region",
                     "title": "Roles",
+                    "empty_message": "No roles yet",
                     "columns": [
                       {
                         "field": "vortex.system_directory:role.key",
@@ -1475,6 +1420,7 @@
                     "presentation": "grid",
                     "id": "iam_groups_region",
                     "title": "Groups",
+                    "empty_message": "No Groups yet",
                     "columns": [
                       {
                         "field": "vortex.system_directory:group.key",
@@ -1566,6 +1512,7 @@
                     "presentation": "grid",
                     "id": "iam_group_memberships_region",
                     "title": "Group memberships",
+                    "empty_message": "No Group members yet",
                     "columns": [
                       {
                         "field": "vortex.system_directory:group_membership.account_display_name",
@@ -2304,6 +2251,7 @@
                     "presentation": "grid",
                     "id": "iam_assignments_region",
                     "title": "Role assignment ledger",
+                    "empty_message": "No role assignments yet",
                     "columns": [
                       {
                         "field": "vortex.system_directory:role_assignment.role_label",
@@ -2426,6 +2374,7 @@
                     "presentation": "grid",
                     "id": "iam_delegations_region",
                     "title": "Delegated authority",
+                    "empty_message": "No delegated authority yet",
                     "columns": [
                       {
                         "field": "vortex.system_directory:delegation.holder_kind",
@@ -2934,6 +2883,7 @@
                     "presentation": "grid",
                     "id": "iam_role_activations_region",
                     "title": "Active roles",
+                    "empty_message": "No active roles",
                     "columns": [
                       {
                         "field": "vortex.system_directory:role_activation.account_display_name",
@@ -3089,6 +3039,7 @@
                   "props": {
                     "presentation": "grid",
                     "id": "iam_access_requests_list",
+                    "empty_message": "No access requests yet",
                     "row_click": {
                       "event_id": "event_iam_open_access_request",
                       "mode": "flow"

@@ -283,6 +283,7 @@ const pages = [
       operations_incidents_table: placement(
         TABLE_BLOCK_RELEASE,
         {
+          empty_message: "No open incidents",
           features: { pinning: { enabled: true }, spreadsheet: { enabled: false } },
           columns: incidentColumns.map(([field, label], index) => ({
             field: `${incidentRecordType}.${field}`,

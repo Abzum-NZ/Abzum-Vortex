@@ -424,6 +424,7 @@
                     "presentation": "grid",
                     "id": "overview_organizations_region",
                     "title": "Organisations in this tenant",
+                    "empty_message": "No organisations yet",
                     "row_click": {
                       "event_id": "event_open_organization_detail",
                       "mode": "flow"
@@ -506,6 +507,7 @@
                     "presentation": "grid",
                     "id": "structure_region",
                     "title": "Tenant structure",
+                    "empty_message": "No organisations yet",
                     "row_click": {
                       "event_id": "event_open_organization_detail",
                       "mode": "flow"
@@ -1161,6 +1163,7 @@
                     "presentation": "grid",
                     "id": "administrators_region",
                     "title": "Tenant administrators",
+                    "empty_message": "No tenant administrators yet",
                     "row_click": {
                       "event_id": "event_open_tenant_administrator_detail",
                       "mode": "flow"

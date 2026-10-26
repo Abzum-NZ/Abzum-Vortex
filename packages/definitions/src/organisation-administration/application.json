@@ -171,14 +171,6 @@
             "permission": "application.organisation_administration.open"
           },
           {
-            "id": "nav_overview",
-            "type": "page",
-            "label": "Overview",
-            "icon": "layout-dashboard",
-            "page": "organisation_overview",
-            "permission": "platform.organization.accounts.read"
-          },
-          {
             "id": "nav_accounts",
             "type": "page",
             "label": "Organisation accounts",
@@ -219,28 +211,12 @@
             "permission": "application.organisation_administration.organisation_notice.read"
           },
           {
-            "id": "nav_record_notice",
-            "type": "page",
-            "label": "Record notice",
-            "icon": "building-2",
-            "page": "record_organisation_notice",
-            "permission": "application.organisation_administration.organisation_notice.record_notice"
-          },
-          {
             "id": "nav_privacy_cases",
             "type": "page",
             "label": "Privacy request cases",
             "icon": "shield-check",
             "page": "privacy_request_cases",
             "permission": "application.organisation_administration.privacy_request_case.read"
-          },
-          {
-            "id": "nav_record_privacy_request",
-            "type": "page",
-            "label": "Record privacy request",
-            "icon": "life-buoy",
-            "page": "record_privacy_request_case",
-            "permission": "application.organisation_administration.privacy_request_case.record_privacy_request"
           }
         ]
       }
@@ -534,6 +510,7 @@
                       }
                     ],
                     "title": "Activity (last 90 days)",
+                    "empty_message": "No activity in the last 90 days",
                     "vortex": {
                       "block": {
                         "block_id": "39ab6f28-c166-47cf-91a7-f0b864ded4ff",
@@ -709,6 +686,7 @@
                     "presentation": "grid",
                     "id": "accounts_region",
                     "title": "Organisation accounts",
+                    "empty_message": "No accounts yet",
                     "columns": [
                       {
                         "field": "vortex.system_directory:person.display_name",
@@ -864,6 +842,7 @@
                     "presentation": "grid",
                     "id": "invitations_region",
                     "title": "Invitations",
+                    "empty_message": "No invitations yet",
                     "columns": [
                       {
                         "field": "vortex.system_directory:organization_invitation.invited_email",
@@ -1115,6 +1094,7 @@
                       "mode": "flow"
                     },
                     "title": "Current runtime settings",
+                    "empty_message": "No runtime settings yet",
                     "columns": [
                       {
                         "field": "vortex.organisation_administration:organization_settings.language",
@@ -1513,6 +1493,7 @@
                   "props": {
                     "presentation": "grid",
                     "id": "notices_table",
+                    "empty_message": "No notices yet",
                     "columns": [
                       {
                         "field": "vortex.organisation_administration:organisation_notice.title",
@@ -1775,6 +1756,7 @@
                   "props": {
                     "presentation": "grid",
                     "id": "privacy_cases_table",
+                    "empty_message": "No privacy requests yet",
                     "columns": [
                       {
                         "field": "vortex.organisation_administration:privacy_request_case.subject",
