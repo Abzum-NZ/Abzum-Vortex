@@ -9,9 +9,9 @@ import {
   moduleRootIdSchema,
   queryIdSchema,
   recordIdSchema,
-  stableDefinitionReleaseVersionSchema,
 } from "../catalogue/identifiers";
 import { boardColumnReadLimit, calendarMappingSchema } from "../definition/application-contracts";
+import { stableDefinitionReleaseVersionSchema } from "../definition/version-impact";
 import { exactDecimalTextSchema, moneyValueSchema } from "../records/module-field-values";
 import {
   protectedQueryBoardMembersCommandSchema,

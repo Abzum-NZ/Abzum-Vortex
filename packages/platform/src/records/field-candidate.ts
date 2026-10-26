@@ -1,7 +1,6 @@
 import "server-only";
 
-import type { recordTypeDefinitionSchema } from "../definition/module-contracts";
-import type { ModuleField } from "../definition/module-field-contracts";
+import type { ModuleField, recordTypeDefinitionSchema } from "../definition/module-contracts";
 import type { JsonValue } from "../catalogue/common";
 import {
   applyBeforeSaveRules,

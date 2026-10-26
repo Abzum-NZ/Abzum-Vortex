@@ -25,7 +25,7 @@ import type {
   StoredDefinitionDraft,
 } from "./definition-store-contracts";
 import type { VersionRequirement } from "./definitions";
-import { stableDefinitionReleaseVersionSchema } from "../catalogue/identifiers";
+import { stableDefinitionReleaseVersionSchema } from "./version-impact";
 import { compare, satisfies } from "semver";
 import { compareCanonicalStrings, fingerprintCanonicalValue } from "./canonical-json-definition";
 import { applicationModuleKeys } from "./application-module-sources";

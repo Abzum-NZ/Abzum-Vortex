@@ -15,9 +15,12 @@ import {
   revisionSchema,
   semanticVersionSchema,
   timestampSchema,
-  stableDefinitionReleaseVersionSchema,
 } from "../catalogue/identifiers";
-import { versionImpactReasonSchema, versionImpactSchema } from "./version-impact";
+import {
+  stableDefinitionReleaseVersionSchema,
+  versionImpactReasonSchema,
+  versionImpactSchema,
+} from "./version-impact";
 
 export const storedApplicationSourceDocumentSchema = applicationSourceDocumentSchema;
 export const storedModuleSourceDocumentSchema = moduleSourceDocumentSchema;

@@ -9,7 +9,6 @@ import {
   revisionSchema,
   semanticVersionSchema,
   namespacedKeySchema,
-  stableDefinitionReleaseVersionSchema,
 } from "../catalogue/identifiers";
 import {
   activeApplicationInstallationEvidenceSchema,
@@ -20,6 +19,7 @@ import {
   installationRuntimeBundleKeySchema,
   installationRuntimeBundleSections,
 } from "./installation-runtime-bundle";
+import { stableDefinitionReleaseVersionSchema } from "./version-impact";
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
 import { z } from "zod";
 import {

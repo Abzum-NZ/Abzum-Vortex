@@ -11,7 +11,7 @@ import {
   conditionalFormattingDateParameters,
   type ConditionalFormattingDateParameter,
 } from "../../definition/application-composition/records-table-features/conditional-formatting";
-import type { ModuleField } from "../../definition/module-field-contracts";
+import type { ModuleField } from "../../definition/module-contracts";
 import type { ConditionNode } from "../../definition/module-foundation-contracts";
 import {
   evaluateTypedCondition,

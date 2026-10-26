@@ -2,9 +2,10 @@ import "server-only";
 
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { correlationIdSchema } from "../catalogue/common";
-import { applicationRootIdSchema, identityIdSchema, organizationAccountIdSchema, organizationIdSchema, revisionSchema, workflowIdSchema, workflowNodeIdSchema, workflowRunIdSchema, stableDefinitionReleaseVersionSchema } from "../catalogue/identifiers";
+import { applicationRootIdSchema, identityIdSchema, organizationAccountIdSchema, organizationIdSchema, revisionSchema, workflowIdSchema, workflowNodeIdSchema, workflowRunIdSchema } from "../catalogue/identifiers";
 import { sameId } from "../catalogue/runtime-primitives";
 import { canonicalJson } from "../definition/canonical-json";
+import { stableDefinitionReleaseVersionSchema } from "../definition/version-impact";
 import { protectedOperationRequestSchema, type ProtectedOperationRequest } from "../rules/automation-contracts";
 import { z } from "zod";
 import { kestraProtectedOperationContractVersion } from "./kestra-compiler";

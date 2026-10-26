@@ -1,9 +1,9 @@
 import { jsonValueSchema } from "../catalogue/common";
 import {
   recordTypeDefinitionSchema,
+  type ModuleField,
   type RecordTypeDefinition,
 } from "../definition/module-contracts";
-import type { ModuleField } from "../definition/module-field-contracts";
 import { compareInstants, exactInstant, type ExactInstant } from "./exact-instant";
 
 export type DeriveEarliestPendingDeadlineTransitionInput = Readonly<{

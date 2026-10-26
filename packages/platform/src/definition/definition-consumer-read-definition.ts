@@ -8,7 +8,6 @@ import {
   platformIdSchema,
   revisionSchema,
   semanticVersionSchema,
-  stableDefinitionReleaseVersionSchema,
 } from "../catalogue/identifiers";
 import { selectApplicationContractPair } from "./application-contract-versions";
 import {
@@ -22,6 +21,7 @@ import {
 } from "./definition-consumer-read";
 import { assertModuleContractPair } from "./definition-source";
 import type { ExactDefinitionDependency } from "./definition-store-contracts";
+import { stableDefinitionReleaseVersionSchema } from "./version-impact";
 import { z } from "zod";
 import type { DefinitionPublicationCatalogue } from "./definition-publication-contracts";
 import {

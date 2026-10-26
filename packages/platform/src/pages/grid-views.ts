@@ -22,7 +22,7 @@ import {
   conditionalFormatRuleFields,
   conditionalFormatRuleIssue,
 } from "../definition/application-composition/records-table-features/conditional-formatting";
-import type { ModuleField } from "../definition/module-field-contracts";
+import type { ModuleField } from "../definition/module-contracts";
 import { placementSettings } from "../definition/application-composition-catalogue";
 import { walkPageComposition } from "./placement-walk";
 import type { PageDefinition } from "../definition/application-contracts";

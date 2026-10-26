@@ -14,9 +14,9 @@ import {
   recordTypeIdSchema,
   revisionSchema,
   timestampSchema,
-  stableDefinitionReleaseVersionSchema,
 } from "../catalogue/identifiers";
 import { canonicalJson } from "../definition/canonical-json";
+import { stableDefinitionReleaseVersionSchema } from "../definition/version-impact";
 import { protectedQueryCommandSchema } from "./protected-query-contracts";
 
 /**

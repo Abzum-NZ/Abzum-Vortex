@@ -42,8 +42,7 @@ import type {
   PageComposition,
 } from "../definition/application-composition/page-composition";
 import type { PageDefinition } from "../definition/application-contracts";
-import type { RecordTypeDefinition } from "../definition/module-contracts";
-import type { ModuleField } from "../definition/module-field-contracts";
+import type { ModuleField, RecordTypeDefinition } from "../definition/module-contracts";
 import { moduleFieldValueSchemas } from "../records/module-field-values";
 import { richTextDocumentSchema } from "../records/rich-text";
 import { resolveShellLayout } from "./page-composition-resolution";

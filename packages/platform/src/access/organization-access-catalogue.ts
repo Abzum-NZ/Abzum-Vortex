@@ -22,8 +22,8 @@ import {
   roleIdSchema,
   semanticVersionSchema,
   timestampSchema,
-  stableDefinitionReleaseVersionSchema,
 } from "../catalogue/identifiers";
+import { stableDefinitionReleaseVersionSchema } from "../definition/version-impact";
 import {
   permissionRegistryDefinitionReleaseSchema,
   permissionRegistryEntryCandidateSchema,

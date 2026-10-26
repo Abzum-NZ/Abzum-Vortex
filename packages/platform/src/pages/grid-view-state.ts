@@ -6,7 +6,7 @@ import {
 } from "./records-table-state";
 import { decodeRecordsTableFieldFilter } from "./records-table-filters";
 import { conditionNodeSchema } from "../definition/module-foundation-contracts";
-import { moduleFieldSchema } from "../definition/module-field-contracts";
+import { moduleFieldSchema } from "../definition/module-contracts";
 import {
   conditionalFormatIcons,
   conditionalFormatRuleFields,

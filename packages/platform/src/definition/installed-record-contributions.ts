@@ -9,8 +9,7 @@ import type { SystemApplicationBoundReleaseSetResult } from "./definition-consum
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
 import { DefinitionError } from "./definition-error";
 import { contributedActionKey } from "./installed-named-actions";
-import { actionDefinitionSchema } from "./module-contracts";
-import { moduleFieldSchema } from "./module-field-contracts";
+import { actionDefinitionSchema, moduleFieldSchema } from "./module-contracts";
 
 /**
  * The exact installed contributions on the record types an application's active installation binds:

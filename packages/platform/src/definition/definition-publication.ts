@@ -25,7 +25,7 @@ import {
   type PublishDefinitionCommand,
   type PublishDefinitionResult,
 } from "./definition-store-contracts";
-import type { ModuleField } from "./module-field-contracts";
+import type { ModuleField } from "./module-contracts";
 import { applicationModuleKeys } from "./application-module-sources";
 import { peopleDirectory, type PeopleDirectoryOwner } from "./module-links";
 import { selectCurrentModuleRelease } from "./definition-dependency-resolution";

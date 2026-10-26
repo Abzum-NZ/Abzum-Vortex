@@ -1,7 +1,8 @@
 import "server-only";
 
-import { applicationRootIdSchema, fingerprintSchema, organizationIdSchema, revisionSchema, timestampSchema, workflowIdSchema, type ApplicationRootId, type OrganizationId, type SemanticVersion, stableDefinitionReleaseVersionSchema } from "../catalogue/identifiers";
+import { applicationRootIdSchema, fingerprintSchema, organizationIdSchema, revisionSchema, timestampSchema, workflowIdSchema, type ApplicationRootId, type OrganizationId, type SemanticVersion } from "../catalogue/identifiers";
 import { databaseCode, isRecord } from "../catalogue/runtime-primitives";
+import { stableDefinitionReleaseVersionSchema } from "../definition/version-impact";
 import { flowSchema } from "./flow-contracts";
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
 import {

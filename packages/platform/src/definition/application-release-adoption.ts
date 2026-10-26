@@ -6,8 +6,8 @@ import {
   revisionSchema,
   type ApplicationRootId,
   type OrganizationId,
-  stableDefinitionReleaseVersionSchema,
 } from "../catalogue/identifiers";
+import { stableDefinitionReleaseVersionSchema } from "./version-impact";
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
 import { z } from "zod";
 import { DefinitionError, unexpectedDefinitionFailure } from "./definition-error";

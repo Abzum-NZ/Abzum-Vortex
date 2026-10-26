@@ -9,8 +9,8 @@ import {
   organizationIdSchema,
   revisionSchema,
   timestampSchema,
-  stableDefinitionReleaseVersionSchema,
 } from "../catalogue/identifiers";
+import { stableDefinitionReleaseVersionSchema } from "./version-impact";
 
 const definitionHistoryCommandCommon = {
   pageSize: z.number().int().min(1).max(100),

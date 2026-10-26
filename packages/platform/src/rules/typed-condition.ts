@@ -5,7 +5,7 @@ import {
   organizationAccountIdSchema,
 } from "../catalogue/identifiers";
 import { isRecord } from "../catalogue/runtime-primitives";
-import { moduleFieldSchema, type ModuleField } from "../definition/module-field-contracts";
+import { moduleFieldSchema, type ModuleField } from "../definition/module-contracts";
 import { conditionNodeSchema, type ConditionNode } from "../definition/module-foundation-contracts";
 import {
   TypedConditionEvaluationError,

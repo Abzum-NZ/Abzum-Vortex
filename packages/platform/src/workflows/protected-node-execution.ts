@@ -1,10 +1,11 @@
 import "server-only";
 
 import { jsonValueSchema, type JsonValue } from "../catalogue/common";
-import { builderKeySchema, workflowNodeIdSchema, workflowRunIdSchema, stableDefinitionReleaseVersionSchema } from "../catalogue/identifiers";
+import { builderKeySchema, workflowNodeIdSchema, workflowRunIdSchema } from "../catalogue/identifiers";
 import { findPlatformServiceOperation, PLATFORM_SERVICE_OPERATIONS } from "../catalogue/platform-service-operation-catalogue";
 import { describeFailure } from "../catalogue/runtime-primitives";
 import { protectedOperationReferenceSetSchema } from "../definition/application-flow-bindings";
+import { stableDefinitionReleaseVersionSchema } from "../definition/version-impact";
 import { protectedOperationRequestSchema, workflowExecutionReferenceSchema, type WorkflowExecutionReference } from "../rules/automation-contracts";
 import { platformOperationKey } from "./default-flow-sources";
 import { flowTaskChildLists, type FlowTask } from "./flow-contracts";

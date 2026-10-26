@@ -3,7 +3,7 @@ import {
   type DefinitionResolutionSnapshot,
 } from "./definition-compilation-contracts";
 import type { sourceQualifiedConditionSchema } from "./definition-source";
-import type { ModuleField } from "./module-field-contracts";
+import type { ModuleField } from "./module-contracts";
 import type { ConditionNode } from "./module-foundation-contracts";
 import type { z } from "zod";
 import { compareCanonicalStrings, fingerprintCanonicalValue } from "./canonical-json-definition";

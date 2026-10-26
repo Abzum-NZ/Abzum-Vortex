@@ -9,7 +9,7 @@ import {
   semanticTypeForLiteral,
   type OperandInfo,
 } from "../../../rules/condition-types";
-import type { ModuleField } from "../../module-field-contracts";
+import type { ModuleField } from "../../module-contracts";
 import type { ComponentSettingValue } from "../block-property-schema";
 import {
   factsOf,

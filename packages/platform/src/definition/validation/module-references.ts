@@ -5,7 +5,7 @@ import {
 import { flowFormulaSchema, flowFormulaUsesNow } from "../../workflows/flow-values";
 import type { DefinitionRuleFailure } from "../../catalogue/validation-errors";
 import type { FlowDefinition } from "../../workflows/flow-contracts";
-import type { ModuleField } from "../module-field-contracts";
+import type { ModuleField } from "../module-contracts";
 import { fingerprintCanonicalValue, compareCanonicalStrings } from "../canonical-json-definition";
 import {
   type PreparedValidationContext,

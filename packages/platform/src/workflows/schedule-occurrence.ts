@@ -5,8 +5,9 @@ import { Temporal } from "@js-temporal/polyfill";
 import { Buffer } from "node:buffer";
 import { createHash } from "node:crypto";
 
-import { applicationRootIdSchema, builderKeySchema, organizationIdSchema, revisionSchema, stableDefinitionReleaseVersionSchema } from "../catalogue/identifiers";
+import { applicationRootIdSchema, builderKeySchema, organizationIdSchema, revisionSchema } from "../catalogue/identifiers";
 import { isRecord } from "../catalogue/runtime-primitives";
+import { stableDefinitionReleaseVersionSchema } from "../definition/version-impact";
 import { flowIdSchema, flowScheduleRecurrenceSchema, flowSchema, type FlowDefinition, type FlowTrigger } from "./flow-contracts";
 
 import { logRefusal } from "../catalogue/runtime-primitives";
