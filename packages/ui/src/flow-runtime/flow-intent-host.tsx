@@ -269,7 +269,7 @@ export function useFlowIntentHost(
     element = (
       <FlowDialog
         key={current.id}
-        title={messageTitle(message.tone)}
+        title={message.title ?? messageTitle(message.tone)}
         onDismiss={() => settle()}
         actions={
           <Button type="button" onClick={() => settle()}>

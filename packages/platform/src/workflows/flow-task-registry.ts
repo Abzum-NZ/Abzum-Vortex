@@ -772,7 +772,11 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
     summary: "Shows a safe message to the person.",
     runLocations: ["browser"],
     effect: "interface",
-    properties: { message: required("message_text"), tone: optional("builder_key") },
+    properties: {
+      title: optional("message_text"),
+      message: required("message_text"),
+      tone: optional("builder_key"),
+    },
     kestra: "not_compiled",
   },
   "interface.show_form": {

@@ -884,6 +884,28 @@
                                     "type": "interface.show_message",
                                     "version": "1.0.0",
                                     "properties": {
+                                      "title": {
+                                        "kind": "formula",
+                                        "formula": {
+                                          "op": "join",
+                                          "parts": [
+                                            {
+                                              "op": "reference",
+                                              "reference": {
+                                                "source": "task_output",
+                                                "task": "install",
+                                                "key": "result",
+                                                "path": ["application_name"]
+                                              }
+                                            },
+                                            {
+                                              "op": "literal",
+                                              "type": "text",
+                                              "value": " installed"
+                                            }
+                                          ]
+                                        }
+                                      },
                                       "message": {
                                         "kind": "formula",
                                         "formula": {
@@ -999,6 +1021,13 @@
                                     "type": "interface.show_message",
                                     "version": "1.0.0",
                                     "properties": {
+                                      "title": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "Install"
+                                        }
+                                      },
                                       "message": {
                                         "kind": "literal",
                                         "literal": {
@@ -1022,6 +1051,13 @@
                                     "type": "interface.show_message",
                                     "version": "1.0.0",
                                     "properties": {
+                                      "title": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "Install"
+                                        }
+                                      },
                                       "message": {
                                         "kind": "literal",
                                         "literal": {
@@ -1040,6 +1076,13 @@
                                 "type": "interface.show_message",
                                 "version": "1.0.0",
                                 "properties": {
+                                  "title": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "Install"
+                                    }
+                                  },
                                   "message": {
                                     "kind": "literal",
                                     "literal": {
@@ -1276,6 +1319,28 @@
                                     "type": "interface.show_message",
                                     "version": "1.0.0",
                                     "properties": {
+                                      "title": {
+                                        "kind": "formula",
+                                        "formula": {
+                                          "op": "join",
+                                          "parts": [
+                                            {
+                                              "op": "reference",
+                                              "reference": {
+                                                "source": "task_output",
+                                                "task": "upgrade",
+                                                "key": "result",
+                                                "path": ["application_name"]
+                                              }
+                                            },
+                                            {
+                                              "op": "literal",
+                                              "type": "text",
+                                              "value": " upgraded"
+                                            }
+                                          ]
+                                        }
+                                      },
                                       "message": {
                                         "kind": "formula",
                                         "formula": {
@@ -1388,6 +1453,13 @@
                                     "type": "interface.show_message",
                                     "version": "1.0.0",
                                     "properties": {
+                                      "title": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "Upgrade"
+                                        }
+                                      },
                                       "message": {
                                         "kind": "literal",
                                         "literal": {
@@ -1411,6 +1483,13 @@
                                     "type": "interface.show_message",
                                     "version": "1.0.0",
                                     "properties": {
+                                      "title": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "Upgrade"
+                                        }
+                                      },
                                       "message": {
                                         "kind": "literal",
                                         "literal": {
@@ -1617,6 +1696,13 @@
                                     "type": "interface.show_message",
                                     "version": "1.0.0",
                                     "properties": {
+                                      "title": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "Role changes accepted"
+                                        }
+                                      },
                                       "message": {
                                         "kind": "formula",
                                         "formula": {
@@ -1690,6 +1776,13 @@
                                     "type": "interface.show_message",
                                     "version": "1.0.0",
                                     "properties": {
+                                      "title": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "Accept role changes"
+                                        }
+                                      },
                                       "message": {
                                         "kind": "literal",
                                         "literal": {
@@ -1713,6 +1806,13 @@
                                     "type": "interface.show_message",
                                     "version": "1.0.0",
                                     "properties": {
+                                      "title": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "Accept role changes"
+                                        }
+                                      },
                                       "message": {
                                         "kind": "literal",
                                         "literal": {
@@ -1791,6 +1891,13 @@
                                     "type": "interface.show_message",
                                     "version": "1.0.0",
                                     "properties": {
+                                      "title": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "Install or upgrade"
+                                        }
+                                      },
                                       "message": {
                                         "kind": "literal",
                                         "literal": {
@@ -1814,6 +1921,13 @@
                                     "type": "interface.show_message",
                                     "version": "1.0.0",
                                     "properties": {
+                                      "title": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "Upgrade"
+                                        }
+                                      },
                                       "message": {
                                         "kind": "literal",
                                         "literal": {
@@ -1837,6 +1951,13 @@
                                     "type": "interface.show_message",
                                     "version": "1.0.0",
                                     "properties": {
+                                      "title": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "Install or upgrade"
+                                        }
+                                      },
                                       "message": {
                                         "kind": "literal",
                                         "literal": {
@@ -1860,6 +1981,13 @@
                                     "type": "interface.show_message",
                                     "version": "1.0.0",
                                     "properties": {
+                                      "title": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "Install or upgrade"
+                                        }
+                                      },
                                       "message": {
                                         "kind": "literal",
                                         "literal": {
@@ -1923,6 +2051,13 @@
                     "type": "interface.show_message",
                     "version": "1.0.0",
                     "properties": {
+                      "title": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "Install or upgrade"
+                        }
+                      },
                       "message": {
                         "kind": "literal",
                         "literal": {

@@ -46,7 +46,11 @@ export const surfaceCancellationError = (): Error => {
 export const isSurfaceCancellation = (error: unknown): boolean =>
   error instanceof Error && error.name === "AbortError";
 
-export type FlowMessageIntent = Readonly<{ text: string; tone: string | undefined }>;
+export type FlowMessageIntent = Readonly<{
+  title: string | undefined;
+  text: string;
+  tone: string | undefined;
+}>;
 /**
  * A confirmation: its question, what it covers line by line, and one optional opt-in that goes with
  * a yes. `confirmLabel` names the answering button.
@@ -92,7 +96,9 @@ export const isFlowIntent = (candidate: unknown): candidate is FlowIntent => {
 /** Undefined when the intent lacks its required, bounded message text. */
 export const readMessageIntent = (intent: FlowIntent): FlowMessageIntent | undefined => {
   const message = text(intent.properties.message);
-  return message === undefined ? undefined : { text: message, tone: text(intent.properties.tone) };
+  return message === undefined
+    ? undefined
+    : { title: text(intent.properties.title), text: message, tone: text(intent.properties.tone) };
 };
 
 /**
