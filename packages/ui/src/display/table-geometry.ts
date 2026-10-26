@@ -1,6 +1,6 @@
 "use client";
 
-import { useLayoutEffect, useSyncExternalStore, type RefObject } from "react";
+import { useEffect, useSyncExternalStore, type RefObject } from "react";
 import {
   RECORDS_TABLE_COLUMN_MAXIMUM_WIDTH,
   RECORDS_TABLE_COLUMN_MINIMUM_WIDTH,
@@ -56,27 +56,50 @@ export const virtualizesRows = (rowCount: number): boolean =>
  */
 export const BOUNDED_VIEWPORT_CLASS = "max-h-[var(--grid-available-height,100svh)]";
 
+type GridMeasurement = () => () => void;
+const gridMeasurements = new Set<GridMeasurement>();
+let gridMeasurementFrame = 0;
+
+/** Viewport sizing and pinning share a frame: every layout read precedes every style write. */
+export const scheduleGridMeasurement = (measure: GridMeasurement): void => {
+  gridMeasurements.add(measure);
+  if (gridMeasurementFrame !== 0) return;
+  gridMeasurementFrame = requestAnimationFrame(() => {
+    gridMeasurementFrame = 0;
+    const measurements = [...gridMeasurements];
+    gridMeasurements.clear();
+    const updates = measurements.map((read) => read());
+    for (const update of updates) update();
+  });
+};
+
+export const cancelGridMeasurement = (measure: GridMeasurement): void => {
+  gridMeasurements.delete(measure);
+  if (gridMeasurements.size !== 0) return;
+  cancelAnimationFrame(gridMeasurementFrame);
+  gridMeasurementFrame = 0;
+};
+
 /** Fit the rows above their following controls; scrolling changes only the overflow cue. */
 export const useBoundedGridViewport = <Element extends HTMLElement>(
   scroll: RefObject<Element | null>,
   bounded: boolean,
 ): void => {
-  useLayoutEffect(() => {
+  useEffect(() => {
     const element = scroll.current;
     if (!bounded || element === null) return;
-    let frame = 0;
+    let ready = false;
     let overflow = 0;
     let fading = false;
-    const updateFade = (): void => {
-      const next = element.scrollTop < overflow - 1;
+    const writeFade = (next: boolean): void => {
       if (next === fading) return;
       fading = next;
       element.style.maskImage = next
         ? "linear-gradient(to bottom, black calc(100% - 16px), transparent)"
         : "none";
     };
-    const measure = (): void => {
-      frame = 0;
+    const updateFade = (): void => writeFade(element.scrollTop < overflow - 1);
+    const measure = (): (() => void) => {
       const viewport = window.visualViewport;
       const bottom = viewport === null ? window.innerHeight : viewport.offsetTop + viewport.height;
       let followingHeight = 0;
@@ -94,12 +117,18 @@ export const useBoundedGridViewport = <Element extends HTMLElement>(
           parseFloat(style.marginBottom);
       }
       const available = Math.max(0, bottom - element.getBoundingClientRect().top - followingHeight);
-      element.style.setProperty("--grid-available-height", `${available}px`);
       overflow = element.scrollHeight - element.clientHeight;
-      updateFade();
+      const next = element.scrollTop < overflow - 1;
+      return () => {
+        const height = `${available}px`;
+        if (element.style.getPropertyValue("--grid-available-height") !== height)
+          element.style.setProperty("--grid-available-height", height);
+        // A changed height is measured by ResizeObserver on the next frame, after layout settles.
+        writeFade(next);
+      };
     };
     const schedule = (): void => {
-      if (frame === 0) frame = requestAnimationFrame(measure);
+      if (ready) scheduleGridMeasurement(measure);
     };
     const observer = new ResizeObserver(schedule);
     observer.observe(element);
@@ -113,11 +142,16 @@ export const useBoundedGridViewport = <Element extends HTMLElement>(
     window.visualViewport?.addEventListener("resize", schedule);
     element.addEventListener("scroll", updateFade, { passive: true });
     element.addEventListener("vortex-row-settled", schedule);
-    measure();
+    // The server-rendered rows are usable before these overflow decorations need measuring.
+    const firstFrame = requestAnimationFrame(() => {
+      ready = true;
+      schedule();
+    });
     return () => {
       observer.disconnect();
       children.disconnect();
-      cancelAnimationFrame(frame);
+      cancelAnimationFrame(firstFrame);
+      cancelGridMeasurement(measure);
       window.removeEventListener("resize", schedule);
       window.visualViewport?.removeEventListener("resize", schedule);
       element.removeEventListener("scroll", updateFade);
