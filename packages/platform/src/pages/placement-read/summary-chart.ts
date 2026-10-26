@@ -111,13 +111,15 @@ const settingText = (value: BlockPropertyValueContract | undefined): string | un
 
 /**
  * A group value in its readable form: a choice's installed label, a link's viewer-safe target
- * label (or its restricted state), or the plain text of a scalar.
+ * label (or its restricted state), or the plain text of a scalar. Records without a value form
+ * their own group, named after the field ("No team").
  */
 const groupLabel = (
   field: PlacementField,
   value: JsonValue | undefined,
   recordLinks: ProjectedRecordLinks | undefined,
 ): string | undefined => {
+  if (value === null || value === undefined) return `No ${field.label.toLowerCase()}`;
   // A link the viewer may not read arrives as the summary's "not_available" group, as in a pivot.
   if (field.type === "link")
     return value === "not_available"
