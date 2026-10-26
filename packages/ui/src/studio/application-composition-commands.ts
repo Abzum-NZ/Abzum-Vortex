@@ -33,6 +33,7 @@ import { createStudioDiscoveryAdapter } from "./discovery-adapter";
 import {
   studioOwnsSetting,
   studioQueryOffered,
+  studioQueryChoices,
   studioReleaseReadsQuery,
 } from "./contextual-palette";
 import {
@@ -44,7 +45,7 @@ import {
   removeFlowBindingsOf,
 } from "./stored-composition";
 import { studioFormChangeRefusal, studioFormShapeRefusal } from "./application-composition-forms";
-import { restoreStudioGridFeatureBindings } from "./grid-features";
+import { restoreStudioGridFeatureBindings, studioGridDataSettings } from "./grid-features";
 import type { StudioSemanticSelection } from "./semantic-selection";
 import type {
   StudioCompositionBreakpoint,
@@ -344,6 +345,14 @@ const applySettings = (
     if (studioOwnsSetting(key)) settings[key] = value;
   restoreStudioGridFeatureBindings(settings, release.properties, source.body.flow_bindings, alias);
   let query = input.query;
+  if (query !== (target.item.props.vortex.query ?? null))
+    Object.assign(
+      settings,
+      studioGridDataSettings(
+        release.properties,
+        studioQueryChoices(source, current.borrowed).find((choice) => choice.reference === query),
+      ),
+    );
   if (
     query !== null &&
     (!readsQuery(release, target.item) || !studioQueryOffered(source, current.borrowed, query))

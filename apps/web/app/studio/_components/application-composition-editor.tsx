@@ -26,6 +26,7 @@ import {
   studioPlacementReferenceSentence,
   studioSemanticSelectionKey,
   studioBlockChoices,
+  studioGridDataSettings,
   studioSettingProblems,
   StudioQueryPicker,
   StudioQueryBindings,
@@ -243,7 +244,18 @@ export function ApplicationCompositionEditor(props: Props) {
   };
   // The query sheet answers after the draft changed: it chooses through the latest settings.
   const chooseQuery = useRef<(reference: string) => void>(() => undefined);
-  chooseQuery.current = (reference) => changeSettings({ ...settingsInputs, query: reference });
+  const changeQuery = (reference: string) =>
+    changeSettings({
+      query: reference === "" ? null : reference,
+      settings: {
+        ...settingsInputs.settings,
+        ...studioGridDataSettings(
+          settingsModel.kind === "available" ? settingsModel.properties : [],
+          props.choices.queries.find((query) => query.reference === reference),
+        ),
+      },
+    });
+  chooseQuery.current = changeQuery;
   const changeLayout = (next: LayoutInputs) => {
     const described = layoutOf(next);
     if ("problem" in described) {
@@ -432,9 +444,7 @@ export function ApplicationCompositionEditor(props: Props) {
                     ? undefined
                     : () => props.onNewQuery?.((reference) => chooseQuery.current(reference))
                 }
-                onChange={(query) =>
-                  changeSettings({ ...settingsInputs, query: query === "" ? null : query })
-                }
+                onChange={changeQuery}
               />
             )}
             {settingsModel.readsQuery && (

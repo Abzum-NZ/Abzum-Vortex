@@ -1336,6 +1336,10 @@ function SettingFields({
   choices,
   disabled,
 }: SettingFieldsProps): ReactElement {
+  const [touched, setTouched] = useState<{ id: string; keys: ReadonlySet<string> }>({
+    id: idPrefix,
+    keys: new Set(),
+  });
   // A field's optional label is an override. Matching text follows the field when it changes;
   // other text stays authored, with an explicit way to return to the field's label.
   const fieldProperty = properties.find(
@@ -1377,6 +1381,10 @@ function SettingFields({
         if (!componentSettingApplies(property, values)) return null;
         const value = Object.hasOwn(values, property.key) ? values[property.key] : undefined;
         const set = (next: SettingValue) => {
+          setTouched((previous) => ({
+            id: idPrefix,
+            keys: new Set([...(previous.id === idPrefix ? previous.keys : []), property.key]),
+          }));
           const result: Record<string, SourceBlockPropertyValueContract> = { ...values };
           if (next === undefined) delete result[property.key];
           // A group's declared defaults are part of its typed value. Materialize them here,
@@ -1450,9 +1458,11 @@ function SettingFields({
             )}
             {property === labelProperty && fieldProperty !== undefined && (
               <div className="space-y-1 text-sm text-muted-foreground">
-                {field === undefined ? (
+                {field === undefined &&
+                touched.id === idPrefix &&
+                (touched.keys.has(fieldProperty.key) || touched.keys.has(property.key)) ? (
                   <p role="alert">Choose a field offered by this data to resolve its label.</p>
-                ) : label?.kind === "text" ? (
+                ) : field === undefined ? null : label?.kind === "text" ? (
                   <>
                     {fieldChanged && label.value !== field.label && (
                       <p role="alert">

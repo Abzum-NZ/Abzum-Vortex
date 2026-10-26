@@ -302,6 +302,7 @@ export type StudioQueryChoice = Readonly<{
   /** The record type the query reads, as `<module>:<record>`. */
   recordType: string;
   recordTypeLabel: string;
+  recordTypePluralLabel?: string;
   allFields: readonly StudioQueryField[];
   fields: readonly StudioQueryField[];
   /** Each declared total, stored by its alias and offered by its business name. */
@@ -522,6 +523,7 @@ const ownQueries = (
         label: query.label ?? query.key,
         recordType,
         recordTypeLabel: record?.name ?? "",
+        recordTypePluralLabel: record?.plural_name ?? "",
         allFields: Object.freeze(allFields),
         fields: Object.freeze(
           selected.flatMap((key) =>
