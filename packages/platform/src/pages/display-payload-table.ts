@@ -3,7 +3,10 @@ import { recordsTableSortDirections } from "../definition/application-compositio
 import { recordsTableTotalsSchema } from "../definition/application-composition/records-table-totals";
 import {
   displayColumnSchema,
+  displayColumnsSchema,
   displayFieldKeySchema,
+  displayDetailFieldsSchema,
+  isInternalAddress,
   displayTextSchema,
   refineUniqueKeys,
 } from "./display-payload-parts";
@@ -399,3 +402,56 @@ export const tablePayloadSchema = z
   .readonly()
   .superRefine(refineTablePayload);
 export type DisplayTablePayload = z.output<typeof tablePayloadSchema>;
+
+const statusOnly = <Status extends string>(status: Status) =>
+  z
+    .object({ status: z.literal(status) })
+    .strict()
+    .readonly();
+
+/**
+ * One page a table reads on demand, a tree level or the open group's members: the table's own
+ * payload for those rows, or why there is none.
+ */
+export const tableLevelResultSchema = z.discriminatedUnion("status", [
+  z
+    .object({ status: z.literal("ready"), values: tablePayloadSchema })
+    .strict()
+    .readonly(),
+  statusOnly("empty"),
+  statusOnly("refused"),
+  statusOnly("error"),
+]);
+
+/** One related record of an expanded row: its own record page, when the viewer may open it. */
+export const rowDetailRowSchema = z
+  .object({
+    recordId: displayTextSchema,
+    href: z
+      .string()
+      .refine(isInternalAddress, "A related record's page must be in this application")
+      .exactOptional(),
+    fields: displayDetailFieldsSchema,
+  })
+  .strict()
+  .readonly();
+
+/**
+ * One page of an expanded row's related records. A refusal and an error carry nothing, so the
+ * panel cannot show records the read did not authorise; the cause stays in the server log.
+ */
+export const rowDetailResultSchema = z.discriminatedUnion("status", [
+  z
+    .object({
+      status: z.literal("ready"),
+      columns: displayColumnsSchema,
+      rows: z.array(rowDetailRowSchema).readonly(),
+      nextContinuationToken: displayTextSchema.exactOptional(),
+    })
+    .strict()
+    .readonly(),
+  statusOnly("empty"),
+  statusOnly("refused"),
+  statusOnly("error"),
+]);
+export type RowDetailResult = z.input<typeof rowDetailResultSchema>;

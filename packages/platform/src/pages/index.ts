@@ -162,18 +162,15 @@ export {
 export {
   readRecordsTableRowDetail,
   type RowDetailRequest,
-  type RowDetailResult,
   type RowDetailRow,
 } from "./records-table-features/master-detail";
+export type { RowDetailResult } from "./display-payload-table";
 export {
   readRecordsTablePivot,
-  type PivotCell,
-  type PivotDrill,
   type PivotRequest,
-  type PivotResult,
-  type PivotRow,
   type RecordsTablePivotQueryRunner,
 } from "./records-table-features/pivot";
+export type { PivotCell, PivotDrill, PivotResult, PivotRow } from "./display-payload-pivot";
 export { readPageSubjectInTransaction } from "./page-subject-read";
 export {
   createPageSubjectReader,

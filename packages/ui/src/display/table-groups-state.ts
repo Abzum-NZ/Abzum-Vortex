@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { fail, requireExactKeys, requireRecord } from "./payload-parse";
+import { tableLevelResultSchema } from "@vortex/platform/schema";
 import {
-  parseTablePayload,
+  parseProjectedPart,
   type DisplayEventHandlers,
   type DisplayRow,
   type DisplayTablePayload,
@@ -40,36 +40,30 @@ const parseMembers = (
   page: number,
 ): Exclude<Members, Readonly<{ status: "loading" }>> | undefined => {
   if (value === undefined) return undefined;
-  const record = requireRecord(value, "A group's members must be an object", location);
-  switch (record.status) {
-    case "empty":
-    case "refused":
-    case "error":
-      requireExactKeys(record, ["status"], location);
-      return { status: record.status, key };
-    case "ready": {
-      requireExactKeys(record, ["status", "values"], location);
-      const payload = parseTablePayload(record.values, location);
-      return {
-        status: "ready",
-        refreshing: false,
-        page: {
-          key,
-          rows: payload.rows,
-          features: payload.features,
-          page,
-          ...(payload.nextContinuationToken === undefined
-            ? {}
-            : { next: payload.nextContinuationToken }),
-          ...(payload.previousContinuationToken === undefined
-            ? {}
-            : { previous: payload.previousContinuationToken }),
-        },
-      };
-    }
-    default:
-      return fail("A group's members have an unknown status", location);
-  }
+  const result = parseProjectedPart(
+    tableLevelResultSchema,
+    value,
+    "A group's members are invalid",
+    location,
+  );
+  if (result.status !== "ready") return { status: result.status, key };
+  const payload = result.values;
+  return {
+    status: "ready",
+    refreshing: false,
+    page: {
+      key,
+      rows: payload.rows,
+      features: payload.features,
+      page,
+      ...(payload.nextContinuationToken === undefined
+        ? {}
+        : { next: payload.nextContinuationToken }),
+      ...(payload.previousContinuationToken === undefined
+        ? {}
+        : { previous: payload.previousContinuationToken }),
+    },
+  };
 };
 
 /** The group a members state belongs to. */

@@ -1,5 +1,7 @@
 import "server-only";
 
+import type { PivotAxisValue, PivotCell, PivotResult, PivotRow } from "../display-payload-pivot";
+
 import type { IdentitySession, OrganizationSelectionCandidate } from "../../access/identity-access";
 import type { JsonValue } from "../../catalogue/common";
 import { describeFailure } from "../../catalogue/runtime-primitives";
@@ -42,58 +44,6 @@ import { logRecordsTableRequestRefusal, recordsTableRequestRefusal } from "./ind
 
 /** The measure's alias in the summary; the pivot defines exactly one. */
 const MEASURE_ALIAS = "pivot_measure";
-
-/** One cell value a pivot shows: the same closed values a summary shows. */
-export type PivotCell =
-  | Readonly<{ kind: "number"; value: number; formatted: string }>
-  | Readonly<{ kind: "text"; text: string }>
-  | Readonly<{ kind: "boolean"; value: boolean }>
-  | Readonly<{ kind: "date"; iso: string }>
-  | Readonly<{ kind: "empty" }>
-  | Readonly<{ kind: "unavailable" }>;
-
-/** The filter a click on a row or column heading applies to the ordinary grid, in address spelling. */
-export type PivotDrill = Readonly<{ fieldId: string; filter: string }>;
-
-export type PivotAxisValue = Readonly<{
-  /** The canonical value text the server keys it by (a choice value or a bucket start). */
-  key: string;
-  label: string;
-  drill?: PivotDrill;
-}>;
-
-export type PivotRow = PivotAxisValue &
-  Readonly<{
-    /** Records in this row. */
-    count: number;
-    /** One entry per column, null where the row holds no record of that column. */
-    cells: readonly (PivotCell | null)[];
-    total?: PivotCell;
-  }>;
-
-/**
- * One page of a pivot. A refusal carries a business sentence and nothing else; an error carries
- * nothing, so the panel cannot show values the read did not authorise. The cause stays in the log.
- */
-export type PivotResult =
-  | Readonly<{
-      status: "ready";
-      rowLabel: string;
-      columnLabel: string;
-      measureLabel: string;
-      columns: readonly PivotAxisValue[];
-      rows: readonly PivotRow[];
-      /** Aligned with `columns`; present when the table shows totals. */
-      columnTotals?: readonly PivotCell[];
-      grandTotal?: PivotCell;
-      totalRecords: number;
-      rowGroupCount: number;
-      /** Opaque position of the next page of rows; absent on the last page. */
-      nextCursor?: string;
-    }>
-  | Readonly<{ status: "empty" }>
-  | Readonly<{ status: "refused"; message: string }>
-  | Readonly<{ status: "error" }>;
 
 /** The one Query engine entry a pivot reads through: the protected summary. */
 export type RecordsTablePivotQueryRunner = Readonly<{

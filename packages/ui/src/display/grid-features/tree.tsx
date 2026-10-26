@@ -4,10 +4,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   RECORDS_TABLE_TREE_MAXIMUM_PAGE_SIZE,
   recordsTableTreeFeature,
+  tableLevelResultSchema,
 } from "@vortex/platform/schema";
 import { cellValueToText } from "../cell";
-import { fail, requireExactKeys, requireRecord } from "../payload-parse";
-import { parseTablePayload, type DisplayRow } from "../projected-data";
+import { fail } from "../payload-parse";
+import { parseProjectedPart, type DisplayRow } from "../projected-data";
 import type { SubRowEntry, SubRowsBeneath } from "../sub-rows";
 import type { GridFeatureModule, GridFeatureSubRowsProps } from "./registry";
 
@@ -38,29 +39,23 @@ const location = { propertyPath: [recordsTableTreeFeature.property] };
  */
 const parseOutcome = (value: unknown): Outcome | undefined => {
   if (value === undefined) return undefined;
-  const record = requireRecord(value, "A tree level must be an object", location);
-  switch (record.status) {
-    case "empty":
-    case "refused":
-    case "error":
-      requireExactKeys(record, ["status"], location);
-      return { status: record.status };
-    case "ready": {
-      requireExactKeys(record, ["status", "values"], location);
-      const payload = parseTablePayload(record.values, location);
-      return {
-        status: "ready",
-        level: {
-          rows: payload.rows,
-          ...(payload.nextContinuationToken === undefined
-            ? {}
-            : { next: payload.nextContinuationToken }),
-        },
-      };
-    }
-    default:
-      return fail("A tree level has an unknown status", location);
-  }
+  const result = parseProjectedPart(
+    tableLevelResultSchema,
+    value,
+    "A tree level is invalid",
+    location,
+  );
+  if (result.status !== "ready") return { status: result.status };
+  const payload = result.values;
+  return {
+    status: "ready",
+    level: {
+      rows: payload.rows,
+      ...(payload.nextContinuationToken === undefined
+        ? {}
+        : { next: payload.nextContinuationToken }),
+    },
+  };
 };
 
 /** The rows each opened branch holds, so the whole table stays within one row budget. */

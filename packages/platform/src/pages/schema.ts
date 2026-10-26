@@ -27,3 +27,4 @@ export * from "./display-payload-rows";
 export * from "./display-payload-launcher";
 export * from "./display-payload-table";
 export * from "./display-payload-board";
+export * from "./display-payload-pivot";
