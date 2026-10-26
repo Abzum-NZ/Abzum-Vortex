@@ -1,3 +1,5 @@
+import type { z } from "zod";
+import type { displayRowFormatSchema } from "../display-payload-rows";
 import type { GridLayoutState } from "../grid-view-state";
 import type {
   ConditionalColumnFormatProjection,
@@ -26,11 +28,7 @@ import { relativeAnchorDate } from "../query-binding-resolver";
  * cell's own rule wins over the row's) and each numeric column's position in the page's range,
  * from 0 to 1.
  */
-export type RecordsTableRowFormat = Readonly<{
-  row?: string;
-  cells?: Readonly<Record<string, string>>;
-  measures?: Readonly<Record<string, number>>;
-}>;
+export type RecordsTableRowFormat = z.infer<typeof displayRowFormatSchema>;
 
 /** What the server knows to evaluate the rules of one read; supplied only when the feature is on. */
 export type ConditionalFormattingContext = Readonly<{

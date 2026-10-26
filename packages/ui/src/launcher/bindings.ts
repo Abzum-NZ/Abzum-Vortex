@@ -4,9 +4,11 @@ import {
   namespacedKeySchema,
   organizationIdSchema,
   isRecord,
+  type DisplayRow,
+  type DisplayScalarCell,
+  type LauncherRowsPayload,
 } from "@vortex/platform/schema";
 import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "../definition-error";
-import type { DisplayCellValue, DisplayRow, LauncherRowsPayload } from "../display/projected-data";
 
 const MAXIMUM_APPLICATIONS = 10_000;
 const MAXIMUM_APPLICATION_TEXT = 120;
@@ -234,7 +236,7 @@ export function permittedApplicationsToListValues(
   projection: Extract<PermittedApplicationsLauncherProjection, { kind: "available" }>,
 ): LauncherRowsPayload {
   const rows: DisplayRow[] = projection.applications.map((application) => {
-    const cells: Record<string, DisplayCellValue> = {
+    const cells: Record<string, DisplayScalarCell> = {
       name: Object.freeze({ kind: "text", text: application.name }),
       icon: Object.freeze({ kind: "text", text: application.icon }),
     };
@@ -251,7 +253,7 @@ export function permittedApplicationsToListValues(
 /** A query row projected to launcher cell keys by its server-side module binding. */
 export type ApplicationLauncherQueryRow = Readonly<{
   applicationKey: unknown;
-  cells: Readonly<Record<string, DisplayCellValue>>;
+  cells: Readonly<Record<string, DisplayScalarCell>>;
 }>;
 
 /**
@@ -310,7 +312,7 @@ export function applicationLauncherQueryRowsToListValues(
       projectedIcon?.kind === "text"
         ? projectedIcon
         : fail("A launcher query row requires its projected icon cell", rowLocation);
-    const cells: Record<string, DisplayCellValue> = {
+    const cells: Record<string, DisplayScalarCell> = {
       [headingKey]: name,
       [secondaryKey]: icon,
     };

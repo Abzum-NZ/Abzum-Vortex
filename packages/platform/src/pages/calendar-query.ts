@@ -1,5 +1,6 @@
 import "server-only";
 
+import type { z } from "zod";
 import {
   type CalendarView,
   calendarLocalDate,
@@ -30,6 +31,7 @@ import {
   recordLinkPlainText,
   type RecordLinkResolver,
 } from "./component-data-projection";
+import type { calendarPayloadSchema } from "./display-payload-calendar";
 
 type ModuleRelease = InstalledRuntimeContext["releaseSet"]["modules"][number];
 type ModuleQuery = ModuleRelease["content"]["queries"][number];
@@ -201,22 +203,7 @@ export type CalendarPlacementFailureCause =
   | "calendar_query_refused"
   | "calendar_arrangement_refused";
 
-export type CalendarPlacementValues = Readonly<{
-  kind: "calendar";
-  view: CalendarView;
-  date: string;
-  windowStart: string;
-  windowEnd: string;
-  timeZone: string;
-  endExclusive: boolean;
-  truncated: boolean;
-  items: readonly Readonly<{
-    recordId: string;
-    start: string;
-    end: string | null;
-    title: string;
-  }>[];
-}>;
+export type CalendarPlacementValues = z.input<typeof calendarPayloadSchema>;
 
 /**
  * One calendar placement read. A refusal names its cause for the server log; `unavailable` is a

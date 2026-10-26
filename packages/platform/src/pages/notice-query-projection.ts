@@ -1,5 +1,6 @@
 import "server-only";
 
+import type { z } from "zod";
 import {
   requireInstalledRuntimeContext,
   type InstalledRuntimeContext,
@@ -17,21 +18,16 @@ import {
 } from "../queries/protected-query-contracts";
 import type { RecordsTableQueryRunner } from "./records-table-query";
 import { describeFailure } from "../catalogue/runtime-primitives";
+import {
+  queryNoticeSeverities,
+  type queryNoticeItemSchema,
+  type queryNoticePayloadSchema,
+  type QueryNoticeSeverity,
+} from "./display-payload-summary";
 
-export type QueryNoticeSeverity = "info" | "success" | "warning" | "critical";
-export type ProjectedQueryNotice = Readonly<{
-  recordId: string;
-  revision: number;
-  message: string;
-  severity: QueryNoticeSeverity;
-  title?: string;
-  link?: Readonly<{ label: string; href: string }>;
-}>;
-export type ProjectedQueryNoticePage = Readonly<{
-  kind: "query_notice";
-  items: readonly ProjectedQueryNotice[];
-  truncated: boolean;
-}>;
+export type { QueryNoticeSeverity };
+export type ProjectedQueryNotice = z.input<typeof queryNoticeItemSchema>;
+export type ProjectedQueryNoticePage = z.input<typeof queryNoticePayloadSchema>;
 export type QueryNoticeResolution =
   | Readonly<{ status: "ready"; values: ProjectedQueryNoticePage }>
   | Readonly<{ status: "refused"; reason: "not_permitted" }>
@@ -56,7 +52,7 @@ export type QueryNoticeQueryBinding = Readonly<{
 const REFUSED = Object.freeze({ status: "refused", reason: "not_permitted" } as const);
 const ERROR = Object.freeze({ status: "error" } as const);
 const isSeverity = (value: unknown): value is QueryNoticeSeverity =>
-  value === "info" || value === "success" || value === "warning" || value === "critical";
+  queryNoticeSeverities.some((severity) => severity === value);
 
 const fieldReference = (settings: Settings, key: string): string | undefined => {
   const value = Object.hasOwn(settings, key) ? settings[key] : undefined;

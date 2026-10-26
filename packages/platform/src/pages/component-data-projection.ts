@@ -1,5 +1,6 @@
 import "server-only";
 
+import type { z } from "zod";
 import type { JsonValue } from "../catalogue/common";
 import type { BlockPropertyValueContract } from "../definition/application-composition/block-property-values";
 import {
@@ -19,6 +20,8 @@ import type {
   ProtectedQueryFieldBounds,
   ProtectedQueryRow,
 } from "../queries/protected-query-contracts";
+import type { displayDetailCellSchema, displayTableFieldSchema } from "./display-payload-parts";
+import type { recordDetailPayloadSchema } from "./display-payload-record-detail";
 import { isExactDecimal } from "./value-format";
 import {
   asRecordLink,
@@ -42,23 +45,15 @@ import {
   type RecordsTableRowFormat,
 } from "./records-table-features";
 
-/**
- * One closed display value. It is structurally the value the shared display components render, so
- * the payload passes their projected-data parser unchanged; this module never imports the UI.
- */
-export type ProjectedCellValue = ProjectedScalarCellValue | ProjectedTableField;
+/** One closed display value of a record detail field, as the display payload schema accepts it. */
+export type ProjectedCellValue = z.infer<typeof displayDetailCellSchema>;
 
 /**
  * A table field's stored rows as a record detail shows them: its declared columns in declared order
  * with readable headings, at most the first page of rows with each row's cells for exactly those
  * columns, each a scalar display value, and how many rows the field holds in total.
  */
-export type ProjectedTableField = Readonly<{
-  kind: "field_table";
-  columns: readonly Readonly<{ key: string; label: string }>[];
-  rows: readonly Readonly<Record<string, ProjectedScalarCellValue>>[];
-  rowCount: number;
-}>;
+export type ProjectedTableField = z.infer<typeof displayTableFieldSchema>;
 
 /** The resolved links of one page, keyed by `recordLinkLabelKey`; absent when the read failed. */
 export type ProjectedRecordLinks = ReadonlyMap<string, ProjectedRecordLink>;
@@ -227,12 +222,7 @@ export type RecordsTableNarrowing = Readonly<{
   recordTitles?: Readonly<Record<string, string>>;
 }>;
 
-export type ProjectedRecordDetailValues = Readonly<{
-  kind: "record_detail";
-  recordId: string;
-  fields: readonly Readonly<{ key: string; label: string; value: ProjectedCellValue }>[];
-  heading?: ProjectedScalarCellValue;
-}>;
+export type ProjectedRecordDetailValues = z.infer<typeof recordDetailPayloadSchema>;
 
 /**
  * The display payload for one placement. Only `ready` carries values; a refusal never does, so a
