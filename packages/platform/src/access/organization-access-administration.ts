@@ -17,7 +17,6 @@ import {
 } from "../catalogue/identifiers";
 import { descriptionSchema, labelSchema } from "../catalogue/common";
 import {
-  roleActivationEligibilitySourceSchema,
   rolePrivilegeClassificationSchema,
   roleRecentAuthenticationRequirementSchema,
 } from "./organization-access-catalogue";
