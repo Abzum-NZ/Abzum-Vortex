@@ -124,13 +124,12 @@ begin
   end if;
   if meta -> 'recordType' ? 'systemProjection' then
     if p_operation <> 'update'
-      or meta #>> '{recordType,key}' <> 'organization_settings'
       or meta #>> '{recordType,systemProjection,protectedView}' <>
         'organization_runtime_settings'
       or not coalesce(
         (meta #> '{recordType,standardActions}') ? 'update', false
       )
-      or not vortex_definition.is_system_projection_module_internal(
+      or not vortex_definition.is_platform_system_module_internal(
         (meta ->> 'moduleRootId')::uuid, organization_id_value
       )
       or p_record_id is distinct from

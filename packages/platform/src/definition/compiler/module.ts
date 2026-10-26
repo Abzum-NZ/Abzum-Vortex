@@ -6,7 +6,7 @@ import {
   type ModuleCompilationOutput,
   type DefinitionCompilationOutput,
 } from "../definition-compilation-contracts";
-import { moduleDraftSchema, isRegisteredWritableSystemProjection } from "../module-contracts";
+import { moduleDraftSchema, isWritableSystemProjection } from "../module-contracts";
 import { compareCanonicalStrings, fingerprintCanonicalValue } from "../canonical-json-definition";
 import { DefinitionCompilationError } from "../compilation-error";
 import { compileActionFlow, platformServiceProtectedOperationReference } from "./action-flows";
@@ -87,15 +87,10 @@ function compileModule(
     const projection = recordType.system_projection as JsonObject | undefined;
     const refresh = projection?.refresh_while as JsonObject | undefined;
     const registeredWritableUpdate =
-      projection !== undefined &&
-      isRegisteredWritableSystemProjection(
-        recordKey,
-        String(projection.protected_view),
-        definitionKey,
-      );
-    // A system projection remains read-only except for update on the exact registered Module,
-    // record type and protected view. Create, delete, restore and every other standard update
-    // still refuse at publication with the stable system-record code.
+      projection !== undefined && isWritableSystemProjection(String(projection.protected_view));
+    // A system projection remains read-only except for update on a protected read model the
+    // platform writes. Create, delete, restore and every other standard update still refuse at
+    // publication with the stable system-record code.
     if (
       projection !== undefined &&
       (recordType.standard_actions as string[]).some(

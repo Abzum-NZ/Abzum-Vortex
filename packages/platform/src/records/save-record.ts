@@ -13,7 +13,7 @@ import {
 import { describeFailure, databaseRevision } from "../catalogue/runtime-primitives";
 import {
   recordTypeDefinitionSchema,
-  writableSystemProjectionRegistrations,
+  isWritableSystemProjection,
 } from "../definition/module-contracts";
 import type { ExecutionAuthorityContext } from "../workflows/flow-contracts";
 import {
@@ -119,16 +119,9 @@ const contractError = (code: string, cause: unknown): Error =>
 
 const writableSystemProjection = (
   recordType: ReturnType<typeof recordTypeDefinitionSchema.parse>,
-) => {
-  const registration =
-    writableSystemProjectionRegistrations[
-      recordType.key as keyof typeof writableSystemProjectionRegistrations
-    ];
-  return registration !== undefined &&
-    recordType.systemProjection?.protectedView === registration.protectedView
-    ? registration
-    : undefined;
-};
+): boolean =>
+  recordType.systemProjection !== undefined &&
+  isWritableSystemProjection(recordType.systemProjection.protectedView);
 
 /** @internal Shared only by the fixed named-action save composition. */
 export const revision = (candidate: unknown): number | undefined => {
@@ -176,12 +169,12 @@ const parsePreparation = (candidate: unknown): PreparationOutcome => {
   if (value.outcome !== "prepared")
     throw contractError("RECORD_SAVE_PREPARATION_INVALID", value.outcome);
   const recordType = recordTypeDefinitionSchema.safeParse(value.recordType);
-  // A system projection has no ordinary write path. Only an exact entry in the closed protected
-  // writer registration can reach its matching protected SQL writer.
+  // A system projection has no ordinary write path. Only a protected read model the platform
+  // writes can reach its protected SQL writer.
   if (!recordType.success) throw contractError("RECORD_SAVE_RECORD_TYPE_INVALID", recordType.error);
   if (
     (recordType.data.systemProjection !== undefined &&
-      writableSystemProjection(recordType.data) === undefined) ||
+      !writableSystemProjection(recordType.data)) ||
     typeof value.existingValues !== "object" ||
     value.existingValues === null ||
     Array.isArray(value.existingValues)
@@ -485,10 +478,9 @@ const persist = async (
 ): Promise<StoredResult> => {
   if (recordType.systemProjection !== undefined) {
     if (preview) return { outcome: "refused", reasonCode: "field_refused" };
-    const registration = writableSystemProjection(recordType);
     if (
       command.operation !== "update" ||
-      registration === undefined ||
+      !writableSystemProjection(recordType) ||
       command.recordId === undefined ||
       command.expectedConcurrencyNumber === undefined
     )
@@ -583,7 +575,7 @@ const invalidSettingsCorrections = (
   if (
     command.operation !== "update" ||
     command.expectedConcurrencyNumber === undefined ||
-    writableSystemProjection(prepared.recordType) === undefined
+    !writableSystemProjection(prepared.recordType)
   )
     return undefined;
 

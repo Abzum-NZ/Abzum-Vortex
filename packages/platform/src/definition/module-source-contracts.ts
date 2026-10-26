@@ -52,13 +52,14 @@ import {
 /** The one current Module source/validation contract pair. */
 export const moduleSourceContractVersion = "3.0.0" as const;
 
-/** The closed set of protected projections that may declare the standard update action. */
-export const writableSystemProjectionRegistrations = Object.freeze({
-  organization_settings: Object.freeze({
-    moduleKey: "vortex.organisation_administration",
-    protectedView: "organization_runtime_settings",
-  }),
-} as const);
+/**
+ * The closed set of protected read models the platform has a writer for. A system projection of one
+ * of them may declare the standard update action; the database writer accepts the update only from
+ * a Module of a platform system Application.
+ */
+export const writableSystemProjectionViews: readonly string[] = Object.freeze([
+  "organization_runtime_settings",
+]);
 
 /** A declaration kept by a platform system-module source for creation-time platform registration. */
 export const modulePlatformPermissionDeclarationSchema = z
@@ -96,17 +97,8 @@ export type ModulePlatformPermissionDeclaration = z.infer<
   typeof modulePlatformPermissionDeclarationSchema
 >;
 
-export const isRegisteredWritableSystemProjection = (
-  recordTypeKey: string,
-  protectedView: string,
-  moduleKey?: string,
-): boolean =>
-  Object.entries(writableSystemProjectionRegistrations).some(
-    ([key, registration]) =>
-      key === recordTypeKey &&
-      registration.protectedView === protectedView &&
-      (moduleKey === undefined || registration.moduleKey === moduleKey),
-  );
+export const isWritableSystemProjection = (protectedView: string): boolean =>
+  writableSystemProjectionViews.includes(protectedView);
 
 const maximumSourceDocumentNodes = 50_000;
 const maximumSourceNestingDepth = 32;
@@ -563,7 +555,7 @@ const moduleSourceRecordTypeSchema = z
         path: ["storage_scope"],
         message: "A system projection record type is scoped to exactly one organisation",
       });
-    const mayUpdate = isRegisteredWritableSystemProjection(value.key, projection.protected_view);
+    const mayUpdate = isWritableSystemProjection(projection.protected_view);
     if (
       value.standard_actions.some(
         (action) =>
