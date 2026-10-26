@@ -60,7 +60,6 @@ import {
   controlSelectedRecordType,
   pageQueryBindingContext,
   placementParameterDependencies,
-  resolvedQueryRecordTypeId,
 } from "@vortex/platform/server";
 import { projectAttachmentInputs } from "./attachment-inputs";
 import { projectCreateFormDefaults, projectEditForms } from "./edit-form-projection";
@@ -74,7 +73,7 @@ import {
   projectPlacementRecordTypes,
   projectFlowBindingTargets,
 } from "./flow-bindings";
-import { pageGridLayoutRequest, readPageGridLayouts } from "./grid-layouts";
+import { pageDefinitionGrids, readPageGridLayouts } from "./grid-layouts";
 import {
   isStreamablePlacement,
   readPlacement,
@@ -294,6 +293,18 @@ const loadApplicationPageJoined = async (
   );
   startedReads.push(projectedPageRead);
   if (navigationRead !== undefined) startedReads.push(navigationRead);
+  // The person's grid layouts and field policy decide which columns each grid reads, so they are
+  // read (once, for every grid the page places) before any grid reads its rows. The address already
+  // opened this page to the viewer, so they are read while the page is projected, not after it.
+  const gridLayoutsRead = readPageGridLayouts(
+    session,
+    dependencies,
+    selection,
+    String(pageDefinition.pageId),
+    pageDefinitionGrids(context, pageDefinition, parameters, selectedPlacementIds),
+  );
+  void gridLayoutsRead.catch(() => undefined);
+  startedReads.push(gridLayoutsRead);
   const projectedPage = await projectedPageRead;
   if (projectedPage.kind !== "available") return projectedPage;
   // An undefined projection is the page refused for this viewer: never an empty page.
@@ -561,39 +572,22 @@ const loadApplicationPageJoined = async (
     selectedForProjection === undefined
       ? allPlacements
       : allPlacements.filter((entry) => selectedForProjection.has(entry.placementId.toLowerCase()));
-  // The person's grid layouts and field policy decide which columns each grid reads, so they are
-  // read (once, for every grid of the page) before any grid reads its rows.
-  const gridLayoutsRead = readPageGridLayouts(
-    session,
-    dependencies,
-    selection,
-    String(pageDefinition.pageId),
-    placements.filter(isTablePlacement).flatMap(({ placementId, vortex }) => {
-      const recordTypeId =
-        typeof vortex.queryId === "string"
-          ? resolvedQueryRecordTypeId(context, vortex.queryId)
-          : undefined;
-      return recordTypeId === undefined
-        ? []
-        : [pageGridLayoutRequest(pageDefinition, placementId, recordTypeId, parameters)];
-    }),
-  );
-  startedReads.push(gridLayoutsRead);
   const hasQueryBoundLauncher = placements.some(
     (placement) =>
       isApplicationLauncherPlacement(placement) && typeof placement.vortex.queryId === "string",
   );
-  const permittedApplicationsRead = hasQueryBoundLauncher
-    ? await loadPermittedApplicationsAtAddress(
+  // The permitted applications a query-bound launcher lists are read alongside the grid layouts.
+  const permittedApplicationsReading = hasQueryBoundLauncher
+    ? loadPermittedApplicationsAtAddress(
         session,
         address.tenantShortName,
         address.organizationShortName,
       )
     : undefined;
-  const permittedApplicationKeys =
-    permittedApplicationsRead?.kind === "available"
-      ? permittedApplicationsRead.applications.map((application) => application.key)
-      : undefined;
+  if (permittedApplicationsReading !== undefined) {
+    void permittedApplicationsReading.catch(() => undefined);
+    startedReads.push(permittedApplicationsReading);
+  }
 
   // Every query input of the page's blocks resolves from the same server-side facts: what the page
   // declares, its address, the subject read above and the viewer. A relative date reads the
@@ -669,7 +663,14 @@ const loadApplicationPageJoined = async (
     subjectRead ??= Promise.resolve(read);
   };
   const resolveRecordLinks: RecordLinkResolver = services.recordLinkResolver(context);
-  const gridLayouts = await gridLayoutsRead;
+  const [gridLayouts, permittedApplicationsRead] = await Promise.all([
+    gridLayoutsRead,
+    permittedApplicationsReading,
+  ]);
+  const permittedApplicationKeys =
+    permittedApplicationsRead?.kind === "available"
+      ? permittedApplicationsRead.applications.map((application) => application.key)
+      : undefined;
   const placementReaderInput: PlacementReaderInput = {
     context,
     session,

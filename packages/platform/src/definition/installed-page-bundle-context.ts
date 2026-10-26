@@ -393,6 +393,11 @@ export const createHumanInstalledPageBundleContextLoader = (
         return loadHumanPreviewRuntimeContext(dependencies.transaction, dependencies.scope);
       }
       const statePromise = readActiveInstallationBundleState(dependencies.transaction);
+      // The installed bundle is immutable, but what other installed Modules contribute to its
+      // record types changes with their installations, so it is read with every request. It does
+      // not depend on the bundle, so it is sent with the bundle state and consulted after it.
+      const contributionsRead = readInstalledRecordContributions(dependencies.transaction);
+      void contributionsRead.catch(() => undefined);
       const installation = await readHumanActiveInstallation(
         statePromise.then(activeInstallationEvidence),
         dependencies.scope,
@@ -415,9 +420,7 @@ export const createHumanInstalledPageBundleContextLoader = (
         bundle = cached.bundle;
         retainInstalledPageBundle(key, bundle, cached.size);
       }
-      // The installed bundle is immutable, but what other installed Modules contribute to its
-      // record types changes with their installations, so it is read with every request.
-      const contributions = await readInstalledRecordContributions(dependencies.transaction);
+      const contributions = await contributionsRead;
       const context = assembleHumanInstalledRuntimeContext(
         installation,
         withCorrelation(bundle.releaseSet, state.identity.correlationId),
