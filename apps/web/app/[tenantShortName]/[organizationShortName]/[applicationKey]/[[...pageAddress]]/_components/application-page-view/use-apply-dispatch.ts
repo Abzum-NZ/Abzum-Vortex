@@ -1,4 +1,5 @@
 import { useCallback, type Dispatch, type SetStateAction, type RefObject } from "react";
+import { toast } from "@vortex/ui/components/sonner";
 import type { useRouter } from "next/navigation";
 import type {
   createPlatformComponentRegistryForReleases,
@@ -112,6 +113,9 @@ export function useApplyDispatch({
               ? resultNotice
               : undefined;
           });
+        // A confirmed change is announced once, in the notifications region, which stays while
+        // the page moves on (a saved form usually opens what it saved).
+        if (resultNotice.tone !== "problem" && formOnPage) return;
         if (formPlacementId !== undefined) {
           setFormFeedback((current) => ({
             ...current,
@@ -233,12 +237,22 @@ export function useApplyDispatch({
           if (!silentCompletion) showResult(resultNotice, refusalFeedback);
           const changedUnderPerson =
             server.descriptor.outcome === "conflict" || diagnostic?.code === "stale_revision";
+          const confirmed =
+            server.descriptor.commit === "confirmed" &&
+            ["completed", "committed"].includes(server.descriptor.outcome) &&
+            server.failure === undefined;
+          // A saved form usually opens what it saved: its confirmation is a toast that outlives
+          // this page (other gestures confirm through the page notice's own toast).
+          if (
+            confirmed &&
+            formPlacementId !== undefined &&
+            resultNotice.tone !== "problem" &&
+            resultNotice.link === undefined
+          )
+            toast.success(resultNotice.text);
           outcome = {
             ...outcome,
-            confirmed:
-              server.descriptor.commit === "confirmed" &&
-              ["completed", "committed"].includes(server.descriptor.outcome) &&
-              server.failure === undefined,
+            confirmed,
             changed: changedUnderPerson,
             ...(diagnostic?.corrections === undefined
               ? {}
