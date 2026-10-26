@@ -1,6 +1,6 @@
 import "server-only";
 
-import { timestampSchema } from "../schema";
+import { timestampSchema } from "../catalogue/identifiers";
 
 export const connectionStateValues = ["pending", "active", "unhealthy", "revoked"] as const;
 export type ConnectionState = (typeof connectionStateValues)[number];

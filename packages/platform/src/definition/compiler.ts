@@ -5,7 +5,7 @@ import type {
   ModuleCompilationRequest,
   DefinitionCompilationRequest,
   DefinitionCompilationOutput,
-} from "../schema";
+} from "./definition-compilation-contracts";
 import {
   compileParsedApplicationRequest,
   type ParsedApplicationRequest,

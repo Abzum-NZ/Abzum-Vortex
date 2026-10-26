@@ -250,9 +250,7 @@ begin
       raise exception using errcode = '55000',
         message = 'Protected record delete effects are unavailable';
     end if;
-    perform vortex_record.append_record_lifecycle_activity_internal(
-      p_activity_id, 'delete', subject_ids
-    );
+    perform vortex_record.append_record_activity_internal(p_activity_id, 'delete_record', subject_ids, array[]::uuid[], 'completed');
 
     perform vortex_record.complete_command_receipt_internal(
       'record_delete', p_command_id, p_record_id, p_expected_concurrency_number + 1,
@@ -313,9 +311,7 @@ begin
     from pg_catalog.jsonb_array_elements(revisions) as item(value)
     where item.value ->> 'recordKey' = 'root';
 
-    perform vortex_record.append_record_lifecycle_activity_internal(
-      p_activity_id, 'restore', array[p_record_id]::uuid[]
-    );
+    perform vortex_record.append_record_activity_internal(p_activity_id, 'restore_record', array[p_record_id]::uuid[], array[]::uuid[], 'completed');
 
     perform vortex_record.complete_command_receipt_internal(
       'record_restore', p_command_id, p_record_id, restored_revision,
@@ -453,9 +449,7 @@ begin
       loaded -> 'declaration', p_record_id, loaded -> 'facts'
     );
     if decision ->> 'outcome' = 'refused' then
-      perform vortex_record.append_ownership_transfer_activity_internal(
-        p_activity_id, organization_id_value, 'refused'
-      );
+      perform vortex_record.append_record_activity_internal(p_activity_id, 'transfer_record_ownership', array[organization_id_value]::uuid[], array[]::uuid[], 'refused');
       perform vortex_record.release_command_receipt_internal('record_save', p_command_id);
       return pg_catalog.jsonb_build_object(
         'outcome', 'refused_recorded', 'reasonCode', 'record_unavailable',
@@ -506,7 +500,7 @@ begin
       raise exception using errcode = '55000', message = 'Record ownership transfer saved identity is unavailable';
     end if;
     perform vortex_access.invalidate_preview_installations_internal(organization_id_value);
-    perform vortex_record.append_ownership_transfer_activity_internal(p_activity_id, p_record_id, 'completed');
+    perform vortex_record.append_record_activity_internal(p_activity_id, 'transfer_record_ownership', array[p_record_id]::uuid[], array[]::uuid[], 'completed');
     event_result := vortex_platform.append_record_occurrences(
       (record_type_fact ->> 'storageContractId')::uuid,
       p_record_id, pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(

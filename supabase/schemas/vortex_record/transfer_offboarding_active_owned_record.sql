@@ -26,19 +26,15 @@ begin
   end if;
 
   begin
-    return vortex_record.apply_lifecycle_record_changes_internal(
-      'transfer_ownership',
-      p_command_id,
-      p_record_type_id,
-      p_record_id,
-      p_expected_concurrency_number,
+    return vortex_record.apply_record_changes(
+      p_command_id, 'transfer_ownership', p_record_type_id, p_record_id,
+      p_expected_concurrency_number, '{}'::jsonb, null,
       pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
         'kind', 'transfer_ownership',
         'targetKind', p_target_kind,
         'targetId', p_target_id
       )),
-      p_activity_id,
-      p_occurrence_id
+      p_activity_id, p_occurrence_id
     );
   exception
     when serialization_failure or lock_not_available then

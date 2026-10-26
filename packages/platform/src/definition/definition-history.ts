@@ -1,29 +1,34 @@
 import "server-only";
 
+import { sessionContextSchema, type SessionContext } from "../access/identity-access";
+import {
+  applicationRootIdSchema,
+  fingerprintSchema,
+  revisionSchema,
+} from "../catalogue/identifiers";
+import {
+  selectApplicationContractPair,
+  selectStoredApplicationSourceContract,
+} from "./application-contract-versions";
+import { sourceIdentityAssignmentSchema } from "./definition-compilation-contracts";
 import {
   definitionReleaseHistoryCommandSchema,
   definitionReleaseHistoryResultSchema,
   definitionReleaseMetadataCommandSchema,
   definitionReleaseMetadataResultSchema,
-  applicationRootIdSchema,
-  storedDefinitionSourceSchema,
-  fingerprintSchema,
-  revisionSchema,
   restoreDefinitionDraftCommandSchema,
-  assertModuleContractPair,
-  selectApplicationContractPair,
-  selectStoredApplicationSourceContract,
-  sessionContextSchema,
-  sourceIdentityAssignmentSchema,
-  storedDefinitionDraftSchema,
   type DefinitionReleaseHistoryCommand,
   type DefinitionReleaseHistoryResult,
   type DefinitionReleaseMetadataCommand,
   type DefinitionReleaseMetadataResult,
   type RestoreDefinitionDraftCommand,
-  type SessionContext,
+} from "./definition-history-contracts";
+import { assertModuleContractPair } from "./definition-source";
+import {
+  storedDefinitionSourceSchema,
+  storedDefinitionDraftSchema,
   type StoredDefinitionDraft,
-} from "../schema";
+} from "./definition-store-contracts";
 import { z } from "zod";
 import { applicationSourceContractVersion } from "./application-contract-versions";
 import { requireBuilderAuthority, type BuilderAuthority } from "./builder-authority";

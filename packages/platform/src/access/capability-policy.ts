@@ -1,33 +1,35 @@
 import "server-only";
 
 import { z } from "zod";
+import { correlationIdSchema } from "../catalogue/common";
 import {
   activityIdSchema,
   administrationDuplicateKeySchema,
   builderKeySchema,
-  configuredTenantAdministrationOperatorContextSchema,
-  correlationIdSchema,
-  databaseRevision,
-  databaseTimestamp,
-  entitlementCheckRequestSchema,
-  identitySessionSchema,
   namespacedKeySchema,
   organizationIdSchema,
-  organizationSelectionCandidateSchema,
   platformIdSchema,
   revisionSchema,
   tenantIdSchema,
   timestampSchema,
+} from "../catalogue/identifiers";
+import { databaseCode, databaseRevision, databaseTimestamp } from "../catalogue/runtime-primitives";
+import {
+  configuredTenantAdministrationOperatorContextSchema,
   type ConfiguredTenantAdministrationOperatorContext,
-  type EntitlementCheckRequest,
+} from "../identity/tenant-provisioning";
+import {
+  identitySessionSchema,
+  organizationSelectionCandidateSchema,
   type IdentitySession,
   type OrganizationSelectionCandidate,
-} from "../schema";
+} from "./identity-access";
+import { entitlementCheckRequestSchema, type EntitlementCheckRequest } from "./metering-contracts";
 import {
   withRuntimeTransaction,
   type DatabaseRow,
   type RequestDatabaseTransaction,
-} from "../db/index";
+} from "../db/request-transaction";
 import {
   createHumanOrganizationRequestService,
   type HumanOrganizationRequestDependencies,
@@ -429,11 +431,6 @@ const subjectOf = (tenantId: unknown, organizationId: unknown) =>
     ? { kind: "tenant", tenantId }
     : { kind: "organization", tenantId, organizationId };
 
-const databaseCode = (error: unknown): string | undefined =>
-  typeof error === "object" && error !== null && "code" in error
-    ? String((error as { readonly code?: unknown }).code)
-    : undefined;
-
 /** Stable refusal codes for the administration commands. */
 export const capabilityPolicyRefusalCodes = [
   "CAPABILITY_POLICY_COMMAND_INVALID",
@@ -625,8 +622,7 @@ export type CapabilityPolicyPlatformOperatorService = ReturnType<
 >;
 
 type CapabilityCeilingPersonOperation =
-  | "set_capability_policy_ceiling"
-  | "revoke_capability_policy_ceiling";
+  "set_capability_policy_ceiling" | "revoke_capability_policy_ceiling";
 
 export type CapabilityCeilingPersonMutationResult =
   | (CapabilityCeilingResult & { readonly operation: "set_capability_policy_ceiling" })
@@ -890,8 +886,8 @@ export const resolveEffectiveCapabilityPolicy = async (
         ${request.data.unit}::text
       )
     `;
-  } catch {
-    throw new Error("CAPABILITY_POLICY_UNAVAILABLE");
+  } catch (error) {
+    throw new Error("CAPABILITY_POLICY_UNAVAILABLE", { cause: error });
   }
   if (rows.length !== 1 || rows[0] === undefined) throw new Error("CAPABILITY_POLICY_UNAVAILABLE");
   const row = rows[0];

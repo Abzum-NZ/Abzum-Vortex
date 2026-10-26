@@ -1,22 +1,21 @@
 import "server-only";
 
 import { z } from "zod";
+import { applicationRootIdSchema, organizationIdSchema } from "../catalogue/identifiers";
+import { sameId } from "../catalogue/runtime-primitives";
 import {
   activeApplicationInstallationEvidenceSchema,
-  applicationRootIdSchema,
-  canonicalJson,
   moduleInstallationBindingEvidenceSchema,
-  organizationIdSchema,
-  sameId,
   type ActiveApplicationInstallationErrorCode,
   type ActiveApplicationInstallationEvidence,
   type ModuleInstallationBindingEvidence,
-  type SystemApplicationBoundReleaseSetResult,
-} from "../schema";
+} from "../files/storage";
+import { canonicalJson } from "./canonical-json";
+import type { SystemApplicationBoundReleaseSetResult } from "./definition-consumer-read";
 import { createDatabaseApplicationReleaseAdoptionReleaseSetService } from "./application-bound-release-set";
 import type { ImmutableDefinitionPublicationCatalogueDefinition } from "./publication/read";
 import { InstallationProblem, installationProblem } from "./installation-authority";
-import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
 import {
   DefinitionError,
   classifyDatabaseError,

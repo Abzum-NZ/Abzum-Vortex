@@ -1,11 +1,8 @@
 import { PLATFORM_SERVICE_OPERATIONS } from "../catalogue/platform-service-operation-catalogue";
-import {
-  flowReadFieldsProjectionSchema,
-  platformOperationKey,
-  type FlowTask,
-  type FlowValue,
-  type SourceFlowTask,
-} from "../workflows/schema";
+import { platformOperationKey } from "../workflows/default-flow-sources";
+import { flowReadFieldsProjectionSchema, type FlowTask } from "../workflows/flow-contracts";
+import type { SourceFlowTask } from "../workflows/flow-source-contracts";
+import type { FlowValue } from "../workflows/flow-values";
 
 /**
  * The one answer to "which named members does this step's JSON output declare?". The flow

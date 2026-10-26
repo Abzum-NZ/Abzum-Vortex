@@ -1,45 +1,58 @@
 import "server-only";
+import { platformPins } from "../platform-pins";
 
+import type { SessionContext } from "../../access/identity-access";
 import {
   actorIdSchema,
-  assertModuleContractPair,
-  definitionCompilationOutputSchema,
-  definitionKindSchema,
-  definitionPublicationHistoryEvidenceSchema,
-  definitionResolutionSnapshotSchema,
-  storedDefinitionSourceSchema,
-  exactDefinitionDependencySchema,
   fingerprintSchema,
   moduleRootIdSchema,
   namespacedKeySchema,
   organizationIdSchema,
   platformIdSchema,
-  publishDefinitionResultSchema,
-  publishedApplicationDefinitionSchema,
-  publishedApplicationReferenceSchema,
-  moduleVersionImpactHistoryEntrySchema,
-  publishedModuleReferenceSchema,
   revisionSchema,
-  savedSharingConditionSchema,
   semanticVersionSchema,
-  selectApplicationContractPair,
-  stableDefinitionReleaseVersionSchema,
-  sourceIdentityAssignmentSchema,
-  moduleExtensionPointUseSchema,
-  storedDefinitionDraftSchema,
   timestampSchema,
-  versionImpactReasonSchema,
-  type PublishedDefinitionHistory,
+} from "../../catalogue/identifiers";
+import { selectApplicationContractPair } from "../application-contract-versions";
+import {
+  publishedApplicationDefinitionSchema,
   type ApplicationDraft,
-  type ApplicationSourceDocument,
+} from "../application-contracts";
+import {
+  definitionCompilationOutputSchema,
+  definitionPublicationHistoryEvidenceSchema,
+  definitionResolutionSnapshotSchema,
+  sourceIdentityAssignmentSchema,
+  type PublishedDefinitionHistory,
   type DefinitionResolutionSnapshot,
+} from "../definition-compilation-contracts";
+import {
+  assertModuleContractPair,
+  type ApplicationSourceDocument,
   type ModuleSourceDocument,
+} from "../definition-source";
+import {
+  storedDefinitionSourceSchema,
+  exactDefinitionDependencySchema,
+  publishDefinitionResultSchema,
+  storedDefinitionDraftSchema,
   type PublishDefinitionResult,
-  type SessionContext,
   type StoredDefinitionSource,
+} from "../definition-store-contracts";
+import {
+  definitionKindSchema,
+  publishedApplicationReferenceSchema,
+  publishedModuleReferenceSchema,
+} from "../definitions";
+import { savedSharingConditionSchema } from "../module-contracts";
+import { moduleExtensionPointUseSchema } from "../module-extension-point-shape";
+import {
+  moduleVersionImpactHistoryEntrySchema,
+  stableDefinitionReleaseVersionSchema,
+  versionImpactReasonSchema,
   type VersionImpactReason,
-} from "../../schema";
-import type { DatabaseRow, RequestDatabaseTransaction } from "../../db/index";
+} from "../version-impact";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../../db/request-transaction";
 import { z } from "zod";
 import {
   canonicalJson,
@@ -529,6 +542,16 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
     const state = await this.readPublicationState(rootId);
     if (state === undefined) return undefined;
     const anchor = state.root.currentReleaseRevision;
+    const latestApplication =
+      anchor === null || state.draft.kind === "module"
+        ? undefined
+        : await this.readLatestRelease(
+            rootId,
+            anchor,
+            state.draft.kind,
+            state.draft.key,
+            String(state.draft.rootId),
+          );
     const latest =
       anchor === null
         ? undefined
@@ -540,15 +563,7 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
                 anchor,
               )
             )?.published
-          : (
-              await this.readLatestRelease(
-                rootId,
-                anchor,
-                state.draft.kind,
-                state.draft.key,
-                String(state.draft.rootId),
-              )
-            ).published;
+          : latestApplication?.published;
     if (
       (anchor !== null && latest === undefined) ||
       (latest !== undefined &&
@@ -569,6 +584,7 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
       historyEvidence: historyEvidence.data,
       savedConditionHistory:
         state.draft.kind === "module" ? await this.readSavedConditionHistory(rootId) : [],
+      latestPlatformPins: platformPins(latestApplication?.stored.dependencyManifest ?? []),
     };
   }
 

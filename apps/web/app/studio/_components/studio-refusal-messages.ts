@@ -3,12 +3,12 @@ export const refusalMessage = (reason: string | undefined, subject: string): str
   reason === "session_ended"
     ? `Your session has ended. Sign in again, then retry. ${subject}`
     : reason === "permission_missing"
-    ? `You do not have permission to manage definition drafts in this organization. ${subject}`
-    : reason === "source_invalid"
-      ? `The draft source is not valid, so it was not accepted. ${subject}`
-      : reason === "context_changed"
-        ? `Your session or access changed while this was being checked. Sign in again or ask an administrator, then retry. ${subject}`
-        : `The request was refused. ${subject}`;
+      ? `You do not have permission to manage definition drafts in this organization. ${subject}`
+      : reason === "source_invalid"
+        ? `The draft source is not valid, so it was not accepted. ${subject}`
+        : reason === "context_changed"
+          ? `Your session or access changed while this was being checked. Sign in again or ask an administrator, then retry. ${subject}`
+          : `The request was refused. ${subject}`;
 
 export const conflictMessage = (reason: string | undefined, subject: string): string =>
   reason === "key_exists"
@@ -16,17 +16,24 @@ export const conflictMessage = (reason: string | undefined, subject: string): st
     : reason === "alias_conflict"
       ? `A name this draft uses was already used by an earlier component of this application and cannot be reassigned. Rename the component you changed or restore its previous name. ${subject}`
       : reason === "draft_missing"
-      ? `This draft no longer exists. ${subject}`
-      : reason === "draft_changed"
-        ? `The saved draft changed since you opened it. ${subject}`
-        : `The draft changed or already exists. ${subject}`;
+        ? `This draft no longer exists. ${subject}`
+        : reason === "draft_changed"
+          ? `The saved draft changed since you opened it. ${subject}`
+          : `The draft changed or already exists. ${subject}`;
 
 export type StudioUnavailableKind =
-  | "refused" | "conflict" | "temporarily_unavailable"
-  | "validation_failed" | "dependency_unavailable" | "no_change";
+  | "refused"
+  | "conflict"
+  | "temporarily_unavailable"
+  | "validation_failed"
+  | "dependency_unavailable"
+  | "no_change";
 
 /** What a loader declined and why, in words that name the real cause and what the person can change. */
-export const unavailableMessage = (kind: StudioUnavailableKind, reason: string | undefined): string => {
+export const unavailableMessage = (
+  kind: StudioUnavailableKind,
+  reason: string | undefined,
+): string => {
   switch (reason) {
     case "session_ended":
       return "Your session has ended. Sign in again to continue.";
@@ -64,24 +71,38 @@ export const unavailableMessage = (kind: StudioUnavailableKind, reason: string |
       break;
   }
   switch (kind) {
-    case "refused": return "The request was refused.";
-    case "conflict": return "The saved draft changed while it was loading. Reload to read its current state.";
-    case "temporarily_unavailable": return "The platform could not read this because of a temporary problem. Try again in a moment.";
-    case "validation_failed": return "The saved draft did not pass validation, so it cannot be opened here.";
-    case "dependency_unavailable": return "A published release this draft depends on is unavailable or incompatible.";
-    case "no_change": return "Nothing has changed since the last release.";
-    default: return kind satisfies never;
+    case "refused":
+      return "The request was refused.";
+    case "conflict":
+      return "The saved draft changed while it was loading. Reload to read its current state.";
+    case "temporarily_unavailable":
+      return "The platform could not read this because of a temporary problem. Try again in a moment.";
+    case "validation_failed":
+      return "The saved draft did not pass validation, so it cannot be opened here.";
+    case "dependency_unavailable":
+      return "A published release this draft depends on is unavailable or incompatible.";
+    case "no_change":
+      return "Nothing has changed since the last release.";
+    default:
+      return kind satisfies never;
   }
 };
 
 /** Why the saved draft is not running as a preview, and what the person can do. */
 export const previewProblem = (
-  result: Readonly<{ kind: "refused"; reason: string } | { kind: "conflict" } | { kind: "temporarily_unavailable" }>,
+  result: Readonly<
+    | { kind: "refused"; reason: string }
+    | { kind: "conflict" }
+    | { kind: "not_runnable"; sentence: string }
+    | { kind: "temporarily_unavailable" }
+  >,
 ): string =>
-  result.kind === "conflict"
-    ? "The saved draft changed while the preview was being prepared. Preview again."
-    : result.kind === "temporarily_unavailable"
-      ? "The preview is temporarily unavailable. Your changes are kept; try again."
-      : result.reason === "permission_refused"
-        ? "Previewing needs permission to publish this application. Ask an administrator."
-        : "The preview request was not accepted. Reload Studio and try again.";
+  result.kind === "not_runnable"
+    ? `The draft cannot run until this is fixed: ${result.sentence}`
+    : result.kind === "conflict"
+      ? "The saved draft changed while the preview was being prepared. Preview again."
+      : result.kind === "temporarily_unavailable"
+        ? "The preview is temporarily unavailable. Your changes are kept; try again."
+        : result.reason === "permission_refused"
+          ? "Previewing needs permission to publish this application. Ask an administrator."
+          : "The preview request was not accepted. Reload Studio and try again.";

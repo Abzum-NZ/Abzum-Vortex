@@ -1,22 +1,22 @@
 import "server-only";
 
-import type { RequestDatabaseTransaction } from "../db/index";
-import {
-  createBuilderAuthority,
-  prepareApplicationRoleTemplatesForHumanRequest,
-  type createHumanOrganizationRequestService,
-  type HumanOrganizationRequestResult,
-  type BuilderOperation,
-} from "../access/index";
-import {
-  canonicalJson,
-  sameId,
-  type IdentitySession,
-  type ModuleInstallationBindingEvidence,
-  type OrganizationSelectionCandidate,
-  type SelectedOrganizationScope,
-  type SystemApplicationBoundReleaseSetResult,
-} from "../schema";
+import type { RequestDatabaseTransaction } from "../db/request-transaction";
+import { prepareApplicationRoleTemplatesForHumanRequest } from "../access/application-role-template-adapter";
+import { createBuilderAuthority } from "../access/builder-authority";
+import type {
+  createHumanOrganizationRequestService,
+  HumanOrganizationRequestResult,
+} from "../access/human-organization-request";
+import type { BuilderOperation } from "./builder-authority";
+import type {
+  IdentitySession,
+  OrganizationSelectionCandidate,
+  SelectedOrganizationScope,
+} from "../access/identity-access";
+import { sameId } from "../catalogue/runtime-primitives";
+import type { ModuleInstallationBindingEvidence } from "../files/storage";
+import { canonicalJson } from "./canonical-json";
+import type { SystemApplicationBoundReleaseSetResult } from "./definition-consumer-read";
 import { DefinitionError } from "./definition-error";
 import { resolveModuleContributions } from "./extension-contributions";
 import { createApplicationInstallationCoordinator } from "./installation-coordinator";

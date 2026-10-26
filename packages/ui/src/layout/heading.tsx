@@ -9,18 +9,21 @@ import { readControlSettings } from "../controls/control-context";
 
 export type HeadingProps = PlatformBlockRenderProps;
 
-type HeadingLevel = "one" | "two" | "three" | "four";
+/** The page's one level-1 heading is its name, drawn by the application shell. */
+type HeadingLevel = "two" | "three" | "four";
 
 /** Each declared level renders its matching semantic heading element. */
-const HEADING_LEVEL_ELEMENTS: Readonly<Record<HeadingLevel, "h1" | "h2" | "h3" | "h4">> =
-  Object.freeze({ one: "h1", two: "h2", three: "h3", four: "h4" });
+const HEADING_LEVEL_ELEMENTS: Readonly<Record<HeadingLevel, "h2" | "h3" | "h4">> = Object.freeze({
+  two: "h2",
+  three: "h3",
+  four: "h4",
+});
 
 /**
  * Each level's shadcn typography classes. The heading font is the resolved theme's heading font
  * (`font-heading`); size, weight and tracking follow the shadcn typography scale.
  */
 const HEADING_LEVEL_CLASSES: Readonly<Record<HeadingLevel, string>> = Object.freeze({
-  one: "text-2xl font-semibold tracking-tight text-balance",
   two: "text-xl font-semibold tracking-tight",
   three: "text-lg font-semibold",
   four: "text-base font-semibold",

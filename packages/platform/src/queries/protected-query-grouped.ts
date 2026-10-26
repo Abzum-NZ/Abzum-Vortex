@@ -1,15 +1,12 @@
 import "server-only";
 
 import type { z } from "zod";
-import type { RequestDatabaseTransaction } from "../db/index";
-import {
-  type JsonValue,
-  type SelectedOrganizationScope,
-  type IdentitySession,
-  sameId,
-  fieldIdSchema,
-  canonicalJson,
-} from "../schema";
+import type { RequestDatabaseTransaction } from "../db/request-transaction";
+import type { SelectedOrganizationScope, IdentitySession } from "../access/identity-access";
+import type { JsonValue } from "../catalogue/common";
+import { fieldIdSchema } from "../catalogue/identifiers";
+import { sameId } from "../catalogue/runtime-primitives";
+import { canonicalJson } from "../definition/canonical-json";
 import {
   type QueryContinuation,
   type QueryContinuationKey,
@@ -26,16 +23,11 @@ import {
   type ResultRow,
   one,
   filterInputRefusal,
-  readInputs,
   normalizeConditionFieldIdentifiers,
   sqlArray,
+  admitQueryInputs,
 } from "./protected-query-helpers";
 import { groupedMemberPageReadSchema, type pageAnchorSchema } from "./protected-query-read-schemas";
-import {
-  parseQueryInputDeclarations,
-  validateQueryInputValues,
-  QueryInputRefusalError,
-} from "./typed-input-validation";
 
 const readGroupedMemberPage = async (
   transaction: RequestDatabaseTransaction,
@@ -105,22 +97,9 @@ export const groupedMembersCommand = async (
       return { outcome: "refused", reasonCode: "cursor_stale" };
   }
 
-  const declared = await readInputs(transaction, command);
-  if (declared.outcome === "refused")
-    return { outcome: "refused", reasonCode: declared.reasonCode };
-  if (after !== undefined && after.moduleReleaseRevision !== declared.moduleReleaseRevision)
-    return { outcome: "refused", reasonCode: "cursor_stale" };
-  const declarations = parseQueryInputDeclarations(declared.inputs);
-  if (declarations === undefined) return { outcome: "refused", reasonCode: "descriptor_invalid" };
-
-  let inputValues: Readonly<Record<string, JsonValue>>;
-  try {
-    inputValues = validateQueryInputValues(declarations, command.inputValues);
-  } catch (error) {
-    if (error instanceof QueryInputRefusalError)
-      return { outcome: "refused", reasonCode: "input_invalid" };
-    throw error;
-  }
+  const admitted = await admitQueryInputs(transaction, command, after?.moduleReleaseRevision);
+  if (admitted.outcome === "refused") return admitted;
+  const { declared, inputValues } = admitted;
 
   const selector = {
     values: command.selector.values

@@ -11,7 +11,8 @@ import {
   type IdentitySession,
 } from "@vortex/platform/schema";
 import { getQueryContinuationKey } from "../query-continuation-key";
-import { loadInstalledContext, readPageProjections, requestDependencies } from "./load";
+import { loadInstalledContext, requestDependencies } from "./installed-context";
+import { readPageProjections } from "./load";
 import { first, pageSubjectParameter } from "./placement-helpers";
 import { createPlacementReadServices } from "./placement-services";
 import { pageGridLayoutRequest, readPageGridLayouts } from "./grid-layouts";
@@ -75,6 +76,7 @@ export const loadApplicationPivot = async (
   );
   try {
     const projectedPage = await projectedPageRead;
+    if (projectedPage.kind === "not_runnable") return { kind: "unavailable" };
     if (projectedPage.kind !== "available") return projectedPage;
     if (projectedPage.value === undefined) return { kind: "unavailable" };
     const resolved = resolveProjectedTablePlacement(projectedPage.value, request.placementId, {

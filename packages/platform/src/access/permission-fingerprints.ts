@@ -1,7 +1,7 @@
 import "server-only";
 
-import type { PermissionDeclaration } from "../schema";
-import { fingerprintCanonicalValue } from "../definition/definition-index";
+import type { PermissionDeclaration } from "./permissions";
+import { fingerprintCanonicalValue } from "../definition/canonical-json-definition";
 
 /** Fingerprints authority-bearing meaning, excluding display-only metadata. */
 export const fingerprintPermissionMeaning = (

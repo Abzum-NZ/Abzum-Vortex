@@ -1,13 +1,12 @@
 import "server-only";
 
+import type { JsonValue } from "../../catalogue/common";
+import { describeFailure, sameId } from "../../catalogue/runtime-primitives";
+import type { RecordsTableContract } from "../../definition/application-composition/records-display";
 import {
-  describeFailure,
   recordsTableGroupingFieldTypes,
-  sameId,
-  type JsonValue,
-  type RecordsTableContract,
   type RecordsTableGroupingFieldType,
-} from "../../schema";
+} from "../../definition/application-composition/records-table-features/grouping";
 import { readRecordsTableQueryState, type RecordsTablePageRequest } from "../records-table-state";
 import { resolveRecordsTableView } from "./records-table-view";
 import type { RecordsTableGroupRead } from "../records-table-features/grouping";

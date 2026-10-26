@@ -111,10 +111,7 @@ begin
           message = 'Relationship copy saved identity is unavailable';
       end if;
     end if;
-    perform vortex_record.append_named_action_activity_internal(
-      pg_catalog.gen_random_uuid(), target_row.record_id, target_row.changed_field_ids,
-      'completed'
-    );
+    perform vortex_record.append_record_activity_internal(pg_catalog.gen_random_uuid(), 'execute_named_action', array[target_row.record_id]::uuid[], target_row.changed_field_ids, 'completed');
     event_result := vortex_platform.append_record_occurrences(
       (meta ->> 'storageContractId')::uuid, target_row.record_id,
       pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(

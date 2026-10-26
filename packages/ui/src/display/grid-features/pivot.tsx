@@ -19,13 +19,12 @@ import { cn } from "../../lib/utils";
 import { DisplayCellView } from "../cell";
 import {
   fail,
-  parseSummaryValue,
   requireArray,
   requireExactKeys,
   requireNonEmptyString,
   requireRecord,
-  type DisplaySummaryMetric,
-} from "../projected-data";
+} from "../payload-parse";
+import { parseSummaryValue, type DisplaySummaryMetric } from "../projected-data";
 import type { GridFeatureModule, GridFeaturePointProps } from "./registry";
 
 type Cell = DisplaySummaryMetric["value"];

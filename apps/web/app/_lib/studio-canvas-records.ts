@@ -136,6 +136,8 @@ export type StudioCanvasRecordsResult =
   | Readonly<{ kind: "refused" }>
   /** The preview does not run this revision's data shape yet: read once it is ready. */
   | Readonly<{ kind: "following" }>
+  /** The saved draft has a problem to fix before its preview can run. */
+  | Readonly<{ kind: "not_runnable"; sentence: string }>
   | Readonly<{ kind: "temporarily_unavailable" }>;
 
 /** The compiled slot of one page area beside its stored items, and the block name of each compiled placement. */

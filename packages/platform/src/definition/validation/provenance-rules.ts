@@ -1,4 +1,5 @@
-import type { DefinitionRuleFailure, VersionRequirement } from "../../schema";
+import type { DefinitionRuleFailure } from "../../catalogue/validation-errors";
+import type { VersionRequirement } from "../definitions";
 import { fingerprintCanonicalValue } from "../canonical-json-definition";
 import { type DefinitionSetValidationContext, allValidationOutputs, type Output } from "./context";
 import { outputKey, pathKey, failure, object, array } from "./helpers";

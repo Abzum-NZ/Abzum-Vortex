@@ -1,22 +1,25 @@
 import "server-only";
+import { databaseCode } from "../catalogue/runtime-primitives";
 
 import { z } from "zod";
 import {
   applicationRootIdSchema,
   containedComponentIdSchema,
-  flowExecutionBindingActorSchema,
-  flowExecutionBindingEffectiveStateSchema,
-  flowExecutionBindingSchema,
   identityIdSchema,
   organizationAccountIdSchema,
   organizationIdSchema,
-  protectedOperationReferenceSchema,
   ruleIdSchema,
-  stableDefinitionReleaseVersionSchema,
   workflowNodeIdSchema,
-} from "../schema";
-import type { FlowExecutionBinding } from "../schema";
-import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
+} from "../catalogue/identifiers";
+import {
+  flowExecutionBindingActorSchema,
+  flowExecutionBindingEffectiveStateSchema,
+  flowExecutionBindingSchema,
+  protectedOperationReferenceSchema,
+} from "../definition/application-flow-bindings";
+import { stableDefinitionReleaseVersionSchema } from "../definition/version-impact";
+import type { FlowExecutionBinding } from "../definition/application-flow-bindings";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
 
 /**
  * One exact execution-authority grant for a published application flow node. A binding names the
@@ -112,11 +115,6 @@ type ReadResultRow = DatabaseRow & {
   effective_state: unknown;
   result: unknown;
 };
-
-const databaseCode = (error: unknown): string | undefined =>
-  typeof error === "object" && error !== null && "code" in error
-    ? String((error as { readonly code?: unknown }).code)
-    : undefined;
 
 const mapStorageFailure = (error: unknown): FlowExecutionBindingError => {
   const code = databaseCode(error);

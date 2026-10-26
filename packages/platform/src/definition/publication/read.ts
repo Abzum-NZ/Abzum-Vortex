@@ -2,36 +2,50 @@ import type { PlatformPermissionSource } from "../../access/platform-permissions
 import "server-only";
 
 import {
-  applicationCompositionCatalogueSnapshotSchema,
-  applicationCompositionPolicySchema,
   connectionTypeIdSchema,
-  connectionTypeSourceDocumentSchema,
-  customComponentPlacementAllowed,
-  customComponentReleaseSchema,
   namespacedKeySchema,
-  platformBlockReferenceSchema,
-  platformBlockReleaseSchema,
-  platformThemeTokenRoles,
-  PLATFORM_SERVICE_OPERATION_RELEASES,
-  PLATFORM_SERVICE_OPERATIONS,
   platformIdSchema,
-  platformThemeReleaseSchema,
-  platformServiceOperationReleaseSchema,
-  stableDefinitionReleaseVersionSchema,
-  type ApplicationCompositionCatalogueSnapshot,
-  type ApplicationCompositionPolicy,
   type BlockId,
   type ConnectionTypeId,
-  type ConnectionTypeSourceDocument,
+  type PlatformId,
+  type SemanticVersion,
+} from "../../catalogue/identifiers";
+import {
+  PLATFORM_SERVICE_OPERATION_RELEASES,
+  PLATFORM_SERVICE_OPERATIONS,
+} from "../../catalogue/platform-service-operation-catalogue";
+import {
+  applicationCompositionCatalogueSnapshotSchema,
+  type ApplicationCompositionCatalogueSnapshot,
+} from "../application-composition/catalogue-snapshot";
+import {
+  customComponentPlacementAllowed,
+  customComponentReleaseSchema,
   type CustomComponentPlacementContext,
   type CustomComponentRelease,
-  type PlatformId,
+} from "../application-composition/custom-components";
+import {
+  applicationCompositionPolicySchema,
+  platformBlockReferenceSchema,
+  platformBlockReleaseSchema,
+  type ApplicationCompositionPolicy,
   type PlatformBlockRelease,
+} from "../application-composition/platform-block-release";
+import {
+  platformThemeTokenRoles,
+  platformThemeReleaseSchema,
   type PlatformThemeRelease,
   type PlatformThemeTokenRole,
+} from "../application-composition/theme";
+import {
+  platformServiceOperationReleaseSchema,
   type PlatformServiceOperationRelease,
-  type SemanticVersion,
-} from "../../schema";
+} from "../application-flow-bindings";
+import {
+  connectionTypeSourceDocumentSchema,
+  type ConnectionTypeSourceDocument,
+} from "../definition-source";
+import { stableDefinitionReleaseVersionSchema } from "../version-impact";
 import { compare } from "semver";
 import { z } from "zod";
 import { compareCanonicalStrings, fingerprintCanonicalValue } from "../canonical-json-definition";

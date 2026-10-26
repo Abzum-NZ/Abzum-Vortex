@@ -22,14 +22,13 @@
 
 import {
   applicationRootIdSchema,
-  liveInvalidationSchema,
   organizationIdSchema,
   recordIdSchema,
   recordTypeIdSchema,
-  type LiveInvalidation,
   type RecordId,
   type RecordTypeId,
-} from "../schema";
+} from "../catalogue/identifiers";
+import { liveInvalidationSchema, type LiveInvalidation } from "./occurrence-contracts";
 import type { PrivateInvalidationTopicScope } from "./invalidation-channel";
 
 /**
@@ -142,17 +141,13 @@ const withoutTransportMetadata = (
 const readChannelEnvelope = (message: unknown): LiveInvalidation | undefined => {
   const received = asRecord(message);
   if (received === undefined) return undefined;
-  const wrapped =
-    received.payload === undefined ? received : asRecord(received.payload);
+  const wrapped = received.payload === undefined ? received : asRecord(received.payload);
   if (wrapped === undefined) return undefined;
   const parsed = liveInvalidationSchema.safeParse(withoutTransportMetadata(wrapped));
   return parsed.success ? parsed.data : undefined;
 };
 
-const scopeMatches = (
-  envelope: LiveInvalidation,
-  scope: PrivateInvalidationTopicScope,
-): boolean =>
+const scopeMatches = (envelope: LiveInvalidation, scope: PrivateInvalidationTopicScope): boolean =>
   envelope.organizationId.toLowerCase() === scope.organizationId.toLowerCase() &&
   envelope.applicationRootId.toLowerCase() === scope.applicationRootId.toLowerCase();
 
@@ -186,8 +181,7 @@ const parseWatch = (candidate: unknown): PrivateInvalidationPlacementWatch => {
   if (value.recordId === undefined)
     return Object.freeze({ placementId, recordTypeId: recordTypeId.data });
   const recordId = recordIdSchema.safeParse(value.recordId);
-  if (!recordId.success)
-    throw new PrivateInvalidationSubscriberError("INVALID_INVALIDATION_WATCH");
+  if (!recordId.success) throw new PrivateInvalidationSubscriberError("INVALID_INVALIDATION_WATCH");
   return Object.freeze({
     placementId,
     recordTypeId: recordTypeId.data,

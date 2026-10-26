@@ -2,28 +2,32 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 import { z } from "zod";
-import { fingerprintPermissionMeaning, type BuilderConferredPermission } from "../access/index";
-import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
+import { fingerprintPermissionMeaning } from "../access/permission-fingerprints";
+import type { BuilderConferredPermission } from "./builder-authority";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
+import type { IdentitySession, SelectedOrganizationScope } from "../access/identity-access";
 import {
-  canonicalJson,
-  organizationAccountIdSchema,
   organizationAdministrationPermissionSchema,
-  organizationIdSchema,
-  permissionFieldPolicySchema,
-  permissionRecordScopeSchema,
   prepareOrganizationAdministrationRoleChangeCommandSchema,
   prepareOrganizationAdministrationRoleRevisionAcceptanceCommandSchema,
+} from "../access/organization-access-administration";
+import type { PreparedOrganizationRoleChange } from "../access/organization-role-changes";
+import {
+  permissionFieldPolicySchema,
+  permissionRecordScopeSchema,
+  type PermissionDeclaration,
+} from "../access/permissions";
+import {
+  organizationAccountIdSchema,
+  organizationIdSchema,
   roleAssignmentIdSchema,
   roleIdSchema,
-  sameId,
   type ApplicationRootId,
-  type IdentitySession,
   type OrganizationId,
-  type PermissionDeclaration,
-  type PreparedOrganizationRoleChange,
-  type SelectedOrganizationScope,
-  type SystemApplicationBoundReleaseSetResult,
-} from "../schema";
+} from "../catalogue/identifiers";
+import { sameId } from "../catalogue/runtime-primitives";
+import { canonicalJson } from "./canonical-json";
+import type { SystemApplicationBoundReleaseSetResult } from "./definition-consumer-read";
 import { builderPermissionKeys } from "./builder-authority";
 import { classifyDatabaseError } from "./definition-error";
 import {

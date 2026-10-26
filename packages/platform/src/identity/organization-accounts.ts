@@ -1,28 +1,24 @@
 import "server-only";
 
-import { createHash, randomBytes } from "node:crypto";
+import { createHash } from "node:crypto";
+import {
+  ensureIdentityProjectionCommandSchema,
+  identityProjectionSchema,
+  verifiedIdentitySchema,
+  type EnsureIdentityProjectionCommand,
+  type IdentityProjection,
+  type VerifiedIdentity,
+} from "../access/identity-access";
 import {
   databaseTimestamp,
   databaseRevision,
-  createOrganizationInvitationCommandSchema,
-  ensureIdentityProjectionCommandSchema,
-  identityProjectionSchema,
   isNonNilUuidText,
-  invitationSchema,
-  revokeOrganizationInvitationCommandSchema,
-  verifiedIdentitySchema,
-  type CreateOrganizationInvitationCommand,
-  type EnsureIdentityProjectionCommand,
-  type IdentityProjection,
-  type Invitation,
-  type RevokeOrganizationInvitationCommand,
-  type VerifiedIdentity,
-} from "../schema";
+} from "../catalogue/runtime-primitives";
 import {
   withRuntimeTransaction,
   type DatabaseRow,
   type RequestDatabaseTransaction,
-} from "../db/index";
+} from "../db/request-transaction";
 import { requireRequestIdentityNotDisabled } from "./identity-disablement-publication";
 
 export const organizationAccountErrorCodes = [
@@ -45,18 +41,12 @@ export class OrganizationAccountError extends Error {
   }
 }
 
-export interface CreatedOrganizationInvitation {
-  readonly invitation: Invitation;
-  readonly invitationSecret: string;
-}
-
 type RuntimeTransactionRunner = <Result>(
   operation: (transaction: RequestDatabaseTransaction) => Promise<Result>,
 ) => Promise<Result>;
 
 interface OrganizationAccountStoreDependencies {
   readonly runtimeTransaction?: RuntimeTransactionRunner;
-  readonly generateInvitationSecret?: () => string;
 }
 
 /** A non-mutating eligibility lookup for protected-session resolution. */
@@ -76,25 +66,6 @@ type IdentityProjectionRow = DatabaseRow & {
   revision: unknown;
 };
 
-type InvitationRow = DatabaseRow & {
-  invitation_id: unknown;
-  organization_id: unknown;
-  invited_email: unknown;
-  invited_by: unknown;
-  created_at: unknown;
-  invited_at: unknown;
-  expires_at: unknown;
-  revoked_at: unknown;
-  revoked_by: unknown;
-  accepted_at: unknown;
-  accepted_organization_account_id: unknown;
-  changed_at: unknown;
-  revision: unknown;
-};
-
-const optional = <Value>(value: Value | null | undefined): Value | undefined =>
-  value === null || value === undefined ? undefined : value;
-
 const parseIdentityProjection = (row: IdentityProjectionRow): IdentityProjection =>
   identityProjectionSchema.parse({
     identityId: row.identity_id,
@@ -103,23 +74,6 @@ const parseIdentityProjection = (row: IdentityProjectionRow): IdentityProjection
     stateChangedAt: databaseTimestamp(row.state_changed_at),
     stateChangedBy: row.state_changed_by,
     stateChangeCorrelationId: row.state_change_correlation_id,
-    revision: databaseRevision(row.revision),
-  });
-
-const parseInvitation = (row: InvitationRow): Invitation =>
-  invitationSchema.parse({
-    invitationId: row.invitation_id,
-    organizationId: row.organization_id,
-    invitedEmail: row.invited_email,
-    invitedBy: row.invited_by,
-    createdAt: databaseTimestamp(row.created_at),
-    invitedAt: databaseTimestamp(row.invited_at),
-    expiresAt: databaseTimestamp(row.expires_at),
-    revokedAt: optional(databaseTimestamp(row.revoked_at)),
-    revokedBy: optional(row.revoked_by),
-    acceptedAt: optional(databaseTimestamp(row.accepted_at)),
-    acceptedOrganizationAccountId: optional(row.accepted_organization_account_id),
-    changedAt: databaseTimestamp(row.changed_at),
     revision: databaseRevision(row.revision),
   });
 
@@ -138,11 +92,6 @@ const mapStorageFailure = (error: unknown): OrganizationAccountError => {
   return new OrganizationAccountError("ORGANIZATION_ACCOUNT_OPERATION_FAILED");
 };
 
-const normalizeEmail = (email: string): string => email.trim().toLowerCase();
-
-const fingerprintSecret = (secret: string): string =>
-  `sha256:${createHash("sha256").update(secret, "utf8").digest("hex")}`;
-
 const requireOne = <Row extends DatabaseRow>(rows: readonly Row[]): Row => {
   if (rows.length !== 1 || rows[0] === undefined)
     throw new OrganizationAccountError("INVALID_ORGANIZATION_ACCOUNT_STORAGE_RESULT");
@@ -159,8 +108,6 @@ export const createOrganizationAccountStore = (
   dependencies: OrganizationAccountStoreDependencies = {},
 ) => {
   const runtimeTransaction = dependencies.runtimeTransaction ?? withRuntimeTransaction;
-  const generateInvitationSecret =
-    dependencies.generateInvitationSecret ?? (() => randomBytes(32).toString("base64url"));
 
   return Object.freeze({
     async ensureIdentityProjection(
@@ -205,58 +152,6 @@ export const createOrganizationAccountStore = (
           const row = requireZeroOrOne(rows);
           return row === undefined ? undefined : parseIdentityProjection(row);
         });
-      } catch (error) {
-        if (error instanceof OrganizationAccountError) throw error;
-        throw mapStorageFailure(error);
-      }
-    },
-
-    async createInvitationAfterAuthorization(
-      transaction: RequestDatabaseTransaction,
-      command: CreateOrganizationInvitationCommand,
-    ): Promise<CreatedOrganizationInvitation> {
-      const parsed = createOrganizationInvitationCommandSchema.safeParse(command);
-      if (!parsed.success)
-        throw new OrganizationAccountError("INVALID_ORGANIZATION_ACCOUNT_COMMAND");
-
-      const invitationSecret = generateInvitationSecret();
-      if (Buffer.byteLength(invitationSecret, "utf8") < 32)
-        throw new OrganizationAccountError("ORGANIZATION_ACCOUNT_OPERATION_FAILED");
-      const tokenFingerprint = fingerprintSecret(invitationSecret);
-      const invitedEmail = normalizeEmail(parsed.data.invitedEmail);
-
-      try {
-        const rows = await transaction.query<InvitationRow>`
-          select *
-          from vortex_identity.create_organization_invitation(
-            ${invitedEmail}::text,
-            ${tokenFingerprint}::text,
-            ${parsed.data.expiresAt}::timestamptz
-          )
-        `;
-        const invitation = parseInvitation(requireOne(rows));
-        return { invitation, invitationSecret };
-      } catch (error) {
-        if (error instanceof OrganizationAccountError) throw error;
-        throw mapStorageFailure(error);
-      }
-    },
-
-    async revokeInvitationAfterAuthorization(
-      transaction: RequestDatabaseTransaction,
-      command: RevokeOrganizationInvitationCommand,
-    ): Promise<Invitation> {
-      const parsed = revokeOrganizationInvitationCommandSchema.safeParse(command);
-      if (!parsed.success)
-        throw new OrganizationAccountError("INVALID_ORGANIZATION_ACCOUNT_COMMAND");
-      try {
-        const rows = await transaction.query<InvitationRow>`
-          select * from vortex_identity.revoke_organization_invitation(
-            ${parsed.data.invitationId}::uuid,
-            ${parsed.data.expectedRevision}::bigint
-          )
-        `;
-        return parseInvitation(requireOne(rows));
       } catch (error) {
         if (error instanceof OrganizationAccountError) throw error;
         throw mapStorageFailure(error);

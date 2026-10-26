@@ -1,6 +1,6 @@
 # Module installation and record storage
 
-[Roadmap archive](README.md) · [Storage specification](../specification/17-runtime-storage-and-caching.md) · [Record save sequence](../specification/06-records-and-lifecycle.md#save-sequence)
+[Build plan](README.md) · [Storage specification](../specification/17-runtime-storage-and-caching.md) · [Record save sequence](../specification/06-records-and-lifecycle.md#save-sequence)
 
 
 ## Installation and storage

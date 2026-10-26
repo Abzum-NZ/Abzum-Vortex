@@ -18,7 +18,12 @@ type AuthShellProps = Readonly<{
   children: ReactNode;
   footer?: ReactNode;
   /** The address state this shell stands for when it replaces a page (refused, unavailable). */
-  addressState?: "unavailable" | "page_not_open" | "temporarily_unavailable" | "suspended";
+  addressState?:
+    | "unavailable"
+    | "page_not_open"
+    | "temporarily_unavailable"
+    | "suspended"
+    | "preview_not_runnable";
 }>;
 
 export function AuthShell({

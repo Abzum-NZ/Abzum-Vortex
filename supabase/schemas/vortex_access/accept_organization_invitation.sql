@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION vortex_access.accept_organization_invitation(p_token_fingerprint text, p_identity_id uuid, p_verified_email text, p_display_name text, p_correlation_id uuid) RETURNS TABLE(outcome text, organization_account_id uuid, organization_id uuid, identity_id uuid, display_name text, state text, language text, time_zone text, invitation_id uuid, activated_at timestamp with time zone, suspended_at timestamp with time zone, closed_at timestamp with time zone, changed_at timestamp with time zone, state_changed_at timestamp with time zone, state_changed_by uuid, state_change_correlation_id uuid, revision bigint, access_version bigint)
+CREATE OR REPLACE FUNCTION vortex_access.accept_organization_invitation(p_invitation_id uuid, p_identity_id uuid, p_verified_email text, p_display_name text, p_correlation_id uuid) RETURNS TABLE(outcome text, organization_account_id uuid, organization_id uuid, identity_id uuid, display_name text, state text, language text, time_zone text, invitation_id uuid, activated_at timestamp with time zone, suspended_at timestamp with time zone, closed_at timestamp with time zone, changed_at timestamp with time zone, state_changed_at timestamp with time zone, state_changed_by uuid, state_change_correlation_id uuid, revision bigint, access_version bigint)
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO ''
     AS $_$
@@ -8,7 +8,8 @@ declare
   accepted record;
   resulting_version bigint;
 begin
-  if p_token_fingerprint !~ '^sha256:[0-9a-f]{64}$'
+  if p_invitation_id is null
+    or not vortex_platform.is_non_nil_uuid(p_invitation_id::text)
     or p_identity_id is null
     or p_identity_id = '00000000-0000-0000-0000-000000000000'::uuid
     or p_verified_email is null
@@ -25,7 +26,7 @@ begin
 
   select candidate.organization_id into target_organization_id
   from vortex_identity.organization_invitations as candidate
-  where candidate.token_fingerprint = p_token_fingerprint
+  where candidate.invitation_id = p_invitation_id
     and candidate.invited_email = p_verified_email;
 
   if not found then
@@ -76,7 +77,7 @@ begin
   select candidate.* into invitation
   from vortex_identity.organization_invitations as candidate
   where candidate.organization_id = target_organization_id
-    and candidate.token_fingerprint = p_token_fingerprint
+    and candidate.invitation_id = p_invitation_id
   for update;
 
   if not found
@@ -96,7 +97,7 @@ begin
 
   select * into accepted
   from vortex_identity.accept_organization_invitation_with_transition(
-    p_token_fingerprint,
+    p_invitation_id,
     p_identity_id,
     p_verified_email,
     p_display_name,
@@ -136,11 +137,11 @@ begin
 end
 $_$;
 
-alter function vortex_access.accept_organization_invitation(p_token_fingerprint text, p_identity_id uuid, p_verified_email text, p_display_name text, p_correlation_id uuid) owner to vortex_owner;
+alter function vortex_access.accept_organization_invitation(p_invitation_id uuid, p_identity_id uuid, p_verified_email text, p_display_name text, p_correlation_id uuid) owner to vortex_owner;
 
-COMMENT ON FUNCTION vortex_access.accept_organization_invitation(p_token_fingerprint text, p_identity_id uuid, p_verified_email text, p_display_name text, p_correlation_id uuid) IS 'Runtime invitation acceptance under the organization access-version lock.';
+COMMENT ON FUNCTION vortex_access.accept_organization_invitation(p_invitation_id uuid, p_identity_id uuid, p_verified_email text, p_display_name text, p_correlation_id uuid) IS 'Runtime acceptance of an invitation by the signed-in person whose verified email it names, under the organization access-version lock.';
 
-REVOKE ALL ON FUNCTION vortex_access.accept_organization_invitation(p_token_fingerprint text, p_identity_id uuid, p_verified_email text, p_display_name text, p_correlation_id uuid) FROM PUBLIC;
-GRANT ALL ON FUNCTION vortex_access.accept_organization_invitation(p_token_fingerprint text, p_identity_id uuid, p_verified_email text, p_display_name text, p_correlation_id uuid) TO vortex_runtime;
+REVOKE ALL ON FUNCTION vortex_access.accept_organization_invitation(p_invitation_id uuid, p_identity_id uuid, p_verified_email text, p_display_name text, p_correlation_id uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION vortex_access.accept_organization_invitation(p_invitation_id uuid, p_identity_id uuid, p_verified_email text, p_display_name text, p_correlation_id uuid) TO vortex_runtime;
 
-grant execute on function vortex_access.accept_organization_invitation(p_token_fingerprint text, p_identity_id uuid, p_verified_email text, p_display_name text, p_correlation_id uuid) to postgres;
+grant execute on function vortex_access.accept_organization_invitation(p_invitation_id uuid, p_identity_id uuid, p_verified_email text, p_display_name text, p_correlation_id uuid) to postgres;

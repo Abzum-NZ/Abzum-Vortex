@@ -5,7 +5,7 @@ import {
   organizationIdSchema,
   type ApplicationRootId,
   type OrganizationId,
-} from "../schema";
+} from "../catalogue/identifiers";
 
 /**
  * Private content-free invalidation channels.
@@ -104,9 +104,9 @@ export type PrivateInvalidationChannelAccess = Readonly<{
  * to. It never accepts an identity or organisation from the topic.
  */
 export interface PrivateInvalidationChannelAccessReader {
-  readCurrent(request: PrivateInvalidationTopicScope): Promise<
-    PrivateInvalidationChannelAccess | undefined
-  >;
+  readCurrent(
+    request: PrivateInvalidationTopicScope,
+  ): Promise<PrivateInvalidationChannelAccess | undefined>;
 }
 
 export type PrivateInvalidationAuthorizationRequest = Readonly<{
@@ -195,8 +195,7 @@ export const createPrivateInvalidationChannelAuthorizer = (
         return refused("scope_mismatch");
       if (!access.accountAvailable) return refused("account_unavailable");
       if (!access.applicationAvailable) return refused("application_unavailable");
-      if (!positiveSafeInteger(access.accessVersion))
-        return refused("invalid_access_version");
+      if (!positiveSafeInteger(access.accessVersion)) return refused("invalid_access_version");
       if (access.accessVersion !== request.boundAccessVersion)
         return {
           outcome: "reauthorization_required",

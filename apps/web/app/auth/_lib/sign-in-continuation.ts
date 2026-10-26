@@ -6,9 +6,11 @@ import {
   builderKeySchema,
   namespacedKeySchema,
   organizationIdSchema,
+  recordIdSchema,
 } from "@vortex/platform/schema";
 import { z } from "zod";
 import { organizationAddressPath } from "../../_lib/address-paths";
+import { pageSubjectParameter } from "../../_lib/application-page/placement-helpers";
 
 /** Only known Studio routes can be resumed; a supplied origin or arbitrary path is never used. */
 const studioAddressSchema = z
@@ -32,12 +34,16 @@ const studioAddressSchema = z
 
 const continuationSchema = z
   .discriminatedUnion("kind", [
+    // The application page the person was opening: its application, its page (absent for the
+    // application's home) and the record it shows, if any. The page rechecks access when it opens.
     z
       .object({
-        kind: z.literal("application_home"),
+        kind: z.literal("application_page"),
         tenantShortName: builderKeySchema.refine((value) => !isReservedTenantSegment(value)),
         organizationShortName: builderKeySchema,
         applicationKey: namespacedKeySchema,
+        pageKey: builderKeySchema.optional(),
+        recordId: recordIdSchema.optional(),
       })
       .strict(),
     z.object({ kind: z.literal("studio"), address: studioAddressSchema }).strict(),
@@ -47,11 +53,12 @@ const continuationSchema = z
 
 export type SignInContinuation = z.infer<typeof continuationSchema>;
 
-/** Application pages continue at their application home, retaining the existing routing policy. */
-export const applicationHomeContinuationFromAddress = (
+/** An application page continues at that page, with the record it shows when it shows one. */
+export const applicationPageContinuationFromAddress = (
   tenantShortName: unknown,
   organizationShortName: unknown,
   applicationAddress: unknown,
+  recordId: unknown,
 ): SignInContinuation | undefined => {
   if (
     !Array.isArray(applicationAddress) ||
@@ -59,11 +66,14 @@ export const applicationHomeContinuationFromAddress = (
     (applicationAddress.length === 2 && !builderKeySchema.safeParse(applicationAddress[1]).success)
   )
     return undefined;
+  const record = recordIdSchema.safeParse(recordId);
   const result = continuationSchema.safeParse({
-    kind: "application_home",
+    kind: "application_page",
     tenantShortName,
     organizationShortName,
     applicationKey: applicationAddress[0],
+    ...(applicationAddress.length === 2 ? { pageKey: applicationAddress[1] } : {}),
+    ...(applicationAddress.length === 2 && record.success ? { recordId: record.data } : {}),
   });
   return result.success ? result.data : undefined;
 };
@@ -95,7 +105,12 @@ export const parseSingleSignInContinuation = (
 ): SignInContinuation | undefined =>
   values.length === 1 ? parseSignInContinuation(values[0]) : undefined;
 
-export const signInContinuationAddressPath = (continuation: SignInContinuation): string =>
-  continuation.kind === "studio"
-    ? continuation.address
-    : `${organizationAddressPath(continuation.tenantShortName, continuation.organizationShortName)}/${encodeURIComponent(continuation.applicationKey)}`;
+export const signInContinuationAddressPath = (continuation: SignInContinuation): string => {
+  if (continuation.kind === "studio") return continuation.address;
+  const application = `${organizationAddressPath(continuation.tenantShortName, continuation.organizationShortName)}/${encodeURIComponent(continuation.applicationKey)}`;
+  if (continuation.pageKey === undefined) return application;
+  const page = `${application}/${encodeURIComponent(continuation.pageKey)}`;
+  return continuation.recordId === undefined
+    ? page
+    : `${page}?${new URLSearchParams({ [pageSubjectParameter]: continuation.recordId })}`;
+};

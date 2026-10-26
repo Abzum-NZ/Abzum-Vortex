@@ -1,12 +1,12 @@
 import type { PlatformPermissionSource } from "./platform-permissions";
 import "server-only";
 
+import { unavailableError } from "../catalogue/runtime-primitives";
+import type { SelectedOrganizationScope } from "./identity-access";
 import {
-  unavailableError,
   organizationAccessDeclarationSchema,
   type OrganizationAccessDeclaration,
-  type SelectedOrganizationScope,
-} from "../schema";
+} from "./organization-access-decision";
 import {
   builderRecentAuthentication,
   deriveBuilderRequirements,
@@ -16,8 +16,8 @@ import {
   type BuilderOperation,
   type BuilderPermissionKey,
   type BuilderTargetFacts,
-} from "../definition/definition-index";
-import type { RequestDatabaseTransaction } from "../db/index";
+} from "../definition/builder-authority";
+import type { RequestDatabaseTransaction } from "../db/request-transaction";
 import { runOrganizationAccessOperation } from "./organization-access-decision-access";
 
 /**
@@ -31,6 +31,35 @@ export type BuilderTargetFactsReader = (
   scope: SelectedOrganizationScope,
   rootId: string | undefined,
 ) => Promise<BuilderTargetFacts>;
+
+/** The persisted origin of an Application root. */
+export type BuilderApplicationOrigin = "ordinary" | "platform_system_application";
+
+/**
+ * The one read of an Application root's classification in the request's own organisation:
+ * undefined when the root is missing, foreign or not an Application. Any other database answer
+ * is a defect and throws.
+ */
+export const readBuilderApplicationOrigin = async (
+  transaction: RequestDatabaseTransaction,
+  rootId: string,
+): Promise<BuilderApplicationOrigin | undefined> => {
+  const rows = await transaction.query<{ outcome: unknown; application_origin_kind: unknown }>`
+    select outcome, application_origin_kind
+    from vortex_definition.read_builder_application_root_classification(${rootId}::uuid)
+  `;
+  const row = rows[0];
+  if (rows.length === 1 && row?.outcome === "unavailable" && row.application_origin_kind === null)
+    return undefined;
+  if (
+    rows.length !== 1 ||
+    row?.outcome !== "available" ||
+    (row.application_origin_kind !== "ordinary" &&
+      row.application_origin_kind !== "platform_system_application")
+  )
+    throw new Error("BUILDER_APPLICATION_CLASSIFICATION_INVALID");
+  return row.application_origin_kind;
+};
 
 const unavailableCode = "BUILDER_AUTHORITY_UNAVAILABLE";
 
@@ -161,11 +190,13 @@ export const createBuilderAuthority = (
     });
     const delegated = uniquePermissions(requirements.delegatedPermissions);
     if (delegated.length > 0)
-      declarations.push(declarationForAcceptance(
+      declarations.push(
+        declarationForAcceptance(
           dependencies.permissions,
           delegated,
           requirements.recentAuthentication,
-        ));
+        ),
+      );
 
     for (const declaration of declarations) {
       const checked = await runOrganizationAccessOperation(

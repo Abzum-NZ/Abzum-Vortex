@@ -1,24 +1,25 @@
 import "server-only";
 
+import type { IdentitySession } from "../../access/identity-access";
+import type { JsonValue } from "../../catalogue/common";
+import { fieldIdSchema } from "../../catalogue/identifiers";
+import { sameId } from "../../catalogue/runtime-primitives";
+import type { RecordsTableRequestRejection } from "../records-selection";
 import {
-  fieldIdSchema,
   pastedLinkTitleOf,
   recordsTableBatchEditMaximumRows,
-  sameId,
-  type IdentitySession,
-  type JsonValue,
   type RecordsTableBatchEditProblem,
   type RecordsTableBatchEditRefusalReason,
   type RecordsTableBatchEditRequest,
   type RecordsTableBatchEditResult,
-  type RecordsTableRequestRejection,
-} from "../../schema";
+} from "../records-table-batch-edit-request";
 import {
   createHumanOrganizationRequestService,
   type HumanOrganizationRequestDependencies,
-} from "../../access/index";
-import { createRecordSaveService, type RecordBatchSaveProblem } from "../../records/index";
-import { createProtectedQueryService, type QueryContinuationKey } from "../../queries/index";
+} from "../../access/human-organization-request";
+import { createRecordSaveService, type RecordBatchSaveProblem } from "../../records/save-record";
+import type { QueryContinuationKey } from "../../queries/continuation-token";
+import { createProtectedQueryService } from "../../queries/protected-query-service";
 import { fieldEditorsOf } from "../placement-read/shared";
 import { pageSubjectFromRead } from "../page-subject-read";
 import { inlineEditCellRefusal } from "./flow-dispatch";

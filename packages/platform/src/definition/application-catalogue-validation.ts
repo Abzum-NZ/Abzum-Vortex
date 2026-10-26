@@ -1,33 +1,39 @@
 import { recordsTableInlineEditEvent } from "./application-composition/records-table-features/inline-edit";
 import { recordsTableRowEditEvent } from "./application-composition/records-table-features/row-edit";
+import type { JsonValue } from "../catalogue/common";
+import { builderKeySchema } from "../catalogue/identifiers";
+import type {
+  DefinitionRuleFailure,
+  DefinitionValidationErrorCode,
+  DefinitionValidationLocation,
+} from "../catalogue/validation-errors";
 import {
-  builderKeySchema,
-  readRecordDetailContract,
-  readRecordsTableContract,
-  readQueryBindings,
-  recordsTableColumnProblems,
-  readSourceItem,
-  canonicalJson,
   plainSourceSettingValue,
   plainSettingValue,
-  type JsonValue,
+  type BlockPropertySchemaContract,
+  type ComponentSettingFailure,
+} from "./application-composition/block-property-schema";
+import type { SourceBlockPropertyValueContract } from "./application-composition/block-property-values";
+import type { PlatformBlockRelease } from "./application-composition/platform-block-release";
+import { readQueryBindings } from "./application-composition/query-bindings";
+import {
+  readRecordDetailContract,
+  readRecordsTableContract,
+  recordsTableColumnProblems,
+} from "./application-composition/records-display";
+import {
+  readSourceItem,
   sourceItemChildSlots,
   sourcePageDataOf,
   sourcePageItems,
   sourcePageRootSlots,
-  type ApplicationSourceDocument,
-  type BlockPropertySchemaContract,
-  type DefinitionRuleFailure,
-  type DefinitionValidationErrorCode,
-  type DefinitionValidationLocation,
-  type PlatformBlockRelease,
-  type ComponentSettingFailure,
-  type SourceBlockPropertyValueContract,
   type SourceItem,
   type SourceItemVortex,
   type SourcePageData,
   type SourceSlotOrder,
-} from "../schema";
+} from "./application-composition/source-composition";
+import { canonicalJson } from "./canonical-json";
+import type { ApplicationSourceDocument } from "./definition-source";
 import { applicationModuleKeys } from "./application-module-sources";
 import { sourceAliasSchema } from "./definition-source-common";
 import { IMMUTABLE_PLATFORM_BLOCK_CATALOGUE } from "./application-composition-catalogue";

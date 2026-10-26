@@ -1,7 +1,9 @@
 import { z } from "zod";
 import { correlationIdSchema } from "./common";
 import { builderKeySchema, namespacedKeySchema } from "./identifiers";
+import { recordsTableFeatureRefusals } from "../definition/application-composition/records-table-features/index";
 import { recordsTableFeatureRefusalCodes } from "../definition/application-composition/records-table-features/shared";
+import { describeFailure } from "./runtime-primitives";
 
 export const definitionValidationCatalogueVersion = "1.4.0" as const;
 
@@ -62,6 +64,7 @@ export const definitionValidationErrorCodes = [
   "definition_runtime_not_supported",
   "definition_query_binding_choice",
   "definition_form_field_dependency",
+  "definition_form_field_duplicate",
   "definition_unknown_property",
   "definition_too_few_items",
   "definition_too_many_items",
@@ -162,6 +165,12 @@ const definitionValidationErrorCatalogueSource = {
     message: "A form shows a field without the field its choices depend on.",
     guidance: "Add the field it depends on to the same form, or remove the dependent field.",
   },
+  // The sentence names the field shown twice.
+  definition_form_field_duplicate: {
+    order: 39,
+    message: "A form shows the same field twice.",
+    guidance: "Remove one of the two inputs, or point it at another field.",
+  },
   definition_unknown_property: {
     order: 40,
     message: "The definition contains an unknown property.",
@@ -251,22 +260,6 @@ export const definitionValidationErrorCatalogue: Readonly<
 > = Object.freeze(parsedDefinitionValidationErrorCatalogue);
 
 /**
- * The grid feature refusals: each feature definition declares its own codes and sentences, and the
- * feature registry hands them to this catalogue once, when it loads. The catalogue never imports the
- * features (they use its codes), so neither module waits on the other while modules load.
- */
-let featureValidationEntries: readonly Readonly<
-  { code: DefinitionValidationErrorCode } & DefinitionValidationCatalogueEntry
->[] = [];
-export const registerFeatureValidationEntries = (
-  entries: readonly Readonly<
-    { code: DefinitionValidationErrorCode } & DefinitionValidationCatalogueEntry
-  >[],
-): void => {
-  featureValidationEntries = entries;
-};
-
-/**
  * The catalogue entry of any definition validation code: the platform's own, or a grid feature's
  * refusal as its feature definition declares it.
  */
@@ -275,7 +268,7 @@ export const definitionValidationEntry = (
 ): Readonly<DefinitionValidationCatalogueEntry> => {
   if (Object.hasOwn(definitionValidationErrorCatalogue, code))
     return definitionValidationErrorCatalogue[code as PlatformDefinitionValidationErrorCode];
-  const entry = featureValidationEntries.find((candidate) => candidate.code === code);
+  const entry = recordsTableFeatureRefusals.find((candidate) => candidate.code === code);
   if (entry === undefined) throw new Error(`No validation sentence for ${code}`);
   return entry;
 };
@@ -539,7 +532,10 @@ function emitDiagnostic(
 ) {
   try {
     sink?.(diagnostic);
-  } catch {
+  } catch (error) {
+    console.error(
+      `[validation] diagnostic not stored VALIDATION_DIAGNOSTIC_SINK_FAILED: ${describeFailure(error)}`,
+    );
     // Diagnostic storage must never change the safe public result.
   }
 }
@@ -602,7 +598,10 @@ export function translateDefinitionSchemaError(
         `[definition] definition_sortable_field_limit ${context.correlationId}: a record type declares more than eight sortable fields`,
       );
     return finishResult(errors, context.correlationId);
-  } catch {
+  } catch (error) {
+    console.error(
+      `[definition] DEFINITION_VALIDATION_TRANSLATION_FAILED: ${describeFailure(error)}`,
+    );
     return finishResult(
       [
         makePublicError(

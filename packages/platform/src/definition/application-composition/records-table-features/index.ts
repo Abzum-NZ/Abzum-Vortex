@@ -16,7 +16,6 @@ export {
   type RecordsTableStatusBarOperation,
 } from "./spreadsheet";
 import type { ComponentSettingValue } from "../block-property-schema";
-import { registerFeatureValidationEntries } from "../../../catalogue/validation-errors";
 import {
   recordsTableBoardFeature,
   type RecordsTableBoardMode,
@@ -333,8 +332,6 @@ export const recordsTableFeatureRefusals: readonly GridFeatureRefusal[] = [
   boundedScrollingRefusal,
   ...recordsTableFeatureDefinitions.flatMap((definition) => definition.refusals),
 ];
-
-registerFeatureValidationEntries(recordsTableFeatureRefusals);
 
 /**
  * The one capability check of one feature against the bound query's facts. Publication runs it on

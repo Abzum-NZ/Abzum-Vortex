@@ -1,19 +1,13 @@
 import "server-only";
 
-import {
-  sameId,
-  applicationRootIdSchema,
-  revisionSchema,
-  sessionContextSchema,
-  type DefinitionConsumerReadResult,
-  type PreparedApplicationPermissionRegistration,
-  type SessionContext,
-} from "../schema";
-import { withResolvedRequestTransaction } from "../db/index";
-import {
-  createDatabaseSystemApplicationBoundReleaseSetService,
-  type ImmutableDefinitionPublicationCatalogueDefinition,
-} from "../definition/definition-index";
+import { applicationRootIdSchema, revisionSchema } from "../catalogue/identifiers";
+import { sameId } from "../catalogue/runtime-primitives";
+import type { DefinitionConsumerReadResult } from "../definition/definition-consumer-read";
+import { sessionContextSchema, type SessionContext } from "./identity-access";
+import type { PreparedApplicationPermissionRegistration } from "./permission-registry";
+import { withResolvedRequestTransaction } from "../db/request-transaction";
+import { createDatabaseSystemApplicationBoundReleaseSetService } from "../definition/application-bound-release-set";
+import type { ImmutableDefinitionPublicationCatalogueDefinition } from "../definition/publication/read";
 import type { HumanOrganizationRequestDependencies } from "./human-organization-request";
 import { prepareApplicationPermissionRegistrationFromReleaseSet } from "./permission-registry-definition-adapter";
 

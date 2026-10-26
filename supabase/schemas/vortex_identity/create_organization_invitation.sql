@@ -1,6 +1,5 @@
 create or replace function vortex_identity.create_organization_invitation(
   p_invited_email text,
-  p_token_fingerprint text,
   p_expires_at timestamptz
 )
 returns table (
@@ -31,9 +30,26 @@ begin
   checked := vortex_identity.validated_human_account_context();
   if p_invited_email is null
     or p_invited_email is distinct from pg_catalog.lower(pg_catalog.btrim(p_invited_email))
-    or p_token_fingerprint !~ '^sha256:[0-9a-f]{64}$'
     or p_expires_at <= operation_at then
     raise exception using errcode = '22023', message = 'Invitation input is invalid';
+  end if;
+
+  -- One pending invitation per email and organisation: inviting again while one waits is refused.
+  -- Invitations of one email to one organisation are serialised, so two at once cannot both pass.
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended(pg_catalog.concat_ws(E'\x1f',
+      checked ->> 'organizationId', p_invited_email), 3584)
+  );
+  if exists (
+    select 1
+    from vortex_identity.organization_invitations as pending
+    where pending.organization_id = (checked ->> 'organizationId')::uuid
+      and pending.invited_email = p_invited_email
+      and pending.accepted_at is null
+      and pending.revoked_at is null
+      and pending.expires_at > operation_at
+  ) then
+    raise exception using errcode = '23505', message = 'Invitation is already pending';
   end if;
 
   loop
@@ -42,12 +58,11 @@ begin
   end loop;
 
   insert into vortex_identity.organization_invitations (
-    invitation_id, organization_id, invited_email, token_fingerprint,
-    invited_by_organization_account_id, created_at, invited_at, expires_at,
-    changed_at, revision
+    invitation_id, organization_id, invited_email, invited_by_organization_account_id,
+    created_at, invited_at, expires_at, changed_at, revision
   ) values (
     new_invitation_id, (checked ->> 'organizationId')::uuid, p_invited_email,
-    p_token_fingerprint, (checked ->> 'organizationAccountId')::uuid,
+    (checked ->> 'organizationAccountId')::uuid,
     operation_at, operation_at, p_expires_at, operation_at, 1
   );
 
@@ -63,9 +78,9 @@ begin
 end
 $function$;
 
-revoke all on function vortex_identity.create_organization_invitation(text, text, timestamptz) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
+revoke all on function vortex_identity.create_organization_invitation(text, timestamptz) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 
-comment on function vortex_identity.create_organization_invitation(text, text, timestamptz) is null;
+comment on function vortex_identity.create_organization_invitation(text, timestamptz) is null;
 
-alter function vortex_identity.create_organization_invitation(text, text, timestamptz) owner to vortex_owner;
-grant execute on function vortex_identity.create_organization_invitation(text, text, timestamptz) to postgres;
+alter function vortex_identity.create_organization_invitation(text, timestamptz) owner to vortex_owner;
+grant execute on function vortex_identity.create_organization_invitation(text, timestamptz) to postgres;

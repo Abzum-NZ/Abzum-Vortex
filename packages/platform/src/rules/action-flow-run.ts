@@ -1,13 +1,7 @@
-import {
-  flowSchema,
-  jsonValueSchema,
-  normalizeExactDecimal,
-  parseExactDecimal,
-  type FlowDefinition,
-  type FlowFormula,
-  type FlowTask,
-  type JsonValue,
-} from "../schema";
+import { jsonValueSchema, type JsonValue } from "../catalogue/common";
+import { normalizeExactDecimal, parseExactDecimal } from "../records/exact-decimal";
+import { flowSchema, type FlowDefinition, type FlowTask } from "../workflows/flow-contracts";
+import type { FlowFormula } from "../workflows/flow-values";
 import type { FlowRuntimeValue } from "./flow-formula";
 import {
   resumeFlowRun,

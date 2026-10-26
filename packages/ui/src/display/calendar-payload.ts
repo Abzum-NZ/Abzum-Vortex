@@ -7,8 +7,8 @@ import {
   requireNonEmptyString,
   requireString,
   requireArray,
-  type CalendarPayload,
-} from "./projected-data";
+} from "./payload-parse";
+import type { CalendarPayload } from "./projected-data";
 const ISO_CALENDAR_DATE = /^\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])$/;
 const isValidIsoCalendarDate = (text: string): boolean => {
   if (!ISO_CALENDAR_DATE.test(text)) return false;

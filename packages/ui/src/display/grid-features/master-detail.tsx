@@ -15,12 +15,14 @@ import {
 import { cellValueToText, DisplayCellView } from "../cell";
 import {
   fail,
-  isInternalAddress,
-  parseFields,
   requireArray,
   requireExactKeys,
   requireNonEmptyString,
   requireRecord,
+} from "../payload-parse";
+import {
+  isInternalAddress,
+  parseFields,
   type DisplayCellValue,
   type DisplayColumn,
   type DisplayField,

@@ -7,12 +7,13 @@ import {
   type IdentitySession,
   type OrganizationLauncherEntry,
   type OrganizationLauncherResolution,
-} from "../schema";
+} from "../access/identity-access";
 import {
   withRuntimeTransaction,
   type DatabaseRow,
   type RequestDatabaseTransaction,
-} from "../db/index";
+} from "../db/request-transaction";
+import { describeFailure } from "../catalogue/runtime-primitives";
 
 type RuntimeTransactionRunner = <Result>(
   operation: (transaction: RequestDatabaseTransaction) => Promise<Result>,
@@ -63,10 +64,10 @@ export const createOrganizationLauncherService = (
           return rows.map(entry);
         });
         return organizationLauncherResolutionSchema.parse({ kind: "available", entries });
-      } catch {
+      } catch (error) {
+        console.error(`[identity] ORGANIZATION_LAUNCHER_READ_FAILED: ${describeFailure(error)}`);
         return organizationLauncherResolutionSchema.parse({ kind: "temporarily_unavailable" });
       }
     },
   });
 };
-

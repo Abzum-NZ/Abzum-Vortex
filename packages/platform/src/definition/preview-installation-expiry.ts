@@ -1,7 +1,7 @@
 import "server-only";
 
-import { describeFailure } from "../schema";
-import { withRuntimeTransaction, type DatabaseRow } from "../db/index";
+import { describeFailure } from "../catalogue/runtime-primitives";
+import { withRuntimeTransaction, type DatabaseRow } from "../db/request-transaction";
 import { DefinitionError, databaseErrorCode } from "./definition-error";
 
 const previewExpiryLimits = Object.freeze({ batchSize: 100, maximumBatches: 100 });
@@ -17,7 +17,7 @@ export const runScheduledPreviewInstallationExpiry = async (): Promise<number> =
       const rows = await withRuntimeTransaction(
         (transaction) =>
           transaction.query<ExpiryRow>`
-          select vortex_definition.expire_abandoned_preview_installations_internal(
+          select vortex_definition.expire_abandoned_preview_installations(
             ${previewExpiryLimits.batchSize}::integer
           ) as expired_count
         `,
@@ -58,7 +58,7 @@ export const dropRetiredPreviewStorage = async (): Promise<number> => {
     (transaction) =>
       transaction.query<RetiredStorageRow>`
         select storage_contract_id
-        from vortex_record.read_retired_preview_storage_internal(
+        from vortex_record.read_retired_preview_storage(
           ${retiredStorageLimits.batchSize}::integer
         ) as storage_contract_id
       `,
@@ -72,7 +72,7 @@ export const dropRetiredPreviewStorage = async (): Promise<number> => {
       const rows = await withRuntimeTransaction(
         (transaction) =>
           transaction.query<DroppedRow>`
-            select vortex_record.drop_retired_preview_storage_internal(
+            select vortex_record.drop_retired_preview_storage(
               ${storageContractId}::uuid
             ) as dropped
           `,

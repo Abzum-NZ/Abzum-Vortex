@@ -1,20 +1,16 @@
 import "server-only";
 
 import type { z } from "zod";
-import {
-  compareExactDecimals,
-  moduleFieldValueSchemas,
-  parseExactDecimal,
-  type JsonValue,
-} from "../schema";
-import type { HumanOrganizationRequestResult } from "../access/index";
+import type { JsonValue } from "../catalogue/common";
+import { compareExactDecimals, parseExactDecimal } from "../records/exact-decimal";
+import { moduleFieldValueSchemas } from "../records/module-field-values";
+import type { HumanOrganizationRequestResult } from "../access/human-organization-request";
 import {
   arrangementCommandSchema,
   arrangementRowLimit,
   protectedBoardArrangementCommandSchema,
   protectedBoardArrangementPageSchema,
   protectedBoardArrangementResultSchema,
-  summaryArrangementResultSchema,
   type AggregateDescriptor,
   type AggregateResult,
   type ArrangementField,
@@ -29,7 +25,6 @@ import {
   type CalendarItem,
   type ProtectedBoardArrangementPage,
   type ProtectedBoardArrangementResult,
-  summaryArrangementCommandSchema,
   type TableArrangementDescriptor,
   type TableArrangementResult,
 } from "./arrangement-contracts";
@@ -535,41 +530,6 @@ export const arrangeDataset = (commandCandidate: unknown): ArrangementResult => 
     case "calendar":
       return arrangeCalendar(plan, descriptor, zone!);
   }
-};
-
-type ProtectedSummaryService = Pick<ReturnType<typeof createProtectedQueryService>, "summarise">;
-type ProtectedSummaryArguments = Parameters<ProtectedSummaryService["summarise"]>;
-
-/** Routes a summary arrangement to the protected database-backed Query service. */
-export const arrangeSummary = async (
-  queries: ProtectedSummaryService,
-  caller: ProtectedSummaryArguments[0],
-  selection: ProtectedSummaryArguments[1],
-  commandCandidate: unknown,
-): Promise<HumanOrganizationRequestResult<ArrangementResult>> => {
-  const command = summaryArrangementCommandSchema.safeParse(commandCandidate);
-  if (!command.success) return { kind: "available", value: refusal("request_invalid") };
-
-  const result = await queries.summarise(caller, selection, command.data);
-  if (result.kind !== "available") return result;
-  if (result.value.outcome === "refused")
-    return { kind: "available", value: refusal(result.value.reasonCode) };
-
-  const mapped = summaryArrangementResultSchema.safeParse({
-    outcome: "completed",
-    arrangement: "summary",
-    plan: {
-      moduleRootId: result.value.moduleRootId,
-      moduleReleaseVersion: result.value.moduleReleaseVersion,
-      queryId: result.value.queryId,
-    },
-    groupByFieldIds: result.value.groupByFieldIds,
-    totalRowCount: result.value.totalRowCount,
-    groups: result.value.groups,
-    aggregates: result.value.aggregates,
-  });
-  if (!mapped.success) throw new Error("PROTECTED_QUERY_SUMMARY_RESULT_INVALID");
-  return { kind: "available", value: mapped.data };
 };
 
 type ProtectedBoardService = Pick<

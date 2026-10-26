@@ -1,8 +1,12 @@
 import "server-only";
 
 import { isDeepStrictEqual } from "node:util";
-import { recordTypeDefinitionSchema, type JsonValue, type RecordTypeDefinition } from "../schema";
-import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
+import type { JsonValue } from "../catalogue/common";
+import {
+  recordTypeDefinitionSchema,
+  type RecordTypeDefinition,
+} from "../definition/module-contracts";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
 import { evaluateRecordCalculations } from "./calculations";
 import { operationClock } from "./field-candidate";
 import { prepareInitialRecordFieldCandidate } from "./field-values";
@@ -173,7 +177,6 @@ export const backfillDerivedFields = async (
   transaction: RequestDatabaseTransaction,
   issuedAt: string,
 ): Promise<number> => {
-  await transaction.query`set local role vortex_runtime`;
   const listed = one(
     await transaction.query<Row>`
     select vortex_record.read_derived_field_backfill(null::uuid, null::uuid) as backfill

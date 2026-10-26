@@ -1,7 +1,8 @@
 import "server-only";
 
-import { workflowRunIdSchema, type WorkflowExecutionReference } from "../schema";
-import { withRuntimeTransaction, type DatabaseRow } from "../db/index";
+import { workflowRunIdSchema } from "../catalogue/identifiers";
+import type { WorkflowExecutionReference } from "../rules/automation-contracts";
+import { withRuntimeTransaction, type DatabaseRow } from "../db/request-transaction";
 import { z } from "zod";
 import {
   protectedNodeRunRecordSchema,

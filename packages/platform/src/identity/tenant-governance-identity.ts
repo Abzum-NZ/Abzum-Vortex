@@ -1,10 +1,14 @@
 import "server-only";
 
 import { createHash } from "node:crypto";
+import { identitySessionSchema, type IdentitySession } from "../access/identity-access";
 import {
+  databaseCode,
   databaseTimestamp,
   databaseRevision,
   describeFailure,
+} from "../catalogue/runtime-primitives";
+import {
   archiveTenantOrganizationCommandSchema,
   archiveTenantOrganizationResultSchema,
   changeTenantAdministratorCommandSchema,
@@ -13,7 +17,6 @@ import {
   createTenantOrganizationResultSchema,
   grantTenantAdministratorCommandSchema,
   grantTenantAdministratorResultSchema,
-  identitySessionSchema,
   reactivateTenantOrganizationCommandSchema,
   reactivateTenantOrganizationResultSchema,
   renameTenantOrganizationCommandSchema,
@@ -40,7 +43,6 @@ import {
   type CreateTenantOrganizationResult,
   type GrantTenantAdministratorCommand,
   type GrantTenantAdministratorResult,
-  type IdentitySession,
   type ReactivateTenantOrganizationCommand,
   type ReactivateTenantOrganizationResult,
   type RenameTenantOrganizationCommand,
@@ -59,12 +61,12 @@ import {
   type TenantLauncherResult,
   type TenantOrganizationQuery,
   type TenantOrganizationResult,
-} from "../schema";
+} from "./tenant-governance";
 import {
   withRuntimeTransaction,
   type DatabaseRow,
   type RequestDatabaseTransaction,
-} from "../db/index";
+} from "../db/request-transaction";
 import { logRefusedOperations } from "./log-refused-operations";
 
 type Runner = <Result>(
@@ -106,10 +108,6 @@ type OrganizationCreationRow = DatabaseRow & {
 };
 const fingerprint = (command: object) =>
   `sha256:${createHash("sha256").update(JSON.stringify(command), "utf8").digest("hex")}`;
-const databaseCode = (error: unknown) =>
-  typeof error === "object" && error !== null && "code" in error
-    ? String((error as { code?: unknown }).code)
-    : undefined;
 // A poisoned request-bound transaction is logged once by the request boundary that aborts on it.
 export const transactionPoisonErrorName = "TenantGovernanceTransactionPoisoned";
 const mutationCode = (error: unknown) => {

@@ -1,10 +1,8 @@
 import "server-only";
 
-import type {
-  DefinitionPublicationHistoryEvidence,
-  ExactDefinitionDependency,
-  SessionContext,
-} from "../schema";
+import type { SessionContext } from "../access/identity-access";
+import type { DefinitionPublicationHistoryEvidence } from "./definition-compilation-contracts";
+import type { ExactDefinitionDependency } from "./definition-store-contracts";
 import type { PlatformPermissionSource } from "../access/platform-permissions";
 import { applicationModuleKeys } from "./application-module-sources";
 import type { ApplicationReleasePlan } from "./application-publication";

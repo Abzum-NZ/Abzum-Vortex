@@ -1,6 +1,9 @@
 import "server-only";
 
-import { readRecordDetailContract, readRecordsTableContract } from "../../schema";
+import {
+  readRecordDetailContract,
+  readRecordsTableContract,
+} from "../../definition/application-composition/records-display";
 import {
   ATTACHMENT_LIST_BLOCK_RELEASE,
   CALENDAR_BLOCK_RELEASE,
@@ -9,7 +12,7 @@ import {
   QUERY_NOTICE_BLOCK_RELEASE,
   SUMMARY_VALUES_BLOCK_RELEASE,
   TABLE_BLOCK_RELEASE,
-} from "../../definition/index";
+} from "../../definition/application-composition-catalogue";
 import { readCalendarPlacementContract } from "../calendar-query";
 import { resolvePlacementInputs } from "./bindings";
 import { readBoard } from "./board";

@@ -1,23 +1,24 @@
 import "server-only";
 
 import { z } from "zod";
+import { jsonValueSchema, sortKeySchema } from "../catalogue/common";
 import {
-  boardColumnReadLimit,
-  recordsTableAggregateOperations,
   builderKeySchema,
-  conditionNodeSchema,
   fieldIdSchema,
-  jsonValueSchema,
   moduleRootIdSchema,
   queryIdSchema,
   recordIdSchema,
   revisionSchema,
-  sortKeySchema,
-  stableDefinitionReleaseVersionSchema,
+} from "../catalogue/identifiers";
+import { recordsTableAggregateOperations } from "../definition/application-composition/records-table-totals";
+import { boardColumnReadLimit } from "../definition/application-contracts";
+import { conditionNodeSchema } from "../definition/module-foundation-contracts";
+import { stableDefinitionReleaseVersionSchema } from "../definition/version-impact";
+import {
   moduleFieldValueSchemas,
   recordLinkValueSchema,
   sourceExactDecimalTextSchema,
-} from "../schema";
+} from "../records/module-field-values";
 import {
   recordSystemValuesSchema,
   supportedRecordSystemFieldKeySchema,
@@ -572,63 +573,63 @@ export const protectedQueryResultSchema = z.discriminatedUnion("outcome", [
 ]);
 export type ProtectedQueryResult = z.infer<typeof protectedQueryResultSchema>;
 
-/** One database-backed summary request over the installed Query's groups and aggregates, or a grid's authored dimension. */
-export const protectedQuerySummaryCommandSchema = z
-  .object({
-    moduleRootId: moduleRootIdSchema,
-    queryId: queryIdSchema,
-    inputValues: z.record(builderKeySchema, jsonValueSchema),
-    /** Visible authored grid columns, overriding query totals; absence retains query defaults. */
-    totals: protectedQueryTotalsSchema.optional(),
-    /** A grid's authored dimension overrides query grouping/totals defaults. */
-    grouping: protectedQueryGroupingSchema.optional(),
-    /** A pivot crosses two dimensions with one measure; it replaces the query's grouping. */
-    pivot: protectedQueryPivotSchema.optional(),
-    /** Groups per page for the query's own grouping (default 40); a grid dimension or pivot carries its own. */
-    groupLimit: z.number().int().min(1).max(200).optional(),
-    /** Last visible summary key; each page recomputes counts under current access. */
-    groupAfter: z.string().min(1).max(4096).optional(),
-    search: protectedQueryCommandSchema.shape.search,
-    searchableFieldIds: protectedQueryCommandSchema.shape.searchableFieldIds,
-    /** The viewer's typed filter narrows the installed Query filter. */
-    filter: conditionNodeSchema.optional(),
-    /** Built by the bound component from its installed filter controls. */
-    filterableFieldIds: z
-      .array(fieldIdSchema)
-      .max(200)
-      .refine(uniqueFieldIds, { message: "Each filterable field is named once" })
-      .default([]),
-  })
-  .strict()
-  .superRefine((command, context) => {
-    if (
-      command.groupLimit !== undefined &&
-      (command.grouping !== undefined || command.pivot !== undefined)
-    )
-      context.addIssue({
-        code: "custom",
-        path: ["groupLimit"],
-        message: "A grid dimension or pivot carries its own page size",
-      });
-    if (command.totals !== undefined && command.pivot !== undefined)
-      context.addIssue({
-        code: "custom",
-        path: ["totals"],
-        message: "A pivot defines its own measure",
-      });
-    if (command.totals !== undefined && command.grouping !== undefined)
-      context.addIssue({
-        code: "custom",
-        path: ["totals"],
-        message: "Grouped totals belong to the grouping's measures",
-      });
-    if (command.grouping !== undefined && command.pivot !== undefined)
-      context.addIssue({
-        code: "custom",
-        path: ["pivot"],
-        message: "A request is either grouped or pivoted",
-      });
-  });
+const protectedQuerySummaryCommandBase = {
+  moduleRootId: moduleRootIdSchema,
+  queryId: queryIdSchema,
+  inputValues: z.record(builderKeySchema, jsonValueSchema),
+  /** Last visible summary key; each page recomputes counts under current access. */
+  groupAfter: z.string().min(1).max(4096).optional(),
+  search: protectedQueryCommandSchema.shape.search,
+  searchableFieldIds: protectedQueryCommandSchema.shape.searchableFieldIds,
+  /** The viewer's typed filter narrows the installed Query filter. */
+  filter: conditionNodeSchema.optional(),
+  /** Built by the bound component from its installed filter controls. */
+  filterableFieldIds: z
+    .array(fieldIdSchema)
+    .max(200)
+    .refine(uniqueFieldIds, { message: "Each filterable field is named once" })
+    .default([]),
+};
+
+/** Groups per page for the query's own grouping; a grid dimension or pivot carries its own. */
+const summaryGroupLimitSchema = z.number().int().min(1).max(200).optional();
+
+/**
+ * One database-backed summary request. Its mode names the one SQL function that answers it:
+ * the installed Query's own groups and aggregates, the grid's visible column totals, a grid's
+ * authored dimension, or a pivot of two dimensions and one measure.
+ */
+export const protectedQuerySummaryCommandSchema = z.discriminatedUnion("mode", [
+  z
+    .object({
+      mode: z.literal("published"),
+      ...protectedQuerySummaryCommandBase,
+      groupLimit: summaryGroupLimitSchema,
+    })
+    .strict(),
+  z
+    .object({
+      mode: z.literal("totals"),
+      ...protectedQuerySummaryCommandBase,
+      totals: protectedQueryTotalsSchema,
+      groupLimit: summaryGroupLimitSchema,
+    })
+    .strict(),
+  z
+    .object({
+      mode: z.literal("grouping"),
+      ...protectedQuerySummaryCommandBase,
+      grouping: protectedQueryGroupingSchema,
+    })
+    .strict(),
+  z
+    .object({
+      mode: z.literal("pivot"),
+      ...protectedQuerySummaryCommandBase,
+      pivot: protectedQueryPivotSchema,
+    })
+    .strict(),
+]);
 export type ProtectedQuerySummaryCommand = z.infer<typeof protectedQuerySummaryCommandSchema>;
 
 export const protectedQuerySummaryAggregateResultSchema = z.discriminatedUnion("outcome", [

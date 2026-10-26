@@ -1,18 +1,15 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
-import {
-  flowSchema,
-  flowTaskChildLists,
-  sameId,
-  type ComponentFlowBinding,
-  type RecordsTableFeatureProjection,
-} from "../../schema";
-import type { RequestDatabaseTransaction } from "../../db";
+import { sameId } from "../../catalogue/runtime-primitives";
+import type { ComponentFlowBinding } from "../../definition/application-flow-bindings";
+import { flowSchema, flowTaskChildLists } from "../../workflows/flow-contracts";
+import type { RecordsTableFeatureProjection } from "../records-table-feature-projection";
+import type { RequestDatabaseTransaction } from "../../db/request-transaction";
 import type { FlowNamedAction } from "../../definition/flow-orchestrator-types";
 import type { InstalledRuntimeContext } from "../../definition/installed-runtime-context";
 import { installedNamedActions } from "../../definition/installed-named-actions";
-import { collectActionFlowTasks, flowLibraryOf } from "../../rules";
+import { collectActionFlowTasks, flowLibraryOf } from "../../rules/action-flow-run";
 import { projectNamedActionAvailability } from "./named-action-availability";
 
 type RowActions = NonNullable<RecordsTableFeatureProjection["rowActions"]>;

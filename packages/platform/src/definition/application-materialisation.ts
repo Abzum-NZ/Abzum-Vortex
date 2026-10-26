@@ -1,38 +1,52 @@
+import type { PlatformId } from "../catalogue/identifiers";
+import type {
+  DefinitionValidationLocation,
+  DefinitionRuleFailure,
+} from "../catalogue/validation-errors";
+import {
+  findFieldInputBinding,
+  plainSettingValue,
+  validateComponentSettingValue,
+  type BlockPropertySchemaContract,
+  type ComponentSettingFailure,
+  type FieldInputControlKey,
+} from "./application-composition/block-property-schema";
+import {
+  blockPropertyValueSchema,
+  type BlockPropertyValueContract,
+  type SourceBlockPropertyValueContract,
+} from "./application-composition/block-property-values";
 import {
   applicationCompositionCatalogueSnapshotSchema,
-  applicationShellSchema,
-  applicationThemeSchema,
-  canonicalApplicationThemeSelection,
-  canonicalResponsivePlacement,
-  blockPropertyValueSchema,
-  guidedFormPageCompositionSchema,
-  findFieldInputBinding,
-  pageCompositionSchema,
-  plainSettingValue,
-  releaseSettingDeclarations,
-  validateComponentSettingValue,
   type ApplicationCompositionCatalogueSnapshot,
-  type ApplicationContent,
+} from "./application-composition/catalogue-snapshot";
+import {
+  applicationShellSchema,
+  canonicalResponsivePlacement,
+  guidedFormPageCompositionSchema,
+  pageCompositionSchema,
   type ApplicationShell,
-  type ApplicationSourceDocument,
-  type BlockPropertySchemaContract,
-  type BlockPropertyValueContract,
-  type ComponentSettingFailure,
-  type DefinitionValidationLocation,
-  type DefinitionRuleFailure,
-  type FieldInputControlKey,
+} from "./application-composition/page-composition";
+import {
+  releaseSettingDeclarations,
   type PlatformBlockRelease,
-  type PlatformThemeRelease,
-  type PlatformId,
-  type SourceBlockPropertyValueContract,
+} from "./application-composition/platform-block-release";
+import { controlReferenceSettingKeys } from "./application-composition/query-binding-check";
+import {
   type SourceItem,
   type SourceSlotOrder,
   readSourceItem,
   sourcePageDataOf,
   sourcePageRootSlots,
   type SourcePageData,
-  controlReferenceSettingKeys,
-} from "../schema";
+} from "./application-composition/source-composition";
+import {
+  applicationThemeSchema,
+  canonicalApplicationThemeSelection,
+  type PlatformThemeRelease,
+} from "./application-composition/theme";
+import type { ApplicationContent } from "./application-contracts";
+import type { ApplicationSourceDocument } from "./definition-source";
 import {
   FIELD_INPUT_BLOCK_RELEASE,
   FIELD_INPUT_CONTROL_RELEASES,
@@ -47,13 +61,10 @@ import type {
   ApplicationCompositionResolution,
   FieldInputSourceField,
 } from "./application-resolution";
-import {
-  createThemeLocation,
-  resolveThemeSelection,
-  validateApplicationTheme,
-  type ThemeResolutionOptions,
-  type ThemeValidationFailure,
-} from "../theme/index";
+import { createThemeLocation } from "../theme/errors";
+import { validateApplicationTheme } from "../theme/resolver";
+import { resolveThemeSelection } from "../theme/selection";
+import type { ThemeResolutionOptions, ThemeValidationFailure } from "../theme/types";
 
 type SourceZone = Readonly<{ items: readonly SourceItem[]; order: SourceSlotOrder | undefined }>;
 type CanonicalComposition = ApplicationContent["pages"][number]["composition"];

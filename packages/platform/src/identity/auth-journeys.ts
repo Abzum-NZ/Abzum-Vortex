@@ -1,13 +1,10 @@
 import "server-only";
 
 import { createClient, type SupabaseClient, type User } from "@supabase/supabase-js";
-import {
-  describeFailure,
-  identityAuthoritySchema,
-  identityIdSchema,
-  isLoopbackHostname,
-  type IdentityAuthority,
-} from "../schema";
+import { identityAuthoritySchema, type IdentityAuthority } from "../access/identity-access";
+import { identityIdSchema } from "../catalogue/identifiers";
+import { describeFailure } from "../catalogue/runtime-primitives";
+import { isLoopbackHostname } from "./loopback-hostname";
 import { createIdentityVerifier } from "./identity-verifier";
 import { readPrivacyNotice } from "./privacy-notice";
 
@@ -36,6 +33,8 @@ export type IdentityJourneyFailure =
   | "vortex.identity.invalid_or_expired_link"
   | "vortex.identity.privacy_notice_required"
   | "vortex.identity.privacy_notice_changed"
+  /** No privacy notice is in effect, so registration is not open. */
+  | "vortex.identity.registration_closed"
   | "vortex.identity.authority_unavailable";
 
 export type IdentityJourneyResult =
@@ -287,6 +286,7 @@ export const requestRegistration = async (
 
   try {
     const notice = await readPrivacyNotice();
+    if (notice === undefined) return { ok: false, code: "vortex.identity.registration_closed" };
     if (notice.id !== acknowledgment.noticeVersionId)
       return { ok: false, code: "vortex.identity.privacy_notice_changed" };
     const authority = createAuthorityClient(configuration);
@@ -309,7 +309,7 @@ export const requestRegistration = async (
       if (error.message === "privacy_notice_changed")
         return { ok: false, code: "vortex.identity.privacy_notice_changed" };
       if (error.message === "privacy_notice_unavailable")
-        return { ok: false, code: "vortex.identity.authority_unavailable" };
+        return { ok: false, code: "vortex.identity.registration_closed" };
     }
 
     // Registration acknowledgement is intentionally neutral. Existing and new addresses

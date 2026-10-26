@@ -1,19 +1,19 @@
 import "server-only";
 
+import type { JsonValue } from "../../catalogue/common";
+import { compiledPageBindingFacts } from "../../definition/application-composition/compiled-query-bindings";
+import { compiledPageShellId } from "../../definition/application-composition/page-composition";
+import type { QueryBindingValueType } from "../../definition/application-composition/query-binding-values";
 import {
-  compiledPageBindingFacts,
-  compiledPageShellId,
   readAwaitingMessage,
   readQueryBindings,
-  type JsonValue,
-  type PageDefinition,
-  type QueryBindingValueType,
-} from "../../schema";
+} from "../../definition/application-composition/query-bindings";
+import type { PageDefinition } from "../../definition/application-contracts";
 import {
   placementBlockRelease,
   placementSettings,
-  type InstalledRuntimeContext,
-} from "../../definition/index";
+} from "../../definition/application-composition-catalogue";
+import type { InstalledRuntimeContext } from "../../definition/installed-runtime-context";
 import { walkPageComposition, walkPlacementData } from "../placement-walk";
 import {
   resolveQueryBindings,

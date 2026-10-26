@@ -1,36 +1,37 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
+import type { SessionContext } from "../access/identity-access";
+import { correlationIdSchema, type CorrelationId } from "../catalogue/common";
 import {
-  MAXIMUM_FILE_STORAGE_OPERATION_SECONDS,
   applicationRootIdSchema,
-  correlationIdSchema,
-  downloadGrantSchema,
   fieldIdSchema,
   fileIdSchema,
-  fileRecordSchema,
-  logRefusal,
   organizationAccountIdSchema,
   organizationIdSchema,
   platformIdSchema,
   recordIdSchema,
   recordTypeIdSchema,
   timestampSchema,
-  verifiedFileActorSchema,
   type ApplicationRootId,
-  type CorrelationId,
-  type DownloadGrant,
   type FieldId,
   type FileId,
-  type FileRecord,
   type OrganizationAccountId,
   type OrganizationId,
   type PlatformId,
   type RecordId,
   type RecordTypeId,
-  type SessionContext,
+} from "../catalogue/identifiers";
+import { logRefusal } from "../catalogue/runtime-primitives";
+import {
+  MAXIMUM_FILE_STORAGE_OPERATION_SECONDS,
+  downloadGrantSchema,
+  fileRecordSchema,
+  verifiedFileActorSchema,
+  type DownloadGrant,
+  type FileRecord,
   type VerifiedFileActor,
-} from "../schema";
+} from "./file-contracts";
 import { isExecutableContent, normalizeFileExtension } from "./content-safety";
 import { sanitizeFileDisplayName } from "./file-metadata";
 import { resolveVerifiedFileActor, verifyAttachmentFieldAuthority } from "./attachment-authority";

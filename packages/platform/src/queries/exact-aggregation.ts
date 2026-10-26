@@ -1,13 +1,13 @@
 import "server-only";
 
+import type { JsonValue } from "../catalogue/common";
 import {
   compareExactDecimals,
   formatExactDecimal,
   parseExactDecimal,
   powerOfTen,
   type ExactDecimal,
-  type JsonValue,
-} from "../schema";
+} from "../records/exact-decimal";
 import type {
   AggregateDescriptor,
   AggregateResult,
@@ -96,8 +96,7 @@ const codePointOrder = (left: string, right: string): number => {
   while (true) {
     const leftPoint = leftPoints.next();
     const rightPoint = rightPoints.next();
-    if (leftPoint.done || rightPoint.done)
-      return leftPoint.done ? (rightPoint.done ? 0 : -1) : 1;
+    if (leftPoint.done || rightPoint.done) return leftPoint.done ? (rightPoint.done ? 0 : -1) : 1;
     const difference = leftPoint.value.codePointAt(0)! - rightPoint.value.codePointAt(0)!;
     if (difference !== 0) return difference < 0 ? -1 : 1;
   }
@@ -145,9 +144,10 @@ const computeAggregate = (
   switch (fieldType) {
     case "yes_no": {
       const values = present as readonly boolean[];
-      const chosen = aggregate.operation === "minimum"
-        ? values.every((value) => value)
-        : values.some((value) => value);
+      const chosen =
+        aggregate.operation === "minimum"
+          ? values.every((value) => value)
+          : values.some((value) => value);
       return { outcome: "completed", value: chosen, valueCount };
     }
     case "money": {
@@ -194,9 +194,12 @@ const computeAggregate = (
     case "text":
     case "date":
     case "date_time": {
-      const order = fieldType === "text"
-        ? codePointOrder
-        : fieldType === "date" ? codeUnitOrder : dateTimeOrder;
+      const order =
+        fieldType === "text"
+          ? codePointOrder
+          : fieldType === "date"
+            ? codeUnitOrder
+            : dateTimeOrder;
       const texts = present as readonly string[];
       let chosen = texts[0]!;
       for (const text of texts) {

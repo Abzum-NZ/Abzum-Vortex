@@ -1,5 +1,5 @@
 create or replace function vortex_identity.accept_organization_invitation_with_transition(
-  p_token_fingerprint text,
+  p_invitation_id uuid,
   p_identity_id uuid,
   p_verified_email text,
   p_display_name text,
@@ -38,7 +38,7 @@ declare
 begin
   select invitation.organization_id into candidate_organization_id
   from vortex_identity.organization_invitations as invitation
-  where invitation.token_fingerprint = p_token_fingerprint
+  where invitation.invitation_id = p_invitation_id
     and invitation.invited_email = p_verified_email
   for update;
 
@@ -58,7 +58,7 @@ begin
 
   select * into accepted
   from vortex_identity.accept_organization_invitation(
-    p_token_fingerprint,
+    p_invitation_id,
     p_identity_id,
     p_verified_email,
     p_display_name,
@@ -79,11 +79,11 @@ begin
 end
 $function$;
 
-revoke all on function vortex_identity.accept_organization_invitation_with_transition(text, uuid, text, text, uuid) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
+revoke all on function vortex_identity.accept_organization_invitation_with_transition(uuid, uuid, text, text, uuid) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 
 comment on function vortex_identity.accept_organization_invitation_with_transition(
-  text, uuid, text, text, uuid
+  uuid, uuid, text, text, uuid
 ) is 'Owner-only Identity invitation transition with explicit Access change classification.';
 
-alter function vortex_identity.accept_organization_invitation_with_transition(text, uuid, text, text, uuid) owner to vortex_owner;
-grant execute on function vortex_identity.accept_organization_invitation_with_transition(text, uuid, text, text, uuid) to postgres;
+alter function vortex_identity.accept_organization_invitation_with_transition(uuid, uuid, text, text, uuid) owner to vortex_owner;
+grant execute on function vortex_identity.accept_organization_invitation_with_transition(uuid, uuid, text, text, uuid) to postgres;

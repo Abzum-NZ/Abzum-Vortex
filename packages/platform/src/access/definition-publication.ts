@@ -2,32 +2,31 @@ import "server-only";
 
 import {
   applicationRootIdSchema,
-  canonicalJson,
-  databaseTimestamp,
   moduleRootIdSchema,
   organizationIdSchema,
+  timestampSchema,
+} from "../catalogue/identifiers";
+import { databaseTimestamp, sameId } from "../catalogue/runtime-primitives";
+import { canonicalJson } from "../definition/canonical-json";
+import {
   prepareDefinitionPublicationCommandSchema,
   prepareDefinitionPublicationResultSchema,
   publishDefinitionCommandSchema,
   publishDefinitionResultSchema,
-  sameId,
-  timestampSchema,
-  type IdentitySession,
   type PrepareDefinitionPublicationResult,
   type PublishDefinitionResult,
-  type SelectedOrganizationScope,
-} from "../schema";
-import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
+} from "../definition/definition-store-contracts";
+import type { IdentitySession, SelectedOrganizationScope } from "./identity-access";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
+import { BuilderAuthorityError, requireBuilderAuthority } from "../definition/builder-authority";
 import {
-  BuilderAuthorityError,
-  createDatabaseDefinitionPublicationService,
   readApplicationDefinitionDraft,
   readModuleDefinitionDraft,
-  requireBuilderAuthority,
-  type ImmutableDefinitionPublicationCatalogueDefinition,
   type StoredApplicationDefinitionDraft,
   type StoredModuleDefinitionDraft,
-} from "../definition/definition-index";
+} from "../definition/definition-draft-read";
+import { createDatabaseDefinitionPublicationService } from "../definition/publication/publish";
+import type { ImmutableDefinitionPublicationCatalogueDefinition } from "../definition/publication/read";
 import {
   assertBeforeLiveDeadline,
   assertLivePermission,
@@ -36,14 +35,16 @@ import {
   readLiveHumanContext,
   type LiveHumanContext,
 } from "./live-context";
-import { createBuilderAuthority, type BuilderTargetFactsReader } from "./builder-authority";
+import {
+  createBuilderAuthority,
+  type BuilderTargetFactsReader,
+  readBuilderApplicationOrigin,
+} from "./builder-authority";
 import type { PlatformPermissionSource } from "./platform-permissions";
 import type { createHumanOrganizationRequestService } from "./human-organization-request";
-import {
-  DefinitionCompilationError,
-  DefinitionError,
-  isVersionImpactRefusal,
-} from "../definition/definition-index";
+import { DefinitionCompilationError } from "../definition/compilation-error";
+import { DefinitionError } from "../definition/definition-error";
+import { isVersionImpactRefusal } from "../definition/version-impact-error";
 import { definitionValidationMessage } from "../catalogue/validation-errors";
 
 /** `reason` is the stable code logged on the server and mapped to a message for the person. */
@@ -90,15 +91,7 @@ class ExpectedBuilderPublicationRefusal extends Error {
 /** Existing roots never acquire a default classification or a System fallback. */
 const targetFacts: BuilderTargetFactsReader = async (transaction, _scope, rootId) => {
   if (rootId === undefined) throw new PublicationContextRefused("root_missing");
-  const rows = await transaction.query<DatabaseRow>`
-    select outcome, application_origin_kind
-    from vortex_definition.read_builder_application_root_classification(${rootId}::uuid)
-  `;
-  if (
-    rows.length !== 1 ||
-    rows[0]?.outcome !== "available" ||
-    rows[0]?.application_origin_kind !== "ordinary"
-  )
+  if ((await readBuilderApplicationOrigin(transaction, rootId)) !== "ordinary")
     throw new PublicationContextRefused("application_root_not_ordinary");
   return { isSystemApplication: false };
 };

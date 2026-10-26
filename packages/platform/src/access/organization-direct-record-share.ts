@@ -1,20 +1,22 @@
 import "server-only";
+import { describeFailure } from "../catalogue/runtime-primitives";
 
 import { randomUUID } from "node:crypto";
+import { activityIdSchema, directShareIdSchema } from "../catalogue/identifiers";
 import {
-  activityIdSchema,
   changeOrganizationDirectRecordShareResultSchema,
-  directShareIdSchema,
   grantOrganizationDirectRecordShareCommandSchema,
   revokeOrganizationDirectRecordShareCommandSchema,
   type ChangeOrganizationDirectRecordShareResult,
   type GrantOrganizationDirectRecordShareCommand,
-  type IdentitySession,
-  type OrganizationSelectionCandidate,
   type RevokeOrganizationDirectRecordShareCommand,
-  type SelectedOrganizationScope,
-} from "../schema";
-import type { RequestDatabaseTransaction } from "../db/index";
+} from "../records/record-share-operations";
+import type {
+  IdentitySession,
+  OrganizationSelectionCandidate,
+  SelectedOrganizationScope,
+} from "./identity-access";
+import type { RequestDatabaseTransaction } from "../db/request-transaction";
 import {
   createHumanOrganizationRequestService,
   type HumanOrganizationRequestDependencies,
@@ -68,7 +70,10 @@ export const createOrganizationDirectRecordShareService = (
       try {
         directShareId = directShareIdSchema.parse(newDirectShareId());
         activityId = activityIdSchema.parse(newActivityId());
-      } catch {
+      } catch (error) {
+        console.error(
+          `[access] direct share identifiers unavailable DIRECT_SHARE_IDENTIFIERS_FAILED: ${describeFailure(error)}`,
+        );
         return { kind: "temporarily_unavailable" };
       }
       return requests.runAccessChange(session, candidate, async (transaction, scope) =>
@@ -90,7 +95,10 @@ export const createOrganizationDirectRecordShareService = (
       let activityId: string;
       try {
         activityId = activityIdSchema.parse(newActivityId());
-      } catch {
+      } catch (error) {
+        console.error(
+          `[access] direct share identifiers unavailable DIRECT_SHARE_IDENTIFIERS_FAILED: ${describeFailure(error)}`,
+        );
         return { kind: "temporarily_unavailable" };
       }
       return requests.runAccessChange(session, candidate, async (transaction, scope) =>

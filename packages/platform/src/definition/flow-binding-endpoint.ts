@@ -4,40 +4,46 @@ import "server-only";
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import {
-  describeFailure,
-  formContinuationReceiptSchema,
-  formContinuationTargetSchema,
-  flowRefusalFeedbackSchema,
-  unlocatedCorrectionsRefusal,
-  flowSchema,
-  flowTaskChildLists,
-  flowBindingInvocationSchema,
   identitySessionSchema,
   organizationSelectionCandidateSchema,
-  safeFlowResultDescriptors,
-  recordIdSchema,
-  recordTypeIdSchema,
-  type ComponentFlowBinding,
+  type IdentitySession,
+  type OrganizationSelectionCandidate,
+} from "../access/identity-access";
+import type { JsonValue } from "../catalogue/common";
+import { recordIdSchema, recordTypeIdSchema } from "../catalogue/identifiers";
+import { describeFailure, isRecord, sameId } from "../catalogue/runtime-primitives";
+import { walkPageComposition, type PlacementVisitor } from "../pages/placement-walk";
+import {
+  flowSchema,
+  flowTaskChildLists,
+  type FlowDefinition,
+  type FlowTask,
+} from "../workflows/flow-contracts";
+import {
+  flowBindingInvocationSchema,
+  type FlowBindingInvocation,
+} from "../workflows/flow-invocation-contracts";
+import {
+  flowRefusalFeedbackSchema,
+  unlocatedCorrectionsRefusal,
+  type FlowRefusalFeedback,
+} from "../workflows/flow-refusal-feedback";
+import {
+  formContinuationReceiptSchema,
+  formContinuationTargetSchema,
   type FormContinuationOutcome,
   type FormContinuationReceipt,
   type FormContinuationRequest,
   type FormContinuationTarget,
-  type ApplicationContent,
-  type ModuleDefinitionConsumerReadResult,
-  type FlowBindingInvocation,
-  type FlowDefinition,
-  type FlowRefusalFeedback,
-  type FlowTask,
   type FlowWarningNotice,
-  type IdentitySession,
-  type JsonValue,
-  type OrganizationSelectionCandidate,
+} from "../workflows/form-continuation-contracts";
+import type { ApplicationContent } from "./application-contracts";
+import {
+  safeFlowResultDescriptors,
+  type ComponentFlowBinding,
   type SafeFlowResultDescriptor,
-  isRecord,
-  sameId,
-  walkPageComposition,
-  type PlacementVisitor,
-} from "../schema";
+} from "./application-flow-bindings";
+import type { ModuleDefinitionConsumerReadResult } from "./definition-consumer-read";
 import {
   FORM_CONTAINER_BLOCK_RELEASE,
   PLATFORM_BLOCK_RELEASES,
@@ -51,7 +57,7 @@ import type {
   FlowRunExpectation,
   FlowUnavailableNotice,
 } from "./flow-orchestrator-types";
-import type { FlowSubject } from "../rules/index";
+import type { FlowSubject } from "../rules/flow-interpreter";
 
 /**
  * The one server entry point that runs the flow bound to a component event (architecture decision

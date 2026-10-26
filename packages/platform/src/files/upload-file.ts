@@ -1,16 +1,16 @@
 import "server-only";
 import { z } from "zod";
+import { sessionContextSchema } from "../access/identity-access";
 import {
   fieldIdSchema,
-  sessionContextSchema,
-  sameId,
   applicationRootIdSchema,
   type RecordTypeId,
   type RecordId,
   type FieldId,
   type FileId,
-} from "../schema";
-import type { RequestDatabaseTransaction } from "../db/index";
+} from "../catalogue/identifiers";
+import { sameId } from "../catalogue/runtime-primitives";
+import type { RequestDatabaseTransaction } from "../db/request-transaction";
 import { createSqlFileUploadRepository } from "./upload-repository";
 import { createFileUploadCoordinator, createUploadStorageAuthorityResolver } from "./upload";
 import { createStorageCredentialBridge, type StorageKeyDefinition } from "./storage-credentials";

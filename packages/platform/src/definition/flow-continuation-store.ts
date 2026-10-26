@@ -1,7 +1,7 @@
 import "server-only";
 
-import type { FlowTriggerOrigin } from "../schema";
-import { withRuntimeTransaction } from "../db/index";
+import type { FlowTriggerOrigin } from "../workflows/flow-contracts";
+import { withRuntimeTransaction } from "../db/request-transaction";
 import { z } from "zod";
 
 /**
@@ -43,8 +43,7 @@ export type FlowContinuationStore = Readonly<{
   consume: (
     input: FlowContinuationBinding & Readonly<{ tokenHash: string }>,
   ) => Promise<
-    | Readonly<{ runId: string; state: unknown; elapsedMilliseconds: number }>
-    | undefined
+    Readonly<{ runId: string; state: unknown; elapsedMilliseconds: number }> | undefined
   >;
 }>;
 
@@ -113,8 +112,9 @@ export const createDatabaseFlowStores = (): Readonly<{
   Object.freeze({
     continuations: Object.freeze<FlowContinuationStore>({
       async issue(input) {
-        const rows = await withRuntimeTransaction((transaction) =>
-          transaction.query`
+        const rows = await withRuntimeTransaction(
+          (transaction) =>
+            transaction.query`
             select vortex_platform.issue_flow_continuation(
               ${input.tokenHash}::text,
               ${input.runId}::uuid,
@@ -137,8 +137,9 @@ export const createDatabaseFlowStores = (): Readonly<{
         return { expiresAt };
       },
       async consume(input) {
-        const rows = await withRuntimeTransaction((transaction) =>
-          transaction.query`
+        const rows = await withRuntimeTransaction(
+          (transaction) =>
+            transaction.query`
             select vortex_platform.consume_flow_continuation(
               ${input.tokenHash}::text,
               ${input.organizationId}::uuid,
@@ -161,8 +162,9 @@ export const createDatabaseFlowStores = (): Readonly<{
     }),
     ledger: Object.freeze<FlowEffectLedger>({
       async begin(key) {
-        const rows = await withRuntimeTransaction((transaction) =>
-          transaction.query`
+        const rows = await withRuntimeTransaction(
+          (transaction) =>
+            transaction.query`
             select vortex_platform.begin_flow_effect(
               ${key.runId}::uuid,
               ${key.organizationId}::uuid,
@@ -181,8 +183,9 @@ export const createDatabaseFlowStores = (): Readonly<{
         return claim.success ? claim.data : { kind: "unavailable" };
       },
       async complete(key, outcome, outputs) {
-        const rows = await withRuntimeTransaction((transaction) =>
-          transaction.query`
+        const rows = await withRuntimeTransaction(
+          (transaction) =>
+            transaction.query`
             select vortex_platform.complete_flow_effect(
               ${key.runId}::uuid,
               ${key.organizationId}::uuid,

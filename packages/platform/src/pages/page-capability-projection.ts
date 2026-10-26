@@ -1,6 +1,8 @@
 import "server-only";
 
-import { isRecord, type CompiledLayout, type PageDefinition } from "../schema";
+import { isRecord } from "../catalogue/runtime-primitives";
+import type { CompiledLayout } from "../definition/application-composition/page-composition";
+import type { PageDefinition } from "../definition/application-contracts";
 import { TABLE_BLOCK_RELEASE } from "../definition/application-composition-catalogue";
 import type { ResolvedPageComposition } from "./page-composition-resolution";
 import { placementViewShown } from "./projected-navigation";

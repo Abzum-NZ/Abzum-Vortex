@@ -1,25 +1,21 @@
 import "server-only";
 
-import {
-  describeFailure,
-  moneyValueSchema,
-  recordLinkValueSchema,
-  readQueryBindings,
-  recordsTableContractOrLog,
-  recordsTablePivotFeature,
-  UnreadableSettingError,
-  type IdentitySession,
-  type JsonValue,
-  type OrganizationSelectionCandidate,
-} from "../../schema";
-import type { HumanOrganizationRequestResult } from "../../access/index";
-import type { QueryContinuationKey } from "../../queries/index";
+import type { IdentitySession, OrganizationSelectionCandidate } from "../../access/identity-access";
+import type { JsonValue } from "../../catalogue/common";
+import { describeFailure } from "../../catalogue/runtime-primitives";
+import { readQueryBindings } from "../../definition/application-composition/query-bindings";
+import { recordsTableContractOrLog } from "../../definition/application-composition/records-display";
+import { recordsTablePivotFeature } from "../../definition/application-composition/records-table-features";
+import { UnreadableSettingError } from "../../definition/application-composition/records-table-features/shared";
+import { moneyValueSchema, recordLinkValueSchema } from "../../records/module-field-values";
+import type { HumanOrganizationRequestResult } from "../../access/human-organization-request";
+import type { QueryContinuationKey } from "../../queries/continuation-token";
 import type { InstalledRuntimeContext } from "../../definition/installed-runtime-context";
 import {
   protectedQuerySummaryCommandSchema,
   type ProtectedQueryPivotResult,
   type ProtectedQuerySummaryResult,
-} from "../../queries/index";
+} from "../../queries/protected-query-contracts";
 import {
   fieldFilterTargetsOf,
   findModuleQuery,
@@ -349,6 +345,7 @@ export const readRecordsTablePivot = async (request: PivotRequest): Promise<Pivo
   const rowBucket = bucket(row, feature.rowDateUnit);
   const columnBucket = bucket(column, feature.columnDateUnit);
   const query = {
+    mode: "pivot",
     moduleRootId: bound.module.rootId,
     queryId: bound.query.queryId,
     inputValues: resolution.inputValues,

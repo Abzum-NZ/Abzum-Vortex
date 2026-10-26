@@ -1,9 +1,12 @@
 import "server-only";
 
 import {
+  selectedOrganizationScopeSchema,
+  type SelectedOrganizationScope,
+} from "../access/identity-access";
+import {
   actorIdSchema,
   applicationRootIdSchema,
-  definitionKindSchema,
   fingerprintSchema,
   moduleRootIdSchema,
   namespacedKeySchema,
@@ -11,16 +14,17 @@ import {
   organizationIdSchema,
   platformIdSchema,
   revisionSchema,
-  selectedOrganizationScopeSchema,
   semanticVersionSchema,
-  storedDefinitionDraftSchema,
-  storedModuleDefinitionDraftSchema,
   tenantIdSchema,
   timestampSchema,
-  type SelectedOrganizationScope,
+} from "../catalogue/identifiers";
+import {
+  storedDefinitionDraftSchema,
+  storedModuleDefinitionDraftSchema,
   type StoredDefinitionDraft,
-} from "../schema";
-import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
+} from "./definition-store-contracts";
+import { definitionKindSchema } from "./definitions";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
 import { z } from "zod";
 import { fingerprintCanonicalValue } from "./canonical-json-definition";
 import { isDefinitionContextFailure } from "./definition-consumer-read-definition";

@@ -1,10 +1,10 @@
+import type { DefinitionRuleFailure } from "../../catalogue/validation-errors";
 import type {
-  DefinitionRuleFailure,
-  VersionRequirement,
   ModuleCompilationOutput,
   ApplicationCompilationOutput,
-  ApplicationSourceDocument,
-} from "../../schema";
+} from "../definition-compilation-contracts";
+import type { ApplicationSourceDocument } from "../definition-source";
+import type { VersionRequirement } from "../definitions";
 import { gt, lt, satisfies } from "semver";
 import {
   compareDefinitionVersionImpactWithEvidence,

@@ -1,23 +1,27 @@
+import type {
+  DefinitionValidationLocation,
+  DefinitionRuleFailure,
+} from "../../catalogue/validation-errors";
+import { connectionTypeSchema } from "../../connections/integration-contracts";
+import type { PlatformBlockRelease } from "../application-composition/platform-block-release";
+import { applicationDraftSchema } from "../application-contracts";
+import type {
+  DefinitionCompilationOutput,
+  DefinitionCompilationRequest,
+  ApplicationCompilationRequest,
+  ModuleCompilationRequest,
+  PublishedDefinitionHistory,
+  DefinitionPublicationHistoryEvidence,
+} from "../definition-compilation-contracts";
 import {
-  type DefinitionCompilationOutput,
-  type DefinitionCompilationRequest,
-  type ApplicationCompilationRequest,
-  type ModuleCompilationRequest,
   type DefinitionSourceDocument,
   type ApplicationSourceDocument,
   type ModuleSourceDocument,
-  type PlatformBlockRelease,
   applicationSourceDocumentSchema,
   moduleSourceDocumentSchema,
   definitionSourceDocumentSchema,
-  type DefinitionValidationLocation,
-  type DefinitionRuleFailure,
-  type PublishedDefinitionHistory,
-  type DefinitionPublicationHistoryEvidence,
-  moduleDraftSchema,
-  applicationDraftSchema,
-  connectionTypeSchema,
-} from "../../schema";
+} from "../definition-source";
+import { moduleDraftSchema } from "../module-contracts";
 import { IMMUTABLE_PLATFORM_BLOCK_CATALOGUE } from "../application-composition-catalogue";
 import type { z } from "zod";
 import type { PlatformPermissionSource } from "../../access/platform-permissions";

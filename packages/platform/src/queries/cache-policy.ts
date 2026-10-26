@@ -3,20 +3,20 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 import { z } from "zod";
+import { personalDataClassSchema } from "../catalogue/catalogues";
 import {
   applicationRootIdSchema,
-  canonicalJson,
   fieldIdSchema,
   fingerprintSchema,
   moduleRootIdSchema,
   organizationAccountIdSchema,
   organizationIdSchema,
-  personalDataClassSchema,
   recordTypeIdSchema,
   revisionSchema,
-  stableDefinitionReleaseVersionSchema,
   timestampSchema,
-} from "../schema";
+} from "../catalogue/identifiers";
+import { canonicalJson } from "../definition/canonical-json";
+import { stableDefinitionReleaseVersionSchema } from "../definition/version-impact";
 import { protectedQueryCommandSchema } from "./protected-query-contracts";
 
 /**

@@ -833,11 +833,8 @@ for (const file of files.filter(
         `${key} vs ${migration?.file ?? "missing migration"}`,
       );
     }
-    // The generated baseline is a fixed snapshot; its unchanged function UUIDs are legacy data.
-    if (migration && matchesMigration && baselineMigrationFiles.has(migration.file)) {
+    if (migration && matchesMigration && baselineMigrationFiles.has(migration.file))
       baselineCopies.add(file);
-      continue;
-    }
     for (const match of value.body.matchAll(uuidPattern))
       if (match[0].toLowerCase() !== "00000000-0000-0000-0000-000000000000") {
         add(

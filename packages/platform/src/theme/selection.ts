@@ -1,11 +1,11 @@
 import "server-only";
 
+import type { DefinitionRuleFailure } from "../catalogue/validation-errors";
 import {
   applicationThemeSelectionSchema,
   themeTokenValueSchema,
   type ApplicationThemeSelection,
-  type DefinitionRuleFailure,
-} from "../schema";
+} from "../definition/application-composition/theme";
 import {
   SHADCN_HEADING_FONT_INHERIT,
   findShadcnFont,

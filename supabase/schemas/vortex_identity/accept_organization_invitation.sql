@@ -1,5 +1,5 @@
 create or replace function vortex_identity.accept_organization_invitation(
-  p_token_fingerprint text,
+  p_invitation_id uuid,
   p_identity_id uuid,
   p_verified_email text,
   p_display_name text,
@@ -38,7 +38,8 @@ declare
   new_account_id uuid;
   result_outcome text := 'accepted';
 begin
-  if p_token_fingerprint !~ '^sha256:[0-9a-f]{64}$'
+  if p_invitation_id is null
+    or not vortex_platform.is_non_nil_uuid(p_invitation_id::text)
     or p_identity_id is null
     or p_identity_id = '00000000-0000-0000-0000-000000000000'::uuid
     or p_verified_email is null
@@ -56,7 +57,7 @@ begin
   select candidate.*
   into invitation
   from vortex_identity.organization_invitations as candidate
-  where candidate.token_fingerprint = p_token_fingerprint
+  where candidate.invitation_id = p_invitation_id
   for update;
 
   if not found
@@ -229,9 +230,9 @@ begin
 end
 $function$;
 
-revoke all on function vortex_identity.accept_organization_invitation(text, uuid, text, text, uuid) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
+revoke all on function vortex_identity.accept_organization_invitation(uuid, uuid, text, text, uuid) from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 
-comment on function vortex_identity.accept_organization_invitation(text, uuid, text, text, uuid) is
+comment on function vortex_identity.accept_organization_invitation(uuid, uuid, text, text, uuid) is
   'Atomically accepts one available invitation using request-local verified identity facts.';
 
-alter function vortex_identity.accept_organization_invitation(text, uuid, text, text, uuid) owner to vortex_owner;
+alter function vortex_identity.accept_organization_invitation(uuid, uuid, text, text, uuid) owner to vortex_owner;

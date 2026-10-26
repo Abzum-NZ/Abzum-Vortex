@@ -1,17 +1,17 @@
 import "server-only";
 
+import type { IdentitySession, OrganizationSelectionCandidate } from "../../access/identity-access";
+import { sameId } from "../../catalogue/runtime-primitives";
+import type { BlockPropertyValueContract } from "../../definition/application-composition/block-property-values";
+import { readQueryBindings } from "../../definition/application-composition/query-bindings";
+import { recordsTableContractOrLog } from "../../definition/application-composition/records-display";
+import { recordsTableMasterDetailFeature } from "../../definition/application-composition/records-table-features";
 import {
-  readQueryBindings,
-  recordsTableMasterDetailFeature,
-  recordsTableContractOrLog,
-  sameId,
-  type BlockPropertyValueContract,
-  type IdentitySession,
-  type OrganizationSelectionCandidate,
-} from "../../schema";
-import { recordLinkLabelKey, type RecordLinkReference } from "../../definition/app-index";
+  recordLinkLabelKey,
+  type RecordLinkReference,
+} from "../../definition/viewer-safe-record-link";
 import type { InstalledRuntimeContext } from "../../definition/installed-runtime-context";
-import { protectedQueryCommandSchema } from "../../queries/index";
+import { protectedQueryCommandSchema } from "../../queries/protected-query-contracts";
 import {
   collectRecordLinks,
   projectRecordDetailData,

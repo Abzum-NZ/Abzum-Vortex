@@ -1,10 +1,8 @@
 import { type PreparedValidationContext, canonicalValueWalker, type JsonObject } from "./context";
-import {
-  type DefinitionRuleFailure,
-  inspectApplicationPageReplacements,
-  type VersionRequirement,
-  type FlowDefinition,
-} from "../../schema";
+import type { DefinitionRuleFailure } from "../../catalogue/validation-errors";
+import { inspectApplicationPageReplacements } from "../../pages/application-page-replacement";
+import type { FlowDefinition } from "../../workflows/flow-contracts";
+import type { VersionRequirement } from "../definitions";
 import { array, failure, object } from "./helpers";
 import { typedSemanticFieldType, typedConditionTypesValid } from "./field-types";
 import {

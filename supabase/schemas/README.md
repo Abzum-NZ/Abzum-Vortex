@@ -20,14 +20,9 @@ The schema directory names the function's schema and the file name is the functi
 lowercase SQL identifiers, so one name has one file: do not overload a function name. Keep each
 canonical file synchronized with the migration that installs its function.
 
-The 20261014 baseline has 705 functions, each with one canonical file. The 244 files added after
-the initial squash copy their definition, owner, comment when present, and privileges from the
-baseline without changing the function.
-
-Migration `20261014001100_collapse_schemas_and_owner_roles` moved those functions into the five schemas
-(`vortex_identity`, `vortex_access`, `vortex_definition`, `vortex_record`, `vortex_platform`) and
-merged the per-schema owner roles into `vortex_owner`; the directories and owner statements here
-follow it. `vortex_record_adapter` and `vortex_record_inventory` remain separate restricted roles.
+`vortex_record_adapter` and `vortex_record_inventory` own the record functions their restricted
+policies need, four integration functions keep `postgres` ownership (target architecture §4), and
+every other function is owned by `vortex_owner`.
 
 ## Migration rule
 
@@ -52,8 +47,7 @@ follow it. `vortex_record_adapter` and `vortex_record_inventory` remain separate
 
 `pnpm guard` runs the check in [`tooling/guard/guard.ts`](../../tooling/guard/guard.ts): it compares
 each canonical function definition with the latest matching definition found in the ordered
-migrations, and rejects non-nil hard-coded UUIDs in new function bodies. The generated baseline's
-legacy UUIDs are exempt only while the canonical definition matches that fixed baseline. It also
+migrations, and rejects non-nil hard-coded UUIDs in new function bodies. It also
 rejects a canonical function name declared with more than one signature, since a call would then
 resolve by argument types instead of by name. The comparison normalizes whitespace. It does not
 inspect the live database or verify the canonical

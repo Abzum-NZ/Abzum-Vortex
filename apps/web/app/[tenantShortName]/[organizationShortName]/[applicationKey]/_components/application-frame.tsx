@@ -22,7 +22,6 @@ import {
   type ApplicationShellRuntime,
   type PagePuckRendererProps,
 } from "@vortex/ui";
-import { Toaster } from "@vortex/ui/components/sonner";
 import type { ApplicationFrameModel } from "../../../../_lib/application-frame";
 import { signOut } from "../../../../auth/actions";
 import {
@@ -325,7 +324,6 @@ export function ApplicationFrame({
       <ApplicationAccountActionsProvider actions={accountActions}>
         <PageNavigationBusyContext.Provider value={pageTransitionPending}>
           <PagePuckRenderer
-            overlay={<Toaster position="bottom-right" />}
             applicationSurface
             composition={frame}
             registry={registry}

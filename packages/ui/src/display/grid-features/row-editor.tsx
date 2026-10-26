@@ -24,7 +24,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "../../components/toolti
 import { Icon } from "../../icons/icon";
 import { rowName } from "../context";
 import { useDateFormatOptions } from "../date-format-context";
-import { fail, requireRecord, type DisplayEventHandlers, type DisplayRow } from "../projected-data";
+import { fail, requireRecord } from "../payload-parse";
+import type { DisplayEventHandlers, DisplayRow } from "../projected-data";
 import type { RowLine } from "../sub-rows";
 import { EditFieldControl } from "./edit-field-control";
 import { linkedRecordTitle } from "./record-choice-picker";

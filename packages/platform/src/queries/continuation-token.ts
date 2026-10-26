@@ -4,14 +4,14 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 import {
   applicationRootIdSchema,
-  canonicalJson,
   moduleRootIdSchema,
   organizationAccountIdSchema,
   organizationIdSchema,
   queryIdSchema,
   recordIdSchema,
   revisionSchema,
-} from "../schema";
+} from "../catalogue/identifiers";
+import { canonicalJson } from "../definition/canonical-json";
 import { openToken, sealToken } from "./sealed-token";
 
 /**

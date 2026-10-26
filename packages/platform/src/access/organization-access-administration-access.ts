@@ -1,17 +1,16 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
+import type { IdentitySession, OrganizationSelectionCandidate } from "./identity-access";
 import type {
   CloseOrganizationAccountCommand,
   CreateOrganizationInvitationForAdministrationCommand,
-  IdentitySession,
   ReactivateOrganizationAccountCommand,
   RevokeOrganizationInvitationForAdministrationCommand,
   SuspendOrganizationAccountCommand,
   UpdateOwnProfileCommand,
   UpdateOwnProfileResult,
-  OrganizationSelectionCandidate,
-} from "../schema";
+} from "./organization-local-administration";
 import {
   createHumanOrganizationRequestService,
   type HumanOrganizationRequestDependencies,

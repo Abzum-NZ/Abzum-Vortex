@@ -1,20 +1,18 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
+import type { JsonValue } from "../catalogue/common";
+import { builderKeySchema, fieldIdSchema, recordTypeIdSchema } from "../catalogue/identifiers";
+import { isRecord } from "../catalogue/runtime-primitives";
 import {
-  builderKeySchema,
-  fieldIdSchema,
   flowReadFieldsProjectionSchema,
   flowReadFieldsScalarTypeSchema,
   flowReadFieldsTypeMapSchema,
   flowTaskChildLists,
-  isRecord,
-  recordTypeIdSchema,
   type FlowDefinition,
-  type FlowFieldCorrection,
   type FlowTask,
-  type FlowValue,
-  type JsonValue,
-} from "../schema";
+} from "../workflows/flow-contracts";
+import type { FlowFieldCorrection } from "../workflows/flow-refusal-feedback";
+import type { FlowValue } from "../workflows/flow-values";
 import { typedValueMatchesType } from "../rules/condition-types";
 import type {
   FlowInterfaceIntent,
@@ -22,7 +20,7 @@ import type {
   FlowProtectedTaskCall,
   FlowRunState,
   FlowTaskOutcome,
-} from "../rules/index";
+} from "../rules/flow-interpreter";
 import type {
   FlowRelease,
   FlowSelectedRecordReadProjection,

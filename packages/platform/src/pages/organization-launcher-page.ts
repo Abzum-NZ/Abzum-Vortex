@@ -92,7 +92,6 @@ export const organizationLauncherShell = applicationShellSchema.parse({
           phone_direction: "inherit",
           phone_menu_width: 14,
           phone_menu_placement: "inherit",
-          content_landmark: true,
           padding: "medium",
           content_width: "fill",
         },
@@ -125,12 +124,17 @@ export const applicationLauncherOpenEventId = "open_application";
 const launcherItems = [
   platformPageItem(HEADING_BLOCK_RELEASE, "f0299e44-84f3-4ab1-a822-90b28584f001", {
     text: "Choose an application you can open",
-    level: "one",
+    level: "two",
   }),
   platformPageItem(
     APPLICATION_LAUNCHER_BLOCK_RELEASE,
     organizationLauncherPlacementId,
-    { title: "Available applications", row_action_event_id: applicationLauncherOpenEventId },
+    {
+      title: "Available applications",
+      row_action_event_id: applicationLauncherOpenEventId,
+      action_label: "Open",
+      empty_message: "You have no applications yet. Ask your administrator for access.",
+    },
     ["side_panel"],
   ),
 ];

@@ -1,12 +1,13 @@
 import "server-only";
 
 import { createHash, timingSafeEqual } from "node:crypto";
-import { applicationRootIdSchema, logRefusal, type ApplicationRootId } from "../schema";
+import { applicationRootIdSchema, type ApplicationRootId } from "../catalogue/identifiers";
+import { logRefusal } from "../catalogue/runtime-primitives";
 import {
   withRuntimeTransaction,
   type DatabaseRow,
   type RequestDatabaseTransaction,
-} from "../db/index";
+} from "../db/request-transaction";
 import { DefinitionError } from "./definition-error";
 
 export const runtimeBundleCleanupLimits = Object.freeze({
@@ -153,7 +154,7 @@ export const runScheduledRuntimeBundleCleanup =
       const rows = await withRuntimeTransaction(
         (transaction) =>
           transaction.query<CleanupRow>`
-        select vortex_definition.remove_abandoned_runtime_bundles_internal(
+        select vortex_definition.remove_abandoned_runtime_bundles(
           ${runtimeBundleCleanupLimits.batchSize}::integer
         ) as cleanup_result
       `,
@@ -178,7 +179,7 @@ export const createInstallationRuntimeBundleCleanupRepository = (
       if (!parsedRootId.success) throw new DefinitionError("RUNTIME_BUNDLE_CLEANUP_UNAVAILABLE");
       try {
         const rows = await transaction.query<CleanupRow>`
-          select vortex_definition.remove_installation_runtime_bundles_internal(
+          select vortex_definition.remove_installation_runtime_bundles(
             ${parsedRootId.data}::uuid
           ) as cleanup_result
         `;

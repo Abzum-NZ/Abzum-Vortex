@@ -1,7 +1,10 @@
 import "server-only";
+import { databaseCode } from "../catalogue/runtime-primitives";
 
-import { correlationIdSchema, recordIdSchema, type SaveRecordCommand } from "../schema";
-import type { DatabaseRow, RequestDatabaseTransaction } from "../db/index";
+import { correlationIdSchema } from "../catalogue/common";
+import { recordIdSchema } from "../catalogue/identifiers";
+import type { SaveRecordCommand } from "./records";
+import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
 import {
   calculateLockedRelationshipTotalSave,
   type CalculateRelationshipTotalSaveResult,
@@ -169,11 +172,6 @@ class RecordLifecycleRollback extends Error {
   }
 }
 
-const databaseCode = (error: unknown): string | undefined =>
-  typeof error === "object" && error !== null && "code" in error
-    ? String((error as { readonly code?: unknown }).code)
-    : undefined;
-
 /**
  * How a failed lifecycle step settles its request transaction: a carried
  * outcome, or a restart for a serialization failure or deadlock. Any other
@@ -325,7 +323,6 @@ export const performProtectedRecordDelete = async (
   command: ProtectedRecordDeleteCommand,
 ): Promise<RecordDeleteResult> => {
   const { activityId, occurrenceId } = command;
-  await transaction.query`set local role vortex_runtime`;
   const prepared = parseDatabaseOutcome(
     one(
       await transaction.query<Row>`

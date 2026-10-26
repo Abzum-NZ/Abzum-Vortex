@@ -670,35 +670,17 @@ export const invitationSchema = z
       });
   });
 
-export const storedInvitationSchema = invitationSchema.safeExtend({
-  tokenFingerprint: fingerprintSchema,
-});
-
 export const ensureIdentityProjectionCommandSchema = z
   .object({
     correlationId: correlationIdSchema,
   })
   .strict();
 
-export const createOrganizationInvitationCommandSchema = z
-  .object({
-    invitedEmail: z.email(),
-    expiresAt: timestampSchema,
-  })
-  .strict();
-
 export const acceptOrganizationInvitationCommandSchema = z
   .object({
-    invitationSecret: z.string().min(32).max(2_000),
+    invitationId: invitationIdSchema,
     displayName: z.string().trim().min(1).max(120).optional(),
     correlationId: correlationIdSchema,
-  })
-  .strict();
-
-export const revokeOrganizationInvitationCommandSchema = z
-  .object({
-    invitationId: invitationIdSchema,
-    expectedRevision: revisionSchema,
   })
   .strict();
 
@@ -1284,16 +1266,9 @@ export type InvitationAcceptanceWithAccessVersion = z.infer<
   typeof invitationAcceptanceWithAccessVersionSchema
 >;
 export type Invitation = z.infer<typeof invitationSchema>;
-export type StoredInvitation = z.infer<typeof storedInvitationSchema>;
 export type EnsureIdentityProjectionCommand = z.infer<typeof ensureIdentityProjectionCommandSchema>;
-export type CreateOrganizationInvitationCommand = z.infer<
-  typeof createOrganizationInvitationCommandSchema
->;
 export type AcceptOrganizationInvitationCommand = z.infer<
   typeof acceptOrganizationInvitationCommandSchema
->;
-export type RevokeOrganizationInvitationCommand = z.infer<
-  typeof revokeOrganizationInvitationCommandSchema
 >;
 export type ChangeOrganizationAccountStateCommand = z.infer<
   typeof changeOrganizationAccountStateCommandSchema

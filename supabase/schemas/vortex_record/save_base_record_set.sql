@@ -106,7 +106,7 @@ alter function vortex_record.save_base_record_set(uuid,jsonb) owner to vortex_re
 
 revoke all on function vortex_record.save_base_record_set(uuid, jsonb)
 from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
-grant execute on function vortex_record.save_base_record_set(uuid, jsonb) to vortex_runtime;
+grant execute on function vortex_record.save_base_record_set(uuid, jsonb) to vortex_request;
 
 comment on function vortex_record.save_base_record_set(uuid, jsonb) is
   'The set-based ordinary save: applies one to 200 field-change updates of one record type, each through the ordinary protected save (receipt, revision check, relationship total guard, Activity and Event), in record identity order inside the caller''s one transaction; the first refusal is returned with its subject index and the caller rolls every subject back.';

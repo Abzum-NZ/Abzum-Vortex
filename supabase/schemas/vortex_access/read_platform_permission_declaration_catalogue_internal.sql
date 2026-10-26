@@ -24,8 +24,7 @@ as $function$
     select declaration.*
     from vortex_access.platform_permission_declarations as declaration
     where declaration.owner_kind = 'platform'
-      -- guard-allow: function-uuid fixed platform permission identity without declaration-table read access
-      and declaration.owner_id = 'cabe121e-0baf-4084-9471-cce915d460a8'::uuid
+      and declaration.owner_id = vortex_access.platform_permission_owner_id()
   ),
   valid as (
     select p_registration_revision = 6

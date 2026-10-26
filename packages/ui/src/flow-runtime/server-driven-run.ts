@@ -93,6 +93,7 @@ export async function driveServerFlow(
             awaitingSurface = true;
             await host.showMessage(
               {
+                title: "Saved, with a warning",
                 text: response.warnings.map((warning) => warning.message).join(" "),
                 tone: "warning",
               },

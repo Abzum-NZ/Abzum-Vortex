@@ -188,9 +188,7 @@ begin
         'outcome', 'permission_refused', 'correlationId', context_value -> 'correlationId'
       );
     end if;
-    perform vortex_record.append_named_action_activity_internal(
-      p_activity_id, p_record_id, array[]::uuid[], 'refused'
-    );
+    perform vortex_record.append_record_activity_internal(p_activity_id, 'execute_named_action', array[p_record_id]::uuid[], array[]::uuid[], 'refused');
     return pg_catalog.jsonb_build_object(
       'outcome', 'refused_recorded', 'correlationId', context_value -> 'correlationId'
     );

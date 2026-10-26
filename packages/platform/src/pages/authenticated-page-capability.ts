@@ -1,31 +1,32 @@
 import "server-only";
 
+import type {
+  IdentitySession,
+  OrganizationSelectionCandidate,
+  SelectedOrganizationScope,
+} from "../access/identity-access";
+import type {
+  OrganizationAccessDeclaration,
+  OrganizationRecordAccessDeclaration,
+} from "../access/organization-access-decision";
 import {
-  canonicalJson,
   compiledItemSlots,
-  pageDefinitionSchema,
   type ApplicationShell,
   type CompiledItem,
-  type ConditionNode,
-  type IdentitySession,
-  type OrganizationAccessDeclaration,
-  type OrganizationRecordAccessDeclaration,
-  type OrganizationSelectionCandidate,
-  type PageDefinition,
-  type SelectedOrganizationScope,
-} from "../schema";
-import {
-  isTrustedInstalledPageComposition,
-  type InstalledRuntimeContext,
-} from "../definition/app-index";
-import type { RequestDatabaseTransaction } from "../db/index";
+} from "../definition/application-composition/page-composition";
+import { pageDefinitionSchema, type PageDefinition } from "../definition/application-contracts";
+import { canonicalJson } from "../definition/canonical-json";
+import type { ConditionNode } from "../definition/module-foundation-contracts";
+import { isTrustedInstalledPageComposition } from "../definition/installed-page-bundle-context";
+import type { InstalledRuntimeContext } from "../definition/installed-runtime-context";
+import type { RequestDatabaseTransaction } from "../db/request-transaction";
 import {
   createHumanOrganizationRequestService,
-  evaluateOrganizationRecordPermissionAvailability,
-  runOrganizationAccessOperation,
   type HumanOrganizationRequestDependencies,
   type HumanOrganizationRequestResult,
-} from "../access/index";
+} from "../access/human-organization-request";
+import { runOrganizationAccessOperation } from "../access/organization-access-decision-access";
+import { evaluateOrganizationRecordPermissionAvailability } from "../access/organization-record-permission-availability";
 import {
   projectPageCapability,
   type PageCapabilityState,

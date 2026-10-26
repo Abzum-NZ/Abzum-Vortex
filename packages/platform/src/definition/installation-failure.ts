@@ -1,6 +1,6 @@
 import "server-only";
 
-import { describeFailure } from "../schema";
+import { describeFailure } from "../catalogue/runtime-primitives";
 import { InstallationProblem, type InstallationProblemShape } from "./installation-authority";
 import { DefinitionError, classifyDatabaseError } from "./definition-error";
 

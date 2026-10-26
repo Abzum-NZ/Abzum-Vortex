@@ -3,6 +3,7 @@ import {
   IMMUTABLE_PLATFORM_BLOCK_CATALOGUE,
   PLATFORM_CONNECTION_TYPE_RELEASES,
   PLATFORM_BLOCK_RELEASES,
+  readBuilderApplicationOrigin,
 } from "@vortex/platform/server";
 import {
   platformIdSchema,
@@ -100,18 +101,13 @@ const verifyApplicationRoot = async (
   descriptor: TrustedApplicationDescriptor,
   rootId: string,
 ): Promise<void> => {
-  const rows = await transaction.query<
-    DatabaseRow & { outcome: unknown; application_origin_kind: unknown; definition_key: unknown }
-  >`
-    select classification.outcome, classification.application_origin_kind,
-      vortex_definition.read_builder_application_root_key(${rootId}::uuid) as definition_key
-    from vortex_definition.read_builder_application_root_classification(${rootId}::uuid)
-      as classification
+  const origin = await readBuilderApplicationOrigin(transaction, rootId);
+  const rows = await transaction.query<DatabaseRow & { definition_key: unknown }>`
+    select vortex_definition.read_builder_application_root_key(${rootId}::uuid) as definition_key
   `;
   if (
+    origin !== descriptor.applicationOriginKind ||
     rows.length !== 1 ||
-    rows[0]!.outcome !== "available" ||
-    rows[0]!.application_origin_kind !== descriptor.applicationOriginKind ||
     rows[0]!.definition_key !== descriptor.source.key
   )
     refuseRecordedApplicationRoot();

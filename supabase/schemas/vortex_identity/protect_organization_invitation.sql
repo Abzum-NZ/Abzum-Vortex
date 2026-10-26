@@ -1,4 +1,4 @@
-CREATE FUNCTION vortex_identity.protect_organization_invitation() RETURNS trigger
+CREATE OR REPLACE FUNCTION vortex_identity.protect_organization_invitation() RETURNS trigger
     LANGUAGE plpgsql
     SET search_path TO ''
     AS $$
@@ -6,7 +6,6 @@ begin
   if new.invitation_id is distinct from old.invitation_id
     or new.organization_id is distinct from old.organization_id
     or new.invited_email is distinct from old.invited_email
-    or new.token_fingerprint is distinct from old.token_fingerprint
     or new.invited_by_organization_account_id is distinct from old.invited_by_organization_account_id
     or new.created_at is distinct from old.created_at
     or new.invited_at is distinct from old.invited_at
