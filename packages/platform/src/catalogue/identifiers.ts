@@ -163,7 +163,6 @@ export type VortexSuperAdministratorAssignmentId = z.infer<
   typeof vortexSuperAdministratorAssignmentIdSchema
 >;
 export type AdministrationDuplicateKey = z.infer<typeof administrationDuplicateKeySchema>;
-
 export type MeteringEventId = z.infer<typeof meteringEventIdSchema>;
 export type BuilderKey = z.infer<typeof builderKeySchema>;
 export type NamespacedKey = z.infer<typeof namespacedKeySchema>;
