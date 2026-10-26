@@ -13,6 +13,7 @@ import {
   type FieldInputControlReleaseMap,
   type createPlatformComponentRegistryForReleases,
   PagePuckRenderer,
+  type FlowIntentHost,
   type ControlSemanticEvent,
   type ChoiceInputPayload,
   type DisplaySemanticEvent,
@@ -26,6 +27,7 @@ import {
 } from "@vortex/ui";
 import {
   describeFailure,
+  PLATFORM_BLOCK_RELEASE_IDENTITIES,
   type ProjectedApplicationFrame,
   isRecord,
   walkPageComposition,
@@ -44,7 +46,7 @@ import type {
   RefreshedPlacementData,
   PageSelection,
 } from "./types";
-import { formOwnersByPlacement } from "./form-surface";
+import { ownersByPlacement } from "./form-surface";
 import { placementEventNamesByPage, applicationLauncherPlacementIds } from "./placement-helpers";
 import { useUnsavedWorkPrompt } from "./use-unsaved-work-prompt";
 import { useNavigationScope } from "./use-navigation-scope";
@@ -164,6 +166,7 @@ export function ApplicationPageViewContent({
   const requestedStepId = useRef<string | undefined>(undefined);
   const guidedSubmitInFlight = useRef(false);
   const runtimeInputsRef = useRef<Readonly<Record<string, unknown>>>({});
+  const setPanelRef = useRef<FlowIntentHost["setPanel"]>(undefined);
   const dialogFormRef = useRef<HTMLDivElement>(null);
   const requestChoicePageRef = useRef<
     (
@@ -181,7 +184,21 @@ export function ApplicationPageViewContent({
 
   const application = model.invocation;
   const formOwners = useMemo(
-    () => formOwnersByPlacement(model.page, platformComponentRegistry),
+    () =>
+      ownersByPlacement(
+        model.page,
+        platformComponentRegistry,
+        PLATFORM_BLOCK_RELEASE_IDENTITIES.FORM_CONTAINER_BLOCK_RELEASE,
+      ),
+    [model.page, platformComponentRegistry],
+  );
+  const recordDetailOwners = useMemo(
+    () =>
+      ownersByPlacement(
+        model.page,
+        platformComponentRegistry,
+        PLATFORM_BLOCK_RELEASE_IDENTITIES.RECORD_DETAIL_BLOCK_RELEASE,
+      ),
     [model.page, platformComponentRegistry],
   );
   const placementEventNames = useMemo(
@@ -300,6 +317,7 @@ export function ApplicationPageViewContent({
     platformThemeTokens,
     committed: (bindingId) =>
       void refreshPlacements(refreshTargetsForBinding(bindingId), undefined, { content: true }),
+    setPanelRef,
   });
 
   /** A page-level address change (a guided form step) renders the page again on the server. */
@@ -483,6 +501,7 @@ export function ApplicationPageViewContent({
     guidedFormCompleted,
     placementEventNames,
     formOwners,
+    recordDetailOwners,
     launcherPlacements,
     busy,
     unsavedWork,
@@ -528,6 +547,7 @@ export function ApplicationPageViewContent({
     router,
     requestChoicePage,
     runtimeInputsRef,
+    setPanelRef,
   });
 
   // What the frame around this page shows for it: its breadcrumb name, its agent-tool state, its
@@ -657,6 +677,8 @@ export function ApplicationPageViewContent({
           platformThemeTokens={platformThemeTokens}
           applicationSearch={applicationFrame?.applicationSearch}
           applicationSearchPageSubject={applicationFrame?.applicationSearchPageSubject}
+          locale={applicationFrame?.locale}
+          timeZone={applicationFrame?.timeZone}
           pageId={model.pageId}
           theme={model.theme}
           {...(navigation === undefined ? {} : { projectedNavigation: navigation })}

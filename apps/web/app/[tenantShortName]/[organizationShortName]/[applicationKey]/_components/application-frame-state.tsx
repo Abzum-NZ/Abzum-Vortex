@@ -47,6 +47,9 @@ export type ApplicationFrameStateValue = Readonly<{
   /** The application search the header shows, also offered to a search block in the content. */
   applicationSearch: PagePuckRendererProps["applicationSearch"];
   applicationSearchPageSubject: string | undefined;
+  /** The viewer's BCP 47 locale and IANA time zone, for the dates the page content shows. */
+  locale: string;
+  timeZone: string;
 }>;
 
 const ApplicationFrameStateContext = createContext<ApplicationFrameStateValue | null>(null);

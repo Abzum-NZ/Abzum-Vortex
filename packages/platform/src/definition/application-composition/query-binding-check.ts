@@ -269,6 +269,17 @@ export const selectionControlSettingKey = (blockKey: string | undefined): string
       ? "record_from"
       : undefined;
 
+/**
+ * Whether a table publishes the record of a row: a click that selects it, or a named parameter its
+ * row-click flow opens a panel with (`interface.set_panel`). The one rule for the draft, the source
+ * check and the compiled release.
+ */
+export const tablePublishesRecord = (
+  rowClickMode: unknown,
+  publishedParameter: string | undefined,
+): boolean =>
+  rowClickMode === "select" || (publishedParameter !== undefined && publishedParameter !== "");
+
 /** One placement of a page as a binding sees it: its block, its name and what it may publish. */
 export type QueryBindingPlacement = Readonly<{
   placement: string;
