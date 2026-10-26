@@ -48,6 +48,7 @@ export const createOrganizationAccessAdministrationService = (
   const localAdministration = createOrganizationLocalAdministrationService(dependencies);
 
   return Object.freeze({
+    readOrganizationAccount: localAdministration.readOrganizationAccount,
     ...createAccessAdministrationGroupOperations(context),
     ...createAccessAdministrationRoleOperations(context),
     ...createAccessAdministrationAssignmentOperations(context),
