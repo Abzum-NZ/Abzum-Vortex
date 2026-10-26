@@ -299,11 +299,22 @@ export function ApplicationPageViewContent({
     dialogFormRef,
     platformThemeTokens,
     committed: (bindingId) => {
-      const targets = refreshTargetsForBinding(bindingId);
-      // Identity and Access writes have no record target; reread the page's displayed data.
-      void refreshPlacements(targets.length === 0 ? Object.keys(currentData) : targets, undefined, {
-        content: true,
-      });
+      let targets = refreshTargetsForBinding(bindingId);
+      if (targets.length === 0) {
+        // Identity and Access writes have no record target. Only reread displayed data:
+        // the page payload also holds inputs for dialogs that are not part of this projection.
+        const displayed = new Set(
+          Array.from(
+            compositionRootRef.current?.querySelectorAll<HTMLElement>(
+              "[data-vortex-placement-id]",
+            ) ?? [],
+          )
+            .filter((element) => element.getClientRects().length > 0)
+            .map((element) => element.dataset.vortexPlacementId?.toLowerCase()),
+        );
+        targets = Object.keys(currentData).filter((id) => displayed.has(id.toLowerCase()));
+      }
+      void refreshPlacements(targets, undefined, { content: true });
     },
   });
 
