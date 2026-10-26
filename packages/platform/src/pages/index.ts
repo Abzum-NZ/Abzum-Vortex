@@ -27,12 +27,7 @@ export {
   type OrganizationAddressState,
 } from "./organization-address-state-page";
 
-export {
-  createAuthenticatedPageCapabilityService,
-  type AuthenticatedPageCapabilityDependencies,
-  type FixedAuthenticatedPageCapability,
-  type FixedAuthenticatedPageCapabilityAdapter,
-} from "./authenticated-page-capability";
+export { type FixedAuthenticatedPageCapability } from "./authenticated-page-capability";
 export {
   projectPageCapability,
   type PageCapabilityState,
@@ -82,11 +77,8 @@ export {
   type StoredPageCapabilitySelection,
 } from "./stored-page-capability";
 export {
-  createAuthenticatedNavigationProjectionService,
   createStoredNavigationProjectionService,
-  type AuthenticatedNavigationProjectionDependencies,
   type FixedAuthenticatedNavigationProjection,
-  type FixedAuthenticatedNavigationProjectionAdapter,
   type NavigationPermissionBinding,
   type StoredNavigationProjectionDependencies,
 } from "./navigation-projection";

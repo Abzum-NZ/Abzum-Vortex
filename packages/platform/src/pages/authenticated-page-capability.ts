@@ -1,10 +1,6 @@
 import "server-only";
 
-import type {
-  IdentitySession,
-  OrganizationSelectionCandidate,
-  SelectedOrganizationScope,
-} from "../access/identity-access";
+import type { SelectedOrganizationScope } from "../access/identity-access";
 import type {
   OrganizationAccessDeclaration,
   OrganizationRecordAccessDeclaration,
@@ -20,11 +16,6 @@ import type { ConditionNode } from "../definition/module-foundation-contracts";
 import { isTrustedInstalledPageComposition } from "../definition/installed-page-bundle-context";
 import type { InstalledRuntimeContext } from "../definition/installed-runtime-context";
 import type { RequestDatabaseTransaction } from "../db/request-transaction";
-import {
-  createHumanOrganizationRequestService,
-  type HumanOrganizationRequestDependencies,
-  type HumanOrganizationRequestResult,
-} from "../access/human-organization-request";
 import { runOrganizationAccessOperation } from "../access/organization-access-decision-access";
 import { evaluateOrganizationRecordPermissionAvailability } from "../access/organization-record-permission-availability";
 import {
@@ -81,44 +72,34 @@ export type FixedAuthenticatedPageCapability = Readonly<{
   >;
 }>;
 
-export interface FixedAuthenticatedPageCapabilityAdapter<Command> {
-  load(
+/** The decisions a page capability projection takes in its own verified transaction. */
+export type PageCapabilityEvaluators = Readonly<{
+  /** Server-owned operand resolution, under the same verified transaction as the view gates. */
+  evaluateVisibilityCondition: (
     transaction: RequestDatabaseTransaction,
     scope: SelectedOrganizationScope,
-    command: Command,
-  ): Promise<FixedAuthenticatedPageCapability>;
-}
-
-export type AuthenticatedPageCapabilityDependencies<Command> =
-  HumanOrganizationRequestDependencies &
-    Readonly<{
-      adapter: FixedAuthenticatedPageCapabilityAdapter<Command>;
-      /** Server-owned operand resolution, under the same verified transaction as the view gates. */
-      evaluateVisibilityCondition?: (
-        transaction: RequestDatabaseTransaction,
-        scope: SelectedOrganizationScope,
-        page: PageDefinition,
-        condition: ConditionNode,
-      ) => Promise<boolean>;
-      /**
-       * Whether the action a placement is bound to can run on the page's subject for the viewer,
-       * decided by that action's own preview under the same verified transaction. `undefined`
-       * means the placement is bound to no action, or the preview cannot decide before the person
-       * supplies inputs; only `false` hides the placement. One decision per action per projection.
-       */
-      evaluateActionAvailability?: (
-        transaction: RequestDatabaseTransaction,
-        scope: SelectedOrganizationScope,
-        page: PageDefinition,
-        placementId: string,
-      ) => Promise<boolean | undefined>;
-      /** Final current-context and database-clock check for the earliest private Access deadline. */
-      validateAccessEligibilityUntil?: (
-        transaction: RequestDatabaseTransaction,
-        scope: SelectedOrganizationScope,
-        validUntil: string,
-      ) => Promise<boolean>;
-    }>;
+    page: PageDefinition,
+    condition: ConditionNode,
+  ) => Promise<boolean>;
+  /**
+   * Whether the action a placement is bound to can run on the page's subject for the viewer,
+   * decided by that action's own preview under the same verified transaction. `undefined`
+   * means the placement is bound to no action, or the preview cannot decide before the person
+   * supplies inputs; only `false` hides the placement. One decision per action per projection.
+   */
+  evaluateActionAvailability: (
+    transaction: RequestDatabaseTransaction,
+    scope: SelectedOrganizationScope,
+    page: PageDefinition,
+    placementId: string,
+  ) => Promise<boolean | undefined>;
+  /** Final current-context and database-clock check for the earliest private Access deadline. */
+  validateAccessEligibilityUntil: (
+    transaction: RequestDatabaseTransaction,
+    scope: SelectedOrganizationScope,
+    validUntil: string,
+  ) => Promise<boolean>;
+}>;
 
 type RequiredPlacement = Readonly<{
   placementId: string;
@@ -210,157 +191,147 @@ const evaluate = async (
 
 const sameKey = (left: string, right: string): boolean => left === right;
 
-export const createAuthenticatedPageCapabilityService = <Command>(
-  dependencies: AuthenticatedPageCapabilityDependencies<Command>,
-) => {
-  const requests = createHumanOrganizationRequestService(dependencies);
-  return Object.freeze({
-    project: (
-      session: IdentitySession,
-      candidate: OrganizationSelectionCandidate,
-      command: Command,
-    ): Promise<HumanOrganizationRequestResult<ProjectedPageCapability>> =>
-      requests.run(session, candidate, async (transaction, scope) => {
-        const loaded = await dependencies.adapter.load(transaction, scope, command);
-        const page = pageDefinitionSchema.parse(loaded.page);
-        if (
-          loaded.resolvedComposition !== undefined &&
-          (loaded.resolvedCompositionContext === undefined ||
-            !isTrustedInstalledPageComposition(
-              loaded.resolvedCompositionContext,
-              loaded.resolvedComposition,
-            ) ||
-            canonicalJson(loaded.resolvedComposition.page) !== canonicalJson(page))
-        )
-          throw new Error("PAGE_CAPABILITY_BINDING_UNAVAILABLE");
-        const resolved =
-          loaded.resolvedComposition ?? resolvePageComposition(page, loaded.applicationShells);
-        if (!sameKey(loaded.pagePermission.permissionKey, page.accessPermissionKey))
-          throw new Error("PAGE_CAPABILITY_BINDING_UNAVAILABLE");
+/**
+ * Projects one loaded page capability for the viewer: the page gate, then each placement's view and
+ * use gates, visibility condition and bound action, all decided in this one verified transaction.
+ * Undefined when the page is not the viewer's to open.
+ */
+export const projectAuthenticatedPageCapability = async (
+  transaction: RequestDatabaseTransaction,
+  scope: SelectedOrganizationScope,
+  loaded: FixedAuthenticatedPageCapability,
+  evaluators: PageCapabilityEvaluators,
+): Promise<ProjectedPageCapability | undefined> => {
+  const page = pageDefinitionSchema.parse(loaded.page);
+  if (
+    loaded.resolvedComposition !== undefined &&
+    (loaded.resolvedCompositionContext === undefined ||
+      !isTrustedInstalledPageComposition(
+        loaded.resolvedCompositionContext,
+        loaded.resolvedComposition,
+      ) ||
+      canonicalJson(loaded.resolvedComposition.page) !== canonicalJson(page))
+  )
+    throw new Error("PAGE_CAPABILITY_BINDING_UNAVAILABLE");
+  const resolved =
+    loaded.resolvedComposition ?? resolvePageComposition(page, loaded.applicationShells);
+  if (!sameKey(loaded.pagePermission.permissionKey, page.accessPermissionKey))
+    throw new Error("PAGE_CAPABILITY_BINDING_UNAVAILABLE");
 
-        // One projection transaction decides each exact declaration once; repeated declarations
-        // reuse the decision and its validity deadline.
-        const decided = new Map<string, Awaited<ReturnType<typeof evaluate>>>();
-        const decide = async (binding: PermissionBinding | PlacementPermissionBinding) => {
-          const key = canonicalJson({
-            kind: isRecordPlacementBinding(binding) ? "record" : "permission",
-            declaration: binding.declaration,
-          });
-          let decision = decided.get(key);
-          if (decision === undefined) {
-            decision = await evaluate(transaction, scope, binding);
-            decided.set(key, decision);
-          }
-          return decision;
-        };
-        const pageAccess = await decide(loaded.pagePermission);
-        if (!pageAccess.allowed) return undefined;
-        const correlations = new Set([
-          pageAccess.correlationId.toLowerCase(),
-          ...(loaded.sourceCorrelationId === undefined
-            ? []
-            : [loaded.sourceCorrelationId.toLowerCase()]),
-        ]);
-        let earliestAccessEligibilityUntil: string | undefined;
-        const retainEarliestAccessEligibility = (candidateUntil: string | undefined): void => {
-          if (candidateUntil === undefined) return;
-          if (
-            earliestAccessEligibilityUntil === undefined ||
-            Date.parse(candidateUntil) < Date.parse(earliestAccessEligibilityUntil)
-          )
-            earliestAccessEligibilityUntil = candidateUntil;
-        };
-        retainEarliestAccessEligibility(pageAccess.validUntil);
-        const states: Record<string, PageCapabilityState["placements"][string]> = {};
-        const hiddenPlacements = new Set<string>();
-        for (const required of requiredPlacements(resolved)) {
-          if (states[required.placementId] !== undefined) continue;
-          const binding = loaded.placements[required.placementId];
-          if (binding === undefined) throw new Error("PAGE_CAPABILITY_BINDING_UNAVAILABLE");
-          const view =
-            required.viewPermissionKey === undefined
-              ? { allowed: true, correlationId: pageAccess.correlationId, validUntil: undefined }
-              : binding.viewPermission !== undefined &&
-                  sameKey(binding.viewPermission.permissionKey, required.viewPermissionKey)
-                ? await decide(binding.viewPermission)
-                : undefined;
-          const use =
-            required.usePermissionKey === undefined
-              ? { allowed: true, correlationId: pageAccess.correlationId, validUntil: undefined }
-              : binding.usePermission !== undefined &&
-                  sameKey(binding.usePermission.permissionKey, required.usePermissionKey)
-                ? await decide(binding.usePermission)
-                : undefined;
-          if (view === undefined || use === undefined)
-            throw new Error("PAGE_CAPABILITY_BINDING_UNAVAILABLE");
-          retainEarliestAccessEligibility(view.validUntil);
-          retainEarliestAccessEligibility(use.validUntil);
-          correlations.add(view.correlationId.toLowerCase());
-          correlations.add(use.correlationId.toLowerCase());
-          const ancestorHidden = required.ancestorPlacementIds.some((id) =>
-            hiddenPlacements.has(id),
-          );
-          const conditionAllowed =
-            required.visibilityCondition === undefined
-              ? binding.visibilityConditionAllowed
-              : !view.allowed || ancestorHidden
-                ? false
-                : dependencies.evaluateVisibilityCondition === undefined
-                  ? binding.visibilityConditionAllowed
-                  : await dependencies.evaluateVisibilityCondition(
-                      transaction,
-                      scope,
-                      page,
-                      required.visibilityCondition,
-                    );
-          const actionAvailable =
-            ancestorHidden || !view.allowed || dependencies.evaluateActionAvailability === undefined
-              ? undefined
-              : await dependencies.evaluateActionAvailability(
-                  transaction,
-                  scope,
-                  page,
-                  required.placementId,
-                );
-          if (
-            ancestorHidden ||
-            !view.allowed ||
-            (required.visibilityCondition !== undefined && conditionAllowed !== true) ||
-            actionAvailable === false
-          )
-            hiddenPlacements.add(required.placementId);
-          states[required.placementId] = {
-            viewAllowed: view.allowed,
-            useAllowed: use.allowed,
-            ...(binding.operationRequired === undefined
-              ? {}
-              : { operationRequired: binding.operationRequired }),
-            operationBound: binding.operationBound,
-            ...(conditionAllowed === undefined ? {} : { conditionAllowed }),
-            ...(actionAvailable === undefined ? {} : { actionAvailable }),
-          };
-        }
-        if (correlations.size !== 1) throw new Error("PAGE_CAPABILITY_EVIDENCE_UNAVAILABLE");
-        const projected = projectPageCapability(resolved, {
-          pageAllowed: true,
-          placements: states,
-          accessVersion: scope.accessVersion,
-          ...(loaded.applicationReleaseRevision === undefined
-            ? {}
-            : { applicationReleaseRevision: loaded.applicationReleaseRevision }),
-        });
-        if (projected !== undefined && earliestAccessEligibilityUntil !== undefined) {
-          if (
-            dependencies.validateAccessEligibilityUntil === undefined ||
-            !(await dependencies.validateAccessEligibilityUntil(
+  // One projection transaction decides each exact declaration once; repeated declarations
+  // reuse the decision and its validity deadline.
+  const decided = new Map<string, Awaited<ReturnType<typeof evaluate>>>();
+  const decide = async (binding: PermissionBinding | PlacementPermissionBinding) => {
+    const key = canonicalJson({
+      kind: isRecordPlacementBinding(binding) ? "record" : "permission",
+      declaration: binding.declaration,
+    });
+    let decision = decided.get(key);
+    if (decision === undefined) {
+      decision = await evaluate(transaction, scope, binding);
+      decided.set(key, decision);
+    }
+    return decision;
+  };
+  const pageAccess = await decide(loaded.pagePermission);
+  if (!pageAccess.allowed) return undefined;
+  const correlations = new Set([
+    pageAccess.correlationId.toLowerCase(),
+    ...(loaded.sourceCorrelationId === undefined ? [] : [loaded.sourceCorrelationId.toLowerCase()]),
+  ]);
+  let earliestAccessEligibilityUntil: string | undefined;
+  const retainEarliestAccessEligibility = (candidateUntil: string | undefined): void => {
+    if (candidateUntil === undefined) return;
+    if (
+      earliestAccessEligibilityUntil === undefined ||
+      Date.parse(candidateUntil) < Date.parse(earliestAccessEligibilityUntil)
+    )
+      earliestAccessEligibilityUntil = candidateUntil;
+  };
+  retainEarliestAccessEligibility(pageAccess.validUntil);
+  const states: Record<string, PageCapabilityState["placements"][string]> = {};
+  const hiddenPlacements = new Set<string>();
+  for (const required of requiredPlacements(resolved)) {
+    if (states[required.placementId] !== undefined) continue;
+    const binding = loaded.placements[required.placementId];
+    if (binding === undefined) throw new Error("PAGE_CAPABILITY_BINDING_UNAVAILABLE");
+    const view =
+      required.viewPermissionKey === undefined
+        ? { allowed: true, correlationId: pageAccess.correlationId, validUntil: undefined }
+        : binding.viewPermission !== undefined &&
+            sameKey(binding.viewPermission.permissionKey, required.viewPermissionKey)
+          ? await decide(binding.viewPermission)
+          : undefined;
+    const use =
+      required.usePermissionKey === undefined
+        ? { allowed: true, correlationId: pageAccess.correlationId, validUntil: undefined }
+        : binding.usePermission !== undefined &&
+            sameKey(binding.usePermission.permissionKey, required.usePermissionKey)
+          ? await decide(binding.usePermission)
+          : undefined;
+    if (view === undefined || use === undefined)
+      throw new Error("PAGE_CAPABILITY_BINDING_UNAVAILABLE");
+    retainEarliestAccessEligibility(view.validUntil);
+    retainEarliestAccessEligibility(use.validUntil);
+    correlations.add(view.correlationId.toLowerCase());
+    correlations.add(use.correlationId.toLowerCase());
+    const ancestorHidden = required.ancestorPlacementIds.some((id) => hiddenPlacements.has(id));
+    const conditionAllowed =
+      required.visibilityCondition === undefined
+        ? binding.visibilityConditionAllowed
+        : !view.allowed || ancestorHidden
+          ? false
+          : await evaluators.evaluateVisibilityCondition(
               transaction,
               scope,
-              earliestAccessEligibilityUntil,
-            ))
-          )
-            return undefined;
-        }
-        return projected;
-      }),
+              page,
+              required.visibilityCondition,
+            );
+    const actionAvailable =
+      ancestorHidden || !view.allowed
+        ? undefined
+        : await evaluators.evaluateActionAvailability(
+            transaction,
+            scope,
+            page,
+            required.placementId,
+          );
+    if (
+      ancestorHidden ||
+      !view.allowed ||
+      (required.visibilityCondition !== undefined && conditionAllowed !== true) ||
+      actionAvailable === false
+    )
+      hiddenPlacements.add(required.placementId);
+    states[required.placementId] = {
+      viewAllowed: view.allowed,
+      useAllowed: use.allowed,
+      ...(binding.operationRequired === undefined
+        ? {}
+        : { operationRequired: binding.operationRequired }),
+      operationBound: binding.operationBound,
+      ...(conditionAllowed === undefined ? {} : { conditionAllowed }),
+      ...(actionAvailable === undefined ? {} : { actionAvailable }),
+    };
+  }
+  if (correlations.size !== 1) throw new Error("PAGE_CAPABILITY_EVIDENCE_UNAVAILABLE");
+  const projected = projectPageCapability(resolved, {
+    pageAllowed: true,
+    placements: states,
+    accessVersion: scope.accessVersion,
+    ...(loaded.applicationReleaseRevision === undefined
+      ? {}
+      : { applicationReleaseRevision: loaded.applicationReleaseRevision }),
   });
+  if (projected !== undefined && earliestAccessEligibilityUntil !== undefined) {
+    if (
+      !(await evaluators.validateAccessEligibilityUntil(
+        transaction,
+        scope,
+        earliestAccessEligibilityUntil,
+      ))
+    )
+      return undefined;
+  }
+  return projected;
 };

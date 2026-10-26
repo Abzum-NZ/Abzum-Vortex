@@ -61,7 +61,8 @@ import {
 } from "../definition/installed-runtime-context";
 import { resolveInstalledPageIdentity } from "../definition/standard-page-resolution";
 import {
-  createAuthenticatedPageCapabilityService,
+  projectAuthenticatedPageCapability,
+  type PageCapabilityEvaluators,
   type FixedAuthenticatedPageCapability,
 } from "./authenticated-page-capability";
 import {
@@ -665,8 +666,7 @@ export const createStoredPageCapabilityService = (
     };
     // One preview per bound action, however many placements share it.
     const availabilities = new Map<string, Promise<boolean | undefined>>();
-    return createAuthenticatedPageCapabilityService({
-      ...requestDependencies,
+    const evaluators: PageCapabilityEvaluators = {
       evaluateActionAvailability: async (transaction, scope, page, placementId) => {
         const action = boundActions.get(placementId.toLowerCase());
         const subjectRecordId = dependencies.selection.subjectRecordId;
@@ -897,18 +897,16 @@ export const createStoredPageCapabilityService = (
           throw error;
         }
       },
-      adapter: {
-        load: async (_transaction, scope) => {
-          if (
-            scope.applicationRootId === undefined ||
-            !sameId(scope.organizationId, context.organizationId) ||
-            !sameId(scope.applicationRootId, applicationRootId)
-          )
-            throw new Error("STORED_PAGE_HUMAN_SCOPE_UNAVAILABLE");
-          return stored;
-        },
-      },
-    }).project(session, candidate, undefined);
+    };
+    return requests.run(session, candidate, async (transaction, scope) => {
+      if (
+        scope.applicationRootId === undefined ||
+        !sameId(scope.organizationId, context.organizationId) ||
+        !sameId(scope.applicationRootId, applicationRootId)
+      )
+        throw new Error("STORED_PAGE_HUMAN_SCOPE_UNAVAILABLE");
+      return projectAuthenticatedPageCapability(transaction, scope, stored, evaluators);
+    });
   };
 
   const project = async (
