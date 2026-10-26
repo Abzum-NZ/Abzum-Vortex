@@ -115,7 +115,9 @@ const blockLabel = (release: PlatformBlockRelease, props: Record<string, unknown
  * The authored name of every named component in the given compiled definitions, so a review reads
  * names, not ids. Each object is named only under the identity it owns. Earlier documents win;
  * later ones (the previous release) supply names for components that were removed. Placements use
- * their block release's display name and their own label; flows use their authored name.
+ * their own label, else their block release's display name; flows use their authored name. Roles,
+ * menu links and placements also carry the access, page, capability and wording facts that explain
+ * their change against the previous release.
  */
 export const componentLabelsOf = async (
   readBlockRelease: (

@@ -169,7 +169,10 @@ export function PublicationSummary({
                   .map((reason) => sentence(reason, component)),
               ),
             ];
-            const added = reasons.every((reason) => reason.code === "component_added");
+            const added = reasons.every(
+              (reason) =>
+                reason.code === "component_added" || reason.code === "required_component_added",
+            );
             const removed = reasons.some((reason) => reason.code === "component_removed");
             const impact = reasons.some((reason) => reason.impact === "major")
               ? "major"
