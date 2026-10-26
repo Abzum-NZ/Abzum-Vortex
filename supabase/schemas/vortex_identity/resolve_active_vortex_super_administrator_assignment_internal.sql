@@ -3,20 +3,24 @@ create or replace function vortex_identity.resolve_active_vortex_super_administr
   p_checked_at timestamptz
 )
 returns uuid
-language sql
+language plpgsql
 stable
 security definer
 set search_path = ''
 as $function$
-  select assignment.assignment_id
-  from vortex_identity.vortex_super_administrator_assignments as assignment
-  join vortex_identity.identity_projections as identity
-    on identity.identity_id = assignment.identity_id
-    and identity.state = 'active'
-  where assignment.identity_id = p_identity_id
-    and (assignment.revoked_at is null or assignment.revoked_at > p_checked_at)
-    and assignment.granted_at <= p_checked_at
-  limit 1
+begin
+  return (
+    select assignment.assignment_id
+    from vortex_identity.vortex_super_administrator_assignments as assignment
+    join vortex_identity.identity_projections as identity
+      on identity.identity_id = assignment.identity_id
+      and identity.state = 'active'
+    where assignment.identity_id = p_identity_id
+      and (assignment.revoked_at is null or assignment.revoked_at > p_checked_at)
+      and assignment.granted_at <= p_checked_at
+    limit 1
+  );
+end
 $function$;
 
 revoke all on function
