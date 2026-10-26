@@ -57,7 +57,7 @@ export const moduleSourceContractVersion = "3.0.0" as const;
  * of them may declare the standard update action; the database writer accepts the update only from
  * a Module of a platform system Application.
  */
-export const writableSystemProjectionViews: readonly string[] = Object.freeze([
+const writableSystemProjectionViews: readonly string[] = Object.freeze([
   "organization_runtime_settings",
 ]);
 
