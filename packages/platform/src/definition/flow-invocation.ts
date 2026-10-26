@@ -30,7 +30,7 @@ import { canonicalJson } from "./canonical-json";
 import type { ModuleDefinitionConsumerReadResult } from "./definition-consumer-read";
 import type { ExactDefinitionDependency } from "./definition-store-contracts";
 import type { RecordReferenceChoiceCommand } from "../queries/reference-choice-contracts";
-import type { PermittedApplication, PermittedApplicationsRead } from "./application-address";
+import type { PermittedApplication, PermittedApplicationsRead } from "./application-launcher-read";
 import { createOrganizationAccessAdministrationService } from "../access/organization-access-administration-access";
 import { runOrganizationAccessOperation } from "../access/organization-access-decision-access";
 import { createHumanOrganizationRequestService } from "../access/human-organization-request";

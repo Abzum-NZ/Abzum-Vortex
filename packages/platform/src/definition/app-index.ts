@@ -11,11 +11,13 @@ export {
   type AddressedApplicationRead,
   type AddressedApplicationBundleRead,
   type ApplicationExperience,
-  type ApplicationLauncherEntry,
-  type ApplicationLauncherRead,
-  type PermittedApplication,
-  type PermittedApplicationsRead,
 } from "./application-address";
+export type {
+  ApplicationLauncherEntry,
+  ApplicationLauncherRead,
+  PermittedApplication,
+  PermittedApplicationsRead,
+} from "./application-launcher-read";
 export {
   requireInstalledRuntimeContext,
   type InstalledRuntimeContext,

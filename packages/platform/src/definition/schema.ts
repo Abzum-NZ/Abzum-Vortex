@@ -53,3 +53,4 @@ export {
 export * from "./version-impact";
 export * from "./platform-compatibility";
 export * from "./application-page-slots";
+export * from "./application-launcher-read";

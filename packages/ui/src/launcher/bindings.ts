@@ -1,54 +1,16 @@
 import {
-  applicationRootIdSchema,
+  applicationLauncherReadSchema,
   builderKeySchema,
+  type ApplicationLauncherEntry,
   namespacedKeySchema,
-  organizationIdSchema,
-  isRecord,
   type DisplayRow,
   type DisplayScalarCell,
   type LauncherRowsPayload,
 } from "@vortex/platform/schema";
 import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "../definition-error";
 
-const MAXIMUM_APPLICATIONS = 10_000;
-const MAXIMUM_APPLICATION_TEXT = 120;
-
 const fail = (message: string, location: DefinitionRenderErrorLocation): never => {
   throw new DefinitionRenderError("INVALID_COMPOSITION", message, location);
-};
-
-const requireRecord = (
-  value: unknown,
-  message: string,
-  location: DefinitionRenderErrorLocation,
-): Record<string, unknown> => (isRecord(value) ? value : fail(message, location));
-
-const requireExactKeys = (
-  value: Record<string, unknown>,
-  allowed: readonly string[],
-  location: DefinitionRenderErrorLocation,
-): void => {
-  for (const key of Object.keys(value))
-    if (!allowed.includes(key)) fail(`Unexpected property '${key}'`, location);
-  for (const key of allowed)
-    if (!Object.hasOwn(value, key)) fail(`Missing property '${key}'`, location);
-};
-
-const requireArray = (
-  value: unknown,
-  maximum: number,
-  message: string,
-  location: DefinitionRenderErrorLocation,
-): readonly unknown[] =>
-  Array.isArray(value) && value.length <= maximum ? value : fail(message, location);
-
-const requireApplicationRootId = (
-  value: unknown,
-  message: string,
-  location: DefinitionRenderErrorLocation,
-): string => {
-  const parsed = applicationRootIdSchema.safeParse(value);
-  return parsed.success ? parsed.data : fail(message, location);
 };
 
 const requireBuilderKey = (
@@ -69,27 +31,6 @@ const requireNamespacedKey = (
   return parsed.success ? parsed.data : fail(message, location);
 };
 
-const requireOrganizationId = (
-  value: unknown,
-  message: string,
-  location: DefinitionRenderErrorLocation,
-): string => {
-  const parsed = organizationIdSchema.safeParse(value);
-  return parsed.success ? parsed.data : fail(message, location);
-};
-
-/** Trimmed text of the server's bounded application name and icon fields. */
-const requireApplicationText = (
-  value: unknown,
-  message: string,
-  location: DefinitionRenderErrorLocation,
-): string => {
-  const text = typeof value === "string" ? value.trim() : "";
-  return text.length > 0 && text.length <= MAXIMUM_APPLICATION_TEXT
-    ? text
-    : fail(message, location);
-};
-
 const sameIdentity = (left: string, right: string): boolean =>
   left.toLowerCase() === right.toLowerCase();
 
@@ -98,13 +39,7 @@ const sameIdentity = (left: string, right: string): boolean =>
  * application-launcher read that a launcher tile may show. The tenant and
  * organisation identity of the read never cross this boundary.
  */
-export type PermittedApplicationMetadata = Readonly<{
-  applicationRootId: string;
-  key: string;
-  name: string;
-  icon: string;
-  homePageKey: string;
-}>;
+export type PermittedApplicationMetadata = ApplicationLauncherEntry;
 
 /**
  * Launcher projection of the `ApplicationLauncherRead` returned by
@@ -120,96 +55,36 @@ export type PermittedApplicationsLauncherProjection =
   | Readonly<{ kind: "unavailable" }>
   | Readonly<{ kind: "temporarily_unavailable" }>;
 
-const parseApplicationMetadata = (
-  value: unknown,
-  location: DefinitionRenderErrorLocation,
-): PermittedApplicationMetadata => {
-  const record = requireRecord(value, "A permitted application must be an object", location);
-  requireExactKeys(record, ["applicationRootId", "key", "name", "icon", "homePageKey"], location);
-  return Object.freeze({
-    applicationRootId: requireApplicationRootId(
-      record.applicationRootId,
-      "A permitted application requires a permanent application identity",
-      location,
-    ),
-    key: requireNamespacedKey(
-      record.key,
-      "A permitted application requires a namespaced key",
-      location,
-    ),
-    name: requireApplicationText(record.name, "A permitted application requires a name", location),
-    icon: requireApplicationText(record.icon, "A permitted application requires an icon", location),
-    homePageKey: requireBuilderKey(
-      record.homePageKey,
-      "A permitted application requires a home page key",
-      location,
-    ),
-  });
-};
-
 /**
- * Validates unknown input against the exact `ApplicationLauncherRead` shape and projects it to
- * launcher metadata. An unknown status, a missing or unexpected field, a malformed application, a
- * duplicate identity or a default outside the permitted set fails closed. The organisation identity,
- * tenant and organisation short names are validated, then dropped.
+ * Validates unknown input against the exact `ApplicationLauncherRead` schema the server builds it
+ * with and projects it to launcher metadata. A malformed read, a duplicate identity or a default
+ * outside the permitted set fails closed. The organisation identity, tenant and organisation short
+ * names and the account's display name are validated, then dropped; a read that is not available
+ * projects as unavailable.
  */
 export function parsePermittedApplicationsLauncherProjection(
   value: unknown,
   location: DefinitionRenderErrorLocation = {},
 ): PermittedApplicationsLauncherProjection {
-  const record = requireRecord(value, "Permitted applications must be an object", location);
-  if (record.kind === "unavailable") {
-    requireExactKeys(record, ["kind"], location);
-    return Object.freeze({ kind: "unavailable" });
-  }
-  if (record.kind === "temporarily_unavailable") {
-    requireExactKeys(record, ["kind"], location);
+  const read = applicationLauncherReadSchema.safeParse(value);
+  if (!read.success)
+    return fail(
+      `Permitted applications are invalid: ${read.error.issues[0]?.message ?? "invalid"}`,
+      location,
+    );
+  if (read.data.kind === "temporarily_unavailable")
     return Object.freeze({ kind: "temporarily_unavailable" });
-  }
-  if (record.kind !== "available")
-    return fail(`Unknown permitted-applications status '${String(record.kind)}'`, location);
-  requireExactKeys(
-    record,
-    [
-      "kind",
-      "organizationId",
-      "tenantShortName",
-      "organizationShortName",
-      "defaultApplicationRootId",
-      "applications",
-    ],
-    location,
-  );
-  requireOrganizationId(record.organizationId, "An organisation identity is invalid", location);
-  requireBuilderKey(record.tenantShortName, "A tenant short name is invalid", location);
-  requireBuilderKey(
-    record.organizationShortName,
-    "An organisation short name is invalid",
-    location,
-  );
-  const defaultApplicationRootId: string | null =
-    record.defaultApplicationRootId === null
-      ? null
-      : requireApplicationRootId(
-          record.defaultApplicationRootId,
-          "A default application identity must be a permanent identity or null",
-          location,
-        );
-  const entries = requireArray(
-    record.applications,
-    MAXIMUM_APPLICATIONS,
-    "Permitted applications must be a bounded array",
-    location,
-  );
+  if (read.data.kind !== "available") return Object.freeze({ kind: "unavailable" });
+  const { applications, defaultApplicationRootId } = read.data;
   const seen = new Set<string>();
-  const applications = entries.map((entry, index) => {
-    const entryLocation = { ...location, propertyPath: [`applications[${index}]`] };
-    const application = parseApplicationMetadata(entry, entryLocation);
+  applications.forEach((application, index) => {
     const identity = application.applicationRootId.toLowerCase();
     if (seen.has(identity))
-      fail(`Duplicate permitted application '${application.applicationRootId}'`, entryLocation);
+      fail(`Duplicate permitted application '${application.applicationRootId}'`, {
+        ...location,
+        propertyPath: [`applications[${index}]`],
+      });
     seen.add(identity);
-    return application;
   });
   if (
     defaultApplicationRootId !== null &&
@@ -221,7 +96,7 @@ export function parsePermittedApplicationsLauncherProjection(
   return Object.freeze({
     kind: "available",
     defaultApplicationRootId,
-    applications: Object.freeze(applications),
+    applications: Object.freeze(applications.map((application) => Object.freeze(application))),
   });
 }
 
