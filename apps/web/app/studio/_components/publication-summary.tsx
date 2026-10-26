@@ -122,24 +122,31 @@ export function PublicationSummary({
       ? `This is the first release. It will be published as version ${confirmation.assignedVersion}.`
       : `${impactLabels[confirmation.impact]}: this will be published as version ${confirmation.assignedVersion}.`;
   const groups = new Map<string, DefinitionPublicationConfirmation["reasons"]>();
-  const addedPages = new Set(
+  const wholePages = new Set(
     confirmation.reasons
       .filter(
-        (reason) => reason.location.componentKind === "page" && reason.code === "component_added",
+        (reason) =>
+          reason.location.componentKind === "page" &&
+          (reason.code === "component_added" || reason.code === "component_removed"),
       )
-      .map((reason) => reason.location.componentId?.toLowerCase()),
+      .map((reason) => `${reason.code}:${reason.location.componentId?.toLowerCase()}`),
   );
-  for (const reason of confirmation.reasons) {
+  // A page added or removed with its menu link and blocks is one destination, keyed by the page id.
+  const partOfWholePage = (reason: Reason): string | undefined => {
     const id = reason.location.componentId?.toLowerCase();
     const pageId = id === undefined ? undefined : names.get(id)?.pageId;
-    // A new page and its new menu link are one destination, identified by the actual page id.
-    const key =
-      reason.location.componentKind === "navigation_item" &&
-      reason.code === "component_added" &&
+    return reason.location.componentKind !== "page" &&
       pageId !== undefined &&
-      addedPages.has(pageId)
+      wholePages.has(`${reason.code}:${pageId}`)
+      ? pageId
+      : undefined;
+  };
+  for (const reason of confirmation.reasons) {
+    const pageId = partOfWholePage(reason);
+    const key =
+      pageId !== undefined
         ? `page:${pageId}`
-        : `${reason.location.componentKind}:${id ?? ""}`;
+        : `${reason.location.componentKind}:${reason.location.componentId?.toLowerCase() ?? ""}`;
     groups.set(key, [...(groups.get(key) ?? []), reason]);
   }
   return (
@@ -157,15 +164,7 @@ export function PublicationSummary({
             const sentences = [
               ...new Set(
                 reasons
-                  .filter(
-                    (reason) =>
-                      !(
-                        primary.location.componentKind === "page" &&
-                        reason.location.componentKind === "navigation_item" &&
-                        primary.code === "component_added" &&
-                        reason.code === "component_added"
-                      ),
-                  )
+                  .filter((reason) => partOfWholePage(reason) === undefined)
                   .map((reason) => sentence(reason, component)),
               ),
             ];

@@ -234,6 +234,9 @@ export const componentLabelsOf = async (
   const current = applications[0];
   const previous = applications[1];
   const details = new Map<string, Omit<ComponentLabel, "componentId" | "label">>();
+  const detail = (id: string, facts: Omit<ComponentLabel, "componentId" | "label">): void => {
+    details.set(id, { ...details.get(id), ...facts });
+  };
   const permissionLabels = new Map<string, string>();
   for (const content of contents)
     for (const permission of (content.permissions as Record<string, unknown>[] | undefined) ?? [])
@@ -255,19 +258,23 @@ export const componentLabelsOf = async (
         const label = permissionLabels.get(key);
         return label === undefined ? [] : [label];
       });
-    details.set(String(role.roleId).toLowerCase(), {
+    detail(String(role.roleId).toLowerCase(), {
       addedAccess: names([...after].filter((key) => !before.has(key))),
       removedAccess: names([...before].filter((key) => !after.has(key))),
     });
   }
+  // Menu links and placements name the page they lead to or sit on, in the candidate or, for a
+  // removed one, in the previous release, so a review reads a page and its parts as one change.
+  const pageOf = (id: string, pageId: string): void => {
+    if (details.get(id)?.pageId === undefined) detail(id, { pageId: pageId.toLowerCase() });
+  };
   const navigation = (items: readonly Record<string, unknown>[]): void => {
     for (const item of items) {
       if (item.type === "page" && typeof item.id === "string" && typeof item.pageId === "string")
-        details.set(item.id.toLowerCase(), { pageId: item.pageId.toLowerCase() });
+        pageOf(item.id.toLowerCase(), item.pageId);
       if (Array.isArray(item.children)) navigation(item.children as Record<string, unknown>[]);
     }
   };
-  navigation((current?.navigation as Record<string, unknown>[] | undefined) ?? []);
   const placements = (content: Record<string, unknown> | undefined) => {
     const result = new Map<string, NonNullable<ReturnType<typeof blockReference>>>();
     const visitBlocks = (value: unknown): void => {
@@ -284,6 +291,12 @@ export const componentLabelsOf = async (
     visitBlocks(content);
     return result;
   };
+  for (const content of [current, previous]) {
+    navigation((content?.navigation as Record<string, unknown>[] | undefined) ?? []);
+    for (const page of (content?.pages as Record<string, unknown>[] | undefined) ?? [])
+      if (typeof page.pageId === "string")
+        for (const id of placements(page).keys()) pageOf(id, page.pageId);
+  }
   const oldPlacements = placements(previous);
   const enabled = (value: unknown): boolean => {
     const group = asRecord(value);
@@ -302,7 +315,7 @@ export const componentLabelsOf = async (
       changedSettings.length > 0 &&
       changedSettings.every((property) => property.kind === "text" || property.kind === "rich_text")
     )
-      details.set(id, { wordingChanged: true });
+      detail(id, { wordingChanged: true });
     if (release.rendererKey !== "platform.renderer.table") continue;
     const oldRelease = releases.get(`${old.blockId}@${old.releaseVersion}`)!;
     const before = compiledItemSettings(old.props, oldRelease).features;
@@ -310,8 +323,7 @@ export const componentLabelsOf = async (
     const declaration = release.properties.find((property) => property.key === "features");
     if (after?.kind !== "group" || declaration?.kind !== "group") continue;
     const beforeProperties = before?.kind === "group" ? before.properties : {};
-    details.set(id, {
-      ...details.get(id),
+    detail(id, {
       addedCapabilities: declaration.properties.flatMap((feature) =>
         enabled(after.properties[feature.key]) && !enabled(beforeProperties[feature.key])
           ? [feature.label]
