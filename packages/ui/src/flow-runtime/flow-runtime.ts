@@ -1,7 +1,6 @@
 import type { ComponentFlowBinding, JsonValue } from "@vortex/platform/schema";
 import type { FlowLibrary } from "@vortex/platform/schema";
-import { runBrowserFlow, type BrowserFlowResult } from "./browser-flow-runner";
-import { flowRunsOnlyInBrowser } from "./browser-eligibility";
+import type { BrowserFlowResult } from "./browser-flow-runner";
 import type { FlowIntentHost } from "./intents";
 import { driveServerFlow, type ServerDrivenResult } from "./server-driven-run";
 import type { FlowInvokeClient, FlowSubjectContext } from "./server-flow-client";
@@ -117,12 +116,13 @@ export function createFlowRuntime(options: FlowRuntimeOptions): FlowRuntime {
     async dispatch(binding, callerInputs = {}, clickId, subject): Promise<FlowDispatchResult> {
       const flowId = binding.flow.flowId;
       const library = options.library;
+      // The browser flow engine loads with the first flow a page runs, never with the page itself.
       // A form submit carries the surface's own submission envelope; the server's form-submit
       // adapter projects it and the endpoint validates it, so it is never pre-filtered here.
       if (
         binding.event !== "form_submit" &&
         library !== undefined &&
-        flowRunsOnlyInBrowser(flowId, library)
+        (await import("./browser-eligibility")).flowRunsOnlyInBrowser(flowId, library)
       ) {
         const inputs = bindingInputs(binding, callerInputs);
         if (inputs === undefined)
@@ -135,7 +135,9 @@ export function createFlowRuntime(options: FlowRuntimeOptions): FlowRuntime {
           };
         return {
           ranIn: "browser",
-          result: await runBrowserFlow(
+          result: await (
+            await import("./browser-flow-runner")
+          ).runBrowserFlow(
             { flowId, inputs, runId: clickId ?? newId(), now: clock() },
             library,
             options.host,
