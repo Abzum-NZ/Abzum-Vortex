@@ -1,12 +1,22 @@
 import {
   createHumanOrganizationRequestService,
   gridViewPlacement,
+  isTablePlacement,
   readGridViews,
+  resolvedQueryRecordTypeId,
   type HumanOrganizationRequestDependencies,
   type InstalledRuntimeContext,
   type StoredGridViews,
 } from "@vortex/platform/server";
-import { readRecordsTableViewId, type GridLayoutStorage } from "@vortex/platform/schema";
+import {
+  compiledPageShellId,
+  readRecordsTableViewId,
+  sameId,
+  walkPageComposition,
+  walkPlacementData,
+  type GridLayoutStorage,
+  type VisitedPlacement,
+} from "@vortex/platform/schema";
 import type {
   GridViewDocument,
   IdentitySession,
@@ -89,6 +99,43 @@ export const pageGridLayoutRequest = (
             document: view.document,
           })),
   };
+};
+
+/**
+ * Every data grid the page's installed definition places, in its composition and in its shell, or
+ * only the selected ones. The page is already open to the viewer, so the person's own layouts of
+ * these grids are read while the page is projected; a grid the projection leaves out reads no rows.
+ */
+export const pageDefinitionGrids = (
+  context: InstalledRuntimeContext,
+  page: InstalledRuntimeContext["releaseSet"]["application"]["content"]["pages"][number],
+  parameters: SearchParameters,
+  selectedPlacementIds: ReadonlySet<string> | undefined,
+): PageGrid[] => {
+  const grids: PageGrid[] = [];
+  const visit = ({ placementId, vortex }: VisitedPlacement): undefined => {
+    if (
+      !isTablePlacement({ vortex }) ||
+      (selectedPlacementIds !== undefined && !selectedPlacementIds.has(placementId.toLowerCase()))
+    )
+      return;
+    const recordTypeId =
+      typeof vortex.queryId === "string"
+        ? resolvedQueryRecordTypeId(context, vortex.queryId)
+        : undefined;
+    if (recordTypeId !== undefined)
+      grids.push(pageGridLayoutRequest(page, placementId, recordTypeId, parameters));
+  };
+  walkPageComposition(page.composition, visit);
+  const shellId = compiledPageShellId(page.composition);
+  const shell =
+    shellId === null
+      ? undefined
+      : context.releaseSet.application.content.shells.find((candidate) =>
+          sameId(candidate.shellId, shellId),
+        );
+  if (shell !== undefined) walkPlacementData(shell.layout, visit);
+  return grids;
 };
 
 /**
