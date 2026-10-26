@@ -82,6 +82,9 @@ export function useGridPinning(
     element.addEventListener("scroll", schedule, { passive: true });
     const observer = new ResizeObserver(schedule);
     observer.observe(element);
+    // Resizing a column changes the scroll range even when the viewport itself does not resize.
+    const grid = element.querySelector("[role='grid'],[role='treegrid']");
+    if (grid !== null) observer.observe(grid);
     // Pin widths and shadows do not block the first usable frame of the server-rendered grid.
     const firstFrame = requestAnimationFrame(() => {
       ready = true;
