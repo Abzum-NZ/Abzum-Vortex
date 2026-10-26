@@ -8,7 +8,7 @@ import { cellValueToText } from "../display/cell";
 import { DisplayHeader, RowActionControl } from "../display/controls";
 import { rowActionEventIdOf } from "../display/context";
 import { DisplayStateContainer } from "../display/display-state-container";
-import type { DisplayCellValue } from "../display/projected-data";
+import type { DisplayDetailCell } from "../display/projected-data";
 import { cn } from "../lib/utils";
 import {
   readLauncherSettings,
@@ -16,7 +16,7 @@ import {
   type LauncherRenderProps,
 } from "./launcher-context";
 
-const cellText = (cells: Readonly<Record<string, DisplayCellValue>>, key: string): string => {
+const cellText = (cells: Readonly<Record<string, DisplayDetailCell>>, key: string): string => {
   const cell = cells[key];
   return cell === undefined ? "" : cellValueToText(cell).trim();
 };

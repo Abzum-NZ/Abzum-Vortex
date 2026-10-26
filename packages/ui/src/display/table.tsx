@@ -36,11 +36,11 @@ import { resolveDisplayContext, rowName, type DisplayRenderProps } from "./conte
 import { DisplayStateContainer } from "./display-state-container";
 import type {
   BoardPayload,
-  DisplayCellValue,
+  DisplayDetailCell,
   DisplayColumn,
   DisplayRow,
-  TableNarrowing,
-  TablePayload,
+  DisplayTableNarrowing,
+  DisplayTablePayload,
 } from "./projected-data";
 import { useRowExpansion } from "./row-expansion";
 import { useRowLines, useRowWrites } from "./sub-rows";
@@ -60,7 +60,7 @@ const GroupedBody = lazy(async () => ({ default: (await import("./table-groups")
 const sameFieldKey = (left: string, right: string): boolean =>
   left.toLowerCase() === right.toLowerCase();
 
-const narrowed = (narrowing: TableNarrowing | undefined): boolean =>
+const narrowed = (narrowing: DisplayTableNarrowing | undefined): boolean =>
   narrowing !== undefined && (narrowing.search !== null || narrowing.filters.length > 0);
 
 /**
@@ -106,7 +106,9 @@ const useAnnouncer = (): [string, (message: string) => void] => {
  * into a board of cards in columns; every other grid shows the table below. The server projects
  * the payload that mode needs, so a payload of the other kind is a definition error.
  */
-export function TableDisplay(props: DisplayRenderProps<TablePayload | BoardPayload>): ReactElement {
+export function TableDisplay(
+  props: DisplayRenderProps<DisplayTablePayload | BoardPayload>,
+): ReactElement {
   const boardMode =
     recordsTableContractOrLog(props.settings, "table display")?.features.board.enabled === true;
   const data = props.data;
@@ -116,13 +118,13 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload | BoardPaylo
       placementId: props.placementId,
     });
   const checked = (mismatched ? { ...props, data: { status: "error" } } : props) as
-    DisplayRenderProps<BoardPayload> | DisplayRenderProps<TablePayload>;
+    DisplayRenderProps<BoardPayload> | DisplayRenderProps<DisplayTablePayload>;
   return boardMode ? (
     <Suspense fallback={null}>
       <GridBoardView {...(checked as DisplayRenderProps<BoardPayload>)} />
     </Suspense>
   ) : (
-    <RecordsTableView {...(checked as DisplayRenderProps<TablePayload>)} />
+    <RecordsTableView {...(checked as DisplayRenderProps<DisplayTablePayload>)} />
   );
 }
 
@@ -134,7 +136,7 @@ export function TableDisplay(props: DisplayRenderProps<TablePayload | BoardPaylo
  * component never sorts, filters, pages or fetches rows itself. Loading, empty, no-match, refused
  * and error states stay distinct, and search and filters stay usable when nothing matched.
  */
-function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement {
+function RecordsTableView(props: DisplayRenderProps<DisplayTablePayload>): ReactElement {
   const { placementId, availability, settings } = props;
   const {
     title,
@@ -145,7 +147,7 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
     refusedMessage,
     errorMessage,
     events: hostEvents,
-  } = resolveDisplayContext<TablePayload>(
+  } = resolveDisplayContext<DisplayTablePayload>(
     props,
     // A completed read carries current feature bounds even with no rows. Keep its controls so
     // empty queries offer the same permitted features as populated queries.
@@ -389,7 +391,7 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
   const renderers = useMemo((): GridRenderers & CardRenderers => {
     // Cards show the same formatting as the grid; their labelled details carry the grid's editors.
     const value = (row: DisplayRow, column: GridColumn) => {
-      const cell: DisplayCellValue = row.cells[column.key] ?? { kind: "empty" };
+      const cell: DisplayDetailCell = row.cells[column.key] ?? { kind: "empty" };
       return decorate(row, column, <DisplayCellView value={cell} />);
     };
     return {
@@ -397,7 +399,7 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
       heading: (row, column) =>
         decorate(row, column, cellValueToText(row.cells[column.key] ?? { kind: "empty" })),
       cell: (row, column) => {
-        const cell: DisplayCellValue = row.cells[column.key] ?? { kind: "empty" };
+        const cell: DisplayDetailCell = row.cells[column.key] ?? { kind: "empty" };
         const decoration = cellClassName(row, column);
         return featureCell(
           row,

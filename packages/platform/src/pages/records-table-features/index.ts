@@ -6,7 +6,11 @@ import type { RecordsTableContract } from "../../definition/application-composit
 import type { RecordsTableFilterField } from "../../definition/application-composition/records-table-features/column-filters";
 import type { ConditionalFormattingProjection } from "../../definition/application-composition/records-table-features/conditional-formatting";
 import type { RecordsTableInlineEditor } from "../../definition/application-composition/records-table-features/inline-edit";
-import type { RecordsTableFeatureProjection } from "../records-table-feature-projection";
+import type { z } from "zod";
+import type {
+  RecordsTableFeatureProjection,
+  recordsTableFeatureProjectionSchema,
+} from "../records-table-feature-projection";
 import type { RecordsTablePivotView } from "../records-table-state";
 import type {
   ProtectedQueryFieldBounds,
@@ -146,7 +150,9 @@ export const recordsTableNarrowingContractRefusal = (
  * by a field Column filters does not offer; a table with no projection offers neither.
  */
 export const recordsTableNarrowingRefusal = (
-  features: RecordsTableFeatureProjection | undefined,
+  features:
+    | Pick<z.input<typeof recordsTableFeatureProjectionSchema>, "search" | "columnFilters">
+    | undefined,
   narrowing: Readonly<{ search: string | null; filters: readonly Readonly<{ fieldId: string }>[] }>,
 ): RecordsTableRequestRefusal | undefined => {
   if (narrowing.search !== null && features?.search !== true)

@@ -16,9 +16,9 @@ import {
 } from "@vortex/platform/schema";
 import type {
   DisplaySemanticEvent,
-  TableBulkRun,
-  TablePayload,
-  TableSelectionScope,
+  DisplayTableBulkRun,
+  DisplayTablePayload,
+  DisplayTableSelectionScope,
 } from "@vortex/ui";
 import type { ApplicationPageModel } from "../../../../../../_lib/application-page";
 import { recordsTableAddress } from "./records-table-address";
@@ -32,7 +32,7 @@ import type { PageSelection, SelectedRecords } from "./types";
 type HeldScope = Readonly<{
   token: string;
   scope:
-    | Exclude<TableSelectionScope, { kind: "matching" }>
+    | Exclude<DisplayTableSelectionScope, { kind: "matching" }>
     | Readonly<{ kind: "matching"; count: number }>;
   excluded: readonly string[];
 }>;
@@ -73,7 +73,7 @@ export function useBulkSelection({
   refreshPlacements: (placementIds: readonly string[]) => Promise<void>;
 }>) {
   const [scopes, setScopes] = useState<Readonly<Record<string, HeldScope>>>({});
-  const [runs, setRuns] = useState<Readonly<Record<string, TableBulkRun>>>({});
+  const [runs, setRuns] = useState<Readonly<Record<string, DisplayTableBulkRun>>>({});
   const [availability, setAvailability] = useState<
     Readonly<
       Record<
@@ -157,7 +157,7 @@ export function useBulkSelection({
 
   /** The held matching selection of this read; an earlier read's descriptor no longer applies. */
   const scopeOf = useCallback(
-    (placementId: string, table: TablePayload): HeldScope | undefined => {
+    (placementId: string, table: DisplayTablePayload): HeldScope | undefined => {
       const held = scopes[placementId];
       return held !== undefined && held.token === table.selectionToken ? held : undefined;
     },
@@ -204,7 +204,7 @@ export function useBulkSelection({
   const runAction = useCallback(
     async (
       placementId: string,
-      table: TablePayload,
+      table: DisplayTablePayload,
       held: SelectedRecords | undefined,
       actionKey: string,
     ): Promise<void> => {
@@ -315,7 +315,7 @@ export function useBulkSelection({
 
   /** The Bulk actions events of one table's placement. */
   const eventsFor = useCallback(
-    (placementId: string, table: TablePayload, held: SelectedRecords | undefined) => ({
+    (placementId: string, table: DisplayTablePayload, held: SelectedRecords | undefined) => ({
       selection_scope_changed: (event: DisplaySemanticEvent) => {
         if (event.event !== "selection_scope_changed") return;
         if (event.scope === "cleared") return clear(placementId);
@@ -335,7 +335,12 @@ export function useBulkSelection({
    * record; it reports whether it handled the change.
    */
   const toggleMatching = useCallback(
-    (placementId: string, table: TablePayload, recordId: string, selected: boolean): boolean => {
+    (
+      placementId: string,
+      table: DisplayTablePayload,
+      recordId: string,
+      selected: boolean,
+    ): boolean => {
       const matching = scopeOf(placementId, table);
       if (matching === undefined && scopes[placementId] !== undefined)
         setScopes((current) => without(current, placementId));
@@ -372,7 +377,7 @@ export function useBulkSelection({
   const decorate = useCallback(
     (
       placementId: string,
-      table: TablePayload,
+      table: DisplayTablePayload,
       values: Readonly<Record<string, unknown>>,
     ): Readonly<Record<string, unknown>> | undefined => {
       const matching = scopeOf(placementId, table);
@@ -386,7 +391,7 @@ export function useBulkSelection({
           : undefined;
       if (matching === undefined && run === undefined && !changed && records === undefined)
         return undefined;
-      const scope: TableSelectionScope | undefined = changed
+      const scope: DisplayTableSelectionScope | undefined = changed
         ? { kind: "not_counted", reason: "changed" }
         : matching === undefined
           ? undefined
@@ -413,7 +418,7 @@ export function useBulkSelection({
 
   /** The sealed descriptor and unticked records of "every matching record", once it is counted. */
   const matchingOf = useCallback(
-    (placementId: string, table: TablePayload) => {
+    (placementId: string, table: DisplayTablePayload) => {
       const held = scopeOf(placementId, table);
       return held?.scope.kind === "matching"
         ? { token: held.token, excluded: held.excluded }

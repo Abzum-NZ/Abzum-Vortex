@@ -8,7 +8,7 @@ import { cellValueToText, DisplayCellView } from "./cell";
 import { DisplayHeader, RowActionControl } from "./controls";
 import { resolveDisplayContext, rowActionEventIdOf, type DisplayRenderProps } from "./context";
 import { DisplayStateContainer } from "./display-state-container";
-import type { DisplayField, RecordDetailPayload } from "./projected-data";
+import type { DisplayDetailField, RecordDetailPayload } from "./projected-data";
 
 /**
  * Shared browser-safe display component for record details, rendered with the shadcn Card and
@@ -47,12 +47,12 @@ export function RecordDetailDisplay(props: DisplayRenderProps<RecordDetailPayloa
       : values?.heading === undefined
         ? undefined
         : cellValueToText(values.heading);
-  const fields: readonly DisplayField[] =
+  const fields: readonly DisplayDetailField[] =
     values === undefined
       ? []
       : contract === undefined
         ? values.fields
-        : contract.fields.flatMap((declared): DisplayField[] => {
+        : contract.fields.flatMap((declared): DisplayDetailField[] => {
             const projected = values.fields.find((field) => field.key === declared.field);
             return projected === undefined
               ? []

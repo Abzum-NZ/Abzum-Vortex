@@ -4,9 +4,9 @@ import {
   parseTablePayload,
   type DisplayEventHandlers,
   type DisplayRow,
-  type TablePayload,
+  type DisplayTablePayload,
 } from "./projected-data";
-import type { TableGroups } from "./projected-grid-features";
+import type { DisplayTableGroups } from "./projected-data";
 
 const location = { propertyPath: ["groups"] };
 
@@ -17,7 +17,7 @@ type MemberPage = Readonly<{
    * The grid features the server projected with this page: a feature that depends on the rows
    * read (such as inline editing) follows the open group's page, not the collapsed groups' read.
    */
-  features: TablePayload["features"];
+  features: DisplayTablePayload["features"];
   next?: string;
   previous?: string;
   /** The page number within the open group, for the footer; the group is read a page at a time. */
@@ -77,14 +77,14 @@ export const memberKey = (members: Members): string =>
   members.status === "ready" ? members.page.key : members.key;
 
 export type GroupedTable = Readonly<{
-  groups: Extract<TableGroups, { status: "ready" }>;
+  groups: Extract<DisplayTableGroups, { status: "ready" }>;
   /** The open group's key; null while every group is closed. */
   expanded: string | null;
   members: Members | undefined;
   /** The open group's rows as the table shows them; empty while closed or reading. */
   rows: readonly DisplayRow[];
   /** The features projected with the open group's page; undefined while no page is shown. */
-  memberFeatures: TablePayload["features"] | undefined;
+  memberFeatures: DisplayTablePayload["features"] | undefined;
   toggle: (key: string) => void;
   /** Reads the open group's next or previous page. */
   move: (direction: "next" | "previous") => void;
@@ -99,7 +99,7 @@ export type GroupedTable = Readonly<{
  * the state again from what the server read; a reply for a group that is no longer open is dropped.
  */
 export function useGroupedTable(
-  values: TablePayload | undefined,
+  values: DisplayTablePayload | undefined,
   events: DisplayEventHandlers | undefined,
 ): GroupedTable | undefined {
   const groups = values?.groups?.status === "ready" ? values.groups : undefined;

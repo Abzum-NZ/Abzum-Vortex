@@ -23,13 +23,17 @@ import {
 import {
   isInternalAddress,
   parseFields,
-  type DisplayCellValue,
+  type DisplayDetailCell,
   type DisplayColumn,
-  type DisplayField,
+  type DisplayDetailField,
 } from "../projected-data";
 import type { GridFeatureModule, GridFeatureRowProps } from "./registry";
 
-type RelatedRow = Readonly<{ recordId: string; href?: string; fields: readonly DisplayField[] }>;
+type RelatedRow = Readonly<{
+  recordId: string;
+  href?: string;
+  fields: readonly DisplayDetailField[];
+}>;
 type RelatedPage = Readonly<{
   columns: readonly DisplayColumn[];
   rows: readonly RelatedRow[];
@@ -108,7 +112,7 @@ const parseOutcome = (value: unknown): Outcome | undefined => {
   }
 };
 
-const cellOf = (row: RelatedRow, column: DisplayColumn): DisplayCellValue =>
+const cellOf = (row: RelatedRow, column: DisplayColumn): DisplayDetailCell =>
   row.fields.find((field) => field.key.toLowerCase() === column.key.toLowerCase())?.value ?? {
     kind: "empty",
   };

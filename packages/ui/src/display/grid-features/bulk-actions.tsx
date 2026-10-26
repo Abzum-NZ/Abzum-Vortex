@@ -26,7 +26,7 @@ import {
 import { Progress } from "../../components/progress";
 import { Spinner } from "../../components/spinner";
 import { Icon } from "../../icons/icon";
-import type { TableBulkRun, TableSelectionScope } from "../projected-grid-features";
+import type { DisplayTableBulkRun, DisplayTableSelectionScope } from "../projected-data";
 import type { GridFeatureContext, GridFeatureModule, GridFeaturePointProps } from "./registry";
 
 const numberFormat = new Intl.NumberFormat();
@@ -215,7 +215,9 @@ function BulkActionsMenu({
 }
 
 /** The sentence of a finished run, its drift and what it left unchanged. */
-function RunSummary({ run }: Readonly<{ run: Extract<TableBulkRun, { status: "finished" }> }>) {
+function RunSummary({
+  run,
+}: Readonly<{ run: Extract<DisplayTableBulkRun, { status: "finished" }> }>) {
   const { summary } = run;
   const refused = summary.refused.reduce((sum, item) => sum + item.count, 0);
   const drift = summary.total - run.selected;
@@ -249,7 +251,7 @@ function RunSummary({ run }: Readonly<{ run: Extract<TableBulkRun, { status: "fi
   );
 }
 
-const scopeMessage = (scope: TableSelectionScope | undefined): string | undefined => {
+const scopeMessage = (scope: DisplayTableSelectionScope | undefined): string | undefined => {
   if (scope?.kind === "counting") return "Counting the matching records...";
   if (scope?.kind !== "not_counted") return undefined;
   return scope.reason === "too_many"

@@ -1,6 +1,6 @@
 import { spreadsheetText } from "@vortex/platform/schema";
 import type {
-  DisplayCellValue,
+  DisplayDetailCell,
   DisplayRichTextBlock,
   DisplayRichTextInline,
   DisplayRow,
@@ -30,7 +30,7 @@ const plainNumber = /^-?\d+(\.\d+)?$/;
 
 /** The canonical text of one cell, and whether it is a system-produced number. */
 const cellText = (
-  cell: DisplayCellValue | undefined,
+  cell: DisplayDetailCell | undefined,
   exact: string | undefined,
 ): Readonly<{ text: string; number: boolean }> => {
   if (exact !== undefined) return { text: exact, number: plainNumber.test(exact) };

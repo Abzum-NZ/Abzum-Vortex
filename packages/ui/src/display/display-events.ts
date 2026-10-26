@@ -9,8 +9,30 @@ import type {
   RecordsTableBatchEditResult,
   GridLayout,
   GridViewCommand,
+  RecordsTableExportFormat,
 } from "@vortex/platform/schema";
-import type { TableSelectionEvent } from "./projected-grid-features";
+
+/** The table's gestures over its explicit selection or sealed matching scope. */
+type TableSelectionEvent =
+  | Readonly<{
+      event: "selection_changed";
+      recordId: string;
+      /** The drawn row's revision, held until it is deselected. */
+      revision: number;
+      selected: boolean;
+    }>
+  /** Runs a declared bulk named action over the selection the page holds for the table. */
+  | Readonly<{ event: "bulk_action"; action: string }>
+  /** Widens the selection to every matching record, or clears it (and a finished run's summary). */
+  | Readonly<{ event: "selection_scope_changed"; scope: "matching" | "cleared" }>
+  /** Downloads the rows ticked on the page, the records of the current view, or every matching record. */
+  | Readonly<{
+      event: "export_requested";
+      scope: "selected" | "view" | "matching";
+      format: RecordsTableExportFormat;
+    }>
+  /** Stops the export in progress; no file is saved. */
+  | Readonly<{ event: "export_cancelled" }>;
 
 /** Declared semantic event names this display family can emit. */
 export type DisplaySemanticEventName =

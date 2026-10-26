@@ -126,6 +126,7 @@ export const displayColumnSchema = z
   .object({ key: displayFieldKeySchema, label: displayTextSchema })
   .strict()
   .readonly();
+export type DisplayColumn = z.output<typeof displayColumnSchema>;
 
 /** Declared columns, each key once. */
 export const displayColumnsSchema = z

@@ -4,7 +4,7 @@ import {
   recordsRangeSummaryResultSchema,
   type RecordsRangeSummaryResult,
 } from "@vortex/platform/schema";
-import type { DisplaySemanticEvent, TablePayload } from "@vortex/ui";
+import type { DisplaySemanticEvent, DisplayTablePayload } from "@vortex/ui";
 import type { ApplicationPageModel } from "../../../../../../_lib/application-page";
 import type { PageAddress } from "./page-address";
 import { recordsTableAddress } from "./records-table-address";
@@ -20,7 +20,7 @@ export function useRangeSummary({
   address,
 }: Readonly<{ model: ApplicationPageModel; address: PageAddress }>) {
   const eventsFor = useCallback(
-    (placementId: string, table: TablePayload) => ({
+    (placementId: string, table: DisplayTablePayload) => ({
       range_summary_requested: async (
         event: DisplaySemanticEvent,
       ): Promise<RecordsRangeSummaryResult> => {
