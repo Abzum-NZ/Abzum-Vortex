@@ -298,8 +298,13 @@ export function ApplicationPageViewContent({
     currentData,
     dialogFormRef,
     platformThemeTokens,
-    committed: (bindingId) =>
-      void refreshPlacements(refreshTargetsForBinding(bindingId), undefined, { content: true }),
+    committed: (bindingId) => {
+      const targets = refreshTargetsForBinding(bindingId);
+      // Identity and Access writes have no record target; reread the page's displayed data.
+      void refreshPlacements(targets.length === 0 ? Object.keys(currentData) : targets, undefined, {
+        content: true,
+      });
+    },
   });
 
   /** A page-level address change (a guided form step) renders the page again on the server. */
