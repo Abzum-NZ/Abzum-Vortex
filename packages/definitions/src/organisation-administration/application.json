@@ -799,7 +799,7 @@
                   "props": {
                     "presentation": "grid",
                     "id": "invitations_region",
-                    "title": "Invitations",
+                    "title": "Organisation invitations",
                     "empty_message": "No invitations yet",
                     "columns": [
                       {
