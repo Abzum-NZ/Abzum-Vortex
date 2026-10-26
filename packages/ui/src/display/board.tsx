@@ -195,6 +195,11 @@ function BoardColumn({
       {...(mover === undefined
         ? {}
         : {
+            onDragEnter: () => {
+              if (mover.dragged.current === undefined || !dropRefused) return;
+              // A native refused drop has dropEffect=none, so the browser never sends onDrop.
+              mover.announce(`This card cannot move from ${from.label} to ${bucket.label}.`);
+            },
             onDragOver: (event: DragEvent) => {
               if (mover.dragged.current === undefined) return;
               event.preventDefault();
