@@ -1,7 +1,12 @@
 "use client";
 
-import { useLayoutEffect, useState, type CSSProperties, type RefObject } from "react";
-import { GRID_COLUMN_MIN_WIDTH, GRID_CONTROL_COLUMN_WIDTH } from "./table-geometry";
+import { useEffect, useState, type CSSProperties, type RefObject } from "react";
+import {
+  cancelGridMeasurement,
+  GRID_COLUMN_MIN_WIDTH,
+  GRID_CONTROL_COLUMN_WIDTH,
+  scheduleGridMeasurement,
+} from "./table-geometry";
 import type { GridLayoutControls } from "./table-layout";
 
 export const EXPAND_COLUMN = "vortex-expand";
@@ -42,45 +47,55 @@ export function useGridPinning(
 ): Readonly<{ variables: CSSProperties; scrollPadding: CSSProperties }> {
   const [viewport, setViewport] = useState(0);
   // Edge shadows follow horizontal scrolling without re-rendering the rows during wheel input.
-  useLayoutEffect(() => {
+  useEffect(() => {
     const element = scroll.current;
     if (!enabled || element === null) return;
     let previous = "";
-    const update = (): void => {
-      const start = element.scrollLeft > 1;
-      const end = element.scrollLeft + element.clientWidth < element.scrollWidth - 1;
+    let measuredWidth = 0;
+    let ready = false;
+    const measure = (): (() => void) => {
+      const left = element.scrollLeft;
+      const width = element.clientWidth;
+      const start = left > 1;
+      const end = left + width < element.scrollWidth - 1;
       const next = `${start}:${end}`;
-      if (next === previous) return;
-      previous = next;
-      element.style.setProperty(
-        "--grid-pin-start-shadow",
-        start ? "4px 0 8px -4px color-mix(in oklab, var(--foreground) 25%, transparent)" : "none",
-      );
-      element.style.setProperty(
-        "--grid-pin-end-shadow",
-        end ? "-4px 0 8px -4px color-mix(in oklab, var(--foreground) 25%, transparent)" : "none",
-      );
+      return () => {
+        if (width !== measuredWidth) {
+          measuredWidth = width;
+          setViewport(width);
+        }
+        if (next === previous) return;
+        previous = next;
+        element.style.setProperty(
+          "--grid-pin-start-shadow",
+          start ? "4px 0 8px -4px color-mix(in oklab, var(--foreground) 25%, transparent)" : "none",
+        );
+        element.style.setProperty(
+          "--grid-pin-end-shadow",
+          end ? "-4px 0 8px -4px color-mix(in oklab, var(--foreground) 25%, transparent)" : "none",
+        );
+      };
     };
-    element.addEventListener("scroll", update, { passive: true });
-    const observer = new ResizeObserver(update);
+    const schedule = (): void => {
+      if (ready) scheduleGridMeasurement(measure);
+    };
+    element.addEventListener("scroll", schedule, { passive: true });
+    const observer = new ResizeObserver(schedule);
     observer.observe(element);
-    update();
+    // Pin widths and shadows do not block the first usable frame of the server-rendered grid.
+    const firstFrame = requestAnimationFrame(() => {
+      ready = true;
+      schedule();
+    });
     return () => {
       observer.disconnect();
-      element.removeEventListener("scroll", update);
+      cancelAnimationFrame(firstFrame);
+      cancelGridMeasurement(measure);
+      element.removeEventListener("scroll", schedule);
       element.style.removeProperty("--grid-pin-start-shadow");
       element.style.removeProperty("--grid-pin-end-shadow");
     };
   }, [scroll, enabled, layout.state.order]);
-  // A grid without pinning never observes its width, so a plain table never re-renders on resize.
-  useLayoutEffect(() => {
-    const element = scroll.current;
-    if (!enabled || element === null) return;
-    const observer = new ResizeObserver(() => setViewport(element.clientWidth));
-    setViewport(element.clientWidth);
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, [scroll, enabled]);
 
   const style: Record<string, string | number> = {};
   const utilityWidth =

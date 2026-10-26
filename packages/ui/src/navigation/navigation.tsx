@@ -5,7 +5,6 @@ import {
   useContext,
   useEffect,
   useId,
-  useLayoutEffect,
   useRef,
   useState,
   type MouseEvent,
@@ -209,7 +208,9 @@ function NavigationList({
             {!selected ? null : (
               // The selected fill slides from the item it leaves to this one.
               <motion.span
-                layoutId={indicator.layoutId}
+                // Motion registers a shared layout identity when its projection node mounts.
+                key={indicator.timing === undefined ? "unmeasured" : indicator.layoutId}
+                {...(indicator.timing === undefined ? {} : { layoutId: indicator.layoutId })}
                 data-vortex-navigation-indicator=""
                 aria-hidden
                 transition={indicator.timing ?? { duration: 0 }}
@@ -306,8 +307,16 @@ export function ApplicationNavigation({
   const navRef = useRef<HTMLElement>(null);
   const reducedMotion = useReducedMotion();
   const [indicatorTiming, setIndicatorTiming] = useState<MotionTiming>();
-  useLayoutEffect(() => {
-    if (navRef.current !== null) setIndicatorTiming(readMotionTiming(navRef.current, "enter-exit"));
+  useEffect(() => {
+    // The selected fill is already painted by CSS. Enable its shared-layout measurement only
+    // after the first frame; hydration has no indicator movement to measure or animate.
+    let frame = requestAnimationFrame(() => {
+      frame = requestAnimationFrame(() => {
+        if (navRef.current !== null)
+          setIndicatorTiming(readMotionTiming(navRef.current, "enter-exit"));
+      });
+    });
+    return () => cancelAnimationFrame(frame);
   }, []);
   const indicator = {
     layoutId: `${baseId}-selected`,
