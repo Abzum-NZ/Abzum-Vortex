@@ -26,7 +26,8 @@
  * invalid states keep their own colours.
  */
 @layer vortex-components {
-  :where([data-vortex-style])
+  /* Scoped style rules win ties over unscoped ones, so this rule carries one more attribute. */
+  [data-vortex-style]
     :is(
       .cn-input,
       .cn-textarea,
