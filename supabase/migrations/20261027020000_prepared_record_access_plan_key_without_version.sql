@@ -780,6 +780,17 @@ revoke all on function vortex_definition.read_active_installation_bundle_identit
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 grant execute on function vortex_definition.read_active_installation_bundle_identity() to vortex_owner, vortex_request;
 comment on function vortex_definition.read_active_installation_bundle_identity() is 'Returns fresh active format2 identity and index, or a private exact locked active cold source for the same HUMAN request; carries no viewer permission decision.';
+reset role;
+
+create temporary table prepared_plan_key_rewrites (
+  old_key text primary key,
+  new_key text not null unique
+);
+grant select, insert on prepared_plan_key_rewrites to vortex_owner;
+grant select on prepared_plan_key_rewrites to vortex_record_adapter;
+
+set role vortex_owner;
+
 do $rewrite$
 declare
   bundle_row record;
@@ -790,7 +801,6 @@ declare
   part_row record;
   part_offset integer;
   part_bytes bytea;
-  rewritten_keys text[] := array[]::text[];
 begin
   for bundle_row in
     select bundle.*
@@ -839,7 +849,7 @@ begin
         and part.section = 'access_plan'
       order by part.ordinal
     loop
-      part_bytes := pg_catalog.substring(rewritten from part_offset + 1 for part_row.byte_size);
+      part_bytes := pg_catalog.substring(rewritten, part_offset + 1, part_row.byte_size);
       part_offset := part_offset + part_row.byte_size;
       update vortex_definition.installation_runtime_bundle_parts as part
       set content_bytes = part_bytes
@@ -874,19 +884,33 @@ begin
       and bundle.application_release_revision = bundle_row.application_release_revision
       and bundle.bundle_format_version = 2;
 
-    update vortex_record.installation_access_plans as plan
-    set plan_key = new_key,
-      plan = pg_catalog.jsonb_set(plan.plan, '{planKey}', pg_catalog.to_jsonb(new_key))
-    where plan.plan_key = old_key;
-    rewritten_keys := rewritten_keys || new_key;
+    insert into prepared_plan_key_rewrites (old_key, new_key) values (old_key, new_key);
   end loop;
+end
+$rewrite$;
+
+reset role;
+
+set role vortex_record_adapter;
+
+do $rewrite$
+begin
+  update vortex_record.installation_access_plans as plan
+  set plan_key = rewrite.new_key,
+    plan = pg_catalog.jsonb_set(plan.plan, '{planKey}', pg_catalog.to_jsonb(rewrite.new_key))
+  from prepared_plan_key_rewrites as rewrite
+  where plan.plan_key = rewrite.old_key;
 
   -- Prepared plans no bundle holds are rebuilt under the new key when next prepared.
   delete from vortex_record.installation_access_plans as plan
   where plan.plan ? 'mappingFingerprint'
     and plan.plan ->> 'planKey' = plan.plan_key
-    and not (plan.plan_key = any (rewritten_keys));
+    and not exists (
+      select 1 from prepared_plan_key_rewrites as rewrite where rewrite.new_key = plan.plan_key
+    );
 end
 $rewrite$;
 
 reset role;
+
+drop table prepared_plan_key_rewrites;
