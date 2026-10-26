@@ -183,18 +183,6 @@ const bytesEqual = (left: Uint8Array, right: Uint8Array): boolean =>
   left.byteLength === right.byteLength &&
   Buffer.compare(Buffer.from(left), Buffer.from(right)) === 0;
 
-/**
- * The server-side bundle object store. Implementations read and write exactly
- * one object per call and never accept a caller-supplied bucket or key. Writes
- * are additive: an existing object is never overwritten.
- */
-export interface ComponentBundleObjectStore {
-  writeObject(
-    input: Readonly<{ objectPath: string; bytes: Uint8Array; contentType: string }>,
-  ): Promise<void>;
-  readObject(input: Readonly<{ objectPath: string }>): Promise<Uint8Array | undefined>;
-}
-
 export type ComponentBundleStorageOperation = "upload" | "read";
 
 /**
@@ -308,14 +296,14 @@ export type SupabaseComponentBundleObjectStoreConfig = Readonly<{
 }>;
 
 /**
- * The default object store over the destination project's Storage REST API. It
- * mints one exact credential per operation, refuses redirects and never caches
- * an upstream response. A 409 on write means the immutable object already
- * exists and is treated as success.
+ * The server-side bundle object store over the destination project's Storage REST API. It reads
+ * and writes exactly one object per call, never accepts a caller-supplied bucket or key, mints
+ * one exact credential per operation, refuses redirects and never caches an upstream response.
+ * Writes are additive: a 409 on write means the immutable object already exists and is success.
  */
 export const createSupabaseComponentBundleObjectStore = (
   config: SupabaseComponentBundleObjectStoreConfig,
-): ComponentBundleObjectStore => {
+) => {
   const base = config.supabaseUrl.replace(/\/+$/, "");
   const fetchImplementation = config.fetchImplementation ?? fetch;
 
@@ -324,8 +312,12 @@ export const createSupabaseComponentBundleObjectStore = (
   const readUrl = (objectPath: string): string =>
     `${base}/storage/v1/object/authenticated/${encodeURIComponent(COMPONENT_BUNDLE_BUCKET)}/${encodeObjectPath(objectPath)}`;
 
-  const store: ComponentBundleObjectStore = {
-    async writeObject({ objectPath, bytes, contentType }) {
+  const store = {
+    async writeObject({
+      objectPath,
+      bytes,
+      contentType,
+    }: Readonly<{ objectPath: string; bytes: Uint8Array; contentType: string }>): Promise<void> {
       const token = (await config.mintCredential({ operation: "upload", objectPath })).token;
       const response = await fetchImplementation(uploadUrl(objectPath), {
         method: "POST",
@@ -343,7 +335,9 @@ export const createSupabaseComponentBundleObjectStore = (
       if (response.status === 200 || response.status === 201 || response.status === 409) return;
       throw unavailableError("COMPONENT_BUNDLE_UPLOAD_REFUSED", `upload_status_${response.status}`);
     },
-    async readObject({ objectPath }) {
+    async readObject({
+      objectPath,
+    }: Readonly<{ objectPath: string }>): Promise<Uint8Array | undefined> {
       const token = (await config.mintCredential({ operation: "read", objectPath })).token;
       const response = await fetchImplementation(readUrl(objectPath), {
         method: "GET",
@@ -364,6 +358,11 @@ export const createSupabaseComponentBundleObjectStore = (
   };
   return Object.freeze(store);
 };
+
+/** The bundle object store a serving or publication path reads and writes through. */
+export type ComponentBundleObjectStore = ReturnType<
+  typeof createSupabaseComponentBundleObjectStore
+>;
 
 const readObjectOrRefuse = async (
   store: ComponentBundleObjectStore,
