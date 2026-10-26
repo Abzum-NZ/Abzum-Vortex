@@ -41,7 +41,6 @@ import type {
   GridFeatureCellProps,
   GridFeatureCommandProps,
   GridFeatureModule,
-  GridFeaturePointProps,
   GridFeatureScopeProps,
 } from "./registry";
 
@@ -470,6 +469,8 @@ function RowCommands({ context, row }: GridFeatureCommandProps): ReactElement | 
     context.events?.[recordsTableRowEditEvent] === undefined
   )
     return null;
+  if (editing.draft?.recordId === row.recordId && context.presentation === "grid")
+    return <SaveControls editing={editing} />;
   return (
     <Tooltip>
       <TooltipTrigger
@@ -496,12 +497,12 @@ function RowCommands({ context, row }: GridFeatureCommandProps): ReactElement | 
 
 function SaveControls({ editing }: Readonly<{ editing: RowEditing }>): ReactElement {
   return (
-    <div className="flex flex-wrap items-center gap-2" onClick={(event) => event.stopPropagation()}>
+    <div className="flex items-center gap-1" onClick={(event) => event.stopPropagation()}>
       {editing.draft === undefined ? null : (
         <>
           <Button
             type="button"
-            size="sm"
+            size="xs"
             disabled={!editing.dirty || editing.saving || editing.conflict}
             onClick={editing.save}
           >
@@ -509,7 +510,7 @@ function SaveControls({ editing }: Readonly<{ editing: RowEditing }>): ReactElem
           </Button>
           <Button
             type="button"
-            size="sm"
+            size="xs"
             variant="outline"
             disabled={editing.saving}
             onClick={editing.cancel}
@@ -538,13 +539,6 @@ function SaveControls({ editing }: Readonly<{ editing: RowEditing }>): ReactElem
         {editing.message}
       </span>
     </div>
-  );
-}
-
-function Toolbar({ context }: GridFeaturePointProps): ReactElement | null {
-  const editing = useContext(RowEditingContext);
-  return editing === undefined || context.presentation === "cards" ? null : (
-    <SaveControls editing={editing} />
   );
 }
 
@@ -580,6 +574,5 @@ export const gridFeature: GridFeatureModule = {
   Scope: RowEditScope,
   CellEditor: RowCell,
   RowCommands,
-  ToolbarItems: Toolbar,
   RowEditor: CardEditor,
 };

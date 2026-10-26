@@ -5,6 +5,7 @@ import type { GridFeatureInteractionProps, GridFeatureModule } from "./registry"
 import { GRID_ROOT, isInteractiveGridTarget } from "../table-interaction";
 import { rangeToTsv } from "./range-copy";
 import { RangeStatusBar, type StatusBarRange } from "./range-status-bar";
+import { GridToolbarSlot } from "./toolbar";
 
 const Find = lazy(() => import("./find"));
 type Point = Readonly<{ row: number; column: number }>;
@@ -310,24 +311,31 @@ function RangeSelection({ context, surface }: GridFeatureInteractionProps): Reac
   }, [page, columns, settings?.rangeSelect, surface.rootRef]);
 
   return (
-    <div className="sticky left-0 flex flex-wrap items-center gap-2 px-2 py-1">
-      {settings?.rangeSelect ? (
-        <span className="text-xs text-muted-foreground">
-          Shift + arrows or drag to select a range on this page
-        </span>
-      ) : null}
+    <>
+      {settled === undefined ? null : (
+        <GridToolbarSlot area="supplement">
+          {settings?.rangeSelect ? (
+            <span
+              className="max-w-40 truncate text-xs text-muted-foreground"
+              title="Shift + arrows or drag to select a range on this page"
+            >
+              Range selected
+            </span>
+          ) : null}
+          {settings?.statusBar !== undefined ? (
+            <RangeStatusBar context={context} range={settled} />
+          ) : null}
+        </GridToolbarSlot>
+      )}
       {settings?.find ? (
         <Suspense fallback={null}>
           <Find context={context} surface={surface} />
         </Suspense>
       ) : null}
-      {settings?.statusBar !== undefined ? (
-        <RangeStatusBar context={context} range={settled} />
-      ) : null}
       <span role="status" aria-live="polite" aria-atomic="true" className="sr-only">
         {announcement}
       </span>
-    </div>
+    </>
   );
 }
 
