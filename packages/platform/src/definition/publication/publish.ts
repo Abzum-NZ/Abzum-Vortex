@@ -12,6 +12,7 @@ import {
   revisionSchema,
   semanticVersionSchema,
   timestampSchema,
+  stableDefinitionReleaseVersionSchema,
 } from "../../catalogue/identifiers";
 import { selectApplicationContractPair } from "../application-contract-versions";
 import {
@@ -48,7 +49,6 @@ import { savedSharingConditionSchema } from "../module-contracts";
 import { moduleExtensionPointUseSchema } from "../module-extension-point-shape";
 import {
   moduleVersionImpactHistoryEntrySchema,
-  stableDefinitionReleaseVersionSchema,
   versionImpactReasonSchema,
   type VersionImpactReason,
 } from "../version-impact";

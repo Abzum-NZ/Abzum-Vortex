@@ -3,9 +3,9 @@ import { jsonValueSchema, type JsonValue } from "../catalogue/common";
 import { timestampSchema } from "../catalogue/identifiers";
 import {
   recordTypeDefinitionSchema,
-  type ModuleField,
   type RecordTypeDefinition,
 } from "../definition/module-contracts";
+import type { ModuleField } from "../definition/module-field-contracts";
 import type { FlowFormula } from "../workflows/flow-values";
 import { formatExactDecimal, parseExactDecimal } from "./exact-decimal";
 import { moneyValueSchema } from "./module-field-values";

@@ -8,7 +8,8 @@ import {
   recordTypeIdSchema,
 } from "../catalogue/identifiers";
 import { searchableFieldTypes } from "../definition/application-search-edit";
-import type { ModuleField, RecordTypeDefinition } from "../definition/module-contracts";
+import type { RecordTypeDefinition } from "../definition/module-contracts";
+import type { ModuleField } from "../definition/module-field-contracts";
 import { searchIndexFieldDiscloses } from "./sensitivity-policy";
 
 /**

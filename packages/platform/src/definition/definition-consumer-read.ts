@@ -12,10 +12,10 @@ import {
   queryIdSchema,
   revisionSchema,
   semanticVersionSchema,
+  stableDefinitionReleaseVersionSchema,
 } from "../catalogue/identifiers";
 import { moduleQueryDefinitionSchema, moduleContentSchema } from "./module-contracts";
 import { applicationPlatformCompatibilityVersionSchema } from "./platform-compatibility";
-import { stableDefinitionReleaseVersionSchema } from "./version-impact";
 
 const dependencySubject = (entry: z.infer<typeof exactDefinitionDependencySchema>): string =>
   // IDs compare lower-cased, matching the publication contract's lowercase references,

@@ -11,9 +11,9 @@ import {
   platformIdSchema,
   revisionSchema,
   semanticVersionSchema,
+  stableDefinitionReleaseVersionSchema,
 } from "../catalogue/identifiers";
 import { permissionDeclarationSchema } from "./permissions";
-import { stableDefinitionReleaseVersionSchema } from "../definition/version-impact";
 
 const permissionRegistryDefinitionReleaseCommon = {
   definitionKey: namespacedKeySchema,

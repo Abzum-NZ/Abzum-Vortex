@@ -9,6 +9,7 @@ import {
   type ConnectionTypeId,
   type PlatformId,
   type SemanticVersion,
+  stableDefinitionReleaseVersionSchema,
 } from "../../catalogue/identifiers";
 import {
   PLATFORM_SERVICE_OPERATION_RELEASES,
@@ -45,7 +46,6 @@ import {
   connectionTypeSourceDocumentSchema,
   type ConnectionTypeSourceDocument,
 } from "../definition-source";
-import { stableDefinitionReleaseVersionSchema } from "../version-impact";
 import { compare } from "semver";
 import { z } from "zod";
 import { compareCanonicalStrings, fingerprintCanonicalValue } from "../canonical-json-definition";

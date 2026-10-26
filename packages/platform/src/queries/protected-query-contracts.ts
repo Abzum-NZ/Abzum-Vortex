@@ -9,11 +9,11 @@ import {
   queryIdSchema,
   recordIdSchema,
   revisionSchema,
+  stableDefinitionReleaseVersionSchema,
 } from "../catalogue/identifiers";
 import { recordsTableAggregateOperations } from "../definition/application-composition/records-table-totals";
 import { boardColumnReadLimit } from "../definition/application-contracts";
 import { conditionNodeSchema } from "../definition/module-foundation-contracts";
-import { stableDefinitionReleaseVersionSchema } from "../definition/version-impact";
 import {
   moduleFieldValueSchemas,
   recordLinkValueSchema,

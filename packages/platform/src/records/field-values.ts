@@ -2,11 +2,10 @@ import { isDeepStrictEqual } from "node:util";
 import type { JsonValue } from "../catalogue/common";
 import type { FileId, PermissionId } from "../catalogue/identifiers";
 import {
-  moduleFieldSchema,
   recordTypeDefinitionSchema,
-  type ModuleField,
   type RecordTypeDefinition,
 } from "../definition/module-contracts";
+import { moduleFieldSchema, type ModuleField } from "../definition/module-field-contracts";
 import {
   pipelineAllowsMove,
   pipelineMoveRefusalMessage,

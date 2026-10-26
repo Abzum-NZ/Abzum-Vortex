@@ -42,6 +42,7 @@ import {
   revisionSchema,
   timestampSchema,
   type TenantId,
+  stableDefinitionReleaseVersionSchema,
 } from "../catalogue/identifiers";
 import {
   findPlatformServiceOperation,
@@ -72,7 +73,6 @@ import {
 } from "../workflows/flow-refusal-feedback";
 import { flowTaskRegistry } from "../workflows/flow-task-registry";
 import type { ProtectedOperationDescriptor } from "./application-flow-bindings";
-import { stableDefinitionReleaseVersionSchema } from "./version-impact";
 import type { createDurableActorRequestService } from "../access/durable-actor-request";
 import type { HumanOrganizationRequestResult } from "../access/human-organization-request";
 import type { createOrganizationAccessAdministrationService } from "../access/organization-access-administration-access";

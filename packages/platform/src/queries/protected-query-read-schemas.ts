@@ -1,7 +1,11 @@
 import { z } from "zod";
 import { jsonValueSchema } from "../catalogue/common";
-import { fieldIdSchema, recordIdSchema, revisionSchema } from "../catalogue/identifiers";
-import { stableDefinitionReleaseVersionSchema } from "../definition/version-impact";
+import {
+  fieldIdSchema,
+  recordIdSchema,
+  revisionSchema,
+  stableDefinitionReleaseVersionSchema,
+} from "../catalogue/identifiers";
 import {
   protectedQueryBoardColumnSchema,
   protectedQueryFieldBoundsSchema,

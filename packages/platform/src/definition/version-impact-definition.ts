@@ -5,12 +5,12 @@ import {
 import type { DefinitionPublicationHistoryEvidence } from "./definition-compilation-contracts";
 import { unresolvedRecordTypeReferencePaths } from "./definitions";
 import { moduleContentSchema } from "./module-contracts";
+import { stableDefinitionReleaseVersionSchema } from "../catalogue/identifiers";
 import {
   applicationVersionImpactRequestSchema,
   moduleVersionImpactRequestSchema,
   definitionVersionImpactRequestSchema,
   definitionVersionImpactResultSchema,
-  stableDefinitionReleaseVersionSchema,
   type DefinitionVersionImpactRequest,
   type DefinitionVersionImpactResult,
   type DefinitionVersionSubject,

@@ -1,8 +1,7 @@
 import "server-only";
 
 import { correlationIdSchema } from "../catalogue/common";
-import { applicationRootIdSchema, moduleRootIdSchema, organizationIdSchema, revisionSchema, timestampSchema } from "../catalogue/identifiers";
-import { stableDefinitionReleaseVersionSchema } from "../definition/version-impact";
+import { applicationRootIdSchema, moduleRootIdSchema, organizationIdSchema, revisionSchema, timestampSchema, stableDefinitionReleaseVersionSchema } from "../catalogue/identifiers";
 import { flowIdSchema, flowTriggerOriginSchema } from "./flow-contracts";
 import { flowLiteralSchema, type FlowLiteral } from "./flow-values";
 import { withRuntimeTransaction, type RequestDatabaseTransaction } from "../db/request-transaction";

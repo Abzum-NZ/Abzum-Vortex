@@ -11,7 +11,7 @@ import {
 } from "./condition-types";
 import type { JsonValue } from "../catalogue/common";
 import { organizationAccountIdSchema } from "../catalogue/identifiers";
-import type { ModuleField } from "../definition/module-contracts";
+import type { ModuleField } from "../definition/module-field-contracts";
 import { parseExactDecimal, type ExactDecimal } from "../records/exact-decimal";
 import {
   exactDecimalTextSchema,

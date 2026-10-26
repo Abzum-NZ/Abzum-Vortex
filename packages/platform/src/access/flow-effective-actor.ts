@@ -13,6 +13,7 @@ import {
   ruleIdSchema,
   timestampSchema,
   workflowNodeIdSchema,
+  stableDefinitionReleaseVersionSchema,
 } from "../catalogue/identifiers";
 import { sameId } from "../catalogue/runtime-primitives";
 import {
@@ -21,7 +22,6 @@ import {
   protectedOperationDescriptorSchema,
   protectedOperationReferenceSchema,
 } from "../definition/application-flow-bindings";
-import { stableDefinitionReleaseVersionSchema } from "../definition/version-impact";
 import { sessionContextSchema, type SessionContext } from "./identity-access";
 import {
   withResolvedRequestTransaction,

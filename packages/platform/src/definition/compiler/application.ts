@@ -9,7 +9,7 @@ import {
   type DefinitionCompilationOutput,
 } from "../definition-compilation-contracts";
 import type { ApplicationSourceDocument } from "../definition-source";
-import type { ModuleField } from "../module-contracts";
+import type { ModuleField } from "../module-field-contracts";
 import { conditionNodeSchema } from "../module-foundation-contracts";
 import { APPLICATION_PLATFORM_COMPATIBILITY_VERSION } from "../platform-compatibility";
 import {

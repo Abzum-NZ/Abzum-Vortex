@@ -1,4 +1,5 @@
-import { stableDefinitionReleaseVersionSchema, type VersionImpact } from "./version-impact";
+import { stableDefinitionReleaseVersionSchema } from "../catalogue/identifiers";
+import { type VersionImpact } from "./version-impact";
 
 type Version = readonly [major: bigint, minor: bigint, patch: bigint];
 

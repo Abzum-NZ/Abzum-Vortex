@@ -1,9 +1,9 @@
 import type { JsonValue } from "../catalogue/common";
 import {
   recordTypeDefinitionSchema,
-  type ModuleField,
   type RecordTypeDefinition,
 } from "../definition/module-contracts";
+import type { ModuleField } from "../definition/module-field-contracts";
 import type { SaveRecordCommand } from "./records";
 import { evaluateRecordCalculations } from "./calculations";
 import {

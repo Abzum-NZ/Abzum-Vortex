@@ -10,6 +10,7 @@ import {
   organizationIdSchema,
   ruleIdSchema,
   workflowNodeIdSchema,
+  stableDefinitionReleaseVersionSchema,
 } from "../catalogue/identifiers";
 import {
   flowExecutionBindingActorSchema,
@@ -17,7 +18,6 @@ import {
   flowExecutionBindingSchema,
   protectedOperationReferenceSchema,
 } from "../definition/application-flow-bindings";
-import { stableDefinitionReleaseVersionSchema } from "../definition/version-impact";
 import type { FlowExecutionBinding } from "../definition/application-flow-bindings";
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
 

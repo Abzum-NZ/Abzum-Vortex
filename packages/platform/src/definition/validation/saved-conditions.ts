@@ -1,4 +1,5 @@
-import { type ModuleField, savedSharingConditionSchema } from "../module-contracts";
+import { savedSharingConditionSchema } from "../module-contracts";
+import type { ModuleField } from "../module-field-contracts";
 import type { ConditionNode } from "../module-foundation-contracts";
 import {
   evaluateTypedCondition,

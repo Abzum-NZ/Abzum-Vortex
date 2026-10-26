@@ -13,6 +13,7 @@ import {
   recordIdSchema,
   revisionSchema,
   timestampSchema,
+  stableDefinitionReleaseVersionSchema,
 } from "../catalogue/identifiers";
 import type {
   ExecuteNamedActionResult,
@@ -36,7 +37,6 @@ import {
   formContinuationAnswerSchema,
   type FlowWarningNotice,
 } from "../workflows/form-continuation-contracts";
-import { stableDefinitionReleaseVersionSchema } from "./version-impact";
 import type { RecordSaveServiceResult } from "../records/save-record";
 import type { HumanOrganizationRequestResult } from "../access/human-organization-request";
 import type { ActionFlowRunner } from "../rules/action-flow-run";

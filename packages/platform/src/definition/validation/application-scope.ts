@@ -3,7 +3,7 @@ import { type PreparedValidationContext, allValidationOutputs, type JsonObject }
 import type { DefinitionRuleFailure } from "../../catalogue/validation-errors";
 import type { FlowDefinition } from "../../workflows/flow-contracts";
 import type { VersionRequirement } from "../definitions";
-import type { ModuleField } from "../module-contracts";
+import type { ModuleField } from "../module-field-contracts";
 import { object, array, outputKey, failure } from "./helpers";
 import { walkPageComposition, walkPlacementData } from "../../pages/placement-walk";
 import { placementSettings } from "../application-composition-catalogue";
