@@ -164,7 +164,7 @@ export const normalizeFileExtension = (extension: string): string => {
  * Reduces a detected media type to its bare lowercase type, so a parameter such as
  * a charset cannot hide an executable type behind a suffix.
  */
-const normalizeMediaType = (detectedMediaType: string): string =>
+export const normalizeMediaType = (detectedMediaType: string): string =>
   detectedMediaType.split(";")[0]?.trim().toLowerCase() ?? "";
 
 /**

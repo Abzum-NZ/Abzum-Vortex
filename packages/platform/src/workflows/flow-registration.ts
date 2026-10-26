@@ -7,6 +7,7 @@ import { flowSchema } from "./flow-contracts";
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
 import {
   kestraFlowCompilerEnvironments,
+  parseKestraFlowIdentity,
   type KestraFlowCandidate,
   type KestraFlowCompilerEnvironment,
   type KestraFlowIdentity,
@@ -136,44 +137,6 @@ const invalidStorageResult = (cause?: unknown): KestraFlowRegistrationError =>
   new KestraFlowRegistrationError("INVALID_FLOW_REGISTRATION_STORAGE_RESULT", { cause });
 
 /**
- * Validates exactly the six permanent identity fields and canonicalises the
- * UUIDs to lower case, so one identity always shortens to one namespace.
- */
-const parseIdentity = (candidate: unknown): KestraFlowIdentity | undefined => {
-  if (!isRecord(candidate) || !hasOnlyKeys(candidate, identityKeys)) return undefined;
-  if (
-    typeof candidate.environment !== "string" ||
-    !(kestraFlowCompilerEnvironments as readonly string[]).includes(candidate.environment)
-  )
-    return undefined;
-
-  const organizationId = organizationIdSchema.safeParse(candidate.organizationId);
-  const applicationRootId = applicationRootIdSchema.safeParse(candidate.applicationRootId);
-  const applicationVersion = stableDefinitionReleaseVersionSchema.safeParse(
-    candidate.applicationVersion,
-  );
-  const installationRevision = revisionSchema.safeParse(candidate.installationRevision);
-  const workflowRevision = revisionSchema.safeParse(candidate.workflowRevision);
-  if (
-    !organizationId.success ||
-    !applicationRootId.success ||
-    !applicationVersion.success ||
-    !installationRevision.success ||
-    !workflowRevision.success
-  )
-    return undefined;
-
-  return Object.freeze({
-    environment: candidate.environment as KestraFlowCompilerEnvironment,
-    organizationId: organizationId.data.toLowerCase() as OrganizationId,
-    applicationRootId: applicationRootId.data.toLowerCase() as ApplicationRootId,
-    applicationVersion: applicationVersion.data,
-    installationRevision: installationRevision.data,
-    workflowRevision: workflowRevision.data,
-  });
-};
-
-/**
  * Parses the command at the storage boundary. The candidate's active flag and
  * revision are rechecked against the identity before any statement runs; the
  * database revalidates them and the generated identity again under its own
@@ -181,7 +144,7 @@ const parseIdentity = (candidate: unknown): KestraFlowIdentity | undefined => {
  */
 const parseCommand = (candidate: unknown): KestraFlowRegistrationCommand => {
   if (!isRecord(candidate) || !hasOnlyKeys(candidate, ["identity", "flow"])) throw invalidInput();
-  const identity = parseIdentity(candidate.identity);
+  const identity = parseKestraFlowIdentity(candidate.identity);
   if (identity === undefined || !isRecord(candidate.flow)) throw invalidInput();
 
   const flow = candidate.flow;

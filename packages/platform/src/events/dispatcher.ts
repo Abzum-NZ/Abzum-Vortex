@@ -22,6 +22,7 @@ import {
   eventDeliveryRecoveryLimits,
   type EventDeliveryFailureClassification,
 } from "./delivery-recovery";
+import { asRecord } from "../catalogue/runtime-primitives";
 
 export const eventDispatcherLimits = Object.freeze({
   /** Occurrences claimed by one dispatch across every selected consumer. */
@@ -215,16 +216,11 @@ const consumerKeyMatches = (value: unknown): value is string =>
 const integerWithin = (value: unknown, minimum: number, maximum: number): value is number =>
   Number.isSafeInteger(value) && (value as number) >= minimum && (value as number) <= maximum;
 
-const record = (value: unknown): Readonly<Record<string, unknown>> | undefined =>
-  typeof value === "object" && value !== null && !Array.isArray(value)
-    ? (value as Readonly<Record<string, unknown>>)
-    : undefined;
-
 const exactRecord = <Key extends string>(
   value: unknown,
   keys: readonly Key[],
 ): Readonly<Record<Key, unknown>> | undefined => {
-  const candidate = record(value);
+  const candidate = asRecord(value);
   if (
     candidate === undefined ||
     Object.keys(candidate).length !== keys.length ||
@@ -386,9 +382,9 @@ const registerConsumers = (
     return registrationInvalid();
   const registered = new Map<string, RegisteredConsumer>();
   for (const adapter of adapters) {
-    const candidate = record(adapter);
+    const candidate = asRecord(adapter);
     const policy: Readonly<Record<string, unknown>> | undefined =
-      candidate?.policy === undefined ? {} : record(candidate.policy);
+      candidate?.policy === undefined ? {} : asRecord(candidate.policy);
     const consumerKey = candidate?.consumerKey;
     const deliver = candidate?.deliver;
     if (
@@ -433,7 +429,7 @@ const registerConsumers = (
 type ValidatedDispatch = Readonly<{ batchLimit: number; consumerKey: string | undefined }>;
 
 const validateDispatchInput = (candidate: unknown): ValidatedDispatch => {
-  const input = record(candidate);
+  const input = asRecord(candidate);
   if (input === undefined) throw new EventDispatcherError("INVALID_EVENT_DISPATCH_INPUT");
   const dispatcher = input.dispatcher;
   if (
