@@ -73,8 +73,11 @@ import type { RequestDatabaseTransaction } from "../db/index";
 import type { ApplicationStoreService } from "./installation-application-store";
 import { z } from "zod";
 import {
-  durableRecordUpdateSchema, prepareDurableRecordUpdate, executeDurableRecordUpdate,
-  type DurableRecordUpdate, type DurableRecordSave,
+  durableRecordUpdateSchema,
+  prepareDurableRecordUpdate,
+  executeDurableRecordUpdate,
+  type DurableRecordUpdate,
+  type DurableRecordSave,
 } from "./durable-record-update";
 import { effectCommandId } from "./flow-orchestrator-support";
 
@@ -131,10 +134,11 @@ type ProtectedOperationExecutionRequest =
 type DurableProtectedOperationExecutionRequest = Readonly<{
   actorContext: unknown;
   inputs: Readonly<Record<string, unknown>>;
-}> & (
-  | Readonly<{ operation: ProtectedOperationIdentity; recordUpdate?: never }>
-  | Readonly<{ operation?: never; recordUpdate: DurableRecordUpdate }>
-);
+}> &
+  (
+    | Readonly<{ operation: ProtectedOperationIdentity; recordUpdate?: never }>
+    | Readonly<{ operation?: never; recordUpdate: DurableRecordUpdate }>
+  );
 
 /** A value a descriptor can declare for an input or output of a registered operation. */
 type ProtectedOperationValue = JsonValue;
@@ -169,7 +173,11 @@ const durableActorOperationPurposeSchema = z
     workflowRevision: revisionSchema,
     nodeId: workflowNodeIdSchema,
     attempt: z.number().int().positive(),
-    operationKey: z.string().min(1).max(128).regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/),
+    operationKey: z
+      .string()
+      .min(1)
+      .max(128)
+      .regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/),
     duplicateProtectionKey: duplicateProtectionKeySchema,
   })
   .passthrough();
@@ -252,15 +260,16 @@ type ProtectedOperationServices = Readonly<{
   applicationStore?: ApplicationStoreService;
 }>;
 
-type ProtectedOperationExecutorDependencies = ProtectedOperationServices & Readonly<{
-  /** Services bound to the actor's one request transaction and resolved scope. */
-  durableOperations?: (
-    transaction: RequestDatabaseTransaction,
-    scope: DurableActorRequestScope,
-  ) => ProtectedOperationServices;
-  /** Access service used to re-resolve the durable run actor and current grants. */
-  durableActorRequest?: Pick<ReturnType<typeof createDurableActorRequestService>, "run">;
-}>;
+type ProtectedOperationExecutorDependencies = ProtectedOperationServices &
+  Readonly<{
+    /** Services bound to the actor's one request transaction and resolved scope. */
+    durableOperations?: (
+      transaction: RequestDatabaseTransaction,
+      scope: DurableActorRequestScope,
+    ) => ProtectedOperationServices;
+    /** Access service used to re-resolve the durable run actor and current grants. */
+    durableActorRequest?: Pick<ReturnType<typeof createDurableActorRequestService>, "run">;
+  }>;
 
 type ProtectedOperationCaller = Readonly<{
   session: IdentitySession;
@@ -281,10 +290,7 @@ type ConfirmedOperationFailure = Readonly<{
 }>;
 
 type OperationResult =
-  | HumanOrganizationRequestResult<Outputs>
-  | "validation"
-  | "conflict"
-  | ConfirmedOperationFailure;
+  HumanOrganizationRequestResult<Outputs> | "validation" | "conflict" | ConfirmedOperationFailure;
 
 type OperationRunner = (
   services: ProtectedOperationExecutorDependencies,
@@ -322,8 +328,8 @@ const duplicateKeyFor = (
  * typed inputs onto that command's fields and the schema rejects anything it does not accept, so an
  * invalid value is a validation result and never reaches the protected wrapper.
  */
-const operation =
-  <Schema extends z.ZodType>(definition: {
+const operation = <Schema extends z.ZodType>(
+  definition: {
     schema: Schema;
     inputAliases?: Readonly<Record<string, string>>;
     command: (
@@ -336,40 +342,42 @@ const operation =
       caller: ProtectedOperationCaller,
       command: z.output<Schema>,
     ) => Promise<OperationResult>;
-  }, authorityKind: Operation["authorityKind"] = "permission"): Operation =>
-    Object.freeze({
-      authorityKind,
-      execute: async (services, caller, inputs) => {
-        const command = definition.schema.safeParse(
-          definition.command(inputs, caller.selection, caller.effectKey),
-        );
-        if (!command.success) {
-          const issue = command.error.issues.length === 1 ? command.error.issues[0] : undefined;
-          const structuralIssueCodes: ReadonlySet<string> = new Set([
-            "invalid_type",
-            "too_small",
-            "too_big",
-            "invalid_format",
-            "not_multiple_of",
-            "invalid_value",
-          ]);
-          const issuePath = issue?.path;
-          const operationInput =
-            issue !== undefined &&
-            structuralIssueCodes.has(issue.code) &&
-            issuePath?.length === 1 &&
-            typeof issuePath[0] === "string"
-              ? definition.inputAliases?.[issuePath[0]]
-              : undefined;
-          return {
-            kind: "confirmed_failure",
-            outcome: "validation",
-            diagnostic: invalidCommandFeedback(operationInput),
-          };
-        }
-        return definition.run(services, caller, command.data);
-      },
-    });
+  },
+  authorityKind: Operation["authorityKind"] = "permission",
+): Operation =>
+  Object.freeze({
+    authorityKind,
+    execute: async (services, caller, inputs) => {
+      const command = definition.schema.safeParse(
+        definition.command(inputs, caller.selection, caller.effectKey),
+      );
+      if (!command.success) {
+        const issue = command.error.issues.length === 1 ? command.error.issues[0] : undefined;
+        const structuralIssueCodes: ReadonlySet<string> = new Set([
+          "invalid_type",
+          "too_small",
+          "too_big",
+          "invalid_format",
+          "not_multiple_of",
+          "invalid_value",
+        ]);
+        const issuePath = issue?.path;
+        const operationInput =
+          issue !== undefined &&
+          structuralIssueCodes.has(issue.code) &&
+          issuePath?.length === 1 &&
+          typeof issuePath[0] === "string"
+            ? definition.inputAliases?.[issuePath[0]]
+            : undefined;
+        return {
+          kind: "confirmed_failure",
+          outcome: "validation",
+          diagnostic: invalidCommandFeedback(operationInput),
+        };
+      }
+      return definition.run(services, caller, command.data);
+    },
+  });
 
 /** One application catalogue journey, run by the installation service under the person's own authority. */
 const applicationStoreOperation = (journey: keyof ApplicationStoreService): Operation =>
@@ -384,7 +392,7 @@ const applicationStoreOperation = (journey: keyof ApplicationStoreService): Oper
 
 /** A blank optional text input, as an empty form field submits it, is the same as an absent one. */
 const optionalText = (value: ProtectedOperationValue | undefined) =>
-  typeof value === "string" && value.trim() === "" ? undefined : value;
+  value === null || (typeof value === "string" && value.trim() === "") ? undefined : value;
 
 /**
  * A text control submits a string; a declared JSON input that a person types as text is parsed here
@@ -777,6 +785,11 @@ const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Obj
         kind: "available",
         value: {
           role_assignment_id: value.assignment.roleAssignmentId,
+          role_name: value.assignment.role.label,
+          assignee_name:
+            value.assignment.assignee.kind === "organization_account"
+              ? value.assignment.assignee.displayName
+              : value.assignment.assignee.label,
           revision: value.assignment.revision,
           access_version: value.accessVersion,
         },
@@ -864,75 +877,87 @@ const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Obj
         }),
       ),
   }),
-  rename_tenant_organization: operation({
-    schema: renameTenantOrganizationCommandSchema.omit({ tenantId: true, operation: true }),
-    command: (inputs, _selection, effectKey) => ({
-      duplicateKey: duplicateKeyFor(effectKey, randomUUID),
-      organizationId: inputs.organization_id,
-      expectedRevision: inputs.expected_revision,
-      displayName: inputs.display_name,
-    }),
-    run: async (services, caller, command) =>
-      runTenantOrganizationMutation(services, caller, ({ tenantId, operations }) =>
-        operations.renameOrganization(caller.session, {
-          ...command,
-          operation: "rename_tenant_organization",
-          tenantId,
-        }),
-      ),
-  }, "tenant_capability"),
-  reparent_tenant_organization: operation({
-    schema: reparentTenantOrganizationCommandSchema
-      .omit({ tenantId: true, operation: true })
-      .extend({ parentOrganizationId: organizationIdSchema }),
-    inputAliases: { parentOrganizationId: "parent_organization_id" },
-    command: (inputs, _selection, effectKey) => ({
-      duplicateKey: duplicateKeyFor(effectKey, randomUUID),
-      organizationId: inputs.organization_id,
-      expectedRevision: inputs.expected_revision,
-      parentOrganizationId: inputs.parent_organization_id,
-    }),
-    run: async (services, caller, command) =>
-      runTenantOrganizationMutation(services, caller, ({ tenantId, operations }) =>
-        operations.reparentOrganization(caller.session, {
-          ...command,
-          operation: "reparent_tenant_organization",
-          tenantId,
-        }),
-      ),
-  }, "tenant_capability"),
-  suspend_tenant_organization: operation({
-    schema: suspendTenantOrganizationCommandSchema.omit({ tenantId: true, operation: true }),
-    command: (inputs, _selection, effectKey) => ({
-      duplicateKey: duplicateKeyFor(effectKey, randomUUID),
-      organizationId: inputs.organization_id,
-      expectedRevision: inputs.expected_revision,
-    }),
-    run: async (services, caller, command) =>
-      runTenantOrganizationMutation(services, caller, ({ tenantId, operations }) =>
-        operations.suspendOrganization(caller.session, {
-          ...command,
-          operation: "suspend_tenant_organization",
-          tenantId,
-        }),
-      ),
-  }, "tenant_capability"),
-  reactivate_tenant_organization: operation({
-    schema: reactivateTenantOrganizationCommandSchema.omit({ tenantId: true, operation: true }),
-    command: (inputs, _selection, effectKey) => ({
-      duplicateKey: duplicateKeyFor(effectKey, randomUUID),
-      organizationId: inputs.organization_id,
-      expectedRevision: inputs.expected_revision,
-    }),
-    run: async (services, caller, command) =>
-      runTenantOrganizationMutation(services, caller, ({ tenantId, operations }) =>
-        operations.reactivateOrganization(caller.session, {
-          ...command,
-          operation: "reactivate_tenant_organization",
-          tenantId,
-        }),
-      ),
-  }, "tenant_capability"),
+  rename_tenant_organization: operation(
+    {
+      schema: renameTenantOrganizationCommandSchema.omit({ tenantId: true, operation: true }),
+      command: (inputs, _selection, effectKey) => ({
+        duplicateKey: duplicateKeyFor(effectKey, randomUUID),
+        organizationId: inputs.organization_id,
+        expectedRevision: inputs.expected_revision,
+        displayName: inputs.display_name,
+      }),
+      run: async (services, caller, command) =>
+        runTenantOrganizationMutation(services, caller, ({ tenantId, operations }) =>
+          operations.renameOrganization(caller.session, {
+            ...command,
+            operation: "rename_tenant_organization",
+            tenantId,
+          }),
+        ),
+    },
+    "tenant_capability",
+  ),
+  reparent_tenant_organization: operation(
+    {
+      schema: reparentTenantOrganizationCommandSchema
+        .omit({ tenantId: true, operation: true })
+        .extend({ parentOrganizationId: organizationIdSchema }),
+      inputAliases: { parentOrganizationId: "parent_organization_id" },
+      command: (inputs, _selection, effectKey) => ({
+        duplicateKey: duplicateKeyFor(effectKey, randomUUID),
+        organizationId: inputs.organization_id,
+        expectedRevision: inputs.expected_revision,
+        parentOrganizationId: inputs.parent_organization_id,
+      }),
+      run: async (services, caller, command) =>
+        runTenantOrganizationMutation(services, caller, ({ tenantId, operations }) =>
+          operations.reparentOrganization(caller.session, {
+            ...command,
+            operation: "reparent_tenant_organization",
+            tenantId,
+          }),
+        ),
+    },
+    "tenant_capability",
+  ),
+  suspend_tenant_organization: operation(
+    {
+      schema: suspendTenantOrganizationCommandSchema.omit({ tenantId: true, operation: true }),
+      command: (inputs, _selection, effectKey) => ({
+        duplicateKey: duplicateKeyFor(effectKey, randomUUID),
+        organizationId: inputs.organization_id,
+        expectedRevision: inputs.expected_revision,
+      }),
+      run: async (services, caller, command) =>
+        runTenantOrganizationMutation(services, caller, ({ tenantId, operations }) =>
+          operations.suspendOrganization(caller.session, {
+            ...command,
+            operation: "suspend_tenant_organization",
+            tenantId,
+          }),
+        ),
+    },
+    "tenant_capability",
+  ),
+  reactivate_tenant_organization: operation(
+    {
+      schema: reactivateTenantOrganizationCommandSchema.omit({ tenantId: true, operation: true }),
+      command: (inputs, _selection, effectKey) => ({
+        duplicateKey: duplicateKeyFor(effectKey, randomUUID),
+        organizationId: inputs.organization_id,
+        expectedRevision: inputs.expected_revision,
+      }),
+      run: async (services, caller, command) =>
+        runTenantOrganizationMutation(services, caller, ({ tenantId, operations }) =>
+          operations.reactivateOrganization(caller.session, {
+            ...command,
+            operation: "reactivate_tenant_organization",
+            tenantId,
+          }),
+        ),
+    },
+    "tenant_capability",
+  ),
   suspend_organization_account: operation({
     schema: suspendOrganizationAccountCommandSchema,
     command: (inputs, _selection, effectKey) => ({
@@ -1131,8 +1156,7 @@ const valueMatches = (type: string, value: unknown): value is ProtectedOperation
 };
 
 type DeclaredInputResult =
-  | Readonly<{ inputs: Inputs }>
-  | Readonly<{ diagnostic: FlowRefusalFeedback }>;
+  Readonly<{ inputs: Inputs }> | Readonly<{ diagnostic: FlowRefusalFeedback }>;
 
 /**
  * The declared inputs only: every declared required input present, no undeclared input and every
@@ -1276,8 +1300,9 @@ export const createProtectedOperationExecutor = (
       return { outcome: "failed" };
     }
   };
-  const execute = (request: ProtectedOperationExecutionRequest): Promise<ProtectedOperationExecution> =>
-    executeWith(dependencies, request);
+  const execute = (
+    request: ProtectedOperationExecutionRequest,
+  ): Promise<ProtectedOperationExecution> => executeWith(dependencies, request);
 
   return Object.freeze({
     /**
@@ -1293,13 +1318,16 @@ export const createProtectedOperationExecutor = (
      * remain person-owned; a system actor is refused rather than converted into a person.
      */
     async executeDurableActor<Result>(
-      request: DurableProtectedOperationExecutionRequest & Readonly<{
-        effect: (
-          transaction: RequestDatabaseTransaction,
-          executeOperation: () => Promise<DurableProtectedOperationExecution>,
-        ) => Promise<Result>;
-      }>,
-    ): Promise<Readonly<{ kind: "available"; value: Result }> | Readonly<{ kind: "refused" | "failed" }>> {
+      request: DurableProtectedOperationExecutionRequest &
+        Readonly<{
+          effect: (
+            transaction: RequestDatabaseTransaction,
+            executeOperation: () => Promise<DurableProtectedOperationExecution>,
+          ) => Promise<Result>;
+        }>,
+    ): Promise<
+      Readonly<{ kind: "available"; value: Result }> | Readonly<{ kind: "refused" | "failed" }>
+    > {
       const refuse = (code: string, cause?: unknown): Readonly<{ kind: "refused" }> => {
         logRefusal("protected-operation", "durable actor execution", code, cause);
         return { kind: "refused" };
@@ -1354,10 +1382,12 @@ export const createProtectedOperationExecutor = (
             : "access_change",
           async (transaction, scope) => {
             const policy = context.data.policy;
-            if (policy.kind !== "initiating_person" ||
-                scope.actor.kind !== "organization_account" ||
-                scope.actor.organizationAccountId.toLowerCase() !==
-                  policy.initiator.organizationAccountId.toLowerCase())
+            if (
+              policy.kind !== "initiating_person" ||
+              scope.actor.kind !== "organization_account" ||
+              scope.actor.organizationAccountId.toLowerCase() !==
+                policy.initiator.organizationAccountId.toLowerCase()
+            )
               throw Object.assign(new Error("DURABLE_OPERATION_ACTOR_MISMATCH"), { code: "42501" });
             const session = identitySessionSchema.parse({
               identityId: policy.initiator.identityId,

@@ -591,7 +591,7 @@
           "required": true
         },
         "starts_at": {
-          "type": "text",
+          "type": "date_time",
           "required": false
         },
         "expires_at": {
@@ -668,7 +668,7 @@
           "required": true
         },
         "starts_at": {
-          "type": "text",
+          "type": "date_time",
           "required": false
         },
         "expires_at": {
@@ -678,6 +678,14 @@
       },
       "outputs": {
         "role_assignment_id": {
+          "type": "text",
+          "required": true
+        },
+        "role_name": {
+          "type": "text",
+          "required": true
+        },
+        "assignee_name": {
           "type": "text",
           "required": true
         },
@@ -1182,7 +1190,7 @@
           "required": true
         },
         "expires_at": {
-          "type": "text",
+          "type": "date_time",
           "required": true
         }
       },

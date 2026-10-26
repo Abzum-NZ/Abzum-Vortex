@@ -1624,15 +1624,15 @@
                         }
                       },
                       {
-                        "type": "platform.renderer.text_input",
+                        "type": "platform.renderer.field_input",
                         "props": {
                           "id": "input_add_group_membership_starts_at",
-                          "name": "starts_at",
-                          "label": "Starts at",
-                          "required": false,
+                          "field": "vortex.system_directory:group_membership.starts_at",
+                          "label": "Starts",
+                          "help_text": "Starts now unless you pick a later time. Times are in the organisation time zone.",
                           "vortex": {
                             "block": {
-                              "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                              "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
                               "release_version": "1.0.0"
                             },
                             "responsive": {
@@ -1650,15 +1650,15 @@
                         }
                       },
                       {
-                        "type": "platform.renderer.text_input",
+                        "type": "platform.renderer.field_input",
                         "props": {
                           "id": "input_add_group_membership_expires_at",
-                          "name": "expires_at",
-                          "label": "Expires at",
-                          "required": false,
+                          "field": "vortex.system_directory:group_membership.expires_at",
+                          "label": "Ends",
+                          "help_text": "Leave empty for no end date.",
                           "vortex": {
                             "block": {
-                              "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                              "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
                               "release_version": "1.0.0"
                             },
                             "responsive": {
@@ -1961,15 +1961,15 @@
                         }
                       },
                       {
-                        "type": "platform.renderer.text_input",
+                        "type": "platform.renderer.field_input",
                         "props": {
                           "id": "input_assign_role_assignment_person_starts_at",
-                          "name": "starts_at",
-                          "label": "Starts at",
-                          "required": false,
+                          "field": "vortex.system_directory:role_assignment.starts_at",
+                          "label": "Starts",
+                          "help_text": "Starts now unless you pick a later time. Times are in the organisation time zone.",
                           "vortex": {
                             "block": {
-                              "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                              "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
                               "release_version": "1.0.0"
                             },
                             "responsive": {
@@ -1987,15 +1987,15 @@
                         }
                       },
                       {
-                        "type": "platform.renderer.text_input",
+                        "type": "platform.renderer.field_input",
                         "props": {
                           "id": "input_assign_role_assignment_person_expires_at",
-                          "name": "expires_at",
-                          "label": "Expires at",
-                          "required": false,
+                          "field": "vortex.system_directory:role_assignment.expires_at",
+                          "label": "Ends",
+                          "help_text": "Leave empty for no end date.",
                           "vortex": {
                             "block": {
-                              "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                              "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
                               "release_version": "1.0.0"
                             },
                             "responsive": {
@@ -2105,15 +2105,15 @@
                         }
                       },
                       {
-                        "type": "platform.renderer.text_input",
+                        "type": "platform.renderer.field_input",
                         "props": {
                           "id": "input_assign_role_assignment_group_starts_at",
-                          "name": "starts_at",
-                          "label": "Starts at",
-                          "required": false,
+                          "field": "vortex.system_directory:role_assignment.starts_at",
+                          "label": "Starts",
+                          "help_text": "Starts now unless you pick a later time. Times are in the organisation time zone.",
                           "vortex": {
                             "block": {
-                              "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                              "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
                               "release_version": "1.0.0"
                             },
                             "responsive": {
@@ -2131,15 +2131,15 @@
                         }
                       },
                       {
-                        "type": "platform.renderer.text_input",
+                        "type": "platform.renderer.field_input",
                         "props": {
                           "id": "input_assign_role_assignment_group_expires_at",
-                          "name": "expires_at",
-                          "label": "Expires at",
-                          "required": false,
+                          "field": "vortex.system_directory:role_assignment.expires_at",
+                          "label": "Ends",
+                          "help_text": "Leave empty for no end date.",
                           "vortex": {
                             "block": {
-                              "block_id": "15b2d6f6-228d-4248-84be-1f8f45e204fc",
+                              "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
                               "release_version": "1.0.0"
                             },
                             "responsive": {
@@ -4961,10 +4961,9 @@
                     }
                   },
                   "starts_at": {
-                    "kind": "literal",
-                    "literal": {
-                      "type": "text",
-                      "value": ""
+                    "kind": "formula",
+                    "formula": {
+                      "op": "now"
                     }
                   },
                   "expires_at": {
@@ -5101,6 +5100,33 @@
                 }
               }
             }
+          },
+          {
+            "id": "member_added",
+            "type": "interface.show_message",
+            "version": "1.0.0",
+            "properties": {
+              "message": {
+                "kind": "formula",
+                "formula": {
+                  "op": "join",
+                  "parts": [
+                    {
+                      "op": "literal",
+                      "type": "text",
+                      "value": "The person is now in the Group."
+                    }
+                  ]
+                }
+              },
+              "tone": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "success"
+                }
+              }
+            }
           }
         ],
         "outputs": {}
@@ -5226,10 +5252,9 @@
                             }
                           },
                           "starts_at": {
-                            "kind": "literal",
-                            "literal": {
-                              "type": "text",
-                              "value": ""
+                            "kind": "formula",
+                            "formula": {
+                              "op": "now"
                             }
                           },
                           "expires_at": {
@@ -5434,6 +5459,56 @@
                         }
                       }
                     }
+                  },
+                  {
+                    "id": "assigned_person",
+                    "type": "interface.show_message",
+                    "version": "1.0.0",
+                    "properties": {
+                      "message": {
+                        "kind": "formula",
+                        "formula": {
+                          "op": "join",
+                          "parts": [
+                            {
+                              "op": "reference",
+                              "reference": {
+                                "source": "task_output",
+                                "task": "call_person",
+                                "key": "result",
+                                "path": ["assignee_name"]
+                              }
+                            },
+                            {
+                              "op": "literal",
+                              "type": "text",
+                              "value": " now has the "
+                            },
+                            {
+                              "op": "reference",
+                              "reference": {
+                                "source": "task_output",
+                                "task": "call_person",
+                                "key": "result",
+                                "path": ["role_name"]
+                              }
+                            },
+                            {
+                              "op": "literal",
+                              "type": "text",
+                              "value": " role."
+                            }
+                          ]
+                        }
+                      },
+                      "tone": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "success"
+                        }
+                      }
+                    }
                   }
                 ]
               },
@@ -5474,10 +5549,9 @@
                             }
                           },
                           "starts_at": {
-                            "kind": "literal",
-                            "literal": {
-                              "type": "text",
-                              "value": ""
+                            "kind": "formula",
+                            "formula": {
+                              "op": "now"
                             }
                           },
                           "expires_at": {
@@ -5679,6 +5753,56 @@
                               "path": ["expires_at"]
                             }
                           }
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "id": "assigned_group",
+                    "type": "interface.show_message",
+                    "version": "1.0.0",
+                    "properties": {
+                      "message": {
+                        "kind": "formula",
+                        "formula": {
+                          "op": "join",
+                          "parts": [
+                            {
+                              "op": "reference",
+                              "reference": {
+                                "source": "task_output",
+                                "task": "call_group",
+                                "key": "result",
+                                "path": ["assignee_name"]
+                              }
+                            },
+                            {
+                              "op": "literal",
+                              "type": "text",
+                              "value": " now has the "
+                            },
+                            {
+                              "op": "reference",
+                              "reference": {
+                                "source": "task_output",
+                                "task": "call_group",
+                                "key": "result",
+                                "path": ["role_name"]
+                              }
+                            },
+                            {
+                              "op": "literal",
+                              "type": "text",
+                              "value": " role."
+                            }
+                          ]
+                        }
+                      },
+                      "tone": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "success"
                         }
                       }
                     }
