@@ -338,7 +338,7 @@ export const newBlockItem = (
             .map((identity) => [repeatableSlotKey(slot.key, identity), []]),
         ),
       ),
-      ...studioStarterSlots(catalogue, release, taken, shownByFlow),
+      ...studioStarterSlots(catalogue, release, taken, shownByFlow, source),
       vortex: {
         block: { block_id: release.blockId, release_version: release.releaseVersion },
         ...(query === null ? {} : { query }),

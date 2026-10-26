@@ -699,7 +699,9 @@ export function useStudioDraft({
       if (next.isSaving) return;
       // An edit after a refusal or a failure is a new attempt; a conflict waits for the latest draft.
       if (next.isDirty && statusRef.current.kind !== "conflict") {
-        if (statusRef.current.kind !== "saving") setStatus({ kind: "saving" });
+        // Keep an unconfirmed save visible while its retry (or a newer edit) is in flight.
+        if (statusRef.current.kind !== "saving" && statusRef.current.kind !== "failed")
+          setStatus({ kind: "saving" });
         if (saving.current === null) scheduleSave(autosaveDelayMs);
       } else if (
         !next.isDirty &&

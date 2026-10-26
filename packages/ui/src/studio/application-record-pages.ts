@@ -7,6 +7,7 @@ import {
   standardPermissionKey,
   type SourceFlow,
   type SourceItem,
+  type ImmutablePlatformBlockCatalogue,
 } from "@vortex/platform/schema";
 import { applyStudioFlowCreate, type StudioFlowCreateCommand } from "./application-flow-create";
 import { ensureStudioRecordQuery } from "./default-record-query";
@@ -474,7 +475,7 @@ const openFlow = (
   );
 
 /** Finds a placed block by alias in the current draft, with the list that holds it. */
-const placed = (
+export const placed = (
   source: Source,
   alias: string,
 ): Readonly<{ item: SourceItem; siblings: SourceItem[] }> | undefined => {
@@ -532,7 +533,7 @@ const openButton = (
   const button = blockItem(
     release(context, PLATFORM_BLOCK_RELEASE_IDENTITIES.BUTTON_BLOCK_RELEASE, "button"),
     alias,
-    { label, action_kind: "action", variant: "secondary" },
+    { label, action_kind: "action", variant: "primary" },
     {},
     { view_permission: permission },
   );
@@ -541,7 +542,20 @@ const openButton = (
     const holder = placed(plan.source, place.beside);
     if (holder === undefined)
       return refuse(`The block ${quoted(place.beside)} is no longer in the draft.`);
-    holder.siblings.splice(holder.siblings.indexOf(holder.item), 0, button);
+    const preceding = holder.siblings[holder.siblings.indexOf(holder.item) - 1];
+    const header =
+      holder.item.type === "platform.renderer.heading"
+        ? holder.item
+        : holder.item.type === "platform.renderer.table" &&
+            preceding?.type === "platform.renderer.heading"
+          ? preceding
+          : undefined;
+    if (header === undefined)
+      holder.siblings.splice(holder.siblings.indexOf(holder.item), 0, button);
+    else {
+      if (!Array.isArray(header.props.actions)) header.props.actions = [];
+      (header.props.actions as SourceItem[]).push(button);
+    }
   }
   openFlow(plan, alias, "action", label, target, resolved);
   return alias;
@@ -631,7 +645,6 @@ const addList = (
     release(context, PLATFORM_BLOCK_RELEASE_IDENTITIES.TABLE_BLOCK_RELEASE, "records table"),
     tableAlias,
     {
-      title: listName ?? record.plural_name,
       empty_message: `There are no ${record.plural_name.toLowerCase()} yet.`,
       columns: tableColumns((entry) => field(resolved, entry), columns, title.key),
     },
@@ -639,7 +652,15 @@ const addList = (
     { query: query.reference },
   );
   const name = listName ?? record.plural_name.slice(0, 60);
-  const items = [table];
+  const items = [
+    blockItem(
+      release(context, PLATFORM_BLOCK_RELEASE_IDENTITIES.HEADING_BLOCK_RELEASE, "heading"),
+      freshAlias(plan, `heading_${record.key}`),
+      { text: name, level: "two" },
+      { actions: [] },
+    ),
+    table,
+  ];
   const placedPage = placeNewPage(
     plan.source,
     name,
@@ -830,6 +851,38 @@ const relatedTables = (
     ),
   );
 
+/** The same ordinary Record detail block for a generated page and a record side sheet. */
+export const studioRecordDetailItem = (
+  catalogue: ImmutablePlatformBlockCatalogue,
+  source: Source,
+  reference: string,
+  alias: string,
+  recordFrom?: string,
+): SourceItem => {
+  const resolved = resolveRecordType(source, reference);
+  const record = resolved.record;
+  const detail = blockRelease(
+    catalogue,
+    PLATFORM_BLOCK_RELEASE_IDENTITIES.RECORD_DETAIL_BLOCK_RELEASE,
+  );
+  if (detail === undefined) return refuse("The block catalogue has no Record detail block.");
+  return blockItem(
+    detail,
+    alias,
+    {
+      title: record.name,
+      heading_source: "field",
+      heading_field: field(resolved, resolved.title),
+      [STUDIO_ROW_ACTION_EVENT_SETTING]: studioRowActionEventId(alias),
+      ...(recordFrom === undefined ? {} : { record_from: recordFrom }),
+      detail_fields: record.fields
+        .filter((entry) => entry.type !== "attachment" && resolved.readable.has(entry.key))
+        .map((entry) => ({ field: field(resolved, entry), label: entry.label })),
+    },
+    {},
+  );
+};
+
 const addDetail = (
   context: StudioStructureContext,
   plan: Plan,
@@ -841,21 +894,11 @@ const addDetail = (
     (entry) => entry.type !== "attachment" && resolved.readable.has(entry.key),
   );
   const detailAlias = freshAlias(plan, `detail_${record.key}`);
-  const detail = blockItem(
-    release(
-      context,
-      PLATFORM_BLOCK_RELEASE_IDENTITIES.RECORD_DETAIL_BLOCK_RELEASE,
-      "record detail",
-    ),
+  const detail = studioRecordDetailItem(
+    context.catalogue,
+    plan.source,
+    resolved.qualified,
     detailAlias,
-    {
-      title: record.name,
-      heading_source: "field",
-      heading_field: field(resolved, resolved.title),
-      [STUDIO_ROW_ACTION_EVENT_SETTING]: studioRowActionEventId(detailAlias),
-      detail_fields: shown.map((entry) => ({ field: field(resolved, entry), label: entry.label })),
-    },
-    {},
   );
   const attachments = record.fields
     .filter((entry) => entry.type === "attachment" && resolved.readable.has(entry.key))

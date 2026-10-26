@@ -30,6 +30,7 @@ import {
 import { applyStudioFlowCreate } from "./application-flow-create";
 import { ensureStudioBoardQuickAdd } from "./board-quick-add";
 import { resolveStudioDataQuery } from "./default-record-query";
+import { ensureStudioRecordSheet } from "./application-record-sheet";
 import { studioLayoutOutletPlacementUses } from "./application-layout-outlets";
 import { createStudioDiscoveryAdapter } from "./discovery-adapter";
 import {
@@ -392,6 +393,11 @@ const applySettings = (
     query = made.query;
   }
   if (board !== undefined && query !== null) ensureStudioBoardTotals(source, board, query);
+  const rowClick = settings.row_click;
+  const sideSheet =
+    rowClick?.kind === "group" &&
+    rowClick.properties.mode?.kind === "choice" &&
+    rowClick.properties.mode.value === "select";
   try {
     const working = workingCopy(target.region);
     const item = workingItem(working, target.steps, alias);
@@ -408,6 +414,7 @@ const applySettings = (
         reason: `${release.name} can't take these settings. ${slotProblem}.`,
       };
     commitWorking(current.catalogue, target.region, working);
+    if (sideSheet) ensureStudioRecordSheet(current.catalogue, source, alias);
     validateStoredApplicationOutlets(current.catalogue, source);
   } catch (error) {
     if (error instanceof StoredCompositionRefusal) {
