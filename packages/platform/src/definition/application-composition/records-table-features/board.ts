@@ -1,5 +1,4 @@
-import { queryTotalLabel } from "../../module-query-edit";
-import { queryTotalOperationLabels } from "../../module-query-totals";
+import { queryTotalLabel, queryTotalOperationLabels } from "../../module-query-totals";
 import {
   featureAvailable,
   featureEnabled,

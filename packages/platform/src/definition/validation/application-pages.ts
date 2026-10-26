@@ -32,7 +32,8 @@ import type {
 } from "../application-composition/records-table-features/shared";
 import { calendarMappingSchema, calendarBlockSourceIsSupported } from "../application-contracts";
 import { moduleQueryDefinitionSchema } from "../module-contracts";
-import { queryTotalLabel, queryTotalReferenceProblem } from "../module-query-edit";
+import { queryTotalReferenceProblem } from "../module-query-edit";
+import { queryTotalLabel } from "../module-query-totals";
 import type { ApplicationScope } from "./application-scope";
 
 export function applicationPageRules(scope: ApplicationScope): void {
