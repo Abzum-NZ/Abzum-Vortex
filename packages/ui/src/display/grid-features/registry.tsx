@@ -300,7 +300,7 @@ const gridFeatureViews: readonly GridFeatureView[] = [
   {
     definition: recordsTableConditionalFormattingFeature,
     load: () => import("./conditional-format"),
-    points: ["CellAdornment", "HeaderAdornment"],
+    points: ["CellAdornment", "HeaderAdornment", "ColumnMenuItems"],
   },
   {
     definition: recordsTablePivotFeature,
