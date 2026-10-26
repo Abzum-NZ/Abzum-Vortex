@@ -18,7 +18,7 @@ import {
   ComboboxList,
 } from "../../components/combobox";
 import { Icon } from "../../icons/icon";
-import { parseRecordChoicePage, type RecordChoiceOption } from "../../controls/projected-data";
+import { readRecordChoicePage, type RecordChoiceOption } from "../../controls/projected-data";
 import type { DisplayEventHandlers, DisplayRow } from "../projected-data";
 import type { LinkDraft } from "./edit-values";
 import { waitingForParent } from "../../controls/dependent-field";
@@ -102,7 +102,7 @@ export function RecordChoicePicker({
     )
       .then((answer) => {
         if (generation.current !== request) return;
-        const page = parseRecordChoicePage(answer);
+        const page = readRecordChoicePage(answer);
         setChoices((held) => (append ? [...held, ...page.choices] : page.choices));
         setNext(page.nextContinuationToken);
         setState("idle");

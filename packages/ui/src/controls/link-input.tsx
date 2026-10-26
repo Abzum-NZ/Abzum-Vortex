@@ -31,7 +31,7 @@ import {
 import { useFormFieldValue, useRequiredFormField } from "./form-context";
 import { labelInSentence, waitingForParent } from "./dependent-field";
 import {
-  parseRecordChoicePage,
+  readRecordChoicePage,
   type LinkInputPayload,
   type RecordChoiceOption,
   type TypedRecordReference,
@@ -141,7 +141,7 @@ export function LinkInput(props: LinkInputProps): ReactElement {
     )
       .then((answer) => {
         if (generation.current !== request) return;
-        const page = parseRecordChoicePage(answer, location.current);
+        const page = readRecordChoicePage(answer, location.current);
         setChoices((current) =>
           continuationToken === undefined ? page.choices : [...current, ...page.choices],
         );

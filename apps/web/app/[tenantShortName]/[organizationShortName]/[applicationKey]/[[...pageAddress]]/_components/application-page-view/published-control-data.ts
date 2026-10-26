@@ -1,4 +1,9 @@
-import { isRecord, recordIdSchema, walkPageComposition } from "@vortex/platform/schema";
+import {
+  isIsoCalendarDate,
+  isRecord,
+  recordIdSchema,
+  walkPageComposition,
+} from "@vortex/platform/schema";
 import type { RecordChoicePage } from "@vortex/ui";
 import type { ApplicationPageModel } from "../../../../../../_lib/application-page";
 
@@ -37,6 +42,9 @@ export function publishedControlData(
   const kind = model.pageParameters.controlKinds[id];
   const value = search.get(name);
   const ready = data as { status?: string; values?: Record<string, unknown> } | undefined;
+  // A control the server did not publish as ready (disabled, refused, loading) stays as it is: the
+  // address never makes it usable.
+  if (ready !== undefined && ready.status !== "ready") return data;
   // URL values are untrusted. Static choices live in the projected placement settings; dynamic
   // choices live in its protected payload. Validate against the same list the control renders.
   const choiceValue = (payload: Record<string, unknown> | undefined): string | null => {
@@ -60,7 +68,11 @@ export function publishedControlData(
         value:
           kind === "choice_input"
             ? choiceValue(ready?.values)
-            : (value ?? (kind === "text_input" ? "" : null)),
+            : kind === "date_input"
+              ? value !== null && isIsoCalendarDate(value)
+                ? value
+                : null
+              : (value ?? ""),
       },
     };
   if (kind === "field_input") {

@@ -9,6 +9,7 @@ export * from "./connections/index";
 export * from "./records/index";
 export * from "./queries/index";
 export * from "./pages/index";
+export * from "./pages/control-data";
 export * from "./rules/index";
 export * from "./workflows/index";
 export * from "./files/index";

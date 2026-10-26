@@ -55,7 +55,9 @@ import {
 } from "./placement-helpers";
 import {
   isApplicationLauncherPlacement,
+  isControlPayload,
   logPlacementFailure,
+  readyControlData,
   controlSelectedRecordType,
   pageQueryBindingContext,
   placementParameterDependencies,
@@ -816,6 +818,14 @@ const loadApplicationPageJoined = async (
       : { recordTypeId: String((subjectRecordType ?? formRecordType)!.recordTypeId) }),
     ...(subject === undefined ? {} : { recordId: subject.recordId }),
   });
+  // Every control payload the page carries is now built: each is checked once against its control
+  // kind's contract here, so the renderer renders it without parsing it again. (Display payloads
+  // were checked where their placement read built them.)
+  for (const [placementId, state] of Object.entries(data))
+    if (state.status === "ready" && isControlPayload(state.values))
+      data[placementId] = readyControlData(state.values, (cause) =>
+        logPlacementFailure(address, placementId, "placement_payload_invalid", cause),
+      );
   if (subjectUnreadable) return { kind: "unavailable" };
   if (typeof page.accessVersion !== "number" || !Number.isSafeInteger(page.accessVersion))
     throw new Error("APPLICATION_PAGE_ACCESS_VERSION_UNAVAILABLE");

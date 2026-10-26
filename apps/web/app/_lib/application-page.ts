@@ -4,6 +4,7 @@ import "server-only";
 import {
   createReferenceChoiceService,
   projectReferenceChoiceInputValues,
+  readyControlData,
 } from "@vortex/platform/server";
 import type {
   IdentitySession,
@@ -149,9 +150,12 @@ export const loadReferenceChoicePage = async (
       pageChoices.some((choice) => choice.key === selectedChoice?.key)
         ? pageChoices
         : [selectedChoice, ...pageChoices];
-    return {
-      kind: "completed",
-      values: projectReferenceChoiceInputValues(choices, selectedChoice?.key ?? null, undefined, {
+    // The page of choices is checked once against the choice input contract here, where it is built.
+    const values = projectReferenceChoiceInputValues(
+      choices,
+      selectedChoice?.key ?? null,
+      undefined,
+      {
         ...(request.search === undefined ? {} : { search: request.search }),
         ...(request.continuationToken === undefined
           ? {}
@@ -162,8 +166,13 @@ export const loadReferenceChoicePage = async (
         ...(Object.keys(selectedEvidenceOverride).length === 0
           ? {}
           : { optionEvidenceOverrides: selectedEvidenceOverride }),
-      }),
-    };
+      },
+    );
+    const page = readyControlData(values, (cause) =>
+      logRefusal("reference-choices", "choice page", "reference_choice_page_invalid", cause),
+    );
+    if (page.status !== "ready") return { kind: "temporarily_unavailable" };
+    return { kind: "completed", values };
   } catch (cause) {
     logRefusal("reference-choices", "choice page", "reference_choice_page_unavailable", cause);
     return { kind: "temporarily_unavailable" };

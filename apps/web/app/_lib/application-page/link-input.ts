@@ -20,6 +20,7 @@ import {
   sameId,
   type BlockPropertyValueContract,
   type IdentitySession,
+  recordChoicePageSchema,
 } from "@vortex/platform/schema";
 import { getQueryContinuationKey } from "../query-continuation-key";
 import {
@@ -448,11 +449,17 @@ export const loadRecordChoicePage = async (
   if (read.kind !== "available") return { kind: "refused", cause: `request_${read.kind}` };
   if (read.value.outcome !== "completed")
     return { kind: "refused", cause: `query_${read.value.reasonCode}` };
-  return {
-    kind: "completed",
+  // The page is checked once against the record choice page contract here, where it is built.
+  const page = recordChoicePageSchema.safeParse({
     choices: read.value.choices,
     ...(read.value.nextContinuationToken === undefined
       ? {}
       : { nextContinuationToken: read.value.nextContinuationToken }),
-  };
+  });
+  if (!page.success)
+    return {
+      kind: "refused",
+      cause: `choice_page_invalid ${page.error.issues[0]?.path.map(String).join(".")}`,
+    };
+  return { kind: "completed", ...page.data };
 };
