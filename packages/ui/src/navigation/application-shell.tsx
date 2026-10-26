@@ -219,6 +219,8 @@ function ApplicationSwitcher({
   const source = useContext(ApplicationSwitcherContext);
   const [switcher, setSwitcher] = useState<ApplicationSwitcherData>();
   const requestToken = useRef(0);
+  const intentStarted = useRef(false);
+  const intentRead = useRef<Promise<void> | undefined>(undefined);
   useEffect(
     () => () => {
       requestToken.current += 1;
@@ -238,12 +240,39 @@ function ApplicationSwitcher({
         setSwitcher({ state: "temporarily_unavailable", applications: [] });
     }
   };
+  const readOnIntent = (event: { currentTarget: HTMLElement }) => {
+    // Serve the visible page first. An early hover never competes with its streamed data or a
+    // pending page change; a later pointer entry or keyboard focus can still express intent.
+    const root = event.currentTarget.closest("[data-vortex-puck-root]");
+    if (
+      intentStarted.current ||
+      document.readyState !== "complete" ||
+      root === null ||
+      root.querySelector('[data-vortex-display-state="loading"], [data-vortex-page-transition]') !==
+        null
+    )
+      return;
+    intentStarted.current = true;
+    intentRead.current = read();
+  };
+  // Intent that ends without an open discards its list, so a later open reads current authority.
+  const dropIntent = () => {
+    if (intentRead.current === undefined) return;
+    intentRead.current = undefined;
+    requestToken.current += 1;
+    setSwitcher(undefined);
+  };
   return (
     <DropdownMenu
       onOpenChange={(open) => {
-        if (open) void read();
-        else {
+        if (open) {
+          // The first open consumes the intent read, including one still in flight. Later opens
+          // read again, so closing the menu never retains its application list for another open.
+          if (intentRead.current === undefined) void read();
+          intentRead.current = undefined;
+        } else {
           requestToken.current += 1;
+          intentRead.current = undefined;
           setSwitcher(undefined);
         }
       }}
@@ -251,6 +280,10 @@ function ApplicationSwitcher({
       <DropdownMenuTrigger
         disabled={source === undefined || actions === null}
         aria-label={`Application: ${applicationName}`}
+        onPointerEnter={readOnIntent}
+        onFocus={readOnIntent}
+        onPointerLeave={dropIntent}
+        onBlur={dropIntent}
         render={
           <Button variant="ghost" size="sm" className="max-w-56 max-sm:min-h-11 max-sm:min-w-11" />
         }

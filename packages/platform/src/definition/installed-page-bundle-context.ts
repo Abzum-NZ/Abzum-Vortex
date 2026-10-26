@@ -27,7 +27,6 @@ import {
   type HumanInstalledRuntimeContextDependencies,
   type InstalledRuntimeContext,
 } from "./installed-runtime-context";
-import { loadHumanPreviewRuntimeContext } from "./preview-runtime-context";
 import { readInstalledRecordContributions } from "./installed-record-contributions";
 
 type InstalledPageBundleIdentityEvidence = Readonly<{
@@ -266,8 +265,10 @@ export const createHumanInstalledPageBundleContextLoader = (
   return Object.freeze({
     async load(): Promise<InstalledRuntimeContext> {
       // A preview request runs the preview's stored release set, never the live bundle.
-      if (dependencies.scope.previewInstallationId !== undefined)
+      if (dependencies.scope.previewInstallationId !== undefined) {
+        const { loadHumanPreviewRuntimeContext } = await import("./preview-runtime-context");
         return loadHumanPreviewRuntimeContext(dependencies.transaction, dependencies.scope);
+      }
       const installation = await readHumanActiveInstallation({
         activeInstallationReader: repository,
         scope: dependencies.scope,
