@@ -2,9 +2,10 @@ import type { RecordsTableContract } from "../definition/application-composition
 import type { GridLayout } from "./grid-view-state";
 
 /*
- * How a grid's layout is resolved from its authored columns and a person's stored layout: plain
- * functions over the layout types, apart from the layout contracts, so the grid in the browser
- * resolves its layout without loading the contracts.
+ * How a grid's layout is resolved from its authored columns and a person's stored layout, and the
+ * format-rule limit: plain functions and values over the layout types, apart from the layout
+ * contracts, so the grid in the browser resolves its layout and checks the limit without loading
+ * the contracts.
  */
 
 /** The most personal formatting rules one view stores. */
