@@ -66,11 +66,6 @@ export {
   type OrganizationAccessOperationResult,
 } from "./organization-access-decision-access";
 export {
-  createOrganizationDirectRecordShareService,
-  type FixedOrganizationDirectRecordShareAdapter,
-  type OrganizationDirectRecordShareDependencies,
-} from "./organization-direct-record-share";
-export {
   createRecordShareGrantService,
   type RecordShareGrantDependencies,
   type RecordShareGrantState,

@@ -9,9 +9,7 @@ import {
 } from "../db/request-transaction";
 import { z } from "zod";
 import {
-  protectedNodeRunRecordSchema,
   protectedNodeRegisteredRunSchema,
-  type ProtectedNodeRunRecord,
   type ProtectedNodeRegisteredRun,
   type ProtectedNodeEffectClaim,
   type ProtectedNodeEffectKey,
@@ -20,10 +18,8 @@ import {
 } from "./protected-node-execution";
 
 type RunRecordRow = DatabaseRow & { readonly run_record: unknown };
-type RunWriteRow = DatabaseRow & { readonly written: unknown };
 type RunRefreshRow = DatabaseRow & { readonly refreshed: unknown };
 
-const objectResult = z.object({ written: z.boolean() });
 const refreshResult = z.object({ refreshed: z.boolean() });
 const effectClaimResult = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("claimed") }),
@@ -43,29 +39,6 @@ const asJson = (value: unknown): string => JSON.stringify(value);
  * The private retained-run store and callback effect ledger. Kestra identifiers remain private to
  * this server-side store.
  */
-
-/** Records one exact run mapping once Kestra accepts it; the flow-start path owns this write. */
-export const writeProtectedNodeRun = async (candidate: unknown): Promise<boolean> => {
-  const parsed = protectedNodeRunRecordSchema.safeParse(candidate);
-  if (!parsed.success) return false;
-  const record: ProtectedNodeRunRecord = parsed.data;
-  const identityId =
-    record.authority.runAs === "initiating_person"
-      ? (record.authority.initiator?.identityId ?? null)
-      : null;
-  const rows = await withRuntimeTransaction((transaction) =>
-    transaction.query<RunWriteRow>`
-      select vortex_platform.write_protected_workflow_run(
-        ${record.authority.runId}::uuid,
-        ${record.authority.organizationId}::uuid,
-        ${identityId}::uuid,
-        ${asJson(record)}::text::jsonb
-      ) as written
-    `,
-  );
-  const row = rows.length === 1 ? objectResult.safeParse({ written: rows[0]?.written }) : undefined;
-  return row?.success === true && row.data.written;
-};
 
 /** Reads one retained run with its exact registration and release proof. */
 export const readProtectedNodeRun = async (

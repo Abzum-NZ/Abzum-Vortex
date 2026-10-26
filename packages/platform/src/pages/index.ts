@@ -214,16 +214,6 @@ export {
   type PrivateFormDraftServiceDependencies,
 } from "./form-drafts";
 export {
-  createPrivateFormContinuationAdapter,
-  type PrivateFormContinuationAdapter,
-  type PrivateFormContinuationDependencies,
-  type PrivateFormContinuationDraft,
-  type PrivateFormContinuationDraftDisposition,
-  type PrivateFormContinuationDraftPort,
-  type PrivateFormContinuationInput,
-  type PrivateFormContinuationResult,
-} from "./form-continuation";
-export {
   adaptPrivateFormSubmit,
   readPrivateFormSubmission,
   type PrivateFormSubmission,

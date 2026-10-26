@@ -109,4 +109,3 @@ export {
   type ProtectedNodeRunStatus,
 } from "./protected-node-execution";
 
-export { writeProtectedNodeRun } from "./protected-node-store";
