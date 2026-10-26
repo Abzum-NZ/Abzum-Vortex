@@ -62,6 +62,9 @@ export const finishedNotice = (
       ? failedUnchangedNotice
       : (outcomeNotices[outcome ?? "failed"] ?? unavailableNotice);
 
+/** Signing in again for a recent sign-in; the dispatcher adds where to come back to. */
+export const reauthenticationPath = "/auth/session-ended?status=reauthenticate";
+
 const iamPeople = {
   link_label: "Open IAM People",
   destination: { application_key: "vortex.app.iam", page_key: "iam_people" },
@@ -73,7 +76,7 @@ export const refusalNotices: Readonly<
   Object.entries(flowRefusalFeedbackSentences).map(([code, text]) => [
     code,
     code === "recent_authentication_required"
-      ? { tone: "problem", text, link: { label: "Sign in again", href: "/auth/session-ended" } }
+      ? { tone: "problem", text, link: { label: "Sign in again", href: reauthenticationPath } }
       : { tone: "problem", text },
   ]),
 ) as Readonly<Record<Extract<FormFlowFeedback, { kind: "refusal" }>["code"], Notice>>;

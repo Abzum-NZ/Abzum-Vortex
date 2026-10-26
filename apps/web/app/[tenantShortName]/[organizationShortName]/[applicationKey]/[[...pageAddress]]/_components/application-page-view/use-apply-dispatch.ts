@@ -13,6 +13,7 @@ import type { ControlReport, DispatchOutcome, Notice, TableContinuationTarget } 
 import {
   unavailableNotice,
   finishedNotice,
+  reauthenticationPath,
   refusalNotices,
   refusalDestinations,
   outcomeNotices,
@@ -216,6 +217,24 @@ export function useApplyDispatch({
                   : `${diagnostic.presentation?.message ?? reason.text} ${resultNotice.text}`,
             };
           }
+          // Signing in again comes back to this page and record, where the person can retry.
+          if (resultNotice.link?.href === reauthenticationPath)
+            resultNotice = {
+              ...resultNotice,
+              link: {
+                ...resultNotice.link,
+                href: `${reauthenticationPath}&${new URLSearchParams({
+                  continuation: JSON.stringify({
+                    kind: "application_page",
+                    tenantShortName: model.invocation.tenantShortName,
+                    organizationShortName: model.invocation.organizationShortName,
+                    applicationKey: model.invocation.applicationKey,
+                    pageKey: model.invocation.pageKey,
+                    ...(model.subject === undefined ? {} : { recordId: model.subject.recordId }),
+                  }),
+                })}`,
+              },
+            };
           if (
             afterAccepted !== undefined &&
             ["completed", "committed", "background_pending"].includes(server.descriptor.outcome)

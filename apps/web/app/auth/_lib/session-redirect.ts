@@ -61,5 +61,12 @@ export const continueSessionOrEnd = async (
   continuation?: SignInContinuation,
 ): Promise<ContinuingIdentitySession> => {
   if (result.kind === "active" || result.kind === "temporarily_unavailable") return result;
+  // Nobody was signed in: a plain sign-in that returns to the address, not "your session ended".
+  if (result.kind === "missing") {
+    const query = new URLSearchParams();
+    if (continuation !== undefined)
+      query.set("continuation", serializeSignInContinuation(continuation));
+    redirect(query.size === 0 ? "/auth/sign-in" : `/auth/sign-in?${query.toString()}`);
+  }
   return redirectToSessionEnd(continuation);
 };

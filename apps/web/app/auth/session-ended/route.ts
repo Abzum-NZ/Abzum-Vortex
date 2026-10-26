@@ -14,7 +14,11 @@ import { revokeIdentitySession } from "../_lib/session-server";
 import { privateResponse } from "../../_lib/private-response";
 import { mapWebError } from "../../_lib/web-error-mapper";
 
-const destinationPath = "/auth/sign-in?status=session-ended";
+/** Where ending the session leads: "your session ended", or "confirm it's you" for a recent sign-in. */
+const destinationPathFor = (status: string | null): string =>
+  status === "reauthenticate"
+    ? "/auth/sign-in?status=reauthenticate"
+    : "/auth/sign-in?status=session-ended";
 
 const allowsSessionEnd = (request: NextRequest, siteUrl: string): boolean => {
   const configuredOrigin = new URL(siteUrl).origin;
@@ -35,7 +39,7 @@ export function GET(request: NextRequest): NextResponse {
   let destination: URL;
   try {
     siteUrl = getIdentityJourneyConfiguration().siteUrl;
-    destination = new URL(destinationPath, siteUrl);
+    destination = new URL(destinationPathFor(request.nextUrl.searchParams.get("status")), siteUrl);
     const continuation = parseSingleSignInContinuation(
       request.nextUrl.searchParams.getAll("continuation"),
     );
@@ -43,7 +47,10 @@ export function GET(request: NextRequest): NextResponse {
       destination.searchParams.set("continuation", serializeSignInContinuation(continuation));
   } catch (error) {
     siteUrl = undefined;
-    destination = new URL(destinationPath, request.url);
+    destination = new URL(
+      destinationPathFor(request.nextUrl.searchParams.get("status")),
+      request.url,
+    );
     mapWebError(error, {
       route: "auth/session-ended",
       operation: "resolve-site-url",

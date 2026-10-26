@@ -21,7 +21,8 @@ import {
   applicationLauncherEventIds,
   openPermittedApplication,
 } from "../../_components/open-application";
-import { applicationHomeContinuationFromAddress } from "../../../../auth/_lib/sign-in-continuation";
+import { applicationPageContinuationFromAddress } from "../../../../auth/_lib/sign-in-continuation";
+import { pageSubjectParameter } from "../../../../_lib/application-page/placement-helpers";
 import { continueSessionOrEnd } from "../../../../auth/_lib/session-redirect";
 import {
   resolveIdentitySession,
@@ -96,16 +97,17 @@ export default function ApplicationAddressPage(props: ApplicationAddressPageProp
 async function readApplicationAddressPage({ params, searchParams }: ApplicationAddressPageProps) {
   const { tenantShortName, organizationShortName, applicationKey, pageAddress } = await params;
   const pageSegments = pageAddress ?? [];
-  const continuation = applicationHomeContinuationFromAddress(
+  const parameters = await searchParams;
+  const continuation = applicationPageContinuationFromAddress(
     tenantShortName,
     organizationShortName,
     [applicationKey, ...pageSegments],
+    parameters[pageSubjectParameter],
   );
   const { resolution, email } = await resolveIdentitySessionWithEmail();
   const identity = await continueSessionOrEnd(resolution, continuation);
   // A read that cannot be made right now (an overloaded or stopped request) is retried at this same
   // address, so a transient failure never sends the person to another application.
-  const parameters = await searchParams;
   const query = new URLSearchParams(
     Object.entries(parameters).flatMap(([key, value]) =>
       (Array.isArray(value) ? value : value === undefined ? [] : [value]).map(

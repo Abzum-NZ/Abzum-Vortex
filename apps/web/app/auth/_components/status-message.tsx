@@ -16,6 +16,7 @@ const messages: Readonly<Record<string, string>> = {
   unavailable: "Sign-in is temporarily unavailable. Please try again shortly.",
   "signed-out": "This browser session has ended.",
   "session-ended": "Your session has ended. Sign in again to continue.",
+  reauthenticate: "Confirm it's you: sign in again to continue where you were.",
 };
 
 export function StatusMessage({ status }: StatusMessageProps) {
