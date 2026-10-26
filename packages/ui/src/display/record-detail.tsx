@@ -58,7 +58,10 @@ export function RecordDetailDisplay(props: DisplayRenderProps<RecordDetailPayloa
               ? []
               : [{ ...projected, label: declared.label ?? projected.label }];
           });
+  const actions = props.slots.actions ?? undefined;
   const hasHeader = title !== undefined || events?.refresh !== undefined;
+  // An actions slot with no placements adds nothing: its band shows only once a placement is in it.
+  const headerClassName = cn(!hasHeader && "hidden has-[[data-vortex-layout-wrapper]]:block");
 
   return (
     <DisplayStateContainer
@@ -77,17 +80,24 @@ export function RecordDetailDisplay(props: DisplayRenderProps<RecordDetailPayloa
           role="region"
           aria-label={accessibleName}
         >
-          {hasHeader ? (
-            <CardHeader
-              className="*:mb-0"
-              // The heading shows a field's value, so a projection refresh can find it on screen.
-              data-vortex-field-key={contract?.headingField}
-              data-vortex-heading-field-key={contract?.headingField}
-            >
-              <DisplayHeader title={title} accessibleName={accessibleName} events={events} />
-            </CardHeader>
+          {hasHeader || actions !== undefined ? (
+            <div className={headerClassName}>
+              <CardHeader
+                className="*:mb-0"
+                // The heading shows a field's value, so a projection refresh can find it on screen.
+                data-vortex-field-key={contract?.headingField}
+                data-vortex-heading-field-key={contract?.headingField}
+              >
+                <DisplayHeader
+                  title={title}
+                  accessibleName={accessibleName}
+                  events={events}
+                  actions={actions}
+                />
+              </CardHeader>
+              <Separator />
+            </div>
           ) : null}
-          {hasHeader ? <Separator /> : null}
           <CardContent className="flex flex-col items-start gap-4">
             <dl className="grid w-full grid-cols-1 gap-4 sm:grid-cols-2">
               {fields.map((field) => (

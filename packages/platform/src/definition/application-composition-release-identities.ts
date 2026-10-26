@@ -48,8 +48,8 @@ export const PLATFORM_BLOCK_RELEASE_IDENTITIES = Object.freeze({
     blockId: "e2569df0-2f10-4b20-b41d-177b66cd136c",
     key: "platform.display.record_detail",
     rendererKey: "platform.renderer.record_detail",
-    releaseVersion: "1.2.0",
-    contentFingerprint: "sha256:b192b4dacafa819d4c5fa85c6d954ca0aee8f2ccae6ab73f12de893ae7dba47c",
+    releaseVersion: "1.3.0",
+    contentFingerprint: "sha256:cbb857bbfd7e27f8d49a4d5dd3b917b54bcb778be992b179e3dd017163c9b743",
   },
   ATTACHMENT_INPUT_BLOCK_RELEASE: {
     blockId: "9cd96c38-95a1-4bd4-bfaa-0e20c4acb1b9",

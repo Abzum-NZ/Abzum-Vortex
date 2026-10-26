@@ -285,7 +285,7 @@
   "RECORD_DETAIL_BLOCK_RELEASE": {
     "blockId": "e2569df0-2f10-4b20-b41d-177b66cd136c",
     "key": "platform.display.record_detail",
-    "releaseVersion": "1.2.0",
+    "releaseVersion": "1.3.0",
     "name": "Record detail",
     "description": "The fields of one record, laid out for reading.",
     "icon": "file",
@@ -467,7 +467,14 @@
         "shared": "awaiting_message"
       }
     ],
-    "slots": [],
+    "slots": [
+      {
+        "key": "actions",
+        "label": "Header actions",
+        "required": false,
+        "allowedChildCategories": ["actions"]
+      }
+    ],
     "capabilities": {
       "responsiveVisibility": true,
       "responsiveOrder": true,
