@@ -1,6 +1,9 @@
 "use client";
 
-import type { DefinitionPublicationConfirmation } from "@vortex/platform/schema";
+import type {
+  DefinitionPublicationConfirmation,
+  PrepareDefinitionPublicationResult,
+} from "@vortex/platform/schema";
 import { Icon } from "@vortex/ui";
 import { Badge } from "@vortex/ui/components/badge";
 import { StudioInspectorGroup } from "@vortex/ui/studio";
@@ -48,7 +51,7 @@ const kindLabels: Record<string, string> = {
   page: "Page",
   page_block: "Page block",
   role: "Role",
-  permission: "Permission",
+  permission: "Access",
   query: "Saved view",
   block_registration: "Block registration",
   pipeline: "Pipeline",
@@ -60,33 +63,50 @@ const kindLabels: Record<string, string> = {
   platform_block_dependency: "Platform block",
   shell: "Application frame",
   shell_content_slot: "Frame slot",
-  block_placement: "Block placement",
-  flow: "Flow",
-  flow_node: "Flow step",
-  flow_edge: "Flow connection",
-  flow_binding: "Flow link",
+  block_placement: "Block",
+  flow: "Workflow",
+  flow_node: "Workflow step",
+  flow_edge: "Workflow connection",
+  flow_binding: "Interaction",
 };
 
-const propertyLabels: Record<string, string> = {
-  definition: "definition",
-  identity: "identity",
-  key: "key",
-  name: "name",
-  description: "description",
-  order: "order",
-  configuration: "settings",
-  constraint: "rules",
-  required: "required setting",
-  storage: "storage",
-  ownership: "owner",
-  permission: "permissions",
-  visibility: "visibility",
-  behavior: "behaviour",
-  version_requirement: "required version",
-  address: "address",
-  theme: "theme",
-  icon: "icon",
-  presentation: "presentation",
+export type PublicationComponentLabel = Readonly<
+  Omit<PrepareDefinitionPublicationResult["componentLabels"][number], "componentId"> & {
+    componentId: string;
+  }
+>;
+
+type Reason = DefinitionPublicationConfirmation["reasons"][number];
+const list = (values: readonly string[]): string =>
+  values.length < 2 ? (values[0] ?? "") : `${values.slice(0, -1).join(", ")} and ${values.at(-1)}`;
+const actions = (values: readonly string[]): string =>
+  list(values.map((value) => value.charAt(0).toLowerCase() + value.slice(1)));
+
+const sentence = (reason: Reason, component: PublicationComponentLabel): string => {
+  const { componentKind: kind, property } = reason.location;
+  const name = component.label;
+  if (kind === "role" && property === "permission") {
+    const changes = [];
+    if (component.addedAccess?.length)
+      changes.push(`${name} can now ${actions(component.addedAccess)}`);
+    if (component.removedAccess?.length)
+      changes.push(`${name} can no longer ${actions(component.removedAccess)}`);
+    if (changes.length > 0) return changes.join("; ");
+    return reason.code === "component_added"
+      ? `Access added for ${name}`
+      : `Access changed for ${name}`;
+  }
+  if (reason.code === "component_added") {
+    if (kind === "block_placement" && property === "behavior")
+      return component.addedCapabilities?.length
+        ? `New capability: ${list(component.addedCapabilities)} on ${name}`
+        : `New capability: ${name}`;
+    return `New ${(kindLabels[kind] ?? "item").toLowerCase()}: ${name}`;
+  }
+  if (reason.code === "component_removed") return `${kindLabels[kind] ?? "Item"} removed: ${name}`;
+  if (reason.code === "presentation_changed" && component.wordingChanged)
+    return `Wording changed: ${name}`;
+  return `${reasonLabels[reason.code]}: ${name}`;
 };
 
 export function PublicationSummary({
@@ -94,18 +114,39 @@ export function PublicationSummary({
   componentLabels,
 }: {
   confirmation: DefinitionPublicationConfirmation;
-  componentLabels: readonly Readonly<{ componentId: string; label: string }>[];
+  componentLabels: readonly PublicationComponentLabel[];
 }) {
-  const names = new Map(
-    componentLabels.map((entry) => [entry.componentId.toLowerCase(), entry.label]),
-  );
+  const names = new Map(componentLabels.map((entry) => [entry.componentId.toLowerCase(), entry]));
   const intro =
     confirmation.outcome === "initial_release"
       ? `This is the first release. It will be published as version ${confirmation.assignedVersion}.`
       : `${impactLabels[confirmation.impact]}: this will be published as version ${confirmation.assignedVersion}.`;
   const groups = new Map<string, DefinitionPublicationConfirmation["reasons"]>();
+  const wholePages = new Set(
+    confirmation.reasons
+      .filter(
+        (reason) =>
+          reason.location.componentKind === "page" &&
+          (reason.code === "component_added" || reason.code === "component_removed"),
+      )
+      .map((reason) => `${reason.code}:${reason.location.componentId?.toLowerCase()}`),
+  );
+  // A page added or removed with its menu link and blocks is one destination, keyed by the page id.
+  const partOfWholePage = (reason: Reason): string | undefined => {
+    const id = reason.location.componentId?.toLowerCase();
+    const pageId = id === undefined ? undefined : names.get(id)?.pageId;
+    return reason.location.componentKind !== "page" &&
+      pageId !== undefined &&
+      wholePages.has(`${reason.code}:${pageId}`)
+      ? pageId
+      : undefined;
+  };
   for (const reason of confirmation.reasons) {
-    const key = reason.location.componentId ?? reason.location.componentKind;
+    const pageId = partOfWholePage(reason);
+    const key =
+      pageId !== undefined
+        ? `page:${pageId}`
+        : `${reason.location.componentKind}:${reason.location.componentId?.toLowerCase() ?? ""}`;
     groups.set(key, [...(groups.get(key) ?? []), reason]);
   }
   return (
@@ -113,50 +154,59 @@ export function PublicationSummary({
       <p>{intro}</p>
       {confirmation.reasons.length > 0 && (
         <ul aria-label="Publication changes" className="m-0 min-w-0 list-none space-y-2 p-0">
-          {Array.from(groups).map(([key, reasons]) => (
-            <li key={key} className="min-w-0 space-y-2 rounded-md py-3 hover:bg-muted/40">
-              <p className="m-0 font-medium">
-                {names.get(key.toLowerCase()) ??
-                  kindLabels[reasons[0]!.location.componentKind] ??
-                  reasons[0]!.location.componentKind}
-              </p>
-              <ul className="m-0 list-none space-y-2 p-0">
-                {reasons.map((reason, index) => {
-                  const added =
-                    reason.code === "component_added" || reason.code === "required_component_added";
-                  const removed = reason.code === "component_removed";
-                  return (
-                    <li key={`${reason.code}:${index}`} className="flex min-w-0 items-start gap-2">
-                      {added || removed ? (
-                        <Icon
-                          name={added ? "plus" : "minus"}
-                          className={`mt-1 size-4 shrink-0 ${added ? "text-success" : "text-destructive"}`}
-                        />
-                      ) : (
-                        <span
-                          aria-hidden="true"
-                          className="w-4 shrink-0 text-center font-medium text-info"
-                        >
-                          ~
-                        </span>
-                      )}
-                      <div className="min-w-0 flex-1 space-y-1">
-                        <p>
-                          {reasonLabels[reason.code]}{" "}
-                          <span className="text-muted-foreground">
-                            · {propertyLabels[reason.location.property] ?? reason.location.property}
-                          </span>
-                        </p>
-                        <Badge variant="outline" className="max-w-full whitespace-normal">
-                          {impactLabels[reason.impact]}
-                        </Badge>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            </li>
-          ))}
+          {Array.from(groups).map(([key, reasons]) => {
+            const primary =
+              reasons.find((reason) => reason.location.componentKind === "page") ?? reasons[0]!;
+            const component = names.get(primary.location.componentId?.toLowerCase() ?? "") ?? {
+              componentId: "",
+              label: kindLabels[primary.location.componentKind] ?? "Item",
+            };
+            const sentences = [
+              ...new Set(
+                reasons
+                  .filter((reason) => partOfWholePage(reason) === undefined)
+                  .map((reason) => sentence(reason, component)),
+              ),
+            ];
+            const added = reasons.every(
+              (reason) =>
+                reason.code === "component_added" || reason.code === "required_component_added",
+            );
+            const removed = reasons.some((reason) => reason.code === "component_removed");
+            const impact = reasons.some((reason) => reason.impact === "major")
+              ? "major"
+              : reasons.some((reason) => reason.impact === "minor")
+                ? "minor"
+                : "patch";
+            return (
+              <li
+                key={key}
+                className="flex min-w-0 items-start gap-2 rounded-md py-3 hover:bg-muted/40"
+              >
+                {added || removed ? (
+                  <Icon
+                    name={removed ? "minus" : "plus"}
+                    className={`mt-1 size-4 shrink-0 ${removed ? "text-destructive" : "text-success"}`}
+                  />
+                ) : (
+                  <span
+                    aria-hidden="true"
+                    className="w-4 shrink-0 text-center font-medium text-info"
+                  >
+                    ~
+                  </span>
+                )}
+                <div className="min-w-0 flex-1 space-y-1">
+                  {sentences.map((value) => (
+                    <p key={value}>{value}</p>
+                  ))}
+                  <Badge variant="outline" className="max-w-full whitespace-normal">
+                    {impactLabels[impact]}
+                  </Badge>
+                </div>
+              </li>
+            );
+          })}
         </ul>
       )}
       <StudioInspectorGroup title="Details" defaultOpen={false}>
@@ -165,11 +215,15 @@ export function PublicationSummary({
             <div>
               <dt className="font-semibold">Changed item identities</dt>
               <dd className="break-all">
-                {confirmation.reasons
-                  .flatMap((reason) =>
-                    reason.location.componentId === undefined ? [] : [reason.location.componentId],
-                  )
-                  .join(", ")}
+                {[
+                  ...new Set(
+                    confirmation.reasons.flatMap((reason) =>
+                      reason.location.componentId === undefined
+                        ? []
+                        : [reason.location.componentId],
+                    ),
+                  ),
+                ].join(", ")}
               </dd>
             </div>
           )}
