@@ -46,6 +46,7 @@ function SearchControl({
       <Input
         id={inputId}
         type="search"
+        placeholder={`Search ${accessibleName}`}
         className="min-w-0 flex-1 sm:w-auto sm:min-w-48 sm:flex-none"
         value={query}
         onChange={(event) => setQuery(event.currentTarget.value)}
