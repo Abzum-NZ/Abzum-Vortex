@@ -31,7 +31,7 @@ import { resolveApplicationAddress } from "./application-address";
 import { loadApplicationSearch } from "./application-search";
 import { fieldInputControlReleasesFor, platformBlockReleasesFor } from "./platform-block-releases";
 import { requestAddressHeader } from "./request-address";
-import { readPageProjections } from "./application-page/load";
+import { readPageProjection } from "./application-page/load";
 import { loadOrganizationLauncher } from "./organization-context";
 import { humanOrganizationRequests } from "./server-composition";
 import { loadStudioCreateAccess } from "./studio-application-draft";
@@ -214,18 +214,17 @@ export const loadApplicationFrame = cache(
       throw new Error(
         `Compiled page '${pageDefinition.key}' references missing shell '${shellId}'`,
       );
-    const { projectedPageRead, navigationRead } = readPageProjections(
+    const projectedPageRead = readPageProjection(
       session,
       context,
       pageDefinition.pageId,
       subject,
       undefined,
-      true,
     );
-    if (navigationRead === undefined) throw new Error("FRAME_NAVIGATION_NOT_READ");
-    const [projected, navigation, presentation, launcher, studioAccess] = await Promise.all([
+    const navigation = resolved.navigation;
+    if (navigation === undefined) throw new Error("FRAME_NAVIGATION_NOT_READ");
+    const [projected, presentation, launcher, studioAccess] = await Promise.all([
       projectedPageRead,
-      navigationRead,
       readViewerPresentation(session, context),
       loadOrganizationLauncher(session),
       loadStudioCreateAccess(context.organizationId),
@@ -237,7 +236,6 @@ export const loadApplicationFrame = cache(
     );
     if (organization === undefined) throw new Error("FRAME_ORGANIZATION_NOT_LISTED");
     if (projected.kind !== "available" || projected.value === undefined) return undefined;
-    if (navigation.kind !== "available") return undefined;
 
     const { frame } = splitProjectedPage(projected.value, shell);
 
@@ -289,7 +287,7 @@ export const loadApplicationFrame = cache(
         presentation,
       })),
       theme: content.theme,
-      navigation: navigation.value,
+      navigation,
       application: {
         tenantShortName,
         organizationShortName,

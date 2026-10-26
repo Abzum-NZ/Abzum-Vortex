@@ -5,7 +5,6 @@ import {
   DRAWER_BLOCK_RELEASE,
   type InstalledRuntimeContext,
   createStoredPageCapabilityService,
-  createStoredNavigationProjectionService,
   type PageSubjectReadResult,
   type RecordLinkResolver,
   pageSubjectFieldIds,
@@ -94,22 +93,20 @@ import { applyFormFieldAccess, decideFormPolicy } from "./form-field-access";
 import { loadInstalledContext, requestDependencies } from "./installed-context";
 
 /**
- * The viewer's projection of one page and of the application menu, read once per server render:
- * the application frame layout and the page of one request share them instead of deciding the same
- * access twice. The next request reads again, so no access decision outlives its request. React's
- * `cache` keys on the number of arguments as well as their values, so every caller passes all six
- * (the selected placements are required, `undefined` for a whole page; `navigation` says whether
- * the caller shows the menu): a call with fewer would miss the shared read and project the page and
- * the menu a second time.
+ * The viewer's projection of one page, read once per server render: the application frame layout
+ * and the page of one request share it instead of deciding the same access twice. The next
+ * request reads again, so no access decision outlives its request. React's `cache` keys on the
+ * number of arguments as well as their values, so every caller passes all five (the selected
+ * placements are required, `undefined` for a whole page): a call with fewer would miss the shared
+ * read and project the page a second time.
  */
-export const readPageProjections = cache(
+export const readPageProjection = cache(
   (
     session: IdentitySession,
     context: InstalledRuntimeContext,
     pageId: string,
     addressedSubjectId: string | undefined,
     selectedPlacementIds: ReadonlySet<string> | undefined,
-    navigation: boolean,
   ) => {
     // Only a well-formed record identity reaches a read; any other address names no record.
     const parsedSubjectId = recordIdSchema.safeParse(addressedSubjectId);
@@ -157,28 +154,10 @@ export const readPageProjections = cache(
         } as const;
       return projected;
     });
-    // A read of selected placements shows no menu, so it projects none.
-    const navigationRead = navigation
-      ? subjectReady.then((ready) =>
-          ready.kind === "ready"
-            ? createStoredNavigationProjectionService({
-                ...dependencies,
-                context,
-                permissions: platformPermissionSource,
-              }).project(session, selection)
-            : ({
-                kind:
-                  ready.kind === "temporarily_unavailable"
-                    ? "temporarily_unavailable"
-                    : "unavailable",
-              } as const),
-        )
-      : undefined;
     // A failure is rethrown where its result is consulted, never left unobserved meanwhile, and
-    // every reader joins both reads before it returns on any path (early returns included).
+    // every reader joins the read before it returns on any path (early returns included).
     void projectedPageRead.catch(() => undefined);
-    void navigationRead?.catch(() => undefined);
-    return { projectedPageRead, navigationRead };
+    return projectedPageRead;
   },
 );
 
@@ -280,19 +259,14 @@ const loadApplicationPageJoined = async (
   }
 
   const conditionSubjectId = first(parameters[pageSubjectParameter]);
-  // The page projection and the navigation projection are independent reads of
-  // the same installed context, each under its own HUMAN request; they run together and their
-  // results are still consulted in the original order.
-  const { projectedPageRead, navigationRead } = readPageProjections(
+  const projectedPageRead = readPageProjection(
     session,
     context,
     pageDefinition.pageId,
     conditionSubjectId,
     selectedPlacementIds,
-    selectedPlacementIds === undefined,
   );
   startedReads.push(projectedPageRead);
-  if (navigationRead !== undefined) startedReads.push(navigationRead);
   // The person's grid layouts and field policy decide which columns each grid reads, so they are
   // read (once, for every grid the page places) before any grid reads its rows. The address already
   // opened this page to the viewer, so they are read while the page is projected, not after it.
@@ -402,8 +376,10 @@ const loadApplicationPageJoined = async (
     allowedPermissions = authorized.value.allowed;
   }
 
-  const navigation = navigationRead === undefined ? undefined : await navigationRead;
-  if (navigation !== undefined && navigation.kind !== "available") return navigation;
+  // A whole page shows the navigation its address request decided; a placement read shows none.
+  const navigation = selectedPlacementIds === undefined ? address.navigation : undefined;
+  if (selectedPlacementIds === undefined && navigation === undefined)
+    throw new Error("PAGE_NAVIGATION_NOT_RESOLVED");
 
   const services = createPlacementReadServices({
     session,
@@ -683,7 +659,7 @@ const loadApplicationPageJoined = async (
     parameters,
     bindings: bindingContext,
     data,
-    services: services.placementServices(resolveRecordLinks, readSubject),
+    services: services.placementServices(context, readSubject),
     permittedApplicationKeys,
     permittedApplicationsUnavailable: permittedApplicationsRead?.kind === "temporarily_unavailable",
     ...(boardReads === undefined ? {} : { boardReads }),
@@ -947,7 +923,7 @@ const loadApplicationPageJoined = async (
     kind: "available",
     model: {
       ...model,
-      ...(options?.includeNavigation === false ? {} : { navigation: navigation.value }),
+      ...(options?.includeNavigation === false ? {} : { navigation }),
       webMcpTools: projectPageWebMcpTools({
         page,
         ...(guidedForm === undefined ? {} : { activeStepId: guidedForm.activeStepId }),

@@ -300,6 +300,181 @@ export const createViewerSafeRecordLinkService = (
   const requests = createHumanOrganizationRequestService(dependencies);
   const records = createViewerSafeRecordLinkReadService();
 
+  /**
+   * Reads the display label of every linked record a page shows inside the caller's own HUMAN
+   * request transaction, in one set read per target record type under the viewer's own authority.
+   * The installed context is the one this page request already resolved; the read checks it
+   * against the live installation again. A target the viewer may not read is `restricted` and
+   * carries nothing of the record, and the detail address is given only when the viewer may open
+   * the target's detail page.
+   */
+  const readLabelsInRequest = async (
+    transaction: RequestDatabaseTransaction,
+    scope: SelectedOrganizationScope,
+    context: InstalledRuntimeContext,
+    links: readonly RecordLinkReference[],
+  ): Promise<Extract<RecordLinkLabelsResult, { outcome: "read" }>> => {
+    const labels = new Map<string, RecordLinkLabel>();
+    if (links.length === 0) return { outcome: "read", labels };
+    if (
+      !sameId(scope.organizationId, context.organizationId) ||
+      scope.applicationRootId === undefined ||
+      !sameId(scope.applicationRootId, context.applicationRootId)
+    )
+      throw new Error("RECORD_LINK_SCOPE_MISMATCH");
+    const byType = new Map<string, Map<string, RecordId>>();
+    for (const link of links) {
+      const typeKey = link.recordTypeId.toLowerCase();
+      const ids = byType.get(typeKey) ?? new Map<string, RecordId>();
+      ids.set(link.recordId.toLowerCase(), recordIdSchema.parse(link.recordId));
+      byType.set(typeKey, ids);
+    }
+    type LinkTypeRead = {
+      readonly typeKey: string;
+      readonly identity: ReturnType<typeof linkTargetIdentity>;
+      readonly titleFieldId: string;
+      readonly recordIds: readonly RecordId[];
+      readonly protectedGroups: boolean;
+      readonly titleIsGroupName: boolean;
+      readonly page: PageDefinition | undefined;
+      readonly permissionIndex: number | undefined;
+    };
+    const typeReads: LinkTypeRead[] = [];
+    const declarations: OrganizationAccessDeclaration[] = [];
+    const permissionIndexes = new Map<string, number>();
+    for (const [typeKey, ids] of byType) {
+      const target = locateLinkTarget(context, typeKey);
+      if (target === undefined) {
+        console.error(
+          "[page] record link target is not installed: RECORD_LINK_TARGET_NOT_INSTALLED",
+        );
+        for (const id of ids.keys()) labels.set(`${typeKey}:${id}`, { outcome: "restricted" });
+        continue;
+      }
+      const { module, recordType } = target;
+      const recordIds = [...ids.values()];
+      const identity = linkTargetIdentity(context, module, recordType);
+      const page = matchingDetailPage(context, { ...identity, recordId: recordIds[0]! });
+      const declaration =
+        page === undefined
+          ? undefined
+          : detailPageDeclaration(dependencies.permissions, context, page);
+      let permissionIndex: number | undefined;
+      if (declaration !== undefined) {
+        const key = canonicalJson(declaration);
+        permissionIndex = permissionIndexes.get(key);
+        if (permissionIndex === undefined) {
+          permissionIndex = declarations.length;
+          declarations.push(declaration);
+          permissionIndexes.set(key, permissionIndex);
+        }
+      }
+      typeReads.push({
+        typeKey,
+        identity,
+        titleFieldId: recordType.titleFieldId,
+        recordIds,
+        protectedGroups: recordType.systemProjection?.protectedView === "groups",
+        titleIsGroupName: recordType.fields.some(
+          (field) => sameId(field.fieldId, recordType.titleFieldId) && field.key === "label",
+        ),
+        page,
+        permissionIndex,
+      });
+    }
+
+    // Detail pages may share a permission across target types. Decide each exact declaration
+    // once, in one live batch of this request.
+    const permissions = await decideOrganizationAccessBatch(transaction, scope, declarations);
+
+    // The titles of every target type are read together: one database call (one access plan
+    // resolution) per set of at most the database's type and record limits.
+    const titles = new Map<string, ViewerSafeRecordLinkTitle>();
+    let pending: {
+      identity: LinkTypeRead["identity"];
+      titleFieldId: string;
+      recordIds: RecordId[];
+    }[] = [];
+    let pendingRecords = 0;
+    const flushTitles = async () => {
+      if (pending.length === 0) return;
+      const read = await records.readTitles(transaction, scope, {
+        applicationReleaseRevision: context.applicationReleaseRevision,
+        targets: pending,
+      });
+      if (read.outcome !== "read") throw new Error("RECORD_LINK_INSTALLATION_MISMATCH");
+      for (const [key, title] of read.titles) titles.set(key, title);
+      pending = [];
+      pendingRecords = 0;
+    };
+    for (const typeRead of typeReads) {
+      for (let start = 0; start < typeRead.recordIds.length;) {
+        if (
+          pendingRecords >= viewerSafeRecordLinkTitleRecordLimit ||
+          pending.length >= viewerSafeRecordLinkTitleTypeLimit
+        )
+          await flushTitles();
+        const take = Math.min(
+          viewerSafeRecordLinkTitleRecordLimit - pendingRecords,
+          typeRead.recordIds.length - start,
+        );
+        pending.push({
+          identity: typeRead.identity,
+          titleFieldId: typeRead.titleFieldId,
+          recordIds: typeRead.recordIds.slice(start, start + take),
+        });
+        pendingRecords += take;
+        start += take;
+      }
+    }
+    await flushTitles();
+
+    for (const typeRead of typeReads) {
+      const { typeKey, page } = typeRead;
+      const visible = typeRead.protectedGroups
+        ? await readVisibleGroupLabels(transaction, typeRead.recordIds)
+        : undefined;
+      for (const recordId of typeRead.recordIds) {
+        const key = `${typeKey}:${recordId.toLowerCase()}`;
+        const title = titles.get(key);
+        const titleText = title === undefined ? undefined : labelText(title);
+        if (title !== undefined && titleText === undefined)
+          console.error("[page] record link title is empty: RECORD_LINK_TITLE_EMPTY");
+        let label: string | undefined = titleText;
+        if (visible !== undefined) {
+          const groupName = visible.get(recordId.toLowerCase());
+          label =
+            groupName !== undefined && titleText !== undefined
+              ? typeRead.titleIsGroupName
+                ? groupName
+                : titleText
+              : undefined;
+        }
+        labels.set(
+          key,
+          label === undefined
+            ? { outcome: "restricted" }
+            : {
+                outcome: "available",
+                label,
+                ...(typeRead.permissionIndex !== undefined &&
+                permissions[typeRead.permissionIndex]?.allowed === true &&
+                page !== undefined
+                  ? {
+                      detail: {
+                        applicationKey: context.releaseSet.application.definitionKey,
+                        pageKey: page.key,
+                        recordId,
+                      },
+                    }
+                  : {}),
+              },
+        );
+      }
+    }
+    return { outcome: "read", labels };
+  };
+
   return Object.freeze({
     async acquireIdentity(
       session: IdentitySession,
@@ -418,12 +593,10 @@ export const createViewerSafeRecordLinkService = (
         return pinUnavailable;
       }
     },
+    readLabelsInRequest,
     /**
-     * Reads the display label of every linked record a page shows, in one set read per target
-     * record type under the viewer's own authority. The installed context is the one this page
-     * request already resolved; the read checks it against the live installation again. A target
-     * the viewer may not read is `restricted` and carries nothing of the record, and the detail
-     * address is given only when the viewer may open the target's detail page.
+     * Reads the labels of `readLabelsInRequest` in a HUMAN request of their own, for a caller that
+     * holds no request transaction of the viewer. A failed read is logged and is `unavailable`.
      */
     async readLabels(
       session: IdentitySession,
@@ -431,177 +604,10 @@ export const createViewerSafeRecordLinkService = (
       context: InstalledRuntimeContext,
       links: readonly RecordLinkReference[],
     ): Promise<RecordLinkLabelsResult> {
-      const labels = new Map<string, RecordLinkLabel>();
-      if (links.length === 0) return { outcome: "read", labels };
+      if (links.length === 0) return { outcome: "read", labels: new Map() };
       try {
-        const byType = new Map<string, Map<string, RecordId>>();
-        for (const link of links) {
-          const typeKey = link.recordTypeId.toLowerCase();
-          const ids = byType.get(typeKey) ?? new Map<string, RecordId>();
-          ids.set(link.recordId.toLowerCase(), recordIdSchema.parse(link.recordId));
-          byType.set(typeKey, ids);
-        }
-        const request = await requests.run(
-          session,
-          selection,
-          async (transaction, scope): Promise<RecordLinkLabelsResult> => {
-            if (
-              !sameId(scope.organizationId, context.organizationId) ||
-              scope.applicationRootId === undefined ||
-              !sameId(scope.applicationRootId, context.applicationRootId)
-            )
-              throw new Error("RECORD_LINK_SCOPE_MISMATCH");
-            type LinkTypeRead = {
-              readonly typeKey: string;
-              readonly identity: ReturnType<typeof linkTargetIdentity>;
-              readonly titleFieldId: string;
-              readonly recordIds: readonly RecordId[];
-              readonly protectedGroups: boolean;
-              readonly titleIsGroupName: boolean;
-              readonly page: PageDefinition | undefined;
-              readonly permissionIndex: number | undefined;
-            };
-            const typeReads: LinkTypeRead[] = [];
-            const declarations: OrganizationAccessDeclaration[] = [];
-            const permissionIndexes = new Map<string, number>();
-            for (const [typeKey, ids] of byType) {
-              const target = locateLinkTarget(context, typeKey);
-              if (target === undefined) {
-                console.error(
-                  "[page] record link target is not installed: RECORD_LINK_TARGET_NOT_INSTALLED",
-                );
-                for (const id of ids.keys())
-                  labels.set(`${typeKey}:${id}`, { outcome: "restricted" });
-                continue;
-              }
-              const { module, recordType } = target;
-              const recordIds = [...ids.values()];
-              const identity = linkTargetIdentity(context, module, recordType);
-              const page = matchingDetailPage(context, { ...identity, recordId: recordIds[0]! });
-              const declaration =
-                page === undefined
-                  ? undefined
-                  : detailPageDeclaration(dependencies.permissions, context, page);
-              let permissionIndex: number | undefined;
-              if (declaration !== undefined) {
-                const key = canonicalJson(declaration);
-                permissionIndex = permissionIndexes.get(key);
-                if (permissionIndex === undefined) {
-                  permissionIndex = declarations.length;
-                  declarations.push(declaration);
-                  permissionIndexes.set(key, permissionIndex);
-                }
-              }
-              typeReads.push({
-                typeKey,
-                identity,
-                titleFieldId: recordType.titleFieldId,
-                recordIds,
-                protectedGroups: recordType.systemProjection?.protectedView === "groups",
-                titleIsGroupName: recordType.fields.some(
-                  (field) =>
-                    sameId(field.fieldId, recordType.titleFieldId) && field.key === "label",
-                ),
-                page,
-                permissionIndex,
-              });
-            }
-
-            // Detail pages may share a permission across target types. Decide each exact
-            // declaration once, in one live batch owned only by this labels transaction.
-            const permissions = await decideOrganizationAccessBatch(
-              transaction,
-              scope,
-              declarations,
-            );
-
-            // The titles of every target type are read together: one database call (one access
-            // plan resolution) per set of at most the database's type and record limits.
-            const titles = new Map<string, ViewerSafeRecordLinkTitle>();
-            let pending: {
-              identity: LinkTypeRead["identity"];
-              titleFieldId: string;
-              recordIds: RecordId[];
-            }[] = [];
-            let pendingRecords = 0;
-            const flushTitles = async () => {
-              if (pending.length === 0) return;
-              const read = await records.readTitles(transaction, scope, {
-                applicationReleaseRevision: context.applicationReleaseRevision,
-                targets: pending,
-              });
-              if (read.outcome !== "read") throw new Error("RECORD_LINK_INSTALLATION_MISMATCH");
-              for (const [key, title] of read.titles) titles.set(key, title);
-              pending = [];
-              pendingRecords = 0;
-            };
-            for (const typeRead of typeReads) {
-              for (let start = 0; start < typeRead.recordIds.length;) {
-                if (
-                  pendingRecords >= viewerSafeRecordLinkTitleRecordLimit ||
-                  pending.length >= viewerSafeRecordLinkTitleTypeLimit
-                )
-                  await flushTitles();
-                const take = Math.min(
-                  viewerSafeRecordLinkTitleRecordLimit - pendingRecords,
-                  typeRead.recordIds.length - start,
-                );
-                pending.push({
-                  identity: typeRead.identity,
-                  titleFieldId: typeRead.titleFieldId,
-                  recordIds: typeRead.recordIds.slice(start, start + take),
-                });
-                pendingRecords += take;
-                start += take;
-              }
-            }
-            await flushTitles();
-
-            for (const typeRead of typeReads) {
-              const { typeKey, page } = typeRead;
-              const visible = typeRead.protectedGroups
-                ? await readVisibleGroupLabels(transaction, typeRead.recordIds)
-                : undefined;
-              for (const recordId of typeRead.recordIds) {
-                const key = `${typeKey}:${recordId.toLowerCase()}`;
-                const title = titles.get(key);
-                const titleText = title === undefined ? undefined : labelText(title);
-                if (title !== undefined && titleText === undefined)
-                  console.error("[page] record link title is empty: RECORD_LINK_TITLE_EMPTY");
-                let label: string | undefined = titleText;
-                if (visible !== undefined) {
-                  const groupName = visible.get(recordId.toLowerCase());
-                  label =
-                    groupName !== undefined && titleText !== undefined
-                      ? typeRead.titleIsGroupName
-                        ? groupName
-                        : titleText
-                      : undefined;
-                }
-                labels.set(
-                  key,
-                  label === undefined
-                    ? { outcome: "restricted" }
-                    : {
-                        outcome: "available",
-                        label,
-                        ...(typeRead.permissionIndex !== undefined &&
-                        permissions[typeRead.permissionIndex]?.allowed === true &&
-                        page !== undefined
-                          ? {
-                              detail: {
-                                applicationKey: context.releaseSet.application.definitionKey,
-                                pageKey: page.key,
-                                recordId,
-                              },
-                            }
-                          : {}),
-                      },
-                );
-              }
-            }
-            return { outcome: "read", labels };
-          },
+        const request = await requests.run(session, selection, (transaction, scope) =>
+          readLabelsInRequest(transaction, scope, context, links),
         );
         if (request.kind === "available") return request.value;
         console.error(
