@@ -59,7 +59,7 @@ import { flowReadFieldsScalarTypeForField } from "./flow-compilation";
 import { createHumanInstalledPageBundleContextLoader } from "./installed-page-bundle-context";
 import type { InstalledRuntimeContext } from "./installed-runtime-context";
 import { installedNamedActionDescriptors, installedNamedActions } from "./installed-named-actions";
-import { runtimeContextSelection } from "./preview-runtime-context";
+import { runtimeContextSelection } from "./runtime-preview";
 import { createProtectedOperationExecutor } from "./protected-operation-executor";
 import type { ApplicationStoreService } from "./installation-application-store";
 import { createViewerSafeRecordLinkService } from "./viewer-safe-record-link";

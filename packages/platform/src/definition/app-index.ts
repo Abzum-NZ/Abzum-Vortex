@@ -2,10 +2,32 @@ import "server-only";
 
 export { createAppTelemetryCollector } from "./telemetry";
 export { createOperationsAlertSink } from "./operations-alert-sink";
-export { isReservedTenantSegment, readAddressedApplicationAtAddress, readAddressedApplicationFromInstalledBundleAtAddress, readPermittedApplicationsAtAddress, resolvePermittedApplicationAddress, type AddressedApplicationRead, type AddressedApplicationBundleRead, type ApplicationExperience, type PermittedApplication, type PermittedApplicationsRead } from "./application-address";
-export { requireInstalledRuntimeContext, type InstalledRuntimeContext } from "./installed-runtime-context";
+export {
+  isReservedTenantSegment,
+  readAddressedApplicationAtAddress,
+  readAddressedApplicationFromInstalledBundleAtAddress,
+  readPermittedApplicationsAtAddress,
+  resolvePermittedApplicationAddress,
+  type AddressedApplicationRead,
+  type AddressedApplicationBundleRead,
+  type ApplicationExperience,
+  type ApplicationLauncherEntry,
+  type ApplicationLauncherRead,
+  type PermittedApplication,
+  type PermittedApplicationsRead,
+} from "./application-address";
+export {
+  requireInstalledRuntimeContext,
+  type InstalledRuntimeContext,
+} from "./installed-runtime-context";
 export { contributedActionControlIds } from "./installed-record-contributions";
-export { createHumanInstalledPageBundleContextLoader, isTrustedInstalledPageBundleContext, isTrustedInstalledPageComposition, matchesInstalledPageBundleIdentity, readInstalledPageComposition } from "./installed-page-bundle-context";
+export {
+  createHumanInstalledPageBundleContextLoader,
+  isTrustedInstalledPageBundleContext,
+  isTrustedInstalledPageComposition,
+  matchesInstalledPageBundleIdentity,
+  readInstalledPageComposition,
+} from "./installed-page-bundle-context";
 
 export { resolveInstalledPageIdentity } from "./standard-page-resolution";
 
@@ -34,15 +56,21 @@ export {
   runtimeContextSelection,
   runtimePreviewOf,
   type RuntimePreview,
-} from "./preview-runtime-context";
+} from "./runtime-preview";
 export { previewApplicationKey } from "./preview-application-key";
 
 export { createProtectedOperationExecutor } from "./protected-operation-executor";
 
 export { createFlowOrchestrator, type FlowOrchestrator } from "./flow-orchestrator";
-export type { FlowNamedAction, FlowOrchestratorResponse, FlowRecordType, FlowRelease, FlowRunExpectation, FlowUnavailableNotice } from "./flow-orchestrator-types";
+export type {
+  FlowNamedAction,
+  FlowOrchestratorResponse,
+  FlowRecordType,
+  FlowRelease,
+  FlowRunExpectation,
+  FlowUnavailableNotice,
+} from "./flow-orchestrator-types";
 export type { FlowSubject } from "../rules/index";
-
 
 export { createFormContinuationService } from "./form-continuation";
 

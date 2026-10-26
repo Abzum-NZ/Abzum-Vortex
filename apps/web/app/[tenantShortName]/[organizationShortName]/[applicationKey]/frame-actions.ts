@@ -87,7 +87,7 @@ export async function readReleaseAdoptionAction(
   }
 }
 
-/** Reads the viewer's permitted applications only when the frame's switcher is opened. */
+/** Reads the viewer's permitted application links on switcher intent or open. */
 export async function readApplicationSwitcherAction(
   tenantShortName: string,
   organizationShortName: string,

@@ -1,7 +1,7 @@
 import "server-only";
 
 import { z } from "zod";
-import type { OrganizationSelectionCandidate } from "../access/identity-access";
+import { registerRuntimePreview } from "./runtime-preview";
 import { correlationIdSchema } from "../catalogue/common";
 import { recordTypeIdSchema, revisionSchema, timestampSchema } from "../catalogue/identifiers";
 import { sameId } from "../catalogue/runtime-primitives";
@@ -14,7 +14,6 @@ import type { PreparedApplicationPermissionRegistration } from "../access/permis
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
 import {
   assembleHumanInstalledRuntimeContext,
-  requireInstalledRuntimeContext,
   type HumanInstalledRuntimeContextDependencies,
   type InstalledRuntimeContext,
 } from "./installed-runtime-context";
@@ -38,23 +37,6 @@ const previewRuntimeSourceSchema = z
     seedBoundedRecordTypeIds: z.array(recordTypeIdSchema).max(201),
   })
   .strict();
-
-/**
- * The deliberate preview bound: a preview's storage holds at most this many records of one record
- * type, the first the builder can read live. The database seed applies the same number.
- */
-export const PREVIEW_SEED_RECORD_BOUND = 2000;
-
-/**
- * What marks a runtime context as a preview: its address, draft revision and expiry, and the
- * record types whose seed reached the preview bound.
- */
-export type RuntimePreview = Readonly<{
-  previewInstallationId: string;
-  draftRevision: number;
-  expiresAt: string;
-  seedBoundedRecordTypeIds: readonly string[];
-}>;
 
 const deepFreeze = <Value>(value: Value): Value => {
   if (typeof value !== "object" || value === null || Object.isFrozen(value)) return value;
@@ -106,8 +88,6 @@ const previewRelease = (
   }
   return entry;
 };
-
-const runtimePreviews = new WeakMap<object, RuntimePreview>();
 
 /**
  * Builds the HUMAN runtime context of the preview this request's transaction runs. The database
@@ -172,33 +152,13 @@ export const loadHumanPreviewRuntimeContext = async (
       return prepared;
     },
   );
-  runtimePreviews.set(context, {
+  registerRuntimePreview(context, {
     previewInstallationId: installation.previewInstallationId,
     draftRevision: source.data.draftRevision,
     expiresAt: source.data.expiresAt,
     seedBoundedRecordTypeIds: Object.freeze([...source.data.seedBoundedRecordTypeIds]),
   });
   return context;
-};
-
-/** The preview a runtime context runs, or undefined for an installed Application. */
-export const runtimePreviewOf = (contextCandidate: unknown): RuntimePreview | undefined =>
-  runtimePreviews.get(requireInstalledRuntimeContext(contextCandidate));
-
-/**
- * The request selection of a runtime context: its organisation and Application, and the preview
- * it runs, so every request a page makes reads the same preview as the page itself.
- */
-export const runtimeContextSelection = (
-  contextCandidate: unknown,
-): OrganizationSelectionCandidate => {
-  const context = requireInstalledRuntimeContext(contextCandidate);
-  const preview = runtimePreviews.get(context);
-  return {
-    organizationId: context.organizationId,
-    applicationRootId: context.applicationRootId,
-    ...(preview === undefined ? {} : { previewInstallationId: preview.previewInstallationId }),
-  };
 };
 
 const previewReleaseEvidenceSchema = z
