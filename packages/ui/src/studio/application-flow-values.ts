@@ -197,7 +197,7 @@ const typedFixed: ReadonlySet<LiteralType> = new Set([
 
 /** The literal type a fixed value of this expected type is written as, or undefined when there is none. */
 export const studioFixedLiteralType = (expected: string | undefined): LiteralType | undefined =>
-  expected === undefined
+  expected === undefined || expected === "placement_id"
     ? "text"
     : typedFixed.has(expected as LiteralType)
       ? (expected as LiteralType)

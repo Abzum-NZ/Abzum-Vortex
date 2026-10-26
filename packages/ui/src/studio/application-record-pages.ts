@@ -544,7 +544,8 @@ const openButton = (
       return refuse(`The block ${quoted(place.beside)} is no longer in the draft.`);
     const preceding = holder.siblings[holder.siblings.indexOf(holder.item) - 1];
     const header =
-      holder.item.type === "platform.renderer.heading"
+      holder.item.type === "platform.renderer.heading" ||
+      holder.item.type === "platform.renderer.record_detail"
         ? holder.item
         : holder.item.type === "platform.renderer.table" &&
             preceding?.type === "platform.renderer.heading"
