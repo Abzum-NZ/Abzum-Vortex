@@ -16,7 +16,7 @@ import { saveRecordCommandSchema, type SaveRecordCommand } from "../records/reco
 import { platformOperationKey } from "../workflows/default-flow-sources";
 import {
   flowRefusalFeedbackSchema,
-  flowRefusalPresentationSchema,
+  flowRefusalGuidanceByCodeSchema,
   unlocatedCorrectionsRefusal,
   type FlowRefusalFeedback,
 } from "../workflows/flow-refusal-feedback";
@@ -664,11 +664,14 @@ export const createFlowTaskRunner = (
       : {};
     let diagnostic = "diagnostic" in executed ? executed.diagnostic : undefined;
     if (diagnostic !== undefined && call.properties.refusal_feedback !== undefined) {
-      const presentation = flowRefusalPresentationSchema.parse(
+      const guidance = flowRefusalGuidanceByCodeSchema.parse(
         call.properties.refusal_feedback.value,
-      );
-      if (presentation.code === diagnostic.code)
-        diagnostic = flowRefusalFeedbackSchema.parse({ ...diagnostic, presentation });
+      )[diagnostic.code];
+      if (guidance !== undefined)
+        diagnostic = flowRefusalFeedbackSchema.parse({
+          ...diagnostic,
+          presentation: { ...guidance, code: diagnostic.code },
+        });
     }
     if (diagnostic !== undefined) stored.diagnostic = jsonValueSchema.parse(diagnostic);
     return {

@@ -94,7 +94,7 @@ begin
   );
   plan_key_value := 'sha256:' || pg_catalog.encode(
     pg_catalog.sha256(pg_catalog.convert_to(
-      'vortex.installation-runtime-bundle.prepared-record-access-plan.v2|' ||
+      'vortex.installation-runtime-bundle.prepared-record-access-plan|' ||
         organization_id_value::text || '|' || application_root_id_value::text || '|' ||
         application_release_revision_value::text || '|2|' || pin_fingerprint_value,
       'UTF8'
@@ -138,9 +138,6 @@ exception
       message = 'Prepared Record access plan evidence is ambiguous';
 end
 $function$;
-alter function vortex_record.resolve_prepared_record_access_plan_internal(uuid,bigint,jsonb) owner to vortex_record_adapter;
-
-
 alter function vortex_record.resolve_prepared_record_access_plan_internal(uuid,bigint,jsonb)
   owner to vortex_record_adapter;
 revoke all on function vortex_record.resolve_prepared_record_access_plan_internal(uuid,bigint,jsonb)

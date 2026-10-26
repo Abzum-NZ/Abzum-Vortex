@@ -32,7 +32,7 @@ export type PastedTitleCell = Readonly<{
 }>;
 
 /** A cell the paste could not resolve, with the sentence the person is told. */
-export type LinkTitleProblem = Readonly<{
+type LinkTitleProblem = Readonly<{
   recordId: string;
   field: string;
   /** For the server log; never carries a title or an id. */
@@ -40,7 +40,7 @@ export type LinkTitleProblem = Readonly<{
   message: string;
 }>;
 
-export type LinkTitleResolution = Readonly<{
+type LinkTitleResolution = Readonly<{
   /** Resolved references by `cellKey`. */
   references: ReadonlyMap<string, Readonly<{ recordTypeId: string; recordId: string }>>;
   problems: readonly LinkTitleProblem[];

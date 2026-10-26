@@ -432,7 +432,7 @@ const typedFilterCondition = (
 };
 
 /** The search and filters of one Records table request, built from the installed definition. */
-export type RecordsTableNarrowingCommand = Readonly<{
+type RecordsTableNarrowingCommand = Readonly<{
   kind: "built";
   /** The declared filter fields the installed definition describes, for their filter controls. */
   filterFields: Readonly<Record<string, RecordsTableFilterField>>;
@@ -522,7 +522,7 @@ export const buildRecordsTableNarrowing = (
 };
 
 /** A built Records table read: the Query command, its visible projection and its effective order. */
-export type RecordsTableQueryCommand = Readonly<{
+type RecordsTableQueryCommand = Readonly<{
   kind: "built";
   command: ProtectedQueryCommand;
   /** The visible columns, in declared order; the rows the page returns carry only these values. */

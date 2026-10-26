@@ -1,6 +1,11 @@
 "use server";
 
-import { applicationRootIdSchema, logRefusal, organizationIdSchema } from "@vortex/platform/schema";
+import {
+  applicationRootIdSchema,
+  flowRefusalFeedbackSentences,
+  logRefusal,
+  organizationIdSchema,
+} from "@vortex/platform/schema";
 import { z } from "zod";
 import { resolveIdentitySession } from "../auth/_lib/session-server";
 import { applicationStoreService } from "../_lib/application-store-service";
@@ -156,23 +161,11 @@ export async function runStudioApplicationLifecycle(organizationId: string, cand
       outcome: result.kind === "temporarily_unavailable" ? "unavailable" : "refused",
       ...(code === undefined ? {} : { refusalCode: code }),
       message:
-        code === "application_republish_required"
-          ? "Republish required: this release uses superseded platform definitions. Republish the application, then install or upgrade to the new release."
-          : code === "recent_authentication_required"
-            ? "Sign in again before managing this application."
-            : code === "application_not_installed"
-              ? "This application is not installed in this organisation, so there is nothing to upgrade or remove. Install it first if it is needed here."
-              : code === "application_not_newer"
-                ? "There is no newer application release to install. Review the latest published release before trying again."
-                : code === "applications_manage_required"
-                  ? "You cannot manage application installations with your current access. Ask an organisation steward for the Manage applications permission."
-                  : code === "installation_delegation_required"
-                    ? "You need authority to assign the application's member role. Decline that role or ask an administrator for delegation."
-                    : code === "application_storage_incompatible"
-                      ? "This release cannot use the organisation's current record storage. Choose a compatible release."
-                      : result.kind === "temporarily_unavailable"
-                        ? "The request did not complete. Review the application's current state before retrying."
-                        : uncodedRefusals[tool],
+        code !== undefined
+          ? flowRefusalFeedbackSentences[code]
+          : result.kind === "temporarily_unavailable"
+            ? "The request did not complete. Review the application's current state before retrying."
+            : uncodedRefusals[tool],
     };
   } catch (error) {
     return mapWebError(error, {

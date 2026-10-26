@@ -584,6 +584,104 @@
                     }
                   }
                 }
+              },
+              "refusal_feedback": {
+                "kind": "map",
+                "entries": {
+                  "applications_manage_required": {
+                    "kind": "map",
+                    "entries": {
+                      "link_label": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "Open IAM People"
+                        }
+                      },
+                      "destination": {
+                        "kind": "map",
+                        "entries": {
+                          "application_key": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "vortex.app.iam"
+                            }
+                          },
+                          "page_key": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "iam_people"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "installation_delegation_required": {
+                    "kind": "map",
+                    "entries": {
+                      "link_label": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "Open IAM People"
+                        }
+                      },
+                      "destination": {
+                        "kind": "map",
+                        "entries": {
+                          "application_key": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "vortex.app.iam"
+                            }
+                          },
+                          "page_key": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "iam_people"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "assignments_manage_required": {
+                    "kind": "map",
+                    "entries": {
+                      "link_label": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "Open IAM People"
+                        }
+                      },
+                      "destination": {
+                        "kind": "map",
+                        "entries": {
+                          "application_key": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "vortex.app.iam"
+                            }
+                          },
+                          "page_key": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "iam_people"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
               }
             }
           },
@@ -835,6 +933,104 @@
                                       "source": "task_output",
                                       "task": "confirm_install",
                                       "key": "choice"
+                                    }
+                                  }
+                                }
+                              },
+                              "refusal_feedback": {
+                                "kind": "map",
+                                "entries": {
+                                  "applications_manage_required": {
+                                    "kind": "map",
+                                    "entries": {
+                                      "link_label": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "Open IAM People"
+                                        }
+                                      },
+                                      "destination": {
+                                        "kind": "map",
+                                        "entries": {
+                                          "application_key": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "vortex.app.iam"
+                                            }
+                                          },
+                                          "page_key": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "iam_people"
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
+                                  },
+                                  "installation_delegation_required": {
+                                    "kind": "map",
+                                    "entries": {
+                                      "link_label": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "Open IAM People"
+                                        }
+                                      },
+                                      "destination": {
+                                        "kind": "map",
+                                        "entries": {
+                                          "application_key": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "vortex.app.iam"
+                                            }
+                                          },
+                                          "page_key": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "iam_people"
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
+                                  },
+                                  "assignments_manage_required": {
+                                    "kind": "map",
+                                    "entries": {
+                                      "link_label": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "Open IAM People"
+                                        }
+                                      },
+                                      "destination": {
+                                        "kind": "map",
+                                        "entries": {
+                                          "application_key": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "vortex.app.iam"
+                                            }
+                                          },
+                                          "page_key": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "iam_people"
+                                            }
+                                          }
+                                        }
+                                      }
                                     }
                                   }
                                 }
@@ -1230,6 +1426,104 @@
                                     }
                                   }
                                 }
+                              },
+                              "refusal_feedback": {
+                                "kind": "map",
+                                "entries": {
+                                  "applications_manage_required": {
+                                    "kind": "map",
+                                    "entries": {
+                                      "link_label": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "Open IAM People"
+                                        }
+                                      },
+                                      "destination": {
+                                        "kind": "map",
+                                        "entries": {
+                                          "application_key": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "vortex.app.iam"
+                                            }
+                                          },
+                                          "page_key": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "iam_people"
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
+                                  },
+                                  "installation_delegation_required": {
+                                    "kind": "map",
+                                    "entries": {
+                                      "link_label": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "Open IAM People"
+                                        }
+                                      },
+                                      "destination": {
+                                        "kind": "map",
+                                        "entries": {
+                                          "application_key": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "vortex.app.iam"
+                                            }
+                                          },
+                                          "page_key": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "iam_people"
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
+                                  },
+                                  "assignments_manage_required": {
+                                    "kind": "map",
+                                    "entries": {
+                                      "link_label": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "Open IAM People"
+                                        }
+                                      },
+                                      "destination": {
+                                        "kind": "map",
+                                        "entries": {
+                                          "application_key": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "vortex.app.iam"
+                                            }
+                                          },
+                                          "page_key": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "iam_people"
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
                               }
                             }
                           },
@@ -1596,6 +1890,104 @@
                                       "task": "review",
                                       "key": "result",
                                       "path": ["role_template_ids"]
+                                    }
+                                  }
+                                }
+                              },
+                              "refusal_feedback": {
+                                "kind": "map",
+                                "entries": {
+                                  "applications_manage_required": {
+                                    "kind": "map",
+                                    "entries": {
+                                      "link_label": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "Open IAM People"
+                                        }
+                                      },
+                                      "destination": {
+                                        "kind": "map",
+                                        "entries": {
+                                          "application_key": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "vortex.app.iam"
+                                            }
+                                          },
+                                          "page_key": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "iam_people"
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
+                                  },
+                                  "installation_delegation_required": {
+                                    "kind": "map",
+                                    "entries": {
+                                      "link_label": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "Open IAM People"
+                                        }
+                                      },
+                                      "destination": {
+                                        "kind": "map",
+                                        "entries": {
+                                          "application_key": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "vortex.app.iam"
+                                            }
+                                          },
+                                          "page_key": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "iam_people"
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
+                                  },
+                                  "assignments_manage_required": {
+                                    "kind": "map",
+                                    "entries": {
+                                      "link_label": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "Open IAM People"
+                                        }
+                                      },
+                                      "destination": {
+                                        "kind": "map",
+                                        "entries": {
+                                          "application_key": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "vortex.app.iam"
+                                            }
+                                          },
+                                          "page_key": {
+                                            "kind": "literal",
+                                            "literal": {
+                                              "type": "text",
+                                              "value": "iam_people"
+                                            }
+                                          }
+                                        }
+                                      }
                                     }
                                   }
                                 }
@@ -2186,6 +2578,104 @@
                     }
                   }
                 }
+              },
+              "refusal_feedback": {
+                "kind": "map",
+                "entries": {
+                  "applications_manage_required": {
+                    "kind": "map",
+                    "entries": {
+                      "link_label": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "Open IAM People"
+                        }
+                      },
+                      "destination": {
+                        "kind": "map",
+                        "entries": {
+                          "application_key": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "vortex.app.iam"
+                            }
+                          },
+                          "page_key": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "iam_people"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "installation_delegation_required": {
+                    "kind": "map",
+                    "entries": {
+                      "link_label": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "Open IAM People"
+                        }
+                      },
+                      "destination": {
+                        "kind": "map",
+                        "entries": {
+                          "application_key": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "vortex.app.iam"
+                            }
+                          },
+                          "page_key": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "iam_people"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "assignments_manage_required": {
+                    "kind": "map",
+                    "entries": {
+                      "link_label": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "Open IAM People"
+                        }
+                      },
+                      "destination": {
+                        "kind": "map",
+                        "entries": {
+                          "application_key": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "vortex.app.iam"
+                            }
+                          },
+                          "page_key": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "iam_people"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
               }
             }
           },
@@ -2315,6 +2805,104 @@
                               "task": "review_removal",
                               "key": "result",
                               "path": ["expected"]
+                            }
+                          }
+                        }
+                      },
+                      "refusal_feedback": {
+                        "kind": "map",
+                        "entries": {
+                          "applications_manage_required": {
+                            "kind": "map",
+                            "entries": {
+                              "link_label": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "Open IAM People"
+                                }
+                              },
+                              "destination": {
+                                "kind": "map",
+                                "entries": {
+                                  "application_key": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "vortex.app.iam"
+                                    }
+                                  },
+                                  "page_key": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "iam_people"
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          "installation_delegation_required": {
+                            "kind": "map",
+                            "entries": {
+                              "link_label": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "Open IAM People"
+                                }
+                              },
+                              "destination": {
+                                "kind": "map",
+                                "entries": {
+                                  "application_key": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "vortex.app.iam"
+                                    }
+                                  },
+                                  "page_key": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "iam_people"
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          "assignments_manage_required": {
+                            "kind": "map",
+                            "entries": {
+                              "link_label": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "Open IAM People"
+                                }
+                              },
+                              "destination": {
+                                "kind": "map",
+                                "entries": {
+                                  "application_key": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "vortex.app.iam"
+                                    }
+                                  },
+                                  "page_key": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "iam_people"
+                                    }
+                                  }
+                                }
+                              }
                             }
                           }
                         }

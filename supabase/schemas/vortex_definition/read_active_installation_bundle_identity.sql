@@ -107,7 +107,7 @@ begin
       or pg_catalog.jsonb_typeof(current_manifest -> 'preparedRecordAccessPlan') is distinct from 'object'
       or current_manifest #>> '{preparedRecordAccessPlan,planKey}' is distinct from (
         'sha256:' || pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(
-          'vortex.installation-runtime-bundle.prepared-record-access-plan.v2|' ||
+          'vortex.installation-runtime-bundle.prepared-record-access-plan|' ||
             selected_org::text || '|' || selected_app::text || '|' ||
             selected_revision::text || '|2|' || pin_hash,'UTF8')),'hex'))
       or current_manifest #>> '{preparedRecordAccessPlan,mappingFingerprint}' is null

@@ -19,7 +19,6 @@ type PlacementParts = Pick<PlacementReadEntry, "vortex" | "settings">;
 type Modules = InstalledRuntimeContext["releaseSet"]["modules"];
 type RecordType = Modules[number]["content"]["recordTypes"][number];
 type ModuleField = RecordType["fields"][number];
-export type PermissionEntry = InstalledRuntimeContext["permissionRegistration"]["entries"][number];
 
 /** The time zones a date-time field shows its value in. */
 export type DateTimeZones = { personTimeZone?: string; organizationTimeZone?: string };
