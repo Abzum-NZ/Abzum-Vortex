@@ -6,6 +6,7 @@ import "@puckeditor/core/puck.css";
 import {
   applicationSourceDocumentSchema,
   canonicalJson,
+  immutablePlatformBlockCatalogueSchema,
   compiledItemSlots,
   readSourceItem,
   readRecordDetailContract,
@@ -436,7 +437,19 @@ function ApplicationPageSlotPuckEditor({
     () => createPlatformComponentRegistryForReleases(platformBlockCatalogue.releases),
     [platformBlockCatalogue],
   );
-  const catalogue = useMemo(() => registry.toPlatformBlockCatalogue(), [registry]);
+  // The registered releases as an immutable catalogue for the editor's pure compilation snapshots.
+  const catalogue = useMemo(
+    () =>
+      immutablePlatformBlockCatalogueSchema.parse({
+        compositionPolicy: { maximumDepth: 32, maximumPlacements: 512 },
+        releases: [...registry.getReleases()].sort(
+          (first, second) =>
+            first.blockId.localeCompare(second.blockId) ||
+            first.releaseVersion.localeCompare(second.releaseVersion),
+        ),
+      }),
+    [registry],
+  );
   // The content renders inside the frame's outlet, exactly as a running page's content does.
   const config = useMemo(
     () =>

@@ -428,6 +428,8 @@ export const tableLevelResultSchema = z.discriminatedUnion("status", [
   statusOnly("refused"),
   statusOnly("error"),
 ]);
+/** A tree level or a group's members as the page receives them. */
+export type TableLevelReply = z.output<typeof tableLevelResultSchema>;
 
 /** One related record of an expanded row: its own record page, when the viewer may open it. */
 export const rowDetailRowSchema = z
@@ -461,3 +463,5 @@ export const rowDetailResultSchema = z.discriminatedUnion("status", [
   statusOnly("error"),
 ]);
 export type RowDetailResult = z.input<typeof rowDetailResultSchema>;
+/** A related-records read as the page receives it. */
+export type RowDetailReply = z.output<typeof rowDetailResultSchema>;

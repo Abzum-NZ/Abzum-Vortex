@@ -13,10 +13,11 @@ import {
   TableRow,
 } from "../../components/table";
 import { cellValueToText, DisplayCellView } from "../cell";
-import { rowDetailResultSchema } from "@vortex/platform/schema";
+import type { RowDetailReply } from "@vortex/platform/schema";
 import { fail } from "../payload-parse";
 import {
-  parseProjectedPart,
+  isInternalAddress,
+  readProjectedResult,
   type DisplayColumn,
   type DisplayDetailCell,
   type DisplayDetailField,
@@ -52,13 +53,15 @@ const location = { propertyPath: ["related_records"] };
  */
 const parseOutcome = (value: unknown): Outcome | undefined => {
   if (value === undefined) return undefined;
-  const result = parseProjectedPart(
-    rowDetailResultSchema,
+  const result = readProjectedResult<RowDetailReply>(
     value,
     "Related records are invalid",
     location,
   );
   if (result.status !== "ready") return { status: result.status };
+  // A related record opens a page of this application; any other address is refused.
+  if (result.rows.some((row) => row.href !== undefined && !isInternalAddress(row.href)))
+    return fail("A related record's page must be in this application", location);
   const next = result.nextContinuationToken;
   return {
     status: "ready",

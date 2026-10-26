@@ -11,7 +11,7 @@ import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "../de
 import { createPayloadParser } from "../registry";
 import type { DisplayRenderProps } from "./context";
 import { DisplayStateContainer } from "./display-state-container";
-import { parseDisplayData, projectedValuesParser } from "./projected-data";
+import { readDisplayData } from "./projected-data";
 
 export type { QueryNoticeItem, QueryNoticePayload };
 const QUERY_NOTICE_RELEASE = PLATFORM_BLOCK_RELEASE_IDENTITIES.QUERY_NOTICE_BLOCK_RELEASE;
@@ -34,14 +34,17 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /** The ready values a query notice block accepts: no arbitrary row values, content or extra keys. */
-export const parseQueryNoticePayload = projectedValuesParser(
-  queryNoticePayloadSchema,
-  "Query Notice runtime input must match its closed permitted projection",
-);
+export const parseQueryNoticePayload = (
+  value: unknown,
+  location: DefinitionRenderErrorLocation,
+): QueryNoticePayload => {
+  const parsed = queryNoticePayloadSchema.safeParse(value);
+  return parsed.success ? parsed.data : refuse(location);
+};
 
 /** Existing transport supplies empty events; this release never accepts a callback or event. */
 export const QUERY_NOTICE_PAYLOAD_PARSER = createPayloadParser({
-  data: (value, location) => parseDisplayData(value, parseQueryNoticePayload, location),
+  data: (value, location) => readDisplayData(value, location, parseQueryNoticePayload),
   events: (value, location) => {
     if (value !== undefined && (!isRecord(value) || Reflect.ownKeys(value).length !== 0))
       refuse(location);

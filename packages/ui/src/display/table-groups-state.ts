@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { tableLevelResultSchema } from "@vortex/platform/schema";
+import type { TableLevelReply } from "@vortex/platform/schema";
 import {
-  parseProjectedPart,
+  readProjectedResult,
   type DisplayEventHandlers,
   type DisplayRow,
   type DisplayTablePayload,
@@ -40,8 +40,7 @@ const parseMembers = (
   page: number,
 ): Exclude<Members, Readonly<{ status: "loading" }>> | undefined => {
   if (value === undefined) return undefined;
-  const result = parseProjectedPart(
-    tableLevelResultSchema,
+  const result = readProjectedResult<TableLevelReply>(
     value,
     "A group's members are invalid",
     location,

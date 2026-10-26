@@ -13,6 +13,7 @@ import {
 } from "../records-table-features";
 import { readRecordsTableQueryState, readRecordsTableView } from "../records-table-state";
 import { projectBoardPlacement } from "../board-query";
+import { boardPayloadSchema } from "../display-payload-board";
 import { filterTimeZone } from "./records-table";
 import {
   fieldFilterTargetsOf,
@@ -164,7 +165,11 @@ export const readBoard = async (
   });
   if (projection.outcome === "ready") {
     try {
-      read.data[placementId] = read.services.boardData(projection.values);
+      // The board payload is checked against the board contract where the server builds it.
+      read.data[placementId] = {
+        status: "ready",
+        values: boardPayloadSchema.parse(projection.values),
+      };
     } catch (error) {
       logPlacementFailure(
         read.address,

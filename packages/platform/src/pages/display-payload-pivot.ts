@@ -95,6 +95,8 @@ export const pivotResultSchema = z.discriminatedUnion("status", [
     .readonly(),
 ]);
 export type PivotResult = z.input<typeof pivotResultSchema>;
+/** A pivot read as the page receives it. */
+export type PivotReply = z.output<typeof pivotResultSchema>;
 export type PivotPage = Omit<
   Extract<z.output<typeof pivotResultSchema>, { status: "ready" }>,
   "status"
