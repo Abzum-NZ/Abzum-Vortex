@@ -88,12 +88,12 @@ export function RecordDetailDisplay(props: DisplayRenderProps<RecordDetailPayloa
                 data-vortex-field-key={contract?.headingField}
                 data-vortex-heading-field-key={contract?.headingField}
               >
-                <DisplayHeader
-                  title={title}
-                  accessibleName={accessibleName}
-                  events={events}
-                  actions={actions}
-                />
+                <div className="flex min-w-0 flex-wrap items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1 *:mb-0">
+                    <DisplayHeader title={title} accessibleName={accessibleName} events={events} />
+                  </div>
+                  {actions}
+                </div>
               </CardHeader>
               <Separator />
             </div>

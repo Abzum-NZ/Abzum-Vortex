@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactElement, ReactNode } from "react";
+import type { ReactElement } from "react";
 import { Button } from "../components/button";
 import { Card, CardContent } from "../components/card";
 import { Checkbox } from "../components/checkbox";
@@ -12,23 +12,18 @@ import { usePendingGesture } from "../controls/pending-gesture";
 import { Icon } from "../icons/icon";
 import type { DisplayEventHandlers, DisplayRow, DisplaySemanticEvent } from "./projected-data";
 
-/**
- * Optional authored title with a refresh control bound to the declared `refresh` event, and the
- * block's own actions beside them when it declares an actions slot.
- */
+/** Optional authored title with a refresh control bound to the declared `refresh` event. */
 export function DisplayHeader({
   title,
   accessibleName,
   events,
-  actions,
 }: Readonly<{
   title: string | undefined;
   accessibleName: string;
   events: DisplayEventHandlers | undefined;
-  actions?: ReactNode;
 }>): ReactElement | null {
   const refresh = events?.refresh;
-  if (title === undefined && refresh === undefined && actions === undefined) return null;
+  if (title === undefined && refresh === undefined) return null;
   return (
     <div className="mb-4 flex min-w-0 flex-wrap items-center justify-between gap-2">
       {title === undefined ? null : (
@@ -36,20 +31,15 @@ export function DisplayHeader({
           {title}
         </h2>
       )}
-      {refresh === undefined && actions === undefined ? null : (
-        <div className="ms-auto flex min-w-0 flex-wrap items-center gap-2">
-          {refresh === undefined ? null : (
-            <Button
-              variant="outline"
-              size="sm"
-              aria-label={`Refresh ${accessibleName}`}
-              onClick={() => refresh({ event: "refresh" })}
-            >
-              Refresh
-            </Button>
-          )}
-          {actions}
-        </div>
+      {refresh === undefined ? null : (
+        <Button
+          variant="outline"
+          size="sm"
+          aria-label={`Refresh ${accessibleName}`}
+          onClick={() => refresh({ event: "refresh" })}
+        >
+          Refresh
+        </Button>
       )}
     </div>
   );
