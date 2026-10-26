@@ -841,9 +841,44 @@
                                               }
                                             },
                                             {
-                                              "op": "literal",
-                                              "type": "text",
-                                              "value": " is installed with its roles. Give people their roles in IAM; people with a role find the application in the launcher."
+                                              "op": "if",
+                                              "condition": {
+                                                "op": "reference",
+                                                "reference": {
+                                                  "source": "task_output",
+                                                  "task": "confirm_install",
+                                                  "key": "choice"
+                                                }
+                                              },
+                                              "then": {
+                                                "op": "join",
+                                                "parts": [
+                                                  {
+                                                    "op": "literal",
+                                                    "type": "text",
+                                                    "value": " is installed and you now have the role "
+                                                  },
+                                                  {
+                                                    "op": "reference",
+                                                    "reference": {
+                                                      "source": "task_output",
+                                                      "task": "review",
+                                                      "key": "result",
+                                                      "path": ["member_role_name"]
+                                                    }
+                                                  },
+                                                  {
+                                                    "op": "literal",
+                                                    "type": "text",
+                                                    "value": ". Find it in the launcher; give other people their roles in IAM."
+                                                  }
+                                                ]
+                                              },
+                                              "else": {
+                                                "op": "literal",
+                                                "type": "text",
+                                                "value": " is installed with its roles. Give people their roles in IAM; people with a role find the application in the launcher."
+                                              }
                                             }
                                           ]
                                         }
