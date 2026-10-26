@@ -318,14 +318,15 @@ export const createHumanOrganizationRequestService = (
       const refused =
         code === "42501" || recentAuthenticationRequired || roleSettingsChangeRequired;
       const cause = describeFailure(error);
-      // A request its caller abandoned (the browser left the page) is stopped on purpose; that is
-      // not a failure of the platform. Every other cause is logged in full.
+      // A request its caller abandoned (the browser left the page) is stopped on purpose, and a
+      // permission refusal is the access model answering: neither is a failure of the platform,
+      // so neither is logged as an error. Every other cause is logged in full.
       const abandoned =
         error instanceof Error &&
         error.name === "VortexDatabaseError" &&
         error.message === "DATABASE_REQUEST_STOPPED";
       if (abandoned) console.info(`[access] human organisation request stopped: ${cause}`);
-      else if (refused) console.error(`[access] human organisation request refused: ${cause}`);
+      else if (refused) console.info(`[access] human organisation request refused: ${cause}`);
       else console.error(`[access] human organisation request failed: ${cause}`);
       appendTelemetry(correlationId, refused ? "refused" : "temporarily_unavailable", startedAtMs);
       return recentAuthenticationRequired
