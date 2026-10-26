@@ -15,6 +15,7 @@ import type { ApplicationCompositionCatalogueSnapshot } from "./application-comp
 import type { PlatformBlockRelease } from "./application-composition/platform-block-release";
 import type { PlatformThemeRelease } from "./application-composition/theme";
 import type { PlatformServiceOperationRelease } from "./application-flow-bindings";
+import type { PlatformPin } from "./platform-pins";
 import type {
   DefinitionCompilationOutput,
   ApplicationCompilationOutput,
@@ -89,10 +90,10 @@ export type DefinitionPublicationCandidate = DefinitionCandidateDraft &
     historyEvidence: DefinitionPublicationHistoryEvidence;
     savedConditionHistory: readonly SavedConditionLike[];
     /**
-     * The platform service operations and connection types the latest release pins, exactly as it
-     * stored them. A platform release changing under an unchanged draft still needs a new release.
+     * The platform service operations and connection types the latest release pins, as platformPins
+     * compares them. A platform release changing under an unchanged draft still needs a new release.
      */
-    latestPlatformPins: readonly ExactDefinitionDependency[];
+    latestPlatformPins: readonly PlatformPin[];
   }>;
 
 /** Immutable organization-owned module release made available to a dependency compilation. */
