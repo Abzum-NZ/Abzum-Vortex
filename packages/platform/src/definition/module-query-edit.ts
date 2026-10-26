@@ -250,6 +250,10 @@ export const inlineQueryProblems = (record: RecordType, query: InlineQuery): str
   if (query.select.length === 0) problems.push("Columns: choose at least one field to show.");
   missing("Columns", query.select);
   repeated("Columns", query.select);
+  if (query.select.length > 0 && !query.select.includes(record.title_field))
+    problems.push(
+      `Columns: include ${named(record.title_field)}, the title every table row shows.`,
+    );
   if (query.sort.length === 0)
     problems.push(
       "Sorting: choose at least one field to sort by, so the order is always the same.",
