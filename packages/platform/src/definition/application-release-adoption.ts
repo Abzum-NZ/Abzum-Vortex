@@ -49,28 +49,23 @@ export type ApplicationReleaseAdoptionTarget = Readonly<{
   currentReleaseVersion: string;
 }>;
 
-export interface ApplicationReleaseAdoptionTargetRepository {
-  read(applicationRootId: ApplicationRootId): Promise<unknown | undefined>;
-}
-
 type AdoptionTargetRow = DatabaseRow & { readonly adoption_target: unknown };
 
-export const createDatabaseApplicationReleaseAdoptionTargetRepository = (
+const readStoredTarget = async (
   transaction: RequestDatabaseTransaction,
-): ApplicationReleaseAdoptionTargetRepository => ({
-  async read(applicationRootId) {
-    const rows = await transaction.query<AdoptionTargetRow>`
-      select vortex_definition.read_application_release_adoption_target(
-        ${applicationRootId}::uuid
-      ) as adoption_target
-    `;
-    if (rows.length !== 1) throw new DefinitionError("APPLICATION_RELEASE_ADOPTION_TARGET_FAILED");
-    return rows[0]!.adoption_target === null ? undefined : rows[0]!.adoption_target;
-  },
-});
+  applicationRootId: ApplicationRootId,
+): Promise<unknown | undefined> => {
+  const rows = await transaction.query<AdoptionTargetRow>`
+    select vortex_definition.read_application_release_adoption_target(
+      ${applicationRootId}::uuid
+    ) as adoption_target
+  `;
+  if (rows.length !== 1) throw new DefinitionError("APPLICATION_RELEASE_ADOPTION_TARGET_FAILED");
+  return rows[0]!.adoption_target === null ? undefined : rows[0]!.adoption_target;
+};
 
 export const createApplicationReleaseAdoptionTargetService = (
-  repository: ApplicationReleaseAdoptionTargetRepository,
+  transaction: RequestDatabaseTransaction,
 ) => ({
   /**
    * The published-current release of the addressed application, or undefined when one cannot be
@@ -82,7 +77,7 @@ export const createApplicationReleaseAdoptionTargetService = (
 
     let candidate: unknown | undefined;
     try {
-      candidate = await repository.read(command.data.applicationRootId);
+      candidate = await readStoredTarget(transaction, command.data.applicationRootId);
     } catch (error) {
       if (error instanceof DefinitionError) throw error;
       throw new DefinitionError("APPLICATION_RELEASE_ADOPTION_TARGET_UNAVAILABLE");
@@ -115,10 +110,3 @@ export const createApplicationReleaseAdoptionTargetService = (
     });
   },
 });
-
-export const createDatabaseApplicationReleaseAdoptionTargetService = (
-  transaction: RequestDatabaseTransaction,
-) =>
-  createApplicationReleaseAdoptionTargetService(
-    createDatabaseApplicationReleaseAdoptionTargetRepository(transaction),
-  );
