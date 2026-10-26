@@ -156,17 +156,20 @@ export const createAccessAdministrationAssignmentOperations = ({
               assignment: normalizeAssignmentLedgerFact(row.assignment_summary),
               accessVersion: databaseRevision(row.access_version),
             });
+            // The same role already assigned to the same assignee for an overlapping period returns
+            // that live assignment unchanged instead of a second one (no new row, same version).
+            const created =
+              parsed.success && sameId(parsed.data.assignment.roleAssignmentId, roleAssignmentId);
             if (
               typeof row.organization_id !== "string" ||
               !sameId(row.organization_id, scope.organizationId) ||
               row.outcome !== "completed" ||
               !parsed.success ||
-              parsed.data.accessVersion !== scope.accessVersion + 1 ||
-              !sameId(parsed.data.assignment.roleAssignmentId, roleAssignmentId) ||
+              parsed.data.accessVersion !== scope.accessVersion + (created ? 1 : 0) ||
               !sameId(parsed.data.assignment.role.roleId, command.data.roleId) ||
               !sameAssignee(parsed.data.assignment.assignee, command.data) ||
               parsed.data.assignment.assignmentKind !== command.data.assignmentKind ||
-              parsed.data.assignment.revision !== 1 ||
+              (created && parsed.data.assignment.revision !== 1) ||
               parsed.data.assignment.state !== "live"
             )
               throw new Error("ORGANIZATION_ACCESS_ADMINISTRATION_UNAVAILABLE");
