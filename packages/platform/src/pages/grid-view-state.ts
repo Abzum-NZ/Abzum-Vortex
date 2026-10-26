@@ -216,6 +216,8 @@ const gridViewItemSchema = z
     scope: z.enum(gridViewScopes),
     /** The viewer owns it: only then (or with the share permission) can they change it. */
     mine: z.boolean(),
+    /** This viewer's saved arrangement derives from this viewer-owned named view. */
+    personalDefault: z.boolean(),
     revision: revisionSchema,
   })
   .strict();
@@ -561,6 +563,7 @@ export const addressedDefaultGridViews = (
           name: view.name,
           scope: "default" as const,
           mine: false,
+          personalDefault: false,
           revision: 1,
         },
         document: sanitized.document,
