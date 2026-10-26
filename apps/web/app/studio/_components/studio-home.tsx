@@ -4,6 +4,8 @@ import type { OrganizationBuilderRoot } from "@vortex/platform/server";
 import { AppearanceToggle } from "@vortex/ui/appearance-toggle";
 import { FormattedTime } from "@vortex/ui/display/date-format-context";
 import { Icon } from "@vortex/ui/icons";
+import { resolveIdentitySessionWithEmail } from "../../auth/_lib/session-server";
+import { StudioAccount } from "./studio-account";
 import { Badge } from "@vortex/ui/components/badge";
 import { Button } from "@vortex/ui/components/button";
 import { Card, CardContent, CardFooter, CardHeader } from "@vortex/ui/components/card";
@@ -55,8 +57,8 @@ function NewApplication({
   );
 }
 
-/** The one application listing, shared by the all-organization and organization routes. */
-export function StudioHome({
+/** The one application listing, shared by the all-organisation and organisation routes. */
+export async function StudioHome({
   organizations,
   filtered = false,
 }: Readonly<{
@@ -64,13 +66,15 @@ export function StudioHome({
   filtered?: boolean;
 }>) {
   const only = organizations.length === 1 ? organizations[0] : undefined;
+  const { email } = await resolveIdentitySessionWithEmail();
+  if (email === undefined) throw new Error("Active identity session resolved without an email");
   return (
     <main className="mx-auto min-h-dvh max-w-7xl space-y-8 px-8 py-8">
       <header className="flex flex-wrap items-center justify-between gap-4">
         <div className="space-y-2">
           <h1 className="text-3xl font-semibold tracking-tight">Applications</h1>
           <p className="text-sm text-muted-foreground">
-            Build and publish applications for your organization.
+            Build and publish applications for your organisation.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -94,7 +98,12 @@ export function StudioHome({
               </DropdownMenuContent>
             </DropdownMenu>
           )}
+          <Button variant="outline" nativeButton={false} render={<Link href="/signed-in" />}>
+            <Icon name="chevron-left" />
+            Back to applications
+          </Button>
           <AppearanceToggle />
+          <StudioAccount account={{ email }} organizationName={only?.name ?? "Studio"} />
         </div>
       </header>
       {organizations.map((organization) => {
@@ -152,16 +161,8 @@ export function StudioHome({
                     >
                       <CardHeader>
                         <div className="flex items-start justify-between gap-2">
-                          <div className="flex size-10 items-center justify-center rounded-lg bg-primary/10 font-semibold text-foreground">
-                            {icon === undefined ? (
-                              root.name
-                                .split(/\s+/)
-                                .slice(0, 2)
-                                .map((word) => word[0])
-                                .join("")
-                            ) : (
-                              <Icon name={icon} className="size-5" />
-                            )}
+                          <div className="flex size-10 items-center justify-center rounded-lg bg-primary/10 text-foreground">
+                            <Icon name={icon ?? "circle"} className="size-5" />
                           </div>
                           <DropdownMenu>
                             <DropdownMenuTrigger
