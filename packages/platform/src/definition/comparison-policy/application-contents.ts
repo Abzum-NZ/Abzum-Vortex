@@ -679,8 +679,19 @@ export const compareApplicationContents = (
     candidate.platformBlockDependencies as RecordValue[],
     blockDependencyIdentity,
     "platform_block_dependency",
+    // A platform block release the application uses changing under it is the platform moving on,
+    // not the application's own behaviour changing.
     (before, after) =>
-      compareSimpleComponent(reasons, "platform_block_dependency", after.blockId, before, after),
+      pushChange(
+        reasons,
+        before,
+        after,
+        "minor",
+        "dependency_requirement_changed",
+        "platform_block_dependency",
+        "version_requirement",
+        after.blockId,
+      ),
     () => "minor",
     (item) => item.blockId,
   );

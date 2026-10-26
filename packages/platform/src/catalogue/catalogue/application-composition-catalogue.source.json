@@ -126,6 +126,7 @@
       {
         "kind": "text",
         "key": "text",
+        "presentation": true,
         "label": "Text",
         "help": "Literal text shown when no projected value is supplied",
         "required": false,
@@ -2353,7 +2354,7 @@
         "key": "maximum_size_mb",
         "label": "Maximum size (MiB)",
         "required": true,
-        "minimum": 0.000001,
+        "minimum": 1e-6,
         "maximum": 5000,
         "integer": false
       },
@@ -4179,6 +4180,7 @@
       {
         "kind": "text",
         "key": "text",
+        "presentation": true,
         "label": "Text",
         "help": "Heading text shown to people",
         "required": true,
@@ -4539,7 +4541,7 @@
         "key": "maximum_size_mb",
         "label": "Maximum size (MiB)",
         "required": true,
-        "minimum": 0.000001,
+        "minimum": 1e-6,
         "maximum": 5000,
         "integer": false
       },
