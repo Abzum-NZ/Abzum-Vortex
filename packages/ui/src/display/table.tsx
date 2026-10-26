@@ -773,11 +773,8 @@ function RecordsTableView(props: DisplayRenderProps<DisplayTablePayload>): React
           )}
         </Empty>
       );
-    // The viewport is unknown while the server renders and the page hydrates: the declared
-    // skeleton stands in until the one presentation that fits is known.
-    if (presentation === undefined) return loading;
     if (grouped !== undefined)
-      if (presentation === "grid") return membersView();
+      if (presentation !== "cards") return membersView();
       else
         return (
           <Suspense fallback={loading}>
@@ -814,7 +811,7 @@ function RecordsTableView(props: DisplayRenderProps<DisplayTablePayload>): React
           data-vortex-display="table"
           data-vortex-placement-id={placementId}
           data-vortex-table-density={layout.density}
-          data-vortex-table-presentation={presentation}
+          data-vortex-table-presentation={presentation ?? "pending"}
           {...(fullScreen.active ? { "data-vortex-full-screen": "" } : {})}
           className={cn(fullScreen.active && FULL_SCREEN_CLASS)}
           {...(revealed ? { "data-vortex-display-revealed": "" } : {})}
@@ -829,18 +826,29 @@ function RecordsTableView(props: DisplayRenderProps<DisplayTablePayload>): React
             {message}
           </div>
           {subRowsOpen === undefined ? null : gridFeatures.subRowsController(subRowsOpen)}
-          {ready && availability === "unavailable" ? (
-            <DisplayStateContainer
-              accessibleName={accessibleName}
-              availability={availability}
-              projectedData={state}
-              emptyMessage={emptyMessage}
-            >
-              {body}
-            </DisplayStateContainer>
-          ) : (
-            body
-          )}
+          {/* While the server renders and the page hydrates the viewport is unknown: the body is
+              drawn as the grid a wide screen shows, so its rows are painted from the first HTML,
+              and a phone shows the declared skeleton in its place (the phone layout rule) until
+              its cards are drawn. The body keeps one element, so a wide screen keeps its grid. */}
+          <div data-vortex-table-body="" className="contents">
+            {ready && availability === "unavailable" ? (
+              <DisplayStateContainer
+                accessibleName={accessibleName}
+                availability={availability}
+                projectedData={state}
+                emptyMessage={emptyMessage}
+              >
+                {body}
+              </DisplayStateContainer>
+            ) : (
+              body
+            )}
+          </div>
+          {presentation === undefined ? (
+            <div data-vortex-table-phone-skeleton="" className="contents">
+              {loading}
+            </div>
+          ) : null}
           {ready &&
           !pivotOpen &&
           values?.totals !== undefined &&
