@@ -34,6 +34,10 @@ type ReleaseAdoptionData =
 export type ApplicationAccountActions = Readonly<{
   account: ApplicationAccount;
   organizationName: string;
+  /** The organisation's address segment, shown beside its display name. */
+  organizationShortName?: string;
+  /** Where the person opens Studio; present only for people who may change drafts. */
+  studioHref?: string;
   readReleaseAdoption?: () => Promise<ReleaseAdoptionData>;
   chooseOrganization: () => void | Promise<void>;
   signOut: () => void | Promise<void>;
@@ -68,6 +72,7 @@ export function ApplicationAccountMenu({
   const avatarSource = account?.displayName ?? account?.email ?? organizationName;
   const avatarInitial = avatarSource?.slice(0, 1).toUpperCase();
   const source = actions?.readReleaseAdoption;
+  const studioHref = actions?.studioHref;
   const [adoption, setAdoption] =
     useState<Readonly<{ source: typeof source; data: ReleaseAdoptionData }>>();
   const requestToken = useRef(0);
@@ -123,6 +128,11 @@ export function ApplicationAccountMenu({
                   <span className="font-normal text-muted-foreground">{account.email}</span>
                 )}
                 <span className="font-normal text-muted-foreground">{organizationName}</span>
+                {actions?.organizationShortName === undefined ? null : (
+                  <span className="font-normal text-muted-foreground">
+                    {actions.organizationShortName}
+                  </span>
+                )}
               </>
             )}
           </DropdownMenuLabel>
@@ -146,6 +156,11 @@ export function ApplicationAccountMenu({
         ) : releaseAdoption.offer === undefined ? null : (
           <DropdownMenuItem onClick={() => void releaseAdoption.offer?.adopt()}>
             Adopt release {releaseAdoption.offer.version}
+          </DropdownMenuItem>
+        )}
+        {studioHref === undefined ? null : (
+          <DropdownMenuItem onClick={() => void actions?.openApplication(studioHref)}>
+            Open Studio
           </DropdownMenuItem>
         )}
         {offerOrganizationSwitch ? (

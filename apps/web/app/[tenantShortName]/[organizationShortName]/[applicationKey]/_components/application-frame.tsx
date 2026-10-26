@@ -257,7 +257,9 @@ export function ApplicationFrame({
   );
   const accountActions: ApplicationAccountActions = {
     account: model.account,
-    organizationName: application.organizationShortName,
+    organizationName: application.organizationDisplayName,
+    organizationShortName: application.organizationShortName,
+    ...(model.studioHref === undefined ? {} : { studioHref: model.studioHref }),
     ...(adoptRelease === undefined ? {} : { readReleaseAdoption }),
     chooseOrganization: async () => {
       if (await leaveIfConfirmed()) router.push("/signed-in");
@@ -289,7 +291,8 @@ export function ApplicationFrame({
   const applicationShellRuntime: ApplicationShellRuntime = {
     applicationName: application.name,
     applicationHref: `${basePath}/${encodeURIComponent(application.homePageKey)}`,
-    organizationName: application.organizationShortName,
+    organizationName: application.organizationDisplayName,
+    organizationShortName: application.organizationShortName,
     pageName:
       pageState.page !== undefined && sameId(pageState.page.pageId, currentPage?.pageId ?? "")
         ? pageState.page.name
@@ -307,8 +310,12 @@ export function ApplicationFrame({
       startPageChange,
       applicationSearch,
       applicationSearchPageSubject,
+      locale: model.locale,
+      timeZone: model.timeZone,
     }),
     [
+      model.locale,
+      model.timeZone,
       applicationSearch,
       applicationSearchPageSubject,
       clearPageState,
@@ -331,6 +338,8 @@ export function ApplicationFrame({
             platformThemeTokens={model.platformThemeTokens}
             {...(shell === undefined ? {} : { shell })}
             theme={model.theme}
+            locale={model.locale}
+            timeZone={model.timeZone}
             applicationShellRuntime={applicationShellRuntime}
             applicationSwitcherSource={() =>
               readApplicationSwitcherAction(

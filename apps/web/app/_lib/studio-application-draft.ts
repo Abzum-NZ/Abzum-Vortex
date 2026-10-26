@@ -342,10 +342,12 @@ export const loadStudioCreateAccess = async (
         return { kind: "available", value: scope.organizationId };
       },
     );
+    // A person without builder authority is the expected answer for most people: the launcher and
+    // every application frame ask it on each read, so the refusal is returned and not logged.
     if (result.kind === "available")
       return result.value.kind === "available"
         ? { kind: "available", organizationId: result.value.value }
-        : declined("create-access", result.value);
+        : result.value;
     return declined(
       "create-access",
       result.kind === "temporarily_unavailable"

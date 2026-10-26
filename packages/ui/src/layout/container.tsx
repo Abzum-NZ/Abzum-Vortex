@@ -48,9 +48,12 @@ function geometryCss(scope: string, geometry: ContainerGeometry): string {
   const row = geometry.direction === "row";
   const menuWidth =
     row && geometry.menuWidth !== undefined ? `${geometry.menuWidth}rem` : undefined;
+  // A sticky menu sticks below the fixed header the shell declares in `--vortex-header-height`
+  // and is no taller than the space under it less the page padding above and below it, so its
+  // top is never covered by the header when the page is scrolled to the end.
   const placement =
     geometry.menuPlacement === "sticky"
-      ? "position:sticky;top:0;min-height:0;max-height:100svh;overflow-y:auto;align-self:flex-start"
+      ? "position:sticky;top:var(--vortex-header-height,0px);min-height:0;max-height:calc(100svh - var(--vortex-header-height,0px) - 2 * var(--vortex-content-padding,0px));overflow-y:auto;align-self:flex-start"
       : geometry.menuPlacement === "full_height"
         ? "position:static;min-height:100svh;max-height:none;overflow-y:visible;align-self:stretch"
         : "position:static;min-height:0;max-height:none;overflow-y:visible;align-self:auto";

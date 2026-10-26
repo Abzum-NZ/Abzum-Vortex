@@ -15,6 +15,7 @@ import {
 } from "./application-composition/block-property-schema";
 import type { SourceBlockPropertyValueContract } from "./application-composition/block-property-values";
 import type { PlatformBlockRelease } from "./application-composition/platform-block-release";
+import { tablePublishesRecord } from "./application-composition/query-binding-check";
 import { readQueryBindings } from "./application-composition/query-bindings";
 import {
   readRecordDetailContract,
@@ -160,13 +161,20 @@ export function validateApplicationSourceCatalogue(
   const selectionsOf = (page: Body["pages"][number]): Map<string, string> => {
     const selections = new Map<string, string>();
     for (const item of sourcePageItems(page.composition)) {
-      const { row_click: rowClick, record_types: recordTypes } = item.props;
+      const {
+        row_click: rowClick,
+        record_types: recordTypes,
+        publishes_parameter: publishesParameter,
+      } = item.props;
       const query = item.props.vortex.query;
       if (
         typeof rowClick === "object" &&
         rowClick !== null &&
         "mode" in rowClick &&
-        rowClick.mode === "select" &&
+        tablePublishesRecord(
+          rowClick.mode,
+          typeof publishesParameter === "string" ? publishesParameter : undefined,
+        ) &&
         query !== undefined
       ) {
         const [moduleKey, queryKey] = query.split(":");
