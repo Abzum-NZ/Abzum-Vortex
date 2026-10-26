@@ -7,6 +7,7 @@ import {
   sourceItemTree,
   sourcePageItems,
   sourcePageShell,
+  tablePublishesRecord,
   type QueryBindingField,
   type QueryBindingPageFacts,
   type QueryBindingPlacement,
@@ -124,7 +125,7 @@ export function studioQueryBindingFacts(
           typeof rowClick === "object" &&
           rowClick !== null &&
           "mode" in rowClick &&
-          rowClick.mode === "select"
+          tablePublishesRecord(rowClick.mode, named(props.publishes_parameter))
             ? queries.find((candidate) => candidate.reference === props.vortex.query)?.recordType
             : undefined,
       };

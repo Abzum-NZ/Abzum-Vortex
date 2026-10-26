@@ -148,7 +148,8 @@ export async function OrganizationAddressState({
       addressState={state.kind}
       page={page}
       shell={organizationLauncherShell}
-      organizationName={entry?.organizationShortName ?? ""}
+      organizationName={entry?.organizationDisplayName ?? ""}
+      organizationShortName={entry?.organizationShortName ?? ""}
       account={account}
       launcherHref={entry === undefined ? "/signed-in" : organizationHref}
       actionPlacementId={organizationAddressStateActionPlacementId}

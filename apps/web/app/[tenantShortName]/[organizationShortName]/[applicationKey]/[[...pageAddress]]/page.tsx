@@ -262,11 +262,14 @@ async function readApplicationAddressPage({ params, searchParams }: ApplicationA
     const launcher = await loadOrganizationLauncher(identity.session);
     if (launcher.kind !== "available")
       throw new Error(`Organisation launcher unavailable for the account menu: ${launcher.kind}`);
-    const displayName = launcher.entries.find(
+    const organization = launcher.entries.find(
       (entry) =>
         entry.tenantShortName === tenantShortName &&
         entry.organizationShortName === organizationShortName,
-    )?.accountDisplayName;
+    );
+    if (organization === undefined)
+      throw new Error("Organisation launcher does not list the addressed organisation");
+    const displayName = organization.accountDisplayName;
     const account: ApplicationAccount =
       displayName === undefined ? { email } : { email, displayName };
     return (
@@ -277,7 +280,8 @@ async function readApplicationAddressPage({ params, searchParams }: ApplicationA
             page={experience.page}
             shells={experience.shells}
             theme={experience.theme}
-            organizationName={organizationShortName}
+            organizationName={organization.organizationDisplayName}
+            organizationShortName={organization.organizationShortName}
             account={account}
             platformBlockReleases={platformBlockReleasesFor(experience.page, experience.shells)}
             fieldInputControlReleases={fieldInputControlReleasesFor(

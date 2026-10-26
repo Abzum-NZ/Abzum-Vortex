@@ -101,11 +101,14 @@ export default async function OrganizationPage({ params }: OrganizationPageProps
   const launcher = await loadOrganizationLauncher(identity.session);
   if (launcher.kind !== "available")
     throw new Error(`Organisation launcher unavailable for the account menu: ${launcher.kind}`);
-  const displayName = launcher.entries.find(
+  const organization = launcher.entries.find(
     (entry) =>
       entry.tenantShortName === tenantShortName &&
       entry.organizationShortName === organizationShortName,
-  )?.accountDisplayName;
+  );
+  if (organization === undefined)
+    throw new Error("Organisation launcher does not list the addressed organisation");
+  const displayName = organization.accountDisplayName;
   const account: ApplicationAccount =
     displayName === undefined ? { email } : { email, displayName };
 
@@ -145,7 +148,8 @@ export default async function OrganizationPage({ params }: OrganizationPageProps
       shell={organizationLauncherShell}
       placementId={organizationLauncherPlacementId}
       values={launcherValues}
-      organizationName={resolved.read.organizationShortName}
+      organizationName={organization.organizationDisplayName}
+      organizationShortName={organization.organizationShortName}
       account={account}
       openApplication={openApplication}
       launcherHref={retryHref}

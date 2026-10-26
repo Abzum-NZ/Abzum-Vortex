@@ -192,6 +192,7 @@ function compileOwnedFlowSources(
       page: (alias) => owned("page", alias),
       // A form is the page placement that holds it.
       form: (alias) => owned("block_placement", alias),
+      placement: (alias) => owned("block_placement", alias),
       connectionBinding: (alias) => owned("connection_binding", alias),
       executionBinding: (alias) => owned("execution_binding", alias),
       locate: (flowKey) => resolution.location("flow", flowKey),

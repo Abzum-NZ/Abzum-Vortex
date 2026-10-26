@@ -1,6 +1,14 @@
-import { useCallback, useEffect, useMemo, useRef, type Dispatch, type SetStateAction } from "react";
-import { applyRecordsTableQueryChange } from "@vortex/platform/schema";
-import type { ControlSemanticEvent } from "@vortex/ui";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  type Dispatch,
+  type RefObject,
+  type SetStateAction,
+} from "react";
+import { applyRecordsTableQueryChange, sameId } from "@vortex/platform/schema";
+import type { ControlSemanticEvent, FlowIntentHost } from "@vortex/ui";
 import type { ApplicationPageModel } from "../../../../../../_lib/application-page";
 import type { PageAddress } from "./page-address";
 import type { PageSelection } from "./types";
@@ -18,6 +26,7 @@ export function usePageParameters({
   refreshPlacements,
   rereadTables,
   setSelection,
+  setPanelRef,
 }: Readonly<{
   model: ApplicationPageModel;
   address: PageAddress;
@@ -26,7 +35,11 @@ export function usePageParameters({
   refreshPlacements: (ids: readonly string[]) => Promise<void>;
   rereadTables: (placementIds: readonly string[]) => void;
   setSelection: Dispatch<SetStateAction<PageSelection>>;
+  /** The flow host's panel seam, which this hook fills with the page's panel host. */
+  setPanelRef: RefObject<FlowIntentHost["setPanel"]>;
 }>) {
+  /** The row each table's click last reported: the record a panel its flow opens shows. */
+  const clickedRecords = useRef(new Map<string, string>());
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const shown = useRef({ navigationKey, search: currentSearch });
   const observedSearch = useRef(currentSearch);
@@ -118,5 +131,32 @@ export function usePageParameters({
     },
     [model.pageParameters.drawers, publish],
   );
-  return useMemo(() => ({ change, publish, dismiss }), [change, publish, dismiss]);
+  const rowClicked = useCallback((placementId: string, recordId: string) => {
+    clickedRecords.current.set(placementId, recordId);
+  }, []);
+  // `interface.set_panel` opens or closes a drawer through the one selection path: the drawer is
+  // open exactly while the address holds a record for the control it opens with, so opening
+  // publishes the clicked row's record and closing clears it.
+  const setPanel = useCallback(
+    (panel: string, state: string) => {
+      const drawer = Object.keys(model.pageParameters.drawers).find((id) => sameId(id, panel));
+      const control = drawer === undefined ? undefined : model.pageParameters.drawers[drawer];
+      const recordId = control === undefined ? undefined : clickedRecords.current.get(control);
+      if (control === undefined || (state === "open" && recordId === undefined)) {
+        console.error(
+          `[page] set_panel names no drawer opened by a clicked control: PANEL_NOT_OPENABLE ${panel}`,
+        );
+        return;
+      }
+      if (state === "open") publish(control, recordId!, false);
+      else if (state === "closed") publish(control, "", false);
+      else console.error(`[page] set_panel state is neither open nor closed: ${state}`);
+    },
+    [model.pageParameters.drawers, publish],
+  );
+  setPanelRef.current = setPanel;
+  return useMemo(
+    () => ({ change, publish, dismiss, rowClicked }),
+    [change, publish, dismiss, rowClicked],
+  );
 }

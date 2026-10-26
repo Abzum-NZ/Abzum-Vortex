@@ -5,10 +5,15 @@ import { headers } from "next/headers";
 import {
   DEFAULT_PLATFORM_THEME_RELEASE,
   PREVIEW_SEED_RECORD_BOUND,
+  readCurrentOrganizationRuntimeSettingsAfterAuthorization,
+  runtimeContextSelection,
   runtimePreviewOf,
+  type InstalledRuntimeContext,
 } from "@vortex/platform/server";
 import {
   type ProjectedNavigation,
+  type IdentitySession,
+  organizationRuntimeSettingsSchema,
   sameId,
   compiledPageShellId,
   splitProjectedPage,
@@ -27,6 +32,9 @@ import { loadApplicationSearch } from "./application-search";
 import { fieldInputControlReleasesFor, platformBlockReleasesFor } from "./platform-block-releases";
 import { requestAddressHeader } from "./request-address";
 import { readPageProjections } from "./application-page/load";
+import { loadOrganizationLauncher } from "./organization-context";
+import { humanOrganizationRequests } from "./server-composition";
+import { loadStudioCreateAccess } from "./studio-application-draft";
 import { pageSubjectParameter } from "./application-page/placement-helpers";
 import type { ApplicationPageModel } from "./application-page";
 
@@ -45,7 +53,14 @@ export type ApplicationFrameModel = Readonly<{
     key: string;
     name: string;
     homePageKey: string;
+    /** The organisation's display name, shown in the header; the short name is its address. */
+    organizationDisplayName: string;
   }>;
+  /** The viewer's BCP 47 locale and IANA time zone: their own, else the organisation's. */
+  locale: string;
+  timeZone: string;
+  /** Where the viewer opens Studio; absent unless they may change drafts in this organisation. */
+  studioHref?: string;
   /** The pages the viewer may open, for the current page's menu state and breadcrumb. */
   pages: readonly Readonly<{ pageId: string; key: string; name: string }>[];
   account: ApplicationAccount;
@@ -66,6 +81,43 @@ export type ApplicationFrameModel = Readonly<{
     seedBoundedPages: Readonly<Record<string, string>>;
   }>;
 }>;
+
+/**
+ * The locale and time zone dates show in for the viewer: those on their own organisation account,
+ * else the organisation's. Read once, under the person's own verified request scope.
+ */
+const readViewerPresentation = async (
+  session: IdentitySession,
+  context: InstalledRuntimeContext,
+): Promise<Readonly<{ locale: string; timeZone: string }>> => {
+  const result = await humanOrganizationRequests().run(
+    session,
+    runtimeContextSelection(context),
+    async (transaction) => {
+      const rows = await transaction.query<{ language: unknown; time_zone: unknown }>`
+        select language, time_zone from vortex_access.read_own_profile()
+      `;
+      const own = rows[0];
+      if (rows.length !== 1 || own === undefined) throw new Error("FRAME_PROFILE_UNAVAILABLE");
+      const organization =
+        await readCurrentOrganizationRuntimeSettingsAfterAuthorization(transaction);
+      const locale =
+        own.language === null
+          ? organization?.language
+          : organizationRuntimeSettingsSchema.shape.language.parse(own.language);
+      const timeZone =
+        own.time_zone === null
+          ? organization?.timeZone
+          : organizationRuntimeSettingsSchema.shape.timeZone.parse(own.time_zone);
+      if (locale === undefined || timeZone === undefined)
+        throw new Error("FRAME_PRESENTATION_SETTINGS_UNAVAILABLE");
+      return { locale, timeZone };
+    },
+  );
+  if (result.kind !== "available")
+    throw new Error(`FRAME_PRESENTATION_READ_${result.kind.toUpperCase()}`);
+  return result.value;
+};
 
 /** The page key and query the request addresses inside this application, when it names one page. */
 const addressedPage = async (
@@ -171,7 +223,19 @@ export const loadApplicationFrame = cache(
       true,
     );
     if (navigationRead === undefined) throw new Error("FRAME_NAVIGATION_NOT_READ");
-    const [projected, navigation] = await Promise.all([projectedPageRead, navigationRead]);
+    const [projected, navigation, presentation, launcher, studioAccess] = await Promise.all([
+      projectedPageRead,
+      navigationRead,
+      readViewerPresentation(session, context),
+      loadOrganizationLauncher(session),
+      loadStudioCreateAccess(context.organizationId),
+    ]);
+    if (launcher.kind !== "available")
+      throw new Error(`FRAME_ORGANIZATION_LAUNCHER_${launcher.kind.toUpperCase()}`);
+    const organization = launcher.entries.find((entry) =>
+      sameId(entry.organizationId, context.organizationId),
+    );
+    if (organization === undefined) throw new Error("FRAME_ORGANIZATION_NOT_LISTED");
     if (projected.kind !== "available" || projected.value === undefined) return undefined;
     if (navigation.kind !== "available") return undefined;
 
@@ -232,7 +296,12 @@ export const loadApplicationFrame = cache(
         key: resolved.application.key,
         name: resolved.application.name,
         homePageKey: resolved.application.homePageKey,
+        organizationDisplayName: organization.organizationDisplayName,
       },
+      ...presentation,
+      ...(studioAccess.kind === "available"
+        ? { studioHref: `/studio/${encodeURIComponent(studioAccess.organizationId)}` }
+        : {}),
       pages: content.pages
         .filter((page) => permittedKeys.has(page.key))
         .map((page) => ({ pageId: page.pageId, key: page.key, name: page.name })),

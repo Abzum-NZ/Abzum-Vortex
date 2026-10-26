@@ -24,7 +24,9 @@ import { signOut } from "../../../auth/actions";
 type OrganizationShellPageProps = Readonly<{
   page: PageDefinition;
   shell: ApplicationShell;
+  /** The organisation's display name; its short name is the address segment shown beside it. */
   organizationName: string;
+  organizationShortName: string;
   account: ApplicationAccount;
   launcherHref: string;
   platformBlockReleases: readonly PlatformBlockRelease[];
@@ -40,6 +42,7 @@ function OrganizationShellPage({
   page,
   shell,
   organizationName,
+  organizationShortName,
   account,
   launcherHref,
   platformBlockReleases,
@@ -61,6 +64,7 @@ function OrganizationShellPage({
       actions={{
         account,
         organizationName,
+        organizationShortName,
         chooseOrganization: () => router.push("/signed-in"),
         signOut,
         openApplication: (href) => router.push(href),
@@ -78,6 +82,7 @@ function OrganizationShellPage({
           applicationName: shell.name,
           applicationHref: launcherHref,
           organizationName,
+          organizationShortName,
           pageName: page.name,
         }}
         runtimeInputs={runtimeInputs(router)}

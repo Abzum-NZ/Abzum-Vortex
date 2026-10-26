@@ -2,6 +2,7 @@ import {
   checkQueryBindings,
   pageBindingFacts,
   selectionControlSettingKey,
+  tablePublishesRecord,
   type QueryBindingField,
   type QueryBindingInput,
   type QueryBindingPageFacts,
@@ -135,7 +136,10 @@ export const compiledPageBindingFacts = <Entry extends Placement>(
         linkTargets: linkInputTypes(settings),
         fieldType: field === undefined ? undefined : fieldFacts(field).type,
         selectedRecordType:
-          object(rowClick.mode).value === "select" && queryRecordType.state === "resolved"
+          tablePublishesRecord(
+            object(rowClick.mode).value,
+            readPublishedParameter(settings as Settings),
+          ) && queryRecordType.state === "resolved"
             ? String(queryRecordType.recordTypeId)
             : undefined,
       };
