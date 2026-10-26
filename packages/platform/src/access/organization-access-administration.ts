@@ -224,44 +224,6 @@ export const organizationAdministrationPermissionSchema = z
   })
   .strict();
 
-export const listOrganizationAdministrationPermissionsCommandSchema = z
-  .object({
-    pageSize: z.number().int().min(1).max(100),
-    after: organizationAccessExactPermissionSchema.optional(),
-  })
-  .strict();
-
-export const listOrganizationAdministrationPermissionsResultSchema = z
-  .object({
-    permissions: z.array(organizationAdministrationPermissionSchema).max(100),
-    nextAfter: organizationAccessExactPermissionSchema.optional(),
-    accessVersion: revisionSchema,
-  })
-  .strict();
-
-export const readOrganizationAdministrationPermissionCommandSchema = z
-  .object({ reference: organizationAccessExactPermissionSchema })
-  .strict();
-
-export const readOrganizationAdministrationPermissionResultSchema = z.discriminatedUnion(
-  "outcome",
-  [
-    z
-      .object({
-        outcome: z.literal("available"),
-        permission: organizationAdministrationPermissionSchema,
-        accessVersion: revisionSchema,
-      })
-      .strict(),
-    z
-      .object({
-        outcome: z.literal("unavailable"),
-        accessVersion: revisionSchema,
-      })
-      .strict(),
-  ],
-);
-
 export const organizationAdministrationRoleSourceSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("custom") }).strict(),
   z
@@ -481,68 +443,6 @@ export const changeOrganizationAdministrationRoleResultSchema = z
     accessVersion: revisionSchema,
   })
   .strict();
-
-export const organizationAdministrationApplicationRoleTemplateReferenceSchema = z
-  .object({
-    applicationRootId: applicationRootIdSchema,
-    sourceRoleId: roleIdSchema,
-  })
-  .strict();
-
-export const organizationAdministrationApplicationRoleTemplateSchema = z
-  .object({
-    reference: organizationAdministrationApplicationRoleTemplateReferenceSchema,
-    key: builderKeySchema,
-    label: labelSchema,
-    permissionSelectionKind: z.enum(["exact", "application_wildcard"]),
-    /** Published declaration keys, not accepted or effective permission evidence. */
-    publishedPermissionKeys: z.array(namespacedKeySchema).min(1),
-  })
-  .strict()
-  .superRefine((value, context) => {
-    if (new Set(value.publishedPermissionKeys).size !== value.publishedPermissionKeys.length)
-      context.addIssue({
-        code: "custom",
-        path: ["publishedPermissionKeys"],
-        message: "Published role-template permission keys must be unique",
-      });
-  });
-
-export const listOrganizationAdministrationApplicationRoleTemplatesCommandSchema = z
-  .object({
-    pageSize: z.number().int().min(1).max(100),
-    after: organizationAdministrationApplicationRoleTemplateReferenceSchema.optional(),
-  })
-  .strict();
-
-export const listOrganizationAdministrationApplicationRoleTemplatesResultSchema = z
-  .object({
-    templates: z.array(organizationAdministrationApplicationRoleTemplateSchema).max(100),
-    nextAfter: organizationAdministrationApplicationRoleTemplateReferenceSchema.optional(),
-    accessVersion: revisionSchema,
-  })
-  .strict();
-
-export const readOrganizationAdministrationApplicationRoleTemplateCommandSchema = z
-  .object({ reference: organizationAdministrationApplicationRoleTemplateReferenceSchema })
-  .strict();
-
-export const readOrganizationAdministrationApplicationRoleTemplateResultSchema =
-  z.discriminatedUnion("outcome", [
-    z
-      .object({
-        outcome: z.literal("available"),
-        template: organizationAdministrationApplicationRoleTemplateSchema,
-        accessVersion: revisionSchema,
-      })
-      .strict(),
-    z
-      .object({
-        outcome: z.literal("unavailable"),
-        accessVersion: revisionSchema,
-      })
-      .strict(),
-  ]);
 
 export const organizationAdministrationAssignmentTemporalStateSchema = z.enum([
   "active",
@@ -980,21 +880,6 @@ export type RemoveOrganizationAdministrationMembershipCommand = z.infer<
 export type ChangeOrganizationAdministrationMembershipResult = z.infer<
   typeof changeOrganizationAdministrationMembershipResultSchema
 >;
-export type OrganizationAdministrationPermission = z.infer<
-  typeof organizationAdministrationPermissionSchema
->;
-export type ListOrganizationAdministrationPermissionsCommand = z.infer<
-  typeof listOrganizationAdministrationPermissionsCommandSchema
->;
-export type ListOrganizationAdministrationPermissionsResult = z.infer<
-  typeof listOrganizationAdministrationPermissionsResultSchema
->;
-export type ReadOrganizationAdministrationPermissionCommand = z.infer<
-  typeof readOrganizationAdministrationPermissionCommandSchema
->;
-export type ReadOrganizationAdministrationPermissionResult = z.infer<
-  typeof readOrganizationAdministrationPermissionResultSchema
->;
 export type OrganizationAdministrationRoleSummary = z.infer<
   typeof organizationAdministrationRoleSummarySchema
 >;
@@ -1033,24 +918,6 @@ export type PrepareOrganizationAdministrationRoleChangeCommand = z.infer<
 >;
 export type PrepareOrganizationAdministrationRoleRevisionAcceptanceCommand = z.infer<
   typeof prepareOrganizationAdministrationRoleRevisionAcceptanceCommandSchema
->;
-export type OrganizationAdministrationApplicationRoleTemplateReference = z.infer<
-  typeof organizationAdministrationApplicationRoleTemplateReferenceSchema
->;
-export type OrganizationAdministrationApplicationRoleTemplate = z.infer<
-  typeof organizationAdministrationApplicationRoleTemplateSchema
->;
-export type ListOrganizationAdministrationApplicationRoleTemplatesCommand = z.infer<
-  typeof listOrganizationAdministrationApplicationRoleTemplatesCommandSchema
->;
-export type ListOrganizationAdministrationApplicationRoleTemplatesResult = z.infer<
-  typeof listOrganizationAdministrationApplicationRoleTemplatesResultSchema
->;
-export type ReadOrganizationAdministrationApplicationRoleTemplateCommand = z.infer<
-  typeof readOrganizationAdministrationApplicationRoleTemplateCommandSchema
->;
-export type ReadOrganizationAdministrationApplicationRoleTemplateResult = z.infer<
-  typeof readOrganizationAdministrationApplicationRoleTemplateResultSchema
 >;
 export type OrganizationAdministrationAssignmentSubject = z.infer<
   typeof organizationAdministrationAssignmentSubjectSchema

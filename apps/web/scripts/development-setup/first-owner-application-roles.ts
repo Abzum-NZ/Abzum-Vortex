@@ -1,6 +1,7 @@
 import {
   acceptedApplicationRoleKey,
   createOrganizationAccessAdministrationService,
+  releaseRoleTemplates,
 } from "@vortex/platform/server";
 import {
   assignOrganizationAdministrationRoleAssignmentCommandSchema,
@@ -9,81 +10,62 @@ import {
   prepareOrganizationAdministrationRoleChangeCommandSchema,
   prepareOrganizationAdministrationRoleRevisionAcceptanceCommandSchema,
   type IdentityAuthorityId,
-  type OrganizationAdministrationApplicationRoleTemplate,
-  type OrganizationAdministrationPermission,
   type OrganizationAdministrationRoleAssignment,
   type OrganizationAdministrationRoleSummary,
   sameId,
 } from "@vortex/platform/schema";
-import { nominatedOwnerSession } from "./development-authority";
+import { nominatedOwnerSession, type SystemContextFacts } from "./development-authority";
+import { readActiveReleaseRevision, readReleaseSet } from "./install";
 import type { PublishedRelease } from "./state";
 
 type AccessAdministration = ReturnType<typeof createOrganizationAccessAdministrationService>;
 type OwnerSession = ReturnType<typeof nominatedOwnerSession>;
 type OrganizationSelection = ReturnType<typeof organizationSelectionCandidateSchema.parse>;
+type RoleTemplate = ReturnType<typeof releaseRoleTemplates>[number] &
+  Readonly<{ applicationRootId: string }>;
 
 export type FirstOwnerApplicationRoleFacts = Readonly<{
   identityAuthorityId: IdentityAuthorityId;
-  organizationId: string;
+  system: SystemContextFacts;
   stewardIdentityId: string;
   stewardOrganizationAccountId: string;
   applicationKeys: readonly string[];
   releases: ReadonlyMap<string, PublishedRelease>;
 }>;
 
-const templateIdentity = (template: OrganizationAdministrationApplicationRoleTemplate): string =>
-  `${template.reference.applicationRootId.toLowerCase()}:${template.reference.sourceRoleId.toLowerCase()}`;
+const templateIdentity = (template: RoleTemplate): string =>
+  `${template.applicationRootId.toLowerCase()}:${template.sourceRoleId.toLowerCase()}`;
 
 const roleIdentity = (role: OrganizationAdministrationRoleSummary): string | undefined =>
   role.source.kind === "application"
     ? `${role.source.applicationRootId.toLowerCase()}:${role.source.sourceRoleId.toLowerCase()}`
     : undefined;
 
-const roleKeyForTemplate = (template: OrganizationAdministrationApplicationRoleTemplate): string =>
-  acceptedApplicationRoleKey(
-    template.reference.applicationRootId,
-    template.reference.sourceRoleId,
-    template.key,
-  );
+const roleKeyForTemplate = (template: RoleTemplate): string =>
+  acceptedApplicationRoleKey(template.applicationRootId, template.sourceRoleId, template.key);
 
-const listTemplates = async (
-  administration: AccessAdministration,
-  session: OwnerSession,
-  selection: OrganizationSelection,
-): Promise<OrganizationAdministrationApplicationRoleTemplate[]> => {
-  const templates: OrganizationAdministrationApplicationRoleTemplate[] = [];
-  let after: OrganizationAdministrationApplicationRoleTemplate["reference"] | undefined;
-  for (;;) {
-    const page = await administration.listApplicationRoleTemplates(session, selection, {
-      pageSize: 40,
-      ...(after === undefined ? {} : { after }),
-    });
-    if (page.kind !== "available")
-      throw new Error(`Application role templates could not be read (${page.kind})`);
-    templates.push(...page.value.templates);
-    after = page.value.nextAfter;
-    if (after === undefined) return templates;
+/**
+ * The role templates of the release each application runs, derived from that release exactly as an
+ * App Store install derives the templates it accepts.
+ */
+const installedTemplates = async (
+  facts: FirstOwnerApplicationRoleFacts,
+  applicationKeyByRootId: ReadonlyMap<string, string>,
+): Promise<RoleTemplate[]> => {
+  const templates: RoleTemplate[] = [];
+  for (const [rootId, applicationKey] of applicationKeyByRootId) {
+    const revision = await readActiveReleaseRevision(facts, applicationKey, rootId);
+    if (revision === null)
+      throw new Error(`Installed application ${applicationKey} has no active release`);
+    const releaseSet = await readReleaseSet(facts.system, rootId, revision);
+    templates.push(
+      ...releaseRoleTemplates(releaseSet).map((template) => ({
+        ...template,
+        applicationRootId: rootId,
+      })),
+    );
   }
-};
-
-const listPermissions = async (
-  administration: AccessAdministration,
-  session: OwnerSession,
-  selection: OrganizationSelection,
-): Promise<OrganizationAdministrationPermission[]> => {
-  const permissions: OrganizationAdministrationPermission[] = [];
-  let after: OrganizationAdministrationPermission["reference"] | undefined;
-  for (;;) {
-    const page = await administration.listPermissions(session, selection, {
-      pageSize: 100,
-      ...(after === undefined ? {} : { after }),
-    });
-    if (page.kind !== "available")
-      throw new Error(`Registered application permissions could not be read (${page.kind})`);
-    permissions.push(...page.value.permissions);
-    after = page.value.nextAfter;
-    if (after === undefined) return permissions;
-  }
+  return templates;
 };
 
 const listRoles = async (
@@ -127,19 +109,6 @@ const listAssignments = async (
   }
 };
 
-const hasAdministrativePermission = (
-  template: OrganizationAdministrationApplicationRoleTemplate,
-  permissions: readonly OrganizationAdministrationPermission[],
-): boolean =>
-  template.permissionSelectionKind === "exact" &&
-  permissions.some(
-    (permission) =>
-      permission.administrative &&
-      permission.reference.applicationRootId !== undefined &&
-      sameId(permission.reference.applicationRootId, template.reference.applicationRootId) &&
-      template.publishedPermissionKeys.includes(permission.key),
-  );
-
 /** An upgrade that changes a shipped role template leaves the accepted role to accept again. */
 const acceptedRevision = async (
   administration: AccessAdministration,
@@ -173,8 +142,7 @@ const acceptedRole = async (
   administration: AccessAdministration,
   session: OwnerSession,
   selection: OrganizationSelection,
-  template: OrganizationAdministrationApplicationRoleTemplate,
-  permissions: readonly OrganizationAdministrationPermission[],
+  template: RoleTemplate,
 ): Promise<OrganizationAdministrationRoleSummary> => {
   const prepared = await administration.prepareRoleChange(
     session,
@@ -182,13 +150,11 @@ const acceptedRole = async (
     prepareOrganizationAdministrationRoleChangeCommandSchema.parse({
       operation: "accept_new_application_role",
       roleKey: roleKeyForTemplate(template),
-      label: template.label,
+      label: template.name,
       description: `Accepted from the ${template.key} role template by local development setup.`,
-      privilegeClassification: hasAdministrativePermission(template, permissions)
-        ? "privileged"
-        : "standard",
-      templateApplicationRootId: template.reference.applicationRootId,
-      sourceRoleId: template.reference.sourceRoleId,
+      privilegeClassification: template.privileged ? "privileged" : "standard",
+      templateApplicationRootId: template.applicationRootId,
+      sourceRoleId: template.sourceRoleId,
       acceptBroadenedAuthority: "accept",
     }),
   );
@@ -208,8 +174,8 @@ const acceptedRole = async (
   if (
     role.lifecycle !== "active" ||
     role.source.kind !== "application" ||
-    !sameId(role.source.applicationRootId, template.reference.applicationRootId) ||
-    !sameId(role.source.sourceRoleId, template.reference.sourceRoleId)
+    !sameId(role.source.applicationRootId, template.applicationRootId) ||
+    !sameId(role.source.sourceRoleId, template.sourceRoleId)
   )
     throw new Error(`Accepted role for ${template.key} did not match its current template`);
   return role;
@@ -239,7 +205,7 @@ export const grantFirstOwnerApplicationRoles = async (
   });
   const session = nominatedOwnerSession(facts.stewardIdentityId);
   const selection = organizationSelectionCandidateSchema.parse({
-    organizationId: facts.organizationId,
+    organizationId: facts.system.organizationId,
   });
   const applicationKeyByRootId = new Map<string, string>();
   for (const applicationKey of facts.applicationKeys) {
@@ -252,26 +218,20 @@ export const grantFirstOwnerApplicationRoles = async (
     applicationKeyByRootId.set(rootId, applicationKey);
   }
 
-  const [templates, permissions, currentRoles, assignments] = await Promise.all([
-    listTemplates(administration, session, selection),
-    listPermissions(administration, session, selection),
+  const [templates, currentRoles, assignments] = await Promise.all([
+    installedTemplates(facts, applicationKeyByRootId),
     listRoles(administration, session, selection),
     listAssignments(administration, session, selection),
   ]);
-  if (templates.length === 0)
-    throw new Error("No installed application role templates were available to the first owner");
 
   const templateCountsByApplication = new Map<string, number>();
   const seenTemplates = new Set<string>();
-  const installedTemplates = templates.filter((template) =>
-    applicationKeyByRootId.has(template.reference.applicationRootId.toLowerCase()),
-  );
-  for (const template of installedTemplates) {
+  for (const template of templates) {
     const identity = templateIdentity(template);
     if (seenTemplates.has(identity))
       throw new Error(`Application role template ${template.key} was returned more than once`);
     seenTemplates.add(identity);
-    const rootId = template.reference.applicationRootId.toLowerCase();
+    const rootId = template.applicationRootId.toLowerCase();
     templateCountsByApplication.set(rootId, (templateCountsByApplication.get(rootId) ?? 0) + 1);
   }
   for (const [rootId, applicationKey] of applicationKeyByRootId) {
@@ -296,15 +256,15 @@ export const grantFirstOwnerApplicationRoles = async (
   }
 
   let ensuredGrants = 0;
-  for (const template of installedTemplates) {
+  for (const template of templates) {
     const identity = templateIdentity(template);
     let role = rolesByTemplate.get(identity);
     if (role === undefined) {
-      role = await acceptedRole(administration, session, selection, template, permissions);
+      role = await acceptedRole(administration, session, selection, template);
       rolesByTemplate.set(identity, role);
       const applicationName =
-        applicationKeyByRootId.get(template.reference.applicationRootId.toLowerCase()) ??
-        template.reference.applicationRootId;
+        applicationKeyByRootId.get(template.applicationRootId.toLowerCase()) ??
+        template.applicationRootId;
       log(`accepted ${applicationName} role template ${template.key}`);
     }
     if (role.lifecycle === "acceptance_required") {
@@ -322,8 +282,8 @@ export const grantFirstOwnerApplicationRoles = async (
       );
 
     const applicationName =
-      applicationKeyByRootId.get(template.reference.applicationRootId.toLowerCase()) ??
-      template.reference.applicationRootId;
+      applicationKeyByRootId.get(template.applicationRootId.toLowerCase()) ??
+      template.applicationRootId;
     if (hasActiveOwnerAssignment(assignments, role, facts.stewardOrganizationAccountId)) {
       log(`first owner already holds ${applicationName} role ${role.key}`);
       ensuredGrants += 1;
