@@ -883,8 +883,8 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
                   accessVersion: access.accessVersion,
                 });
           if (mode === "already_active") {
+            // The exact active bindings were checked before Access was aligned.
             const installation = activeSummary(request, state);
-            requireExactBindings(request, pins, installation.moduleBindings, "active");
             await changeContributions(
               transaction,
               request,
