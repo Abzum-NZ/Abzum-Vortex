@@ -52,7 +52,7 @@
         {
           "id": "fld_landing_zone_tile_application_key",
           "key": "application_key",
-          "label": "Application key",
+          "label": "Application",
           "required": false,
           "unique": false,
           "filterable": true,
@@ -67,7 +67,7 @@
         {
           "id": "fld_landing_zone_tile_page_key",
           "key": "page_key",
-          "label": "Page key",
+          "label": "Page",
           "required": false,
           "unique": false,
           "filterable": true,
@@ -82,7 +82,7 @@
         {
           "id": "fld_landing_zone_tile_record_type",
           "key": "record_type",
-          "label": "Record type key",
+          "label": "Record type",
           "required": false,
           "unique": false,
           "filterable": true,
@@ -193,7 +193,7 @@
         {
           "id": "fld_landing_zone_tile_record_id",
           "key": "record_id",
-          "label": "Record identity",
+          "label": "Record",
           "required": false,
           "unique": false,
           "filterable": true,
