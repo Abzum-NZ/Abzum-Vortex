@@ -245,69 +245,68 @@ const mapFailure = (error: unknown): EventConsumerProgressError => {
   return new EventConsumerProgressError("EVENT_CONSUMER_PROGRESS_STORAGE_UNAVAILABLE");
 };
 
-export interface EventConsumerProgressRepository {
-  claim(input: EventConsumerClaimInput): Promise<EventConsumerClaimResult>;
-  renewLease(input: EventConsumerLeaseRenewalInput): Promise<EventConsumerLeaseRenewalResult>;
-  acknowledge(
-    input: EventConsumerAcknowledgementInput,
-  ): Promise<EventConsumerAcknowledgementResult>;
-}
-
-/**
- * Event-owned runtime adapter.  The caller supplies the server-only runtime
- * transaction; this adapter never accepts a request context, direct SQL, or an
- * organisation selector from a consumer.
+/*
+ * The consumer progress operations. The caller supplies the server-only runtime transaction; they
+ * never accept a request context, direct SQL, or an organisation selector from a consumer.
  */
-export const createEventConsumerProgressRepository = (
+
+/** Claims the next bounded batch of occurrences for one consumer, each under a lease. */
+export const claimEventConsumerOccurrences = async (
   transaction: RequestDatabaseTransaction,
-): EventConsumerProgressRepository =>
-  Object.freeze<EventConsumerProgressRepository>({
-    async claim(inputCandidate) {
-      const input = validateClaimInput(inputCandidate);
-      try {
-        const rows = await transaction.query<ConsumerProgressRow>`
-          select vortex_platform.claim_consumer_occurrences(
-            ${input.consumerKey}::text,
-            ${input.batchSize}::integer,
-            ${input.leaseSeconds}::integer
-          ) as result
-        `;
-        return parseClaimResult(requireOne(rows).result, input.batchSize);
-      } catch (error) {
-        throw mapFailure(error);
-      }
-    },
+  inputCandidate: EventConsumerClaimInput,
+): Promise<EventConsumerClaimResult> => {
+  const input = validateClaimInput(inputCandidate);
+  try {
+    const rows = await transaction.query<ConsumerProgressRow>`
+      select vortex_platform.claim_consumer_occurrences(
+        ${input.consumerKey}::text,
+        ${input.batchSize}::integer,
+        ${input.leaseSeconds}::integer
+      ) as result
+    `;
+    return parseClaimResult(requireOne(rows).result, input.batchSize);
+  } catch (error) {
+    throw mapFailure(error);
+  }
+};
 
-    async renewLease(inputCandidate) {
-      const input = validateLeaseRenewalInput(inputCandidate);
-      try {
-        const rows = await transaction.query<ConsumerProgressRow>`
-          select vortex_platform.renew_consumer_occurrence_lease(
-            ${input.consumerKey}::text,
-            ${input.ackCursor}::uuid,
-            ${input.occurrenceId}::uuid,
-            ${input.leaseSeconds}::integer
-          ) as result
-        `;
-        return parseLeaseRenewalResult(requireOne(rows).result);
-      } catch (error) {
-        throw mapFailure(error);
-      }
-    },
+/** Renews the lease of one claimed occurrence just before its consumer runs. */
+export const renewEventConsumerLease = async (
+  transaction: RequestDatabaseTransaction,
+  inputCandidate: EventConsumerLeaseRenewalInput,
+): Promise<EventConsumerLeaseRenewalResult> => {
+  const input = validateLeaseRenewalInput(inputCandidate);
+  try {
+    const rows = await transaction.query<ConsumerProgressRow>`
+      select vortex_platform.renew_consumer_occurrence_lease(
+        ${input.consumerKey}::text,
+        ${input.ackCursor}::uuid,
+        ${input.occurrenceId}::uuid,
+        ${input.leaseSeconds}::integer
+      ) as result
+    `;
+    return parseLeaseRenewalResult(requireOne(rows).result);
+  } catch (error) {
+    throw mapFailure(error);
+  }
+};
 
-    async acknowledge(inputCandidate) {
-      const input = validateAcknowledgementInput(inputCandidate);
-      try {
-        const rows = await transaction.query<ConsumerProgressRow>`
-          select vortex_platform.acknowledge_consumer_occurrence(
-            ${input.consumerKey}::text,
-            ${input.ackCursor}::uuid,
-            ${input.occurrenceId}::uuid
-          ) as result
-        `;
-        return parseAcknowledgementResult(requireOne(rows).result);
-      } catch (error) {
-        throw mapFailure(error);
-      }
-    },
-  });
+/** Acknowledges one delivered occurrence, releasing later ones for the same record. */
+export const acknowledgeEventConsumerOccurrence = async (
+  transaction: RequestDatabaseTransaction,
+  inputCandidate: EventConsumerAcknowledgementInput,
+): Promise<EventConsumerAcknowledgementResult> => {
+  const input = validateAcknowledgementInput(inputCandidate);
+  try {
+    const rows = await transaction.query<ConsumerProgressRow>`
+      select vortex_platform.acknowledge_consumer_occurrence(
+        ${input.consumerKey}::text,
+        ${input.ackCursor}::uuid,
+        ${input.occurrenceId}::uuid
+      ) as result
+    `;
+    return parseAcknowledgementResult(requireOne(rows).result);
+  } catch (error) {
+    throw mapFailure(error);
+  }
+};

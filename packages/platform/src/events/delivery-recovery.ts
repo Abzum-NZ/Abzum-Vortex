@@ -359,80 +359,75 @@ const mapFailure = (error: unknown): EventDeliveryRecoveryError => {
   return new EventDeliveryRecoveryError("EVENT_DELIVERY_RECOVERY_STORAGE_UNAVAILABLE");
 };
 
-export interface EventDeliveryRecoveryRepository {
-  /** Reports one failed delivery attempt against an existing claim. */
-  reportFailure(input: EventDeliveryFailureReportInput): Promise<EventDeliveryFailureReportResult>;
-  /**
-   * Requests recovery of one exhausted claim. Storage refuses unless the named
-   * system actor holds an active system actor grant scoped to the consumer, so
-   * naming an actor confers nothing by itself.
-   */
-  recoverClaim(input: EventDeliveryRecoveryInput): Promise<EventDeliveryRecoveryResult>;
-  /** Bounded inspection of currently exhausted, replayable claims. */
-  listTerminallyFailed(
-    input: EventDeliveryRecoveryListInput,
-  ): Promise<readonly TerminallyFailedConsumerOccurrence[]>;
-}
+/*
+ * The delivery recovery operations over the consumer claim and lease row. The caller supplies the
+ * server-only runtime transaction; they never accept a request context, direct SQL or an
+ * organisation selector from a consumer. Recovery authority is only ever a stored system actor
+ * grant. They never claim fresh work or mutate an event_outbox row.
+ */
+
+/** Reports one failed delivery attempt against an existing claim. */
+export const reportEventDeliveryFailure = async (
+  transaction: RequestDatabaseTransaction,
+  inputCandidate: EventDeliveryFailureReportInput,
+): Promise<EventDeliveryFailureReportResult> => {
+  const input = validateFailureReportInput(inputCandidate);
+  try {
+    const rows = await transaction.query<DeliveryRecoveryRow>`
+      select vortex_platform.record_consumer_occurrence_delivery_failure(
+        ${input.consumerKey}::text,
+        ${input.occurrenceId}::uuid,
+        ${input.claimCursor}::uuid,
+        ${input.failureCode}::text,
+        ${input.maxAttempts}::integer,
+        ${input.retryBackoffSeconds}::integer
+      ) as result
+    `;
+    return parseFailureReportResult(requireOne(rows).result);
+  } catch (error) {
+    throw mapFailure(error);
+  }
+};
 
 /**
- * Event-owned runtime adapter over the #639 consumer claim/lease row. The
- * caller supplies the server-only runtime transaction; this adapter never
- * accepts a request context, direct SQL or an organisation selector from a
- * consumer. Recovery authority is only ever a stored system actor grant. It
- * never claims fresh work or mutates an event_outbox row.
+ * Requests recovery of one exhausted claim. Storage refuses unless the named system actor holds an
+ * active system actor grant scoped to the consumer, so naming an actor confers nothing by itself.
  */
-export const createEventDeliveryRecoveryRepository = (
+export const recoverEventDeliveryClaim = async (
   transaction: RequestDatabaseTransaction,
-): EventDeliveryRecoveryRepository =>
-  Object.freeze<EventDeliveryRecoveryRepository>({
-    async reportFailure(inputCandidate) {
-      const input = validateFailureReportInput(inputCandidate);
-      try {
-        const rows = await transaction.query<DeliveryRecoveryRow>`
-          select vortex_platform.record_consumer_occurrence_delivery_failure(
-            ${input.consumerKey}::text,
-            ${input.occurrenceId}::uuid,
-            ${input.claimCursor}::uuid,
-            ${input.failureCode}::text,
-            ${input.maxAttempts}::integer,
-            ${input.retryBackoffSeconds}::integer
-          ) as result
-        `;
-        return parseFailureReportResult(requireOne(rows).result);
-      } catch (error) {
-        throw mapFailure(error);
-      }
-    },
+  inputCandidate: EventDeliveryRecoveryInput,
+): Promise<EventDeliveryRecoveryResult> => {
+  const input = validateRecoveryInput(inputCandidate);
+  try {
+    const rows = await transaction.query<DeliveryRecoveryRow>`
+      select vortex_platform.recover_consumer_occurrence_claim(
+        ${input.consumerKey}::text,
+        ${input.occurrenceId}::uuid,
+        ${input.expectedFailureCount}::integer,
+        ${input.systemActorId}::uuid
+      ) as result
+    `;
+    return parseRecoveryResult(requireOne(rows).result);
+  } catch (error) {
+    throw mapFailure(error);
+  }
+};
 
-    async recoverClaim(inputCandidate) {
-      const input = validateRecoveryInput(inputCandidate);
-      try {
-        const rows = await transaction.query<DeliveryRecoveryRow>`
-          select vortex_platform.recover_consumer_occurrence_claim(
-            ${input.consumerKey}::text,
-            ${input.occurrenceId}::uuid,
-            ${input.expectedFailureCount}::integer,
-            ${input.systemActorId}::uuid
-          ) as result
-        `;
-        return parseRecoveryResult(requireOne(rows).result);
-      } catch (error) {
-        throw mapFailure(error);
-      }
-    },
-
-    async listTerminallyFailed(inputCandidate) {
-      const input = validateListInput(inputCandidate);
-      try {
-        const rows = await transaction.query<DeliveryRecoveryRow>`
-          select vortex_platform.list_terminally_failed_consumer_occurrences(
-            ${input.consumerKey}::text,
-            ${input.limit}::integer
-          ) as result
-        `;
-        return parseTerminallyFailedList(requireOne(rows).result, input.limit);
-      } catch (error) {
-        throw mapFailure(error);
-      }
-    },
-  });
+/** Bounded inspection of currently exhausted, replayable claims. */
+export const listTerminallyFailedEventDeliveries = async (
+  transaction: RequestDatabaseTransaction,
+  inputCandidate: EventDeliveryRecoveryListInput,
+): Promise<readonly TerminallyFailedConsumerOccurrence[]> => {
+  const input = validateListInput(inputCandidate);
+  try {
+    const rows = await transaction.query<DeliveryRecoveryRow>`
+      select vortex_platform.list_terminally_failed_consumer_occurrences(
+        ${input.consumerKey}::text,
+        ${input.limit}::integer
+      ) as result
+    `;
+    return parseTerminallyFailedList(requireOne(rows).result, input.limit);
+  } catch (error) {
+    throw mapFailure(error);
+  }
+};
