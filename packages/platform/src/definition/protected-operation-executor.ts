@@ -40,6 +40,7 @@ import {
   workflowIdSchema,
   organizationIdSchema,
   revisionSchema,
+  timestampSchema,
   type TenantId,
 } from "../catalogue/identifiers";
 import {
@@ -1167,6 +1168,8 @@ const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Obj
 const valueMatches = (type: string, value: unknown): value is ProtectedOperationValue => {
   if (type === "text" || type === "choice") return typeof value === "string";
   if (type === "whole_number") return typeof value === "number" && Number.isSafeInteger(value);
+  if (type === "date_time")
+    return typeof value === "string" && timestampSchema.safeParse(value).success;
   if (type === "yes_no") return typeof value === "boolean";
   if (type === "json") return jsonValueSchema.safeParse(value).success;
   return false;
