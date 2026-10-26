@@ -119,7 +119,7 @@ const descriptorLifetimeMilliseconds = 3_600_000;
 const purpose = "vortex.records.selection.v1";
 
 /** What one table read knows that the descriptor carries, beside who reads it. */
-export type RecordsSelectionTarget = Readonly<{
+type RecordsSelectionTarget = Readonly<{
   installationRevision: number;
   pageId: string;
   placementId: string;

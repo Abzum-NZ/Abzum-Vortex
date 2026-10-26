@@ -276,7 +276,7 @@ export const fieldLinkTypesOf = (module: PlacementModule): Record<string, LinkFi
  * The declared columns of every table field, in definition order, with the heading the form shows
  * and, for a choice column, its options, so a record detail shows a table field's stored rows.
  */
-export const fieldTableColumnsOf = (
+const fieldTableColumnsOf = (
   module: PlacementModule,
 ): Record<string, readonly TableFieldColumn[]> =>
   Object.fromEntries(
