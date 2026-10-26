@@ -100,6 +100,7 @@ type BoardMover = Readonly<{
   /** The bucket a card is being dragged from, so each column can show whether it may go there. */
   draggingFrom: BoardBucket | undefined;
   setDraggingFrom: (bucket: BoardBucket | undefined) => void;
+  announce: (message: string) => void;
 }>;
 
 const countText = (count: number): string => formatLocaleNumber(count);
@@ -184,23 +185,35 @@ function BoardColumn({
   const dropRefused = from !== undefined && from.key !== bucket.key && !dropAllowed;
   return (
     <div
-      className={`flex min-w-64 flex-1 basis-64 flex-col gap-3 transition-opacity max-md:min-w-0 max-md:basis-full ${
+      className={`flex min-h-64 min-w-64 flex-1 basis-64 flex-col gap-3 transition-opacity max-md:min-w-0 max-md:basis-full ${
         active ? "" : "max-md:hidden"
       } ${dropRefused ? "opacity-50" : dropAllowed ? "ring-2 ring-ring" : ""}`}
       data-vortex-board-column="true"
       data-vortex-board-key={bucket.key}
       data-vortex-board-state={pending ? "reading" : bucket.values.state}
       data-vortex-board-drop={dropAllowed ? "allowed" : dropRefused ? "refused" : undefined}
-      {...(mover === undefined || bucket.selector.kind !== "option"
+      {...(mover === undefined
         ? {}
         : {
             onDragOver: (event: DragEvent) => {
-              if (mover.dragged.current !== undefined && dropAllowed) event.preventDefault();
+              if (mover.dragged.current === undefined) return;
+              event.preventDefault();
+              event.dataTransfer.dropEffect = dropAllowed ? "move" : "none";
             },
             onDrop: (event: DragEvent) => {
               const card = mover.dragged.current;
-              if (card === undefined || !dropAllowed) return;
+              if (card === undefined) return;
               event.preventDefault();
+              if (!dropAllowed) {
+                mover.announce(
+                  from?.key === bucket.key
+                    ? `The card is already in ${bucket.label}.`
+                    : `This card cannot move from ${from?.label ?? "its current column"} to ${bucket.label}.`,
+                );
+                mover.dragged.current = undefined;
+                mover.setDraggingFrom(undefined);
+                return;
+              }
               mover.dragged.current = undefined;
               mover.setDraggingFrom(undefined);
               void mover.move(card, bucket);
@@ -254,7 +267,7 @@ function BoardColumn({
           </p>
         ) : null}
       </header>
-      <div className="flex flex-col gap-3">
+      <div className="flex min-h-32 flex-1 flex-col gap-3">
         {page === null ? (
           pending ? (
             <p className="text-sm text-muted-foreground" role="status">
@@ -316,10 +329,18 @@ function BoardColumn({
                     ? {
                         draggable: true,
                         onDragStart: (event: DragEvent) => {
+                          mover.announce("");
                           mover.dragged.current = card;
                           mover.setDraggingFrom(bucket);
                           event.dataTransfer.effectAllowed = "move";
                           event.dataTransfer.setData("text/plain", accessibleTitle);
+                          const element = event.currentTarget as HTMLElement;
+                          const bounds = element.getBoundingClientRect();
+                          event.dataTransfer.setDragImage(
+                            element,
+                            event.clientX - bounds.left,
+                            event.clientY - bounds.top,
+                          );
                         },
                         onDragEnd: () => {
                           mover.dragged.current = undefined;
@@ -537,6 +558,7 @@ export function BoardView(props: DisplayRenderProps<BoardPayload>): ReactElement
   const focusAfterMoveRef = useRef<string | undefined>(undefined);
   const draggedRef = useRef<BoardMoveCard | undefined>(undefined);
   const [draggingFrom, setDraggingFrom] = useState<BoardBucket>();
+  const [dropMessage, setDropMessage] = useState("");
   const [chosenKey, setChosenKey] = useState<string>();
   const columnsRef = useRef<HTMLDivElement>(null);
   const [overflow, setOverflow] = useState({ start: false, end: false });
@@ -673,6 +695,7 @@ export function BoardView(props: DisplayRenderProps<BoardPayload>): ReactElement
           dragged: draggedRef,
           draggingFrom,
           setDraggingFrom,
+          announce: setDropMessage,
         };
 
   const readBuckets = useCallback(
@@ -808,6 +831,9 @@ export function BoardView(props: DisplayRenderProps<BoardPayload>): ReactElement
           aria-label={accessibleName}
         >
           <DisplayHeader title={title} accessibleName={accessibleName} events={events} />
+          <span role="status" aria-live="polite" aria-atomic="true" className="sr-only">
+            {dropMessage}
+          </span>
           {values.filters === undefined ? null : (
             <Suspense fallback={null}>
               <BoardFilters
@@ -887,7 +913,7 @@ export function BoardView(props: DisplayRenderProps<BoardPayload>): ReactElement
               aria-label={`${accessibleName} columns`}
               tabIndex={0}
             >
-              <div className="flex min-w-max items-start gap-3 pb-2 max-md:min-w-0">
+              <div className="flex min-w-max items-stretch gap-3 pb-2 max-md:min-w-0">
                 {buckets.map((bucket) => (
                   <BoardColumn
                     key={bucket.key}
