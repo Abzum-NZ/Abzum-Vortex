@@ -1,4 +1,4 @@
-import { builderKeySchema, fieldIdSchema, isRecord } from "@vortex/platform/schema";
+import { isRecord } from "@vortex/platform/schema";
 import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "../definition-error";
 
 /*
@@ -34,7 +34,7 @@ export const requireExactKeys = (
   }
 };
 
-export const requireString = (
+const requireString = (
   value: unknown,
   message: string,
   location: DefinitionRenderErrorLocation,
@@ -54,40 +54,3 @@ export const requireArray = (
   message: string,
   location: DefinitionRenderErrorLocation,
 ): readonly unknown[] => (Array.isArray(value) ? value : fail(message, location));
-
-export const requireBuilderKey = (
-  value: unknown,
-  message: string,
-  location: DefinitionRenderErrorLocation,
-): string => {
-  const parsed = builderKeySchema.safeParse(value);
-  return parsed.success ? parsed.data : fail(message, location);
-};
-
-/** A row cell, column, detail field or sort key: a builder key or a declared field identity. */
-export const requireFieldKey = (
-  value: unknown,
-  message: string,
-  location: DefinitionRenderErrorLocation,
-): string => {
-  const parsed = builderKeySchema.safeParse(value);
-  if (parsed.success) return parsed.data;
-  const field = fieldIdSchema.safeParse(value);
-  return field.success ? field.data : fail(message, location);
-};
-
-export const requirePositiveInteger = (
-  value: unknown,
-  message: string,
-  location: DefinitionRenderErrorLocation,
-): number =>
-  typeof value === "number" && Number.isInteger(value) && value >= 1
-    ? value
-    : fail(message, location);
-
-export const requireFiniteNumber = (
-  value: unknown,
-  message: string,
-  location: DefinitionRenderErrorLocation,
-): number =>
-  typeof value === "number" && Number.isFinite(value) ? value : fail(message, location);
