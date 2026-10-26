@@ -1,6 +1,7 @@
 import {
   acceptedApplicationRoleKey,
   createOrganizationAccessAdministrationService,
+  releaseRoleTemplates,
 } from "@vortex/platform/server";
 import {
   assignOrganizationAdministrationRoleAssignmentCommandSchema,
@@ -9,144 +10,92 @@ import {
   prepareOrganizationAdministrationRoleChangeCommandSchema,
   prepareOrganizationAdministrationRoleRevisionAcceptanceCommandSchema,
   type IdentityAuthorityId,
-  type OrganizationAdministrationApplicationRoleTemplate,
-  type OrganizationAdministrationPermission,
-  type OrganizationAdministrationRoleAssignment,
   type OrganizationAdministrationRoleSummary,
   sameId,
 } from "@vortex/platform/schema";
-import { nominatedOwnerSession } from "./development-authority";
+import { nominatedOwnerSession, type SystemContextFacts } from "./development-authority";
+import { readActiveReleaseRevision, readReleaseSet } from "./install";
 import type { PublishedRelease } from "./state";
 
 type AccessAdministration = ReturnType<typeof createOrganizationAccessAdministrationService>;
 type OwnerSession = ReturnType<typeof nominatedOwnerSession>;
 type OrganizationSelection = ReturnType<typeof organizationSelectionCandidateSchema.parse>;
+type RoleTemplate = ReturnType<typeof releaseRoleTemplates>[number];
+type ProjectedRole = Extract<
+  Awaited<ReturnType<AccessAdministration["listRoles"]>>,
+  { kind: "available" }
+>["value"][number];
+type ProjectedAssignment = Extract<
+  Awaited<ReturnType<AccessAdministration["listRoleAssignments"]>>,
+  { kind: "available" }
+>["value"][number];
+
+/** The accepted role a grant needs: its identity, live revision, lifecycle and assignment policy. */
+type GrantableRole = Pick<
+  ProjectedRole,
+  "roleId" | "label" | "liveRevision" | "lifecycle" | "assignmentPolicy"
+>;
 
 export type FirstOwnerApplicationRoleFacts = Readonly<{
   identityAuthorityId: IdentityAuthorityId;
-  organizationId: string;
+  system: SystemContextFacts;
   stewardIdentityId: string;
   stewardOrganizationAccountId: string;
   applicationKeys: readonly string[];
   releases: ReadonlyMap<string, PublishedRelease>;
 }>;
 
-const templateIdentity = (template: OrganizationAdministrationApplicationRoleTemplate): string =>
-  `${template.reference.applicationRootId.toLowerCase()}:${template.reference.sourceRoleId.toLowerCase()}`;
+const grantable = (role: OrganizationAdministrationRoleSummary): GrantableRole => ({
+  roleId: role.roleId,
+  label: role.label,
+  liveRevision: role.liveRevision,
+  lifecycle: role.lifecycle,
+  assignmentPolicy: role.assignmentPolicy.kind,
+});
 
-const roleIdentity = (role: OrganizationAdministrationRoleSummary): string | undefined =>
-  role.source.kind === "application"
-    ? `${role.source.applicationRootId.toLowerCase()}:${role.source.sourceRoleId.toLowerCase()}`
-    : undefined;
-
-const roleKeyForTemplate = (template: OrganizationAdministrationApplicationRoleTemplate): string =>
-  acceptedApplicationRoleKey(
-    template.reference.applicationRootId,
-    template.reference.sourceRoleId,
-    template.key,
-  );
-
-const listTemplates = async (
-  administration: AccessAdministration,
-  session: OwnerSession,
-  selection: OrganizationSelection,
-): Promise<OrganizationAdministrationApplicationRoleTemplate[]> => {
-  const templates: OrganizationAdministrationApplicationRoleTemplate[] = [];
-  let after: OrganizationAdministrationApplicationRoleTemplate["reference"] | undefined;
-  for (;;) {
-    const page = await administration.listApplicationRoleTemplates(session, selection, {
-      pageSize: 40,
-      ...(after === undefined ? {} : { after }),
-    });
-    if (page.kind !== "available")
-      throw new Error(`Application role templates could not be read (${page.kind})`);
-    templates.push(...page.value.templates);
-    after = page.value.nextAfter;
-    if (after === undefined) return templates;
-  }
-};
-
-const listPermissions = async (
-  administration: AccessAdministration,
-  session: OwnerSession,
-  selection: OrganizationSelection,
-): Promise<OrganizationAdministrationPermission[]> => {
-  const permissions: OrganizationAdministrationPermission[] = [];
-  let after: OrganizationAdministrationPermission["reference"] | undefined;
-  for (;;) {
-    const page = await administration.listPermissions(session, selection, {
-      pageSize: 100,
-      ...(after === undefined ? {} : { after }),
-    });
-    if (page.kind !== "available")
-      throw new Error(`Registered application permissions could not be read (${page.kind})`);
-    permissions.push(...page.value.permissions);
-    after = page.value.nextAfter;
-    if (after === undefined) return permissions;
-  }
-};
-
+/** Every page of the organisation's roles, through the protected roles projection. */
 const listRoles = async (
   administration: AccessAdministration,
   session: OwnerSession,
   selection: OrganizationSelection,
-): Promise<OrganizationAdministrationRoleSummary[]> => {
-  const roles: OrganizationAdministrationRoleSummary[] = [];
-  let afterRoleId: OrganizationAdministrationRoleSummary["roleId"] | undefined;
+): Promise<ProjectedRole[]> => {
+  const roles: ProjectedRole[] = [];
   for (;;) {
-    const page = await administration.listRoles(session, selection, {
-      pageSize: 100,
-      ...(afterRoleId === undefined ? {} : { afterRoleId }),
-    });
+    const page = await administration.listRoles(session, selection, roles.at(-1)?.roleId);
     if (page.kind !== "available")
       throw new Error(`Accepted application roles could not be read (${page.kind})`);
-    roles.push(...page.value.roles);
-    afterRoleId = page.value.nextAfterRoleId;
-    if (afterRoleId === undefined) return roles;
+    if (page.value.length === 0) return roles;
+    roles.push(...page.value);
   }
 };
 
+/** Every page of the organisation's role assignments, through the protected assignments projection. */
 const listAssignments = async (
   administration: AccessAdministration,
   session: OwnerSession,
   selection: OrganizationSelection,
-): Promise<OrganizationAdministrationRoleAssignment[]> => {
-  const assignments: OrganizationAdministrationRoleAssignment[] = [];
-  let afterRoleAssignmentId:
-    OrganizationAdministrationRoleAssignment["roleAssignmentId"] | undefined;
+): Promise<ProjectedAssignment[]> => {
+  const assignments: ProjectedAssignment[] = [];
   for (;;) {
-    const page = await administration.listRoleAssignments(session, selection, {
-      pageSize: 100,
-      ...(afterRoleAssignmentId === undefined ? {} : { afterRoleAssignmentId }),
-    });
+    const page = await administration.listRoleAssignments(
+      session,
+      selection,
+      assignments.at(-1)?.roleAssignmentId,
+    );
     if (page.kind !== "available")
       throw new Error(`Current role assignments could not be read (${page.kind})`);
-    assignments.push(...page.value.assignments);
-    afterRoleAssignmentId = page.value.nextAfterRoleAssignmentId;
-    if (afterRoleAssignmentId === undefined) return assignments;
+    if (page.value.length === 0) return assignments;
+    assignments.push(...page.value);
   }
 };
-
-const hasAdministrativePermission = (
-  template: OrganizationAdministrationApplicationRoleTemplate,
-  permissions: readonly OrganizationAdministrationPermission[],
-): boolean =>
-  template.permissionSelectionKind === "exact" &&
-  permissions.some(
-    (permission) =>
-      permission.administrative &&
-      permission.reference.applicationRootId !== undefined &&
-      sameId(permission.reference.applicationRootId, template.reference.applicationRootId) &&
-      template.publishedPermissionKeys.includes(permission.key),
-  );
 
 /** An upgrade that changes a shipped role template leaves the accepted role to accept again. */
 const acceptedRevision = async (
   administration: AccessAdministration,
   session: OwnerSession,
   selection: OrganizationSelection,
-  role: OrganizationAdministrationRoleSummary,
-): Promise<OrganizationAdministrationRoleSummary> => {
+  role: GrantableRole,
+): Promise<GrantableRole> => {
   const prepared = await administration.prepareApplicationRoleRevisionAcceptance(
     session,
     selection,
@@ -158,37 +107,35 @@ const acceptedRevision = async (
     }),
   );
   if (prepared.kind !== "available")
-    throw new Error(`Role revision of ${role.key} could not be prepared (${prepared.kind})`);
+    throw new Error(`Role revision of ${role.label} could not be prepared (${prepared.kind})`);
   const result = await administration.acceptApplicationRoleRevision(
     session,
     selection,
     changeOrganizationAdministrationRoleAuthorityCommandSchema.parse({ evidence: prepared.value }),
   );
   if (result.kind !== "available" || result.value.role.lifecycle !== "active")
-    throw new Error(`Role revision of ${role.key} could not be accepted (${result.kind})`);
-  return result.value.role;
+    throw new Error(`Role revision of ${role.label} could not be accepted (${result.kind})`);
+  return grantable(result.value.role);
 };
 
 const acceptedRole = async (
   administration: AccessAdministration,
   session: OwnerSession,
   selection: OrganizationSelection,
-  template: OrganizationAdministrationApplicationRoleTemplate,
-  permissions: readonly OrganizationAdministrationPermission[],
-): Promise<OrganizationAdministrationRoleSummary> => {
+  applicationRootId: string,
+  template: RoleTemplate,
+): Promise<GrantableRole> => {
   const prepared = await administration.prepareRoleChange(
     session,
     selection,
     prepareOrganizationAdministrationRoleChangeCommandSchema.parse({
       operation: "accept_new_application_role",
-      roleKey: roleKeyForTemplate(template),
-      label: template.label,
+      roleKey: acceptedApplicationRoleKey(applicationRootId, template.sourceRoleId, template.key),
+      label: template.name,
       description: `Accepted from the ${template.key} role template by local development setup.`,
-      privilegeClassification: hasAdministrativePermission(template, permissions)
-        ? "privileged"
-        : "standard",
-      templateApplicationRootId: template.reference.applicationRootId,
-      sourceRoleId: template.reference.sourceRoleId,
+      privilegeClassification: template.privileged ? "privileged" : "standard",
+      templateApplicationRootId: applicationRootId,
+      sourceRoleId: template.sourceRoleId,
       acceptBroadenedAuthority: "accept",
     }),
   );
@@ -208,28 +155,19 @@ const acceptedRole = async (
   if (
     role.lifecycle !== "active" ||
     role.source.kind !== "application" ||
-    !sameId(role.source.applicationRootId, template.reference.applicationRootId) ||
-    !sameId(role.source.sourceRoleId, template.reference.sourceRoleId)
+    !sameId(role.source.applicationRootId, applicationRootId) ||
+    !sameId(role.source.sourceRoleId, template.sourceRoleId)
   )
     throw new Error(`Accepted role for ${template.key} did not match its current template`);
-  return role;
+  return grantable(role);
 };
 
-const hasActiveOwnerAssignment = (
-  assignments: readonly OrganizationAdministrationRoleAssignment[],
-  role: OrganizationAdministrationRoleSummary,
-  organizationAccountId: string,
-): boolean =>
-  assignments.some(
-    (assignment) =>
-      sameId(assignment.role.roleId, role.roleId) &&
-      assignment.assignee.kind === "organization_account" &&
-      sameId(assignment.assignee.organizationAccountId, organizationAccountId) &&
-      assignment.state === "live" &&
-      assignment.temporalState === "active" &&
-      assignment.assignmentKind === "standing",
-  );
-
+/**
+ * Accepts every role template of each installed application and gives the first owner a standing
+ * assignment of each. The templates come from the release the application runs, exactly as an App
+ * Store install derives them; the accepted roles and assignments are read through the protected
+ * roles and role assignments projections, and an accepted role is found by its derived role key.
+ */
 export const grantFirstOwnerApplicationRoles = async (
   facts: FirstOwnerApplicationRoleFacts,
   log: (message: string) => void,
@@ -239,7 +177,7 @@ export const grantFirstOwnerApplicationRoles = async (
   });
   const session = nominatedOwnerSession(facts.stewardIdentityId);
   const selection = organizationSelectionCandidateSchema.parse({
-    organizationId: facts.organizationId,
+    organizationId: facts.system.organizationId,
   });
   const applicationKeyByRootId = new Map<string, string>();
   for (const applicationKey of facts.applicationKeys) {
@@ -252,118 +190,96 @@ export const grantFirstOwnerApplicationRoles = async (
     applicationKeyByRootId.set(rootId, applicationKey);
   }
 
-  const [templates, permissions, currentRoles, assignments] = await Promise.all([
-    listTemplates(administration, session, selection),
-    listPermissions(administration, session, selection),
+  const [currentRoles, assignments] = await Promise.all([
     listRoles(administration, session, selection),
     listAssignments(administration, session, selection),
   ]);
-  if (templates.length === 0)
-    throw new Error("No installed application role templates were available to the first owner");
-
-  const templateCountsByApplication = new Map<string, number>();
-  const seenTemplates = new Set<string>();
-  const installedTemplates = templates.filter((template) =>
-    applicationKeyByRootId.has(template.reference.applicationRootId.toLowerCase()),
-  );
-  for (const template of installedTemplates) {
-    const identity = templateIdentity(template);
-    if (seenTemplates.has(identity))
-      throw new Error(`Application role template ${template.key} was returned more than once`);
-    seenTemplates.add(identity);
-    const rootId = template.reference.applicationRootId.toLowerCase();
-    templateCountsByApplication.set(rootId, (templateCountsByApplication.get(rootId) ?? 0) + 1);
-  }
-  for (const [rootId, applicationKey] of applicationKeyByRootId) {
-    if (templateCountsByApplication.get(rootId) === undefined)
-      throw new Error(
-        `No registered role templates were available for installed application ${applicationKey}`,
-      );
-  }
-
-  const rolesByTemplate = new Map<string, OrganizationAdministrationRoleSummary>();
-  for (const role of currentRoles) {
-    const identity = roleIdentity(role);
-    if (
-      identity === undefined ||
-      role.source.kind !== "application" ||
-      !applicationKeyByRootId.has(role.source.applicationRootId.toLowerCase())
-    )
-      continue;
-    if (rolesByTemplate.has(identity))
-      throw new Error(`More than one accepted role was found for application template ${identity}`);
-    rolesByTemplate.set(identity, role);
-  }
+  const rolesByKey = new Map(currentRoles.map((role) => [role.key, role]));
+  const ownerHolds = (roleId: string): boolean =>
+    assignments.some(
+      (assignment) =>
+        sameId(assignment.roleId, roleId) &&
+        assignment.organizationAccountId !== null &&
+        sameId(assignment.organizationAccountId, facts.stewardOrganizationAccountId) &&
+        assignment.state === "live" &&
+        assignment.temporalState === "active" &&
+        assignment.assignmentKind === "standing",
+    );
 
   let ensuredGrants = 0;
-  for (const template of installedTemplates) {
-    const identity = templateIdentity(template);
-    let role = rolesByTemplate.get(identity);
-    if (role === undefined) {
-      role = await acceptedRole(administration, session, selection, template, permissions);
-      rolesByTemplate.set(identity, role);
-      const applicationName =
-        applicationKeyByRootId.get(template.reference.applicationRootId.toLowerCase()) ??
-        template.reference.applicationRootId;
-      log(`accepted ${applicationName} role template ${template.key}`);
-    }
-    if (role.lifecycle === "acceptance_required") {
-      role = await acceptedRevision(administration, session, selection, role);
-      rolesByTemplate.set(identity, role);
-      log(`accepted the revised role template ${template.key}`);
-    }
-    if (role.lifecycle !== "active")
+  for (const [rootId, applicationName] of applicationKeyByRootId) {
+    const revision = await readActiveReleaseRevision(facts, applicationName, rootId);
+    if (revision === null)
+      throw new Error(`Installed application ${applicationName} has no active release`);
+    const releaseSet = await readReleaseSet(facts.system, rootId, revision);
+    const templates = releaseRoleTemplates(releaseSet);
+    if (templates.length === 0)
       throw new Error(
-        `Accepted role ${role.key} from template ${template.key} is ${role.lifecycle}`,
-      );
-    if (role.assignmentPolicy.kind !== "standing")
-      throw new Error(
-        `Role ${role.key} from template ${template.key} requires activation and cannot open an application immediately`,
+        `No registered role templates were available for installed application ${applicationName}`,
       );
 
-    const applicationName =
-      applicationKeyByRootId.get(template.reference.applicationRootId.toLowerCase()) ??
-      template.reference.applicationRootId;
-    if (hasActiveOwnerAssignment(assignments, role, facts.stewardOrganizationAccountId)) {
-      log(`first owner already holds ${applicationName} role ${role.key}`);
-      ensuredGrants += 1;
-      continue;
-    }
-
-    const assigned = await administration.assignRoleAssignment(
-      session,
-      selection,
-      assignOrganizationAdministrationRoleAssignmentCommandSchema.parse({
-        roleId: role.roleId,
-        expectedRoleRevision: role.liveRevision,
-        assigneeKind: "organization_account",
-        organizationAccountId: facts.stewardOrganizationAccountId,
-        assignmentKind: "standing",
-        startsAt: new Date(Date.now() - 1_000).toISOString(),
-      }),
-    );
-    if (assigned.kind !== "available" || !("assignment" in assigned.value))
-      throw new Error(
-        `Role ${role.key} for ${applicationName} could not be assigned to the first owner (${assigned.kind})`,
+    for (const template of templates) {
+      const current = rolesByKey.get(
+        acceptedApplicationRoleKey(rootId, template.sourceRoleId, template.key),
       );
-    if (
-      assigned.value.assignment.state !== "live" ||
-      assigned.value.assignment.temporalState !== "active" ||
-      assigned.value.assignment.assignmentKind !== "standing" ||
-      !sameId(assigned.value.assignment.role.roleId, role.roleId) ||
-      assigned.value.assignment.assignee.kind !== "organization_account" ||
-      !sameId(
-        assigned.value.assignment.assignee.organizationAccountId,
-        facts.stewardOrganizationAccountId,
+      let role: GrantableRole;
+      if (current === undefined) {
+        role = await acceptedRole(administration, session, selection, rootId, template);
+        log(`accepted ${applicationName} role template ${template.key}`);
+      } else role = current;
+      if (role.lifecycle === "acceptance_required") {
+        role = await acceptedRevision(administration, session, selection, role);
+        log(`accepted the revised role template ${template.key}`);
+      }
+      if (role.lifecycle !== "active")
+        throw new Error(
+          `Accepted role ${role.label} from template ${template.key} is ${role.lifecycle}`,
+        );
+      if (role.assignmentPolicy !== "standing")
+        throw new Error(
+          `Role ${role.label} from template ${template.key} requires activation and cannot open an application immediately`,
+        );
+
+      if (ownerHolds(role.roleId)) {
+        log(`first owner already holds ${applicationName} role ${role.label}`);
+        ensuredGrants += 1;
+        continue;
+      }
+
+      const assigned = await administration.assignRoleAssignment(
+        session,
+        selection,
+        assignOrganizationAdministrationRoleAssignmentCommandSchema.parse({
+          roleId: role.roleId,
+          expectedRoleRevision: role.liveRevision,
+          assigneeKind: "organization_account",
+          organizationAccountId: facts.stewardOrganizationAccountId,
+          assignmentKind: "standing",
+          startsAt: new Date(Date.now() - 1_000).toISOString(),
+        }),
+      );
+      if (assigned.kind !== "available" || !("assignment" in assigned.value))
+        throw new Error(
+          `Role ${role.label} for ${applicationName} could not be assigned to the first owner (${assigned.kind})`,
+        );
+      if (
+        assigned.value.assignment.state !== "live" ||
+        assigned.value.assignment.temporalState !== "active" ||
+        assigned.value.assignment.assignmentKind !== "standing" ||
+        !sameId(assigned.value.assignment.role.roleId, role.roleId) ||
+        assigned.value.assignment.assignee.kind !== "organization_account" ||
+        !sameId(
+          assigned.value.assignment.assignee.organizationAccountId,
+          facts.stewardOrganizationAccountId,
+        )
       )
-    )
-      throw new Error(`The protected assignment for ${role.key} did not match the first owner`);
-    assignments.push(assigned.value.assignment);
-    log(`granted ${applicationName} role ${role.key} to the first owner`);
-    ensuredGrants += 1;
+        throw new Error(`The protected assignment for ${role.label} did not match the first owner`);
+      log(`granted ${applicationName} role ${role.label} to the first owner`);
+      ensuredGrants += 1;
+    }
   }
 
   log(
-    `ensured ${ensuredGrants} application role grants for the first owner across ${templateCountsByApplication.size} installed applications`,
+    `ensured ${ensuredGrants} application role grants for the first owner across ${applicationKeyByRootId.size} installed applications`,
   );
 };

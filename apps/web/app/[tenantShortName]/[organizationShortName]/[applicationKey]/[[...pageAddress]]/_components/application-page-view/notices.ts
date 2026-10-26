@@ -65,11 +65,6 @@ export const finishedNotice = (
 /** Signing in again for a recent sign-in; the dispatcher adds where to come back to. */
 export const reauthenticationPath = "/auth/session-ended?status=reauthenticate";
 
-const iamPeople = {
-  link_label: "Open IAM People",
-  destination: { application_key: "vortex.app.iam", page_key: "iam_people" },
-} as const;
-
 export const refusalNotices: Readonly<
   Record<Extract<FormFlowFeedback, { kind: "refusal" }>["code"], Notice>
 > = Object.fromEntries(
@@ -80,20 +75,3 @@ export const refusalNotices: Readonly<
       : { tone: "problem", text },
   ]),
 ) as Readonly<Record<Extract<FormFlowFeedback, { kind: "refusal" }>["code"], Notice>>;
-
-/**
- * Where a refusal that names a missing permission sends the person: the platform's IAM People
- * page, opened through the same destination resolution an authored presentation uses.
- */
-export const refusalDestinations: Readonly<
-  Partial<
-    Record<
-      keyof typeof refusalNotices,
-      Readonly<{ link_label: string; destination: { application_key: string; page_key: string } }>
-    >
-  >
-> = {
-  applications_manage_required: iamPeople,
-  installation_delegation_required: iamPeople,
-  assignments_manage_required: iamPeople,
-};

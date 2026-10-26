@@ -59,7 +59,7 @@ export const sealPivotCursor = (
     }),
   );
 
-export type PivotCursorOpening =
+type PivotCursorOpening =
   | Readonly<{ kind: "opened"; groupKey: string }>
   /** The cursor is not usable for this read; `cause` names why, for the log only. */
   | Readonly<{ kind: "stale"; cause: string }>;

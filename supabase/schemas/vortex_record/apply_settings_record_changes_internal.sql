@@ -61,11 +61,10 @@ begin
 
   meta := vortex_record.resolve_record_action_context_internal(p_record_type_id, 'read');
   record_type_value := meta -> 'recordType';
-  if record_type_value ->> 'key' is distinct from 'organization_settings'
-    or record_type_value #>> '{systemProjection,protectedView}' is distinct from
+  if record_type_value #>> '{systemProjection,protectedView}' is distinct from
       'organization_runtime_settings'
     or not coalesce((record_type_value -> 'standardActions') ? 'update', false)
-    or not vortex_definition.is_system_projection_module_internal(
+    or not vortex_definition.is_platform_system_module_internal(
       (meta ->> 'moduleRootId')::uuid,
       (meta -> 'context' ->> 'organizationId')::uuid
     ) then

@@ -12,6 +12,7 @@ import {
   organizationSelectionCandidateSchema,
   sameId,
   type IdentityAuthorityId,
+  type SystemApplicationBoundReleaseSetResult,
 } from "@vortex/platform/schema";
 import {
   createDatabaseSystemApplicationBoundReleaseSetService,
@@ -132,17 +133,12 @@ const installOne = async (
   log(`installed ${applicationKey}: ${activation.outcome}`);
 };
 
-/**
- * Replaces only the observed active revision. System applications follow every shipped release;
- * an ordinary application keeps its administrator's choice while that release still verifies.
- */
-export const upgradeOne = async (
-  facts: InstallFacts,
+/** The release revision the organisation runs for one application, or null before its install. */
+export const readActiveReleaseRevision = async (
+  facts: Pick<InstallFacts, "identityAuthorityId" | "system" | "stewardIdentityId">,
   applicationKey: string,
-  origin: TrustedApplicationRootOriginKind,
-  log: (message: string) => void,
-): Promise<void> => {
-  const published = release(facts, applicationKey);
+  applicationRootId: string,
+): Promise<number | null> => {
   let readFailure: unknown;
   const observed = await createHumanOrganizationRequestService({
     identityAuthorityId: facts.identityAuthorityId,
@@ -151,7 +147,7 @@ export const upgradeOne = async (
     organizationSelectionCandidateSchema.parse({ organizationId: facts.system.organizationId }),
     async (transaction): Promise<number | null> => {
       try {
-        const bindings = await readInstallationBindings(transaction, published.rootId);
+        const bindings = await readInstallationBindings(transaction, applicationRootId);
         if (!sameId(bindings.organizationId, facts.system.organizationId))
           throw new Error(`Installation scope differs for ${applicationKey}`);
         const revisions = new Set(
@@ -175,7 +171,36 @@ export const upgradeOne = async (
         cause: readFailure ?? observed,
       },
     );
-  const activeRevision = observed.value;
+  return observed.value;
+};
+
+/** One exact application release with its bound Module releases, read with system authority. */
+export const readReleaseSet = (
+  system: SystemContextFacts,
+  applicationRootId: string,
+  applicationReleaseRevision: number,
+): Promise<SystemApplicationBoundReleaseSetResult> => {
+  const context = mintSystemContext(system);
+  return inSystemTransaction(context, (transaction) =>
+    createDatabaseSystemApplicationBoundReleaseSetService(
+      developmentPublicationCatalogue,
+      transaction,
+    ).read(context, { applicationRootId, applicationReleaseRevision }),
+  );
+};
+
+/**
+ * Replaces only the observed active revision. System applications follow every shipped release;
+ * an ordinary application keeps its administrator's choice while that release still verifies.
+ */
+export const upgradeOne = async (
+  facts: InstallFacts,
+  applicationKey: string,
+  origin: TrustedApplicationRootOriginKind,
+  log: (message: string) => void,
+): Promise<void> => {
+  const published = release(facts, applicationKey);
+  const activeRevision = await readActiveReleaseRevision(facts, applicationKey, published.rootId);
   if (activeRevision === null) {
     await installOne(facts, applicationKey, log);
     return;
@@ -188,16 +213,7 @@ export const upgradeOne = async (
     throw new Error(`Active release is newer than the publication for ${applicationKey}`);
 
   if (origin === "ordinary") {
-    const context = mintSystemContext(facts.system);
-    const superseded = await inSystemTransaction(context, (transaction) =>
-      createDatabaseSystemApplicationBoundReleaseSetService(
-        developmentPublicationCatalogue,
-        transaction,
-      ).read(context, {
-        applicationRootId: published.rootId,
-        applicationReleaseRevision: activeRevision,
-      }),
-    ).then(
+    const superseded = await readReleaseSet(facts.system, published.rootId, activeRevision).then(
       () => false,
       (error: unknown) => {
         if (error instanceof DefinitionError && error.code === "DEFINITION_DEPENDENCY_SUPERSEDED")

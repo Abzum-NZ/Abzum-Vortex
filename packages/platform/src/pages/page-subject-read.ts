@@ -124,7 +124,7 @@ export const pageSubjectFromRead = (
 };
 
 /** The named actions a subject read previews on its record, and how each one's flow is run. */
-export type PageSubjectActionPreviews = Readonly<{
+type PageSubjectActionPreviews = Readonly<{
   references: readonly ExecuteNamedActionCommand["action"][];
   runFor: (action: ExecuteNamedActionCommand["action"]) => ActionFlowRunner;
 }>;

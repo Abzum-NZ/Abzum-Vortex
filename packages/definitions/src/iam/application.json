@@ -5352,42 +5352,40 @@
                       "refusal_feedback": {
                         "kind": "map",
                         "entries": {
-                          "code": {
-                            "kind": "literal",
-                            "literal": {
-                              "type": "text",
-                              "value": "role_acceptance_required"
-                            }
-                          },
-                          "message": {
-                            "kind": "literal",
-                            "literal": {
-                              "type": "text",
-                              "value": "This role changed in the latest release. Open App Store and choose Install or upgrade for its application to review and accept the changes before assigning it."
-                            }
-                          },
-                          "link_label": {
-                            "kind": "literal",
-                            "literal": {
-                              "type": "text",
-                              "value": "Review and accept role changes in App Store"
-                            }
-                          },
-                          "destination": {
+                          "role_acceptance_required": {
                             "kind": "map",
                             "entries": {
-                              "application_key": {
+                              "message": {
                                 "kind": "literal",
                                 "literal": {
                                   "type": "text",
-                                  "value": "vortex.app.app_store"
+                                  "value": "This role changed in the latest release. Open App Store and choose Install or upgrade for its application to review and accept the changes before assigning it."
                                 }
                               },
-                              "page_key": {
+                              "link_label": {
                                 "kind": "literal",
                                 "literal": {
                                   "type": "text",
-                                  "value": "app_store_catalogue"
+                                  "value": "Review and accept role changes in App Store"
+                                }
+                              },
+                              "destination": {
+                                "kind": "map",
+                                "entries": {
+                                  "application_key": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "vortex.app.app_store"
+                                    }
+                                  },
+                                  "page_key": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "app_store_catalogue"
+                                    }
+                                  }
                                 }
                               }
                             }
@@ -5772,42 +5770,40 @@
                       "refusal_feedback": {
                         "kind": "map",
                         "entries": {
-                          "code": {
-                            "kind": "literal",
-                            "literal": {
-                              "type": "text",
-                              "value": "role_acceptance_required"
-                            }
-                          },
-                          "message": {
-                            "kind": "literal",
-                            "literal": {
-                              "type": "text",
-                              "value": "This role changed in the latest release. Open App Store and choose Install or upgrade for its application to review and accept the changes before assigning it."
-                            }
-                          },
-                          "link_label": {
-                            "kind": "literal",
-                            "literal": {
-                              "type": "text",
-                              "value": "Review and accept role changes in App Store"
-                            }
-                          },
-                          "destination": {
+                          "role_acceptance_required": {
                             "kind": "map",
                             "entries": {
-                              "application_key": {
+                              "message": {
                                 "kind": "literal",
                                 "literal": {
                                   "type": "text",
-                                  "value": "vortex.app.app_store"
+                                  "value": "This role changed in the latest release. Open App Store and choose Install or upgrade for its application to review and accept the changes before assigning it."
                                 }
                               },
-                              "page_key": {
+                              "link_label": {
                                 "kind": "literal",
                                 "literal": {
                                   "type": "text",
-                                  "value": "app_store_catalogue"
+                                  "value": "Review and accept role changes in App Store"
+                                }
+                              },
+                              "destination": {
+                                "kind": "map",
+                                "entries": {
+                                  "application_key": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "vortex.app.app_store"
+                                    }
+                                  },
+                                  "page_key": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "app_store_catalogue"
+                                    }
+                                  }
                                 }
                               }
                             }
