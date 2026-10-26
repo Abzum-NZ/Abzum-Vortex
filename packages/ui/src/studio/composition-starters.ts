@@ -1,9 +1,12 @@
 import type {
+  ApplicationSourceDocument,
   ImmutablePlatformBlockCatalogue,
   PlatformBlockRelease,
   SourceItem,
 } from "@vortex/platform/schema";
 import { freshBlockName } from "./stored-composition";
+import { studioRecordDetailItem } from "./application-record-pages";
+import { refuse } from "./application-structure-common";
 
 /** Authoring templates fill required slots before the ordinary composition validation runs. */
 const formChildren = (catalogue: ImmutablePlatformBlockCatalogue) => {
@@ -17,16 +20,29 @@ export const studioHasSlotStarter = (
   release: PlatformBlockRelease,
   slotKey: string,
 ): boolean =>
-  release.key === "platform.form.container" &&
   slotKey === "content" &&
-  formChildren(catalogue) !== undefined;
+  ((release.key === "platform.form.container" && formChildren(catalogue) !== undefined) ||
+    (release.key === "platform.layout.drawer" &&
+      catalogue.releases.some((entry) => entry.key === "platform.display.record_detail")));
 
 export const studioStarterSlots = (
   catalogue: ImmutablePlatformBlockCatalogue,
   release: PlatformBlockRelease,
   taken: Set<string>,
   shownByFlow: boolean,
+  source: ApplicationSourceDocument,
 ): Record<string, SourceItem[]> => {
+  if (release.key === "platform.layout.drawer") {
+    const module = source.body.modules.find((entry) => entry.record_types.length > 0);
+    const record = module?.record_types[0];
+    if (module === undefined || record === undefined)
+      return refuse("Add a record type before adding a Drawer with record details.");
+    const alias = freshBlockName("record_detail", taken);
+    taken.add(alias);
+    return {
+      content: [studioRecordDetailItem(catalogue, source, `${module.key}:${record.key}`, alias)],
+    };
+  }
   if (release.key !== "platform.form.container") return {};
   const children = formChildren(catalogue);
   if (children === undefined) throw new Error("STUDIO_FORM_STARTER_RELEASE_MISSING");

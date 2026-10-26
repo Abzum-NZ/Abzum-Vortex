@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useId, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react";
 import { Button } from "@vortex/ui/components/button";
 import {
   Dialog,
@@ -14,6 +14,7 @@ import {
   StudioQueryPicker,
   StudioSettingFields,
   studioBlockChoices,
+  studioGridDataSettings,
   studioGroupedTableSettings,
   studioGroupedTableStart,
   studioSettingProblems,
@@ -68,7 +69,7 @@ export function StudioBlockSetupDialog({
   choices: StudioSettingChoices;
   onClose: () => void;
 }>) {
-  const queries = draftChoices.queries;
+  const queries = [...draftChoices.queries, ...(draftChoices.recordQueries ?? [])];
   const [query, setQuery] = useState("");
   const [values, setValues] = useState<StudioCompositionSettings>({});
   // The Grouped table preset: the field it groups by and, for a date, the calendar unit.
@@ -111,6 +112,19 @@ export function StudioBlockSetupDialog({
   );
   // The bound query starts the Grouped table with the field it already groups by.
   const queryChoice = queries.find((candidate) => candidate.reference === query);
+  const initializedData = useRef<{ request: StudioBlockSetupRequest | null; query: string } | null>(
+    null,
+  );
+  useEffect(() => {
+    if (initializedData.current?.request === request && initializedData.current.query === query)
+      return;
+    initializedData.current = { request, query };
+    if (request === null || queryChoice === undefined) return;
+    setValues({
+      ...setupDefaults(request.choice),
+      ...studioGridDataSettings(request.choice.setup, queryChoice),
+    });
+  }, [request, query, queryChoice]);
   const choosePreset = (next: StudioCompositionSettings) => {
     const preset = next["presentation"];
     const groupedPreset = preset?.kind === "choice" && preset.value === STUDIO_GROUPED_TABLE_PRESET;
@@ -187,7 +201,8 @@ export function StudioBlockSetupDialog({
           {choice.needsQuery && (
             <StudioQueryPicker
               id={`${formId}-query`}
-              queries={queries}
+              queries={draftChoices.queries}
+              recordQueries={draftChoices.recordQueries}
               value={query}
               disabled={false}
               onChange={(next) => {

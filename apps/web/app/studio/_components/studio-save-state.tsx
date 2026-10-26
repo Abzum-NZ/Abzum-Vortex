@@ -72,7 +72,7 @@ export function StudioSaveState({ draft }: Readonly<{ draft: StudioDraft }>) {
   const label = hasFieldProblems
     ? "Not saved"
     : status.kind === "failed"
-      ? "Retrying…"
+      ? "Not saved, retrying"
       : notSaved
         ? "Not saved"
         : status.kind === "saving"

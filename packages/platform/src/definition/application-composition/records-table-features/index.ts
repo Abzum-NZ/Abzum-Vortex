@@ -356,23 +356,32 @@ export const checkRecordsTableFeature = (
       ? featureNotPossible(boundedScrollingRefusal)
       : featureAvailable;
   const definition = registry[key];
-  const context = { features, presentation, tablePageSize };
-  const conflict = definition.conflicts?.(state, facts, context);
-  if (conflict !== undefined) return conflict;
-  if (features.board.enabled && definition.onBoard === "unsupported")
-    return state.enabled
-      ? featureNotPossible(
-          definition.refusals[0],
-          `${definition.label} is not available on a board yet: turn Board off to use it, or turn ${definition.label} off.`,
-        )
-      : definition.check(state, facts, context);
-  // The board reads its own grouped query, which the board check judges; a table-row check of a
-  // feature the board borrows would refuse that query.
-  if (features.board.enabled && definition.onBoard === "supported")
-    return facts.board === undefined
-      ? featureAvailable
-      : (definition.boardCheck?.(state, facts.board) ?? featureAvailable);
-  return definition.check(state, facts, context);
+  const assessed = (() => {
+    const context = { features, presentation, tablePageSize };
+    const conflict = definition.conflicts?.(state, facts, context);
+    if (conflict !== undefined) return conflict;
+    if (features.board.enabled && definition.onBoard === "unsupported")
+      return state.enabled
+        ? featureNotPossible(
+            definition.refusals[0],
+            `${definition.label} is not available on a board yet: turn Board off to use it, or turn ${definition.label} off.`,
+          )
+        : definition.check(state, facts, context);
+    // The board reads its own grouped query, which the board check judges; a table-row check of a
+    // feature the board borrows would refuse that query.
+    if (features.board.enabled && definition.onBoard === "supported")
+      return facts.board === undefined
+        ? featureAvailable
+        : (definition.boardCheck?.(state, facts.board) ?? featureAvailable);
+    return definition.check(state, facts, context);
+  })();
+  // Each refusal names its feature once, whether or not its own sentence already starts with it.
+  return assessed.kind === "available" || assessed.reason.startsWith(definition.label)
+    ? assessed
+    : {
+        ...assessed,
+        reason: `${definition.label}: ${assessed.reason}`,
+      };
 };
 
 /** Every feature's state and check, in Studio's order. */

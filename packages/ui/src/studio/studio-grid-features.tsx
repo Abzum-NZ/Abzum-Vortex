@@ -10,6 +10,8 @@ import {
 } from "@vortex/platform/schema";
 
 import { useId, useState, type ReactElement } from "react";
+import { Button } from "../components/button";
+import { studioGridPrerequisites } from "./grid-features/prerequisites";
 import {
   checkRecordsTableFeature,
   plainSourceSettingValue,
@@ -119,6 +121,7 @@ export function StudioGridFeatures({
   onChange,
 }: Readonly<{
   idPrefix: string;
+  /** The inspector's held problem after a features change; shown in the changed feature. */
   problem: string;
   /** The table release's `features` group declaration. */
   property: Extract<BlockPropertySchemaContract, { kind: "group" }>;
@@ -357,6 +360,16 @@ export function StudioGridFeatures({
               ? declaration.properties.filter((setting) => setting.key !== "enabled")
               : [];
           const current = featureValue(key);
+          const fix =
+            enabled && (check?.kind === "not_possible" || incomplete.has(key))
+              ? studioGridPrerequisites(key, whole, facts)
+              : undefined;
+          const ownProblems =
+            enabled && declaration !== undefined && check?.kind !== "not_possible"
+              ? studioSettingProblems({ [key]: current }, [declaration]).map((sentence) =>
+                  sentence.replace(`${label}, `, `${label}: `),
+                )
+              : [];
           const editor = studioGridFeatureEditors[key];
           const settingValues: StudioSettingValues = Object.fromEntries(
             Object.entries(current.properties).filter(([setting]) => setting !== "enabled"),
@@ -369,6 +382,8 @@ export function StudioGridFeatures({
                     <Label htmlFor={switchId}>{label}</Label>
                     {blocked !== undefined ? (
                       <Badge variant="outline">Not possible</Badge>
+                    ) : incomplete.has(key) ? (
+                      <Badge variant="outline">Not ready</Badge>
                     ) : check === undefined ? null : check.kind === "available" ? (
                       <Badge
                         variant="outline"
@@ -377,7 +392,7 @@ export function StudioGridFeatures({
                         Available
                       </Badge>
                     ) : (
-                      <Badge variant="outline">Not possible</Badge>
+                      <Badge variant="outline">{enabled ? "Not ready" : "Not possible"}</Badge>
                     )}
                   </ItemTitle>
                   <ItemDescription>
@@ -385,6 +400,27 @@ export function StudioGridFeatures({
                   </ItemDescription>
                 </ItemContent>
                 <ItemActions>
+                  {fix === undefined ? null : (
+                    <Button
+                      type="button"
+                      size="xs"
+                      variant="outline"
+                      disabled={disabled}
+                      aria-label={`Fix ${label}`}
+                      onClick={() => {
+                        setChangedFeature(key);
+                        const normalized = typedSourceSettingValue(
+                          plainSourceSettingValue(fix),
+                          property,
+                          [property.key],
+                          [],
+                        );
+                        onChange(normalized ?? fix);
+                      }}
+                    >
+                      Fix
+                    </Button>
+                  )}
                   <Switch
                     id={switchId}
                     checked={enabled}
@@ -407,18 +443,20 @@ export function StudioGridFeatures({
                   />
                 </ItemActions>
               </Item>
-              {problem !== "" && changedFeature === key ? (
+              {ownProblems.map((sentence) => (
+                <p key={sentence} role="alert" className="text-sm text-destructive">
+                  {sentence}
+                </p>
+              ))}
+              {/* A held change this feature's own sentences do not explain still says why. */}
+              {problem !== "" &&
+              changedFeature === key &&
+              check?.kind !== "not_possible" &&
+              ownProblems.length === 0 ? (
                 <p role="alert" className="text-sm text-destructive">
                   {problem}
                 </p>
               ) : null}
-              {enabled && declaration !== undefined
-                ? studioSettingProblems({ [key]: current }, [declaration]).map((sentence) => (
-                    <p key={sentence} role="alert" className="text-sm text-destructive">
-                      {sentence}
-                    </p>
-                  ))
-                : null}
               {enabled && key === recordsTableSpreadsheetFeature.key ? (
                 <StudioSpreadsheetEditor
                   value={current}
