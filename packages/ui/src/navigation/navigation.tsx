@@ -333,42 +333,36 @@ export function ApplicationNavigation({
       <Sidebar className="md:min-h-svh">
         <SidebarContent>
           <SidebarGroup>
-            {navigation.length === 0 ? (
-              <p className="px-2 text-sm text-muted-foreground">No navigation is available.</p>
-            ) : (
-              <>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className={cn("w-full justify-between", toggleVisibility)}
-                  aria-expanded={open}
-                  aria-controls={listId}
-                  onClick={() => setOpen((value) => !value)}
-                >
-                  <span>{label}</span>
-                  {open ? (
-                    <Icon name="close" aria-hidden="true" />
-                  ) : (
-                    <Icon name="menu" aria-hidden="true" />
-                  )}
-                </Button>
-                <SidebarGroupContent>
-                  <NavigationList
-                    items={navigation}
-                    depth={0}
-                    listId={listId}
-                    className={listVisibility}
-                    headingId={headingId}
-                    resolvePageHref={resolvePageHref}
-                    currentPageId={currentPageId}
-                    pendingPageId={pendingPageId}
-                    onNavigate={activatePage}
-                    onPrefetch={onPrefetch}
-                    indicator={indicator}
-                  />
-                </SidebarGroupContent>
-              </>
-            )}
+            <Button
+              type="button"
+              variant="ghost"
+              className={cn("w-full justify-between", toggleVisibility)}
+              aria-expanded={open}
+              aria-controls={listId}
+              onClick={() => setOpen((value) => !value)}
+            >
+              <span>{label}</span>
+              {open ? (
+                <Icon name="close" aria-hidden="true" />
+              ) : (
+                <Icon name="menu" aria-hidden="true" />
+              )}
+            </Button>
+            <SidebarGroupContent>
+              <NavigationList
+                items={navigation}
+                depth={0}
+                listId={listId}
+                className={listVisibility}
+                headingId={headingId}
+                resolvePageHref={resolvePageHref}
+                currentPageId={currentPageId}
+                pendingPageId={pendingPageId}
+                onNavigate={activatePage}
+                onPrefetch={onPrefetch}
+                indicator={indicator}
+              />
+            </SidebarGroupContent>
           </SidebarGroup>
         </SidebarContent>
       </Sidebar>
@@ -379,8 +373,8 @@ export function ApplicationNavigation({
 /**
  * Registered renderer for the application navigation block. It draws the one `ProjectedNavigation`
  * the server already filtered for this viewer, in definition order, and never filters, fetches or
- * invents an item; an absent projection is an empty menu. The shell supplies the page-address
- * resolver, so route composition owns the address shape; a non-empty menu without one is refused
+ * invents an item; an absent or empty projection draws nothing. The shell supplies the page-address
+ * resolver, so route composition owns the address shape; a menu without one is refused
  * rather than linking to an invented address. Its registration refuses every supplied runtime
  * input, because a menu is navigation rather than a data surface.
  */
@@ -399,8 +393,10 @@ export function ApplicationNavigationBlock(props: PlatformBlockRenderProps): Rea
     );
 
   const navigation = props.projectedNavigation ?? [];
+  // An empty menu draws nothing.
+  if (navigation.length === 0) return <></>;
   const resolvePageHref = props.resolvePageHref;
-  if (resolvePageHref === undefined && navigation.length > 0)
+  if (resolvePageHref === undefined)
     throw new DefinitionRenderError(
       "INVALID_COMPOSITION",
       "The application navigation block requires the shell's page-address resolver",
@@ -411,8 +407,7 @@ export function ApplicationNavigationBlock(props: PlatformBlockRenderProps): Rea
     <ApplicationNavigation
       navigation={navigation}
       label={label}
-      // Only reachable with an empty menu, which renders no page link.
-      resolvePageHref={resolvePageHref ?? (() => "")}
+      resolvePageHref={resolvePageHref}
       {...(props.currentPageId === undefined ? {} : { currentPageId: props.currentPageId })}
       {...(props.onNavigatePage === undefined ? {} : { onNavigate: props.onNavigatePage })}
       {...(props.onPrefetchPage === undefined ? {} : { onPrefetch: props.onPrefetchPage })}

@@ -22,6 +22,7 @@ import {
   type ChoiceInputPayload,
   type FlowFormAnswer,
   type FlowFormIntent,
+  type FlowIntentHost,
   type FlowInvokeClient,
   type LinkNavigationEnvironment,
   type ServerFlowResponse,
@@ -65,6 +66,7 @@ export function useFlowRuntime({
   dialogFormRef,
   platformThemeTokens,
   committed,
+  setPanelRef,
 }: Readonly<{
   application: ApplicationPageModel["invocation"];
   subject: ApplicationPageModel["subject"];
@@ -99,6 +101,8 @@ export function useFlowRuntime({
   platformThemeTokens: PlatformThemeTokens;
   /** Re-reads what a binding writes once one of its server runs committed. */
   committed: (bindingId: string) => void;
+  /** Filled by the page's panel host once it has rendered. */
+  setPanelRef: RefObject<FlowIntentHost["setPanel"]>;
 }>) {
   /**
    * The one browser flow client and host (#1013): a form submit starts the bound flow on the server
@@ -353,6 +357,7 @@ export function useFlowRuntime({
   const { host, element: intentHostElement } = useFlowIntentHost({
     renderForm,
     navigation: navigationEnvironment,
+    setPanel: (panel, state) => setPanelRef.current?.(panel, state),
   });
   const committedRef = useRef(committed);
   committedRef.current = committed;

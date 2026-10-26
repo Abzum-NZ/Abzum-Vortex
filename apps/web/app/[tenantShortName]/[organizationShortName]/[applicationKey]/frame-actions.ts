@@ -123,6 +123,7 @@ export async function readApplicationSwitcherAction(
           ? read.applications.map((candidate) => ({
               key: candidate.key,
               name: candidate.name,
+              icon: candidate.icon,
               href: `/${encodeURIComponent(tenantShortName)}/${encodeURIComponent(organizationShortName)}/${encodeURIComponent(candidate.key)}/${encodeURIComponent(candidate.homePageKey)}`,
             }))
           : [],

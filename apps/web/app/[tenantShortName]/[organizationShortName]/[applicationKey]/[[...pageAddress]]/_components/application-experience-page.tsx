@@ -25,6 +25,7 @@ export function ApplicationExperiencePage({
   shells,
   theme,
   organizationName,
+  organizationShortName,
   account,
   platformBlockReleases,
   fieldInputControlReleases,
@@ -34,7 +35,9 @@ export function ApplicationExperiencePage({
   shells: readonly ApplicationShell[];
   /** The application's installed release theme; absent keeps the platform default. */
   theme?: ComponentProps<typeof PagePuckRenderer>["theme"];
+  /** The organisation's display name; its short name is the address segment shown beside it. */
   organizationName: string;
+  organizationShortName: string;
   account: ApplicationAccount;
   platformBlockReleases: readonly PlatformBlockRelease[];
   fieldInputControlReleases: FieldInputControlReleaseMap;
@@ -51,6 +54,7 @@ export function ApplicationExperiencePage({
       actions={{
         account,
         organizationName,
+        organizationShortName,
         chooseOrganization: () => router.push("/signed-in"),
         signOut,
         openApplication: (href) => router.push(href),

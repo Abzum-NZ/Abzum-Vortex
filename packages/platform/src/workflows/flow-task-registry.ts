@@ -88,6 +88,7 @@ export const flowTaskPropertyTypeSchema = z.enum([
   "query_id",
   "page_id",
   "form_id",
+  "placement_id",
   "relationship_id",
   "connection_binding_id",
   "protected_operation_key",
@@ -829,7 +830,7 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
     summary: "Opens or closes a panel on the page.",
     runLocations: ["browser"],
     effect: "interface",
-    properties: { panel: required("builder_key"), state: required("builder_key") },
+    properties: { panel: required("placement_id"), state: required("builder_key") },
     kestra: "not_compiled",
   },
   "interface.set_filter": {
