@@ -405,7 +405,10 @@ const scopeOf = (
           reference.key,
           reference.path,
         );
-        return type !== undefined && typedValueMatchesType(selected, type, "flow")
+        if (type === undefined) return undefined;
+        // A declared member that is present but empty (a form field left blank) is its typed null.
+        if (selected === null) return declaredNull(type);
+        return typedValueMatchesType(selected, type, "flow")
           ? typed(type, selected as JsonValue)
           : undefined;
       }
@@ -1238,10 +1241,12 @@ export const resumeFlowRun = (
           ? "the submitted answers are not an object"
           : Object.keys(answers).length !== declared.length
             ? "the submitted answers do not match the form's declared answers"
-            : declared.find(
+            : // A field left empty answers null; whether it may be empty is the form's and the
+              // consuming task's decision, so only a present value must match its declared type.
+              declared.find(
                 ([name, type]) =>
                   !Object.hasOwn(answers, name) ||
-                  !typedValueMatchesType(answers[name], type, "flow"),
+                  (answers[name] !== null && !typedValueMatchesType(answers[name], type, "flow")),
               );
       if (invalidAnswer !== undefined) {
         replaceTop(

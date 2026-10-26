@@ -152,6 +152,7 @@ begin
       'assignee_kind', assignment.assignee_kind,
       'organization_account_id', assignment.organization_account_id,
       'group_id', assignment.group_id,
+      'assignee_display_name', coalesce(assignee_account.display_name, assignee_group.label),
       'assignment_kind', assignment.assignment_kind,
       'starts_at', assignment.starts_at,
       'expires_at', assignment.expires_at,
@@ -170,6 +171,14 @@ begin
     join vortex_access.organization_role_revisions as role_revision
       on role_revision.organization_id = role.organization_id
       and role_revision.role_id = role.role_id and role_revision.revision = role.live_revision
+    left join vortex_identity.organization_accounts as assignee_account
+      on assignment.assignee_kind = 'organization_account'
+      and assignee_account.organization_id = assignment.organization_id
+      and assignee_account.organization_account_id = assignment.organization_account_id
+    left join vortex_access.organization_groups as assignee_group
+      on assignment.assignee_kind = 'group'
+      and assignee_group.organization_id = assignment.organization_id
+      and assignee_group.group_id = assignment.group_id
     order by %s
   $scan$, sort_expression, sort_null_expression, candidate_joins, keyset_sql,
     order_sql, outer_order_sql);
