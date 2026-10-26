@@ -412,7 +412,6 @@ export const componentSettingApplies = (
   return selected?.kind === "choice" && declaration.showWhen.values.includes(selected.value);
 };
 
-
 const plainStringOf = (schema: z.ZodType<string>, value: unknown): string | undefined => {
   const parsed = schema.safeParse(value);
   return parsed.success ? parsed.data : undefined;

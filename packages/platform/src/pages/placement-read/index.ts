@@ -262,7 +262,6 @@ export {
 export {
   findModuleQuery,
   isApplicationLauncherPlacement,
-  tablePlacementContract,
   isBoardPlacement,
   logPlacementFailure,
   projectedUseAvailability,

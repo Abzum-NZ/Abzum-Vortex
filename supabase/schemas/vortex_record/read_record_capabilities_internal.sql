@@ -62,11 +62,10 @@ begin
     meta := coalesce(p_action_meta,
       vortex_record.resolve_record_action_context_internal(p_record_type_id, 'read'));
   end if;
-  if meta #>> '{recordType,key}' = 'organization_settings'
-    and meta #>> '{recordType,systemProjection,protectedView}' =
+  if meta #>> '{recordType,systemProjection,protectedView}' =
       'organization_runtime_settings'
     and coalesce((meta #> '{recordType,standardActions}') ? 'update', false)
-    and vortex_definition.is_system_projection_module_internal(
+    and vortex_definition.is_platform_system_module_internal(
       (meta ->> 'moduleRootId')::uuid,
       (meta -> 'context' ->> 'organizationId')::uuid
     ) then

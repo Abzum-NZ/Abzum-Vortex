@@ -94,7 +94,7 @@ export const decideRecordTypeCreatableFieldIds = async (
 };
 
 /** Why a viewer may not export a record type now. */
-export type RecordTypeExportRefusal = "export_not_permitted" | "export_scope_not_all_records";
+type RecordTypeExportRefusal = "export_not_permitted" | "export_scope_not_all_records";
 
 /**
  * Whether the viewer may export one record type now, and which fields the export permission

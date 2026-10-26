@@ -15,7 +15,6 @@ import {
   finishedNotice,
   reauthenticationPath,
   refusalNotices,
-  refusalDestinations,
   outcomeNotices,
 } from "./notices";
 import { formSurfaceComposition, visibleOwningFormFieldLabel } from "./form-surface";
@@ -195,7 +194,7 @@ export function useApplyDispatch({
               ruleMessages === undefined
                 ? refusalNotices[diagnostic.code]
                 : { tone: "problem", text: ruleMessages.join(" ") };
-            const presentation = diagnostic.presentation ?? refusalDestinations[diagnostic.code];
+            const presentation = diagnostic.presentation;
             resultNotice = {
               ...reason,
               ...(presentation === undefined

@@ -45,11 +45,10 @@ import {
 } from "./module-foundation-contracts";
 import { refineActionTaskIds } from "./definition-source-common";
 import {
-  isRegisteredWritableSystemProjection,
+  isWritableSystemProjection,
   moduleSourceContractVersion as moduleSourceContractVersion,
-  writableSystemProjectionRegistrations,
 } from "./module-source-contracts";
-export { isRegisteredWritableSystemProjection, writableSystemProjectionRegistrations };
+export { isWritableSystemProjection };
 import { permissionDeclarationSchema } from "../access/permissions";
 import { protectedOperationReferenceSchema } from "./application-flow-bindings";
 import { PLATFORM_SERVICE_OPERATIONS } from "../catalogue/platform-service-operation-catalogue";
@@ -1111,7 +1110,7 @@ export const recordTypeDefinitionSchema = z
       invalid("A system projection record type is scoped to exactly one organisation", [
         "storageScope",
       ]);
-    const mayUpdate = isRegisteredWritableSystemProjection(value.key, projection.protectedView);
+    const mayUpdate = isWritableSystemProjection(projection.protectedView);
     if (
       value.standardActions.some(
         (action) =>
