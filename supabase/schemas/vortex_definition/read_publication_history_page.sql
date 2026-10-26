@@ -60,7 +60,12 @@ begin
       join vortex_definition.releases as target on target.root_id = dependency.target_root_id
         and target.release_revision = dependency.target_release_revision
       where dependency.root_id = release.root_id and dependency.release_revision = release.release_revision
-        and dependency.dependency_kind = 'module'), '[]'::jsonb),
+        and dependency.dependency_kind = 'module'), '[]'::jsonb)
+      || coalesce((select pg_catalog.jsonb_agg(dependency.dependency_entry
+        order by dependency.dependency_kind, dependency.dependency_reference)
+      from vortex_definition.release_dependencies as dependency
+      where dependency.root_id = release.root_id and dependency.release_revision = release.release_revision
+        and dependency.dependency_kind in ('protected_operation', 'connection_type')), '[]'::jsonb),
       'releaseNote', release.release_note,
       'evidence', pg_catalog.jsonb_build_object('authoredSource',release.authored_source,
       'authoredSourceFingerprint',release.authored_source_fingerprint,
