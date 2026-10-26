@@ -16,7 +16,7 @@ This document defines the shape the code keeps and the rules that keep it there.
    - Blocks and controls are composed from `packages/ui` shadcn components.
    - Theme tokens are CSS variables produced from the theme definition.
 4. **Engines never name business applications.**
-   - CRM, Service Desk, IAM, Landing Zone and similar names appear only in `packages/definitions` and in development setup.
+   - IAM, Landing Zone and similar application names appear only in `packages/definitions` and in development setup.
    - Organisation configuration, such as the default application, carries the choice; code does not.
 5. **No absent-setting behaviour.** A renderer never changes layout or behaviour because a setting is missing. Defaults are Puck `defaultProps` written into the definition.
 6. **One current version of every contract.** There are no `V2`/`V3` siblings. A change to a contract updates the contract, its compiler and the shipped definitions together, because there is no released product to stay compatible with.
