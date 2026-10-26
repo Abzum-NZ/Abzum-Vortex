@@ -4,7 +4,7 @@ import type { ReactElement } from "react";
 import { Button } from "../../components/button";
 import {
   DropdownMenuGroup,
-  DropdownMenuItem,
+  DropdownMenuCheckboxItem,
   DropdownMenuSeparator,
 } from "../../components/dropdown-menu";
 import { Icon } from "../../icons/icon";
@@ -35,7 +35,7 @@ function GroupToggle({ context }: GridFeaturePointProps): ReactElement | null {
       onClick={() => grouping.setGrouped(!grouping.grouped)}
     >
       <Icon name="list-tree" aria-hidden="true" />
-      {grouping.grouped ? "Ungroup" : `Group by ${settings.label}`}
+      {`Group by ${settings.label}`}
     </Button>
   );
 }
@@ -55,10 +55,13 @@ function GroupItems({ context, column }: GridFeatureColumnProps): ReactElement |
   return (
     <>
       <DropdownMenuGroup>
-        <DropdownMenuItem onClick={() => grouping.setGrouped(!grouping.grouped)}>
+        <DropdownMenuCheckboxItem
+          checked={grouping.grouped}
+          onCheckedChange={(checked) => grouping.setGrouped(checked)}
+        >
           <Icon name="list-tree" aria-hidden="true" />
-          {grouping.grouped ? "Ungroup" : `Group by ${column.label}`}
-        </DropdownMenuItem>
+          {`Group by ${column.label}`}
+        </DropdownMenuCheckboxItem>
       </DropdownMenuGroup>
       <DropdownMenuSeparator />
     </>

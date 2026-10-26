@@ -12,6 +12,7 @@ import {
 } from "@vortex/platform/schema";
 import { PALETTE_GROUP_TITLES } from "../palette-groups";
 import { studioHasSlotStarter } from "./composition-starters";
+import { studioDefaultRecordQuery } from "./default-record-query";
 import { studioGroupedTablePreset, type StudioGroupedTablePreset } from "./grouped-table-preset";
 
 /**
@@ -302,6 +303,7 @@ export type StudioQueryChoice = Readonly<{
   /** The record type the query reads, as `<module>:<record>`. */
   recordType: string;
   recordTypeLabel: string;
+  recordTypePluralLabel?: string;
   allFields: readonly StudioQueryField[];
   fields: readonly StudioQueryField[];
   /** Each declared total, stored by its alias and offered by its business name. */
@@ -454,96 +456,107 @@ const isParentLink = (
         : `${moduleKey}:${relationship.to_record_type}`) === recordType,
   );
 
+type SourceModule = ApplicationSourceDocument["body"]["modules"][number];
+
+/** One query of a Module in the draft, as Studio offers it. */
+const ownQuery = (
+  source: ApplicationSourceDocument,
+  borrowed: StudioBorrowedChoices | null,
+  module: SourceModule,
+  query: SourceModule["queries"][number],
+): StudioQueryChoice => {
+  const recordType = query.record_type.includes(":")
+    ? query.record_type
+    : `${module.key}:${query.record_type}`;
+  const [moduleKey, recordKey] = recordType.split(":");
+  const record = source.body.modules
+    .find((candidate) => candidate.key === moduleKey)
+    ?.record_types.find((candidate) => candidate.key === recordKey);
+  const selected =
+    query.select.length === 0 ? (record?.fields ?? []).map((field) => field.key) : query.select;
+  const allFields = (record?.fields ?? []).map((field) =>
+    Object.freeze({
+      reference: `${recordType}.${field.key}`,
+      label: field.label,
+      type: field.type,
+      ...studioFieldFacts(field),
+      linkTargetResolved:
+        field.type !== "link" ||
+        (() => {
+          const target = (field.settings as { target: string }).target;
+          const qualified = target.includes(":") ? target : `${moduleKey}:${target}`;
+          return (
+            source.body.modules.some((owner) =>
+              owner.record_types.some(
+                (targetRecord) => `${owner.key}:${targetRecord.key}` === qualified,
+              ),
+            ) || borrowed?.recordTypes.includes(qualified) === true
+          );
+        })(),
+      ...(isParentLink(module.key, recordType, record, field) ? { parentLink: true } : {}),
+      ...((field.type === "link" || field.type === "choice") &&
+      (field.settings as { depends_on?: { parent_field: string } }).depends_on !== undefined
+        ? {
+            dependsOn: `${recordType}.${(field.settings as { depends_on: { parent_field: string } }).depends_on.parent_field}`,
+          }
+        : {}),
+    }),
+  );
+  const inputs = query.inputs.map((input) =>
+    Object.freeze({
+      key: input.key,
+      label: input.label,
+      type: input.type,
+      required: input.required,
+      ...(input.type === "text" && input.validation?.choices !== undefined
+        ? { choices: input.validation.choices }
+        : {}),
+      ...(input.type === "record_reference"
+        ? {
+            recordTypes: Object.freeze(
+              input.record_types.map((type) =>
+                type.includes(":") ? type : `${module.key}:${type}`,
+              ),
+            ),
+          }
+        : {}),
+    }),
+  );
+  return Object.freeze({
+    reference: `${module.key}:${query.key}`,
+    label: query.label ?? query.key,
+    recordType,
+    recordTypeLabel: record?.name ?? "",
+    recordTypePluralLabel: record?.plural_name ?? "",
+    allFields: Object.freeze(allFields),
+    fields: Object.freeze(
+      selected.flatMap((key) =>
+        allFields.filter((field) => field.reference === `${recordType}.${key}`),
+      ),
+    ),
+    grouped: query.group_by.length > 0 || query.aggregates.length > 0,
+    totals: query.aggregates.map((total) => ({
+      alias: total.alias,
+      label: queryTotalLabel(
+        total.operation,
+        record?.fields.find((field) => field.key === total.field)?.label,
+      ),
+    })),
+    groupBy: Object.freeze(query.group_by.map((key) => `${recordType}.${key}`)),
+    inputs: Object.freeze(inputs),
+    pageSize: query.page_size,
+    exposure: query.exposure,
+    exportable: record?.standard_actions.includes("export") === true,
+    ...(record === undefined ? {} : { board: studioBoardFacts(module.key, query, record) }),
+  });
+};
+
 const ownQueries = (
   source: ApplicationSourceDocument,
   borrowed: StudioBorrowedChoices | null,
 ): StudioQueryChoice[] =>
   (source.body.modules ?? []).flatMap((module) =>
-    module.queries.map((query) => {
-      const recordType = query.record_type.includes(":")
-        ? query.record_type
-        : `${module.key}:${query.record_type}`;
-      const [moduleKey, recordKey] = recordType.split(":");
-      const record = source.body.modules
-        .find((candidate) => candidate.key === moduleKey)
-        ?.record_types.find((candidate) => candidate.key === recordKey);
-      const selected =
-        query.select.length === 0 ? (record?.fields ?? []).map((field) => field.key) : query.select;
-      const allFields = (record?.fields ?? []).map((field) =>
-        Object.freeze({
-          reference: `${recordType}.${field.key}`,
-          label: field.label,
-          type: field.type,
-          ...studioFieldFacts(field),
-          linkTargetResolved:
-            field.type !== "link" ||
-            (() => {
-              const target = (field.settings as { target: string }).target;
-              const qualified = target.includes(":") ? target : `${moduleKey}:${target}`;
-              return (
-                source.body.modules.some((owner) =>
-                  owner.record_types.some(
-                    (targetRecord) => `${owner.key}:${targetRecord.key}` === qualified,
-                  ),
-                ) || borrowed?.recordTypes.includes(qualified) === true
-              );
-            })(),
-          ...(isParentLink(module.key, recordType, record, field) ? { parentLink: true } : {}),
-          ...((field.type === "link" || field.type === "choice") &&
-          (field.settings as { depends_on?: { parent_field: string } }).depends_on !== undefined
-            ? {
-                dependsOn: `${recordType}.${(field.settings as { depends_on: { parent_field: string } }).depends_on.parent_field}`,
-              }
-            : {}),
-        }),
-      );
-      const inputs = query.inputs.map((input) =>
-        Object.freeze({
-          key: input.key,
-          label: input.label,
-          type: input.type,
-          required: input.required,
-          ...(input.type === "text" && input.validation?.choices !== undefined
-            ? { choices: input.validation.choices }
-            : {}),
-          ...(input.type === "record_reference"
-            ? {
-                recordTypes: Object.freeze(
-                  input.record_types.map((type) =>
-                    type.includes(":") ? type : `${module.key}:${type}`,
-                  ),
-                ),
-              }
-            : {}),
-        }),
-      );
-      return Object.freeze({
-        reference: `${module.key}:${query.key}`,
-        label: query.label ?? query.key,
-        recordType,
-        recordTypeLabel: record?.name ?? "",
-        allFields: Object.freeze(allFields),
-        fields: Object.freeze(
-          selected.flatMap((key) =>
-            allFields.filter((field) => field.reference === `${recordType}.${key}`),
-          ),
-        ),
-        grouped: query.group_by.length > 0 || query.aggregates.length > 0,
-        totals: query.aggregates.map((total) => ({
-          alias: total.alias,
-          label: queryTotalLabel(
-            total.operation,
-            record?.fields.find((field) => field.key === total.field)?.label,
-          ),
-        })),
-        groupBy: Object.freeze(query.group_by.map((key) => `${recordType}.${key}`)),
-        inputs: Object.freeze(inputs),
-        pageSize: query.page_size,
-        exposure: query.exposure,
-        exportable: record?.standard_actions.includes("export") === true,
-        ...(record === undefined ? {} : { board: studioBoardFacts(module.key, query, record) }),
-      });
-    }),
+    module.queries.map((query) => ownQuery(source, borrowed, module, query)),
   );
 
 /** The record types of the application's own Modules in the draft, as `<module>:<record>`. */
@@ -591,6 +604,22 @@ export function studioQueryChoices(
     ...(borrowedFor(source, borrowed)?.queries ?? []),
   ]);
 }
+
+/** Record types offered in Data create or reuse their ordinary default query in the same edit. */
+export const studioRecordDataChoices = (
+  source: ApplicationSourceDocument,
+): readonly StudioQueryChoice[] =>
+  source.body.modules.flatMap((module) =>
+    module.record_types.flatMap((record) => {
+      if (!record.standard_actions.includes("read") || record.fields.length === 0) return [];
+      const query = studioDefaultRecordQuery(source, module, record);
+      if (query === undefined) return [];
+      const choice = ownQuery(source, null, module, query);
+      return [
+        { ...choice, reference: `record:${module.key}:${record.key}`, label: record.plural_name },
+      ];
+    }),
+  );
 
 /**
  * The module actions a block can run: those of the application's own Modules in the draft, then

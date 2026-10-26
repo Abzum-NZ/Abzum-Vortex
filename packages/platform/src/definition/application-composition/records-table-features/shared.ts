@@ -339,7 +339,9 @@ export const recordsTableFieldNotEditableReason = (
     case "link_to_one_of_several":
       return `${field.label} links to one of several record types, so it cannot be edited here`;
     default:
-      return `${field.label} cannot be edited in a cell`;
+      return recordsTableEditableFieldTypes.includes(field.type)
+        ? `${field.label} is read-only under this record type's update permission, so it cannot be edited in a cell`
+        : `${field.label} uses a ${field.type.replaceAll("_", " ")} value that has no cell editor`;
   }
 };
 
@@ -394,8 +396,13 @@ export const featureAvailable: RecordsTableFeatureCheck = Object.freeze({ kind: 
 export const featureNotPossible = (
   refusal: GridFeatureRefusal,
   /** The sentence naming the part that does not fit, for a feature whose sentence is not fixed. */
-  reason: string = refusal.message,
-): RecordsTableFeatureCheck => Object.freeze({ kind: "not_possible", code: refusal.code, reason });
+  reason: string | readonly string[] = refusal.message,
+): RecordsTableFeatureCheck =>
+  Object.freeze({
+    kind: "not_possible",
+    code: refusal.code,
+    reason: typeof reason === "string" ? reason : [...new Set(reason)].join(" "),
+  });
 
 /** The facts of a field the settings name, compared without regard to case. */
 export const factsOf = <Field extends Readonly<{ field: string }>>(

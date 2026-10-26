@@ -288,23 +288,21 @@ export const recordsTableInlineEditFeature: RecordsTableFeatureDefinition<
     );
     if (facts.grouped || !facts.fields.some((field) => field.editable)) return needed;
     if (!state.enabled) return featureAvailable;
-    if (state.eventId === undefined)
-      return featureNotPossible(featureRefusal, "Name the action that saves a change");
-    if (state.fields.length === 0)
-      return featureNotPossible(featureRefusal, "Choose the fields people may change in place");
+    const reasons: string[] = [];
+    if (state.eventId === undefined) reasons.push("Add the flow that saves a change.");
+    if (state.fields.length === 0) reasons.push("Choose the fields people may change in place.");
     for (const chosen of state.fields) {
       const field = factsOf(facts, chosen);
-      if (field === undefined)
-        return featureNotPossible(
-          featureRefusal,
-          "Choose editable fields of the table's own query",
-        );
+      if (field === undefined) {
+        reasons.push("Choose editable fields of the table's own query.");
+        continue;
+      }
       const reason = recordsTableFieldNotEditableReason(field);
-      if (reason !== undefined) return featureNotPossible(featureRefusal, reason);
+      if (reason !== undefined) reasons.push(reason);
     }
     const missing = recordsTableDependencyMissing(facts, state.fields);
-    if (missing !== undefined) return featureNotPossible(featureRefusal, missing);
-    return featureAvailable;
+    if (missing !== undefined) reasons.push(missing);
+    return reasons.length === 0 ? featureAvailable : featureNotPossible(featureRefusal, reasons);
   },
 };
 

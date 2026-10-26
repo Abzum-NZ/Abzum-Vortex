@@ -69,7 +69,7 @@ export function StudioInlineEditEditor({
           <ItemDescription>
             {hasAction
               ? "Each change is saved by the workflow for an edited value."
-              : "Name the action that saves a change: add the workflow for “When a value is edited” under Workflow."}
+              : "Use Fix to add the flow that saves edited values and choose the editable columns together."}
           </ItemDescription>
         </ItemContent>
       </Item>

@@ -1,4 +1,5 @@
 import {
+  typedSourceSettingValue,
   groupingDefaultsFromQuery,
   queryInputValueType,
   recordsTableFeatureOfEvent,
@@ -36,6 +37,35 @@ import type {
   StudioQueryField,
   StudioRelationshipChoice,
 } from "../contextual-palette";
+
+/** Data selection writes a grid's initial columns, sorting choices and title into its definition. */
+export const studioGridDataSettings = (
+  properties: readonly BlockPropertySchemaContract[],
+  query: StudioQueryChoice | undefined,
+): Readonly<Record<string, SourceBlockPropertyValueContract>> => {
+  const columns = properties.find((property) => property.key === "columns");
+  if (
+    query === undefined ||
+    columns?.kind !== "list" ||
+    columns.item.kind !== "group" ||
+    !columns.item.properties.some((property) => property.key === "visible")
+  )
+    return {};
+  const values: Record<string, unknown> = {
+    title: query.recordTypePluralLabel ?? query.recordTypeLabel,
+    columns: query.fields.map((field) => ({ field: field.reference, visible: true })),
+    sortable_fields: query.fields.filter((field) => field.sortable).map((field) => field.reference),
+  };
+  return Object.fromEntries(
+    Object.entries(values).flatMap(([key, value]) => {
+      const property = properties.find((candidate) => candidate.key === key);
+      if (property === undefined) return [];
+      const typed = typedSourceSettingValue(value, property, [key], []);
+      if (typed === undefined) throw new Error(`Invalid grid data setting: ${key}`);
+      return [[key, typed]];
+    }),
+  );
+};
 
 /**
  * How Studio edits one grid feature's settings once it is switched on. `settings` draws the feature's

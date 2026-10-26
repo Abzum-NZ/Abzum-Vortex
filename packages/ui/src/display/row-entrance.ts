@@ -45,6 +45,11 @@ export const useRowEntrance = <T extends HTMLElement>(
         { ...timing, delay: Math.min(index, STAGGERED_ROW_LIMIT - 1) * step },
       );
     });
+    // Transformed rows can temporarily extend scroll overflow without resizing their container.
+    // Re-measure that overflow once the whole entrance has settled, including short pages.
+    void Promise.all(controls).then(() =>
+      container.dispatchEvent(new Event("vortex-row-settled", { bubbles: true })),
+    );
     return () => {
       for (const control of controls) control.complete();
     };
