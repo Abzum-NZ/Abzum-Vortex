@@ -100,6 +100,52 @@ const reviewOutputs = (
     ...values,
   }) as Outputs;
 
+/** The words a person uses for each standard record operation, in the order they are listed. */
+const standardOperationWords: ReadonlyArray<readonly [string, string]> = [
+  ["read", "view"],
+  ["create", "create"],
+  ["update", "edit"],
+  ["soft delete", "delete"],
+  ["restore", "restore"],
+  ["export", "export"],
+];
+const standardPermission = /^Allows the standard (.+) operation for (.+)\.$/u;
+
+const listWords = (words: readonly string[]): string =>
+  words.length <= 1
+    ? (words[0] ?? "")
+    : `${words.slice(0, -1).join(", ")} and ${words[words.length - 1]}`;
+
+/**
+ * One sentence per role: its standard record permissions grouped by record type ("Members can view,
+ * create, edit, delete, restore and export assets."), then its other permissions as written.
+ */
+const roleSummaryLine = (
+  role: Readonly<{ name: string; permissions: readonly Readonly<{ description: string }>[] }>,
+): string => {
+  const operationsByRecords = new Map<string, Set<string>>();
+  const others: string[] = [];
+  for (const { description } of role.permissions) {
+    const match = standardPermission.exec(description);
+    if (match === null) {
+      others.push(description);
+      continue;
+    }
+    const records = match[2] ?? "";
+    operationsByRecords.set(
+      records,
+      (operationsByRecords.get(records) ?? new Set()).add((match[1] ?? "").replaceAll("_", " ")),
+    );
+  }
+  const standard = [...operationsByRecords].map(([records, operations]) => {
+    const words = standardOperationWords
+      .filter(([operation]) => operations.has(operation))
+      .map(([, word]) => word);
+    return `${role.name} can ${listWords(words)} ${records}.`;
+  });
+  return [...standard, ...others].join(" ");
+};
+
 /** A review that names why neither an install nor an upgrade is possible; the flow explains it. */
 const unavailable = (reason: UnavailableReason): ApplicationStoreResult => ({
   kind: "available",
@@ -227,10 +273,7 @@ const installReview = async (
     application_name: candidate.releaseSet.application.content.name,
     release_version: candidate.snapshot.selected.releaseVersion,
     release_note: candidate.snapshot.latest.releaseNote,
-    roles: roles.map(
-      (role) =>
-        `${role.name}: ${role.permissions.map((permission) => permission.description).join(" ")}`,
-    ),
+    roles: roles.map(roleSummaryLine),
     member_role_name: releaseMemberRole(roles).name,
     member_role_assignable: await readMemberRoleAssignable(
       environment,
