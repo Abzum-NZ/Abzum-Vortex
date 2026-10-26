@@ -1,6 +1,8 @@
 "use client";
 
 import {
+  createContext,
+  useContext,
   useCallback,
   useEffect,
   useRef,
@@ -9,6 +11,7 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
+import { createPortal } from "react-dom";
 import { recordsTableDensities, type RecordsTableDensity } from "@vortex/platform/schema";
 import { Button } from "../../components/button";
 import {
@@ -26,11 +29,8 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "../../components/dropdown-menu";
-import { Kbd } from "../../components/kbd";
-import { ToggleGroup, ToggleGroupItem } from "../../components/toggle-group";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../../components/tooltip";
 import { Icon } from "../../icons/icon";
-import { usePhoneViewport } from "../table-geometry";
 import type { GridLayoutControls } from "../table-layout";
 
 const DENSITY_LABELS: Readonly<Record<RecordsTableDensity, string>> = Object.freeze({
@@ -39,7 +39,6 @@ const DENSITY_LABELS: Readonly<Record<RecordsTableDensity, string>> = Object.fre
 });
 
 /** The full screen shortcut, as the tooltip shows it and as `aria-keyshortcuts` names it. */
-const FULL_SCREEN_KEYS = "Ctrl+Shift+F";
 const FULL_SCREEN_ARIA_KEYS = "Control+Shift+F Meta+Shift+F";
 
 /** The classes of a table expanded to fill the window, as an in-app layer over the page. */
@@ -236,9 +235,12 @@ export type GridToolbarProps = Readonly<{
   accessibleName: string;
   /** What the projected grid features draw first: search, filter chips, the view switcher. */
   featureItems: ReactNode;
+  overflowItems: ReactNode;
+  selectionActive: boolean;
+  refresh: (() => void) | undefined;
   /**
    * The bulk actions over the selection and the selection band, when the projection offers them;
-   * the band takes a row of its own below the toolbar.
+   * these replace the ordinary controls inside the same toolbar row.
    */
   selectionBanner: ReactNode;
   /** The layout controls (density, columns) show when the page has rows to arrange. */
@@ -247,159 +249,157 @@ export type GridToolbarProps = Readonly<{
   fullScreen: GridFullScreen | undefined;
 }>;
 
+type ToolbarArea = "supplement" | "overflow";
+type ToolbarSlots = Record<ToolbarArea, HTMLElement | null>;
+const ToolbarContext = createContext<Readonly<{
+  slots: ToolbarSlots;
+  setSlot: (area: ToolbarArea, element: HTMLElement | null) => void;
+}> | null>(null);
+
+/** Interactions stay with the grid while their controls fill its one toolbar. */
+export function GridToolbarScope({ children }: Readonly<{ children: ReactNode }>): ReactElement {
+  const [slots, setSlots] = useState<ToolbarSlots>({ supplement: null, overflow: null });
+  const setSlot = useCallback((area: ToolbarArea, element: HTMLElement | null): void => {
+    setSlots((held) => (held[area] === element ? held : { ...held, [area]: element }));
+  }, []);
+  return <ToolbarContext value={{ slots, setSlot }}>{children}</ToolbarContext>;
+}
+
+export function GridToolbarSlot({
+  area,
+  children,
+}: Readonly<{ area: ToolbarArea; children: ReactNode }>): ReactNode {
+  const toolbar = useContext(ToolbarContext);
+  const target = toolbar?.slots[area];
+  return target == null ? null : createPortal(children, target);
+}
+
 /**
  * The one toolbar of the Records table, in a fixed order: the projected features' items (search,
- * filter chips, view switcher), then density, columns and full screen. Feature items show only when
- * the viewer's projection turns the feature on; density, columns and full screen are the table's
- * own and read nothing. On a phone the table's own controls fold into one More menu so the toolbar
- * stays usable at 390 pixels.
+ * filter chips, view switcher), then Columns with density, and the overflow menu. Selection fills
+ * the same row. Spreadsheet interactions fill slots without drawing controls over the grid body.
  */
 export function GridToolbar({
   accessibleName,
   featureItems,
+  overflowItems,
   selectionBanner,
+  selectionActive,
+  refresh,
   layoutControls,
   fullScreen,
 }: GridToolbarProps): ReactElement {
-  const phone = usePhoneViewport();
+  const toolbar = useContext(ToolbarContext);
+  const setSlot = toolbar?.setSlot;
+  const supplementRef = useCallback(
+    (element: HTMLDivElement | null) => setSlot?.("supplement", element),
+    [setSlot],
+  );
+  const overflowRef = useCallback(
+    (element: HTMLDivElement | null) => setSlot?.("overflow", element),
+    [setSlot],
+  );
   const fullScreenLabel = fullScreen?.active === true ? "Exit full screen" : "Full screen";
-  const own = ((): ReactNode => {
-    if (layoutControls === undefined && fullScreen === undefined) return null;
-    if (phone)
-      return (
-        <DropdownMenu>
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <DropdownMenuTrigger
-                  render={
-                    <Button
-                      ref={fullScreen?.buttonRef}
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label={`More tools for ${accessibleName}`}
-                    />
-                  }
-                />
-              }
-            >
-              <Icon name="more-horizontal" aria-hidden="true" />
-            </TooltipTrigger>
-            <TooltipContent>More</TooltipContent>
-          </Tooltip>
-          <DropdownMenuContent align="end" className="min-w-48">
-            {layoutControls === undefined ? null : (
-              <>
-                <DropdownMenuGroup>
-                  <DropdownMenuLabel>Row density</DropdownMenuLabel>
-                  <DropdownMenuRadioGroup
-                    value={layoutControls.layout.density}
-                    onValueChange={(value: unknown) => {
-                      const density = pickDensity(value);
-                      if (density === undefined) return;
-                      layoutControls.layout.setDensity(density);
-                      layoutControls.announce(`${DENSITY_LABELS[density]} rows`);
-                    }}
-                  >
-                    {recordsTableDensities.map((density) => (
-                      <DropdownMenuRadioItem key={density} value={density}>
-                        {DENSITY_LABELS[density]}
-                      </DropdownMenuRadioItem>
-                    ))}
-                  </DropdownMenuRadioGroup>
-                </DropdownMenuGroup>
-                <DropdownMenuSeparator />
-                <DropdownMenuSub>
-                  <DropdownMenuSubTrigger>
-                    <Icon name="sliders-horizontal" aria-hidden="true" />
-                    Columns
-                  </DropdownMenuSubTrigger>
-                  <DropdownMenuSubContent>
-                    <ColumnChoices {...layoutControls} />
-                  </DropdownMenuSubContent>
-                </DropdownMenuSub>
-              </>
-            )}
-            {fullScreen === undefined ? null : (
-              <>
-                {layoutControls === undefined ? null : <DropdownMenuSeparator />}
-                <DropdownMenuItem onClick={fullScreen.toggle}>
-                  <Icon name={fullScreen.active ? "minimize" : "maximize"} aria-hidden="true" />
-                  {fullScreenLabel}
-                </DropdownMenuItem>
-              </>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      );
-    return (
-      <>
-        {layoutControls === undefined ? null : (
-          <>
-            <ToggleGroup
-              aria-label={`Row density of ${accessibleName}`}
-              variant="outline"
-              size="sm"
-              value={[layoutControls.layout.density]}
-              onValueChange={(values: unknown[]) => {
-                // Pressing the chosen density again keeps it: one density is always chosen.
-                const density = pickDensity(values[0]);
-                if (density === undefined) return;
-                layoutControls.layout.setDensity(density);
-                layoutControls.announce(`${DENSITY_LABELS[density]} rows`);
-              }}
-            >
-              {recordsTableDensities.map((density) => (
-                <ToggleGroupItem key={density} value={density}>
-                  {DENSITY_LABELS[density]}
-                </ToggleGroupItem>
-              ))}
-            </ToggleGroup>
+  return (
+    <div
+      role="group"
+      aria-label={`Tools for ${accessibleName}`}
+      className="mb-2 flex h-11 min-w-0 shrink-0 items-center gap-2 overflow-x-auto whitespace-nowrap"
+    >
+      <div className={selectionActive ? "flex min-w-0 flex-1 items-center gap-2" : "hidden"}>
+        {selectionBanner}
+      </div>
+      <div className={selectionActive ? "hidden" : "flex min-w-0 flex-1 items-center gap-2"}>
+        {featureItems}
+      </div>
+      <div
+        ref={supplementRef}
+        className={selectionActive ? "hidden" : "flex min-w-0 shrink-0 items-center gap-2"}
+      />
+      {selectionActive ? null : (
+        <>
+          {refresh === undefined ? null : (
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={`Refresh ${accessibleName}`}
+                    onClick={refresh}
+                  />
+                }
+              >
+                <Icon name="redo" aria-hidden="true" />
+              </TooltipTrigger>
+              <TooltipContent>Refresh</TooltipContent>
+            </Tooltip>
+          )}
+          {layoutControls === undefined ? null : (
             <DropdownMenu>
               <DropdownMenuTrigger
                 render={
                   <Button variant="outline" size="sm" aria-label={`Columns of ${accessibleName}`} />
                 }
               >
-                <Icon name="sliders-horizontal" data-icon="inline-start" aria-hidden="true" />
+                <Icon name="sliders-horizontal" aria-hidden="true" />
                 Columns
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <ColumnChoices {...layoutControls} />
+                <DropdownMenuSeparator />
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger>Row density</DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent>
+                    <DropdownMenuRadioGroup
+                      value={layoutControls.layout.density}
+                      onValueChange={(value: unknown) => {
+                        const density = pickDensity(value);
+                        if (density === undefined) return;
+                        layoutControls.layout.setDensity(density);
+                        layoutControls.announce(`${DENSITY_LABELS[density]} rows`);
+                      }}
+                    >
+                      {recordsTableDensities.map((density) => (
+                        <DropdownMenuRadioItem key={density} value={density}>
+                          {DENSITY_LABELS[density]}
+                        </DropdownMenuRadioItem>
+                      ))}
+                    </DropdownMenuRadioGroup>
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
               </DropdownMenuContent>
             </DropdownMenu>
-          </>
-        )}
-        {fullScreen === undefined ? null : (
-          <Tooltip>
-            <TooltipTrigger
+          )}
+          <DropdownMenu>
+            <DropdownMenuTrigger
               render={
                 <Button
-                  ref={fullScreen.buttonRef}
+                  ref={fullScreen?.buttonRef}
                   variant="ghost"
                   size="icon-sm"
-                  aria-label={fullScreenLabel}
-                  aria-keyshortcuts={FULL_SCREEN_ARIA_KEYS}
-                  onClick={fullScreen.toggle}
+                  aria-label={`More tools for ${accessibleName}`}
                 />
               }
             >
-              <Icon name={fullScreen.active ? "minimize" : "maximize"} aria-hidden="true" />
-            </TooltipTrigger>
-            <TooltipContent className="flex items-center gap-2">
-              {fullScreenLabel}
-              <Kbd>{fullScreen.active ? "Esc" : FULL_SCREEN_KEYS}</Kbd>
-            </TooltipContent>
-          </Tooltip>
-        )}
-      </>
-    );
-  })();
-  return (
-    <div className="mb-2 flex shrink-0 flex-wrap items-end gap-2">
-      {featureItems}
-      {selectionBanner}
-      {own === null ? null : <div className="ms-auto flex flex-wrap items-center gap-2">{own}</div>}
+              <Icon name="more-horizontal" aria-hidden="true" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-48">
+              {overflowItems}
+              <div ref={overflowRef} />
+              {fullScreen === undefined ? null : (
+                <DropdownMenuItem
+                  aria-keyshortcuts={FULL_SCREEN_ARIA_KEYS}
+                  onClick={fullScreen.toggle}
+                >
+                  <Icon name={fullScreen.active ? "minimize" : "maximize"} aria-hidden="true" />
+                  {fullScreenLabel}
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </>
+      )}
     </div>
   );
 }

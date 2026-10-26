@@ -19,7 +19,12 @@ import { toast } from "../../components/sonner";
 import { Spinner } from "../../components/spinner";
 import { Icon } from "../../icons/icon";
 import type { TableExportRun, TableExportScope } from "../projected-grid-features";
-import type { GridFeatureContext, GridFeatureModule, GridFeaturePointProps } from "./registry";
+import type {
+  GridFeatureContext,
+  GridFeatureModule,
+  GridFeaturePointProps,
+  GridFeatureScopeProps,
+} from "./registry";
 
 const numberFormat = new Intl.NumberFormat();
 const records = (count: number): string =>
@@ -98,7 +103,6 @@ function useExportToast(run: TableExportRun | undefined): void {
  */
 function ExportToolbarItems({ context }: GridFeaturePointProps): ReactElement | null {
   const run = context.selection.exportRun;
-  useExportToast(run);
   const onCancel = context.events?.export_cancelled;
   if (context.events?.export_requested === undefined) return null;
   if (run?.status === "running")
@@ -122,16 +126,9 @@ function ExportToolbarItems({ context }: GridFeaturePointProps): ReactElement | 
     );
   const { matching, selected } = selectionOf(context);
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        render={
-          <Button variant="outline" size="sm" aria-label={`Export ${context.accessibleName}`} />
-        }
-      >
-        Export
-        <Icon name="chevron-down" data-icon="inline-end" aria-hidden="true" />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
+    <DropdownMenuSub>
+      <DropdownMenuSubTrigger>Export</DropdownMenuSubTrigger>
+      <DropdownMenuSubContent>
         <ExportScopeItem context={context} scope="view" label="Export this view" />
         {selected > 0 ? (
           <ExportScopeItem
@@ -147,8 +144,8 @@ function ExportToolbarItems({ context }: GridFeaturePointProps): ReactElement | 
             label={`Export all ${numberFormat.format(matching)} matching`}
           />
         ) : null}
-      </DropdownMenuContent>
-    </DropdownMenu>
+      </DropdownMenuSubContent>
+    </DropdownMenuSub>
   );
 }
 
@@ -186,6 +183,10 @@ function ExportSelectionBanner({ context }: GridFeaturePointProps): ReactElement
 }
 
 export const gridFeature: GridFeatureModule = {
-  ToolbarItems: ExportToolbarItems,
+  Scope: function ExportScope({ context, children }: GridFeatureScopeProps): ReactElement {
+    useExportToast(context.selection.exportRun);
+    return <>{children}</>;
+  },
+  OverflowItems: ExportToolbarItems,
   SelectionBanner: ExportSelectionBanner,
 };

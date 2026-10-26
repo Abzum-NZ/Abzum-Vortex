@@ -545,15 +545,61 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
         };
   const allowFullScreen = contract.allowFullScreen;
   const toolbar =
-    gridFeatures.keys.length === 0 && layoutControls === undefined && !allowFullScreen ? null : (
+    gridFeatures.keys.length === 0 &&
+    layoutControls === undefined &&
+    !allowFullScreen &&
+    events?.refresh === undefined ? null : (
       <GridToolbar
         key={controlsKey}
         accessibleName={accessibleName}
         featureItems={state.status === "empty" ? null : gridFeatures.toolbarItems()}
+        overflowItems={gridFeatures.toolbarOverflowItems()}
+        refresh={
+          events?.refresh === undefined || state.status === "empty"
+            ? undefined
+            : () => events.refresh?.({ event: "refresh" })
+        }
+        selectionActive={
+          selectedRecordIds.length > 0 || selectionScope !== undefined || bulkRun !== undefined
+        }
         selectionBanner={
-          selectable && (layoutControls !== undefined || bulkRun !== undefined)
-            ? gridFeatures.selectionBanner()
-            : null
+          selectable && (layoutControls !== undefined || bulkRun !== undefined) ? (
+            <>
+              {(values?.features?.bulkActions ?? []).length > 0 ? null : (
+                <>
+                  <span role="status" className="text-sm">
+                    {selectedRecordIds.length} records selected
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      if (events?.selection_scope_changed !== undefined)
+                        void events.selection_scope_changed({
+                          event: "selection_scope_changed",
+                          scope: "cleared",
+                        });
+                      else
+                        for (const row of rows)
+                          if (
+                            selectedRecordIds.includes(row.recordId) &&
+                            row.revision !== undefined
+                          )
+                            void events?.selection_changed?.({
+                              event: "selection_changed",
+                              recordId: row.recordId,
+                              revision: row.revision,
+                              selected: false,
+                            });
+                    }}
+                  >
+                    Clear selection
+                  </Button>
+                </>
+              )}
+              {gridFeatures.selectionBanner()}
+            </>
+          ) : null
         }
         layoutControls={layoutControls}
         fullScreen={allowFullScreen ? fullScreen : undefined}
@@ -744,11 +790,7 @@ function RecordsTableView(props: DisplayRenderProps<TablePayload>): ReactElement
           className={cn(fullScreen.active && FULL_SCREEN_CLASS)}
           {...(revealed ? { "data-vortex-display-revealed": "" } : {})}
         >
-          <DisplayHeader
-            title={title}
-            accessibleName={accessibleName}
-            events={state.status === "empty" ? undefined : events}
-          />
+          <DisplayHeader title={title} accessibleName={accessibleName} events={undefined} />
           {state.status === "refused" ||
           state.status === "error" ||
           state.status === "awaiting_input"

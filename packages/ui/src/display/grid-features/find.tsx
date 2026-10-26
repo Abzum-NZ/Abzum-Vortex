@@ -2,12 +2,15 @@
 
 import { useEffect, useId, useMemo, useRef, useState, type ReactElement } from "react";
 import { Button } from "../../components/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../../components/dialog";
+import { DropdownMenuItem } from "../../components/dropdown-menu";
 import { Input } from "../../components/input";
 import { Icon } from "../../icons/icon";
 import { cellValueToText } from "../cell";
 import { useDateFormatOptions } from "../date-format-context";
 import { GRID_ROOT } from "../table-interaction";
 import type { GridFeatureInteractionProps } from "./registry";
+import { GridToolbarSlot } from "./toolbar";
 
 type Match = Readonly<{ row: number; field: string }>;
 const matchClasses = [
@@ -119,102 +122,113 @@ export default function Find({ context, surface }: GridFeatureInteractionProps):
     const next = (index + offset + matches.length) % matches.length;
     setIndex(next);
   };
-  if (!open)
-    return (
-      <Button
-        size="sm"
-        variant="ghost"
-        onClick={() => {
-          // Only Ctrl+F from a cell has a cell to return to.
-          previous.current = undefined;
-          setOpen(true);
-        }}
-      >
-        <Icon name="search" aria-hidden="true" />
-        Find on page
-      </Button>
-    );
   return (
-    <div
-      role="search"
-      aria-label={`Find on page in ${context.accessibleName}`}
-      className="flex flex-wrap items-center gap-1"
-    >
-      <Input
-        ref={input}
-        aria-label="Find on this page"
-        aria-describedby={label}
-        value={query}
-        maxLength={200}
-        className="w-48"
-        onChange={(event) => {
-          setQuery(event.currentTarget.value);
-          setIndex(0);
-        }}
-        onKeyDown={(event) => {
-          if (event.key === "Escape") {
-            event.preventDefault();
-            close();
-          }
-          if (event.key === "Enter") {
-            event.preventDefault();
-            step(event.shiftKey ? -1 : 1);
-          }
-        }}
-      />
-      <span
-        id={label}
-        role="status"
-        aria-live="polite"
-        className="text-xs text-muted-foreground tabular-nums"
-      >
-        {query === ""
-          ? "Enter text"
-          : matches.length === 0
-            ? "No matches on this page"
-            : `${(index % matches.length) + 1} of ${matches.length} matching cells`}
-      </span>
-      <Button
-        size="icon-sm"
-        variant="ghost"
-        title="Previous match"
-        aria-label="Previous match"
-        disabled={matches.length === 0}
-        onClick={() => step(-1)}
-      >
-        <Icon name="chevron-up" aria-hidden="true" />
-      </Button>
-      <Button
-        size="icon-sm"
-        variant="ghost"
-        title="Next match"
-        aria-label="Next match"
-        disabled={matches.length === 0}
-        onClick={() => step(1)}
-      >
-        <Icon name="chevron-down" aria-hidden="true" />
-      </Button>
-      {context.features.search !== true || context.events?.search_changed === undefined ? null : (
-        <Button
-          size="sm"
-          variant="ghost"
-          disabled={query.trim() === ""}
+    <>
+      <GridToolbarSlot area="overflow">
+        <DropdownMenuItem
           onClick={() => {
-            void context.events?.search_changed?.({ event: "search_changed", query });
+            previous.current = undefined;
+            setOpen(true);
           }}
         >
-          Search all records
-        </Button>
-      )}
-      <Button
-        size="icon-sm"
-        variant="ghost"
-        title="Close find"
-        aria-label="Close find"
-        onClick={close}
+          <Icon name="search" aria-hidden="true" />
+          Find on page
+        </DropdownMenuItem>
+      </GridToolbarSlot>
+      <Dialog
+        open={open}
+        onOpenChange={(next) => {
+          if (!next) close();
+        }}
       >
-        <Icon name="close" aria-hidden="true" />
-      </Button>
-    </div>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Find on page</DialogTitle>
+          </DialogHeader>
+          <div
+            role="search"
+            aria-label={`Find on page in ${context.accessibleName}`}
+            className="flex flex-wrap items-center gap-1"
+          >
+            <Input
+              ref={input}
+              aria-label="Find on this page"
+              aria-describedby={label}
+              value={query}
+              maxLength={200}
+              className="w-48"
+              onChange={(event) => {
+                setQuery(event.currentTarget.value);
+                setIndex(0);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  close();
+                }
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  step(event.shiftKey ? -1 : 1);
+                }
+              }}
+            />
+            <span
+              id={label}
+              role="status"
+              aria-live="polite"
+              className="text-xs text-muted-foreground tabular-nums"
+            >
+              {query === ""
+                ? "Enter text"
+                : matches.length === 0
+                  ? "No matches on this page"
+                  : `${(index % matches.length) + 1} of ${matches.length} matching cells`}
+            </span>
+            <Button
+              size="icon-sm"
+              variant="ghost"
+              title="Previous match"
+              aria-label="Previous match"
+              disabled={matches.length === 0}
+              onClick={() => step(-1)}
+            >
+              <Icon name="chevron-up" aria-hidden="true" />
+            </Button>
+            <Button
+              size="icon-sm"
+              variant="ghost"
+              title="Next match"
+              aria-label="Next match"
+              disabled={matches.length === 0}
+              onClick={() => step(1)}
+            >
+              <Icon name="chevron-down" aria-hidden="true" />
+            </Button>
+            {context.features.search !== true ||
+            context.events?.search_changed === undefined ? null : (
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={query.trim() === ""}
+                onClick={() => {
+                  void context.events?.search_changed?.({ event: "search_changed", query });
+                }}
+              >
+                Search all records
+              </Button>
+            )}
+            <Button
+              size="icon-sm"
+              variant="ghost"
+              title="Close find"
+              aria-label="Close find"
+              onClick={close}
+            >
+              <Icon name="close" aria-hidden="true" />
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

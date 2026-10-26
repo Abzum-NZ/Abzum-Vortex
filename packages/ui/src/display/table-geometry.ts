@@ -32,17 +32,20 @@ export const GRID_CONTROL_COLUMN_WIDTH = 48;
 
 /** The trailing cell fits every authored button, its menu and the optional row editor. */
 export const gridActionsWidth = (contract: RecordsTableContract): number =>
-  contract.features.rowActions.enabled && contract.rowBehaviours.rowActions.length > 0
-    ? 16 +
-      36 *
-        (Math.min(
-          3,
-          contract.rowBehaviours.rowActions.filter((action) => action.placement === "inline")
-            .length,
-        ) +
-          1 +
-          Number(contract.features.rowEdit.enabled))
-    : GRID_CONTROL_COLUMN_WIDTH;
+  Math.max(
+    contract.features.rowEdit.enabled ? 192 : GRID_CONTROL_COLUMN_WIDTH,
+    contract.features.rowActions.enabled && contract.rowBehaviours.rowActions.length > 0
+      ? 16 +
+          36 *
+            (Math.min(
+              3,
+              contract.rowBehaviours.rowActions.filter((action) => action.placement === "inline")
+                .length,
+            ) +
+              1 +
+              Number(contract.features.rowEdit.enabled))
+      : GRID_CONTROL_COLUMN_WIDTH,
+  );
 
 /** Whether a page of this many rows mounts only the rows in view. */
 export const virtualizesRows = (rowCount: number): boolean =>
