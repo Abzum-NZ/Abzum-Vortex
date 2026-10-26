@@ -780,16 +780,11 @@ revoke all on function vortex_definition.read_active_installation_bundle_identit
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request, vortex_record_adapter;
 grant execute on function vortex_definition.read_active_installation_bundle_identity() to vortex_owner, vortex_request;
 comment on function vortex_definition.read_active_installation_bundle_identity() is 'Returns fresh active format2 identity and index, or a private exact locked active cold source for the same HUMAN request; carries no viewer permission decision.';
-reset role;
-
 create temporary table prepared_plan_key_rewrites (
   old_key text primary key,
   new_key text not null unique
 );
-grant select, insert on prepared_plan_key_rewrites to vortex_owner;
 grant select on prepared_plan_key_rewrites to vortex_record_adapter;
-
-set role vortex_owner;
 
 do $rewrite$
 declare
@@ -913,4 +908,8 @@ $rewrite$;
 
 reset role;
 
+set role vortex_owner;
+
 drop table prepared_plan_key_rewrites;
+
+reset role;
