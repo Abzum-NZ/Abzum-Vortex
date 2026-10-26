@@ -24,6 +24,10 @@ import {
   textPayloadSchema,
   type RichTextPayload,
   type TextPayload,
+  displaySummaryMetricsSchema,
+  summaryPayloadSchema,
+  type DisplaySummaryMetric,
+  type SummaryPayload,
   displayDataStateSchema,
   displayDetailCellSchema,
   displayScalarCellSchema,
@@ -71,7 +75,7 @@ export {
   type DisplayDataState,
   type DisplayRefusalReason,
 } from "@vortex/platform/schema";
-export type { RichTextPayload, TextPayload };
+export type { DisplaySummaryMetric, RichTextPayload, SummaryPayload, TextPayload };
 
 /**
  * Validated structured rich-text document from the shared closed rich-text contract.
@@ -153,13 +157,6 @@ export type DisplayColumn = Readonly<{ key: string; label: string }>;
 
 /** One labelled record-detail field. */
 export type DisplayField = Readonly<{ key: string; label: string; value: DisplayCellValue }>;
-
-/** One summary-block aggregate, which may be unavailable on its own. */
-export type DisplaySummaryMetric = Readonly<{
-  key: string;
-  label: string;
-  value: DisplayCellValue | Readonly<{ kind: "unavailable" }>;
-}>;
 
 /** The ready rows a launcher or link-tile block renders. */
 export type LauncherRowsPayload = Readonly<{
@@ -260,12 +257,6 @@ export type RecordDetailPayload = Readonly<{
   recordId: string;
   fields: readonly DisplayField[];
   heading?: DisplayCellValue;
-}>;
-
-/** The ready values a summary-values block renders. */
-export type SummaryPayload = Readonly<{
-  kind: "summary_values";
-  values: readonly DisplaySummaryMetric[];
 }>;
 
 /** One fetched page of cards in a protected board bucket. */
@@ -392,8 +383,11 @@ export const parseProjectedPart = <Output>(
   );
 };
 
-/** A block's ready values parser: its platform payload schema, refused with a located error. */
-const projectedValuesParser =
+/**
+ * @internal A block's ready values parser: its platform payload schema, refused with a located
+ * error.
+ */
+export const projectedValuesParser =
   <Output>(schema: Parameters<typeof parseProjectedPart<Output>>[0], message: string) =>
   (value: unknown, location: DefinitionRenderErrorLocation = {}): Output =>
     parseProjectedPart(schema, value, message, location);
@@ -612,43 +606,17 @@ export const parseSummaryValue = (
   location: DefinitionRenderErrorLocation,
 ): DisplaySummaryMetric["value"] => parseCellValue(value, location);
 
-const parseSummaryEntries = <Value>(
-  value: unknown,
-  location: DefinitionRenderErrorLocation,
-  parseValue: (value: unknown, location: DefinitionRenderErrorLocation) => Value,
-): readonly Readonly<{ key: string; label: string; value: Value }>[] => {
-  const items = requireArray(value, "Projected summary values must be an array", location);
-  const seen = new Set<string>();
-  return Object.freeze(
-    items.map((item, index) => {
-      const summaryLocation = { ...location, propertyPath: [`values[${index}]`] };
-      const record = requireRecord(item, "A summary value must be an object", summaryLocation);
-      requireExactKeys(record, ["key", "label", "value"], summaryLocation);
-      const key = requireBuilderKey(
-        record.key,
-        "A summary value requires a stable key",
-        summaryLocation,
-      );
-      if (seen.has(key)) fail(`Duplicate summary value key '${key}'`, summaryLocation);
-      seen.add(key);
-      return Object.freeze({
-        key,
-        label: requireNonEmptyString(
-          record.label,
-          "A summary value requires a label",
-          summaryLocation,
-        ),
-        value: parseValue(record.value, summaryLocation),
-      });
-    }),
-  );
-};
-
 /** @internal Shared with the board payload parser. */
 export const parseSummaryMetrics = (
   value: unknown,
   location: DefinitionRenderErrorLocation,
-): readonly DisplaySummaryMetric[] => parseSummaryEntries(value, location, parseSummaryValue);
+): readonly DisplaySummaryMetric[] =>
+  parseProjectedPart(
+    displaySummaryMetricsSchema,
+    value,
+    "Projected summary values are invalid",
+    location,
+  );
 
 /**
  * @internal Shared with the board payload parser. A board card's fields are scalar; only a record
@@ -946,22 +914,10 @@ export const parseRecordDetailPayload = (
 };
 
 /** The ready values a summary-values block accepts. */
-export const parseSummaryPayload = (
-  value: unknown,
-  location: DefinitionRenderErrorLocation = {},
-): SummaryPayload => {
-  const record = requireRecord(value, "Projected display values must be an object", location);
-  if (record.kind !== "summary_values")
-    return fail(
-      `Expected 'summary_values' projected values, got '${String(record.kind)}'`,
-      location,
-    );
-  requireExactKeys(record, ["kind", "values"], location);
-  return Object.freeze({
-    kind: "summary_values",
-    values: parseSummaryMetrics(record.values, location),
-  });
-};
+export const parseSummaryPayload = projectedValuesParser(
+  summaryPayloadSchema,
+  "Projected summary values are invalid",
+);
 
 /**
  * Validates one block's unknown projected state and returns its frozen fail-closed shape. Only the

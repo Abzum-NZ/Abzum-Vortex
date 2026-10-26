@@ -20,3 +20,4 @@ export type { RecordsTableRowFormat } from "./records-table-features";
 export { projectInlineEditedCell } from "./cell-projection";
 export * from "./display-payload-parts";
 export * from "./display-payload-text";
+export * from "./display-payload-summary";
