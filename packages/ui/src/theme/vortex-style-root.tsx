@@ -1,7 +1,12 @@
 "use client";
 
 import * as React from "react";
-import { createVortexStyleRootProps, resolveVortexStyleSelection } from "./vortex-style";
+import {
+  createVortexStyleRootProps,
+  resolveVortexStyle,
+  resolveVortexStyleSelection,
+} from "./vortex-style";
+import { VortexStyleSheet } from "./vortex-style-sheet";
 
 type StyleRootContext = Readonly<{ element: HTMLDivElement | null }>;
 
@@ -97,9 +102,11 @@ export function VortexStyleRoot({
   const ownStyle = documentTheme
     ? Object.fromEntries(Object.entries(style ?? {}).filter(([name]) => !name.startsWith("--")))
     : style;
+  const rootStyle = (props as Record<string, unknown>)["data-vortex-style"];
 
   return (
     <VortexStyleRootContext.Provider value={{ element }}>
+      {typeof rootStyle === "string" ? <VortexStyleSheet style={resolveVortexStyle(rootStyle)} /> : null}
       <div ref={setElement} {...props} style={ownStyle} data-vortex-style-root="">
         {children}
       </div>

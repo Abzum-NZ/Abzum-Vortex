@@ -38,3 +38,8 @@ export {
 } from "./vortex-style";
 
 export { VortexStyleRoot } from "./vortex-style-root";
+export {
+  VortexStyleSheet,
+  VortexStyleSheetsProvider,
+  type VortexStyleSheetHrefs,
+} from "./vortex-style-sheet";

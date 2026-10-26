@@ -16,9 +16,10 @@
 /* Shared shadcn component reset, scoped to every application style root. */
 @import "./base-components.css";
 
-/* Shared component rules use the theme variables resolved on each application root. */
+/* Shared component rules use the theme variables resolved on each application root. Each style's
+ * own rules (style-variants.css) are a stylesheet of their own, linked only where a root paints with
+ * that style (apps/web document styles), after these rules in the same layer. */
 @import "./shared-components.css" layer(vortex-components);
-@import "./style-variants.css" layer(vortex-components);
 
 /*
  * A form control's boundary keeps at least 3:1 against the surface it sits on in every theme and

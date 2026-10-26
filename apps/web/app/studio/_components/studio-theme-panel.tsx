@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import type { SourceApplicationThemeSelection } from "@vortex/platform/schema";
-import { createVortexStyleRootProps, Icon, VORTEX_STYLES } from "@vortex/ui";
+import { createVortexStyleRootProps, Icon, VORTEX_STYLES, VortexStyleSheet } from "@vortex/ui";
 import { Button } from "@vortex/ui/components/button";
 import { Input } from "@vortex/ui/components/input";
 import { InputGroup, InputGroupInput, InputGroupAddon } from "@vortex/ui/components/input-group";
@@ -48,6 +48,7 @@ function StylePreview({ style }: Readonly<{ style: string }>) {
   if (props === undefined) throw new Error(`No preview for catalogue style ${style}`);
   return (
     <div {...props} data-vortex-theme="" aria-hidden="true" inert>
+      <VortexStyleSheet style={props["data-vortex-style"]} />
       <div style={{ zoom: 0.65 }}>
         <div className="space-y-3 bg-background p-3 text-foreground">
           <p className="text-sm font-semibold">Overview</p>

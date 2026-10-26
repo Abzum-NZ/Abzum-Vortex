@@ -12,6 +12,13 @@ const nextConfig: NextConfig = {
     // is Next's default, stated here because hover prefetch and navigation rely on it.
     staleTimes: { dynamic: 0 },
   },
+  turbopack: {
+    rules: {
+      // A stylesheet imported with `?raw` is its text: the server splits the style variants into
+      // one stylesheet per style (app/_lib/document-styles.ts).
+      "*.css": { condition: { query: "?raw" }, type: "raw" },
+    },
+  },
   transpilePackages: [
     "@vortex/platform",
     "@vortex/definitions",
