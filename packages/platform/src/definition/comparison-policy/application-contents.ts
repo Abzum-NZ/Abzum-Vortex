@@ -1,5 +1,6 @@
 import type { ApplicationContent } from "../application-contracts";
 import type { VersionImpactReason } from "../version-impact";
+import { canonicalJson } from "../canonical-json-definition";
 import { placementBlockRelease, placementSettings } from "../application-composition-catalogue";
 import { releaseSettingDeclarations } from "../application-composition/platform-block-release";
 import type { BlockPropertySchemaContract } from "../application-composition/block-property-schema";
@@ -317,6 +318,10 @@ const comparePlacements = (
       if (declaration === undefined) throw new Error(`Block release has no setting '${key}'`);
       const previousSetting = asRecord(before.settings[key]);
       const candidateSetting = asRecord(after.settings[key]);
+      if (key === "features" && declaration.kind === "group") {
+        compareGridFeatures(reasons, previousSetting, candidateSetting, id);
+        continue;
+      }
       // Display list entries may be appended or have their text edited; other settings and
       // references remain behaviour changes. A list that exists on one side only compares as
       // an empty list on the other, so a whole new list is an append (minor), never a patch.
@@ -365,6 +370,50 @@ const comparePlacements = (
         );
       }
     }
+  }
+};
+
+/** One grid feature's setting group, or undefined when the group does not hold it. */
+const gridFeature = (features: RecordValue | undefined, key: string): RecordValue | undefined => {
+  const properties = features?.kind === "group" ? asRecord(features.properties) : undefined;
+  const feature = properties === undefined ? undefined : asRecord(properties[key]);
+  return feature?.kind === "group" ? feature : undefined;
+};
+
+const gridFeatureEnabled = (feature: RecordValue | undefined): boolean => {
+  const enabled =
+    feature === undefined ? undefined : asRecord(asRecord(feature.properties)?.enabled);
+  return enabled?.kind === "boolean" && enabled.value === true;
+};
+
+/**
+ * A Records table's opt-in features compare one by one: switching one on adds a capability
+ * (minor), switching one off or changing an enabled one changes existing behaviour (major), and
+ * editing a feature that stays off changes nothing a person sees (patch).
+ */
+const compareGridFeatures = (
+  reasons: VersionImpactReason[],
+  previous: RecordValue | undefined,
+  candidate: RecordValue | undefined,
+  id: unknown,
+): void => {
+  const keys = new Set([
+    ...Object.keys(asRecord(previous?.properties) ?? {}),
+    ...Object.keys(asRecord(candidate?.properties) ?? {}),
+  ]);
+  for (const key of keys) {
+    const before = gridFeature(previous, key);
+    const after = gridFeature(candidate, key);
+    if (canonicalJson(before ?? null) === canonicalJson(after ?? null)) continue;
+    const wasOn = gridFeatureEnabled(before);
+    const isOn = gridFeatureEnabled(after);
+    reasons.push(
+      !wasOn && isOn
+        ? makeReason("minor", "component_added", "block_placement", "behavior", id)
+        : wasOn
+          ? makeReason("major", "existing_behavior_changed", "block_placement", "behavior", id)
+          : makeReason("patch", "presentation_changed", "block_placement", "configuration", id),
+    );
   }
 };
 

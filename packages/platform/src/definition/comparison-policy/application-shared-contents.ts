@@ -278,16 +278,14 @@ const compareRole = (
     "behavior",
     id,
   );
-  pushChange(
-    reasons,
-    previous.permissionKeys,
-    candidate.permissionKeys,
-    "major",
-    "permission_changed",
-    "role",
-    "permission",
-    id,
-  );
+  // A role that gains permissions lets its holders do more, which existing installations can take
+  // as they are (minor); a role that loses one narrows what they could do (major).
+  const before = new Set((previous.permissionKeys as unknown[]).map(String));
+  const after = new Set((candidate.permissionKeys as unknown[]).map(String));
+  if ([...before].some((key) => !after.has(key)))
+    reasons.push(makeReason("major", "permission_changed", "role", "permission", id));
+  else if ([...after].some((key) => !before.has(key)))
+    reasons.push(makeReason("minor", "component_added", "role", "permission", id));
 };
 
 /**
