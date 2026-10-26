@@ -113,8 +113,7 @@ const listAssignments = async (
 ): Promise<OrganizationAdministrationRoleAssignment[]> => {
   const assignments: OrganizationAdministrationRoleAssignment[] = [];
   let afterRoleAssignmentId:
-    | OrganizationAdministrationRoleAssignment["roleAssignmentId"]
-    | undefined;
+    OrganizationAdministrationRoleAssignment["roleAssignmentId"] | undefined;
   for (;;) {
     const page = await administration.listRoleAssignments(session, selection, {
       pageSize: 100,
@@ -314,7 +313,9 @@ export const grantFirstOwnerApplicationRoles = async (
       log(`accepted the revised role template ${template.key}`);
     }
     if (role.lifecycle !== "active")
-      throw new Error(`Accepted role ${role.key} from template ${template.key} is ${role.lifecycle}`);
+      throw new Error(
+        `Accepted role ${role.key} from template ${template.key} is ${role.lifecycle}`,
+      );
     if (role.assignmentPolicy.kind !== "standing")
       throw new Error(
         `Role ${role.key} from template ${template.key} requires activation and cannot open an application immediately`,

@@ -148,8 +148,7 @@ export function AttachmentInput(props: ControlRenderProps<AttachmentInputPayload
       setBusy(false);
     }
   };
-  const chooseDisabled =
-    disabled || readOnly || busy || (files.length >= maximum && maximum !== 1);
+  const chooseDisabled = disabled || readOnly || busy || (files.length >= maximum && maximum !== 1);
   return (
     <Field
       data-vortex-control="attachment-input"

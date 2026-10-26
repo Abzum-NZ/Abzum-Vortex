@@ -437,11 +437,7 @@ export function useGridLayout({
               (column) => !column.visible || visible.has(column.fieldId),
             );
           if (layoutOnly) {
-            await adoptOwnLayout(
-              placementId,
-              selected.viewId,
-              selected.document,
-            );
+            await adoptOwnLayout(placementId, selected.viewId, selected.document);
             selectTableViewInPlace(placementId, selected.viewId);
             patchLayoutState(placementId, (layout) =>
               layout.views === undefined
