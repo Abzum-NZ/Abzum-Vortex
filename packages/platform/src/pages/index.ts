@@ -210,7 +210,7 @@ export {
   type UpdatePrivateFormDraftCommand,
   createPrivateFormDraftService,
   type PrivateFormDraftAuthority,
-  type PrivateFormDraftAuthorityAdapter,
+  type LoadPrivateFormDraftAuthority,
   type PrivateFormDraftServiceDependencies,
 } from "./form-drafts";
 export {
