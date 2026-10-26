@@ -72,7 +72,6 @@ export {
   type FileUploadCoordinatorDependencies,
   type FileUploadRenewalInput,
   type FileUploadRenewalResult,
-  type FileUploadRepository,
   type PendingUploadReservation,
   type PendingUploadState,
   type UploadAttachmentSettings,
