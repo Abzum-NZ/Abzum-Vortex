@@ -1,13 +1,9 @@
 import type { StoredDefinitionSource } from "@vortex/platform/schema";
 import { appStoreApplication } from "./app-store";
-import { crmApplication } from "./crm";
-import { hrApplication } from "./hr";
 import { iamApplication } from "./iam";
 import { landingZoneApplication } from "./landing-zone";
 import { operationsApplication } from "./operations";
 import { organisationAdministrationApplication } from "./organisation-administration";
-import { serviceDeskApplication } from "./service-desk";
-import { tasksApplication } from "./tasks";
 import { tenantAdministrationApplication } from "./tenant-administration";
 
 /**
@@ -27,10 +23,6 @@ export const shippedApplications: readonly Readonly<{
     applicationOriginKind: "platform_system_application",
   },
   { source: operationsApplication, applicationOriginKind: "ordinary" },
-  { source: crmApplication, applicationOriginKind: "ordinary" },
-  { source: hrApplication, applicationOriginKind: "ordinary" },
-  { source: tasksApplication, applicationOriginKind: "ordinary" },
-  { source: serviceDeskApplication, applicationOriginKind: "ordinary" },
   { source: landingZoneApplication, applicationOriginKind: "platform_system_application" },
   { source: appStoreApplication, applicationOriginKind: "platform_system_application" },
 ];

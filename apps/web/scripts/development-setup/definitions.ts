@@ -39,7 +39,7 @@ import { platformPermissionSource } from "../../app/_lib/platform-permission-sou
 /**
  * The platform release catalogue the shipped applications were authored against: every registered
  * platform block release and the default platform theme, no custom component releases, and the
- * shipped platform connection types CRM and Service Desk bind.
+ * platform connection types.
  */
 export const developmentPublicationCatalogue: ImmutableDefinitionPublicationCatalogueDefinition = {
   permissions: platformPermissionSource,
