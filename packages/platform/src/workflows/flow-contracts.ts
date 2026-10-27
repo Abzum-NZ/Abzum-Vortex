@@ -34,9 +34,6 @@ import {
 } from "./flow-values";
 import type { FlowFormula, FlowLiteral, FlowValue } from "./flow-values";
 
-/** Maximum number of detail lines a flow confirmation can present for explicit review. */
-export const maximumFlowConfirmationDetailLines = 500;
-
 /**
  * The one flow definition every behaviour kind uses: interactive actions, named-action bodies,
  * before-save rules, background reactions and durable workflows. It is shaped like a Kestra flow
