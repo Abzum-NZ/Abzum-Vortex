@@ -1,9 +1,9 @@
-import {
-  type AnyPageComposition,
-  type ApplicationShell,
-  type CompiledItem,
-  type CompiledLayout,
-  type PageComposition,
+import type {
+  AnyPageComposition,
+  ApplicationShell,
+  CompiledItem,
+  CompiledLayout,
+  PageComposition,
 } from "../definition/application-composition/page-composition";
 import {
   compiledItemSlots,

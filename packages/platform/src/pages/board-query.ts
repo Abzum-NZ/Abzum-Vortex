@@ -42,7 +42,7 @@ import {
   recordsTableBoardFactsOf,
 } from "../definition/application-composition/records-table-features/board";
 import { boardFilterProblem } from "../definition/application-composition/records-table-features/column-filters";
-import { type RecordsTableFilterField } from "../definition/application-composition/records-table-features/projections/column-filters";
+import type { RecordsTableFilterField } from "../definition/application-composition/records-table-features/projections/column-filters";
 import type { ConditionalFormatStyle } from "../definition/application-composition/records-table-features/conditional-formatting";
 import { boardColumnReadRequestSchema } from "../definition/application-contracts";
 import { pipelineMovesFrom } from "../definition/record-type-pipelines";

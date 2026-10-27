@@ -11,11 +11,7 @@ import {
   semanticVersionSchema,
 } from "../../catalogue/identifiers";
 import { deterministicDependencyList, iconKeySchema } from "./shared";
-import {
-  type BlockPropertySchemaContract,
-  blockPropertyVisibilityIssues,
-  blockPropertySchema,
-} from "./block-property-schema";
+import { blockPropertyVisibilityIssues, blockPropertySchema } from "./block-property-schema";
 import { customComponentReleaseSchema } from "./custom-components";
 import { releaseSettingDeclarations } from "./placement-slots";
 

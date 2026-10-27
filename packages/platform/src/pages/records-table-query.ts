@@ -10,7 +10,7 @@ import {
   type RecordsTableContract,
 } from "../definition/application-composition/records-display";
 import { recordsTableFilterKindOf } from "../definition/application-composition/records-table-features/column-filters";
-import { type RecordsTableFilterField } from "../definition/application-composition/records-table-features/projections/column-filters";
+import type { RecordsTableFilterField } from "../definition/application-composition/records-table-features/projections/column-filters";
 import type { RecordsTableInlineEditor } from "../definition/application-composition/records-table-features/projections/inline-edit";
 import { gridLayoutVisibleFieldIds, type GridLayoutState } from "./grid-view-state";
 import type { RecordsTableFeatureProjection } from "./records-table-feature-projection";

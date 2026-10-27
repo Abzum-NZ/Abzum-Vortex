@@ -8,7 +8,6 @@ import {
   recordsTableFeatureDefinitions,
   type RecordsTableFeatures,
 } from "./records-table-features";
-import type { ComponentSettingValue } from "./block-property-schema";
 import {
   UnreadableSettingError,
   optionalText,
