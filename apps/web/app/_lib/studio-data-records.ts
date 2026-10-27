@@ -1,4 +1,5 @@
 import "server-only";
+import type { StudioPreviewNotRunnable } from "@vortex/ui/studio";
 
 import {
   collectRecordLinks,
@@ -116,7 +117,7 @@ export type StudioDataRecordsResult =
   | Readonly<{ kind: "query_refused"; reason: string }>
   | Readonly<{ kind: "refused" }>
   /** The saved draft has a problem to fix before its preview can run. */
-  | Readonly<{ kind: "not_runnable"; sentence: string }>
+  | StudioPreviewNotRunnable
   | Readonly<{ kind: "temporarily_unavailable" }>;
 
 type ModuleRecordType = ModuleRelease["content"]["recordTypes"][number];

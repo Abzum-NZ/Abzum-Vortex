@@ -1,4 +1,5 @@
 import "server-only";
+import { randomUUID } from "node:crypto";
 
 import { z } from "zod";
 import {
@@ -40,7 +41,8 @@ import {
   type PeopleDirectoryOwner,
   moduleQueryBorrowable,
   queryTotalLabel,
-  definitionValidationMessage,
+  definitionValidationEntry,
+  translateDefinitionRuleFailures,
 } from "@vortex/platform/schema";
 import {
   BuilderAuthorityError,
@@ -360,7 +362,7 @@ export const loadStudioCreateAccess = async (
 };
 
 /** A compiler refusal names its rule, family and location; anything else is reported as unexpected. */
-const studioCompileFailure = (error: unknown): StudioCompileFailure => {
+export const studioCompileFailure = (error: unknown): StudioCompileFailure => {
   let current: unknown = error;
   for (let depth = 0; depth < 8 && current instanceof Error; depth += 1) {
     if (current instanceof DefinitionCompilationError) {
@@ -376,15 +378,30 @@ const studioCompileFailure = (error: unknown): StudioCompileFailure => {
         flowKey: keyOf("flow"),
         taskId: keyOf("flow_node"),
       };
+      const entry =
+        current.code !== undefined
+          ? definitionValidationEntry(current.code)
+          : current.location === undefined
+            ? undefined
+            : translateDefinitionRuleFailures(
+                [
+                  {
+                    ruleCode: current.ruleCode,
+                    family: current.family,
+                    location: current.location,
+                  },
+                ],
+                { correlationId: randomUUID(), rootLocation: current.location },
+              ).errors[0];
+      const sentence = current.sentence ?? entry?.message;
       return {
         reasonCode: current.ruleCode,
         family: current.family,
         moduleKeys: segments
           .filter((segment) => segment.kind === "module")
           .map((segment) => segment.key),
-        ...(current.code === undefined
-          ? {}
-          : { sentence: definitionValidationMessage(current.code) }),
+        ...(sentence === undefined ? {} : { sentence }),
+        ...(entry === undefined ? {} : { guidance: entry.guidance }),
         ...(block === undefined ? {} : { blockAlias: block.key }),
         ...(setting === undefined || setting.key === "theme" ? {} : { tokenKey: setting.key }),
         ...Object.fromEntries(Object.entries(located).filter(([, key]) => key !== undefined)),
@@ -484,7 +501,7 @@ export const loadStudioApplicationDraft = async (
                   rootId: root.data,
                   ...(expectedDraftRevision === undefined ? {} : { expectedDraftRevision }),
                 },
-                { publication: requests.some(publishedOf) },
+                { publication: requests.some(publishedOf), releasable: false },
               );
         const draft =
           snapshot === null

@@ -198,6 +198,9 @@ export function ApplicationCompositionEditor(props: Props) {
     () => studioBlockChoices(props.choices, settingsInputs.query),
     [props.choices, settingsInputs.query],
   );
+  // The query sheet answers after the draft changed: it chooses through the latest settings.
+  const chooseQuery = useRef<(reference: string) => void>(() => undefined);
+  const [wrapSetup, setWrapSetup] = useState<StudioBlockSetupRequest | null>(null);
 
   if (model.kind !== "available" || layout.value === null)
     return (
@@ -242,8 +245,6 @@ export function ApplicationCompositionEditor(props: Props) {
     );
     return result.kind === "applied";
   };
-  // The query sheet answers after the draft changed: it chooses through the latest settings.
-  const chooseQuery = useRef<(reference: string) => void>(() => undefined);
   const changeQuery = (reference: string) =>
     changeSettings({
       query: reference === "" ? null : reference,
@@ -347,7 +348,6 @@ export function ApplicationCompositionEditor(props: Props) {
     }
     command({ kind: "move", destination: chosen.destination }, undefined, "Item moved.");
   };
-  const [wrapSetup, setWrapSetup] = useState<StudioBlockSetupRequest | null>(null);
   const wrapIn = (key: string) => {
     const chosen =
       wrapModel.kind === "available"
