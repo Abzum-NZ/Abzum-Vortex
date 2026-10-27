@@ -5,13 +5,13 @@ import {
   type RenderedPage,
 } from "@vortex/ui";
 import {
-  responsivePlacementSchema,
   PLATFORM_BLOCK_RELEASE_IDENTITIES,
   isRecord,
   walkPageComposition,
   walkPlacements,
   itemPropSlots,
   type VisitedPlacement,
+  readCompiledItemSettings,
 } from "@vortex/platform/schema";
 
 /** One placement of a form surface: its Vortex metadata and its typed settings. */
@@ -37,7 +37,12 @@ const surfacePlacement = (
     );
   return {
     vortex,
-    settings: placementSettings(props, release, { placementId, blockId, releaseVersion }),
+    settings: placementSettings(
+      props,
+      release,
+      { placementId, blockId, releaseVersion },
+      readCompiledItemSettings,
+    ),
   };
 };
 
@@ -126,9 +131,7 @@ export const formSurfaceComposition = (
   const desktop = sourceResponsive.desktop;
   const tablet = sourceResponsive.tablet;
   const phone = sourceResponsive.phone;
-  const responsive = responsivePlacementSchema.safeParse(sourceResponsive);
-  if (!responsive.success || !isRecord(desktop) || !isRecord(tablet) || !isRecord(phone))
-    return undefined;
+  if (!isRecord(desktop) || !isRecord(tablet) || !isRecord(phone)) return undefined;
   // The modal shows the form whatever its page layout hides at a breakpoint.
   const modalVortex: Record<string, unknown> = {
     ...form.vortex,

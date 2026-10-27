@@ -1,7 +1,7 @@
 import {
   PLATFORM_BLOCK_RELEASE_IDENTITIES,
   queryNoticePayloadSchema,
-  validateComponentSettings,
+  componentSettingShapeFailures,
   type QueryNoticeItem,
   type QueryNoticePayload,
 } from "@vortex/platform/schema";
@@ -70,7 +70,8 @@ export function QueryNoticeDisplay(props: DisplayRenderProps<QueryNoticePayload>
       "Query Notice received a different immutable release",
       location,
     );
-  if (validateComponentSettings(props.settings, metadata.properties).length !== 0) refuse(location);
+  if (componentSettingShapeFailures(props.settings, metadata.properties).length !== 0)
+    refuse(location);
   const dismissal = props.settings.dismissible;
   const dismissible = dismissal?.kind === "boolean" ? dismissal.value : false;
   const values = props.data?.status === "ready" ? props.data.values : undefined;

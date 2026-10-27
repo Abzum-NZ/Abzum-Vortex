@@ -1,5 +1,6 @@
 "use client";
 
+import { compiledItemSettings } from "@vortex/platform/schema";
 import { Puck, createUsePuck, useGetPuck, type Content, type Data } from "@puckeditor/core";
 import {
   useEffect,
@@ -272,6 +273,7 @@ export function StudioCanvasBridge({
       onAuxClickCapture={inert}
     >
       <PagePuckRenderer
+        readSettings={compiledItemSettings}
         composition={frame.frame}
         breakpoint={breakpoint}
         registry={registry}

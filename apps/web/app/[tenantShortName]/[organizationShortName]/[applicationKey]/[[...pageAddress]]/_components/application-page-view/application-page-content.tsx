@@ -31,6 +31,7 @@ import {
   type ProjectedApplicationFrame,
   isRecord,
   walkPageComposition,
+  readCompiledItemSettings,
 } from "@vortex/platform/schema";
 import Link from "next/link";
 import { Button } from "@vortex/ui/components/button";
@@ -633,6 +634,7 @@ export function ApplicationPageViewContent({
           onStatusChange={reportWebMcpShellState}
         />
         <PagePuckRenderer
+          readSettings={readCompiledItemSettings}
           contentRegion
           feedback={
             pageFeedback === undefined &&

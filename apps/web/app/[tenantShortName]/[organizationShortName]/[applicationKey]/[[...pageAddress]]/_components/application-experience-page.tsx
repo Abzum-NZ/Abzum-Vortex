@@ -1,5 +1,6 @@
 "use client";
 
+import { readCompiledItemSettings } from "@vortex/platform/schema";
 import { useMemo, type ComponentProps, type ReactElement } from "react";
 import { useRouter } from "next/navigation";
 import type { ApplicationShell, PageDefinition } from "@vortex/platform/schema";
@@ -61,6 +62,7 @@ export function ApplicationExperiencePage({
       }}
     >
       <PagePuckRenderer
+        readSettings={readCompiledItemSettings}
         composition={rendered.page}
         {...(rendered.shell === undefined ? {} : { shell: rendered.shell })}
         registry={platformComponentRegistry}

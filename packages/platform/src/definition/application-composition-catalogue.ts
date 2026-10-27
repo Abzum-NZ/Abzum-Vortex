@@ -1,7 +1,5 @@
-import type {
-  BlockPropertySchemaContract,
-  FieldInputControlKey,
-} from "./application-composition/block-property-schema";
+import type { BlockPropertySchemaContract } from "./application-composition/block-property-schema";
+import type { FieldInputControlKey } from "./application-composition/component-setting-reading";
 import type { BlockPropertyValueContract } from "./application-composition/block-property-values";
 import { compiledItemSettings } from "./application-composition/page-composition";
 import { recordsTableFeatureDefinitions } from "./application-composition/records-table-features";

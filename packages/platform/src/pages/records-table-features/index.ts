@@ -3,9 +3,9 @@ import type { recordsTableRowEditEvent } from "../../definition/application-comp
 export { recordsTableRowActionsProjection } from "../../definition/application-composition/records-table-features/row-actions";
 export { rowMayChangeField } from "../../definition/application-composition/records-table-features/shared";
 import type { RecordsTableContract } from "../../definition/application-composition/records-display";
-import type { RecordsTableFilterField } from "../../definition/application-composition/records-table-features/column-filters";
-import type { ConditionalFormattingProjection } from "../../definition/application-composition/records-table-features/conditional-formatting";
-import type { RecordsTableInlineEditor } from "../../definition/application-composition/records-table-features/inline-edit";
+import type { RecordsTableFilterField } from "../../definition/application-composition/records-table-features/projections/column-filters";
+import type { ConditionalFormattingProjection } from "../../definition/application-composition/records-table-features/projections/conditional-formatting";
+import type { RecordsTableInlineEditor } from "../../definition/application-composition/records-table-features/projections/inline-edit";
 import type { z } from "zod";
 import type {
   RecordsTableFeatureProjection,

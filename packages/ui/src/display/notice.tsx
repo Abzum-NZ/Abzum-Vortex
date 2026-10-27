@@ -1,6 +1,5 @@
 import {
-  blockPropertyValueSchema,
-  validateComponentSettings,
+  componentSettingShapeFailures,
   PLATFORM_BLOCK_RELEASE_IDENTITIES,
   type PlatformBlockRelease,
   type BlockPropertyValueContract,
@@ -10,8 +9,12 @@ import { Notice, type NoticeContentPart, type NoticeSeverity } from "../componen
 import { DefinitionRenderError, type DefinitionRenderErrorLocation } from "../definition-error";
 import type { DisplayRenderProps } from "./context";
 
-const NOTICE_SEVERITIES =
-  ["info", "success", "warning", "critical"] as const satisfies readonly NoticeSeverity[];
+const NOTICE_SEVERITIES = [
+  "info",
+  "success",
+  "warning",
+  "critical",
+] as const satisfies readonly NoticeSeverity[];
 const NOTICE_CONTENT_KINDS = ["text", "link"] as const;
 const NOTICE_RELEASE = PLATFORM_BLOCK_RELEASE_IDENTITIES.NOTICE_BLOCK_RELEASE;
 
@@ -73,24 +76,15 @@ const parseCanonicalSettings = (
   if (typeof input !== "object" || input === null || Array.isArray(input))
     return refuse(location, "Notice settings must be an object");
 
-  const settings: Record<string, BlockPropertyValueContract> = Object.create(null);
-  for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
-    const parsed = blockPropertyValueSchema.safeParse(value);
-    if (!parsed.success)
-      return refuse(location, "Notice settings must match the declared Notice release", [key]);
-    settings[key] = parsed.data;
-  }
-
-  const failures = validateComponentSettings(settings, release.properties);
+  // The host's settings reader typed every value (and checked it where the composition is
+  // edited); the Notice judges the settings' shape against its own release.
+  const settings = input as NoticeSettings;
+  const failures = componentSettingShapeFailures(settings, release.properties);
   const failure = failures[0];
   if (failure !== undefined) {
-    return refuse(
-      location,
-      "Notice settings must match the declared Notice release",
-      failure.path,
-    );
+    return refuse(location, "Notice settings must match the declared Notice release", failure.path);
   }
-  return Object.freeze(settings);
+  return Object.freeze({ ...settings });
 };
 
 function readDismissible(
@@ -101,23 +95,17 @@ function readDismissible(
   const setting = settings.dismissible;
   if (setting !== undefined) {
     if (setting.kind !== "boolean")
-      return refuse(
-        location,
-        "Notice settings must match the declared Notice release",
-        ["dismissible"],
-      );
+      return refuse(location, "Notice settings must match the declared Notice release", [
+        "dismissible",
+      ]);
     return setting.value;
   }
 
-  const declaration = release.properties.find(
-    (property) => property.key === "dismissible",
-  );
+  const declaration = release.properties.find((property) => property.key === "dismissible");
   if (declaration?.kind !== "boolean" || declaration.defaultValue?.kind !== "boolean")
-    return refuse(
-      location,
-      "Notice release must declare a boolean dismissal default",
-      ["dismissible"],
-    );
+    return refuse(location, "Notice release must declare a boolean dismissal default", [
+      "dismissible",
+    ]);
   return declaration.defaultValue.value;
 }
 
@@ -163,10 +151,7 @@ export function NoticeBlock(props: DisplayRenderProps<never>): ReactElement {
         ]);
       if (kind === "text") return Object.freeze({ kind, value });
 
-      const href = readTextSetting(item.properties, "href", location, false, [
-        ...itemPath,
-        "href",
-      ]);
+      const href = readTextSetting(item.properties, "href", location, false, [...itemPath, "href"]);
       return Object.freeze({ kind, label: value, href: href ?? "" });
     }),
   );

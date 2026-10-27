@@ -1,5 +1,3 @@
-import { z } from "zod";
-import { builderKeySchema, fieldIdSchema } from "../../../catalogue/identifiers";
 import type { RecordsTableActionContract } from "./row-actions";
 import type { ComponentSettingValue } from "../block-property-schema";
 import type { RecordsTableFeatures } from "./index";
@@ -510,8 +508,6 @@ export type RecordsTableFeatureDefinition<
 > = Readonly<{
   key: Key;
   property: keyof RecordsTableFeatures;
-  /** The strict wire schema for this feature's viewer projection, absent for a separate payload. */
-  projectionSchema?: z.ZodType;
   label: string;
   /** One short line saying what the feature lets people do. */
   description: string;
@@ -550,11 +546,3 @@ export type RecordsTableFeatureDefinition<
 }>;
 
 export const RECORDS_TABLE_UNVIRTUALIZED_ROW_LIMIT = 100;
-
-/** A field key as the table's columns spell it: an authored key or a field identity. */
-export const projectionFieldKeySchema = z
-  .string()
-  .refine(
-    (value) => builderKeySchema.safeParse(value).success || fieldIdSchema.safeParse(value).success,
-    "A field is named by its key or identity",
-  );

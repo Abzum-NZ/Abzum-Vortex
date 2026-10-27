@@ -26,25 +26,14 @@ import {
   type SourceBlockPropertyValueContract,
 } from "./block-property-values";
 import { asRecord } from "../../catalogue/runtime-primitives";
-
-/**
- * The control an automatic field input renders, chosen from its referenced module field type by the
- * compiler. A field that has no compatible control here is refused at publication.
- */
-export const fieldInputControlKeys = [
-  "text",
-  "rich_text",
-  "number",
-  "boolean",
-  "date",
-  "date_time",
-  "choice",
-  "several_choices",
-  "link",
-  "table",
-  "attachment",
-] as const;
-export type FieldInputControlKey = (typeof fieldInputControlKeys)[number];
+import {
+  componentSettingApplies,
+  componentSettingMissing,
+  isExecutableComponentSettingKey,
+  plainSettingValue,
+  typedSettingCandidate,
+  undeclaredComponentSettingFailures,
+} from "./component-setting-reading";
 
 type BlockPropertySchemaBase = {
   key: string;
@@ -144,39 +133,6 @@ const propertySchemaBase = {
    */
   derivesFieldInput: sourceProvenanceUnchanged(z.boolean().optional()),
 };
-
-/**
- * Undeclared setting names that would carry markup, script, styling, data access or component
- * code. Any undeclared setting is refused; these are refused as unsafe content rather than as a
- * merely unknown property.
- */
-const executableSettingKeys: ReadonlySet<string> = new Set([
-  "class",
-  "class_name",
-  "classes",
-  "code",
-  "component",
-  "component_code",
-  "css",
-  "dangerously_set_inner_html",
-  "handler",
-  "html",
-  "inner_html",
-  "jsx",
-  "markup",
-  "raw_html",
-  "rpc",
-  "script",
-  "source_code",
-  "sql",
-  "style",
-  "styles",
-  "tsx",
-]);
-
-/** True when an undeclared setting name would carry executable or presentational code. */
-export const isExecutableComponentSettingKey = (key: string): boolean =>
-  executableSettingKeys.has(key) || /^on_[a-z]/.test(key);
 
 /**
  * Syntax that marks authored text as markup, script, styling or a data-access statement rather
@@ -380,36 +336,15 @@ export const validateComponentSettings = (
   settings: Readonly<Record<string, ComponentSettingValue>>,
   declarations: readonly BlockPropertySchemaContract[],
 ): ComponentSettingFailure[] => {
-  const failures: ComponentSettingFailure[] = [];
-  const byKey = new Set(declarations.map((declaration) => declaration.key));
-  for (const key of Object.keys(settings))
-    if (!byKey.has(key))
-      failures.push({
-        family: isExecutableComponentSettingKey(key) ? "unsafe_content" : "unknown_property",
-        path: [key],
-      });
+  const failures = undeclaredComponentSettingFailures(settings, declarations);
   for (const declaration of declarations) {
     const value = settings[declaration.key];
     if (value !== undefined)
       failures.push(...validateComponentSettingValue(value, declaration, [declaration.key]));
-    else if (
-      declaration.required &&
-      declaration.defaultValue === undefined &&
-      componentSettingApplies(declaration, settings)
-    )
+    else if (componentSettingMissing(declaration, settings))
       failures.push({ family: "required_value", path: [declaration.key] });
   }
   return failures;
-};
-
-/** A conditional setting is required and shown only for its selected sibling choice. */
-export const componentSettingApplies = (
-  declaration: BlockPropertySchemaContract,
-  settings: Readonly<Record<string, ComponentSettingValue>>,
-): boolean => {
-  if (declaration.showWhen === undefined) return true;
-  const selected = settings[declaration.showWhen.property];
-  return selected?.kind === "choice" && declaration.showWhen.values.includes(selected.value);
 };
 
 const plainStringOf = (schema: z.ZodType<string>, value: unknown): string | undefined => {
@@ -647,105 +582,6 @@ export const plainSourceSettingValue = (value: SourceBlockPropertyValueContract)
       return value.items.map(plainSourceSettingValue);
     default:
       return value.value;
-  }
-};
-
-/**
- * The plain form of one canonical setting value: the value without its kind, as a compiled item
- * carries it. A compiled item holds every setting in this form, exactly as a stored item does; only
- * its references are resolved to canonical identities.
- */
-export const plainSettingValue = (value: BlockPropertyValueContract): unknown => {
-  switch (value.kind) {
-    case "asset_reference":
-      return value.assetId;
-    case "icon":
-      return value.iconKey;
-    case "field_reference":
-      return value.fieldId;
-    case "condition":
-      return value.condition;
-    case "relationship_reference":
-      return value.relationshipId;
-    case "action_reference":
-      return value.actionKey;
-    case "page_reference":
-      return value.pageId;
-    case "query_reference":
-      return value.queryId;
-    case "record_type_reference":
-      return value.recordType;
-    case "record_reference":
-      return { recordType: value.recordType, recordId: value.recordId };
-    case "group":
-      return Object.fromEntries(
-        Object.entries(value.properties).map(([key, nested]) => [key, plainSettingValue(nested)]),
-      );
-    case "list":
-      return value.items.map(plainSettingValue);
-    default:
-      return value.value;
-  }
-};
-
-/**
- * The kind-tagged candidate of one plain compiled value, built from the declaration it fills; the
- * closed value contract then judges it. Undefined when the plain value has the wrong shape.
- */
-const typedSettingCandidate = (
-  value: unknown,
-  declaration: BlockPropertySchemaContract,
-): unknown => {
-  switch (declaration.kind) {
-    case "total_reference":
-    case "text":
-    case "number":
-    case "boolean":
-    case "choice":
-    case "rich_text":
-    case "url":
-      return { kind: declaration.kind, value };
-    case "asset_reference":
-      return { kind: declaration.kind, assetId: value };
-    case "icon":
-      return { kind: declaration.kind, iconKey: value };
-    case "field_reference":
-      return { kind: declaration.kind, fieldId: value };
-    case "condition":
-      return { kind: declaration.kind, condition: value };
-    case "relationship_reference":
-      return { kind: declaration.kind, relationshipId: value };
-    case "action_reference":
-      return { kind: declaration.kind, actionKey: value };
-    case "page_reference":
-      return { kind: declaration.kind, pageId: value };
-    case "query_reference":
-      return { kind: declaration.kind, queryId: value };
-    case "record_type_reference":
-      return { kind: declaration.kind, recordType: value };
-    case "record_reference": {
-      const reference = asRecord(value);
-      return reference === undefined ? undefined : { kind: declaration.kind, ...reference };
-    }
-    case "group": {
-      const group = asRecord(value);
-      if (group === undefined) return undefined;
-      const declared = new Map(declaration.properties.map((property) => [property.key, property]));
-      const properties: Record<string, unknown> = {};
-      for (const [key, nested] of Object.entries(group)) {
-        const property = declared.get(key);
-        if (property === undefined) return undefined;
-        properties[key] = typedSettingCandidate(nested, property);
-      }
-      return { kind: "group", properties };
-    }
-    case "list":
-      return Array.isArray(value)
-        ? {
-            kind: "list",
-            items: value.map((item: unknown) => typedSettingCandidate(item, declaration.item)),
-          }
-        : undefined;
   }
 };
 

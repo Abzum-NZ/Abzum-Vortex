@@ -10,8 +10,8 @@ import {
   recordsTableContractOrLog,
   type RecordsDisplayFormat,
 } from "../definition/application-composition/records-display";
-import type { RecordsTableFilterField } from "../definition/application-composition/records-table-features/column-filters";
-import type { RecordsTableInlineEditor } from "../definition/application-composition/records-table-features/inline-edit";
+import type { RecordsTableFilterField } from "../definition/application-composition/records-table-features/projections/column-filters";
+import type { RecordsTableInlineEditor } from "../definition/application-composition/records-table-features/projections/inline-edit";
 import type { RecordsTableTotal } from "../definition/application-composition/records-table-totals";
 import type { tableCellTypeKeys } from "../records/module-field-values";
 import { gridLayoutVisibleFieldIds, type GridLayoutState } from "./grid-view-state";

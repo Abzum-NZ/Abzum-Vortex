@@ -1,4 +1,3 @@
-import { z } from "zod";
 import {
   recordsTableAggregateOperations,
   type RecordsTableAggregateOperation,
@@ -129,16 +128,13 @@ const featureRefusal: GridFeatureRefusal = {
     "Choose number or money columns, or count any stored column, and turn Board and Pivot off.",
 };
 
-const projectionSchema = z.literal(true);
-
 export const recordsTableTotalsFeature: RecordsTableFeatureDefinition<
   RecordsTableTotalsSettings,
   "totals"
 > &
-  Readonly<{ property: "totals"; projectionSchema: typeof projectionSchema }> = {
+  Readonly<{ property: "totals" }> = {
   key: "totals",
   property: "totals",
-  projectionSchema,
   settings: featureSettings,
   refusals: [featureRefusal],
   onBoard: "unsupported",

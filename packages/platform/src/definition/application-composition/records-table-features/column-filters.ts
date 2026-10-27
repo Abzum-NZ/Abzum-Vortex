@@ -1,5 +1,3 @@
-import { projectionFieldKeySchema as fieldKeySchema } from "./shared";
-import { z } from "zod";
 import {
   factsOf,
   featureAvailable,
@@ -172,53 +170,13 @@ const featureRefusal: GridFeatureRefusal = {
     "Choose stored fields the bound query selects and its record type allows filtering by, or turn Column filters off.",
 };
 
-const textSchema = z.string().min(1);
-/**
- * What the viewer's grid knows of one filterable field: its canonical type, the filter kind that
- * type takes and what the control needs (a choice field's options, a fixed money currency, and for
- * a date-and-time field the organisation time zone its days are taken in).
- */
-const recordsTableFilterFieldSchema = z
-  .object({
-    fieldId: fieldKeySchema,
-    label: textSchema,
-    /** The canonical field type, for example `choice` or `date_time`. */
-    type: textSchema,
-    kind: z.enum(recordsTableFilterKinds),
-    options: z
-      .array(z.object({ value: textSchema, label: textSchema }).strict().readonly())
-      .readonly()
-      .optional(),
-    currency: textSchema.optional(),
-    timeZone: textSchema.optional(),
-  })
-  .strict()
-  .readonly()
-  .refine((field) => (field.kind === "choice") === (field.options !== undefined), {
-    message: "A choice filter field carries its options, and no other field does",
-  });
-export type RecordsTableFilterField = z.output<typeof recordsTableFilterFieldSchema>;
-
-/** The filter fields a table or a board offers: at least one, each named once. */
-export const recordsTableFilterFieldsSchema = z
-  .array(recordsTableFilterFieldSchema)
-  .min(1)
-  .refine(
-    (fields) => new Set(fields.map((field) => field.fieldId.toLowerCase())).size === fields.length,
-    "Each filter field is named once",
-  )
-  .readonly();
-
-const projectionSchema = recordsTableFilterFieldsSchema;
-
 export const recordsTableColumnFiltersFeature: RecordsTableFeatureDefinition<
   RecordsTableColumnFiltersSettings,
   "column_filters"
 > &
-  Readonly<{ property: "columnFilters"; projectionSchema: typeof projectionSchema }> = {
+  Readonly<{ property: "columnFilters" }> = {
   key: "column_filters",
   property: "columnFilters",
-  projectionSchema,
   settings: featureSettings,
   refusals: [featureRefusal],
   onBoard: "supported",

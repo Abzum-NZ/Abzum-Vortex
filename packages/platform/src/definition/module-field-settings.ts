@@ -1,12 +1,14 @@
 import type { fieldTypeKeys } from "../catalogue/catalogues";
 import {
-  componentSettingApplies,
-  plainSettingValue,
   plainSourceSettingValue,
   typedSourceSettingValue,
   type BlockPropertySchemaContract,
   type ComponentSettingFailure,
 } from "./application-composition/block-property-schema";
+import {
+  componentSettingApplies,
+  plainSettingValue,
+} from "./application-composition/component-setting-reading";
 import type { SourceBlockPropertyValueContract } from "./application-composition/block-property-values";
 import { linkDependencyCandidates, type LinkDependencyField } from "./module-link-dependencies";
 
@@ -24,12 +26,26 @@ export type ModuleFieldTypedSettings = Readonly<Record<string, Typed>>;
 
 /** A field type as a person reads it, for the type picker. */
 export const moduleFieldTypeLabels: Readonly<Record<ModuleFieldType, string>> = {
-  text: "Text", long_text: "Long text", formatted_text: "Formatted text", whole_number: "Whole number",
-  decimal_number: "Decimal number", money: "Money", yes_no: "Yes or no", date: "Date", date_time: "Date and time",
-  choice: "Choice", several_choices: "Several choices", reference_number: "Reference number",
-  email_address: "Email address", phone_number: "Phone number", web_address: "Web address", table: "Table",
-  link: "Link to a record", link_to_one_of_several: "Link to one of several record types",
-  calculation: "Calculation", total: "Total of related records",
+  text: "Text",
+  long_text: "Long text",
+  formatted_text: "Formatted text",
+  whole_number: "Whole number",
+  decimal_number: "Decimal number",
+  money: "Money",
+  yes_no: "Yes or no",
+  date: "Date",
+  date_time: "Date and time",
+  choice: "Choice",
+  several_choices: "Several choices",
+  reference_number: "Reference number",
+  email_address: "Email address",
+  phone_number: "Phone number",
+  web_address: "Web address",
+  table: "Table",
+  link: "Link to a record",
+  link_to_one_of_several: "Link to one of several record types",
+  calculation: "Calculation",
+  total: "Total of related records",
   attachment: "Attachment",
 };
 
@@ -47,78 +63,208 @@ export type ModuleFieldSettingsContext = Readonly<{
   }>;
 }>;
 
-const base = (key: string, label: string, required: boolean, help?: string, defaultValue?: Declaration["defaultValue"]) =>
-  ({ key, label, required, ...(help === undefined ? {} : { help }), ...(defaultValue === undefined ? {} : { defaultValue }) });
-const text = (key: string, label: string, required: boolean, minLength: number, maxLength: number, help?: string): Declaration =>
-  ({ ...base(key, label, required, help), kind: "text", minLength, maxLength });
-const number = (key: string, label: string, required: boolean, options: Readonly<{ integer?: boolean; minimum?: number; maximum?: number; help?: string }> = {}): Declaration => ({
-  ...base(key, label, required, options.help), kind: "number", integer: options.integer ?? true,
+const base = (
+  key: string,
+  label: string,
+  required: boolean,
+  help?: string,
+  defaultValue?: Declaration["defaultValue"],
+) => ({
+  key,
+  label,
+  required,
+  ...(help === undefined ? {} : { help }),
+  ...(defaultValue === undefined ? {} : { defaultValue }),
+});
+const text = (
+  key: string,
+  label: string,
+  required: boolean,
+  minLength: number,
+  maxLength: number,
+  help?: string,
+): Declaration => ({ ...base(key, label, required, help), kind: "text", minLength, maxLength });
+const number = (
+  key: string,
+  label: string,
+  required: boolean,
+  options: Readonly<{ integer?: boolean; minimum?: number; maximum?: number; help?: string }> = {},
+): Declaration => ({
+  ...base(key, label, required, options.help),
+  kind: "number",
+  integer: options.integer ?? true,
   ...(options.minimum === undefined ? {} : { minimum: options.minimum }),
   ...(options.maximum === undefined ? {} : { maximum: options.maximum }),
 });
-const boolean = (key: string, label: string, required: boolean, help?: string): Declaration =>
-  ({ ...base(key, label, required, help), kind: "boolean" });
-const choice = (key: string, label: string, required: boolean, options: readonly (readonly [string, string])[], help?: string, defaultValue?: Declaration["defaultValue"]): Declaration =>
-  ({ ...base(key, label, required, help, defaultValue), kind: "choice", options: options.map(([optionKey, optionLabel]) => ({ key: optionKey, label: optionLabel })) });
-const list = (key: string, label: string, required: boolean, minimumItems: number, maximumItems: number, item: Declaration, help?: string): Declaration =>
-  ({ ...base(key, label, required, help), kind: "list", minimumItems, maximumItems, item });
-const group = (key: string, label: string, properties: Declaration[], required = true): Declaration =>
-  ({ ...base(key, label, required), kind: "group", properties });
+const boolean = (key: string, label: string, required: boolean, help?: string): Declaration => ({
+  ...base(key, label, required, help),
+  kind: "boolean",
+});
+const choice = (
+  key: string,
+  label: string,
+  required: boolean,
+  options: readonly (readonly [string, string])[],
+  help?: string,
+  defaultValue?: Declaration["defaultValue"],
+): Declaration => ({
+  ...base(key, label, required, help, defaultValue),
+  kind: "choice",
+  options: options.map(([optionKey, optionLabel]) => ({ key: optionKey, label: optionLabel })),
+});
+const list = (
+  key: string,
+  label: string,
+  required: boolean,
+  minimumItems: number,
+  maximumItems: number,
+  item: Declaration,
+  help?: string,
+): Declaration => ({
+  ...base(key, label, required, help),
+  kind: "list",
+  minimumItems,
+  maximumItems,
+  item,
+});
+const group = (
+  key: string,
+  label: string,
+  properties: Declaration[],
+  required = true,
+): Declaration => ({ ...base(key, label, required), kind: "group", properties });
 
 const decimalText = (key: string, label: string) =>
   text(key, label, false, 1, 60, "An exact number, for example 0 or 99.95.");
-const isoDate = (key: string, label: string) => text(key, label, false, 10, 10, "A date written as YYYY-MM-DD.");
+const isoDate = (key: string, label: string) =>
+  text(key, label, false, 10, 10, "A date written as YYYY-MM-DD.");
 const permissionChoices = (permissions: ModuleFieldSettingsContext["permissions"]) =>
   permissions.map(({ key, label }) => [key, label] as const);
-const deleteRules = [["refuse", "Refuse to delete the linked record"], ["empty_optional", "Clear this link"],
-  ["soft_delete_dependent", "Delete this record too"]] as const;
-const currencyModes = [["organization_default", "The organisation's currency"], ["fixed", "One fixed currency"]] as const;
+const deleteRules = [
+  ["refuse", "Refuse to delete the linked record"],
+  ["empty_optional", "Clear this link"],
+  ["soft_delete_dependent", "Delete this record too"],
+] as const;
+const currencyModes = [
+  ["organization_default", "The organisation's currency"],
+  ["fixed", "One fixed currency"],
+] as const;
 /** Fields and table columns author the same money settings, including their stored default. */
 const moneyCurrencyDeclarations = (subject: "field" | "column"): Declaration[] => [
-  choice("currency_mode", "Currency", true, currencyModes, undefined,
-    { kind: "choice", value: "organization_default" }),
-  { ...text("currency", `The currency this ${subject} always uses`, true, 3, 3,
-    "Three capital letters, for example NZD."), showWhen: { property: "currency_mode", values: ["fixed"] } },
+  choice("currency_mode", "Currency", true, currencyModes, undefined, {
+    kind: "choice",
+    value: "organization_default",
+  }),
+  {
+    ...text(
+      "currency",
+      `The currency this ${subject} always uses`,
+      true,
+      3,
+      3,
+      "Three capital letters, for example NZD.",
+    ),
+    showWhen: { property: "currency_mode", values: ["fixed"] },
+  },
 ];
-const optionItem = (permissions: ModuleFieldSettingsContext["permissions"], dependent = false): Declaration => ({ ...base("option", "Option", true), kind: "group", properties: [
-  text("label", "Label", true, 1, 60),
-  text("value", "Stored value", true, 1, 120, "Made from the label when added. Renaming the option keeps this value."),
-  choice("required_permission", "Permission needed to choose it", false, permissionChoices(permissions),
-    "Leave empty so everyone who can edit the field may choose it."),
-  ...(dependent ? [list("parent_values", "Belongs to these options of the field it depends on", false, 1, 200,
-    text("parent_value", "Stored value of the parent option", true, 1, 120),
-    "Only when this field depends on another choice: the parent options this option is offered for.")] : []),
-], namedEntry: { label: "label", value: "value" } });
-const tableColumnTypes = [["text", "Text"], ["whole_number", "Whole number"], ["decimal_number", "Decimal number"],
-  ["money", "Money"], ["yes_no", "Yes or no"], ["date", "Date"], ["date_time", "Date and time"], ["choice", "Choice"]] as const;
-const timeZones = [["person", "The person's time zone"], ["organization", "The organisation's time zone"], ["utc", "UTC"]] as const;
+const optionItem = (
+  permissions: ModuleFieldSettingsContext["permissions"],
+  dependent = false,
+): Declaration => ({
+  ...base("option", "Option", true),
+  kind: "group",
+  properties: [
+    text("label", "Label", true, 1, 60),
+    text(
+      "value",
+      "Stored value",
+      true,
+      1,
+      120,
+      "Made from the label when added. Renaming the option keeps this value.",
+    ),
+    choice(
+      "required_permission",
+      "Permission needed to choose it",
+      false,
+      permissionChoices(permissions),
+      "Leave empty so everyone who can edit the field may choose it.",
+    ),
+    ...(dependent
+      ? [
+          list(
+            "parent_values",
+            "Belongs to these options of the field it depends on",
+            false,
+            1,
+            200,
+            text("parent_value", "Stored value of the parent option", true, 1, 120),
+            "Only when this field depends on another choice: the parent options this option is offered for.",
+          ),
+        ]
+      : []),
+  ],
+  namedEntry: { label: "label", value: "value" },
+});
+const tableColumnTypes = [
+  ["text", "Text"],
+  ["whole_number", "Whole number"],
+  ["decimal_number", "Decimal number"],
+  ["money", "Money"],
+  ["yes_no", "Yes or no"],
+  ["date", "Date"],
+  ["date_time", "Date and time"],
+  ["choice", "Choice"],
+] as const;
+const timeZones = [
+  ["person", "The person's time zone"],
+  ["organization", "The organisation's time zone"],
+  ["utc", "UTC"],
+] as const;
 const textFormats = [["uuid", "Identifier (UUID)"]] as const;
 
 /** One table column: its declared type selects both the controls and the settings it stores. */
-const tableColumnItem = (permissions: ModuleFieldSettingsContext["permissions"]): Declaration => group("column", "Column", [
-  text("key", "Key", true, 1, 40, "Lowercase words separated by underscores."),
-  boolean("required", "A value is required", false),
-  choice("type", "Type", true, tableColumnTypes),
-  number("max_length", "Longest value allowed (text)", false, { minimum: 1, maximum: 100_000 }),
-  choice("format", "Format (text)", false, textFormats),
-  number("minimum", "Smallest value (whole number)", false),
-  number("maximum", "Largest value (whole number)", false),
-  number("step", "Step (whole number)", false, { minimum: 1 }),
-  number("digits_before_decimal", "Digits before the decimal point (decimal number)", false, { minimum: 1, maximum: 30 }),
-  number("decimal_places", "Decimal places (decimal number)", false, { minimum: 0, maximum: 12 }),
-  ...moneyCurrencyDeclarations("column"),
-  decimalText("minimum_amount", "Smallest value (decimal number or money)"),
-  decimalText("maximum_amount", "Largest value (decimal number or money)"),
-  isoDate("earliest", "Earliest date (date)"),
-  isoDate("latest", "Latest date (date)"),
-  choice("display_time_zone", "Time zone shown (date and time)", true, timeZones),
-  list("options", "Options (choice)", false, 0, 200, optionItem(permissions)),
-].map((property): Declaration => {
-  if (["key", "required", "type"].includes(property.key)) return property;
-  return { ...property, showWhen: property.showWhen
-    ?? { property: "type", values: Object.entries(columnSettingKeys)
-      .filter(([, keys]) => keys.includes(property.key)).map(([type]) => type) } };
-}));
+const tableColumnItem = (permissions: ModuleFieldSettingsContext["permissions"]): Declaration =>
+  group(
+    "column",
+    "Column",
+    [
+      text("key", "Key", true, 1, 40, "Lowercase words separated by underscores."),
+      boolean("required", "A value is required", false),
+      choice("type", "Type", true, tableColumnTypes),
+      number("max_length", "Longest value allowed (text)", false, { minimum: 1, maximum: 100_000 }),
+      choice("format", "Format (text)", false, textFormats),
+      number("minimum", "Smallest value (whole number)", false),
+      number("maximum", "Largest value (whole number)", false),
+      number("step", "Step (whole number)", false, { minimum: 1 }),
+      number("digits_before_decimal", "Digits before the decimal point (decimal number)", false, {
+        minimum: 1,
+        maximum: 30,
+      }),
+      number("decimal_places", "Decimal places (decimal number)", false, {
+        minimum: 0,
+        maximum: 12,
+      }),
+      ...moneyCurrencyDeclarations("column"),
+      decimalText("minimum_amount", "Smallest value (decimal number or money)"),
+      decimalText("maximum_amount", "Largest value (decimal number or money)"),
+      isoDate("earliest", "Earliest date (date)"),
+      isoDate("latest", "Latest date (date)"),
+      choice("display_time_zone", "Time zone shown (date and time)", true, timeZones),
+      list("options", "Options (choice)", false, 0, 200, optionItem(permissions)),
+    ].map((property): Declaration => {
+      if (["key", "required", "type"].includes(property.key)) return property;
+      return {
+        ...property,
+        showWhen: property.showWhen ?? {
+          property: "type",
+          values: Object.entries(columnSettingKeys)
+            .filter(([, keys]) => keys.includes(property.key))
+            .map(([type]) => type),
+        },
+      };
+    }),
+  );
 
 /**
  * A link field can take its choices from the records linked to another link field of its record
@@ -129,13 +275,29 @@ const linkDependencyDeclaration = (context: ModuleFieldSettingsContext): Declara
   const candidates = linkDependencyCandidates(fields, field, targetFields);
   if (candidates.kind === "unavailable") return [];
   const filters = candidates.filtersByParent[field.dependsOn?.parent ?? ""] ?? [];
-  return [group("depends_on", "Choices depend on another link", [
-    choice("parent_field", "Link it depends on", true, candidates.parents.map(({ id, label }) => [id, label] as const),
-      "Its chosen record narrows the choices here. It must come before this field."),
-    choice("filter_field", "Field the linked records are narrowed by", true,
-      filters.map(({ id, label }) => [id, label] as const),
-      "A filterable link on the linked record type that points at the same record type as the link above."),
-  ], false)];
+  return [
+    group(
+      "depends_on",
+      "Choices depend on another link",
+      [
+        choice(
+          "parent_field",
+          "Link it depends on",
+          true,
+          candidates.parents.map(({ id, label }) => [id, label] as const),
+          "Its chosen record narrows the choices here. It must come before this field.",
+        ),
+        choice(
+          "filter_field",
+          "Field the linked records are narrowed by",
+          true,
+          filters.map(({ id, label }) => [id, label] as const),
+          "A filterable link on the linked record type that points at the same record type as the link above.",
+        ),
+      ],
+      false,
+    ),
+  ];
 };
 
 /**
@@ -146,10 +308,22 @@ const linkDependencyDeclaration = (context: ModuleFieldSettingsContext): Declara
 const choiceDependencyDeclaration = (context: ModuleFieldSettingsContext): Declaration[] => {
   const parents = context.fields.filter((field) => field.type === "choice");
   if (parents.length === 0) return [];
-  return [group("depends_on", "Options depend on another choice", [
-    choice("parent_field", "Choice it depends on", true, parents.map(({ key, label }) => [key, label] as const),
-      "Its chosen option narrows the options here. It must come before this field."),
-  ], false)];
+  return [
+    group(
+      "depends_on",
+      "Options depend on another choice",
+      [
+        choice(
+          "parent_field",
+          "Choice it depends on",
+          true,
+          parents.map(({ key, label }) => [key, label] as const),
+          "Its chosen option narrows the options here. It must come before this field.",
+        ),
+      ],
+      false,
+    ),
+  ];
 };
 
 /**
@@ -157,65 +331,205 @@ const choiceDependencyDeclaration = (context: ModuleFieldSettingsContext): Decla
  * Data tab edits them with its formula and total editors (`module-field-formulas.ts`).
  */
 export const moduleFieldSettingDeclarations = (
-  type: ModuleFieldType, context: ModuleFieldSettingsContext,
+  type: ModuleFieldType,
+  context: ModuleFieldSettingsContext,
 ): readonly Declaration[] => {
   switch (type) {
     case "text":
-      return [number("max_length", "Longest value allowed", true, { minimum: 1, maximum: 100_000, help: "The number of characters a person may enter." }),
-        choice("format", "Format", false, textFormats, "Leave empty for any text.")];
+      return [
+        number("max_length", "Longest value allowed", true, {
+          minimum: 1,
+          maximum: 100_000,
+          help: "The number of characters a person may enter.",
+        }),
+        choice("format", "Format", false, textFormats, "Leave empty for any text."),
+      ];
     case "long_text":
-      return [number("max_length", "Longest value allowed", true, { minimum: 1, maximum: 1_000_000, help: "The number of characters a person may enter." })];
+      return [
+        number("max_length", "Longest value allowed", true, {
+          minimum: 1,
+          maximum: 1_000_000,
+          help: "The number of characters a person may enter.",
+        }),
+      ];
     case "formatted_text":
-      return [list("allowed_blocks", "What the text may contain", true, 1, 6, choice("block", "Part", true, [["paragraph", "Paragraphs"],
-        ["heading", "Headings"], ["list", "Lists"], ["table", "Tables"], ["link", "Links"], ["attachment", "Attachments"]])),
-        number("max_length", "Longest visible text allowed", false, { minimum: 1 })];
+      return [
+        list(
+          "allowed_blocks",
+          "What the text may contain",
+          true,
+          1,
+          6,
+          choice("block", "Part", true, [
+            ["paragraph", "Paragraphs"],
+            ["heading", "Headings"],
+            ["list", "Lists"],
+            ["table", "Tables"],
+            ["link", "Links"],
+            ["attachment", "Attachments"],
+          ]),
+        ),
+        number("max_length", "Longest visible text allowed", false, { minimum: 1 }),
+      ];
     case "whole_number":
-      return [number("minimum", "Smallest value", false), number("maximum", "Largest value", false),
-        number("step", "Step", false, { minimum: 1, help: "Values go up in this step from the smallest value." })];
+      return [
+        number("minimum", "Smallest value", false),
+        number("maximum", "Largest value", false),
+        number("step", "Step", false, {
+          minimum: 1,
+          help: "Values go up in this step from the smallest value.",
+        }),
+      ];
     case "decimal_number":
-      return [number("digits_before_decimal", "Digits before the decimal point", true, { minimum: 1, maximum: 30 }),
+      return [
+        number("digits_before_decimal", "Digits before the decimal point", true, {
+          minimum: 1,
+          maximum: 30,
+        }),
         number("decimal_places", "Decimal places (precision)", true, { minimum: 0, maximum: 12 }),
-        decimalText("minimum", "Smallest value"), decimalText("maximum", "Largest value")];
+        decimalText("minimum", "Smallest value"),
+        decimalText("maximum", "Largest value"),
+      ];
     case "money":
-      return [...moneyCurrencyDeclarations("field"),
-        decimalText("minimum", "Smallest amount"), decimalText("maximum", "Largest amount")];
+      return [
+        ...moneyCurrencyDeclarations("field"),
+        decimalText("minimum", "Smallest amount"),
+        decimalText("maximum", "Largest amount"),
+      ];
     case "date":
       return [isoDate("earliest", "Earliest date"), isoDate("latest", "Latest date")];
     case "date_time":
       return [choice("display_time_zone", "Time zone shown", true, timeZones)];
     case "choice":
-      return [list("options", "Options", true, 1, 200, optionItem(context.permissions, context.fields.some((field) => field.type === "choice")), "Add, rename and reorder the options people choose from."),
-        ...choiceDependencyDeclaration(context)];
+      return [
+        list(
+          "options",
+          "Options",
+          true,
+          1,
+          200,
+          optionItem(
+            context.permissions,
+            context.fields.some((field) => field.type === "choice"),
+          ),
+          "Add, rename and reorder the options people choose from.",
+        ),
+        ...choiceDependencyDeclaration(context),
+      ];
     case "several_choices":
-      return [list("options", "Options", true, 1, 200, optionItem(context.permissions), "Add, rename and reorder the options people choose from."),
-        number("maximum_selections", "Most options a person may choose", false, { minimum: 1, maximum: 200 })];
+      return [
+        list(
+          "options",
+          "Options",
+          true,
+          1,
+          200,
+          optionItem(context.permissions),
+          "Add, rename and reorder the options people choose from.",
+        ),
+        number("maximum_selections", "Most options a person may choose", false, {
+          minimum: 1,
+          maximum: 200,
+        }),
+      ];
     case "reference_number":
-      return [text("prefix", "Text before the number", false, 0, 20), text("suffix", "Text after the number", false, 0, 20),
+      return [
+        text("prefix", "Text before the number", false, 0, 20),
+        text("suffix", "Text after the number", false, 0, 20),
         number("digits", "Digits", true, { minimum: 1, maximum: 20 }),
-        number("starting_number", "First number", false, { minimum: 1 })];
+        number("starting_number", "First number", false, { minimum: 1 }),
+      ];
     case "phone_number":
-      return [text("default_country", "Default country", false, 2, 2, "Two capital letters, for example NZ.")];
+      return [
+        text(
+          "default_country",
+          "Default country",
+          false,
+          2,
+          2,
+          "Two capital letters, for example NZ.",
+        ),
+      ];
     case "web_address":
-      return [list("allowed_schemes", "Allowed kinds of address", false, 1, 1, choice("scheme", "Kind", true, [["https", "Secure (https)"]]))];
+      return [
+        list(
+          "allowed_schemes",
+          "Allowed kinds of address",
+          false,
+          1,
+          1,
+          choice("scheme", "Kind", true, [["https", "Secure (https)"]]),
+        ),
+      ];
     case "table":
-      return [number("minimum_rows", "Fewest rows", true, { minimum: 0 }), number("maximum_rows", "Most rows", true, { minimum: 1, maximum: 1_000 }),
-        list("columns", "Columns", true, 1, 40, tableColumnItem(context.permissions))];
+      return [
+        number("minimum_rows", "Fewest rows", true, { minimum: 0 }),
+        number("maximum_rows", "Most rows", true, { minimum: 1, maximum: 1_000 }),
+        list("columns", "Columns", true, 1, 40, tableColumnItem(context.permissions)),
+      ];
     case "link":
-      return [{ ...base("target", "Linked record type", true), kind: "record_type_reference" },
-        text("reverse_name", "Name of the link back", true, 1, 60, "The name people see on the linked record, for example Items. Its key is made automatically and stays the same when you rename it."),
+      return [
+        { ...base("target", "Linked record type", true), kind: "record_type_reference" },
+        text(
+          "reverse_name",
+          "Name of the link back",
+          true,
+          1,
+          60,
+          "The name people see on the linked record, for example Items. Its key is made automatically and stays the same when you rename it.",
+        ),
         choice("on_parent_delete", "When the linked record is deleted", true, deleteRules),
         boolean("application_root_required", "Only records of this application", false),
-        ...linkDependencyDeclaration(context)];
+        ...linkDependencyDeclaration(context),
+      ];
     case "link_to_one_of_several":
-      return [list("targets", "Record types it may link to", true, 2, 20, { ...base("target", "Record type", true), kind: "record_type_reference" }),
-        choice("on_parent_delete", "When the linked record is deleted", true, deleteRules)];
+      return [
+        list("targets", "Record types it may link to", true, 2, 20, {
+          ...base("target", "Record type", true),
+          kind: "record_type_reference",
+        }),
+        choice("on_parent_delete", "When the linked record is deleted", true, deleteRules),
+      ];
     case "attachment":
-      return [list("allowed_kinds", "Kinds of file allowed", true, 1, 9, choice("kind", "Kind", true, [["image", "Images"], ["document", "Documents"],
-        ["spreadsheet", "Spreadsheets"], ["presentation", "Presentations"], ["audio", "Audio"], ["video", "Video"],
-        ["archive", "Archives"], ["text", "Text files"], ["other", "Other files"]])),
-        list("allowed_extensions", "File endings allowed", false, 0, 50, text("extension", "Ending", true, 2, 20, "For example .pdf.")),
-        number("max_file_size_mb", "Largest file (MB)", true, { integer: false, minimum: 0.001, maximum: 5_000 }),
-        boolean("multiple", "Several files", false), number("max_files", "Most files", false, { minimum: 2, maximum: 100, help: "Only for several files." })];
+      return [
+        list(
+          "allowed_kinds",
+          "Kinds of file allowed",
+          true,
+          1,
+          9,
+          choice("kind", "Kind", true, [
+            ["image", "Images"],
+            ["document", "Documents"],
+            ["spreadsheet", "Spreadsheets"],
+            ["presentation", "Presentations"],
+            ["audio", "Audio"],
+            ["video", "Video"],
+            ["archive", "Archives"],
+            ["text", "Text files"],
+            ["other", "Other files"],
+          ]),
+        ),
+        list(
+          "allowed_extensions",
+          "File endings allowed",
+          false,
+          0,
+          50,
+          text("extension", "Ending", true, 2, 20, "For example .pdf."),
+        ),
+        number("max_file_size_mb", "Largest file (MB)", true, {
+          integer: false,
+          minimum: 0.001,
+          maximum: 5_000,
+        }),
+        boolean("multiple", "Several files", false),
+        number("max_files", "Most files", false, {
+          minimum: 2,
+          maximum: 100,
+          help: "Only for several files.",
+        }),
+      ];
     case "yes_no":
     case "email_address":
     case "calculation":
@@ -225,18 +539,30 @@ export const moduleFieldSettingDeclarations = (
 };
 
 const columnSettingKeys: Readonly<Record<string, readonly string[]>> = {
-  text: ["max_length", "format"], whole_number: ["minimum", "maximum", "step"],
+  text: ["max_length", "format"],
+  whole_number: ["minimum", "maximum", "step"],
   decimal_number: ["digits_before_decimal", "decimal_places", "minimum_amount", "maximum_amount"],
-  money: ["currency_mode", "currency", "minimum_amount", "maximum_amount"], yes_no: [], date: ["earliest", "latest"],
-  date_time: ["display_time_zone"], choice: ["options"],
+  money: ["currency_mode", "currency", "minimum_amount", "maximum_amount"],
+  yes_no: [],
+  date: ["earliest", "latest"],
+  date_time: ["display_time_zone"],
+  choice: ["options"],
 };
 const amountKeys = (type: string) => type === "decimal_number" || type === "money";
 /** A stored column as the one flat entry the column control edits. */
 const flatColumn = (column: Record<string, unknown>): Record<string, unknown> => {
   const settings = (column.settings ?? {}) as Record<string, unknown>;
-  const flat: Record<string, unknown> = { key: column.key, required: column.required, type: column.type };
+  const flat: Record<string, unknown> = {
+    key: column.key,
+    required: column.required,
+    type: column.type,
+  };
   for (const [key, value] of Object.entries(settings))
-    flat[amountKeys(String(column.type)) && (key === "minimum" || key === "maximum") ? `${key}_amount` : key] = value;
+    flat[
+      amountKeys(String(column.type)) && (key === "minimum" || key === "maximum")
+        ? `${key}_amount`
+        : key
+    ] = value;
   return flat;
 };
 /** The flat column entry back as the column the contract stores: only its type's settings are kept. */
@@ -244,15 +570,21 @@ const storedColumn = (flat: Record<string, unknown>): Record<string, unknown> =>
   const type = String(flat.type);
   const settings: Record<string, unknown> = {};
   for (const key of columnSettingKeys[type] ?? [])
-    if (flat[key] !== undefined) settings[key.endsWith("_amount") ? key.slice(0, -"_amount".length) : key] = flat[key];
+    if (flat[key] !== undefined)
+      settings[key.endsWith("_amount") ? key.slice(0, -"_amount".length) : key] = flat[key];
   return { key: flat.key, required: flat.required === true, type, settings };
 };
 /** Where a field's current settings could not be read as typed settings, as located failures. */
-export type ModuleFieldSettingsReading = Readonly<{ values: ModuleFieldTypedSettings; failures: readonly ComponentSettingFailure[] }>;
+export type ModuleFieldSettingsReading = Readonly<{
+  values: ModuleFieldTypedSettings;
+  failures: readonly ComponentSettingFailure[];
+}>;
 
 /** The field's plain settings as the typed values its declarations edit; a kept setting is left out. */
 export const readModuleFieldSettings = (
-  type: ModuleFieldType, settings: Readonly<Record<string, unknown>>, declarations: readonly Declaration[],
+  type: ModuleFieldType,
+  settings: Readonly<Record<string, unknown>>,
+  declarations: readonly Declaration[],
 ): ModuleFieldSettingsReading => {
   const failures: ComponentSettingFailure[] = [];
   const values: Record<string, Typed> = {};
@@ -272,16 +604,21 @@ export const readModuleFieldSettings = (
  * not edit is carried over from `current` unchanged.
  */
 export const writeModuleFieldSettings = (
-  type: ModuleFieldType, values: ModuleFieldTypedSettings, declarations: readonly Declaration[],
+  type: ModuleFieldType,
+  values: ModuleFieldTypedSettings,
+  declarations: readonly Declaration[],
   current: Readonly<Record<string, unknown>>,
 ): Record<string, unknown> => {
   const declared = new Map(declarations.map((declaration) => [declaration.key, declaration]));
-  const settings: Record<string, unknown> = Object.fromEntries(Object.entries(current).filter(([key]) => !declared.has(key)));
+  const settings: Record<string, unknown> = Object.fromEntries(
+    Object.entries(current).filter(([key]) => !declared.has(key)),
+  );
   for (const [key, value] of Object.entries(values)) {
     const declaration = declared.get(key);
     if (declaration === undefined || !componentSettingApplies(declaration, values)) continue;
     let plain = plainSourceSettingValue(value);
-    if (type === "table" && key === "columns") plain = (plain as Record<string, unknown>[]).map(storedColumn);
+    if (type === "table" && key === "columns")
+      plain = (plain as Record<string, unknown>[]).map(storedColumn);
     settings[key] = plain;
   }
   return settings;
@@ -290,75 +627,197 @@ export const writeModuleFieldSettings = (
 /** The settings a field of a type starts with when it is added or its type changes. */
 export const starterModuleFieldSettings = (
   type: ModuleFieldType,
-  start: Readonly<{ recordTypes: readonly string[]; joinField: string | undefined;
-    relationships: readonly string[] }>,
+  start: Readonly<{
+    recordTypes: readonly string[];
+    joinField: string | undefined;
+    relationships: readonly string[];
+  }>,
 ): Record<string, unknown> => {
   switch (type) {
-    case "text": return { max_length: 255 };
-    case "long_text": return { max_length: 10_000 };
-    case "formatted_text": return { allowed_blocks: ["paragraph", "heading", "list", "link"] };
-    case "decimal_number": return { digits_before_decimal: 12, decimal_places: 2 };
-    case "money": return Object.fromEntries(moneyCurrencyDeclarations("field").flatMap((declaration) =>
-      declaration.defaultValue === undefined ? [] : [[declaration.key, plainSettingValue(declaration.defaultValue)]]));
-    case "date_time": return { display_time_zone: "person" };
-    case "choice": return { options: [] };
-    case "several_choices": return { options: [] };
-    case "reference_number": return { digits: 6 };
-    case "table": return { minimum_rows: 0, maximum_rows: 50, columns: [{ key: "item", required: true, type: "text", settings: { max_length: 255 } }] };
-    case "link": return { ...(start.recordTypes[0] === undefined ? {} : { target: start.recordTypes[0] }),
-      reverse_name: "Related records", on_parent_delete: "empty_optional" };
-    case "link_to_one_of_several": return { targets: start.recordTypes.slice(0, 2), on_parent_delete: "empty_optional" };
-    case "calculation": return { result_type: "text", evaluation: "stored", expression: { op: "join",
-      parts: start.joinField === undefined ? [] : [{ op: "reference", reference: { source: "trigger_record", field: start.joinField } }], separator: " " } };
-    case "total": return { ...(start.relationships[0] === undefined ? {} : { relationship: start.relationships[0] }),
-      operation: "count", result_type: "whole_number" };
-    case "attachment": return { allowed_kinds: ["document", "image"], max_file_size_mb: 10, multiple: false };
-    default: return {};
+    case "text":
+      return { max_length: 255 };
+    case "long_text":
+      return { max_length: 10_000 };
+    case "formatted_text":
+      return { allowed_blocks: ["paragraph", "heading", "list", "link"] };
+    case "decimal_number":
+      return { digits_before_decimal: 12, decimal_places: 2 };
+    case "money":
+      return Object.fromEntries(
+        moneyCurrencyDeclarations("field").flatMap((declaration) =>
+          declaration.defaultValue === undefined
+            ? []
+            : [[declaration.key, plainSettingValue(declaration.defaultValue)]],
+        ),
+      );
+    case "date_time":
+      return { display_time_zone: "person" };
+    case "choice":
+      return { options: [] };
+    case "several_choices":
+      return { options: [] };
+    case "reference_number":
+      return { digits: 6 };
+    case "table":
+      return {
+        minimum_rows: 0,
+        maximum_rows: 50,
+        columns: [{ key: "item", required: true, type: "text", settings: { max_length: 255 } }],
+      };
+    case "link":
+      return {
+        ...(start.recordTypes[0] === undefined ? {} : { target: start.recordTypes[0] }),
+        reverse_name: "Related records",
+        on_parent_delete: "empty_optional",
+      };
+    case "link_to_one_of_several":
+      return { targets: start.recordTypes.slice(0, 2), on_parent_delete: "empty_optional" };
+    case "calculation":
+      return {
+        result_type: "text",
+        evaluation: "stored",
+        expression: {
+          op: "join",
+          parts:
+            start.joinField === undefined
+              ? []
+              : [
+                  {
+                    op: "reference",
+                    reference: { source: "trigger_record", field: start.joinField },
+                  },
+                ],
+          separator: " ",
+        },
+      };
+    case "total":
+      return {
+        ...(start.relationships[0] === undefined ? {} : { relationship: start.relationships[0] }),
+        operation: "count",
+        result_type: "whole_number",
+      };
+    case "attachment":
+      return { allowed_kinds: ["document", "image"], max_file_size_mb: 10, multiple: false };
+    default:
+      return {};
   }
 };
 
 /** Field types whose value is produced by the platform or held elsewhere, so they take no default. */
-const noDefault: ReadonlySet<string> = new Set(["reference_number", "calculation", "total", "attachment", "table",
-  "formatted_text"]);
+const noDefault: ReadonlySet<string> = new Set([
+  "reference_number",
+  "calculation",
+  "total",
+  "attachment",
+  "table",
+  "formatted_text",
+]);
 
 /** The one typed declaration of a field's default value, or why a default is not set here. */
 export const moduleFieldDefaultDeclaration = (
-  type: ModuleFieldType, settings: Readonly<Record<string, unknown>>,
-): Readonly<{ kind: "declared"; declaration: Declaration }> | Readonly<{ kind: "none"; reason: string }> => {
+  type: ModuleFieldType,
+  settings: Readonly<Record<string, unknown>>,
+):
+  | Readonly<{ kind: "declared"; declaration: Declaration }>
+  | Readonly<{ kind: "none"; reason: string }> => {
   const label = "Default value";
   const help = "Filled in for a new record. Leave empty for no default.";
   if (noDefault.has(type))
-    return { kind: "none", reason: type === "reference_number" || type === "calculation" || type === "total"
-      ? "The platform works out this field's value, so it has no default."
-      : "A default for this type is not set in Studio; one already in the source is kept." };
-  const options = ((settings.options ?? []) as { value: string; label: string }[]).map((option) => [option.value, option.label] as const);
+    return {
+      kind: "none",
+      reason:
+        type === "reference_number" || type === "calculation" || type === "total"
+          ? "The platform works out this field's value, so it has no default."
+          : "A default for this type is not set in Studio; one already in the source is kept.",
+    };
+  const options = ((settings.options ?? []) as { value: string; label: string }[]).map(
+    (option) => [option.value, option.label] as const,
+  );
   switch (type) {
-    case "text": case "long_text": case "email_address": case "phone_number": case "decimal_number": case "money":
+    case "text":
+    case "long_text":
+    case "email_address":
+    case "phone_number":
+    case "decimal_number":
+    case "money":
     case "date_time":
-      return { kind: "declared", declaration: text("default", label, false, 1, Math.max(1, Number(settings.max_length ?? 1_000_000)), help) };
-    case "date": return { kind: "declared", declaration: isoDate("default", label) };
-    case "web_address": return { kind: "declared", declaration: { ...base("default", label, false, help), kind: "url" } };
-    case "whole_number": return { kind: "declared", declaration: number("default", label, false, { help }) };
-    case "yes_no": return { kind: "declared", declaration: choice("default", label, false, [["yes", "Yes"], ["no", "No"]], help) };
-    case "choice": return { kind: "declared", declaration: choice("default", label, false, options, help) };
+      return {
+        kind: "declared",
+        declaration: text(
+          "default",
+          label,
+          false,
+          1,
+          Math.max(1, Number(settings.max_length ?? 1_000_000)),
+          help,
+        ),
+      };
+    case "date":
+      return { kind: "declared", declaration: isoDate("default", label) };
+    case "web_address":
+      return {
+        kind: "declared",
+        declaration: { ...base("default", label, false, help), kind: "url" },
+      };
+    case "whole_number":
+      return { kind: "declared", declaration: number("default", label, false, { help }) };
+    case "yes_no":
+      return {
+        kind: "declared",
+        declaration: choice(
+          "default",
+          label,
+          false,
+          [
+            ["yes", "Yes"],
+            ["no", "No"],
+          ],
+          help,
+        ),
+      };
+    case "choice":
+      return { kind: "declared", declaration: choice("default", label, false, options, help) };
     case "several_choices":
-      return { kind: "declared", declaration: list("default", label, false, 0, 200, choice("choice", "Choice", true, options), help) };
+      return {
+        kind: "declared",
+        declaration: list(
+          "default",
+          label,
+          false,
+          0,
+          200,
+          choice("choice", "Choice", true, options),
+          help,
+        ),
+      };
     case "link":
-      return settings.target === undefined ? { kind: "none", reason: "Choose the linked record type first." }
-        : { kind: "declared", declaration: { ...base("default", label, false, help), kind: "record_reference" } };
-    default: return { kind: "none", reason: "A default for this type is not set in Studio." };
+      return settings.target === undefined
+        ? { kind: "none", reason: "Choose the linked record type first." }
+        : {
+            kind: "declared",
+            declaration: { ...base("default", label, false, help), kind: "record_reference" },
+          };
+    default:
+      return { kind: "none", reason: "A default for this type is not set in Studio." };
   }
 };
 
 /** A stored default as the typed value its declaration edits. */
-export const readModuleFieldDefault = (type: ModuleFieldType, value: unknown, declaration: Declaration): Typed | undefined => {
+export const readModuleFieldDefault = (
+  type: ModuleFieldType,
+  value: unknown,
+  declaration: Declaration,
+): Typed | undefined => {
   if (value === undefined) return undefined;
   if (type === "yes_no") return { kind: "choice", value: value === true ? "yes" : "no" };
   return typedSourceSettingValue(value, declaration, ["default"], []);
 };
 
 /** A typed default as the value the field contract stores. */
-export const writeModuleFieldDefault = (type: ModuleFieldType, value: Typed | undefined): unknown => {
+export const writeModuleFieldDefault = (
+  type: ModuleFieldType,
+  value: Typed | undefined,
+): unknown => {
   if (value === undefined) return undefined;
   if (type === "yes_no") return value.kind === "choice" && value.value === "yes";
   return plainSourceSettingValue(value);

@@ -1,13 +1,15 @@
+import type {
+  AnyPageComposition,
+  ApplicationShell,
+  CompiledItem,
+  CompiledLayout,
+  PageComposition,
+} from "../definition/application-composition/page-composition";
 import {
-  type AnyPageComposition,
-  type ApplicationShell,
-  type CompiledItem,
-  type CompiledLayout,
-  type PageComposition,
   compiledItemSlots,
   compiledItemTree,
   compiledPageRootSlots,
-} from "../definition/application-composition/page-composition";
+} from "../definition/application-composition/compiled-item-tree";
 import type { PageDefinition } from "../definition/application-contracts";
 
 export type ResolvedPageComposition = Readonly<{

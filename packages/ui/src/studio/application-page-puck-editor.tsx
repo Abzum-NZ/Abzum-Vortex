@@ -18,6 +18,7 @@ import {
   type ApplicationSourceDocument,
   type PageSlotAddress,
   type ImmutablePlatformBlockCatalogue,
+  compiledItemSettings,
 } from "@vortex/platform/schema";
 import type { CompiledItem, SourceItem, SourcePageZone } from "@vortex/platform/schema";
 import type { FieldInputControlReleaseMap } from "../registry";
@@ -826,7 +827,7 @@ function ApplicationPageSlotPuckEditor({
                       iframe={{ enabled: false }}
                       height="auto"
                       overrides={studioCanvasOverrides}
-                      metadata={{ breakpoint }}
+                      metadata={{ breakpoint, readSettings: compiledItemSettings }}
                       permissions={{
                         drag: editable,
                         duplicate: editable,

@@ -1,4 +1,3 @@
-import { z } from "zod";
 import {
   factsOf,
   featureAvailable,
@@ -314,25 +313,13 @@ const queryCheck = (
   return reasons.length === 0 ? featureAvailable : featureNotPossible(featureRefusal, reasons);
 };
 
-const textSchema = z.string().min(1);
-const positiveSchema = z.number().int().min(1);
-const projectionSchema = z
-  .object({
-    rowPageSize: positiveSchema,
-    totals: z.boolean(),
-    view: z.object({ cursor: textSchema.optional() }).strict().readonly().optional(),
-  })
-  .strict()
-  .readonly();
-
 export const recordsTablePivotFeature: RecordsTableFeatureDefinition<
   RecordsTablePivotSettings,
   "pivot"
 > &
-  Readonly<{ property: "pivot"; projectionSchema: typeof projectionSchema }> = {
+  Readonly<{ property: "pivot" }> = {
   key: "pivot",
   property: "pivot",
-  projectionSchema,
   settings: featureSettings,
   refusals: [featureRefusal],
   onBoard: "unsupported",

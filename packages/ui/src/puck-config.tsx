@@ -31,6 +31,7 @@ import {
 import type { ComponentConfig, Config, Field, PuckContext, SlotComponent } from "@puckeditor/core";
 import {
   plainSettingValue,
+  readCompiledItemSettings,
   repeatableSlotItemIdentities,
   repeatableSlotKey,
   type BreakpointOrder,
@@ -46,6 +47,7 @@ import {
   DefinitionRenderError,
   placementSettings,
   validateAccessibleName,
+  type PlacementSettingsReader,
   type Breakpoint,
   type DefinitionRenderErrorLocation,
 } from "./definition-error";
@@ -147,6 +149,11 @@ export type VortexPuckMetadata = Readonly<{
   applicationSearch?: ApplicationSearchRuntime | undefined;
   /** Record subject preserved when submitting application search from a detail page. */
   applicationSearchPageSubject?: string | undefined;
+  /**
+   * How every placement's settings are read. The host always supplies it: a runtime page reads
+   * its published composition, Studio checks every value of the composition being edited.
+   */
+  readSettings?: PlacementSettingsReader | undefined;
 }>;
 type FieldInputControlReleases = FieldInputControlReleaseMap;
 
@@ -391,7 +398,12 @@ function PlacementBlock(props: {
   const Implementation = implementationFor(release);
   // Each setting is its own prop holding its plain value; the release declares every one,
   // including those the compiler derives, and gives it its kind.
-  const settings = placementSettings(componentProps, release, location);
+  const readSettings = metadataIn.readSettings;
+  if (readSettings === undefined)
+    throw new Error(
+      `Placement '${placementId}' is rendered by a host that supplies no settings reader`,
+    );
+  const settings = placementSettings(componentProps, release, location, readSettings);
   validateAccessibleName(settings, release.capabilities, location);
 
   // A placement whose use is unavailable stays viewable but never receives an invocable callback,
@@ -597,10 +609,15 @@ export function createVortexPuckConfig(
         buildFields(
           release,
           hasRepeatableSlot
-            ? placementSettings(data.props, release, {
-                blockId: release.blockId,
-                releaseVersion: release.releaseVersion,
-              })
+            ? placementSettings(
+                data.props,
+                release,
+                {
+                  blockId: release.blockId,
+                  releaseVersion: release.releaseVersion,
+                },
+                readCompiledItemSettings,
+              )
             : defaults,
         ),
       render: (componentProps) => (

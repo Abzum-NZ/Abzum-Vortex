@@ -1,5 +1,3 @@
-import { inlineEditFieldsSchema } from "./inline-edit";
-import { z } from "zod";
 import {
   factsOf,
   featureAvailable,
@@ -122,20 +120,13 @@ const featureRefusal: GridFeatureRefusal = {
     "Choose editable columns and name the action that saves the row, or turn Row editing off.",
 };
 
-const textSchema = z.string().min(1);
-const projectionSchema = z
-  .object({ eventId: textSchema, trigger: z.literal("button"), fields: inlineEditFieldsSchema })
-  .strict()
-  .readonly();
-
 export const recordsTableRowEditFeature: RecordsTableFeatureDefinition<
   RecordsTableRowEditSettings,
   "row_edit"
 > &
-  Readonly<{ property: "rowEdit"; projectionSchema: typeof projectionSchema }> = {
+  Readonly<{ property: "rowEdit" }> = {
   key: "row_edit",
   property: "rowEdit",
-  projectionSchema,
   settings: featureSettings,
   refusals: [featureRefusal],
   onBoard: "unsupported",

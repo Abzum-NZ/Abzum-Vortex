@@ -3,7 +3,10 @@ import {
   CONTAINER_BLOCK_RELEASE,
   HEADING_BLOCK_RELEASE,
 } from "../definition/application-composition-catalogue";
-import { applicationShellSchema } from "../definition/application-composition/page-composition";
+import {
+  applicationShellSchema,
+  compiledItemSettings,
+} from "../definition/application-composition/page-composition";
 import type { PlatformBlockRelease } from "../definition/application-composition/platform-block-release";
 import { pageDefinitionSchema } from "../definition/application-contracts";
 import { containedComponentIdSchema } from "../catalogue/identifiers";
@@ -26,9 +29,8 @@ export const platformPageItem = (
   id: string,
   settings: Record<string, unknown>,
   emptySlots: readonly string[] = [],
-) => ({
-  type: release.rendererKey,
-  props: {
+) => {
+  const props = {
     id,
     ...settings,
     ...Object.fromEntries(emptySlots.map((key) => [key, []])),
@@ -37,8 +39,11 @@ export const platformPageItem = (
       responsive,
       slotOrders: Object.fromEntries(emptySlots.map((key) => [key, sameOrder([])])),
     },
-  },
-});
+  };
+  // Platform-owned pages are built here rather than published, so check their settings here.
+  compiledItemSettings(props, release);
+  return { type: release.rendererKey, props };
+};
 
 /** Compiled page data in an application shell whose one content slot holds `items`. */
 export const platformShellPageData = (
