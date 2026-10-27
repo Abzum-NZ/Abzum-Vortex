@@ -17,6 +17,7 @@ export * from "./application-composition/component-setting-reading";
 export * from "./application-composition/compiled-item-tree";
 export * from "./application-composition/custom-components";
 export * from "./application-composition/theme";
+export * from "./application-composition/theme-defaults";
 export * from "./application-composition/catalogue-snapshot";
 export * from "./application-composition/protected-read-models";
 export * from "./application-composition/page-composition";

@@ -7,6 +7,7 @@ import {
   semanticVersionSchema,
 } from "../../catalogue/identifiers";
 import { nonNegativeFiniteSchema, positiveFiniteSchema } from "./shared";
+import { DEFAULT_APPLICATION_THEME_SELECTION } from "./theme-defaults";
 
 export const themeTokenKindSchema = z.enum([
   "color_pair",
@@ -190,19 +191,9 @@ export const sourceApplicationThemeSelectionSchema = z
   .strict();
 export type SourceApplicationThemeSelection = z.infer<typeof sourceApplicationThemeSelectionSchema>;
 
-/** Small authored and canonical values for the platform's current default theme selection. */
-export const DEFAULT_APPLICATION_THEME_SELECTION = applicationThemeSelectionSchema.parse({
-  style: "nova",
-  baseColor: "neutral",
-  theme: "neutral",
-  chartColor: "neutral",
-  radius: "default",
-  menuColor: "default",
-  menuAccent: "subtle",
-  iconLibrary: "lucide",
-  bodyFont: "inter",
-  headingFont: "inherit",
-});
+// The default selection lives apart from these contracts so the renderer reads it without them;
+// it is checked against the selection contract here, wherever the contracts load.
+applicationThemeSelectionSchema.parse(DEFAULT_APPLICATION_THEME_SELECTION);
 
 /** Studio's platform chrome; the authored application keeps its own selection on the canvas. */
 export const STUDIO_THEME_SELECTION = applicationThemeSelectionSchema.parse({
