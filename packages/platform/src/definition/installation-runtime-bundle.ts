@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { applicationContentSchema } from "./application-contracts";
 import { compiledLayoutSchema } from "./application-composition/page-composition";
 import { jsonValueSchema } from "../catalogue/common";
 import {
@@ -31,10 +30,7 @@ import {
   permissionDeclarationSchema,
   permissionRecordScopeSchema,
 } from "../access/permissions";
-import {
-  recordStorageColumnTokenSchema,
-  recordStorageTableTokenSchema,
-} from "../files/storage";
+import { recordStorageColumnTokenSchema, recordStorageTableTokenSchema } from "../files/storage";
 import { savedSharingConditionSchema } from "./module-contracts";
 
 export {
@@ -55,9 +51,7 @@ export const installationRuntimeBundleSections = [
   "tool_bundle",
 ] as const;
 
-export const installationRuntimeBundleSectionSchema = z.enum(
-  installationRuntimeBundleSections,
-);
+export const installationRuntimeBundleSectionSchema = z.enum(installationRuntimeBundleSections);
 
 export const installationRuntimeBundlePartMetadataSchema = z
   .object({
@@ -68,29 +62,33 @@ export const installationRuntimeBundlePartMetadataSchema = z
   })
   .strict();
 
-export const installationRuntimeBundlePartSchema =
-  installationRuntimeBundlePartMetadataSchema.extend({
+export const installationRuntimeBundlePartSchema = installationRuntimeBundlePartMetadataSchema
+  .extend({
     /** A UTF-8 fragment of the section's canonical JSON serialization. */
     content: z.string(),
-  }).strict();
+  })
+  .strict();
 
-const immutableRuntimeReleaseIdentitySchema = z.object({
-  rootId: z.uuid(),
-  definitionKey: namespacedKeySchema,
-  releaseRevision: revisionSchema,
-  releaseVersion: stableDefinitionReleaseVersionSchema,
-  validationContractVersion: semanticVersionSchema,
-  contentFingerprint: fingerprintSchema,
-  resolutionFingerprint: fingerprintSchema,
-}).strict();
+const immutableRuntimeReleaseIdentitySchema = z
+  .object({
+    rootId: z.uuid(),
+    definitionKey: namespacedKeySchema,
+    releaseRevision: revisionSchema,
+    releaseVersion: stableDefinitionReleaseVersionSchema,
+    validationContractVersion: semanticVersionSchema,
+    contentFingerprint: fingerprintSchema,
+    resolutionFingerprint: fingerprintSchema,
+  })
+  .strict();
 
-const immutableRuntimeModuleIdentitySchema = immutableRuntimeReleaseIdentitySchema.extend({
-  rootId: moduleRootIdSchema,
-}).strict();
+const immutableRuntimeModuleIdentitySchema = immutableRuntimeReleaseIdentitySchema
+  .extend({
+    rootId: moduleRootIdSchema,
+  })
+  .strict();
 
 const applicationConsumerResultFields = applicationDefinitionConsumerReadResultSchema.shape;
 const moduleConsumerResultFields = moduleDefinitionConsumerReadResultSchema.shape;
-const applicationContentFields = z.object(applicationContentSchema.shape).strict();
 
 // Release metadata is immutable; consumer correlation IDs are request-specific and are injected
 // again when a HUMAN release set is reconstructed from the stored sections.
@@ -104,17 +102,13 @@ const installationRuntimeBundleModuleSourceHeaderSchema = z
   .omit({ content: true, correlationId: true })
   .strict();
 
-const installationRuntimeBundleApplicationPageContentSchema = applicationContentFields
-  .omit({
-    navigation: true,
-    flows: true,
-    flowBindings: true,
-    theme: true,
-    platformBlockDependencies: true,
-    pages: true,
-    shells: true,
-  })
-  .strict();
+/*
+ * Release content stored in the pages section. It is written from a release set that is already
+ * checked, and it is read back only into a release set that the release-set contract checks again
+ * as a whole, like the navigation, flows, theme, registry and tool sections: this section's own
+ * contract is its envelope (identities, Module order, resolved compositions).
+ */
+const installationRuntimeBundleReleaseContentSchema = z.record(z.string(), z.unknown());
 
 const installationRuntimeBundleResolvedRootsSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("page"), main: compiledLayoutSchema }).strict(),
@@ -131,9 +125,9 @@ export const installationRuntimeBundlePagesSectionSchema = z
     application: z
       .object({
         identity: installationRuntimeBundleApplicationSourceHeaderSchema,
-        content: installationRuntimeBundleApplicationPageContentSchema,
-        shells: applicationContentFields.shape.shells,
-        pages: applicationContentFields.shape.pages,
+        content: installationRuntimeBundleReleaseContentSchema,
+        shells: z.array(z.unknown()),
+        pages: z.array(z.unknown()),
       })
       .strict(),
     modules: z
@@ -141,7 +135,7 @@ export const installationRuntimeBundlePagesSectionSchema = z
         z
           .object({
             identity: installationRuntimeBundleModuleSourceHeaderSchema,
-            content: moduleConsumerResultFields.content,
+            content: installationRuntimeBundleReleaseContentSchema,
           })
           .strict(),
       )
@@ -170,23 +164,11 @@ export const installationRuntimeBundlePagesSectionSchema = z
   })
   .strict()
   .superRefine((value, context) => {
-    const pageIds = value.application.pages.map((page) => page.pageId);
-    const compositionPageIds = value.resolvedCompositions.map(
-      (composition) => composition.pageId,
-    );
-    if (
-      pageIds.length !== compositionPageIds.length ||
-      pageIds.some((pageId, index) => compositionPageIds[index] !== pageId)
-    )
-      context.addIssue({
-        code: "custom",
-        path: ["resolvedCompositions"],
-        message: "Runtime page compositions must match the exact source page order",
-      });
+    // Composition order against the source pages is checked where the bundle is read, against the
+    // checked release set's pages.
     if (
       value.modules.some(
-        (module) =>
-          module.identity.organizationId !== value.application.identity.organizationId,
+        (module) => module.identity.organizationId !== value.application.identity.organizationId,
       )
     )
       context.addIssue({
@@ -220,69 +202,88 @@ const runtimePlanFieldTypeSchema = z.enum([
   "attachment",
 ]);
 
-const runtimePlanFieldSchema = z.object({
-  fieldId: fieldIdSchema,
-  type: runtimePlanFieldTypeSchema,
-  settings: z.record(z.string(), jsonValueSchema),
-}).strict();
+const runtimePlanFieldSchema = z
+  .object({
+    fieldId: fieldIdSchema,
+    type: runtimePlanFieldTypeSchema,
+    settings: z.record(z.string(), jsonValueSchema),
+  })
+  .strict();
 
-const runtimePlanColumnSchema = z.object({
-  token: recordStorageColumnTokenSchema,
-  databaseValueType: z.enum([
-    "boolean",
-    "date",
-    "decimal",
-    "integer",
-    "json",
-    "text",
-    "timestamp_with_time_zone",
-    "uuid",
-  ]),
-  type: runtimePlanFieldTypeSchema,
-}).strict();
+const runtimePlanColumnSchema = z
+  .object({
+    token: recordStorageColumnTokenSchema,
+    databaseValueType: z.enum([
+      "boolean",
+      "date",
+      "decimal",
+      "integer",
+      "json",
+      "text",
+      "timestamp_with_time_zone",
+      "uuid",
+    ]),
+    type: runtimePlanFieldTypeSchema,
+  })
+  .strict();
 
-const runtimePlanRecordTypeSchema = z.object({
-  moduleRootId: moduleRootIdSchema,
-  recordTypeId: recordTypeIdSchema,
-  storageContractId: storageContractIdSchema,
-  storageScope: z.enum(["organization_shared", "application_contained"]),
-  ownershipMode: recordOwnershipModeSchema,
-  releaseRevision: revisionSchema,
-  validationContractVersion: semanticVersionSchema,
-  table: recordStorageTableTokenSchema,
-  columns: z.record(fieldIdSchema, runtimePlanColumnSchema),
-  valueExpression: z.string(),
-  fields: z.array(runtimePlanFieldSchema).min(1).max(500),
-  ownershipRelationshipId: containedComponentIdSchema.optional(),
-}).strict();
-
-const runtimePlanRelationshipSchema = z.object({
-  relationshipId: containedComponentIdSchema,
-  fromModuleRootId: moduleRootIdSchema,
-  fromRecordTypeId: recordTypeIdSchema,
-  toRecordTypes: z.array(z.object({
+const runtimePlanRecordTypeSchema = z
+  .object({
     moduleRootId: moduleRootIdSchema,
     recordTypeId: recordTypeIdSchema,
-  }).strict()).min(1).max(20),
-}).strict();
+    storageContractId: storageContractIdSchema,
+    storageScope: z.enum(["organization_shared", "application_contained"]),
+    ownershipMode: recordOwnershipModeSchema,
+    releaseRevision: revisionSchema,
+    validationContractVersion: semanticVersionSchema,
+    table: recordStorageTableTokenSchema,
+    columns: z.record(fieldIdSchema, runtimePlanColumnSchema),
+    valueExpression: z.string(),
+    fields: z.array(runtimePlanFieldSchema).min(1).max(500),
+    ownershipRelationshipId: containedComponentIdSchema.optional(),
+  })
+  .strict();
+
+const runtimePlanRelationshipSchema = z
+  .object({
+    relationshipId: containedComponentIdSchema,
+    fromModuleRootId: moduleRootIdSchema,
+    fromRecordTypeId: recordTypeIdSchema,
+    toRecordTypes: z
+      .array(
+        z
+          .object({
+            moduleRootId: moduleRootIdSchema,
+            recordTypeId: recordTypeIdSchema,
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(20),
+  })
+  .strict();
 
 const runtimePlanPermissionSchema = z.discriminatedUnion("ownerKind", [
-  z.object({
-    ownerKind: z.literal("application"),
-    ownerId: applicationRootIdSchema,
-    recordTypeId: recordTypeIdSchema,
-    actionKind: permissionActionKindSchema,
-    namedAction: builderKeySchema.nullable(),
-    recordScope: permissionRecordScopeSchema,
-  }).strict(),
-  z.object({
-    ownerKind: z.literal("module"),
-    ownerId: moduleRootIdSchema,
-    recordTypeId: recordTypeIdSchema,
-    actionKind: permissionActionKindSchema,
-    namedAction: builderKeySchema.nullable(),
-    recordScope: permissionRecordScopeSchema,
-  }).strict(),
+  z
+    .object({
+      ownerKind: z.literal("application"),
+      ownerId: applicationRootIdSchema,
+      recordTypeId: recordTypeIdSchema,
+      actionKind: permissionActionKindSchema,
+      namedAction: builderKeySchema.nullable(),
+      recordScope: permissionRecordScopeSchema,
+    })
+    .strict(),
+  z
+    .object({
+      ownerKind: z.literal("module"),
+      ownerId: moduleRootIdSchema,
+      recordTypeId: recordTypeIdSchema,
+      actionKind: permissionActionKindSchema,
+      namedAction: builderKeySchema.nullable(),
+      recordScope: permissionRecordScopeSchema,
+    })
+    .strict(),
 ]);
 
 const runtimePlanRecordTypesSchema = z
@@ -321,58 +322,81 @@ const runtimePlanPermissionsSchema = z
         });
   });
 
-const runtimeRecordAccessPlanSchema = z.object({
-  organizationId: organizationIdSchema,
-  applicationRootId: applicationRootIdSchema,
-  applicationReleaseRevision: revisionSchema,
-  recordTypes: runtimePlanRecordTypesSchema,
-  relationships: runtimePlanRelationshipsSchema,
-  sharingConditions: z.array(savedSharingConditionSchema),
-  permissions: runtimePlanPermissionsSchema,
-}).strict();
+const runtimeRecordAccessPlanSchema = z
+  .object({
+    organizationId: organizationIdSchema,
+    applicationRootId: applicationRootIdSchema,
+    applicationReleaseRevision: revisionSchema,
+    recordTypes: runtimePlanRecordTypesSchema,
+    relationships: runtimePlanRelationshipsSchema,
+    sharingConditions: z.array(savedSharingConditionSchema),
+    permissions: runtimePlanPermissionsSchema,
+  })
+  .strict();
 
-export const installationPreparedRecordAccessPlanSchema = z.object({
-  planKey: fingerprintSchema,
-  mappingFingerprint: fingerprintSchema,
-  plan: runtimeRecordAccessPlanSchema,
-}).strict();
-
-export const installationRuntimeBundleAccessPlanSectionSchema = z.object({
-  preparedRecordAccessPlan: installationPreparedRecordAccessPlanSchema,
-  declaredPermissions: z.object({
-    application: z.array(permissionDeclarationSchema),
-    modules: z.array(z.object({
-      rootId: moduleRootIdSchema,
-      permissions: z.array(permissionDeclarationSchema),
-    }).strict()).max(10_000),
-  }).strict(),
-}).strict();
-
-/** Exact protected source identities and immutable prepared Record plan for format 2. */
-export const installationRuntimeBundleSourceManifestSchema = z.object({
-  bundleFormatVersion: z.literal(installationRuntimeBundleFormatVersion),
-  application: immutableRuntimeReleaseIdentitySchema.extend({
-    rootId: applicationRootIdSchema,
-  }).strict(),
-  modules: z.array(immutableRuntimeModuleIdentitySchema).max(10_000).superRefine((modules, context) => {
-    const roots = modules.map((module) => module.rootId.toLowerCase());
-    if (new Set(roots).size !== roots.length)
-      context.addIssue({
-        code: "custom",
-        message: "A runtime source manifest must contain one release per Module root",
-      });
-    if (roots.some((root, index) => index > 0 && roots[index - 1]! >= root))
-      context.addIssue({
-        code: "custom",
-        message: "Runtime source Module identities must be in strict root order",
-      });
-  }),
-  pinFingerprint: fingerprintSchema,
-  preparedRecordAccessPlan: z.object({
+export const installationPreparedRecordAccessPlanSchema = z
+  .object({
     planKey: fingerprintSchema,
     mappingFingerprint: fingerprintSchema,
-  }).strict(),
-}).strict();
+    plan: runtimeRecordAccessPlanSchema,
+  })
+  .strict();
+
+export const installationRuntimeBundleAccessPlanSectionSchema = z
+  .object({
+    preparedRecordAccessPlan: installationPreparedRecordAccessPlanSchema,
+    declaredPermissions: z
+      .object({
+        application: z.array(permissionDeclarationSchema),
+        modules: z
+          .array(
+            z
+              .object({
+                rootId: moduleRootIdSchema,
+                permissions: z.array(permissionDeclarationSchema),
+              })
+              .strict(),
+          )
+          .max(10_000),
+      })
+      .strict(),
+  })
+  .strict();
+
+/** Exact protected source identities and immutable prepared Record plan for format 2. */
+export const installationRuntimeBundleSourceManifestSchema = z
+  .object({
+    bundleFormatVersion: z.literal(installationRuntimeBundleFormatVersion),
+    application: immutableRuntimeReleaseIdentitySchema
+      .extend({
+        rootId: applicationRootIdSchema,
+      })
+      .strict(),
+    modules: z
+      .array(immutableRuntimeModuleIdentitySchema)
+      .max(10_000)
+      .superRefine((modules, context) => {
+        const roots = modules.map((module) => module.rootId.toLowerCase());
+        if (new Set(roots).size !== roots.length)
+          context.addIssue({
+            code: "custom",
+            message: "A runtime source manifest must contain one release per Module root",
+          });
+        if (roots.some((root, index) => index > 0 && roots[index - 1]! >= root))
+          context.addIssue({
+            code: "custom",
+            message: "Runtime source Module identities must be in strict root order",
+          });
+      }),
+    pinFingerprint: fingerprintSchema,
+    preparedRecordAccessPlan: z
+      .object({
+        planKey: fingerprintSchema,
+        mappingFingerprint: fingerprintSchema,
+      })
+      .strict(),
+  })
+  .strict();
 export const installationRuntimeBundleIndexSchema = z
   .object({
     organizationId: organizationIdSchema,
@@ -381,9 +405,9 @@ export const installationRuntimeBundleIndexSchema = z
     bundleFormatVersion: z.literal(installationRuntimeBundleFormatVersion),
     pinFingerprint: fingerprintSchema,
     sourceManifest: installationRuntimeBundleSourceManifestSchema,
-    parts: z.array(installationRuntimeBundlePartMetadataSchema).min(
-      installationRuntimeBundleSections.length,
-    ),
+    parts: z
+      .array(installationRuntimeBundlePartMetadataSchema)
+      .min(installationRuntimeBundleSections.length),
     totalSizeBytes: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
     builtAt: timestampSchema,
   })
@@ -463,9 +487,10 @@ export const installationRuntimeBundleWriteCommandSchema = z
 export const installationRuntimeBundleReadPartsCommandSchema = z
   .object({
     ...installationRuntimeBundleKeySchema.shape,
-    sections: z.array(installationRuntimeBundleSectionSchema).min(1).max(
-      installationRuntimeBundleSections.length,
-    ),
+    sections: z
+      .array(installationRuntimeBundleSectionSchema)
+      .min(1)
+      .max(installationRuntimeBundleSections.length),
   })
   .strict()
   .superRefine((value, context) => {
@@ -477,14 +502,11 @@ export const installationRuntimeBundleReadPartsCommandSchema = z
       });
   });
 
-export type InstallationRuntimeBundleSection =
-  (typeof installationRuntimeBundleSections)[number];
+export type InstallationRuntimeBundleSection = (typeof installationRuntimeBundleSections)[number];
 export type InstallationRuntimeBundlePartMetadata = z.infer<
   typeof installationRuntimeBundlePartMetadataSchema
 >;
-export type InstallationRuntimeBundlePart = z.infer<
-  typeof installationRuntimeBundlePartSchema
->;
+export type InstallationRuntimeBundlePart = z.infer<typeof installationRuntimeBundlePartSchema>;
 export type InstallationRuntimeBundleSourceManifest = z.infer<
   typeof installationRuntimeBundleSourceManifestSchema
 >;
@@ -496,12 +518,8 @@ export type PreparedInstallationRuntimeSource = Readonly<{
   sourceManifest: InstallationRuntimeBundleSourceManifest;
   preparedRecordAccessPlan: InstallationPreparedRecordAccessPlan;
 }>;
-export type InstallationRuntimeBundleIndex = z.infer<
-  typeof installationRuntimeBundleIndexSchema
->;
-export type InstallationRuntimeBundleKey = z.infer<
-  typeof installationRuntimeBundleKeySchema
->;
+export type InstallationRuntimeBundleIndex = z.infer<typeof installationRuntimeBundleIndexSchema>;
+export type InstallationRuntimeBundleKey = z.infer<typeof installationRuntimeBundleKeySchema>;
 export type InstallationRuntimeBundleWriteCommand = z.infer<
   typeof installationRuntimeBundleWriteCommandSchema
 >;
