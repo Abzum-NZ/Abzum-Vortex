@@ -20,8 +20,8 @@ import { readQueryBindings } from "./application-composition/query-bindings";
 import {
   readRecordDetailContract,
   readRecordsTableContract,
-  recordsTableColumnProblems,
 } from "./application-composition/records-display";
+import { recordsTableColumnProblems } from "./application-composition/records-table-column-problems";
 import {
   readSourceItem,
   sourceItemChildSlots,
