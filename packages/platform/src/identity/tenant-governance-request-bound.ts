@@ -236,7 +236,7 @@ export const createRequestBoundTenantGovernanceService = (
     let identitySqlFailure: unknown;
     try {
       return await invocationTransaction.withSavepoint(async (identityTransactionScope) => {
-        await identityTransactionScope.query`set local role vortex_runtime`;
+        await identityTransactionScope.query`select pg_catalog.set_config('role', 'vortex_runtime', true)`;
 
         const identityTransaction: RequestDatabaseTransaction = {
           query: async <ResultRow extends DatabaseRow>(
@@ -267,7 +267,7 @@ export const createRequestBoundTenantGovernanceService = (
         if (!state.identityQueryUsed) throw poison("TENANT_GOVERNANCE_METHOD_BOUNDARY_VIOLATION");
 
         // Restore and verify the least-privileged request role before the exact-call child settles.
-        await identityTransactionScope.query`set local role vortex_request`;
+        await identityTransactionScope.query`select pg_catalog.set_config('role', 'vortex_request', true)`;
         await assertBoundHumanContext(identityTransactionScope, boundRequest);
         return result;
       });

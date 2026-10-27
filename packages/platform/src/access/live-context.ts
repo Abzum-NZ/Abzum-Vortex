@@ -57,17 +57,23 @@ const refuse = (reason: LiveContextRefusalReason, cause?: unknown): LiveContextR
   return new LiveContextRefused(reason, cause === undefined ? undefined : { cause });
 };
 
-/** The database transaction's own clock; the one time source of every live check. */
-export const readDatabaseClock = async (
-  transaction: RequestDatabaseTransaction,
-): Promise<number> => {
-  const rows =
-    await transaction.query<DatabaseRow>`select pg_catalog.clock_timestamp() as completed_at`;
+/**
+ * The database clock one result row carries as `completed_at`: the one time source of every live
+ * check. A statement that already reads something returns the clock with it instead of a
+ * separate round trip.
+ */
+export const databaseClockOf = (rows: readonly DatabaseRow[]): number => {
   const parsed = timestampSchema.safeParse(databaseTimestamp(rows[0]?.completed_at));
   if (rows.length !== 1 || !parsed.success)
     throw new DefinitionError("INVALID_DEFINITION_STORAGE_RESULT", { cause: parsed.error });
   return Date.parse(parsed.data);
 };
+
+/** The database transaction's own clock, read on its own. */
+export const readDatabaseClock = async (transaction: RequestDatabaseTransaction): Promise<number> =>
+  databaseClockOf(
+    await transaction.query<DatabaseRow>`select pg_catalog.clock_timestamp() as completed_at`,
+  );
 
 export type LiveHumanContextRequest = Readonly<{
   scope: SelectedOrganizationScope;

@@ -69,8 +69,8 @@ transaction-local context through its private initializer, which stores the
 validated context in the owner-only `vortex_platform.request_contexts` row for the
 current backend and transaction and refuses re-establishment; a value written
 into any session setting is ignored, and neither login role can read or write the
-table. It then enters the non-login `vortex_request` role with `SET LOCAL ROLE`
-before protected work.
+table. The same statement then enters the non-login `vortex_request` role with a
+transaction-local `set_config('role', 'vortex_request', true)` before protected work.
 Only `vortex_runtime` may execute the initializer; only `vortex_request` may
 execute the read-only context accessors used by policies and service SQL.
 Commit or rollback ends the transaction-local role. The context row outlives the
@@ -80,7 +80,7 @@ connection can read it; each must establish its own.
 For a human organisation request, the browser supplies only one untrusted
 organisation identifier. The Identity service resolves the exact active identity,
 tenant, organisation and organisation account; Access composes that scope with
-its current version. Resolution, context initialisation, `SET LOCAL ROLE`, live
+its current version. Resolution, context initialisation, the request-role switch, live
 validation and protected work remain in the same transaction. Shared locks keep
 the resolved Identity and Access rows stable until that work finishes. The
 `vortex_request` role has no Identity-schema access and receives only the exact

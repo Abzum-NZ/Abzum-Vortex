@@ -31,7 +31,7 @@ import {
   type ResolvedRequestContext,
 } from "../db/request-transaction";
 
-import { readDatabaseClock } from "./live-context";
+import { databaseClockOf } from "./live-context";
 
 type ResolvedRequestTransactionRunner = <Scope, Result>(
   resolve: (transaction: RequestDatabaseTransaction) => Promise<ResolvedRequestContext<Scope>>,
@@ -84,6 +84,7 @@ type ScopeRow = DatabaseRow & {
   organization_account_id: unknown;
   application_root_id?: unknown;
   access_version: unknown;
+  completed_at?: unknown;
 };
 
 const parseScope = (rows: readonly ScopeRow[]): SelectedOrganizationScope => {
@@ -210,35 +211,35 @@ export const createHumanOrganizationRequestService = (
             verifiedCandidate.data.applicationRootId === undefined
               ? mode === "access_change"
                 ? await transaction.query<ScopeRow>`
-                  select *
+                  select scope.*, pg_catalog.clock_timestamp() as completed_at
                   from vortex_access.resolve_human_organization_access_change_scope(
                     ${verifiedSession.data.identityId}::uuid,
                     ${verifiedCandidate.data.organizationId}::uuid
-                  )
+                  ) as scope
                 `
                 : await transaction.query<ScopeRow>`
-                  select *
+                  select scope.*, pg_catalog.clock_timestamp() as completed_at
                   from vortex_access.resolve_human_organization_scope(
                     ${verifiedSession.data.identityId}::uuid,
                     ${verifiedCandidate.data.organizationId}::uuid
-                  )
+                  ) as scope
                 `
               : mode === "access_change"
                 ? await transaction.query<ScopeRow>`
-                  select *
+                  select scope.*, pg_catalog.clock_timestamp() as completed_at
                   from vortex_access.resolve_human_application_access_change_scope(
                     ${verifiedSession.data.identityId}::uuid,
                     ${verifiedCandidate.data.organizationId}::uuid,
                     ${verifiedCandidate.data.applicationRootId}::uuid
-                  )
+                  ) as scope
                 `
                 : await transaction.query<ScopeRow>`
-                  select *
+                  select scope.*, pg_catalog.clock_timestamp() as completed_at
                   from vortex_access.resolve_human_application_scope(
                     ${verifiedSession.data.identityId}::uuid,
                     ${verifiedCandidate.data.organizationId}::uuid,
                     ${verifiedCandidate.data.applicationRootId}::uuid
-                  )
+                  ) as scope
                 `;
           const parsedScope = parseScope(rows);
           const scope: SelectedOrganizationScope =
@@ -260,9 +261,10 @@ export const createHumanOrganizationRequestService = (
           )
             throw new Error("INVALID_SCOPE_RESULT");
           // Live context and permission deadlines are checked on the database clock. Issue the
-          // context on that same clock: a web host ahead by even a few milliseconds must not
-          // produce a future-issued context that a fast request then refuses.
-          issuedAt = new Date(await readDatabaseClock(transaction)).toISOString();
+          // context on that same clock, read by the scope statement once the scope is resolved: a
+          // web host ahead by even a few milliseconds must not produce a future-issued context
+          // that a fast request then refuses.
+          issuedAt = new Date(databaseClockOf(rows)).toISOString();
           const context: SessionContext = sessionContextSchema.parse({
             callerKind: "human",
             identityAuthorityId: configuredAuthority,
