@@ -1,0 +1,14 @@
+import { z } from "zod";
+import { RECORDS_TABLE_EXPORT_MAXIMUM_ROWS, recordsTableExportFormats } from "../export";
+
+export const exportProjectionSchema = z
+  .object({
+    maxRows: z.number().int().min(1).max(RECORDS_TABLE_EXPORT_MAXIMUM_ROWS),
+    formats: z
+      .array(z.enum(recordsTableExportFormats))
+      .min(1)
+      .refine((formats) => new Set(formats).size === formats.length, "Name each format once")
+      .readonly(),
+  })
+  .strict()
+  .readonly();

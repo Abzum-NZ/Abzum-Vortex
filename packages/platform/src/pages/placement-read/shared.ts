@@ -4,7 +4,7 @@ import type { IdentitySession, OrganizationSelectionCandidate } from "../../acce
 import { isRecord, logRefusal, sameId } from "../../catalogue/runtime-primitives";
 import type { BlockPropertyValueContract } from "../../definition/application-composition/block-property-values";
 import { recordsTableContractOrLog } from "../../definition/application-composition/records-display";
-import type { RecordsTableInlineEditor } from "../../definition/application-composition/records-table-features/inline-edit";
+import type { RecordsTableInlineEditor } from "../../definition/application-composition/records-table-features/projections/inline-edit";
 import type { PageDefinition } from "../../definition/application-contracts";
 import { tableColumnLabel } from "../../records/module-field-values";
 import {

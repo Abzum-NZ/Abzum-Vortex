@@ -1,4 +1,3 @@
-import { z } from "zod";
 import {
   factsOf,
   featureAvailable,
@@ -134,17 +133,13 @@ const queryCheck = (
   return featureAvailable;
 };
 
-const positiveSchema = z.number().int().min(1);
-const projectionSchema = z.object({ pageSize: positiveSchema }).strict().readonly();
-
 export const recordsTableTreeFeature: RecordsTableFeatureDefinition<
   RecordsTableTreeSettings,
   "tree"
 > &
-  Readonly<{ property: "tree"; projectionSchema: typeof projectionSchema }> = {
+  Readonly<{ property: "tree" }> = {
   key: "tree",
   property: "tree",
-  projectionSchema,
   settings: featureSettings,
   refusals: [featureRefusal],
   onBoard: "own",

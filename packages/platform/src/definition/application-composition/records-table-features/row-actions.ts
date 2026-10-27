@@ -1,5 +1,3 @@
-import { namedActionAvailabilitySchema } from "../../../pages/named-action-availability-schema";
-import { z } from "zod";
 import type { RecordsTableFeatureProjection } from "../../../pages/records-table-feature-projection";
 import type { ComponentSettingValue } from "../block-property-schema";
 import {
@@ -80,39 +78,10 @@ export const recordsTableRowActionIcons = [
 export const recordsTableActionCapabilities = ["update", "delete", "restore"] as const;
 type RecordsTableActionCapability = (typeof recordsTableActionCapabilities)[number];
 
-const textSchema = z.string().min(1);
-const rowActionSchema = z
-  .object({
-    eventId: textSchema,
-    label: textSchema,
-    icon: z.enum(recordsTableRowActionIcons),
-    placement: z.enum(["inline", "menu"]),
-    capability: z.enum(recordsTableActionCapabilities).optional(),
-  })
-  .strict()
-  .readonly();
-
-const projectionSchema = z
-  .object({
-    actions: z
-      .array(rowActionSchema)
-      .min(1)
-      .max(20)
-      .refine(
-        (actions) => new Set(actions.map((action) => action.eventId)).size === actions.length,
-        "Each row action is named once",
-      )
-      .readonly(),
-    availability: namedActionAvailabilitySchema,
-  })
-  .strict()
-  .readonly();
-
 export const recordsTableRowActionsFeature: RecordsTableFeatureDefinition<object, "row_actions"> &
-  Readonly<{ property: "rowActions"; projectionSchema: typeof projectionSchema }> = {
+  Readonly<{ property: "rowActions" }> = {
   key: "row_actions",
   property: "rowActions",
-  projectionSchema,
   settings: featureSettings,
   refusals: [featureRefusal, rowActionLimitRefusal],
   onBoard: "supported",

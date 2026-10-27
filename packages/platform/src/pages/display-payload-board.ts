@@ -8,8 +8,8 @@ import {
   revisionSchema,
   stableDefinitionReleaseVersionSchema,
 } from "../catalogue/identifiers";
-import { recordsTableFilterFieldsSchema } from "../definition/application-composition/records-table-features/column-filters";
-import { conditionalFormatStylesSchema } from "../definition/application-composition/records-table-features/conditional-formatting";
+import { recordsTableFilterFieldsSchema } from "../definition/application-composition/records-table-features/projections/column-filters";
+import { conditionalFormatStylesSchema } from "../definition/application-composition/records-table-features/projections/conditional-formatting";
 import { pipelineStageToneSchema } from "../definition/record-type-pipelines";
 import { displayFieldsSchema, displayTextSchema, refineUniqueKeys } from "./display-payload-parts";
 import { displayRowCapabilitiesSchema } from "./display-payload-rows";

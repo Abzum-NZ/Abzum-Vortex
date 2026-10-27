@@ -1,4 +1,3 @@
-import { z } from "zod";
 import {
   factsOf,
   featureAvailable,
@@ -279,29 +278,13 @@ const featureRefusal: GridFeatureRefusal = {
     "Choose the choice, stage, link or date field the records are grouped by, or turn Group by off.",
 };
 
-const textSchema = z.string().min(1);
-const onlyTrue = z.literal(true);
-const projectionSchema = z
-  .object({
-    fieldId: textSchema,
-    label: textSchema,
-    unassignedLabel: textSchema,
-    /** The authored opening state: the address overrides it (grouped or flat) for this viewer. */
-    opensGrouped: z.boolean(),
-    /** The table reads a grouped query, so it is always grouped and offers no way to ungroup. */
-    required: onlyTrue.optional(),
-  })
-  .strict()
-  .readonly();
-
 export const recordsTableGroupingFeature: RecordsTableFeatureDefinition<
   RecordsTableGroupingSettings,
   "grouping"
 > &
-  Readonly<{ property: "grouping"; projectionSchema: typeof projectionSchema }> = {
+  Readonly<{ property: "grouping" }> = {
   key: "grouping",
   property: "grouping",
-  projectionSchema,
   settings: featureSettings,
   refusals: [featureRefusal],
   onBoard: "own",
