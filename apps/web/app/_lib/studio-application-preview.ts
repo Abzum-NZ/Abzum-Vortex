@@ -251,22 +251,22 @@ const readPreviewStateIn = (
         ).readApplicationDraftSnapshot(
           context,
           { rootId, expectedDraftRevision: draftRevision },
-          { publication: false },
+          { publication: false, releasable: true },
         );
         const compiled = snapshot.compilation;
         // A compile that failed still leaves the saved draft to read, and only a ready canvas
         // needs its compile.
-        const draft =
-          compiled?.candidate.draft ??
-          (await readApplicationDefinitionDraft(transaction, scope, {
-            rootId,
-            expectedDraftRevision: draftRevision,
-          }));
+        const draft = snapshot.draft;
         if (draft.kind !== "application")
           throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING");
         if (studioPreviewRunsDraft(draft, preview) !== "ready")
           return { kind: "read", draft, preview } as const;
-        if (compiled === null) throw snapshot.failure;
+        if (compiled === null) {
+          console.error(
+            `[studio] canvas compilation refused: ${describeFailure(snapshot.failure)}`,
+          );
+          return failure(snapshot.failure, true);
+        }
         return {
           kind: "read",
           draft,

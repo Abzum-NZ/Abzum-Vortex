@@ -489,7 +489,7 @@ export const loadStudioApplicationDraft = async (
                   rootId: root.data,
                   ...(expectedDraftRevision === undefined ? {} : { expectedDraftRevision }),
                 },
-                { publication: requests.some(publishedOf) },
+                { publication: requests.some(publishedOf), releasable: false },
               );
         const draft =
           snapshot === null
