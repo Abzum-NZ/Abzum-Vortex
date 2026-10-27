@@ -9,10 +9,10 @@ import type {
 } from "../catalogue/validation-errors";
 import {
   plainSourceSettingValue,
-  plainSettingValue,
   type BlockPropertySchemaContract,
   type ComponentSettingFailure,
 } from "./application-composition/block-property-schema";
+import { plainSettingValue } from "./application-composition/component-setting-reading";
 import type { SourceBlockPropertyValueContract } from "./application-composition/block-property-values";
 import type { PlatformBlockRelease } from "./application-composition/platform-block-release";
 import { tablePublishesRecord } from "./application-composition/query-binding-check";

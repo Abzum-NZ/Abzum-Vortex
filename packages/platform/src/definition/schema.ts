@@ -13,6 +13,7 @@ export * from "./application-composition/compiled-query-bindings";
 export * from "./application-composition/records-table-features";
 export * from "./application-composition/platform-block-release";
 export * from "./application-composition/placement-slots";
+export * from "./application-composition/component-setting-reading";
 export * from "./application-composition/compiled-item-tree";
 export * from "./application-composition/custom-components";
 export * from "./application-composition/theme";

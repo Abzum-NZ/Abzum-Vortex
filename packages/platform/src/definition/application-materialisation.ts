@@ -5,12 +5,14 @@ import type {
 } from "../catalogue/validation-errors";
 import {
   findFieldInputBinding,
-  plainSettingValue,
   validateComponentSettingValue,
   type BlockPropertySchemaContract,
   type ComponentSettingFailure,
-  type FieldInputControlKey,
 } from "./application-composition/block-property-schema";
+import {
+  plainSettingValue,
+  type FieldInputControlKey,
+} from "./application-composition/component-setting-reading";
 import {
   blockPropertyValueSchema,
   type BlockPropertyValueContract,
@@ -27,7 +29,7 @@ import {
   pageCompositionSchema,
   type ApplicationShell,
 } from "./application-composition/page-composition";
-import { type PlatformBlockRelease } from "./application-composition/platform-block-release";
+import type { PlatformBlockRelease } from "./application-composition/platform-block-release";
 import { releaseSettingDeclarations } from "./application-composition/placement-slots";
 import { controlReferenceSettingKeys } from "./application-composition/query-binding-check";
 import {

@@ -1,12 +1,14 @@
 import type { fieldTypeKeys } from "../catalogue/catalogues";
 import {
-  componentSettingApplies,
-  plainSettingValue,
   plainSourceSettingValue,
   typedSourceSettingValue,
   type BlockPropertySchemaContract,
   type ComponentSettingFailure,
 } from "./application-composition/block-property-schema";
+import {
+  componentSettingApplies,
+  plainSettingValue,
+} from "./application-composition/component-setting-reading";
 import type { SourceBlockPropertyValueContract } from "./application-composition/block-property-values";
 import { linkDependencyCandidates, type LinkDependencyField } from "./module-link-dependencies";
 

@@ -17,11 +17,12 @@ import {
 import { positiveFiniteSchema } from "./shared";
 import type { BlockPropertyValueContract } from "./block-property-values";
 import { typedSettingValue } from "./block-property-schema";
+import { compiledItemSettingsBy } from "./component-setting-reading";
 import {
   platformBlockDependenciesSchema,
   platformBlockReferenceSchema,
 } from "./platform-block-release";
-import { releaseSettingDeclarations } from "./placement-slots";
+import type { releaseSettingDeclarations } from "./placement-slots";
 import {
   compiledItemReservedProps,
   compiledItemTree,
@@ -205,30 +206,14 @@ export type ProjectedItem = {
 };
 
 /**
- * The typed settings of a compiled item's props, read by the declaration of its block release:
- * each property and derived property the release declares, when the props hold it, typed as the
- * canonical value of that declaration. No other prop is a setting: slots, Puck's context and host
- * wrappers are never read. A held value that is not a value of its declaration fails loudly.
+ * The typed settings of a compiled item's props, each value checked as the canonical value of
+ * its declaration. A held value that is not a value of its declaration fails loudly.
  */
 export const compiledItemSettings = (
   props: Readonly<Record<string, unknown>>,
   release: Parameters<typeof releaseSettingDeclarations>[0],
-): Record<string, BlockPropertyValueContract> => {
-  const settings: Record<string, BlockPropertyValueContract> = {};
-  for (const declaration of releaseSettingDeclarations(release)) {
-    if (!Object.hasOwn(props, declaration.key)) continue;
-    const value = props[declaration.key];
-    // Puck writes `undefined` for an untouched field, which is absent.
-    if (value === undefined) continue;
-    const typed = typedSettingValue(value, declaration);
-    if (typed === undefined)
-      throw new TypeError(
-        `Setting '${declaration.key}' of placement '${String(props.id)}' is not a ${declaration.kind} value`,
-      );
-    settings[declaration.key] = typed;
-  }
-  return settings;
-};
+): Record<string, BlockPropertyValueContract> =>
+  compiledItemSettingsBy(props, release, typedSettingValue);
 
 const breakpointOrderSchema = z
   .object({
