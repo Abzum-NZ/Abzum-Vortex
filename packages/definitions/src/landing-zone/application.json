@@ -718,7 +718,7 @@
                         "props": {
                           "id": "bookmark_entry_label",
                           "field": "vortex.landing_zone:tile.label",
-                          "help_text": "Optional label for external bookmarks. Internal application, page, and record names are resolved live.",
+                          "help_text": "Optional label for application, page, and external bookmarks. Without a label, the target name or address is shown. Record names are resolved live.",
                           "vortex": {
                             "block": {
                               "block_id": "9c4e7a52-6b18-4d3f-8e21-5a7c0d9f2b64",
