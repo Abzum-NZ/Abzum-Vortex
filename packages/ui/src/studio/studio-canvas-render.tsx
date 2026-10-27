@@ -421,12 +421,9 @@ function CanvasBlock({
       },
     })
   ) : (
-    <>
-      <p className="text-xs text-muted-foreground" data-vortex-canvas-records-note={id}>
-        {note}
-      </p>
-      {render(drawn)}
-    </>
+    <p className="text-xs text-muted-foreground" data-vortex-canvas-records-note={id}>
+      {note}
+    </p>
   );
 }
 
