@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { recordsTableGroupingFeature } from "../grouping";
 
 const textSchema = z.string().min(1);
 const onlyTrue = z.literal(true);
@@ -14,3 +15,9 @@ export const groupingProjectionSchema = z
   })
   .strict()
   .readonly();
+
+/** This feature's viewer projection: its definition's property and the strict schema under it. */
+export const groupingProjection = {
+  property: recordsTableGroupingFeature.property,
+  schema: groupingProjectionSchema,
+} as const;

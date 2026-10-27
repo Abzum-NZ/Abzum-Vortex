@@ -1,5 +1,9 @@
 import { z } from "zod";
-import { RECORDS_TABLE_EXPORT_MAXIMUM_ROWS, recordsTableExportFormats } from "../export";
+import {
+  RECORDS_TABLE_EXPORT_MAXIMUM_ROWS,
+  recordsTableExportFormats,
+  recordsTableExportFeature,
+} from "../export";
 
 export const exportProjectionSchema = z
   .object({
@@ -12,3 +16,9 @@ export const exportProjectionSchema = z
   })
   .strict()
   .readonly();
+
+/** This feature's viewer projection: its definition's property and the strict schema under it. */
+export const exportProjection = {
+  property: recordsTableExportFeature.property,
+  schema: exportProjectionSchema,
+} as const;

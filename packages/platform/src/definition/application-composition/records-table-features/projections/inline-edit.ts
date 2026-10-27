@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { recordsTableInlineEditFeature } from "../inline-edit";
 import { projectionFieldKeySchema as fieldKeySchema } from "./field-key";
 
 const textSchema = z.string().min(1);
@@ -131,3 +132,9 @@ export const inlineEditProjectionSchema = z
   .object({ eventId: textSchema, fields: inlineEditFieldsSchema })
   .strict()
   .readonly();
+
+/** This feature's viewer projection: its definition's property and the strict schema under it. */
+export const inlineEditProjection = {
+  property: recordsTableInlineEditFeature.property,
+  schema: inlineEditProjectionSchema,
+} as const;

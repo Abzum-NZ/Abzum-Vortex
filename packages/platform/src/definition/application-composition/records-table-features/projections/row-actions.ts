@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { namedActionAvailabilitySchema } from "../../../../pages/named-action-availability-schema";
-import { recordsTableActionCapabilities, recordsTableRowActionIcons } from "../row-actions";
+import {
+  recordsTableActionCapabilities,
+  recordsTableRowActionIcons,
+  recordsTableRowActionsFeature,
+} from "../row-actions";
 
 const textSchema = z.string().min(1);
 const rowActionSchema = z
@@ -29,3 +33,9 @@ export const rowActionsProjectionSchema = z
   })
   .strict()
   .readonly();
+
+/** This feature's viewer projection: its definition's property and the strict schema under it. */
+export const rowActionsProjection = {
+  property: recordsTableRowActionsFeature.property,
+  schema: rowActionsProjectionSchema,
+} as const;

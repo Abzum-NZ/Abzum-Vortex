@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { projectionFieldKeySchema as fieldKeySchema } from "./field-key";
-import { recordsTableFilterKinds } from "../column-filters";
+import { recordsTableFilterKinds, recordsTableColumnFiltersFeature } from "../column-filters";
 
 const textSchema = z.string().min(1);
 /**
@@ -40,3 +40,9 @@ export const recordsTableFilterFieldsSchema = z
   .readonly();
 
 export const columnFiltersProjectionSchema = recordsTableFilterFieldsSchema;
+
+/** This feature's viewer projection: its definition's property and the strict schema under it. */
+export const columnFiltersProjection = {
+  property: recordsTableColumnFiltersFeature.property,
+  schema: columnFiltersProjectionSchema,
+} as const;

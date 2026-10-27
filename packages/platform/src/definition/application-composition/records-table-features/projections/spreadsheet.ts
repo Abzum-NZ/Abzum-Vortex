@@ -3,6 +3,7 @@ import { projectionFieldKeySchema as fieldKeySchema } from "./field-key";
 import {
   RECORDS_TABLE_STATUS_BAR_MAXIMUM_FIELDS,
   recordsTableStatusBarOperations,
+  recordsTableSpreadsheetFeature,
 } from "../spreadsheet";
 
 const onlyTrue = z.literal(true);
@@ -53,3 +54,9 @@ const spreadsheetSchema = z
   });
 
 export const spreadsheetProjectionSchema = spreadsheetSchema;
+
+/** This feature's viewer projection: its definition's property and the strict schema under it. */
+export const spreadsheetProjection = {
+  property: recordsTableSpreadsheetFeature.property,
+  schema: spreadsheetProjectionSchema,
+} as const;

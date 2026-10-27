@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { projectionFieldKeySchema as fieldKeySchema } from "./field-key";
-import { conditionalFormatIcons, conditionalFormatTokens } from "../conditional-formatting";
+import {
+  conditionalFormatIcons,
+  conditionalFormatTokens,
+  recordsTableConditionalFormattingFeature,
+} from "../conditional-formatting";
 
 const textSchema = z.string().min(1);
 /** The styles a rule names: a closed style of semantic tokens, never a colour or markup. */
@@ -62,3 +66,9 @@ export type ConditionalFormattingProjection = z.output<
   typeof conditionalFormattingProjectionSchema
 >;
 export type ConditionalColumnFormatProjection = z.output<typeof columnFormatSchema>;
+
+/** This feature's viewer projection: its definition's property and the strict schema under it. */
+export const conditionalFormattingProjection = {
+  property: recordsTableConditionalFormattingFeature.property,
+  schema: conditionalFormattingProjectionSchema,
+} as const;

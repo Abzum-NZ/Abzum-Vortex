@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { recordsTableBulkActionRecordLimit } from "../bulk-actions";
+import { recordsTableBulkActionRecordLimit, recordsTableBulkActionsFeature } from "../bulk-actions";
 
 const textSchema = z.string().min(1);
 const bulkActionSchema = z
@@ -13,3 +13,9 @@ const bulkActionSchema = z
   .readonly();
 
 export const bulkActionsProjectionSchema = z.array(bulkActionSchema).min(1).readonly();
+
+/** This feature's viewer projection: its definition's property and the strict schema under it. */
+export const bulkActionsProjection = {
+  property: recordsTableBulkActionsFeature.property,
+  schema: bulkActionsProjectionSchema,
+} as const;
