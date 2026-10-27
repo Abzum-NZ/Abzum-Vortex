@@ -4,6 +4,8 @@ export type StudioCompileFailure = Readonly<{
   family: string;
   /** The rule's own business sentence, when it has one (a Records table feature check, for one). */
   sentence?: string;
+  /** The catalogue's guidance for correcting this refusal. */
+  guidance?: string;
   blockAlias?: string;
   tokenKey?: string;
   /** The module, record type, field or query the refusal is about. */
@@ -16,4 +18,11 @@ export type StudioCompileFailure = Readonly<{
   /** The flow and the step in it the refusal is about. */
   flowKey?: string;
   taskId?: string;
+}>;
+
+/** A saved draft's publication refusal, carried unchanged to Studio's visible readers. */
+export type StudioPreviewNotRunnable = Readonly<{
+  kind: "not_runnable";
+  sentence: string;
+  refusal: StudioCompileFailure;
 }>;

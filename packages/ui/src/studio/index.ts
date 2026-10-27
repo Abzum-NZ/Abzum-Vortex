@@ -43,7 +43,7 @@ export * from "./application-flow-start";
 export * from "./application-record-rules";
 export * from "./module-action-condition";
 export * from "./application-visibility-condition-commands";
-export type { StudioCompileFailure } from "./compile-failure";
+export type { StudioCompileFailure, StudioPreviewNotRunnable } from "./compile-failure";
 export * from "./studio-setting-controls";
 export * from "./studio-grid-features";
 export * from "./grid-features";

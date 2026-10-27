@@ -17,6 +17,7 @@ import {
 import type { PlatformComponentRegistry } from "../registry";
 import { studioReleaseReadsQuery } from "./contextual-palette";
 import { useStudioCanvasGridEvents } from "./studio-canvas-grid";
+import type { StudioCompileFailure } from "./compile-failure";
 
 /**
  * The Studio canvas renders the stored items Puck holds with the one Puck config. A block's render
@@ -54,6 +55,8 @@ export type StudioCanvasRecords = Readonly<{
   state: "loading" | "ready" | "refused" | "not_runnable" | "unavailable";
   /** Why the saved draft cannot run yet, when `state` is `not_runnable`. */
   sentence?: string;
+  /** The publication refusal, including the placement and its own corrective guidance. */
+  refusal?: StudioCompileFailure;
   /** The records of each data block of the saved revision, by block name. */
   records: Readonly<Record<string, unknown>>;
   /** Each block's release, settings and query in the saved revision the records were read for. */
@@ -300,6 +303,40 @@ function CanvasBlock({
       </Item>
     );
   const render = component.render as (props: Record<string, unknown>) => ReactElement;
+  const refusal = records.refusal;
+  if (
+    refusal !== undefined &&
+    (refusal.blockAlias === id ||
+      (refusal.blockAlias === undefined &&
+        release !== undefined &&
+        studioReleaseReadsQuery(release)))
+  )
+    return (
+      <Item
+        variant="outline"
+        role="alert"
+        className="border-destructive"
+        data-vortex-canvas-refusal={id}
+      >
+        <ItemContent>
+          <ItemTitle>
+            {refusal.sentence ?? records.sentence ?? "This block cannot run yet."}
+          </ItemTitle>
+          {refusal.guidance === undefined ? null : (
+            <ItemDescription>{refusal.guidance}</ItemDescription>
+          )}
+        </ItemContent>
+      </Item>
+    );
+  if (records.state === "not_runnable" && release !== undefined && studioReleaseReadsQuery(release))
+    return (
+      <Item variant="outline" data-vortex-canvas-records-note={id}>
+        <ItemContent>
+          <ItemTitle>{release.name}</ItemTitle>
+          <ItemDescription>Records show here once the draft can run.</ItemDescription>
+        </ItemContent>
+      </Item>
+    );
   // A block whose drawing needs what the compiler derives (an automatic field input's control, a
   // data block's resolved fields) is drawn only from a compile of exactly this block. Until then
   // it shows that a save draws it; it is never drawn from settings the compiler has not seen.

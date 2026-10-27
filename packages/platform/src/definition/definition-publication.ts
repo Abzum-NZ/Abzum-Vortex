@@ -58,7 +58,7 @@ import {
   type DefinitionPublicationTransaction,
 } from "./definition-publication-contracts";
 import type { ResolvedDependencies } from "./definition-dependency-resolution";
-import { validateDraftCandidate } from "./definition-publication-compilation";
+import { assertReleasable, validateDraftCandidate } from "./definition-publication-compilation";
 import type { RequestDatabaseTransaction } from "../db/request-transaction";
 import { createDatabaseDefinitionPublicationRepository } from "./publication/publish";
 import {
@@ -565,7 +565,7 @@ export const createDatabaseDefinitionPublicationService = (
     readApplicationDraftSnapshot: async (
       context: SessionContext,
       input: unknown,
-      resources: Readonly<{ publication: boolean }>,
+      resources: Readonly<{ publication: boolean; releasable: boolean }>,
     ) => {
       const command = prepareDefinitionPublicationCommandSchema
         .partial({ expectedDraftRevision: true })
@@ -573,12 +573,20 @@ export const createDatabaseDefinitionPublicationService = (
       if (!command.success) return refuse("INVALID_DEFINITION_PUBLICATION_COMMAND");
       await authorize(authority, context, { kind: "draft_change", rootId: command.data.rootId });
       return storage.read(context, async (reader) => {
-        const stored = await reader.readDraftCandidate(command.data.rootId);
+        // A canvas read judges this revision as publication does, even when its records reuse
+        // the preview's data shape. Read its authenticated history beside the draft once.
+        const stored = resources.releasable
+          ? await reader.readCandidate(command.data.rootId)
+          : await reader.readDraftCandidate(command.data.rootId);
         if (stored === undefined) return refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
-        const candidate = validateDraftCandidate(context, stored, {
+        const expected = {
           rootId: command.data.rootId,
           expectedDraftRevision: command.data.expectedDraftRevision ?? stored.draft.draftRevision,
-        });
+        };
+        const candidate =
+          "releaseHistory" in stored
+            ? applicationCandidate(context, stored, expected)
+            : validateDraftCandidate(context, stored, expected);
         if (candidate.draft.kind !== "application" || candidate.draft.source.kind !== "application")
           return refuse("DEFINITION_DRAFT_STALE_OR_MISSING");
         const overlay = createDraftModuleOverlay(reader, context, candidate.draft);
@@ -586,10 +594,25 @@ export const createDatabaseDefinitionPublicationService = (
           ? await overlay.readOwnedModulePublication(String(candidate.draft.rootId))
           : null;
         try {
+          const compilation = await compileDraftSnapshot(
+            context,
+            reader,
+            overlay,
+            catalogue,
+            candidate,
+          );
+          if (
+            resources.releasable &&
+            candidate.draft.publishedRevision !== candidate.draft.draftRevision
+          ) {
+            if (!("releaseHistory" in stored)) return refuse("DEFINITION_HISTORY_INVALID");
+            retainApplicationDraftPublicationHistory(compilation, stored.releaseHistory);
+            assertReleasable(compilation.releasePlan, stored.releaseHistory, catalogue.permissions);
+          }
           return {
             draft: candidate.draft,
             publication,
-            compilation: await compileDraftSnapshot(context, reader, overlay, catalogue, candidate),
+            compilation,
             failure: undefined,
           };
         } catch (failure) {

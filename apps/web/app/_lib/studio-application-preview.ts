@@ -32,15 +32,19 @@ import {
   type PreviewInstallation,
   type PreviewDemand,
   type SelectedOrganizationScope,
-  definitionValidationMessage,
 } from "@vortex/platform/schema";
+import type { StudioPreviewNotRunnable } from "@vortex/ui/studio";
 import { z } from "zod";
 import { installedReleaseCatalogue } from "./definition-catalogue";
 import { humanOrganizationRequests } from "./server-composition";
 import { platformPermissionSource } from "./platform-permission-source";
 import { loadOrganizationLauncher } from "./organization-context";
 import { organizationAddressPath } from "./address-paths";
-import { studioDraftTargetFacts, studioPreviewShapeFingerprint } from "./studio-application-draft";
+import {
+  studioCompileFailure,
+  studioDraftTargetFacts,
+  studioPreviewShapeFingerprint,
+} from "./studio-application-draft";
 
 const previewRequestSchema = z
   .object({
@@ -58,7 +62,7 @@ export type StudioApplicationPreviewResult =
     }>
   | Readonly<{ kind: "conflict" }>
   /** The saved draft has a problem the builder must fix before it can run: the sentence says which. */
-  | Readonly<{ kind: "not_runnable"; sentence: string }>
+  | StudioPreviewNotRunnable
   | Readonly<{ kind: "temporarily_unavailable" }>;
 
 type PreviewFailure = Exclude<StudioApplicationPreviewResult, { kind: "provisioned" }>;
@@ -126,15 +130,14 @@ const failure = (error: unknown, reported = false): PreviewFailure => {
       return { kind: "temporarily_unavailable" };
   }
   for (let current: unknown = error, depth = 0; depth < 8 && current instanceof Error; depth += 1) {
-    if (current instanceof DefinitionCompilationError)
+    if (current instanceof DefinitionCompilationError) {
+      const refusal = studioCompileFailure(current);
       return {
         kind: "not_runnable",
-        sentence:
-          current.sentence ??
-          (current.code === undefined
-            ? "The draft has a problem to fix before it can run."
-            : definitionValidationMessage(current.code)),
+        sentence: refusal.sentence ?? "The draft has a problem to fix before it can run.",
+        refusal,
       };
+    }
     current = current.cause;
   }
   if (!reported) console.error("[studio] preview provisioning failed", error);
@@ -248,22 +251,22 @@ const readPreviewStateIn = (
         ).readApplicationDraftSnapshot(
           context,
           { rootId, expectedDraftRevision: draftRevision },
-          { publication: false },
+          { publication: false, releasable: true },
         );
         const compiled = snapshot.compilation;
         // A compile that failed still leaves the saved draft to read, and only a ready canvas
         // needs its compile.
-        const draft =
-          compiled?.candidate.draft ??
-          (await readApplicationDefinitionDraft(transaction, scope, {
-            rootId,
-            expectedDraftRevision: draftRevision,
-          }));
+        const draft = snapshot.draft;
         if (draft.kind !== "application")
           throw new DefinitionError("DEFINITION_DRAFT_STALE_OR_MISSING");
         if (studioPreviewRunsDraft(draft, preview) !== "ready")
           return { kind: "read", draft, preview } as const;
-        if (compiled === null) throw snapshot.failure;
+        if (compiled === null) {
+          console.error(
+            `[studio] canvas compilation refused: ${describeFailure(snapshot.failure)}`,
+          );
+          return failure(snapshot.failure, true);
+        }
         return {
           kind: "read",
           draft,

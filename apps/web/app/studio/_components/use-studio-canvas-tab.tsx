@@ -645,7 +645,12 @@ export function useStudioCanvasTab({
         };
       if (result.kind === "refused") return { state: "refused" as const, records: {} };
       if (result.kind === "not_runnable")
-        return { state: "not_runnable" as const, sentence: result.sentence, records: {} };
+        return {
+          state: "not_runnable" as const,
+          sentence: result.sentence,
+          refusal: result.refusal,
+          records: {},
+        };
       // A conflict means a newer save replaced this revision: its compile reads again, and what is shown stays meanwhile.
       if (result.kind === "conflict") return { state: "superseded" as const, records: {} };
       console.error(
