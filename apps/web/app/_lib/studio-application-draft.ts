@@ -1,4 +1,5 @@
 import "server-only";
+import { randomUUID } from "node:crypto";
 
 import { z } from "zod";
 import {
@@ -41,6 +42,7 @@ import {
   moduleQueryBorrowable,
   queryTotalLabel,
   definitionValidationEntry,
+  translateDefinitionRuleFailures,
 } from "@vortex/platform/schema";
 import {
   BuilderAuthorityError,
@@ -376,20 +378,30 @@ export const studioCompileFailure = (error: unknown): StudioCompileFailure => {
         flowKey: keyOf("flow"),
         taskId: keyOf("flow_node"),
       };
+      const entry =
+        current.code !== undefined
+          ? definitionValidationEntry(current.code)
+          : current.location === undefined
+            ? undefined
+            : translateDefinitionRuleFailures(
+                [
+                  {
+                    ruleCode: current.ruleCode,
+                    family: current.family,
+                    location: current.location,
+                  },
+                ],
+                { correlationId: randomUUID(), rootLocation: current.location },
+              ).errors[0];
+      const sentence = current.sentence ?? entry?.message;
       return {
         reasonCode: current.ruleCode,
         family: current.family,
         moduleKeys: segments
           .filter((segment) => segment.kind === "module")
           .map((segment) => segment.key),
-        ...(current.code === undefined
-          ? current.sentence === undefined
-            ? {}
-            : { sentence: current.sentence }
-          : {
-              sentence: current.sentence ?? definitionValidationEntry(current.code).message,
-              guidance: definitionValidationEntry(current.code).guidance,
-            }),
+        ...(sentence === undefined ? {} : { sentence }),
+        ...(entry === undefined ? {} : { guidance: entry.guidance }),
         ...(block === undefined ? {} : { blockAlias: block.key }),
         ...(setting === undefined || setting.key === "theme" ? {} : { tokenKey: setting.key }),
         ...Object.fromEntries(Object.entries(located).filter(([, key]) => key !== undefined)),
