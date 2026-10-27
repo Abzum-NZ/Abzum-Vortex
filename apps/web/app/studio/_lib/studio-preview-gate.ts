@@ -1,4 +1,5 @@
 import { describeFailure } from "@vortex/platform/schema";
+import type { StudioPreviewNotRunnable } from "@vortex/ui/studio";
 import { prepareStudioPreview } from "./studio-reads";
 
 /** Why Studio's readers cannot read the preview's records of a saved revision now. */
@@ -10,7 +11,7 @@ type StudioPreviewNotReady =
   | Readonly<{ kind: "refused" }>
   | Readonly<{ kind: "temporarily_unavailable" }>
   /** The saved draft has a problem to fix before its preview can run. */
-  | Readonly<{ kind: "not_runnable"; sentence: string }>;
+  | StudioPreviewNotRunnable;
 
 /**
  * When the builder's preview runs a saved revision's data shape, so Studio's canvas and Data tab

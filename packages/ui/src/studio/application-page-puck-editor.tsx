@@ -156,6 +156,7 @@ export type StudioCanvasRecordsRead = Readonly<{
   state: StudioCanvasRecords["state"] | "superseded";
   /** Why the saved draft cannot run yet, when `state` is `not_runnable`. */
   sentence?: string;
+  refusal?: StudioCompileFailure;
   records: Readonly<Record<string, unknown>>;
   /** On a page of one record, the record its blocks were read with. */
   sample?: StudioCanvasSample;
@@ -621,8 +622,9 @@ function ApplicationPageSlotPuckEditor({
       saved: savedKeys,
       current: recordKeys(catalogue, slot?.items ?? []),
       updating: updating === true,
+      ...(compileFailure == null ? {} : { refusal: compileFailure }),
     }),
-    [recordsRead, compiledSource, carried, catalogue, savedKeys, slot, updating],
+    [recordsRead, compiledSource, carried, catalogue, savedKeys, slot, updating, compileFailure],
   );
   useEffect(() => {
     const element = well.current;

@@ -40,7 +40,7 @@ import {
   type PeopleDirectoryOwner,
   moduleQueryBorrowable,
   queryTotalLabel,
-  definitionValidationMessage,
+  definitionValidationEntry,
 } from "@vortex/platform/schema";
 import {
   BuilderAuthorityError,
@@ -360,7 +360,7 @@ export const loadStudioCreateAccess = async (
 };
 
 /** A compiler refusal names its rule, family and location; anything else is reported as unexpected. */
-const studioCompileFailure = (error: unknown): StudioCompileFailure => {
+export const studioCompileFailure = (error: unknown): StudioCompileFailure => {
   let current: unknown = error;
   for (let depth = 0; depth < 8 && current instanceof Error; depth += 1) {
     if (current instanceof DefinitionCompilationError) {
@@ -383,8 +383,13 @@ const studioCompileFailure = (error: unknown): StudioCompileFailure => {
           .filter((segment) => segment.kind === "module")
           .map((segment) => segment.key),
         ...(current.code === undefined
-          ? {}
-          : { sentence: definitionValidationMessage(current.code) }),
+          ? current.sentence === undefined
+            ? {}
+            : { sentence: current.sentence }
+          : {
+              sentence: current.sentence ?? definitionValidationEntry(current.code).message,
+              guidance: definitionValidationEntry(current.code).guidance,
+            }),
         ...(block === undefined ? {} : { blockAlias: block.key }),
         ...(setting === undefined || setting.key === "theme" ? {} : { tokenKey: setting.key }),
         ...Object.fromEntries(Object.entries(located).filter(([, key]) => key !== undefined)),

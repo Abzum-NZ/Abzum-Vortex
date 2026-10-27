@@ -39,6 +39,7 @@ import type { ApplicationScope } from "./application-scope";
 export function applicationPageRules(scope: ApplicationScope): void {
   const {
     content,
+    request,
     records,
     pageNavigationPermissionKnown,
     publicPermissionSafe,
@@ -428,6 +429,19 @@ export function applicationPageRules(scope: ApplicationScope): void {
     // grouping fields). The default sort must be the query's leading sort, the order the Query
     // engine actually applies. The Query engine refuses a request for an unselected field.
     for (const placement of placements) {
+      const alias = request?.resolution.identities.find(
+        (identity) =>
+          identity.kind === "block_placement" && identity.identifier === placement.props.id,
+      )?.alias;
+      const placementFailure: typeof failure = (target, rule, family, component, code, sentence) =>
+        failure(
+          target,
+          rule,
+          family,
+          component ?? (alias === undefined ? undefined : { kind: "block", key: alias }),
+          code,
+          sentence,
+        );
       const bound =
         placement.vortex.queryId === undefined
           ? undefined
@@ -460,7 +474,7 @@ export function applicationPageRules(scope: ApplicationScope): void {
           const problem = queryTotalReferenceProblem(declaration.label, String(held.value), totals);
           if (problem !== undefined)
             failures.push(
-              failure(
+              placementFailure(
                 output,
                 "vortex.definition.application_block_settings",
                 "broken_reference",
@@ -483,7 +497,11 @@ export function applicationPageRules(scope: ApplicationScope): void {
       if (bound === undefined) {
         if (blockKey === "platform.display.calendar")
           failures.push(
-            failure(output, "vortex.definition.application_block_settings", "broken_reference"),
+            placementFailure(
+              output,
+              "vortex.definition.application_block_settings",
+              "broken_reference",
+            ),
           );
         continue;
       }
@@ -495,7 +513,7 @@ export function applicationPageRules(scope: ApplicationScope): void {
         bindingFacts,
       ))
         failures.push(
-          failure(
+          placementFailure(
             output,
             "vortex.definition.application_block_settings",
             "invalid_value",
@@ -516,7 +534,11 @@ export function applicationPageRules(scope: ApplicationScope): void {
         detail === undefined
       )
         failures.push(
-          failure(output, "vortex.definition.application_block_settings", "required_value"),
+          placementFailure(
+            output,
+            "vortex.definition.application_block_settings",
+            "required_value",
+          ),
         );
       // A Records table always declares a readable contract: every column with all of its
       // settings, every default sort key and feature entry, and a page size. The refusal names
@@ -526,7 +548,7 @@ export function applicationPageRules(scope: ApplicationScope): void {
           `[publish] ${release?.name ?? "Data grid"} refused: DATA_GRID_SETTING_UNREADABLE path=${tableRead.path}`,
         );
         failures.push(
-          failure(
+          placementFailure(
             output,
             "vortex.definition.application_block_settings",
             "required_value",
@@ -622,7 +644,11 @@ export function applicationPageRules(scope: ApplicationScope): void {
         }
         if (!calendarMappingValid)
           failures.push(
-            failure(output, "vortex.definition.application_block_settings", "broken_reference"),
+            placementFailure(
+              output,
+              "vortex.definition.application_block_settings",
+              "broken_reference",
+            ),
           );
       }
       if (blockKey === "platform.display.chart") {
@@ -649,14 +675,22 @@ export function applicationPageRules(scope: ApplicationScope): void {
           groupedBy[0] !== categoryId
         )
           failures.push(
-            failure(output, "vortex.definition.application_block_settings", "broken_reference"),
+            placementFailure(
+              output,
+              "vortex.definition.application_block_settings",
+              "broken_reference",
+            ),
           );
       }
       if (table === undefined && detail === undefined) continue;
       if (table !== undefined) {
         if (!moduleQueryDefinitionSchema.safeParse(bound).success)
           failures.push(
-            failure(output, "vortex.definition.application_block_settings", "broken_reference"),
+            placementFailure(
+              output,
+              "vortex.definition.application_block_settings",
+              "broken_reference",
+            ),
           );
         // Every enabled grid feature must fit the bound query; publication reports the feature's
         // own business sentence, the one Studio shows beside its switch.
@@ -680,7 +714,7 @@ export function applicationPageRules(scope: ApplicationScope): void {
             feature.check.kind === "not_possible"
           )
             failures.push(
-              failure(
+              placementFailure(
                 output,
                 "vortex.definition.application_block_settings",
                 "unsupported_choice",
@@ -696,7 +730,7 @@ export function applicationPageRules(scope: ApplicationScope): void {
           const viewId = view.viewId.toLowerCase();
           if (defaultViewIds.has(viewId))
             failures.push(
-              failure(
+              placementFailure(
                 output,
                 "vortex.definition.application_block_settings",
                 "unsupported_choice",
@@ -708,7 +742,7 @@ export function applicationPageRules(scope: ApplicationScope): void {
           defaultViewIds.add(viewId);
           if (!gridViewDocumentSchema.safeParse(view.document).success)
             failures.push(
-              failure(
+              placementFailure(
                 output,
                 "vortex.definition.application_block_settings",
                 "unsupported_choice",
@@ -719,7 +753,7 @@ export function applicationPageRules(scope: ApplicationScope): void {
             );
           if (view.role !== "*" && !roles.has(view.role))
             failures.push(
-              failure(
+              placementFailure(
                 output,
                 "vortex.definition.application_block_settings",
                 "unsupported_choice",
@@ -742,7 +776,11 @@ export function applicationPageRules(scope: ApplicationScope): void {
           const value = object(settings)[declaration.key];
           if (value !== undefined && !fieldTypesFit(object(value), declaration, fieldType))
             failures.push(
-              failure(output, "vortex.definition.application_block_settings", "broken_reference"),
+              placementFailure(
+                output,
+                "vortex.definition.application_block_settings",
+                "broken_reference",
+              ),
             );
         }
       }
@@ -786,7 +824,11 @@ export function applicationPageRules(scope: ApplicationScope): void {
           ))
       )
         failures.push(
-          failure(output, "vortex.definition.application_block_settings", "broken_reference"),
+          placementFailure(
+            output,
+            "vortex.definition.application_block_settings",
+            "broken_reference",
+          ),
         );
     }
     if (page.type === "public") {

@@ -1,4 +1,5 @@
 import "server-only";
+import type { StudioPreviewNotRunnable } from "@vortex/ui/studio";
 
 import {
   createRecordChoiceReader,
@@ -134,7 +135,7 @@ type StudioCanvasRecordsResult =
   /** The preview does not run this revision's data shape yet: read once it is ready. */
   | Readonly<{ kind: "following" }>
   /** The saved draft has a problem to fix before its preview can run. */
-  | Readonly<{ kind: "not_runnable"; sentence: string }>
+  | StudioPreviewNotRunnable
   | Readonly<{ kind: "temporarily_unavailable" }>;
 
 /** The compiled slot of one page area beside its stored items, and the block name of each compiled placement. */
