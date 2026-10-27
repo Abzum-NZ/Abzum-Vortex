@@ -1,7 +1,6 @@
 import "server-only";
 
 import type { PreparedApplicationPermissionRegistration } from "../access/permission-registry";
-import { jsonValueSchema } from "../catalogue/common";
 import type { ResolvedPageComposition } from "../pages/page-composition-resolution";
 import { canonicalJson } from "./canonical-json";
 import {
@@ -100,9 +99,10 @@ const requireSection = (
   sections: Readonly<Partial<Record<(typeof installationRuntimeBundleSections)[number], unknown>>>,
   section: (typeof installationRuntimeBundleSections)[number],
 ): unknown => {
-  const parsed = jsonValueSchema.safeParse(sections[section]);
-  if (!parsed.success) throw new Error("INSTALLED_PAGE_BUNDLE_SECTION_UNAVAILABLE");
-  return parsed.data;
+  // The reader returns parsed JSON; the section's contract below checks its shape.
+  const value = sections[section];
+  if (value === undefined) throw new Error("INSTALLED_PAGE_BUNDLE_SECTION_UNAVAILABLE");
+  return value;
 };
 
 const deepFreeze = <Value>(value: Value): Value => {

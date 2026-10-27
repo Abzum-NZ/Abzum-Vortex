@@ -209,11 +209,14 @@ export const prepareApplicationPermissionRegistrationFromReleaseSet = (
   const context = sessionContextSchema.safeParse(contextCandidate);
   if (!context.success || !isLiveSystemContext(context.data))
     throw new PermissionRegistryPreparationError("PERMISSION_REGISTRY_CONTEXT_REFUSED");
+  const releaseSet = systemApplicationBoundReleaseSetResultSchema.safeParse(releaseSetCandidate);
+  if (!releaseSet.success)
+    throw new PermissionRegistryPreparationError("PERMISSION_REGISTRY_DEFINITION_EVIDENCE_INVALID");
   return prepareRegistrationForRelease(
     context.data.organizationId,
     context.data.correlationId,
     commandCandidate,
-    releaseSetCandidate,
+    releaseSet.data,
   );
 };
 
@@ -222,20 +225,21 @@ export const prepareApplicationPermissionRegistrationFromReleaseSet = (
  * scope. It grants nothing: the registration only names the release's declared permissions, and
  * every decision still runs through Access for the signed-in person. The organisation is the
  * request's resolved one, and the release set's own correlation is the evidence correlation, since
- * a human request does not read under a system correlation.
+ * a human request does not read under a system correlation. The caller passes the release set it
+ * has already checked against the release-set contract.
  */
 export const prepareApplicationPermissionRegistrationForHumanRequest = (
   organizationId: string,
   commandCandidate: PrepareApplicationPermissionRegistrationCommand,
-  releaseSetCandidate: unknown,
+  releaseSet: SystemApplicationBoundReleaseSetResult,
 ): PreparedApplicationPermissionRegistration =>
-  prepareRegistrationForRelease(organizationId, undefined, commandCandidate, releaseSetCandidate);
+  prepareRegistrationForRelease(organizationId, undefined, commandCandidate, releaseSet);
 
 const prepareRegistrationForRelease = (
   organizationId: string,
   expectedCorrelationId: string | undefined,
   commandCandidate: PrepareApplicationPermissionRegistrationCommand,
-  releaseSetCandidate: unknown,
+  releaseSet: SystemApplicationBoundReleaseSetResult,
 ): PreparedApplicationPermissionRegistration => {
   const applicationRootId = applicationRootIdSchema.safeParse(commandCandidate?.applicationRootId);
   const releaseRevision = revisionSchema
@@ -244,16 +248,13 @@ const prepareRegistrationForRelease = (
   if (!applicationRootId.success || !releaseRevision.success)
     throw new PermissionRegistryPreparationError("INVALID_PERMISSION_REGISTRY_PREPARATION_COMMAND");
 
-  const releaseSet = systemApplicationBoundReleaseSetResultSchema.safeParse(releaseSetCandidate);
-  if (!releaseSet.success)
-    throw new PermissionRegistryPreparationError("PERMISSION_REGISTRY_DEFINITION_EVIDENCE_INVALID");
-  const application = releaseSet.data.application;
+  const application = releaseSet.application;
   if (
     application.organizationId !== organizationId ||
     (expectedCorrelationId !== undefined && application.correlationId !== expectedCorrelationId) ||
     application.rootId !== applicationRootId.data ||
     application.releaseRevision !== releaseRevision.data ||
-    releaseSet.data.modules.some((module) => module.correlationId !== application.correlationId)
+    releaseSet.modules.some((module) => module.correlationId !== application.correlationId)
   )
     throw new PermissionRegistryPreparationError("PERMISSION_REGISTRY_DEFINITION_EVIDENCE_INVALID");
 
@@ -261,7 +262,7 @@ const prepareRegistrationForRelease = (
   validateApplicationWildcardEvidence(application, catalogue);
   const entries = [
     ...entriesFor(application.rootId, application),
-    ...releaseSet.data.modules.flatMap((module) => entriesFor(application.rootId, module)),
+    ...releaseSet.modules.flatMap((module) => entriesFor(application.rootId, module)),
   ].sort(comparePermissionEntries);
   requireUniqueOwnership(entries);
 
