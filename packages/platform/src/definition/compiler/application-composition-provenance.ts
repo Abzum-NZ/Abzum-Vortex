@@ -1,8 +1,6 @@
 import type { BlockPropertySchemaContract } from "../application-composition/block-property-schema";
-import {
-  releaseSettingDeclarations,
-  type PlatformBlockRelease,
-} from "../application-composition/platform-block-release";
+import { type PlatformBlockRelease } from "../application-composition/platform-block-release";
+import { releaseSettingDeclarations } from "../application-composition/placement-slots";
 import { controlReferenceSettingKeys } from "../application-composition/query-binding-check";
 import type { DefinitionProvenanceEntry } from "../definition-provenance";
 import type { ApplicationSourceDocument } from "../definition-source";

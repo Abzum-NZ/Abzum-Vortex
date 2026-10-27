@@ -24,10 +24,8 @@ import {
   type IdentityAuthorityId,
 } from "../catalogue/identifiers";
 import { sameId, logRefusal } from "../catalogue/runtime-primitives";
-import {
-  compiledPageShellId,
-  applicationShellSchema,
-} from "./application-composition/page-composition";
+import { applicationShellSchema } from "./application-composition/page-composition";
+import { compiledPageShellId } from "./application-composition/compiled-item-tree";
 import { applicationThemeSchema } from "./application-composition/theme";
 import {
   isPresentationOnlyApplicationExperience,

@@ -2,7 +2,7 @@ import "server-only";
 
 import type { JsonValue } from "../../catalogue/common";
 import { compiledPageBindingFacts } from "../../definition/application-composition/compiled-query-bindings";
-import { compiledPageShellId } from "../../definition/application-composition/page-composition";
+import { compiledPageShellId } from "../../definition/application-composition/compiled-item-tree";
 import type { QueryBindingValueType } from "../../definition/application-composition/query-binding-values";
 import {
   readAwaitingMessage,

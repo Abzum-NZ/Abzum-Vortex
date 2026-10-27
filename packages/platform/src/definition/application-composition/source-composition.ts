@@ -12,12 +12,14 @@ import { type ComponentSettingFailure, typedSourceSettings } from "./block-prope
 import type { SourceBlockPropertyValueContract } from "./block-property-values";
 import {
   type PlatformBlockRelease,
-  isRepeatableSlotIdentity,
-  repeatableSlotItemIdentities,
-  repeatableSlotKey,
   reservedItemPropKeys,
   sourcePlatformBlockReferenceSchema,
 } from "./platform-block-release";
+import {
+  isRepeatableSlotIdentity,
+  repeatableSlotItemIdentities,
+  repeatableSlotKey,
+} from "./placement-slots";
 import {
   sourceApplicationShellPresentationSchema,
   sourceResponsivePlacementSchema,

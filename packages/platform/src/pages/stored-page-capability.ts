@@ -23,10 +23,8 @@ import {
 } from "../catalogue/identifiers";
 import { PLATFORM_SERVICE_OPERATIONS } from "../catalogue/platform-service-operation-catalogue";
 import { databaseTimestamp, sameId, describeFailure } from "../catalogue/runtime-primitives";
-import {
-  type CompiledLayout,
-  compiledItemTree,
-} from "../definition/application-composition/page-composition";
+import { type CompiledLayout } from "../definition/application-composition/page-composition";
+import { compiledItemTree } from "../definition/application-composition/compiled-item-tree";
 import { conditionNodeSchema, type ConditionNode } from "../definition/module-foundation-contracts";
 import { installedNamedActionReferenceSchema } from "../records/named-actions";
 import { platformOperationKey } from "../workflows/default-flow-sources";

@@ -27,10 +27,8 @@ import {
   pageCompositionSchema,
   type ApplicationShell,
 } from "./application-composition/page-composition";
-import {
-  releaseSettingDeclarations,
-  type PlatformBlockRelease,
-} from "./application-composition/platform-block-release";
+import { type PlatformBlockRelease } from "./application-composition/platform-block-release";
+import { releaseSettingDeclarations } from "./application-composition/placement-slots";
 import { controlReferenceSettingKeys } from "./application-composition/query-binding-check";
 import {
   type SourceItem,

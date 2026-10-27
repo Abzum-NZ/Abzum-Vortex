@@ -1,10 +1,8 @@
 import { descriptionSchema } from "../../catalogue/common";
 import { ruleIdSchema } from "../../catalogue/identifiers";
 import type { BlockPropertyValueContract } from "../application-composition/block-property-values";
-import {
-  compiledItemSettings,
-  compiledPageItems,
-} from "../application-composition/page-composition";
+import { compiledItemSettings } from "../application-composition/page-composition";
+import { compiledPageItems } from "../application-composition/compiled-item-tree";
 import type { PlatformBlockRelease } from "../application-composition/platform-block-release";
 import type { ApplicationDraft, NavigationItem } from "../application-contracts";
 import {

@@ -4,10 +4,12 @@ import {
   type CompiledItem,
   type CompiledLayout,
   type PageComposition,
+} from "../definition/application-composition/page-composition";
+import {
   compiledItemSlots,
   compiledItemTree,
   compiledPageRootSlots,
-} from "../definition/application-composition/page-composition";
+} from "../definition/application-composition/compiled-item-tree";
 import type { PageDefinition } from "../definition/application-contracts";
 
 export type ResolvedPageComposition = Readonly<{

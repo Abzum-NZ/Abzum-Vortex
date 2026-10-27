@@ -6,10 +6,10 @@ import type {
   OrganizationRecordAccessDeclaration,
 } from "../access/organization-access-decision";
 import {
-  compiledItemSlots,
   type ApplicationShell,
   type CompiledItem,
 } from "../definition/application-composition/page-composition";
+import { compiledItemSlots } from "../definition/application-composition/compiled-item-tree";
 import { pageDefinitionSchema, type PageDefinition } from "../definition/application-contracts";
 import { canonicalJson } from "../definition/canonical-json";
 import type { ConditionNode } from "../definition/module-foundation-contracts";

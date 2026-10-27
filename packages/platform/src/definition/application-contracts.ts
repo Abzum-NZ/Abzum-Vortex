@@ -38,15 +38,17 @@ import { actionInputValueTypes, applicationExperienceStateSchema } from "../cata
 import { permissionDeclarationSchema } from "../access/permissions";
 import {
   applicationShellSchema,
-  compiledItemTree,
-  compiledPageDataOf,
-  compiledPageRootSlots,
-  compiledPageShellId,
   guidedFormPageCompositionSchema,
   pageCompositionSchema,
   type AnyPageComposition,
   type CompiledItem,
 } from "./application-composition/page-composition";
+import {
+  compiledItemTree,
+  compiledPageDataOf,
+  compiledPageRootSlots,
+  compiledPageShellId,
+} from "./application-composition/compiled-item-tree";
 import { applicationThemeSchema } from "./application-composition/theme";
 import { platformBlockDependenciesSchema } from "./application-composition/platform-block-release";
 import { componentFlowBindingSchema } from "./application-flow-bindings";

@@ -1,7 +1,7 @@
 import type { BlockId, SemanticVersion } from "../catalogue/identifiers";
 import type { PlatformBlockRelease } from "./application-composition/platform-block-release";
 import { compiledItemSettings } from "./application-composition/page-composition";
-import { releaseSettingDeclarations } from "./application-composition/platform-block-release";
+import { releaseSettingDeclarations } from "./application-composition/placement-slots";
 import { sameCanonicalValue } from "./canonical-json-definition";
 import type { PrepareDefinitionPublicationResult } from "./definition-store-contracts";
 import { asRecord } from "../catalogue/runtime-primitives";

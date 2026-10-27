@@ -6,7 +6,7 @@ import {
   placementBlockRelease,
   placementSettings,
 } from "../application-composition-catalogue";
-import { releaseSettingDeclarations } from "../application-composition/platform-block-release";
+import { releaseSettingDeclarations } from "../application-composition/placement-slots";
 import type { BlockPropertySchemaContract } from "../application-composition/block-property-schema";
 import {
   type RecordValue,
