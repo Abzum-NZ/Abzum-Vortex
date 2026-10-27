@@ -1,11 +1,7 @@
 import {
   describeFailure,
-  flowBindingInvocationSchema,
   flowRefusalFeedbackSchema,
-  flowWarningNoticeSchema,
   type FlowWarningNotice,
-  formContinuationReceiptSchema,
-  formContinuationTargetSchema,
   type FlowBindingInvocation,
   type FlowRefusalFeedback,
   type FormContinuationAnswer,
@@ -110,6 +106,21 @@ const invalidServerResponse = (cause: unknown = new TypeError("FLOW_SERVER_RESPO
 const parseIntents = (candidate: unknown): readonly FlowIntent[] | undefined =>
   Array.isArray(candidate) && candidate.every(isFlowIntent) ? candidate : undefined;
 
+/** Exactly a committed save's authored warning: its task and a non-blank message. */
+const isWarningNotice = (candidate: unknown): candidate is FlowWarningNotice =>
+  isRecord(candidate) &&
+  Object.keys(candidate).length === 2 &&
+  typeof candidate.taskId === "string" &&
+  typeof candidate.message === "string" &&
+  candidate.message.length > 0;
+
+/**
+ * The paused target and run receipt are evidence the server built through their contracts. The
+ * page keeps them unchanged and returns them with the continuation, where the endpoint's strict
+ * request contract and the server's trusted state check them again.
+ */
+const isEvidence = (candidate: unknown): boolean => candidate === undefined || isRecord(candidate);
+
 /** Fails closed: anything that is not exactly one of the endpoint's answers is `unavailable`. */
 export const parseServerFlowResponse = (candidate: unknown): ServerFlowResponse => {
   if (!isRecord(candidate)) return invalidServerResponse();
@@ -124,30 +135,16 @@ export const parseServerFlowResponse = (candidate: unknown): ServerFlowResponse 
         : invalidServerResponse();
     case "intent": {
       const intents = parseIntents(candidate.intents);
-      const target =
-        candidate.target === undefined
-          ? undefined
-          : formContinuationTargetSchema.safeParse(candidate.target);
-      const receipt =
-        candidate.receipt === undefined
-          ? undefined
-          : formContinuationReceiptSchema.safeParse(candidate.receipt);
       if (
         intents === undefined ||
-        target?.success === false ||
-        receipt?.success === false ||
+        !isEvidence(candidate.target) ||
+        !isEvidence(candidate.receipt) ||
         typeof candidate.runId !== "string" ||
         (candidate.awaiting !== "form" && candidate.awaiting !== "confirm") ||
         typeof candidate.continuation !== "string" ||
         typeof candidate.expiresAt !== "string"
       )
-        return invalidServerResponse(
-          target?.success === false
-            ? target.error
-            : receipt?.success === false
-              ? receipt.error
-              : undefined,
-        );
+        return invalidServerResponse();
       return {
         kind: "intent",
         runId: candidate.runId,
@@ -155,13 +152,18 @@ export const parseServerFlowResponse = (candidate: unknown): ServerFlowResponse 
         intents,
         continuation: candidate.continuation,
         expiresAt: candidate.expiresAt,
-        ...(target?.success ? { target: target.data } : {}),
-        ...(receipt?.success ? { receipt: receipt.data } : {}),
+        ...(candidate.target === undefined
+          ? {}
+          : { target: candidate.target as FormContinuationTarget }),
+        ...(candidate.receipt === undefined
+          ? {}
+          : { receipt: candidate.receipt as FormContinuationReceipt }),
       };
     }
     case "result": {
-      const warnings = flowWarningNoticeSchema.array().safeParse(candidate.warnings);
-      if (!warnings.success) return invalidServerResponse(warnings.error);
+      const warnings = candidate.warnings;
+      if (!Array.isArray(warnings) || !warnings.every(isWarningNotice))
+        return invalidServerResponse();
       const intents = parseIntents(candidate.intents);
       const descriptor = candidate.descriptor;
       if (
@@ -204,7 +206,7 @@ export const parseServerFlowResponse = (candidate: unknown): ServerFlowResponse 
       }
       return {
         kind: "result",
-        warnings: warnings.data,
+        warnings,
         runId: candidate.runId,
         descriptor: {
           outcome: descriptor.outcome,
@@ -236,15 +238,14 @@ export function createFlowInvokeClient(options: FlowInvokeClientOptions): FlowIn
   ): Promise<ServerFlowResponse> => {
     if (signal?.aborted) return unavailable;
     try {
-      const parsedInvocation = flowBindingInvocationSchema.safeParse(invocation);
-      if (!parsedInvocation.success) return refused;
       const response = await (options.fetchImplementation ?? fetch)(endpoint, {
         method: "POST",
         headers: { "content-type": "application/json" },
         credentials: "same-origin",
         cache: "no-store",
         ...(signal === undefined ? {} : { signal }),
-        // Exactly the endpoint's strict request shape: the addressed page and the invocation.
+        // Exactly the endpoint's strict request shape: the addressed page and the invocation. The
+        // endpoint checks it against the invocation contract and refuses anything else.
         body: JSON.stringify({
           tenantShortName: options.address.tenantShortName,
           organizationShortName: options.address.organizationShortName,
@@ -253,7 +254,7 @@ export function createFlowInvokeClient(options: FlowInvokeClientOptions): FlowIn
           ...(options.address.pageRecordId === undefined
             ? {}
             : { pageRecordId: options.address.pageRecordId }),
-          invocation: parsedInvocation.data,
+          invocation,
         }),
       });
       if (response.status === 401 || response.status === 403 || response.status === 413)

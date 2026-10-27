@@ -50,7 +50,8 @@ import {
 import { applicationThemeSchema } from "./application-composition/theme";
 import { platformBlockDependenciesSchema } from "./application-composition/platform-block-release";
 import { componentFlowBindingSchema } from "./application-flow-bindings";
-import { flowSchema, maximumFlowConfirmationDetailLines } from "../workflows/flow-contracts";
+import { flowSchema } from "../workflows/flow-contracts";
+import { maximumFlowConfirmationDetailLines } from "../workflows/flow-confirmation-limits";
 import { vortexIconNameSchema } from "../catalogue/icon-names";
 
 /** The typed inputs and shape of one Application-owned action. */
