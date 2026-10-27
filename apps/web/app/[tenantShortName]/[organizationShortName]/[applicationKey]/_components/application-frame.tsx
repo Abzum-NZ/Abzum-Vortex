@@ -11,7 +11,12 @@ import {
   type ReactNode,
 } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { compiledItemTree, recordIdSchema, sameId } from "@vortex/platform/schema";
+import {
+  compiledItemTree,
+  recordIdSchema,
+  sameId,
+  readCompiledItemSettings,
+} from "@vortex/platform/schema";
 import {
   ApplicationAccountActionsProvider,
   ContentTransition,
@@ -331,6 +336,7 @@ export function ApplicationFrame({
       <ApplicationAccountActionsProvider actions={accountActions}>
         <PageNavigationBusyContext.Provider value={pageTransitionPending}>
           <PagePuckRenderer
+            readSettings={readCompiledItemSettings}
             applicationSurface
             composition={frame}
             registry={registry}

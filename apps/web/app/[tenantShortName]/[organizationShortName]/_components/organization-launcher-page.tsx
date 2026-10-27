@@ -1,5 +1,6 @@
 "use client";
 
+import { readCompiledItemSettings } from "@vortex/platform/schema";
 import type { ReactElement } from "react";
 import { useMemo } from "react";
 import { useRouter } from "next/navigation";
@@ -71,6 +72,7 @@ function OrganizationShellPage({
       }}
     >
       <PagePuckRenderer
+        readSettings={readCompiledItemSettings}
         composition={rendered.page}
         {...(rendered.shell === undefined ? {} : { shell: rendered.shell })}
         registry={registry}

@@ -2,7 +2,7 @@ import type { ReactElement } from "react";
 import {
   PLATFORM_BLOCK_RELEASE_IDENTITIES,
   attachmentListPayloadSchema,
-  validateComponentSettings,
+  componentSettingShapeFailures,
   type AttachmentListPayload,
 } from "@vortex/platform/schema";
 import { Card, CardContent, CardHeader } from "./components/card";
@@ -74,7 +74,7 @@ export function SearchAttachmentDisplay(
       "Attachment list received a different immutable release",
       location,
     );
-  if (validateComponentSettings(props.settings, metadata.properties).length !== 0)
+  if (componentSettingShapeFailures(props.settings, metadata.properties).length !== 0)
     return refuse(location);
 
   const {

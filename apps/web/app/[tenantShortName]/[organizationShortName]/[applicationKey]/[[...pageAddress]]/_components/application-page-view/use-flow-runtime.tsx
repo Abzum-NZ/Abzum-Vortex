@@ -33,6 +33,7 @@ import {
   type ReferenceChoiceSelectionEvidenceMap,
   isRecord,
   sameId,
+  readCompiledItemSettings,
 } from "@vortex/platform/schema";
 import { Button } from "@vortex/ui/components/button";
 import { DialogFooter } from "@vortex/ui/components/dialog";
@@ -324,6 +325,7 @@ export function useFlowRuntime({
             <div ref={dialogFormRef} className="flex flex-col gap-4">
               <UnsavedWorkProvider>
                 <PagePuckRenderer
+                  readSettings={readCompiledItemSettings}
                   composition={surface.composition}
                   registry={platformComponentRegistry}
                   fieldInputControlReleases={fieldInputControlReleases}

@@ -29,7 +29,11 @@ import {
 import { DateFormatProvider } from "./display/date-format-context";
 import { Button } from "./components/button";
 import { Item } from "./components/item";
-import { validatePlacementTree, type Breakpoint } from "./definition-error";
+import {
+  validatePlacementTree,
+  type Breakpoint,
+  type PlacementSettingsReader,
+} from "./definition-error";
 import {
   assertRuntimeInputKeysArePlacements,
   type PlatformComponentRegistry,
@@ -58,6 +62,7 @@ type ResolvedPageInputs = Readonly<{
   composition: PagePuckRendererProps["composition"];
   shell: PagePuckRendererProps["shell"];
   registry: PlatformComponentRegistry;
+  readSettings: PlacementSettingsReader;
   pageId: string | undefined;
   activeStepId: string | undefined;
   breakpoint: Breakpoint | undefined;
@@ -82,12 +87,13 @@ const resolvedPages = new WeakMap<
  * through Puck metadata and never repeat it.
  */
 const resolvedPageData = (inputs: ResolvedPageInputs): ResolvedPageData => {
-  const { composition, shell, registry, pageId, activeStepId, breakpoint } = inputs;
+  const { composition, shell, registry, readSettings, pageId, activeStepId, breakpoint } = inputs;
   const entries = resolvedPages.get(composition) ?? [];
   const cached = entries.find(
     (entry) =>
       entry.inputs.shell === shell &&
       entry.inputs.registry === registry &&
+      entry.inputs.readSettings === readSettings &&
       entry.inputs.pageId === pageId &&
       entry.inputs.activeStepId === activeStepId &&
       entry.inputs.breakpoint === breakpoint,
@@ -101,7 +107,10 @@ const resolvedPageData = (inputs: ResolvedPageInputs): ResolvedPageData => {
   };
   // A permission-projected layout may hold a required slot the viewer was refused every child
   // of; publication itself refuses an empty required slot.
-  validatePlacementTree(layout, registry, location, { allowEmptyRequiredSlots: true });
+  validatePlacementTree(layout, registry, location, {
+    readSettings,
+    allowEmptyRequiredSlots: true,
+  });
   validateProjectedAvailabilityTree(layout, location);
   const rootShell: ApplicationPuckRootShell =
     shell === undefined
@@ -138,6 +147,11 @@ export type PagePuckRendererProps = Readonly<{
    */
   breakpoint?: Breakpoint;
   registry: PlatformComponentRegistry;
+  /**
+   * How every placement's settings are read: `readCompiledItemSettings` for a published
+   * composition, `compiledItemSettings` (every value checked) for one Studio is editing.
+   */
+  readSettings: PlacementSettingsReader;
   fieldInputControlReleases: FieldInputControlReleaseMap;
   platformThemeTokens: PlatformThemeTokens;
   /** The application shell that frames the page; absent for the platform default frame. */
@@ -213,6 +227,7 @@ export function PagePuckRenderer({
   composition,
   breakpoint,
   registry,
+  readSettings,
   fieldInputControlReleases,
   platformThemeTokens,
   shell,
@@ -245,6 +260,7 @@ export function PagePuckRenderer({
     composition,
     shell,
     registry,
+    readSettings,
     pageId,
     activeStepId,
     breakpoint,
@@ -266,6 +282,7 @@ export function PagePuckRenderer({
   const themeRootProps = createThemeRootProps(applicationTheme, platformThemeTokens);
   const vortexStyleProps = createVortexStyleRootProps(vortexStyle);
   const metadata: VortexPuckMetadata = {
+    readSettings,
     ...(breakpoint === undefined ? {} : { breakpoint }),
     ...(runtimeInputs === undefined ? {} : { runtimeInputs }),
     ...(projectedNavigation === undefined ? {} : { projectedNavigation }),

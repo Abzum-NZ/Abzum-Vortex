@@ -1,5 +1,4 @@
 import {
-  compiledItemSettings,
   compiledItemSlots,
   repeatableSlotItemIdentities,
   repeatableSlotKey,
@@ -72,17 +71,28 @@ export class DefinitionRenderError extends Error {
 }
 
 /**
- * The typed settings of one placement's props, read by its release's declaration: each declared
- * property and derived property the props hold. A held value that is not a value of its
- * declaration fails closed as an invalid composition at that placement.
+ * How a host reads a placement's settings: kind tagged from its release's declaration, and
+ * checked when the host's compositions are not checked where they are produced. A runtime page
+ * reads a published composition (`readCompiledItemSettings`); Studio, whose compositions change
+ * under the editor, checks every value (`compiledItemSettings`).
+ */
+export type PlacementSettingsReader = (
+  props: Readonly<Record<string, unknown>>,
+  release: PlatformBlockRelease,
+) => Readonly<Record<string, BlockPropertyValueContract>>;
+
+/**
+ * The typed settings of one placement's props, read by its host's reader. A held value the reader
+ * refuses fails closed as an invalid composition at that placement.
  */
 export function placementSettings(
   props: Readonly<Record<string, unknown>>,
   release: PlatformBlockRelease,
   location: DefinitionRenderErrorLocation,
+  read: PlacementSettingsReader,
 ): Readonly<Record<string, BlockPropertyValueContract>> {
   try {
-    return compiledItemSettings(props, release);
+    return read(props, release);
   } catch (error) {
     throw new DefinitionRenderError(
       "INVALID_COMPOSITION",
@@ -231,6 +241,12 @@ export function validateSlotOrder(
   return orderList;
 }
 
+/** How a placement tree is judged: the host's settings reader, and whether a required slot may be empty. */
+export type PlacementTreeOptions = Readonly<{
+  readSettings: PlacementSettingsReader;
+  allowEmptyRequiredSlots?: boolean;
+}>;
+
 /**
  * Validates child slots and category restrictions:
  * 1. An item's slots must only be keys declared in metadata.slots.
@@ -240,8 +256,8 @@ export function validatePlacementSlots(
   item: CompiledItem,
   metadata: PlatformBlockRelease,
   registry: PlatformComponentRegistry,
-  location: DefinitionRenderErrorLocation = {},
-  options: Readonly<{ allowEmptyRequiredSlots?: boolean }> = {},
+  location: DefinitionRenderErrorLocation,
+  options: PlacementTreeOptions,
 ): void {
   // A repeatable declaration's own key names only its family, never a slot.
   const declaredSlots = new Map(
@@ -253,7 +269,10 @@ export function validatePlacementSlots(
   const repeatableSlots = new Map<string, PlatformBlockRelease["slots"][number]>();
   for (const declaration of metadata.slots) {
     if (declaration.repeats === undefined) continue;
-    for (const identity of repeatableSlotItemIdentities(declaration, placementSettings(item.props, metadata, location)))
+    for (const identity of repeatableSlotItemIdentities(
+      declaration,
+      placementSettings(item.props, metadata, location, options.readSettings),
+    ))
       repeatableSlots.set(repeatableSlotKey(declaration.key, identity), declaration);
   }
 
@@ -342,8 +361,8 @@ export function validatePlacementSlots(
 export function validatePlacementTree(
   layout: CompiledLayout,
   registry: PlatformComponentRegistry,
-  location: DefinitionRenderErrorLocation = {},
-  options: Readonly<{ allowEmptyRequiredSlots?: boolean }> = {},
+  location: DefinitionRenderErrorLocation,
+  options: PlacementTreeOptions,
 ): void {
   const seenPlacementIds = new Set<string>();
 
@@ -392,13 +411,22 @@ export function validatePlacementTree(
       }
 
       validateAccessibleName(
-        placementSettings(item.props, registration.metadata, placementLocation),
+        placementSettings(
+          item.props,
+          registration.metadata,
+          placementLocation,
+          options.readSettings,
+        ),
         registration.metadata.capabilities,
         placementLocation,
       );
       validatePlacementSlots(item, registration.metadata, registry, placementLocation, options);
 
-      const layouts = [vortex.responsive.desktop, vortex.responsive.tablet, vortex.responsive.phone];
+      const layouts = [
+        vortex.responsive.desktop,
+        vortex.responsive.tablet,
+        vortex.responsive.phone,
+      ];
       if (
         !registration.metadata.capabilities.responsiveVisibility &&
         layouts.some((entry) => entry.visible !== layouts[0]?.visible)
