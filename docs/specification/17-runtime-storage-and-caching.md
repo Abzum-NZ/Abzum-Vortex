@@ -210,7 +210,8 @@ verifies its exact active registration in that organisation under the same Acces
 before initializing the application-bound context. The organisation-only route remains valid.
 
 The runtime then validates and initializes the complete closed [session-context
-contract](appendices/data-contracts.md#session-context), enters `vortex_request` with `SET LOCAL ROLE`,
+contract](appendices/data-contracts.md#session-context), enters `vortex_request` with a transaction-local
+`set_config('role', 'vortex_request', true)` in the initializer's statement,
 and runs protected service SQL without leaving that transaction. `vortex_runtime` may call only the
 safe launcher, Access scope composer and initializer; the exact Identity scope resolver remains an
 owner-only helper callable through that Access composer. The request role
