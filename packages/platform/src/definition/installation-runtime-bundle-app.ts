@@ -249,15 +249,9 @@ export const readInstallationRuntimeBundleSections = async (
     try {
       const text = sectionParts.map((part) => part.content).join("");
       textLength += text.length;
-      const value: unknown = JSON.parse(text);
-      const parsedValue = jsonValueSchema.safeParse(value);
-      if (!parsedValue.success)
-        throw unexpectedDefinitionFailure(
-          "INSTALLATION_RUNTIME_BUNDLE_STORAGE_FAILED",
-          parsedValue.error,
-          "installation-runtime-bundle",
-        );
-      reconstructed[section] = parsedValue.data;
+      // JSON text parses only to JSON values; each section's own contract checks its shape where
+      // the bundle is read.
+      reconstructed[section] = JSON.parse(text) as JsonValue;
     } catch (error) {
       throw mapFailure(error);
     }

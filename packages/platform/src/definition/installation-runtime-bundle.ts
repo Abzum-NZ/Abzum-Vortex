@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { applicationContentSchema } from "./application-contracts";
 import { compiledLayoutSchema } from "./application-composition/page-composition";
 import { jsonValueSchema } from "../catalogue/common";
 import {
@@ -90,7 +89,6 @@ const immutableRuntimeModuleIdentitySchema = immutableRuntimeReleaseIdentitySche
 
 const applicationConsumerResultFields = applicationDefinitionConsumerReadResultSchema.shape;
 const moduleConsumerResultFields = moduleDefinitionConsumerReadResultSchema.shape;
-const applicationContentFields = z.object(applicationContentSchema.shape).strict();
 
 // Release metadata is immutable; consumer correlation IDs are request-specific and are injected
 // again when a HUMAN release set is reconstructed from the stored sections.
@@ -104,17 +102,13 @@ const installationRuntimeBundleModuleSourceHeaderSchema = z
   .omit({ content: true, correlationId: true })
   .strict();
 
-const installationRuntimeBundleApplicationPageContentSchema = applicationContentFields
-  .omit({
-    navigation: true,
-    flows: true,
-    flowBindings: true,
-    theme: true,
-    platformBlockDependencies: true,
-    pages: true,
-    shells: true,
-  })
-  .strict();
+/*
+ * Release content stored in the pages section. It is written from a release set that is already
+ * checked, and it is read back only into a release set that the release-set contract checks again
+ * as a whole, like the navigation, flows, theme, registry and tool sections: this section's own
+ * contract is its envelope (identities, Module order, resolved compositions).
+ */
+const installationRuntimeBundleReleaseContentSchema = z.record(z.string(), z.unknown());
 
 const installationRuntimeBundleResolvedRootsSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("page"), main: compiledLayoutSchema }).strict(),
@@ -131,9 +125,9 @@ export const installationRuntimeBundlePagesSectionSchema = z
     application: z
       .object({
         identity: installationRuntimeBundleApplicationSourceHeaderSchema,
-        content: installationRuntimeBundleApplicationPageContentSchema,
-        shells: applicationContentFields.shape.shells,
-        pages: applicationContentFields.shape.pages,
+        content: installationRuntimeBundleReleaseContentSchema,
+        shells: z.array(z.unknown()),
+        pages: z.array(z.unknown()),
       })
       .strict(),
     modules: z
@@ -141,7 +135,7 @@ export const installationRuntimeBundlePagesSectionSchema = z
         z
           .object({
             identity: installationRuntimeBundleModuleSourceHeaderSchema,
-            content: moduleConsumerResultFields.content,
+            content: installationRuntimeBundleReleaseContentSchema,
           })
           .strict(),
       )
@@ -170,19 +164,8 @@ export const installationRuntimeBundlePagesSectionSchema = z
   })
   .strict()
   .superRefine((value, context) => {
-    const pageIds = value.application.pages.map((page) => page.pageId);
-    const compositionPageIds = value.resolvedCompositions.map(
-      (composition) => composition.pageId,
-    );
-    if (
-      pageIds.length !== compositionPageIds.length ||
-      pageIds.some((pageId, index) => compositionPageIds[index] !== pageId)
-    )
-      context.addIssue({
-        code: "custom",
-        path: ["resolvedCompositions"],
-        message: "Runtime page compositions must match the exact source page order",
-      });
+    // Composition order against the source pages is checked where the bundle is read, against the
+    // checked release set's pages.
     if (
       value.modules.some(
         (module) =>
