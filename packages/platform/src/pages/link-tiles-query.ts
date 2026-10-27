@@ -590,8 +590,14 @@ async function resolveLinkTiles(
               "application_target_batch_result_missing",
               new Error("LINK_TILE_TARGET_BATCH_RESULT_MISSING"),
             );
-          if (result?.availability === "available")
-            target = { ...result, openBehaviour: behaviour };
+          if (result?.availability === "available") {
+            const label = value(binding.mapping.label.fieldId);
+            target = {
+              ...result,
+              label: typeof label === "string" && label.trim() !== "" ? label : result.label,
+              openBehaviour: behaviour,
+            };
+          }
         } else {
           const reference = targetReadsBySource.get(source.recordId);
           const result = reference?.kind === "record" ? recordReads.get(reference.key) : undefined;
