@@ -229,8 +229,13 @@ const createResolvedRequestTransactionRunner =
         ...(parsedChannel === undefined ? {} : { channel: parsedChannel.data }),
       });
 
-      await transaction.query`select vortex_platform.initialize(${serialized}::text::jsonb)`;
-      await transaction.query`set local role vortex_request`;
+      // One statement initialises the request context and then switches to the request role:
+      // the select list runs in order, so the role changes only once the context is accepted
+      // (`set_config('role', ..., true)` is what `set local role` does).
+      await transaction.query`
+        select vortex_platform.initialize(${serialized}::text::jsonb),
+          pg_catalog.set_config('role', 'vortex_request', true)
+      `;
 
       const run = () =>
         invokeRequestDatabaseCallback(() =>
