@@ -244,35 +244,13 @@ const evaluatePlacement = async (
   };
 };
 
-/**
- * Projects one loaded page capability for the viewer: the page gate, then each placement's view and
- * use gates, visibility condition and bound action, all decided in this one verified transaction.
- * The page gate and every placement's permission gate are decided together in one batch
- * statement; a record placement gate keeps its own availability read. Undefined when the page is
- * not the viewer's to open.
- */
-export const projectAuthenticatedPageCapability = async (
+/** Batch the same page and placement declarations for a full page or a scoped projection. */
+const placementDecisions = async (
   transaction: RequestDatabaseTransaction,
   scope: SelectedOrganizationScope,
   loaded: FixedAuthenticatedPageCapability,
-  evaluators: PageCapabilityEvaluators,
-): Promise<ProjectedPageCapability | undefined> => {
-  const page = pageDefinitionSchema.parse(loaded.page);
-  if (
-    loaded.resolvedComposition !== undefined &&
-    (loaded.resolvedCompositionContext === undefined ||
-      !isTrustedInstalledPageComposition(
-        loaded.resolvedCompositionContext,
-        loaded.resolvedComposition,
-      ) ||
-      canonicalJson(loaded.resolvedComposition.page) !== canonicalJson(page))
-  )
-    throw new Error("PAGE_CAPABILITY_BINDING_UNAVAILABLE");
-  const resolved =
-    loaded.resolvedComposition ?? resolvePageComposition(page, loaded.applicationShells);
-  if (!sameKey(loaded.pagePermission.permissionKey, page.accessPermissionKey))
-    throw new Error("PAGE_CAPABILITY_BINDING_UNAVAILABLE");
-
+  required: readonly RequiredPlacement[],
+) => {
   // One projection transaction decides each exact declaration once; repeated declarations
   // reuse the decision and its validity deadline.
   const decided = new Map<string, GateDecision>();
@@ -281,7 +259,7 @@ export const projectAuthenticatedPageCapability = async (
       kind: isRecordPlacementBinding(binding) ? "record" : "permission",
       declaration: binding.declaration,
     });
-  const placementGates = requiredPlacements(resolved).flatMap((required) => {
+  const placementGates = required.flatMap((required) => {
     const binding = loaded.placements[required.placementId];
     return [
       required.viewPermissionKey !== undefined &&
@@ -318,7 +296,39 @@ export const projectAuthenticatedPageCapability = async (
     }
     return decision;
   };
-  const pageAccess = await decide(loaded.pagePermission);
+  return { decide, pageAccess: await decide(loaded.pagePermission) };
+};
+
+/**
+ * Projects one loaded page capability for the viewer: the page gate, then each placement's view and
+ * use gates, visibility condition and bound action, all decided in this one verified transaction.
+ * The page gate and every placement's permission gate are decided together in one batch
+ * statement; a record placement gate keeps its own availability read. Undefined when the page is
+ * not the viewer's to open.
+ */
+export const projectAuthenticatedPageCapability = async (
+  transaction: RequestDatabaseTransaction,
+  scope: SelectedOrganizationScope,
+  loaded: FixedAuthenticatedPageCapability,
+  evaluators: PageCapabilityEvaluators,
+): Promise<ProjectedPageCapability | undefined> => {
+  const page = pageDefinitionSchema.parse(loaded.page);
+  if (
+    loaded.resolvedComposition !== undefined &&
+    (loaded.resolvedCompositionContext === undefined ||
+      !isTrustedInstalledPageComposition(
+        loaded.resolvedCompositionContext,
+        loaded.resolvedComposition,
+      ) ||
+      canonicalJson(loaded.resolvedComposition.page) !== canonicalJson(page))
+  )
+    throw new Error("PAGE_CAPABILITY_BINDING_UNAVAILABLE");
+  const resolved =
+    loaded.resolvedComposition ?? resolvePageComposition(page, loaded.applicationShells);
+  if (!sameKey(loaded.pagePermission.permissionKey, page.accessPermissionKey))
+    throw new Error("PAGE_CAPABILITY_BINDING_UNAVAILABLE");
+  const requiredList = requiredPlacements(resolved);
+  const { decide, pageAccess } = await placementDecisions(transaction, scope, loaded, requiredList);
   if (!pageAccess.allowed) return undefined;
   const correlations = new Set([
     pageAccess.correlationId.toLowerCase(),
@@ -336,7 +346,7 @@ export const projectAuthenticatedPageCapability = async (
   retainEarliestAccessEligibility(pageAccess.validUntil);
   const states: Record<string, PageCapabilityState["placements"][string]> = {};
   const hiddenPlacements = new Set<string>();
-  for (const required of requiredPlacements(resolved)) {
+  for (const required of requiredList) {
     if (states[required.placementId] !== undefined) continue;
     const binding = loaded.placements[required.placementId];
     if (binding === undefined) throw new Error("PAGE_CAPABILITY_BINDING_UNAVAILABLE");
