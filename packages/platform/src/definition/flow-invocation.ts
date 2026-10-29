@@ -70,7 +70,7 @@ import {
 import { admitPageGesture } from "./flow-admission-page";
 import { admitRowForm } from "./flow-row-form-admission";
 import { openFlowCarriedValues, sealFlowCarriedValues } from "../workflows/flow-carried-values";
-import { createHumanInstalledPageBundleContextLoader } from "./installed-page-bundle-context";
+import { createInstalledContextLoader } from "./installed-page-bundle-context";
 import type { InstalledRuntimeContext } from "./installed-runtime-context";
 import { installedNamedActionDescriptors, installedNamedActions } from "./installed-named-actions";
 import { runtimeContextSelection } from "./runtime-preview";
@@ -299,17 +299,7 @@ export async function invokeInstalledFlow(
     permissions: dependencies.releaseCatalogue.permissions,
     createInstalledContextLoader: (transaction, scope) => {
       if (scope.applicationRootId === undefined) throw new Error("RECORD_PIN_TARGET_UNAVAILABLE");
-      return createHumanInstalledPageBundleContextLoader({
-        transaction,
-        scope: {
-          organizationId: scope.organizationId,
-          organizationAccountId: scope.organizationAccountId,
-          applicationRootId: scope.applicationRootId,
-          ...(scope.previewInstallationId === undefined
-            ? {}
-            : { previewInstallationId: scope.previewInstallationId }),
-        },
-      });
+      return createInstalledContextLoader(transaction, scope);
     },
     resolveTargetApplication: async (session, sourceSelection, applicationKey) => {
       if (
@@ -572,17 +562,7 @@ export async function invokeInstalledFlow(
               !sameId(scope.applicationRootId, installation.applicationRootId)
             )
               return false;
-            const current = await createHumanInstalledPageBundleContextLoader({
-              transaction,
-              scope: {
-                organizationId: scope.organizationId,
-                organizationAccountId: scope.organizationAccountId,
-                applicationRootId: scope.applicationRootId,
-                ...(scope.previewInstallationId === undefined
-                  ? {}
-                  : { previewInstallationId: scope.previewInstallationId }),
-              },
-            }).load();
+            const current = await createInstalledContextLoader(transaction, scope).load();
             const application = current.releaseSet.application;
             const modules = installedModuleClosure(application, current.releaseSet.modules);
             return (
@@ -675,17 +655,7 @@ export async function invokeInstalledFlow(
               !sameId(scope.applicationRootId, installation.applicationRootId)
             )
               return false;
-            const current = await createHumanInstalledPageBundleContextLoader({
-              transaction,
-              scope: {
-                organizationId: scope.organizationId,
-                organizationAccountId: scope.organizationAccountId,
-                applicationRootId: scope.applicationRootId,
-                ...(scope.previewInstallationId === undefined
-                  ? {}
-                  : { previewInstallationId: scope.previewInstallationId }),
-              },
-            }).load();
+            const current = await createInstalledContextLoader(transaction, scope).load();
             const application = current.releaseSet.application;
             const modules = installedModuleClosure(application, current.releaseSet.modules);
             if (
@@ -925,17 +895,7 @@ export async function invokeInstalledFlow(
     const read = await requests.run(session, selection, async (transaction, scope) => {
       if (scope.applicationRootId === undefined)
         throw new Error("INSTALLED_FLOW_BINDINGS_SCOPE_UNAVAILABLE");
-      return createHumanInstalledPageBundleContextLoader({
-        transaction,
-        scope: {
-          organizationId: scope.organizationId,
-          organizationAccountId: scope.organizationAccountId,
-          applicationRootId: scope.applicationRootId,
-          ...(scope.previewInstallationId === undefined
-            ? {}
-            : { previewInstallationId: scope.previewInstallationId }),
-        },
-      }).load();
+      return createInstalledContextLoader(transaction, scope).load();
     });
     return read.kind === "available" ? read.value : undefined;
   };
@@ -1227,17 +1187,10 @@ export async function invokeInstalledFlow(
           requests: requestDependencies,
           authorizeBinding: async (bound) => {
             if (bound.scope.applicationRootId === undefined) return false;
-            const current = await createHumanInstalledPageBundleContextLoader({
-              transaction: bound.transaction,
-              scope: {
-                organizationId: bound.scope.organizationId,
-                organizationAccountId: bound.scope.organizationAccountId,
-                applicationRootId: bound.scope.applicationRootId,
-                ...(bound.scope.previewInstallationId === undefined
-                  ? {}
-                  : { previewInstallationId: bound.scope.previewInstallationId }),
-              },
-            }).load();
+            const current = await createInstalledContextLoader(
+              bound.transaction,
+              bound.scope,
+            ).load();
             const currentBinding = current.releaseSet.application.content.flowBindings.filter(
               (entry) => sameId(entry.bindingId, binding.bindingId),
             );

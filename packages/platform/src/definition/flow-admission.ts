@@ -10,7 +10,7 @@ import { iterationKey } from "../rules/flow-interpreter-state";
 import type { FlowBindingInvocation } from "../workflows/flow-invocation-contracts";
 import { startFlow } from "../workflows/start";
 import { canonicalJson } from "./canonical-json";
-import { createHumanInstalledPageBundleContextLoader } from "./installed-page-bundle-context";
+import { createInstalledContextLoader } from "./installed-page-bundle-context";
 import type { InstalledRuntimeContext } from "./installed-runtime-context";
 import type { InstalledFlowBindings } from "./flow-binding-endpoint";
 import type { FlowOrchestratorDependencies, FlowRelease, Run } from "./flow-orchestrator-types";
@@ -60,17 +60,7 @@ const prepareAdmission = (
   return {
     authorizeBinding: async (bound: BoundHumanOrganizationRequest) => {
       if (bound.scope.applicationRootId === undefined) return false;
-      const current = await createHumanInstalledPageBundleContextLoader({
-        transaction: bound.transaction,
-        scope: {
-          organizationId: bound.scope.organizationId,
-          organizationAccountId: bound.scope.organizationAccountId,
-          applicationRootId: bound.scope.applicationRootId,
-          ...(bound.scope.previewInstallationId === undefined
-            ? {}
-            : { previewInstallationId: bound.scope.previewInstallationId }),
-        },
-      }).load();
+      const current = await createInstalledContextLoader(bound.transaction, bound.scope).load();
       currentContext = current;
       currentInstallation = host.installationOf(current);
       const matches = currentInstallation.bindings.filter((entry) =>
