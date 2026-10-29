@@ -6,6 +6,7 @@ import {
   sessionContextSchema,
   type IdentitySession,
   type OrganizationSelectionCandidate,
+  type SelectedOrganizationScope,
 } from "../access/identity-access";
 import {
   organizationRecordAccessDeclarationSchema,
@@ -884,21 +885,32 @@ export const createStoredPageCapabilityService = (
   };
 
   // Projects one loaded page for the viewer's current authority over this exact scope only.
+  const projectStoredInTransaction = (
+    transaction: RequestDatabaseTransaction,
+    scope: SelectedOrganizationScope,
+    stored: FixedAuthenticatedPageCapability,
+  ): Promise<ProjectedPageCapability> => {
+    if (
+      scope.applicationRootId === undefined ||
+      !sameId(scope.organizationId, context.organizationId) ||
+      !sameId(scope.applicationRootId, applicationRootId)
+    )
+      throw new Error("STORED_PAGE_HUMAN_SCOPE_UNAVAILABLE");
+    return projectAuthenticatedPageCapability(
+      transaction,
+      scope,
+      stored,
+      evaluatorsFor(stored, dependencies.selection.subjectRecordId),
+    );
+  };
   const projectStored = (
     session: IdentitySession,
     candidate: OrganizationSelectionCandidate,
     stored: FixedAuthenticatedPageCapability,
   ): Promise<HumanOrganizationRequestResult<ProjectedPageCapability>> => {
-    const evaluators = evaluatorsFor(stored, dependencies.selection.subjectRecordId);
-    return requests.run(session, candidate, async (transaction, scope) => {
-      if (
-        scope.applicationRootId === undefined ||
-        !sameId(scope.organizationId, context.organizationId) ||
-        !sameId(scope.applicationRootId, applicationRootId)
-      )
-        throw new Error("STORED_PAGE_HUMAN_SCOPE_UNAVAILABLE");
-      return projectAuthenticatedPageCapability(transaction, scope, stored, evaluators);
-    });
+    return requests.run(session, candidate, (transaction, scope) =>
+      projectStoredInTransaction(transaction, scope, stored),
+    );
   };
 
   const project = async (
@@ -969,6 +981,16 @@ export const createStoredPageCapabilityService = (
   return Object.freeze({
     project: (session: IdentitySession, candidate: OrganizationSelectionCandidate) =>
       project(session, candidate),
+    /** Projects inside an already verified request, sharing its authority and transaction. */
+    projectInTransaction: async (
+      transaction: RequestDatabaseTransaction,
+      scope: SelectedOrganizationScope,
+    ): Promise<ProjectedPageCapability> => {
+      const fixed = await load(selectedPageId);
+      return fixed === undefined
+        ? undefined
+        : projectStoredInTransaction(transaction, scope, fixed);
+    },
     /**
      * Re-checks one declared link target against the viewer's current access at navigation time.
      * The target is definition or record data and grants nothing. An external address is available
