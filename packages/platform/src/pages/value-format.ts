@@ -90,15 +90,15 @@ export const formatPageValue = (
   if (formatter === "money") {
     const currency = money?.currency ?? options.currency;
     if (currency === undefined || !isIsoCurrencyCode(currency)) return undefined;
-    const minor =
-      new Intl.NumberFormat(NUMBER_LOCALE, { style: "currency", currency }).resolvedOptions()
-        .minimumFractionDigits ?? 0;
-    const digits = places ?? minor;
+    // Without explicit places the stored amount is shown exactly, padded to the currency's minor
+    // units: one money display for cells, boards and summaries.
+    if (options.places === undefined && typeof amount === "string")
+      return formatMoney({ currency, amount });
     return new Intl.NumberFormat(NUMBER_LOCALE, {
       style: "currency",
       currency,
-      minimumFractionDigits: digits,
-      maximumFractionDigits: digits,
+      minimumFractionDigits: options.places,
+      maximumFractionDigits: options.places,
     }).format(amount as number);
   }
   if (money !== undefined) return undefined;
