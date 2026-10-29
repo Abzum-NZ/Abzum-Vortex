@@ -10,6 +10,7 @@ import { Label } from "../components/label";
 export type ApplicationSearchRuntime =
   | Readonly<{ kind: "disabled" }>
   | Readonly<{ kind: "unavailable" }>
+  | Readonly<{ kind: "loading"; expression: string }>
   | Readonly<{ kind: "refused"; expression: string; reason: string }>
   | Readonly<{
       kind: "available";
@@ -80,7 +81,9 @@ export function ApplicationSearchControl({
           type="search"
           maxLength={2_000}
           defaultValue={
-            applicationSearch.kind === "available" || applicationSearch.kind === "refused"
+            applicationSearch.kind === "available" ||
+            applicationSearch.kind === "refused" ||
+            applicationSearch.kind === "loading"
               ? applicationSearch.expression
               : ""
           }
@@ -93,6 +96,10 @@ export function ApplicationSearchControl({
       {applicationSearch.kind === "unavailable" ? (
         <p role="status" className="text-sm text-muted-foreground">
           Search is unavailable. Try again.
+        </p>
+      ) : applicationSearch.kind === "loading" ? (
+        <p role="status" className="text-sm text-muted-foreground">
+          Searching…
         </p>
       ) : applicationSearch.kind === "refused" ? (
         <p role="status" className="text-sm text-muted-foreground">

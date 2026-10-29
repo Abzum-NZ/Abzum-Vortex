@@ -66,6 +66,7 @@ type LauncherGroup = Readonly<{
 }>;
 type LauncherSearchResult =
   | Readonly<{ kind: "unavailable" }>
+  | Readonly<{ kind: "loading" }>
   | Readonly<{ kind: "refused"; reason: string }>
   | Readonly<{ kind: "available"; groups: readonly LauncherGroup[] }>;
 export type ApplicationSwitcherSource = (() => Promise<ApplicationSwitcherData>) & {
@@ -385,9 +386,11 @@ function ApplicationSwitcher({
                             }),
                       })),
                     }
-                  : search.kind === "refused"
-                    ? { kind: "refused", expression: searchExpression, reason: search.reason }
-                    : { kind: "unavailable" }) as ApplicationSearchRuntime
+                  : search.kind === "loading"
+                    ? { kind: "loading", expression: searchExpression }
+                    : search.kind === "refused"
+                      ? { kind: "refused", expression: searchExpression, reason: search.reason }
+                      : { kind: "unavailable" }) as ApplicationSearchRuntime
               }
               onSearch={(expression) => {
                 const token = ++searchToken.current;
@@ -396,6 +399,7 @@ function ApplicationSwitcher({
                   setSearch({ kind: "available", groups: [] });
                   return;
                 }
+                setSearch({ kind: "loading" });
                 void source.search!(expression)
                   .then((result) => {
                     if (token === searchToken.current) setSearch(result);

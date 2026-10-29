@@ -116,10 +116,10 @@ export function OrganizationLauncherPage({
   }>): ReactElement {
   const params = useSearchParams();
   const expression = params.get("q") ?? "";
-  const [search, setSearch] = useState<Awaited<ReturnType<typeof searchLauncherAction>>>({
-    kind: "available",
-    groups: [],
-  });
+  const [searched, setSearched] = useState<{
+    expression: string;
+    result: Awaited<ReturnType<typeof searchLauncherAction>>;
+  }>({ expression: "", result: { kind: "available", groups: [] } });
   useEffect(() => {
     if (expression === "") return;
     let active = true;
@@ -131,69 +131,76 @@ export function OrganizationLauncherPage({
       expression,
     )
       .then((result) => {
-        if (active) setSearch(result);
+        if (active) setSearched({ expression, result });
       })
       .catch((error: unknown) => {
         console.error("[launcher] search failed", error);
-        if (active) setSearch({ kind: "unavailable" });
+        if (active) setSearched({ expression, result: { kind: "unavailable" } });
       });
     return () => {
       active = false;
     };
   }, [expression, shellPage.launcherHref, shellPage.organizationShortName]);
   const tenant = decodeURIComponent(shellPage.launcherHref.split("/")[1] ?? "");
+  const search = searched.result;
   const applicationSearch: PagePuckRendererProps["applicationSearch"] =
     expression === ""
       ? { kind: "available", expression: "", results: [], more: false, groups: [] }
-      : search.kind === "available"
-        ? {
-            kind: "available",
-            expression,
-            results: [],
-            more: false,
-            groups: search.groups.map((group) => ({
-              ...group,
-              ...(group.cursor === undefined
-                ? {}
-                : {
-                    showMore: () => {
-                      void searchLauncherAction(
-                        tenant,
-                        shellPage.organizationShortName,
-                        expression,
-                        group.key,
-                        group.cursor,
-                      )
-                        .then((next) => {
-                          if (next.kind !== "available") return;
-                          const addition = next.groups[0];
-                          if (addition === undefined) return;
-                          setSearch((previous) =>
-                            previous.kind !== "available"
-                              ? previous
-                              : {
-                                  kind: "available",
-                                  groups: previous.groups.map((old) =>
-                                    old.key === group.key && old.cursor === group.cursor
-                                      ? {
-                                          ...addition,
-                                          results: [...old.results, ...addition.results],
-                                        }
-                                      : old,
-                                  ),
-                                },
+      : searched.expression !== expression
+        ? { kind: "loading", expression }
+        : search.kind === "available"
+          ? {
+              kind: "available",
+              expression,
+              results: [],
+              more: false,
+              groups: search.groups.map((group) => ({
+                ...group,
+                ...(group.cursor === undefined
+                  ? {}
+                  : {
+                      showMore: () => {
+                        void searchLauncherAction(
+                          tenant,
+                          shellPage.organizationShortName,
+                          expression,
+                          group.key,
+                          group.cursor,
+                        )
+                          .then((next) => {
+                            if (next.kind !== "available") return;
+                            const addition = next.groups[0];
+                            if (addition === undefined) return;
+                            setSearched((previous) =>
+                              previous.expression !== expression ||
+                              previous.result.kind !== "available"
+                                ? previous
+                                : {
+                                    expression,
+                                    result: {
+                                      kind: "available",
+                                      groups: previous.result.groups.map((old) =>
+                                        old.key === group.key && old.cursor === group.cursor
+                                          ? {
+                                              ...addition,
+                                              results: [...old.results, ...addition.results],
+                                            }
+                                          : old,
+                                      ),
+                                    },
+                                  },
+                            );
+                          })
+                          .catch((error: unknown) =>
+                            console.error("[launcher] continuation failed", error),
                           );
-                        })
-                        .catch((error: unknown) =>
-                          console.error("[launcher] continuation failed", error),
-                        );
-                    },
-                  }),
-            })),
-          }
-        : search.kind === "refused"
-          ? { kind: "refused", expression, reason: search.reason }
-          : { kind: "unavailable" };
+                      },
+                    }),
+              })),
+            }
+          : search.kind === "refused"
+            ? { kind: "refused", expression, reason: search.reason }
+            : { kind: "unavailable" };
   return (
     <OrganizationShellPage
       {...shellPage}
