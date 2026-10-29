@@ -1,5 +1,7 @@
 import { z } from "zod";
 import { builderKeySchema, fieldIdSchema, platformIdSchema } from "./identifiers";
+import { cloneJsonValue, isJsonValue, type JsonValue } from "./json-value";
+export type { JsonValue } from "./json-value";
 
 /**
  * One sort key: a field, spelled in lower case whatever the sender wrote, and a direction. It is
@@ -59,18 +61,9 @@ export const correlationIdSchema = platformIdSchema.brand<"CorrelationId">();
 /** Closed safety limits shared by every authored and canonical condition tree. */
 export const conditionMaximumNestingDepth = 10;
 export const conditionMaximumOperandCount = 100;
-export type JsonValue =
-  string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
-export const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
-  z.union([
-    z.string(),
-    z.number().finite(),
-    z.boolean(),
-    z.null(),
-    z.array(jsonValueSchema),
-    z.record(z.string(), jsonValueSchema),
-  ]),
-);
+export const jsonValueSchema: z.ZodType<JsonValue> = z
+  .custom<JsonValue>(isJsonValue, { error: "Use a JSON value" })
+  .transform(cloneJsonValue);
 
 export const secretReferenceSchema = z
   .object({
