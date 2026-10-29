@@ -76,9 +76,9 @@ export const pageFlowSegmentSeed = (
       parts[0] !== "forms"
     )
       continue;
-    // A task on another branch may not have run, and inputs and variables may be initialized by
-    // the receiving interpreter. Preserve absence; its input validation still checks requirements.
-    if (value === undefined && parts[0] !== "forms") continue;
+    // A value read only on another branch may be absent. The receiving interpreter decides
+    // whether it is needed, and its input validation still checks requirements.
+    if (value === undefined) continue;
     if (
       value === undefined ||
       value.type !== type ||
