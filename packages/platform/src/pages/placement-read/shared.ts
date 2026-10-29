@@ -144,7 +144,7 @@ export const logPlacementFailure = (
 };
 
 /** A block's payload contract: the platform schema its ready values must satisfy. */
-export type PlacementPayloadContract = Readonly<{
+type PlacementPayloadContract = Readonly<{
   safeParse(values: unknown):
     | Readonly<{ success: true; data: unknown }>
     | Readonly<{
