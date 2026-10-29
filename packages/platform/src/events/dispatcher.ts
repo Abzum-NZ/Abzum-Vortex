@@ -729,8 +729,7 @@ export const createEventDispatcher = (
 /**
  * The protected dispatcher route: verifies the caller's credential, resolves
  * the dispatcher's system actor from an active system actor grant, then runs
- * one bounded dispatch. Webhook wake-ups and scheduled recovery both call this
- * same operation. Responses carry only refusal reasons, safe error codes and
+ * one bounded dispatch. Scheduled recovery calls this operation. Responses carry only refusal reasons, safe error codes and
  * counts; a missing, ambiguous or unavailable grant refuses closed before
  * any occurrence is claimed.
  */
