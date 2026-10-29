@@ -175,8 +175,30 @@ export type FlowRunState = Readonly<{
   awaiting?: Awaiting;
 }>;
 
-/** How the host finds a compiled flow of the exact release the run is bound to. */
+/** The declarations and task lists the interpreter reads, independent of the host's full release. */
+export type FlowProgram = Readonly<{
+  id: string;
+  execution: FlowExecutionKind;
+  inputs: Readonly<
+    Record<
+      string,
+      Pick<FlowDefinition["inputs"][string], "type" | "required" | "default" | "recordTypeIds">
+    >
+  >;
+  variables: Readonly<
+    Record<string, Pick<FlowDefinition["variables"][string], "type" | "default">>
+  >;
+  outputs: Readonly<Record<string, Pick<FlowDefinition["outputs"][string], "type" | "value">>>;
+  triggers: readonly FlowDefinition["triggers"][number][];
+  tasks: readonly FlowTask[];
+  errors: readonly FlowTask[];
+  finally: readonly FlowTask[];
+}>;
+
+/** How the server finds a compiled flow of the exact release the run is bound to. */
 export type FlowLibrary = (flowId: string) => FlowDefinition | undefined;
+/** How an interpreter host finds the task lists and declarations it is allowed to run. */
+export type FlowProgramLibrary = (flowId: string) => FlowProgram | undefined;
 
 /** Resolve a declared server output member without exposing its task properties to the page. */
 export type FlowOutputMemberTypeResolver = (
@@ -336,7 +358,7 @@ const findTask = (tasks: readonly FlowTask[], taskId: string): FlowTask | undefi
 const declaredOutputFieldType = (
   state: FlowRunState,
   activation: Activation,
-  flow: FlowDefinition,
+  flow: FlowProgram,
   taskId: string,
   outputKey: string,
   path: readonly string[],
@@ -363,7 +385,7 @@ const declaredOutputFieldType = (
 const scopeOf = (
   state: FlowRunState,
   activation: Activation,
-  flow: FlowDefinition,
+  flow: FlowProgram,
   resolveMember: FlowOutputMemberTypeResolver,
 ): FlowFormulaScope => ({
   now: state.now,
@@ -432,7 +454,7 @@ const evaluateValue = (
   value: FlowValue,
   state: FlowRunState,
   activation: Activation,
-  flow: FlowDefinition,
+  flow: FlowProgram,
   taskId: string,
   resolveMember: FlowOutputMemberTypeResolver,
 ): FlowRuntimeValue => {
@@ -446,7 +468,7 @@ const evaluateProperties = (
   properties: Readonly<Record<string, FlowValue>>,
   state: FlowRunState,
   activation: Activation,
-  flow: FlowDefinition,
+  flow: FlowProgram,
   taskId: string,
   resolveMember: FlowOutputMemberTypeResolver,
 ): FlowRuntimeValues =>
@@ -460,7 +482,7 @@ const evaluateProperties = (
 // ─── Activations ──────────────────────────────────────────────────────────────────────────────
 
 const buildInputs = (
-  flow: FlowDefinition,
+  flow: FlowProgram,
   supplied: Readonly<Record<string, unknown>>,
   taskId?: string,
 ): FlowRuntimeValues => {
@@ -483,7 +505,7 @@ const buildInputs = (
   return inputs;
 };
 
-const initialVariables = (flow: FlowDefinition): FlowRuntimeValues =>
+const initialVariables = (flow: FlowProgram): FlowRuntimeValues =>
   Object.fromEntries(
     Object.entries(flow.variables).map(([name, declaration]) => [
       name,
@@ -492,7 +514,7 @@ const initialVariables = (flow: FlowDefinition): FlowRuntimeValues =>
   );
 
 const newActivation = (
-  flow: FlowDefinition,
+  flow: FlowProgram,
   inputs: FlowRuntimeValues,
   prefix: string,
   callTaskId?: string,
@@ -513,7 +535,7 @@ type Machine = {
   state: {
     -readonly [Key in keyof FlowRunState]: FlowRunState[Key];
   };
-  library: FlowLibrary;
+  library: FlowProgramLibrary;
   resolveMember: FlowOutputMemberTypeResolver;
 };
 
@@ -524,7 +546,7 @@ const replaceTop = (machine: Machine, next: Activation): void => {
   machine.state.activations = [...machine.state.activations.slice(0, -1), next];
 };
 
-const flowOf = (machine: Machine, activation: Activation): FlowDefinition =>
+const flowOf = (machine: Machine, activation: Activation): FlowProgram =>
   machine.library(activation.flowId) ?? failed("flow_unavailable", "failed");
 
 const withFrames = (activation: Activation, frames: readonly Frame[]): Activation => ({
@@ -616,7 +638,7 @@ const declaredOutputs = (
 };
 
 const validReadFieldsResume = (
-  flow: FlowDefinition | undefined,
+  flow: FlowProgram | undefined,
   taskId: string,
   produced: Readonly<Record<string, JsonValue>> | undefined,
 ): boolean => {
@@ -1145,7 +1167,7 @@ const drive = (machine: Machine, observer?: FlowTaskTraceObserver): FlowRunStep 
  */
 export const startFlowRun = (
   start: FlowRunStart,
-  library: FlowLibrary,
+  library: FlowProgramLibrary,
   resolveMember: FlowOutputMemberTypeResolver,
   observer?: FlowTaskTraceObserver,
 ): FlowRunStep => {
@@ -1188,7 +1210,7 @@ export const startFlowRun = (
 export const resumeFlowRun = (
   previous: FlowRunState,
   resume: FlowRunResume,
-  library: FlowLibrary,
+  library: FlowProgramLibrary,
   resolveMember: FlowOutputMemberTypeResolver,
   observer?: FlowTaskTraceObserver,
 ): FlowRunStep => {
