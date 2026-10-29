@@ -4,7 +4,7 @@ import { describeFailure } from "../catalogue/runtime-primitives";
 import { typedValueMatchesType } from "./condition-types";
 import type { JsonValue } from "../catalogue/common";
 import { PLATFORM_SERVICE_OPERATIONS } from "../catalogue/platform-service-operation-catalogue";
-import { recordLinkValueSchema } from "../records/module-field-values";
+import { isRecordLinkValue } from "../records/value-predicates";
 import { platformOperationKey } from "../catalogue/platform-service-operation-catalogue";
 import {
   flowReadFieldsProjectionSchema,
@@ -837,12 +837,12 @@ const execute = (machine: Machine, task: FlowTask, taskPath: readonly PathSegmen
       )
         return failed("value_unresolved", "failed", taskId);
 
-      const link = recordLinkValueSchema.safeParse({
+      const link = {
         recordTypeId,
         recordId: evaluatedRecord.value,
-      });
-      if (!link.success) return failed("value_unresolved", "failed", taskId);
-      replaceTop(machine, storeTaskOutputs(next, taskId, { value: typed("json", link.data) }));
+      };
+      if (!isRecordLinkValue(link)) return failed("value_unresolved", "failed", taskId);
+      replaceTop(machine, storeTaskOutputs(next, taskId, { value: typed("json", link) }));
       return { kind: "continue" };
     }
     if (registered.type === "data.calculate") {

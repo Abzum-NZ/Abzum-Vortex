@@ -6,7 +6,7 @@ import {
   powerOfTen,
   type ExactDecimal,
 } from "../records/exact-decimal";
-import { moneyValueSchema, recordLinkValueSchema } from "../records/module-field-values";
+import { isMoneyValue, isRecordLinkValue } from "../records/value-predicates";
 import type {
   FlowDateUnit,
   FlowFormula,
@@ -56,8 +56,7 @@ const decimalOf = (candidate: FlowRuntimeValue): ExactDecimal | undefined => {
   if (candidate.type === "money") {
     // Flow literals carry an amount; stored Record values also carry a currency.
     if (typeof candidate.value === "string") return parseExactDecimal(candidate.value);
-    const money = moneyValueSchema.safeParse(candidate.value);
-    return money.success ? parseExactDecimal(money.data.amount) : undefined;
+    return isMoneyValue(candidate.value) ? parseExactDecimal(candidate.value.amount) : undefined;
   }
   return isNumericType(candidate.type) ? parseExactDecimal(candidate.value) : undefined;
 };
@@ -153,8 +152,7 @@ const roundedQuotient = (
 
 const currencyOf = (candidate: FlowRuntimeValue): string | undefined => {
   if (candidate.type !== "money") return undefined;
-  const parsed = moneyValueSchema.safeParse(candidate.value);
-  return parsed.success ? parsed.data.currency : undefined;
+  return isMoneyValue(candidate.value) ? candidate.value.currency : undefined;
 };
 
 const codePointCompare = (left: string, right: string): number => {
@@ -497,8 +495,7 @@ export const evaluateFlowFormula = (
           !Object.hasOwn(operand.value, "recordId")
         )
           return undefined;
-        const record = recordLinkValueSchema.safeParse(operand.value);
-        return record.success ? value("text", record.data.recordId) : undefined;
+        return isRecordLinkValue(operand.value) ? value("text", operand.value.recordId) : undefined;
       }
       case "add":
       case "multiply":

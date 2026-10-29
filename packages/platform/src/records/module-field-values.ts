@@ -4,7 +4,6 @@ import { safeHttpsUrlSchema } from "../catalogue/common";
 import {
   compareExactDecimals,
   exactDecimalDigitCounts,
-  normalizeExactDecimal,
   parseExactDecimal,
   type ExactDecimal,
 } from "./exact-decimal";
@@ -16,6 +15,12 @@ import {
   sourceQualifiedRecordTypeSchema,
 } from "../catalogue/identifiers";
 import { richTextBlockSchema, richTextInlineSchema, type RichTextInline } from "./rich-text";
+import {
+  currencyCodePattern,
+  isCanonicalExactDecimal,
+  isMoneyValue,
+  isRecordLinkValue,
+} from "./value-predicates";
 
 const exactDecimalMessage = "Use exact base-10 text without exponent notation";
 const normalizedExactDecimalMessage = "Use normalized exact base-10 text";
@@ -27,11 +32,13 @@ export const sourceExactDecimalTextSchema = z
 
 /** Canonical exact text has one representation for each base-10 value. */
 export const exactDecimalTextSchema = sourceExactDecimalTextSchema.refine(
-  (value) => normalizeExactDecimal(value) === value,
+  isCanonicalExactDecimal,
   normalizedExactDecimalMessage,
 );
 
-export const currencyCodeSchema = z.string().regex(/^[A-Z]{3}$/, "Use an uppercase currency code");
+export const currencyCodeSchema = z
+  .string()
+  .regex(currencyCodePattern, "Use an uppercase currency code");
 
 export const sourceMoneyValueSchema = z
   .object({ amount: sourceExactDecimalTextSchema, currency: currencyCodeSchema })
@@ -39,7 +46,8 @@ export const sourceMoneyValueSchema = z
 
 export const moneyValueSchema = z
   .object({ amount: exactDecimalTextSchema, currency: currencyCodeSchema })
-  .strict();
+  .strict()
+  .refine(isMoneyValue);
 
 export const sourceRecordLinkValueSchema = z
   .object({ record_type: sourceQualifiedRecordTypeSchema, record_id: recordIdSchema })
@@ -47,7 +55,8 @@ export const sourceRecordLinkValueSchema = z
 
 export const recordLinkValueSchema = z
   .object({ recordTypeId: recordTypeIdSchema, recordId: recordIdSchema })
-  .strict();
+  .strict()
+  .refine(isRecordLinkValue);
 
 /** Attachment order is meaningful for both single-file and multiple-file fields. */
 export const attachmentValueSchema = z.array(fileIdSchema);

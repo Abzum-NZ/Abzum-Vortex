@@ -1,10 +1,9 @@
 import { z } from "zod";
+import { isPlatformIdentifier } from "./identifier-predicates";
 
-const nonNilUuidSchema = z
-  .uuid()
-  .refine((value) => value !== "00000000-0000-0000-0000-000000000000", {
-    message: "A platform-issued identifier cannot be the nil UUID",
-  });
+const nonNilUuidSchema = z.uuid().refine(isPlatformIdentifier, {
+  message: "A platform-issued identifier cannot be the nil UUID",
+});
 const stableId = <Name extends string>() => nonNilUuidSchema.brand<Name>();
 
 export const platformIdSchema = stableId<"PlatformId">();
