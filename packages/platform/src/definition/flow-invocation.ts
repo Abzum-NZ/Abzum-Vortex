@@ -27,7 +27,10 @@ import type { RecordReferenceChoiceCommand } from "../queries/reference-choice-c
 import type { PermittedApplication, PermittedApplicationsRead } from "./application-launcher-read";
 import { createOrganizationAccessAdministrationService } from "../access/organization-access-administration-access";
 import { runOrganizationAccessOperation } from "../access/organization-access-decision-access";
-import { createHumanOrganizationRequestService } from "../access/human-organization-request";
+import {
+  createHumanOrganizationRequestService,
+  type BoundHumanOrganizationRequest,
+} from "../access/human-organization-request";
 import { createRequestBoundTenantGovernanceService } from "../identity/tenant-governance-request-bound";
 import { createReferenceChoiceService } from "../queries/reference-choice-service";
 import { changeConnectionInstance } from "../connections/connection-administration";
@@ -288,27 +291,34 @@ export async function invokeInstalledFlow(
         : undefined;
     },
   });
-  const executor = createProtectedOperationExecutor({
-    accessAdministration: createOrganizationAccessAdministrationService(requestDependencies),
-    connectionAdministration: (session, selection, change) =>
-      requests.runChange(session, selection, (transaction) =>
-        changeConnectionInstance(transaction, change),
-      ),
-    connectionHealth: (session, selection, command) =>
-      requests.runChange(session, selection, (transaction, scope) =>
-        checkConnectionHealth(transaction, scope, command),
-      ),
-    applicationStore: dependencies.applicationStore,
-    tenantGovernance: {
-      run: (session, selection, operation) =>
-        requests.runAccessChange(session, selection, (transaction, scope) =>
-          operation({
-            tenantId: scope.tenantId,
-            operations: createRequestBoundTenantGovernanceService(transaction, scope),
-          }),
+  const executorFor = (boundRequest?: BoundHumanOrganizationRequest) => {
+    const scopedDependencies = {
+      ...requestDependencies,
+      ...(boundRequest === undefined ? {} : { boundRequest }),
+    };
+    const scopedRequests = createHumanOrganizationRequestService(scopedDependencies);
+    return createProtectedOperationExecutor({
+      accessAdministration: createOrganizationAccessAdministrationService(scopedDependencies),
+      connectionAdministration: (session, selection, change) =>
+        scopedRequests.runChange(session, selection, (transaction) =>
+          changeConnectionInstance(transaction, change),
         ),
-    },
-  });
+      connectionHealth: (session, selection, command) =>
+        scopedRequests.runChange(session, selection, (transaction, scope) =>
+          checkConnectionHealth(transaction, scope, command),
+        ),
+      applicationStore: dependencies.applicationStore,
+      tenantGovernance: {
+        run: (session, selection, operation) =>
+          scopedRequests.runAccessChange(session, selection, (transaction, scope) =>
+            operation({
+              tenantId: scope.tenantId,
+              operations: createRequestBoundTenantGovernanceService(transaction, scope),
+            }),
+          ),
+      },
+    });
+  };
   // Save record tasks and named actions run through the record service's own
   // protected paths, under the initiator's verified request and in their own transactions.
   const records = createRecordSaveService(requestDependencies);
@@ -376,7 +386,7 @@ export async function invokeInstalledFlow(
     installation: InstalledFlowBindings,
   ) =>
     createFlowOrchestrator({
-      executor,
+      executor: executorFor(),
       records,
       actionRecords,
       subjects: {
