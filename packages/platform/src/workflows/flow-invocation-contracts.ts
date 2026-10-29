@@ -27,6 +27,7 @@ const bindingInvocationSchema = z
     ]),
     /** One identity per user gesture, so a repeated request for the same click is the same run. */
     clickId: z.uuid(),
+    carriedValues: z.string().min(1).max(65_536).optional(),
     /** The values the surface itself supplies, by the name of the binding's `caller` input. */
     callerInputs: z.record(z.string().min(1).max(100), z.unknown()).default({}),
     /** The record the surface was rendered for and the revision it showed (evidence only). */
@@ -49,6 +50,7 @@ const continuationInvocationSchema = z
     /** The row form's source table, supplied by the page and revalidated by the gate. */
     sourceTablePlacementId: containedComponentIdSchema.optional(),
     continuation: z.string().min(16).max(128),
+    carriedValues: z.string().min(1).max(65_536).optional(),
     answer: formContinuationAnswerSchema,
     /**
      * The exact paused target and run receipt the surface last saw. Both are evidence: the server

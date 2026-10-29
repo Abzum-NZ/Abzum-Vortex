@@ -178,6 +178,7 @@ export type FlowBindingEndpointResult =
       runId: string;
       descriptor: SafeFlowResultDescriptor;
       outputs: Readonly<Record<string, JsonValue>>;
+      carriedValues?: string;
       /** Browser intents such as navigation or a message, for the surface to carry out. */
       intents: SafeIntents;
       unavailable: readonly FlowUnavailableNotice[];
@@ -195,6 +196,7 @@ export type FlowBindingEndpointResult =
       intents: SafeIntents;
       continuation: string;
       expiresAt: string;
+      carriedValues?: string;
       /** The exact paused target and receipt the surface returns with the continuation (evidence). */
       target?: FormContinuationTarget;
       receipt?: FormContinuationReceipt;

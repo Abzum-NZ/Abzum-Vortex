@@ -50,6 +50,7 @@ export type ServerFlowResponse =
       descriptor: Readonly<{ outcome: string; commit: string; outputs: string; recovery: string }>;
       outputs: Readonly<Record<string, JsonValue>>;
       intents: readonly FlowIntent[];
+      carriedValues?: string;
       failure?: Readonly<{ code: string; taskId?: string; diagnostic?: FlowRefusalFeedback }>;
     }>
   | Readonly<{
@@ -59,6 +60,7 @@ export type ServerFlowResponse =
       intents: readonly FlowIntent[];
       continuation: string;
       expiresAt: string;
+      carriedValues?: string;
       target?: FormContinuationTarget;
       receipt?: FormContinuationReceipt;
     }>
@@ -74,6 +76,7 @@ export type FlowInvokeClient = Readonly<{
     /** The one record this gesture is about, when it is not the record the page was rendered for. */
     subject?: FlowSubjectContext,
     sourceTablePlacementId?: string,
+    carriedValues?: string,
   ) => Promise<ServerFlowResponse>;
   resume: (
     flowId: string,
@@ -82,6 +85,7 @@ export type FlowInvokeClient = Readonly<{
     evidence?: FlowResumeEvidence,
     signal?: AbortSignal,
     sourceTablePlacementId?: string,
+    carriedValues?: string,
   ) => Promise<ServerFlowResponse>;
 }>;
 
@@ -128,6 +132,9 @@ const isWarningNotice = (candidate: unknown): candidate is FlowWarningNotice =>
  * request contract and the server's trusted state check them again.
  */
 const isEvidence = (candidate: unknown): boolean => candidate === undefined || isRecord(candidate);
+const isCarriedValues = (candidate: unknown): candidate is string | undefined =>
+  candidate === undefined ||
+  (typeof candidate === "string" && candidate.length > 0 && candidate.length <= 65_536);
 
 /** Fails closed: anything that is not exactly one of the endpoint's answers is `unavailable`. */
 export const parseServerFlowResponse = (candidate: unknown): ServerFlowResponse => {
@@ -147,6 +154,7 @@ export const parseServerFlowResponse = (candidate: unknown): ServerFlowResponse 
         intents === undefined ||
         !isEvidence(candidate.target) ||
         !isEvidence(candidate.receipt) ||
+        !isCarriedValues(candidate.carriedValues) ||
         typeof candidate.runId !== "string" ||
         (candidate.awaiting !== "form" && candidate.awaiting !== "confirm") ||
         typeof candidate.continuation !== "string" ||
@@ -160,6 +168,9 @@ export const parseServerFlowResponse = (candidate: unknown): ServerFlowResponse 
         intents,
         continuation: candidate.continuation,
         expiresAt: candidate.expiresAt,
+        ...(candidate.carriedValues === undefined
+          ? {}
+          : { carriedValues: candidate.carriedValues }),
         ...(candidate.target === undefined
           ? {}
           : { target: candidate.target as FormContinuationTarget }),
@@ -182,7 +193,8 @@ export const parseServerFlowResponse = (candidate: unknown): ServerFlowResponse 
         typeof descriptor.commit !== "string" ||
         typeof descriptor.outputs !== "string" ||
         typeof descriptor.recovery !== "string" ||
-        !isRecord(candidate.outputs)
+        !isRecord(candidate.outputs) ||
+        !isCarriedValues(candidate.carriedValues)
       )
         return invalidServerResponse();
       const failure = candidate.failure;
@@ -224,6 +236,9 @@ export const parseServerFlowResponse = (candidate: unknown): ServerFlowResponse 
         },
         outputs: candidate.outputs as Readonly<Record<string, JsonValue>>,
         intents,
+        ...(candidate.carriedValues === undefined
+          ? {}
+          : { carriedValues: candidate.carriedValues }),
         ...(acceptedFailure === undefined ? {} : { failure: acceptedFailure }),
       };
     }
@@ -280,7 +295,15 @@ export function createFlowInvokeClient(options: FlowInvokeClientOptions): FlowIn
     releaseKey: options.installation.releaseKey,
   };
   return Object.freeze({
-    startBinding: (binding, callerInputs, clickId, signal, subject, sourceTablePlacementId) =>
+    startBinding: (
+      binding,
+      callerInputs,
+      clickId,
+      signal,
+      subject,
+      sourceTablePlacementId,
+      carriedValues,
+    ) =>
       send(
         {
           kind: "binding",
@@ -290,6 +313,7 @@ export function createFlowInvokeClient(options: FlowInvokeClientOptions): FlowIn
           segment: binding.segment,
           clickId,
           callerInputs,
+          ...(carriedValues === undefined ? {} : { carriedValues }),
           ...(sourceTablePlacementId === undefined ? {} : { sourceTablePlacementId }),
           ...((subject ?? options.subject) === undefined
             ? {}
@@ -297,7 +321,15 @@ export function createFlowInvokeClient(options: FlowInvokeClientOptions): FlowIn
         },
         signal,
       ),
-    resume: (flowId, continuation, answer, evidence, signal, sourceTablePlacementId) =>
+    resume: (
+      flowId,
+      continuation,
+      answer,
+      evidence,
+      signal,
+      sourceTablePlacementId,
+      carriedValues,
+    ) =>
       send(
         {
           kind: "continuation",
@@ -305,6 +337,7 @@ export function createFlowInvokeClient(options: FlowInvokeClientOptions): FlowIn
           flowId,
           continuation,
           answer,
+          ...(carriedValues === undefined ? {} : { carriedValues }),
           ...(sourceTablePlacementId === undefined ? {} : { sourceTablePlacementId }),
           ...(evidence?.target === undefined ? {} : { target: evidence.target }),
           ...(evidence?.receipt === undefined ? {} : { receipt: evidence.receipt }),

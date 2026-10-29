@@ -161,6 +161,7 @@ export async function driveServerFlow(
               evidence,
               signal,
               sourceTablePlacementId,
+              response.carriedValues,
             );
           } else {
             const confirmation = readConfirmIntent(waiting);
@@ -178,6 +179,7 @@ export async function driveServerFlow(
               evidence,
               signal,
               sourceTablePlacementId,
+              response.carriedValues,
             );
           }
           break;
