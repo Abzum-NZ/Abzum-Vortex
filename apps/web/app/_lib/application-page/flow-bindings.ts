@@ -351,9 +351,11 @@ export const projectPlacementBindings = (
       return {
         savesFormValues: flow !== undefined && savesValues(flow.tasks),
         bindingId: binding.bindingId,
+        controlId: binding.controlId,
         eventId: binding.eventId,
         event: binding.event,
         flowId: binding.flow.flowId,
+        settings: binding.settings,
         callerInputs: Object.values(binding.flow.inputs).flatMap((input) =>
           typeof input === "object" && input !== null && input.kind === "caller"
             ? [input.name]

@@ -11,6 +11,7 @@ import type {
   BoardColumnReadRequest,
   PageDefinition,
   RecordsTablePageRequest,
+  ComponentFlowBinding,
 } from "@vortex/platform/schema";
 import type { PageWebMcpTool } from "./webmcp-projection";
 export type { PageWebMcpTool } from "./webmcp-projection";
@@ -19,10 +20,12 @@ export type PageDataState = Readonly<Record<string, unknown>>;
 
 /** One flow binding a placement holds, described only by identities and the caller inputs it takes. */
 export type PlacementFlowBinding = Readonly<{
-  bindingId: string;
-  eventId: string;
-  event: string;
-  flowId: string;
+  bindingId: ComponentFlowBinding["bindingId"];
+  controlId: ComponentFlowBinding["controlId"];
+  eventId: ComponentFlowBinding["eventId"];
+  event: ComponentFlowBinding["event"];
+  flowId: ComponentFlowBinding["flow"]["flowId"];
+  settings: ComponentFlowBinding["settings"];
   /** The names of the caller inputs the bound flow declares; the surface may fill only these. */
   callerInputs: readonly string[];
   /** The whole values input feeds a record-save task in this bound flow. */
