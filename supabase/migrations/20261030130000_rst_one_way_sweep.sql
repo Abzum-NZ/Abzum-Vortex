@@ -5978,9 +5978,18 @@ declare
   moved_delegations bigint;
   unavailable_roles bigint;
   unavailable_delegations bigint;
+  live_moved_roles bigint;
+  live_unavailable_roles bigint;
+  live_moved_delegations bigint;
+  live_unavailable_delegations bigint;
 begin
   select pg_catalog.count(*) into bumped_count from rst_permission_meaning_bumps;
-  select pg_catalog.count(*) into unavailable_roles
+  select pg_catalog.count(*) filter (where not vortex_access.permission_meaning_is_same_internal(accepted, current_entry)),
+    pg_catalog.count(*) filter (where role.live_revision = permission.role_revision
+      and vortex_access.permission_meaning_is_same_internal(accepted, current_entry)),
+    pg_catalog.count(*) filter (where role.live_revision = permission.role_revision
+      and not vortex_access.permission_meaning_is_same_internal(accepted, current_entry))
+  into unavailable_roles, live_moved_roles, live_unavailable_roles
   from vortex_access.organization_role_permission_entries as permission
   join rst_permission_meaning_bumps as bump
     on bump.organization_id = permission.organization_id
@@ -5990,6 +5999,8 @@ begin
     and bump.registration_kind = permission.registration_kind
     and bump.registration_owner_id = permission.registration_owner_id
     and bump.old_revision = permission.continuity_revision
+  join vortex_access.organization_roles as role
+    on role.organization_id = permission.organization_id and role.role_id = permission.role_id
   join vortex_access.permission_catalogue_entries as accepted
     on accepted.organization_id = permission.organization_id
     and accepted.registration_kind = permission.registration_kind
@@ -6005,8 +6016,7 @@ begin
     and current_entry.registration_revision = bump.last_processed_registration_revision
     and current_entry.application_root_id is not distinct from bump.application_root_id
     and current_entry.owner_kind = bump.owner_kind and current_entry.owner_id = bump.owner_id
-    and current_entry.permission_id = bump.permission_id
-  where not vortex_access.permission_meaning_is_same_internal(accepted, current_entry);
+    and current_entry.permission_id = bump.permission_id;
 
   update vortex_access.organization_role_permission_entries as permission
   set continuity_revision = bump.old_revision + 1
@@ -6038,8 +6048,12 @@ begin
   get diagnostics moved_roles = row_count;
 
   select pg_catalog.count(*) filter (where vortex_access.permission_meaning_is_same_internal(accepted, current_entry)),
-    pg_catalog.count(*) filter (where not vortex_access.permission_meaning_is_same_internal(accepted, current_entry))
-  into moved_delegations, unavailable_delegations
+    pg_catalog.count(*) filter (where not vortex_access.permission_meaning_is_same_internal(accepted, current_entry)),
+    pg_catalog.count(*) filter (where delegation.state = 'live'
+      and vortex_access.permission_meaning_is_same_internal(accepted, current_entry)),
+    pg_catalog.count(*) filter (where delegation.state = 'live'
+      and not vortex_access.permission_meaning_is_same_internal(accepted, current_entry))
+  into moved_delegations, unavailable_delegations, live_moved_delegations, live_unavailable_delegations
   from vortex_access.organization_delegation_authorities as delegation
   cross join lateral pg_catalog.jsonb_array_elements(delegation.bounded_permissions) as permission(value)
   join rst_permission_meaning_bumps as bump
@@ -6111,7 +6125,10 @@ begin
     and continuity.registration_kind = bump.registration_kind
     and continuity.registration_owner_id = bump.registration_owner_id;
 
-  raise notice 'permission_meaning_migration: bumped %, moved %, made unavailable %',
+  raise notice 'permission_meaning_migration live role revisions and non-revoked delegations: bumped permissions %, moved %, made unavailable %',
+    bumped_count, live_moved_roles + live_moved_delegations,
+    live_unavailable_roles + live_unavailable_delegations;
+  raise notice 'permission_meaning_migration all stored references: bumped permissions %, moved %, made unavailable %',
     bumped_count, moved_roles + moved_delegations, unavailable_roles + unavailable_delegations;
 end
 $migrate$;
