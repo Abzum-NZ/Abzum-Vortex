@@ -261,7 +261,7 @@ function BuiltValue({
 }
 
 /** A fixed value's starting literal for a type. */
-const startLiteral = (
+export const startLiteral = (
   type: LiteralType,
   options: readonly Readonly<{ value: string }>[],
 ): FlowLiteral =>
@@ -284,7 +284,7 @@ const literalText = (literal: FlowLiteral): string =>
         ? ""
         : String(literal.value);
 
-function FixedInput({
+export function FixedInput({
   id,
   label,
   literal,

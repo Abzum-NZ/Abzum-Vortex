@@ -25,6 +25,7 @@ import {
   studioFlowReferenceChoices,
   studioFlowFieldOptions,
   studioFlowStepTypesAt,
+  studioFixedLiteralType,
   studioFlowValueOf,
   studioFlowValueSourceOf,
   samePath,
@@ -47,7 +48,7 @@ import { deferredStudioPart } from "./studio-deferred-part";
 import { useStudioTabVisited } from "./studio-frame";
 import type { StudioModuleOwnerApplication } from "./module-fields-editor";
 import { StudioFormulaEditor, formulaReferenceName } from "./studio-formula-editor";
-import { StudioFlowValueControl } from "./studio-flow-value-control";
+import { FixedInput, startLiteral, StudioFlowValueControl } from "./studio-flow-value-control";
 
 // The workflow canvas pulls in @xyflow/react; load it only when the Flows tab shows a flow.
 const StudioFlowCanvas = dynamic(
@@ -391,6 +392,29 @@ export function useStudioFlowsTab({
           onChange={(next) => onChange(next === null ? null : studioFlowValueOf(next))}
         />
       ),
+      renderLiteral: ({ id, label, type, value, onChange }) => {
+        const literalType = type === undefined ? undefined : studioFixedLiteralType(type);
+        if (literalType === undefined)
+          return (
+            <p className="text-sm text-muted-foreground">
+              {type === undefined
+                ? "Enter a valid value expression first."
+                : "This expression type has no fixed case value."}
+            </p>
+          );
+        return (
+          <FixedInput
+            key={literalType}
+            id={id}
+            label={label}
+            literal={value ?? startLiteral(literalType, [])}
+            options={[]}
+            long={false}
+            disabled={disabled}
+            onChange={onChange}
+          />
+        );
+      },
     };
   };
   const typesAt = (path: StudioFlowPath) => {

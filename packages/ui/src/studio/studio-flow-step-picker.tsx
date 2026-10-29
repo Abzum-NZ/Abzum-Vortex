@@ -23,6 +23,7 @@ import {
   flowTaskRegistry,
   type ConditionNode,
   type FlowFormula,
+  type FlowLiteral,
   type FlowValue,
   type SourceFlow,
 } from "@vortex/platform/schema";
@@ -52,6 +53,15 @@ export type StudioFlowStepPickerContext = Readonly<{
       type: string | undefined;
       value: FlowValue | null;
       onChange: (value: FlowValue | null) => void;
+    }>,
+  ) => ReactNode;
+  renderLiteral?: (
+    props: Readonly<{
+      id: string;
+      label: string;
+      type: string | undefined;
+      value: FlowLiteral | null;
+      onChange: (value: FlowLiteral) => void;
     }>,
   ) => ReactNode;
 }>;
@@ -84,7 +94,7 @@ export function StudioFlowStepPicker({
   const [formula, setFormula] = useState<FlowFormula | undefined>(undefined);
   const [expression, setExpression] = useState<FlowFormula | undefined>(undefined);
   const [expressionType, setExpressionType] = useState<string | undefined>(undefined);
-  const [caseValue, setCaseValue] = useState<FlowValue | null>(null);
+  const [caseValue, setCaseValue] = useState<FlowLiteral | null>(null);
   const [maximumItems, setMaximumItems] = useState(flowMaximumForEachItemsOther);
   const [target, setTarget] = useState("");
   const [inputs, setInputs] = useState<Readonly<Record<string, FlowValue>>>({});
@@ -199,19 +209,24 @@ export function StudioFlowStepPicker({
             value: expression ?? { op: "literal", type: "whole_number", value: 0 },
             onChange: (value, type) => {
               setExpression(value);
+              if (type !== expressionType) setCaseValue(null);
               setExpressionType(type);
             },
           })}
         </div>
       )}
-      {chosen?.type === "switch" &&
-        context.renderValue?.({
-          id: `${id}-case`,
-          label: "Case value",
-          type: expressionType,
-          value: caseValue,
-          onChange: setCaseValue,
-        })}
+      {chosen?.type === "switch" && (
+        <div className="space-y-1">
+          <Label htmlFor={`${id}-case`}>Case value</Label>
+          {context.renderLiteral?.({
+            id: `${id}-case`,
+            label: "Case value",
+            type: expressionType,
+            value: caseValue,
+            onChange: setCaseValue,
+          })}
+        </div>
+      )}
       {chosen?.type === "for_each" && (
         <div className="space-y-1">
           <Label htmlFor={`${id}-maximum`}>Maximum items</Label>
@@ -329,7 +344,7 @@ export function StudioFlowStepPicker({
           (needsCondition && formula === undefined) ||
           (grouped && firstStep === undefined) ||
           (needsExpression && expression === undefined) ||
-          (chosen?.type === "switch" && caseValue?.kind !== "literal") ||
+          (chosen?.type === "switch" && caseValue === null) ||
           (chosen?.type === "for_each" &&
             (!Number.isSafeInteger(maximumItems) ||
               maximumItems < 1 ||
@@ -347,9 +362,7 @@ export function StudioFlowStepPicker({
               ...(needsCondition && formula !== undefined ? { condition: formula } : {}),
               ...(grouped && firstStep !== undefined ? { firstStep } : {}),
               ...(needsExpression && expression !== undefined ? { value: expression } : {}),
-              ...(chosen.type === "switch" && caseValue?.kind === "literal"
-                ? { caseValue: caseValue.literal }
-                : {}),
+              ...(chosen.type === "switch" && caseValue !== null ? { caseValue } : {}),
               ...(chosen.type === "for_each" ? { maximumItems } : {}),
               ...(chosen.type === "run_flow" ? { flowId: target, inputs } : {}),
             });
