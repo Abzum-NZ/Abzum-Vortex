@@ -1,4 +1,6 @@
-﻿-- Prevent a new queued request between the check and extension removal.
+begin;
+
+-- Prevent a new queued request between the check and extension removal.
 lock table net.http_request_queue in access exclusive mode;
 do $migration$
 begin
@@ -15,10 +17,5 @@ reset role;
 drop function if exists vortex_platform.request_event_dispatch_wakeup();
 drop extension if exists pg_net;
 
-do $migration$
-begin
-  execute pg_catalog.format('alter database %I reset vortex.event_dispatch_wakeup_url', pg_catalog.current_database());
-  execute pg_catalog.format('alter database %I reset vortex.event_dispatch_wakeup_bearer', pg_catalog.current_database());
-end
-$migration$;
+commit;
 reset role;
