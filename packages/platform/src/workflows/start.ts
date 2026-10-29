@@ -176,6 +176,8 @@ export const startFlow = async <Value>(
     bindingId?: string;
     iteration: string;
     channel: "page" | "headless";
+    /** Hashed continuation read before path selection; consumed only after admission. */
+    continuation?: Readonly<{ tokenHash: string; releaseKey: string }>;
     /** Resolved by the server before opening a profile-change scope. */
     profileAccountId?: string;
   }>,
@@ -335,6 +337,11 @@ export const startFlow = async <Value>(
         .parse(rows[0]);
       if (!rate.admitted)
         return { kind: "rate_limited", retryAfterSeconds: rate.retry_after_seconds };
+    }
+    if (request.continuation !== undefined) {
+      const rows = await transaction.query`select vortex_platform.admit_flow_continuation(${request.continuation.tokenHash}::text, ${runId}::uuid, ${request.plan.flowId}::uuid, ${request.continuation.releaseKey}::text, ${commandId}::uuid) as admitted`;
+      if (!z.object({ admitted: z.boolean() }).parse(rows[0]).admitted)
+        return { kind: "refused" };
     }
     if (!segment.changes || replay !== undefined) {
       let executed: SegmentExecution<Value>;
