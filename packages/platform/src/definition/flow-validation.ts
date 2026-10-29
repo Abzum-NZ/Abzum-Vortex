@@ -23,7 +23,7 @@ import {
 } from "../workflows/flow-task-registry";
 import {
   flowMaximumTaskOutputPathDepth,
-  flowFormulaChildren,
+  flowFormulaHasUnroundedDivide,
   flowRoundingModeSchema,
   type FlowFormula,
   type FlowReference,
@@ -611,12 +611,9 @@ export function validateFlow(
         return resolveReference(value.reference, where, [...path, "reference"]);
       case "formula": {
         const type = checkFormulaAt(value.formula, where, [...path, "formula"]);
-        const hasDivide = (formula: FlowFormula): boolean =>
-          formula.op !== "round" &&
-          (formula.op === "divide" || flowFormulaChildren(formula).some(hasDivide));
         if (
           (type === "whole_number" || type === "decimal_number" || type === "money") &&
-          hasDivide(value.formula)
+          flowFormulaHasUnroundedDivide(value.formula)
         )
           add(
             path,
@@ -886,6 +883,17 @@ export function validateFlow(
         );
       else {
         const type = checkFormulaAt(value.formula, where, [...path, "formula"]);
+        if (
+          task.type !== "data.calculate" &&
+          (type === "whole_number" || type === "decimal_number" || type === "money") &&
+          flowFormulaHasUnroundedDivide(value.formula)
+        )
+          add(
+            path,
+            "vortex.definition.workflow_node_values",
+            "invalid_value",
+            "A numeric formula containing division must round its result",
+          );
         // A calculation declares its result type, and its formula must produce it.
         const declaredResult = calculationResultType(task);
         if (

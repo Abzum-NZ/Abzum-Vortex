@@ -16,6 +16,7 @@ import type {
 } from "../workflows/flow-values";
 import { flowFormulaChildren, flowFormulaSchema } from "../workflows/flow-values";
 import { flowInstantMicros } from "./flow-instant";
+import { conditionValueType, operatorAcceptsOperands } from "./condition-types";
 
 /**
  * The one evaluator of the typed flow formula tree (architecture decision 1, "Formulas"): exact
@@ -1184,13 +1185,29 @@ export const checkFlowFormula = (
     case "ends_with": {
       const left = child(formula.left, "left");
       const right = child(formula.right, "right");
+      const leftType = conditionValueType(left);
+      const rightType = conditionValueType(right);
+      const operator = {
+        eq: "equals",
+        neq: "not_equals",
+        lt: "less_than",
+        lte: "less_than_or_equal",
+        gt: "greater_than",
+        gte: "greater_than_or_equal",
+        contains: "contains",
+        starts_with: "contains",
+        ends_with: "contains",
+      }[formula.op];
       if (
-        left !== undefined &&
-        right !== undefined &&
-        left !== "json" &&
-        right !== "json" &&
-        !valueTypesCompatible(left, right, "condition") &&
-        !valueTypesCompatible(right, left, "condition")
+        leftType !== undefined &&
+        rightType !== undefined &&
+        (!operatorAcceptsOperands(
+          operator,
+          { source: "reference", semanticType: leftType },
+          { source: "reference", semanticType: rightType },
+        ) ||
+          ((formula.op === "starts_with" || formula.op === "ends_with") &&
+            (leftType !== "text" || rightType !== "text")))
       )
         add(
           path,
@@ -1208,12 +1225,16 @@ export const checkFlowFormula = (
       const value = child(formula.value, "value");
       formula.options.forEach((option, index) => {
         const type = child(option, "options", index);
+        const valueType = conditionValueType(value);
+        const optionType = conditionValueType(type);
         if (
-          value !== undefined &&
-          type !== undefined &&
-          value !== "json" &&
-          type !== "json" &&
-          !valueTypesCompatible(type, value, "condition")
+          valueType !== undefined &&
+          optionType !== undefined &&
+          !operatorAcceptsOperands(
+            "equals",
+            { source: "reference", semanticType: valueType },
+            { source: "reference", semanticType: optionType },
+          )
         )
           add(
             [...path, "options", index],
