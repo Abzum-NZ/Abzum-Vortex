@@ -39,7 +39,7 @@ import {
   assertPreparedInstallationRuntimeBundleMatches,
   writePreparedInstallationRuntimeBundle,
 } from "./installation-runtime-bundle-app";
-import type { DefinitionError } from "./definition-error";
+import { DefinitionError } from "./definition-error";
 import {
   type ApplicationInstallationCoordinatorErrorCode,
   applicationInstallationPreparationRequestSchema,
@@ -398,6 +398,33 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
     } catch (error) {
       if (isCoordinatorError(error)) throw error;
       throw fail("APPLICATION_INSTALLATION_STORAGE_INCOMPATIBLE", error);
+    }
+  };
+
+  /** Whether a release read failed because the release predates the current definition contract. */
+  const supersededRelease = (error: unknown): boolean => {
+    for (let cause: unknown = error; cause instanceof Error; cause = cause.cause)
+      if (cause instanceof DefinitionError && cause.code === "RELEASE_CONTRACT_SUPERSEDED")
+        return true;
+    return false;
+  };
+
+  /**
+   * The storage set an upgrade replaces. Temporary: remove the superseded outcome when stage and
+   * production report 0 active installations on a superseded contract.
+   */
+  const readOldStorageRelease = async (
+    session: IdentitySession,
+    target: ReleaseTarget,
+  ): Promise<ExactStorageRelease | "superseded"> => {
+    try {
+      return exactStorageRelease(
+        target,
+        await readReleaseSet(session, target, "replace_or_remove"),
+      );
+    } catch (error) {
+      if (supersededRelease(error)) return "superseded";
+      throw error;
     }
   };
 
@@ -821,7 +848,9 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
               applicationRootId: request.applicationRootId,
               applicationReleaseRevision: request.expectedActiveReleaseRevision,
             }).catch((error: unknown) => {
-              logRefusal("installation", "prior release read", "prior_release_unreadable", error);
+              // A prior release of an earlier contract has no registered authority to preserve.
+              if (!supersededRelease(error))
+                logRefusal("installation", "prior release read", "prior_release_unreadable", error);
               return null;
             });
 
@@ -836,12 +865,7 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
               applicationReleaseRevision: request.expectedActiveReleaseRevision,
             };
       const oldExact =
-        oldTarget === null
-          ? null
-          : exactStorageRelease(
-              oldTarget,
-              await readReleaseSet(verifiedSession.data, oldTarget, "replace_or_remove"),
-            );
+        oldTarget === null ? null : await readOldStorageRelease(verifiedSession.data, oldTarget);
       const switched = await inInstallerTransaction(
         "runAccessChange",
         verifiedSession.data,
@@ -911,7 +935,23 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
               active.releaseRevision !== oldTarget.applicationReleaseRevision
             )
               throw fail("APPLICATION_INSTALLATION_STALE");
-            requireExactBindings(oldTarget, oldExact.pins, active.bindings, "active");
+            // Temporary: remove when stage and production report 0 active installations on a
+            // superseded contract. A release of an earlier definition contract is never decoded;
+            // its pins are the active bindings and it detaches no contributions, because the
+            // release-set read refuses one whose Module releases declare any.
+            const old =
+              oldExact === "superseded"
+                ? {
+                    pins: byModuleRoot(
+                      active.bindings.map((binding) => ({
+                        moduleRootId: canonicalModuleRootId(binding.moduleRootId),
+                        moduleReleaseRevision: binding.moduleReleaseRevision,
+                      })),
+                    ),
+                    contributionGroups: [],
+                  }
+                : oldExact;
+            requireExactBindings(oldTarget, old.pins, active.bindings, "active");
             const detached = requireLifecycleResult(
               await detachApplicationInstallation(transaction, {
                 applicationRootId: request.applicationRootId,
@@ -923,11 +963,11 @@ export const createApplicationInstallationCoordinator = <InstalledEvents = never
               active.releaseRevision,
               "detached",
             );
-            requireExactBindings(oldTarget, oldExact.pins, detached.moduleBindings, "detached");
+            requireExactBindings(oldTarget, old.pins, detached.moduleBindings, "detached");
             await changeContributions(
               transaction,
               oldTarget,
-              oldExact.contributionGroups,
+              old.contributionGroups,
               detached.moduleBindings,
               "detach",
             );

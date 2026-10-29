@@ -62,7 +62,7 @@ begin
       message = 'Prepared runtime bundle source changed';
   end if;
   source_manifest := pg_catalog.jsonb_build_object(
-    'bundleFormatVersion', 2,
+    'bundleFormatVersion', 3,
     'application', pg_catalog.jsonb_build_object(
       'rootId', prepared_source #> '{application,rootId}',
       'definitionKey', prepared_source #> '{application,key}',
@@ -240,7 +240,7 @@ begin
     'organizationId', selected_organization_id,
     'applicationRootId', p_application_root_id,
     'applicationReleaseRevision', p_application_release_revision,
-    'bundleFormatVersion', 2,
+    'bundleFormatVersion', 3,
     'pinFingerprint', stored_bundle.pin_fingerprint,
     'sourceManifest', stored_bundle.source_manifest
   );

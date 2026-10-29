@@ -755,7 +755,19 @@ class DatabasePublicationReader implements DefinitionPublicationReader {
             release.releaseRevision !== entry.releaseRevision
           )
             return invalidStorage("readModuleReleasePage found inconsistent stored evidence");
-          return [{ previousReleaseRevision: entry.previousReleaseRevision, release }];
+          // Contracts only move forward, so every release before the first current one is
+          // superseded: that first release starts the history resolution sees.
+          const previousSuperseded =
+            entry.previousReleaseRevision !== null &&
+            this.supersededModuleReleases.has(
+              JSON.stringify([String(page.rootId).toLowerCase(), entry.previousReleaseRevision]),
+            );
+          return [
+            {
+              previousReleaseRevision: previousSuperseded ? null : entry.previousReleaseRevision,
+              release,
+            },
+          ];
         }),
       }));
       requests.forEach((request, index) => request.resolve(materialized[index]!));

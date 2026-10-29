@@ -16,7 +16,6 @@ import {
   createDatabaseDefinitionPublicationService,
   createDatabaseDefinitionPublicationRepository,
   createDefinitionStore,
-  listOrganizationBuilderRoots,
   type OrganizationBuilderRoot,
   type ImmutableDefinitionPublicationCatalogueDefinition,
   type TrustedApplicationRootOriginKind,
@@ -315,32 +314,6 @@ export const publishShippedDefinitions = async (
     published.set(descriptor.source.key, release);
   }
   return published;
-};
-
-/**
- * The organisation's own applications (built in Studio, not shipped) that have a release, so the
- * setup refresh can move any whose active release predates the current definition contract.
- */
-export const listStudioApplicationRoots = async (
-  facts: SystemContextFacts,
-  shippedKeys: readonly string[],
-): Promise<readonly OrganizationBuilderRoot[]> => {
-  const context = mintSystemContext(facts);
-  const roots: OrganizationBuilderRoot[] = [];
-  let cursor: string | null = null;
-  do {
-    const page = await inSystemTransaction(context, (transaction) =>
-      listOrganizationBuilderRoots(transaction, cursor),
-    );
-    roots.push(...page.roots);
-    cursor = page.nextCursor;
-  } while (cursor !== null);
-  return roots.filter(
-    (root) =>
-      !root.isSystemApplication &&
-      !shippedKeys.includes(root.key) &&
-      root.currentReleaseRevision !== null,
-  );
 };
 
 /**

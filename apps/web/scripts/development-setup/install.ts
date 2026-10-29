@@ -17,6 +17,9 @@ import {
 import {
   createDatabaseSystemApplicationBoundReleaseSetService,
   createPreparedInstallationRuntimeSourceReader,
+  listOrganizationBuilderRoots,
+  type HumanOrganizationRequestResult,
+  type OrganizationBuilderRoot,
   resolveModuleContributions,
   readInstallationBindings,
   type TrustedApplicationRootOriginKind,
@@ -24,7 +27,6 @@ import {
 import { releaseSetContainsCustomComponents } from "../../app/_lib/definition-catalogue";
 import {
   developmentPublicationCatalogue,
-  listStudioApplicationRoots,
   publishShippedDefinitions,
   publishStudioApplicationDraft,
 } from "./definitions";
@@ -291,14 +293,44 @@ export const refreshShippedApplications = async (
  * upgrade the shipped applications use. An application not installed, or already on a current
  * release, is left alone.
  */
+/**
+ * The organisation's own applications (built in Studio, not shipped) that have a release, listed
+ * as the steward sees them in Studio.
+ */
+const listStudioApplicationRoots = async (
+  facts: Omit<InstallFacts, "releases">,
+): Promise<readonly OrganizationBuilderRoot[]> => {
+  const roots: OrganizationBuilderRoot[] = [];
+  let cursor: string | null = null;
+  do {
+    const after: string | null = cursor;
+    const page: HumanOrganizationRequestResult<
+      Awaited<ReturnType<typeof listOrganizationBuilderRoots>>
+    > = await createHumanOrganizationRequestService({
+      identityAuthorityId: facts.identityAuthorityId,
+    }).run(
+      nominatedOwnerSession(facts.stewardIdentityId),
+      organizationSelectionCandidateSchema.parse({ organizationId: facts.system.organizationId }),
+      (transaction) => listOrganizationBuilderRoots(transaction, after),
+    );
+    if (page.kind !== "available")
+      throw new Error(`Studio applications could not be listed (${page.kind})`, { cause: page });
+    roots.push(...page.value.roots);
+    cursor = page.value.nextCursor;
+  } while (cursor !== null);
+  return roots.filter(
+    (root) =>
+      !root.isSystemApplication &&
+      !(facts.manifest.applicationKeys as readonly string[]).includes(root.key) &&
+      root.currentReleaseRevision !== null,
+  );
+};
+
 export const refreshStudioApplications = async (
   facts: Omit<InstallFacts, "releases">,
   log: (message: string) => void,
 ): Promise<void> => {
-  for (const root of await listStudioApplicationRoots(
-    facts.system,
-    facts.manifest.applicationKeys,
-  )) {
+  for (const root of await listStudioApplicationRoots(facts)) {
     const activeRevision = await readActiveReleaseRevision(facts, root.key, root.rootId);
     if (activeRevision === null) continue;
     const superseded = await readReleaseSet(facts.system, root.rootId, activeRevision).then(

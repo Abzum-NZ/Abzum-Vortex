@@ -99,7 +99,7 @@ begin
       'resolutionFingerprint',module.value -> 'resolutionFingerprint')
       order by (module.value ->> 'rootId')::uuid)
     into manifest_pins from pg_catalog.jsonb_array_elements(current_manifest -> 'modules') as module(value);
-    if current_manifest ->> 'bundleFormatVersion' is distinct from '2'
+    if current_manifest ->> 'bundleFormatVersion' is distinct from '3'
       or current_manifest -> 'application' is distinct from registered_identity
       or current_manifest ->> 'pinFingerprint' is distinct from pin_hash
       or stored_bundle.pin_fingerprint is distinct from pin_hash
@@ -133,7 +133,7 @@ begin
       'application',mapping -> 'application','modules',mapping -> 'modules',
       'preparedRecordAccessPlan',stable_plan);
   source_manifest := pg_catalog.jsonb_build_object(
-    'bundleFormatVersion', 2,
+    'bundleFormatVersion', 3,
     'application', pg_catalog.jsonb_build_object(
       'rootId', active_source #> '{application,rootId}',
       'definitionKey', active_source #> '{application,key}',

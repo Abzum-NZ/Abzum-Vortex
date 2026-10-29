@@ -124,14 +124,30 @@ const projectBoundReleaseSet = async (
   ).safeParse(candidate);
   if (!storedSet.success) throw new DefinitionError("DEFINITION_RELEASE_INTEGRITY_FAILED");
   // A release published under an earlier definition contract is history: it is never read as a
-  // release set to run, and the setup refresh moves its installation to a current release.
+  // release set to run, and the setup refresh moves its installation to a current release. The
+  // installation coordinator detaches such a release without decoding it, which is only sound when
+  // none of its Module releases declares a contribution, so that case is refused by name.
   const applicationEvidence = storedSet.data.application;
   if (
     isRecord(applicationEvidence) &&
     typeof applicationEvidence.sourceContractVersion === "string" &&
     applicationEvidence.sourceContractVersion !== applicationSourceContractVersion
-  )
-    throw new DefinitionError("RELEASE_CONTRACT_SUPERSEDED");
+  ) {
+    const contributing = storedSet.data.modules.filter((module) => {
+      const output = isRecord(module) ? module.compilationOutput : undefined;
+      const canonical = isRecord(output) ? output.canonical : undefined;
+      const content = isRecord(canonical) ? canonical.content : undefined;
+      return (
+        isRecord(content) &&
+        Array.isArray(content.contributions) &&
+        content.contributions.length > 0
+      );
+    });
+    if (contributing.length === 0) throw new DefinitionError("RELEASE_CONTRACT_SUPERSEDED");
+    throw new DefinitionError("RELEASE_CONTRACT_SUPERSEDED_WITH_CONTRIBUTIONS", {
+      detail: `application ${String(applicationEvidence.key)} (${String(applicationEvidence.rootId)}) has Module releases on an earlier contract that declare contributions: ${contributing.map((module) => (isRecord(module) ? String(module.key) : "?")).join(", ")}`,
+    });
+  }
 
   const storedApplication = storedConsumerReleaseEvidenceSchema.safeParse(
     storedSet.data.application,

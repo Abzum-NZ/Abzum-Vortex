@@ -162,7 +162,7 @@ begin
       message = 'Installation runtime bundle source changed';
   end if;
   source_manifest := pg_catalog.jsonb_build_object(
-    'bundleFormatVersion', 2,
+    'bundleFormatVersion', 3,
     'application', pg_catalog.jsonb_build_object(
       'rootId', prepared_source #> '{application,rootId}',
       'definitionKey', prepared_source #> '{application,key}',

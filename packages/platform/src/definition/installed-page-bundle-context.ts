@@ -8,6 +8,7 @@ import {
   type SystemApplicationBoundReleaseSetResult,
 } from "./definition-consumer-read";
 import {
+  installationRuntimeBundleFormatVersion,
   installationRuntimeBundleKeySchema,
   installationRuntimeBundlePagesSectionSchema,
   installationRuntimeBundleSections,
@@ -354,7 +355,7 @@ const readActiveInstallationBundleSections = async (
     const keyCandidate = installationRuntimeBundleKeySchema.safeParse({
       applicationRootId: state.identity.applicationRootId,
       applicationReleaseRevision: state.identity.applicationReleaseRevision,
-      bundleFormatVersion: 2,
+      bundleFormatVersion: installationRuntimeBundleFormatVersion,
     });
     if (!keyCandidate.success)
       throw unexpectedDefinitionFailure(
