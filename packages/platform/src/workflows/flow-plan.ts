@@ -494,6 +494,13 @@ export const compileFlowPlan = (
       reference.source === "variable" ? [reference.name] : [],
     ),
   );
+  const pageTaskOutputs = new Set(
+    pageReferences.flatMap((reference) =>
+      reference.source === "task_output"
+        ? [`outputs.${reference.task}.${reference.key}`]
+        : [],
+    ),
+  );
   return {
     flowId: flow.id,
     definition: flow,
@@ -535,8 +542,15 @@ export const compileFlowPlan = (
               section: segment.section,
               guard: segment.guard,
               inputs: segment.inputs,
-              outputs: segment.outputs,
-              outputMembers: segment.outputMembers,
+              outputs: Object.fromEntries(
+                Object.entries(segment.outputs).filter(([name]) => pageTaskOutputs.has(name)),
+              ),
+              outputMembers: Object.fromEntries(
+                Object.entries(segment.outputMembers).filter(([name]) => {
+                  const [task, output] = name.split(".");
+                  return pageTaskOutputs.has(`outputs.${task}.${output}`);
+                }),
+              ),
               labels: segment.labels,
             },
       ),
