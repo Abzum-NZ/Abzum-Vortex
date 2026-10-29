@@ -27,11 +27,11 @@ catalog:
   knip: 6.43.0
   re2js: 2.9.1
   "@xyflow/react": 12.12.0
-  "@tanstack/react-table": 8.21.3
+  "@tanstack/react-table": 9.3.1
   "@tanstack/react-virtual": 3.14.22
   file-type: 22.2.0
   exceljs: 4.4.0
-  "@noble/hashes": 1.8.0
+  "@noble/hashes": 2.4.0
 
 catalogMode: strict
 
