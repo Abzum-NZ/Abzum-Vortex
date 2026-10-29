@@ -305,7 +305,7 @@ begin
         policy_value := policy_choice #> '{activationPolicy,policy}';
         if policy_value - array[
           'activationPolicyId', 'revision', 'maximumActivationDurationSeconds',
-          'reasonRequired', 'recentAuthentication', 'requiredCallerExecutionBindingId'
+          'reasonRequired', 'recentAuthentication'
         ]::text[] <> '{}'::jsonb
           or not (policy_value ?& array[
             'activationPolicyId', 'revision', 'maximumActivationDurationSeconds',
@@ -317,16 +317,6 @@ begin
             'number'
           or pg_catalog.jsonb_typeof(policy_value -> 'reasonRequired') <> 'boolean'
           or pg_catalog.jsonb_typeof(policy_value -> 'recentAuthentication') <> 'object'
-          or (
-            policy_value ? 'requiredCallerExecutionBindingId'
-            and (
-              pg_catalog.jsonb_typeof(policy_value -> 'requiredCallerExecutionBindingId') <>
-                'string'
-              or not vortex_platform.is_non_nil_uuid(
-                policy_value ->> 'requiredCallerExecutionBindingId'
-              )
-            )
-          )
           or (policy_value ->> 'revision')::numeric < 1
           or (policy_value ->> 'revision')::numeric > 9007199254740991
           or (policy_value ->> 'revision')::numeric <>
@@ -1164,27 +1154,12 @@ begin
     order by item.ordinality;
   end if;
 
-  -- A named required caller must be a current, active execution binding of this organisation;
-  -- it is read without a lock because binding writers lock the binding before the access version.
-  if policy_value ? 'requiredCallerExecutionBindingId' and not exists (
-    select 1
-    from vortex_access.flow_execution_bindings as binding
-    where binding.execution_binding_id =
-        (policy_value ->> 'requiredCallerExecutionBindingId')::uuid
-      and binding.organization_id = target_organization_id
-      and binding.is_current
-      and binding.state = 'active'
-  ) then
-    raise exception using errcode = '22023',
-      message = 'Required caller execution binding is unavailable';
-  end if;
-
   if policy_value is not null then
     insert into vortex_access.organization_role_activation_policy_revisions (
       organization_id, role_id, activation_policy_id, revision,
       maximum_activation_duration_seconds,
       reason_required, authentication_requirement,
-      authentication_maximum_age_seconds, required_caller_execution_binding_id,
+      authentication_maximum_age_seconds,
       changed_by, changed_at, change_correlation_id
     ) values (
       target_organization_id, target_role_id, target_activation_policy_id,
@@ -1195,7 +1170,6 @@ begin
       case when policy_value #>> '{recentAuthentication,kind}' = 'none' then null
         else (policy_value #>>
           '{recentAuthentication,maximumAgeSeconds}')::numeric::bigint end,
-      (policy_value ->> 'requiredCallerExecutionBindingId')::uuid,
       p_changed_by, operation_at, p_correlation_id
     );
   end if;
@@ -1366,7 +1340,6 @@ begin
           'maximumAgeSeconds', policy.authentication_maximum_age_seconds
         )
       end,
-      'requiredCallerExecutionBindingId', policy.required_caller_execution_binding_id,
       'changedByActorId', policy.changed_by,
       'changedAt', policy.changed_at,
       'changeCorrelationId', policy.change_correlation_id

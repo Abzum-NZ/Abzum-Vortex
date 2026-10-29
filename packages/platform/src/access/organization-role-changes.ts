@@ -78,7 +78,6 @@ export const organizationRoleNewActivationPolicySchema = z
       .max(Number.MAX_SAFE_INTEGER),
     reasonRequired: z.boolean(),
     recentAuthentication: roleRecentAuthenticationRequirementSchema,
-    requiredCallerExecutionBindingId: containedComponentIdSchema.optional(),
   })
   .strict();
 

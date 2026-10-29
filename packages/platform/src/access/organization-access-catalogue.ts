@@ -163,7 +163,6 @@ export const roleActivationPolicyRevisionSchema = z
     reasonRequired: z.boolean(),
     recentAuthentication: roleRecentAuthenticationRequirementSchema,
     /** The one published flow execution binding permitted to activate; absent means any eligible caller. */
-    requiredCallerExecutionBindingId: containedComponentIdSchema.optional(),
     changedByActorId: actorIdSchema,
     changedAt: timestampSchema,
     changeCorrelationId: correlationIdSchema,

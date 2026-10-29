@@ -13,8 +13,7 @@ create or replace function vortex_access.coordinate_organization_role_activation
   p_membership_id uuid,
   p_expected_membership_revision bigint,
   p_changed_by uuid,
-  p_correlation_id uuid,
-  p_invoking_execution_binding_id uuid default null
+  p_correlation_id uuid
 )
 returns table (
   outcome text,
@@ -134,8 +133,7 @@ begin
       revision.authority_continuity_revision,
       revision.policy_continuity_revision, revision.activation_policy_id,
       revision.activation_policy_revision,
-      policy.maximum_activation_duration_seconds,
-      policy.required_caller_execution_binding_id
+      policy.maximum_activation_duration_seconds
     into role_fact
     from vortex_access.organization_roles as role
     join vortex_access.organization_role_revisions as revision
@@ -173,34 +171,6 @@ begin
       ) then
       raise exception using errcode = '40001',
         message = 'Organization role activation role evidence is stale or unavailable';
-    end if;
-
-    -- A policy that names a required caller refuses every other invocation. The named
-    -- binding must be the exact current, active, unexpired grant in this organisation whose
-    -- effective actor is the actor making this change; a null or different value refuses.
-    if role_fact.required_caller_execution_binding_id is not null
-      and (
-        p_invoking_execution_binding_id is distinct from
-          role_fact.required_caller_execution_binding_id
-        or not exists (
-          select 1
-          from vortex_access.flow_execution_bindings as binding
-          where binding.execution_binding_id = p_invoking_execution_binding_id
-            and binding.organization_id = p_organization_id
-            and binding.is_current
-            and binding.state = 'active'
-            and (
-              binding.expires_at is null
-              or binding.expires_at > pg_catalog.clock_timestamp()
-            )
-            and (
-              binding.actor_organization_account_id = p_changed_by
-              or binding.actor_system_actor_id = p_changed_by
-            )
-        )
-      ) then
-      raise exception using errcode = '42501',
-        message = 'Organization role activation requires its named caller';
     end if;
 
     perform 1
@@ -468,16 +438,16 @@ $function$;
 revoke execute on function
   vortex_access.coordinate_organization_role_activation_change(
     text, uuid, uuid, bigint, uuid, uuid, bigint, bigint, text, uuid,
-    bigint, uuid, bigint, uuid, uuid, uuid
+    bigint, uuid, bigint, uuid, uuid
   )
 from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 
 comment on function vortex_access.coordinate_organization_role_activation_change(
   text, uuid, uuid, bigint, uuid, uuid, bigint, bigint, text, uuid,
-  bigint, uuid, bigint, uuid, uuid, uuid
+  bigint, uuid, bigint, uuid, uuid
 ) is
-  'Owner-only atomic individual role activation or terminal revocation. It changes Access once but grants no caller authority; a policy that names a required caller refuses any other invoking execution binding.';
+  'Owner-only atomic individual role activation or terminal revocation. It changes Access once but grants no caller authority.';
 
-alter function vortex_access.coordinate_organization_role_activation_change(p_operation text, p_organization_id uuid, p_role_activation_id uuid, p_expected_activation_revision bigint, p_organization_account_id uuid, p_role_id uuid, p_expected_role_revision bigint, p_requested_duration_seconds bigint, p_eligibility_source_kind text, p_role_assignment_id uuid, p_expected_role_assignment_revision bigint, p_membership_id uuid, p_expected_membership_revision bigint, p_changed_by uuid, p_correlation_id uuid, p_invoking_execution_binding_id uuid) owner to vortex_owner;
+alter function vortex_access.coordinate_organization_role_activation_change(p_operation text, p_organization_id uuid, p_role_activation_id uuid, p_expected_activation_revision bigint, p_organization_account_id uuid, p_role_id uuid, p_expected_role_revision bigint, p_requested_duration_seconds bigint, p_eligibility_source_kind text, p_role_assignment_id uuid, p_expected_role_assignment_revision bigint, p_membership_id uuid, p_expected_membership_revision bigint, p_changed_by uuid, p_correlation_id uuid) owner to vortex_owner;
 
-grant execute on function vortex_access.coordinate_organization_role_activation_change(p_operation text, p_organization_id uuid, p_role_activation_id uuid, p_expected_activation_revision bigint, p_organization_account_id uuid, p_role_id uuid, p_expected_role_revision bigint, p_requested_duration_seconds bigint, p_eligibility_source_kind text, p_role_assignment_id uuid, p_expected_role_assignment_revision bigint, p_membership_id uuid, p_expected_membership_revision bigint, p_changed_by uuid, p_correlation_id uuid, p_invoking_execution_binding_id uuid) to postgres;
+grant execute on function vortex_access.coordinate_organization_role_activation_change(p_operation text, p_organization_id uuid, p_role_activation_id uuid, p_expected_activation_revision bigint, p_organization_account_id uuid, p_role_id uuid, p_expected_role_revision bigint, p_requested_duration_seconds bigint, p_eligibility_source_kind text, p_role_assignment_id uuid, p_expected_role_assignment_revision bigint, p_membership_id uuid, p_expected_membership_revision bigint, p_changed_by uuid, p_correlation_id uuid) to postgres;
