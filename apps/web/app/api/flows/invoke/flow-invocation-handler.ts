@@ -4,6 +4,7 @@ import {
   flowBindingInvocationSchema,
   logRefusal,
   recordIdSchema,
+  sameId,
   type ProtectedOperationChannel,
 } from "@vortex/platform/schema";
 import { invokeInstalledFlow } from "@vortex/platform/server";
@@ -35,6 +36,8 @@ import {
 import { resolveIdentitySession } from "../../../auth/_lib/session-server";
 import { privateJsonResponse as privateResponse } from "../../../_lib/private-response";
 import { mapWebError } from "../../../_lib/web-error-mapper";
+import { validateProjectedControlOption } from "../../../_lib/application-page/reference-choice";
+import { validateProjectedLinkControl } from "../../../_lib/application-page/link-input";
 
 const maximumRequestBodyLength = 131_072;
 const requestSchema = z
@@ -121,6 +124,48 @@ export const createFlowInvocationHandler =
         telemetry: appTelemetry,
         releaseCatalogue: installedReleaseCatalogue,
         continuationKey: getQueryContinuationKey(),
+        validateControlOption: (input) => {
+          if (input.bound.scope.previewInstallationId !== undefined) {
+            console.error("[flows] preview control demand not prepared");
+            return Promise.resolve(false);
+          }
+          return validateProjectedControlOption(
+            input.bound,
+            input.context,
+            input.page,
+            input.placementId,
+            input.raw,
+            input.parsed,
+            input.subject,
+            (gate) => {
+              if (
+                input.subject === undefined ||
+                !sameId(input.subject.recordTypeId, gate.recordTypeId)
+              )
+                return new Set();
+              const held = Object.entries(input.heldValues).find(([field]) =>
+                sameId(field, gate.fieldId),
+              )?.[1];
+              return new Set(
+                typeof held === "string"
+                  ? [held]
+                  : Array.isArray(held)
+                    ? held.filter((value): value is string => typeof value === "string")
+                    : [],
+              );
+            },
+            (placementId, selected) =>
+              validateProjectedLinkControl(
+                input.bound,
+                input.context,
+                input.page,
+                placementId,
+                selected,
+                input.controls,
+                async () => ({ kind: "ready" }),
+              ),
+          );
+        },
         guidedFormControls: getGuidedFormControlIds,
         guidedFormFlowId: getGuidedFormFlowId,
         confirmationKey: guidedFormConfirmationKey,

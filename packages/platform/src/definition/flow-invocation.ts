@@ -118,6 +118,19 @@ type InvocationDependencies = Readonly<{
   telemetry: NonNullable<Parameters<typeof createRecordSaveService>[0]["telemetry"]>;
   releaseCatalogue: Parameters<typeof createDatabaseApplicationBoundReleaseSetService>[0];
   continuationKey: QueryContinuationKey;
+  validateControlOption: (
+    input: Readonly<{
+      bound: BoundHumanOrganizationRequest;
+      context: InstalledRuntimeContext;
+      page: Readonly<Record<string, unknown>>;
+      placementId: string;
+      raw: string;
+      parsed: JsonValue;
+      subject: Readonly<{ recordTypeId: string; recordId: string }> | undefined;
+      heldValues: Readonly<Record<string, JsonValue>>;
+      controls: Readonly<Record<string, string>>;
+    }>,
+  ) => Promise<boolean>;
   guidedFormControls: (
     page: unknown,
     shells?: unknown,
