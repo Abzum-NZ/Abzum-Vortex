@@ -158,7 +158,7 @@ unknown and disallowed content stays unavailable. This is content admission, wit
 scanner integration. Save activates admitted references and detaches removed files atomically
 inside `apply_record_changes`. Pending uploads never appear in record detail or download routes.
 
-`VORTEX_CLUSTER_ID` and `VORTEX_TENANT_ADMINISTRATION_OPERATOR_ACTOR_ID` are not needed locally: `pnpm setup:local` takes the configured operator from its manifest. `VORTEX_APPLICATION_KESTRA_URL` and the flow secret `VORTEX_WORKFLOW_CALLBACK_KEY` belong to the application Kestra instance; they are optional for `pnpm dev` (only the `/api/flows/callback` route reads them) and not read by `pnpm setup:local`.
+`VORTEX_CLUSTER_ID` and `VORTEX_TENANT_ADMINISTRATION_OPERATOR_ACTOR_ID` are not needed locally: `pnpm setup:local` takes the configured operator from its manifest.
 
 ## Delivery and contribution
 

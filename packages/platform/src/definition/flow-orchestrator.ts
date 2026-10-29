@@ -2,22 +2,11 @@ import "server-only";
 
 import { randomBytes, randomUUID } from "node:crypto";
 import { z } from "zod";
-import {
-  identitySessionSchema,
-  organizationSelectionCandidateSchema,
-  type IdentitySession,
-  type OrganizationSelectionCandidate,
-} from "../access/identity-access";
-import { ruleIdSchema } from "../catalogue/identifiers";
+import type { IdentitySession, OrganizationSelectionCandidate } from "../access/identity-access";
 import { isRecord } from "../catalogue/runtime-primitives";
-import {
-  executeNamedActionCommandSchema,
-  type ExecuteNamedActionCommand,
-} from "../records/named-actions";
-import { executionAuthorityContextSchema, type FlowDefinition } from "../workflows/flow-contracts";
+import type { ExecuteNamedActionCommand } from "../records/named-actions";
+import type { FlowDefinition } from "../workflows/flow-contracts";
 import { flowWarningNoticeSchema } from "../workflows/form-continuation-contracts";
-import { readFlowRunAsPrincipalForRun } from "../access/flow-run-as-principals";
-import { withRuntimeTransaction } from "../db/request-transaction";
 import { collectActionFlowTasks, flowLibraryOf } from "../rules/action-flow-run";
 import {
   resumeFlowRun,
@@ -37,10 +26,6 @@ import {
   withinPayload,
 } from "./flow-orchestrator-support";
 import {
-  committedFlowStartIntentSchema,
-  flowReleaseIdentityMatches,
-  flowReleaseIdentitySchema,
-  releaseIdentityForIntent,
   resumeRequestSchema,
   startRequestSchema,
   subjectSchema,
@@ -340,33 +325,6 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
 
   return Object.freeze({
     /**
-     * Runs one named action for the verified person: resolves the exact release's action flow and
-     * hands the record port a run of that flow to call inside its transaction, where the action's
-     * permission is decided. The port applies every record change the flow asks for in one apply
-     * record changes call. Nothing about the actor or the organisation is read from the command.
-     */
-    async executeAction(
-      session: IdentitySession,
-      selection: OrganizationSelectionCandidate,
-      commandCandidate: unknown,
-    ): Promise<NamedActionExecutionResult> {
-      try {
-        const parsed = z
-          .object({
-            session: identitySessionSchema,
-            selection: organizationSelectionCandidateSchema,
-          })
-          .safeParse({ session, selection });
-        const command = executeNamedActionCommandSchema.safeParse(commandCandidate);
-        if (!parsed.success || !command.success) return { kind: "unavailable" };
-        return await runNamedAction(parsed.data.session, parsed.data.selection, command.data);
-      } catch (error) {
-        reportUnexpectedFailure("named action execution", error);
-        return { kind: "unavailable" };
-      }
-    },
-
-    /**
      * Starts a run from a binding (flow id and typed inputs) for the verified initiator. The run id
      * is issued here. The inputs and the surface's subject are values only: authority,
      * organisation and actor never come from them.
@@ -422,138 +380,6 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
         return await drive(run, first);
       } catch (error) {
         reportUnexpectedFailure("flow start", error);
-        return refused;
-      }
-    },
-
-    /** Starts one verified background Event flow using only its committed start-intent ID. */
-    async startCommittedIntent(intentIdCandidate: string): Promise<FlowOrchestratorResponse> {
-      try {
-        const intentId = z.uuid().safeParse(intentIdCandidate);
-        if (
-          !intentId.success ||
-          dependencies.readCommittedStartIntent === undefined ||
-          dependencies.resolveCommittedStartRelease === undefined
-        )
-          return refused;
-
-        const storedIntent = await dependencies.readCommittedStartIntent(intentId.data);
-        const parsedIntent = committedFlowStartIntentSchema.safeParse(storedIntent);
-        if (
-          !parsedIntent.success ||
-          parsedIntent.data.intentId.toLowerCase() !== intentId.data.toLowerCase()
-        )
-          return refused;
-        const intent = parsedIntent.data;
-        // Trigger field values are not yet mapped by the Event dispatcher; never silently ignore them.
-        if (
-          Object.keys(intent.triggerValues).length > 0 ||
-          !withinPayload(intent.inputs) ||
-          !withinPayload(intent.triggerValues)
-        )
-          return refused;
-
-        const resolvedRelease = await dependencies.resolveCommittedStartRelease(intent);
-        if (resolvedRelease === undefined) return refused;
-        const resolvedIdentity = flowReleaseIdentitySchema.safeParse(resolvedRelease.identity);
-        if (
-          !resolvedIdentity.success ||
-          !flowReleaseIdentityMatches(releaseIdentityForIntent(intent), resolvedIdentity.data)
-        )
-          return refused;
-
-        const library = libraryOf(resolvedRelease);
-        const flow = library(intent.flowId);
-        if (
-          flow === undefined ||
-          flow.execution !== "background" ||
-          (flow.runAs.kind !== "specified_account" && flow.runAs.kind !== "system") ||
-          !flow.triggers.some(
-            (trigger) => trigger.type === "Event" && trigger.id === intent.trigger.id,
-          )
-        )
-          return refused;
-
-        const executionBindingId = flow.runAs.executionBindingId;
-        // Access retains the flow identity under its RuleId brand; both contracts validate
-        // the same non-nil UUID, so cross that boundary explicitly before the scoped read.
-        const accessFlowId = ruleIdSchema.safeParse(intent.flowId);
-        if (!accessFlowId.success) return refused;
-        const principalRead = await withRuntimeTransaction((transaction) =>
-          readFlowRunAsPrincipalForRun(transaction, {
-            executionBindingId,
-            organizationId: intent.organizationId,
-            applicationRootId: intent.applicationRootId,
-            releaseVersion: intent.applicationReleaseVersion,
-            flowId: accessFlowId.data,
-          }),
-        );
-        if (principalRead.outcome !== "available") return refused;
-        const principal = principalRead.principal;
-        if (
-          principal.state !== "active" ||
-          principal.actor.kind !== flow.runAs.kind ||
-          principal.executionBindingId.toLowerCase() !==
-            flow.runAs.executionBindingId.toLowerCase() ||
-          principal.organizationId.toLowerCase() !== intent.organizationId.toLowerCase() ||
-          principal.applicationRootId.toLowerCase() !== intent.applicationRootId.toLowerCase() ||
-          principal.releaseVersion !== intent.applicationReleaseVersion ||
-          principal.flowId.toLowerCase() !== intent.flowId.toLowerCase()
-        )
-          return refused;
-
-        const issuedAt = now();
-        const executionAuthority = executionAuthorityContextSchema.safeParse({
-          kind: "execution_authority",
-          organizationId: intent.organizationId,
-          applicationRootId: intent.applicationRootId,
-          releaseVersion: intent.applicationReleaseVersion,
-          flowId: intent.flowId,
-          executionBindingId: flow.runAs.executionBindingId,
-          actor: principal.actor,
-          correlationId: intent.correlationId,
-          issuedAt: issuedAt.toISOString(),
-          expiresAt: new Date(issuedAt.valueOf() + serverMilliseconds).toISOString(),
-        });
-        if (!executionAuthority.success) return refused;
-
-        const run: Run = {
-          authority: {
-            kind: "execution_authority",
-            context: executionAuthority.data,
-            organizationId: intent.organizationId,
-          },
-          origin: intent.origin,
-          originId: intent.originId,
-          flowId: intent.flowId,
-          release: resolvedRelease,
-          library,
-          carriedMilliseconds: 0,
-          segmentStart: clock(),
-          unavailable: [],
-          warnings: [],
-          refusalLoggedTaskIds: [],
-          sensitive: [],
-          selectedRecordReadSeen: false,
-        };
-        const actor =
-          principal.actor.kind === "specified_account"
-            ? principal.actor.organizationAccountId
-            : principal.actor.systemActorId;
-        const first = startFlowRun(
-          {
-            runId: intent.intentId,
-            flowId: intent.flowId,
-            inputs: intent.inputs,
-            now: issuedAt.toISOString(),
-            actor,
-            executionKinds: ["background"],
-          },
-          run.library,
-        );
-        return await drive(run, first);
-      } catch (error) {
-        reportUnexpectedFailure("committed intent start", error);
         return refused;
       }
     },

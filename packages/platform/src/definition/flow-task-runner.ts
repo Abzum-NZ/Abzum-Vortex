@@ -192,7 +192,7 @@ export const createFlowTaskRunner = (
 
   /**
    * Plans one named action of the exact release, run for the surface's subject record through the
-   * same path as its binding (`executeAction`).
+   * same named-action path (`runNamedAction`).
    */
   const planNamedAction = (
     run: Run,
@@ -415,7 +415,7 @@ export const createFlowTaskRunner = (
     }
 
     // Otherwise the key may name one named action of the exact release, run for the surface's
-    // subject record through the same path as its binding (`executeAction`).
+    // subject record through the same named-action path (`runNamedAction`).
     const named =
       typeof operationKey === "string" ? run.release.namedActions?.get(operationKey) : undefined;
     if (named === undefined)
