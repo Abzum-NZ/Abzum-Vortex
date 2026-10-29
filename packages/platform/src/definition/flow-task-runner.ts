@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { IdentitySession, OrganizationSelectionCandidate } from "../access/identity-access";
-import { jsonValueSchema, type JsonValue } from "../catalogue/common";
+import type { JsonValue } from "../catalogue/common";
 import { groupIdSchema, recordIdSchema, recordTypeIdSchema } from "../catalogue/identifiers";
 import { PLATFORM_SERVICE_OPERATIONS } from "../catalogue/platform-service-operation-catalogue";
 import { describeFailure, isRecord, sameId } from "../catalogue/runtime-primitives";
@@ -117,7 +117,7 @@ export const createFlowTaskRunner = (
   const isEmptyEffectOutput = (value: unknown): boolean =>
     isRecord(value) && Object.keys(value).length === 0;
 
-  /** A refused save stores only its located field keys and codes, so a replay reports them again. */
+  /** A stored refusal carries its stable code, never rendered correction text. */
   const storedCorrectionDiagnostic = (value: unknown): FlowRefusalFeedback | undefined => {
     if (!isRecord(value) || Object.keys(value).length !== 1) return undefined;
     const parsed = flowRefusalFeedbackSchema.safeParse(value.diagnostic);
@@ -638,25 +638,7 @@ export const createFlowTaskRunner = (
             outcome: "validation",
             ...(diagnostic.success ? { diagnostic: diagnostic.data } : {}),
           },
-          stored: diagnostic.success
-            ? {
-                diagnostic: {
-                  code: diagnostic.data.code,
-                  ...(located.length === 0
-                    ? {}
-                    : {
-                        corrections: located.map((correction) => ({
-                          field: correction.field,
-                          code: correction.code,
-                          ...(correction.message === undefined
-                            ? {}
-                            : { message: correction.message }),
-                        })),
-                      }),
-                  ...(ruleRefusal === undefined ? {} : { ruleRefusal }),
-                },
-              }
-            : {},
+          stored: diagnostic.success ? { diagnostic: { code: diagnostic.data.code } } : {},
         };
       }
       return {
@@ -728,7 +710,7 @@ export const createFlowTaskRunner = (
           presentation: { ...guidance, code: diagnostic.code },
         });
     }
-    if (diagnostic !== undefined) stored.diagnostic = jsonValueSchema.parse(diagnostic);
+    if (diagnostic !== undefined) stored.diagnostic = { code: diagnostic.code };
     return {
       result: {
         outcome,

@@ -59,6 +59,7 @@ import {
  */
 
 export { flowRunStateVersion } from "./flow-interpreter-state";
+export { flowPathGuardMatches } from "./flow-path-guard";
 
 /** The safe outcomes a failed run reports; the default error handler shows each of them. */
 export type FlowFailureOutcome = "refused" | "conflict" | "validation" | "uncertain" | "failed";

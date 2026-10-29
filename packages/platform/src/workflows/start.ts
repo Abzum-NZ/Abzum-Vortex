@@ -2,6 +2,7 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 import { z } from "zod";
+import { requireRequestSavepoint } from "../db/request-transaction";
 import {
   createHumanOrganizationRequestService,
   HumanOrganizationRequestRestart,
@@ -10,7 +11,7 @@ import {
 } from "../access/human-organization-request";
 import type { IdentitySession, OrganizationSelectionCandidate } from "../access/identity-access";
 import { jsonValueSchema } from "../catalogue/common";
-import { flowRefusalFeedbackSchema } from "./flow-refusal-feedback";
+import { flowRefusalFeedbackCodeSchema } from "./flow-refusal-feedback";
 import type { FlowPlan, FlowServerSegment } from "./flow-plan";
 import type { FlowSegmentReplay, FlowTaskOutcome } from "../rules/flow-interpreter";
 import type { BeforeSaveRuleWarning } from "../rules/before-save-flow-run";
@@ -30,7 +31,7 @@ const effectSchema = z
       "failed",
     ]),
     outputs: z.record(z.string(), jsonValueSchema).optional(),
-    diagnostic: flowRefusalFeedbackSchema.optional(),
+    diagnostic: z.object({ code: flowRefusalFeedbackCodeSchema }).strict().optional(),
   })
   .strict();
 const receiptSchema = z
@@ -81,6 +82,8 @@ export type FlowSegmentReceipt = Readonly<{
 }>;
 type SegmentExecution<Value> = Readonly<{
   value: Value;
+  /** The segment ended refused: all its effects and its receipt must roll back. */
+  refused: boolean;
   /** Only task outcomes and declared non-sensitive effect outputs; null means not replayable. */
   effects: Readonly<
     Record<
@@ -221,38 +224,57 @@ export const startFlow = async <Value>(
         .parse(rows[0]);
       if (!rate.admitted)
         return { kind: "rate_limited", retryAfterSeconds: rate.retry_after_seconds };
-      if (segment.changes) {
+    }
+    if (!segment.changes || replay !== undefined) {
+      const executed = await dependencies.execute(context, segment, replay);
+      if (Object.keys(executed.effects).length > 0)
+        throw new Error("FLOW_SEGMENT_UNEXPECTED_EFFECT");
+      return { kind: "completed", value: executed.value };
+    }
+    const rollback = new Error("FLOW_SEGMENT_REFUSED_ROLLBACK");
+    let declined: Readonly<{ value: Value }> | undefined;
+    try {
+      const value = await requireRequestSavepoint(transaction).withSavepoint(async (child) => {
         const rows =
-          await transaction.query`select vortex_record.flow_segment_receipt(${commandId}::uuid, false) as result`;
+          await child.query`select vortex_record.flow_segment_receipt(${commandId}::uuid, false) as result`;
         if (claimSchema.parse(rows[0]?.result).status !== "claimed")
           throw new Error("FLOW_SEGMENT_CLAIM_INVALID");
-      }
+        const executed = await dependencies.execute(
+          { ...context, transaction: child },
+          segment,
+          undefined,
+        );
+        if (executed.refused) {
+          declined = { value: executed.value };
+          throw rollback;
+        }
+        const safeEffects: Record<string, FlowSegmentReplay[string]> = {};
+        for (const [key, effect] of Object.entries(executed.effects)) {
+          const [taskPath, iteration] = z
+            .tuple([z.string().min(1).max(1000), z.string().min(1).max(200)])
+            .parse(JSON.parse(key));
+          if (effect.replay !== null && effect.replay.outcome !== effect.outcome)
+            throw new Error("FLOW_SEGMENT_EFFECT_OUTCOME_MISMATCH");
+          safeEffects[key] = effect.replay;
+          const outputs = effect.replay?.outputs ?? {};
+          await child.query`select vortex_platform.record_flow_segment_effect(${runId.data}::uuid, ${taskPath}::text, ${iteration}::text, ${effect.outcome}::text, ${JSON.stringify(outputs)}::text::jsonb)`;
+        }
+        const warnings = Object.fromEntries(
+          Object.entries(executed.warnings).map(([key, entries]) => [
+            key,
+            entries.map(storeFlowWarning),
+          ]),
+        );
+        const receipt = receiptSchema.parse({ effects: safeEffects, warnings });
+        await child.query`select vortex_record.complete_flow_segment_receipt(${commandId}::uuid, ${JSON.stringify(receipt)}::text::jsonb)`;
+        return executed.value;
+      });
+      return { kind: "completed", value };
+    } catch (error) {
+      if (error === rollback && declined !== undefined)
+        return { kind: "completed", value: declined.value };
+      throw error;
     }
-    const executed = await dependencies.execute(context, segment, replay);
-    if ((!segment.changes || replay !== undefined) && Object.keys(executed.effects).length > 0)
-      throw new Error("FLOW_SEGMENT_UNEXPECTED_EFFECT");
-    if (segment.changes && replay === undefined) {
-      const safeEffects: Record<string, FlowSegmentReplay[string]> = {};
-      for (const [key, effect] of Object.entries(executed.effects)) {
-        const [taskPath, iteration] = z
-          .tuple([z.string().min(1).max(1000), z.string().min(1).max(200)])
-          .parse(JSON.parse(key));
-        if (effect.replay !== null && effect.replay.outcome !== effect.outcome)
-          throw new Error("FLOW_SEGMENT_EFFECT_OUTCOME_MISMATCH");
-        safeEffects[key] = effect.replay;
-        const outputs = effect.replay?.outputs ?? {};
-        await transaction.query`select vortex_platform.record_flow_segment_effect(${runId.data}::uuid, ${taskPath}::text, ${iteration}::text, ${effect.outcome}::text, ${JSON.stringify(outputs)}::text::jsonb)`;
-      }
-      const warnings = Object.fromEntries(
-        Object.entries(executed.warnings).map(([key, entries]) => [
-          key,
-          entries.map(storeFlowWarning),
-        ]),
-      );
-      const receipt = receiptSchema.parse({ effects: safeEffects, warnings });
-      await transaction.query`select vortex_record.complete_flow_segment_receipt(${commandId}::uuid, ${JSON.stringify(receipt)}::text::jsonb)`;
-    }
-    return { kind: "completed", value: executed.value };
   };
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
@@ -273,6 +295,8 @@ export const startFlow = async <Value>(
       if (!(error instanceof HumanOrganizationRequestRestart)) throw error;
     }
   }
-  console.error("[flows] segment could not acquire stable relationship totals after three attempts");
+  console.error(
+    "[flows] segment could not acquire stable relationship totals after three attempts",
+  );
   return { kind: "refused" };
 };
