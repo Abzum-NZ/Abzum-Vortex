@@ -15,7 +15,6 @@
     "./theme/appearance": "./src/theme/appearance.ts",
     "./theme/styles": "./src/theme/theme-styles.ts",
     "./display/projected-data": "./src/display/projected-data.ts",
-    "./display/board-payload": "./src/display/board-payload.ts",
     "./launcher/bindings": "./src/launcher/bindings.ts",
     "./studio/contextual-palette": "./src/studio/contextual-palette.ts",
     "./studio": "./src/studio/index.ts",

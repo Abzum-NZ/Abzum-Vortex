@@ -5,7 +5,7 @@ import {
   recordsTableExportFeature,
 } from "../export";
 
-export const exportProjectionSchema = z
+const exportProjectionSchema = z
   .object({
     maxRows: z.number().int().min(1).max(RECORDS_TABLE_EXPORT_MAXIMUM_ROWS),
     formats: z
