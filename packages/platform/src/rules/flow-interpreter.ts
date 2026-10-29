@@ -1,3 +1,5 @@
+import { pageStepIntents } from "./flow-page-steps";
+export { pageStepIntents } from "./flow-page-steps";
 import { describeFailure } from "../catalogue/runtime-primitives";
 import { typedValueMatchesType } from "./condition-types";
 import type { JsonValue } from "../catalogue/common";
@@ -657,20 +659,6 @@ const validReadFieldsResume = (
     )
   );
 };
-
-/**
- * The page's implementation map: the intent the page performs for each step that runs in the page
- * today (`PageStepType`). The page runner's own map replaces it when page segments run in the page.
- */
-export const pageStepIntents = {
-  "interface.show_message": "show_message",
-  "interface.show_form": "show_form",
-  "interface.confirm": "confirm",
-  "interface.navigate": "navigate",
-  "interface.refresh": "refresh",
-  "interface.set_panel": "set_panel",
-  "interface.set_filter": "set_filter",
-} as const satisfies Record<PageStepType, FlowInterfaceIntent["kind"]>;
 
 /**
  * Which server runner executes each step that runs on the server today (`ServerStepType`): this
