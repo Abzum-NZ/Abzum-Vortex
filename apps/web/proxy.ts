@@ -16,33 +16,36 @@ import { requestAddressHeader, requestAddressOf } from "./app/_lib/request-addre
 
 export async function proxy(request: NextRequest) {
   const isPage = !/^\/api(?:\/|$)/.test(request.nextUrl.pathname);
-  const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
-  const supabaseOrigin = process.env.VORTEX_SUPABASE_URL
-    ? new URL(process.env.VORTEX_SUPABASE_URL).origin
-    : undefined;
-  const componentOrigin = process.env.VORTEX_COMPONENT_BUNDLE_ORIGIN
-    ? new URL(process.env.VORTEX_COMPONENT_BUNDLE_ORIGIN).origin
-    : undefined;
-  const policy = [
-    "default-src 'self'",
-    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
-    "style-src 'self' 'unsafe-inline'",
-    `connect-src 'self'${supabaseOrigin ? ` ${supabaseOrigin}` : ""}`,
-    `frame-src 'self'${componentOrigin ? ` ${componentOrigin}` : ""}`,
-    "img-src 'self' data: blob:",
-    "font-src 'self' data:",
-    "object-src 'none'",
-    "base-uri 'self'",
-    "form-action 'self'",
-    "frame-ancestors 'self'",
-  ].join("; ");
+  let policy: string | undefined;
+  if (isPage) {
+    const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
+    const supabaseOrigin = process.env.VORTEX_SUPABASE_URL
+      ? new URL(process.env.VORTEX_SUPABASE_URL).origin
+      : undefined;
+    const componentOrigin = process.env.VORTEX_COMPONENT_BUNDLE_ORIGIN
+      ? new URL(process.env.VORTEX_COMPONENT_BUNDLE_ORIGIN).origin
+      : undefined;
+    policy = [
+      "default-src 'self'",
+      `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
+      "style-src 'self' 'unsafe-inline'",
+      `connect-src 'self'${supabaseOrigin ? ` ${supabaseOrigin}` : ""}`,
+      `frame-src 'self'${componentOrigin ? ` ${componentOrigin}` : ""}`,
+      "img-src 'self' data: blob:",
+      "font-src 'self' data:",
+      "object-src 'none'",
+      "base-uri 'self'",
+      "form-action 'self'",
+      "frame-ancestors 'self'",
+    ].join("; ");
+  }
   const responseFor = (state: IdentitySessionProxyState): NextResponse => {
     const headers = forwardedIdentitySessionHeaders(request.headers, state);
     // The application frame layout projects the frame of the page this request addresses.
     headers.set(requestAddressHeader, requestAddressOf(request.nextUrl));
-    if (isPage) headers.set("Content-Security-Policy", policy);
+    if (policy !== undefined) headers.set("Content-Security-Policy", policy);
     const response = NextResponse.next({ request: { headers } });
-    if (isPage) response.headers.set("Content-Security-Policy", policy);
+    if (policy !== undefined) response.headers.set("Content-Security-Policy", policy);
     return response;
   };
 
