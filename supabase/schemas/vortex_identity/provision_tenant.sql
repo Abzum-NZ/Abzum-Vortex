@@ -2,7 +2,6 @@ create or replace function vortex_identity.provision_tenant(
   p_cluster_id uuid,
   p_operator_actor_id uuid,
   p_duplicate_key uuid,
-  p_command_fingerprint text,
   p_tenant_short_name text,
   p_tenant_display_name text,
   p_organization_short_name text,
@@ -59,19 +58,9 @@ declare
   replay_assignment_id uuid;
   replay_account_id uuid;
 begin
-  if p_storage_project is null or p_storage_project !~ '^[a-z0-9][a-z0-9-]{0,119}$' then
-    raise exception using errcode = '22023', message = 'Storage destination is invalid';
-  end if;
-  insert into vortex_platform.storage_destination(singleton, project_ref)
-  values (true, p_storage_project) on conflict (singleton) do nothing;
-  if not exists (select 1 from vortex_platform.storage_destination where singleton and project_ref = p_storage_project) then
-    raise exception using errcode = '55000', message = 'Storage destination differs from the provisioned project';
-  end if;
   if not vortex_platform.is_non_nil_uuid(p_cluster_id::text)
     or not vortex_platform.is_non_nil_uuid(p_operator_actor_id::text)
-    or not vortex_platform.is_non_nil_uuid(p_duplicate_key::text)
-    or p_command_fingerprint is null
-    or p_command_fingerprint !~ '^sha256:[0-9a-f]{64}$' then
+    or not vortex_platform.is_non_nil_uuid(p_duplicate_key::text) then
     raise exception using errcode = '22023', message = 'Tenant provisioning input is invalid';
   end if;
 
@@ -92,12 +81,8 @@ begin
     select r.* into stored
     from pg_catalog.jsonb_to_record(claimed) as r(
       "receiptId" uuid, "acceptedAt" timestamptz, "subjectIds" uuid[],
-      "subjectRevisions" bigint[], "fingerprint" text, "clusterId" uuid
+      "subjectRevisions" bigint[]
     );
-    if stored."fingerprint" <> p_command_fingerprint
-      or stored."clusterId" is distinct from p_cluster_id then
-      raise exception using errcode = 'V3001', message = 'Administration duplicate conflicts';
-    end if;
     select tenant.tenant_id into replay_tenant_id
     from vortex_identity.tenants as tenant
     where tenant.tenant_id = any(stored."subjectIds");
@@ -124,6 +109,14 @@ begin
     return;
   end if;
 
+  if p_storage_project is null or p_storage_project !~ '^[a-z0-9][a-z0-9-]{0,119}$' then
+    raise exception using errcode = '22023', message = 'Storage destination is invalid';
+  end if;
+  insert into vortex_platform.storage_destination(singleton, project_ref)
+  values (true, p_storage_project) on conflict (singleton) do nothing;
+  if not exists (select 1 from vortex_platform.storage_destination where singleton and project_ref = p_storage_project) then
+    raise exception using errcode = '55000', message = 'Storage destination differs from the provisioned project';
+  end if;
   if vortex_identity.tenant_short_name_reserved(p_tenant_short_name) then
     raise exception using errcode = 'V3190', message = 'Tenant short name is reserved for a platform route';
   end if;
@@ -272,8 +265,7 @@ begin
     pg_catalog.jsonb_build_object(
       'receiptId', new_correlation_id, 'acceptedAt', operation_at,
       'subjectIds', pg_catalog.to_jsonb(result_subject_ids),
-      'subjectRevisions', pg_catalog.to_jsonb(result_subject_revisions),
-      'fingerprint', p_command_fingerprint, 'clusterId', p_cluster_id
+      'subjectRevisions', pg_catalog.to_jsonb(result_subject_revisions)
     )
   );
 
@@ -285,18 +277,18 @@ end
 $function$;
 
 revoke execute on function vortex_identity.provision_tenant(
-  uuid, uuid, uuid, text, text, text, text, text, uuid, uuid, text, text,
+  uuid, uuid, uuid, text, text, text, text, uuid, uuid, text, text,
   text, text, text, text, text, text, text
 ) from public, anon, authenticated, service_role, vortex_request, vortex_record_adapter;
 grant execute on function vortex_identity.provision_tenant(
-  uuid, uuid, uuid, text, text, text, text, text, uuid, uuid, text, text,
+  uuid, uuid, uuid, text, text, text, text, uuid, uuid, text, text,
   text, text, text, text, text, text, text
 ) to vortex_runtime;
 comment on function vortex_identity.provision_tenant(
-  uuid, uuid, uuid, text, text, text, text, text, uuid, uuid, text, text,
+  uuid, uuid, uuid, text, text, text, text, uuid, uuid, text, text,
   text, text, text, text, text, text, text
 ) is 'Configured-system-only atomic tenant/root-organisation provisioning with separate explicit tenant and organisation steward nominations and an initial current owner Group membership for the organisation steward.';
 
-alter function vortex_identity.provision_tenant(p_cluster_id uuid, p_operator_actor_id uuid, p_duplicate_key uuid, p_command_fingerprint text, p_tenant_short_name text, p_tenant_display_name text, p_organization_short_name text, p_organization_display_name text, p_tenant_steward_identity_id uuid, p_organization_steward_identity_id uuid, p_account_display_name text, p_account_language text, p_account_time_zone text, p_runtime_language text, p_runtime_time_zone text, p_runtime_currency text, p_runtime_date_format text, p_runtime_number_format text, p_storage_project text) owner to vortex_owner;
+alter function vortex_identity.provision_tenant(p_cluster_id uuid, p_operator_actor_id uuid, p_duplicate_key uuid, p_tenant_short_name text, p_tenant_display_name text, p_organization_short_name text, p_organization_display_name text, p_tenant_steward_identity_id uuid, p_organization_steward_identity_id uuid, p_account_display_name text, p_account_language text, p_account_time_zone text, p_runtime_language text, p_runtime_time_zone text, p_runtime_currency text, p_runtime_date_format text, p_runtime_number_format text, p_storage_project text) owner to vortex_owner;
 
-grant execute on function vortex_identity.provision_tenant(p_cluster_id uuid, p_operator_actor_id uuid, p_duplicate_key uuid, p_command_fingerprint text, p_tenant_short_name text, p_tenant_display_name text, p_organization_short_name text, p_organization_display_name text, p_tenant_steward_identity_id uuid, p_organization_steward_identity_id uuid, p_account_display_name text, p_account_language text, p_account_time_zone text, p_runtime_language text, p_runtime_time_zone text, p_runtime_currency text, p_runtime_date_format text, p_runtime_number_format text, p_storage_project text) to postgres;
+grant execute on function vortex_identity.provision_tenant(p_cluster_id uuid, p_operator_actor_id uuid, p_duplicate_key uuid, p_tenant_short_name text, p_tenant_display_name text, p_organization_short_name text, p_organization_display_name text, p_tenant_steward_identity_id uuid, p_organization_steward_identity_id uuid, p_account_display_name text, p_account_language text, p_account_time_zone text, p_runtime_language text, p_runtime_time_zone text, p_runtime_currency text, p_runtime_date_format text, p_runtime_number_format text, p_storage_project text) to postgres;

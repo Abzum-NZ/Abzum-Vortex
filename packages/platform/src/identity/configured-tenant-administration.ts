@@ -340,7 +340,6 @@ export const createConfiguredTenantAdministrationService = (
               ${operator.clusterId}::uuid,
               ${operator.systemActorId}::uuid,
               ${value.duplicateKey}::uuid,
-              ${fingerprint(value)}::text,
               ${value.tenant.shortName}::text,
               ${value.tenant.displayName}::text,
               ${value.rootOrganization.shortName}::text,
@@ -408,7 +407,6 @@ export const createConfiguredTenantAdministrationService = (
             select * from vortex_identity.adopt_tenant(
               ${operator.systemActorId}::uuid,
               ${value.duplicateKey}::uuid,
-              ${fingerprint(value)}::text,
               ${value.tenantId}::uuid,
               ${value.tenantSteward.identityId}::uuid
             )
