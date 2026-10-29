@@ -763,7 +763,21 @@ export const applyStudioFlowCommand = (
         if (!built.ok) return { kind: "invalid", reason: built.reason };
         // Settings that come out as the step already has them apply as no change.
         list[index] = built.value;
-        return done(command.taskId);
+        const checked = done(command.taskId);
+        // A well-formed formula belongs in the draft even when its type or references will
+        // prevent publication. Other new validation issues still refuse the edit.
+        if (
+          checked.kind === "invalid" &&
+          Array.isArray(checked.cause) &&
+          checked.cause.length > 0 &&
+          checked.cause.every((issue) => {
+            if (issue.taskId !== command.taskId || !Array.isArray(issue.path)) return false;
+            const property = issue.path.lastIndexOf("properties");
+            return property >= 0 && issue.path[property + 1] === "formula";
+          })
+        )
+          return { kind: "applied", source: candidate, taskId: command.taskId };
+        return checked;
       }
     }
   } catch (cause) {
