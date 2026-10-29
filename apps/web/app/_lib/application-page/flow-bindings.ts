@@ -1,4 +1,9 @@
-import { buildLinkTilesQueryBinding, type InstalledRuntimeContext } from "@vortex/platform/server";
+import {
+  buildLinkTilesQueryBinding,
+  readOrganizationRuntimeSettings,
+  type HumanOrganizationRequestDependencies,
+  type InstalledRuntimeContext,
+} from "@vortex/platform/server";
 import {
   ATTACHMENT_LIST_BLOCK_RELEASE,
   FORM_CONTAINER_BLOCK_RELEASE,
@@ -10,6 +15,8 @@ import {
   recordsTableContractOrLog,
   readRecordDetailContract,
   type FlowTask,
+  type IdentitySession,
+  type OrganizationSelectionCandidate,
   flowTaskChildLists,
   type PageDefinition,
   sameId,
@@ -19,6 +26,25 @@ import type { collectPlacements } from "./placement-helpers";
 import type { PlacementFlowBinding } from "./types";
 import { isEditFieldPlacement, selectedReadInputTypes } from "./placement-helpers";
 import { isTablePlacement, resolvedQueryRecordTypeId } from "@vortex/platform/server";
+import { humanOrganizationRequests } from "../server-composition";
+
+/** Read the bound page's organisation time zone under the same authority as its other reads. */
+export const readFlowOrganizationTimeZone = (
+  input: Readonly<{
+    session: IdentitySession;
+    selection: OrganizationSelectionCandidate;
+    dependencies: HumanOrganizationRequestDependencies;
+  }>,
+) =>
+  humanOrganizationRequests(input.dependencies.identityAuthorityId).run(
+    input.session,
+    input.selection,
+    async (transaction, scope) => {
+      const settings = await readOrganizationRuntimeSettings(transaction);
+      if (settings === undefined) throw new Error("FLOW_ORGANIZATION_TIME_ZONE_UNAVAILABLE");
+      return { timeZone: settings.timeZone, accessVersion: scope.accessVersion };
+    },
+  );
 
 export const projectPlacementRecordTypes = (input: {
   allPlacements: ReturnType<typeof collectPlacements>;
