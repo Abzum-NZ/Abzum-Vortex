@@ -11,6 +11,7 @@ import {
   isRecord,
 } from "@vortex/platform/schema";
 import { isFlowIntent, type FlowIntent } from "./intents";
+import type { PlacementFlowBinding } from "./flow-runtime";
 
 /** The address the signed-in person is using; the server resolves everything else from it. */
 export type FlowApplicationAddress = Readonly<{
@@ -66,7 +67,7 @@ export type ServerFlowResponse =
 
 export type FlowInvokeClient = Readonly<{
   startBinding: (
-    binding: Readonly<{ bindingId: string; flowId: string }>,
+    binding: Pick<PlacementFlowBinding, "bindingId" | "flowId" | "segment">,
     callerInputs: Readonly<Record<string, unknown>>,
     clickId: string,
     signal?: AbortSignal,

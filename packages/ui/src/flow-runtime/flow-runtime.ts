@@ -64,7 +64,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions): FlowRuntime {
   ): Promise<ServerDrivenResult> => {
     if (signal?.aborted) return { kind: "abandoned", unanswered: true };
     const first = await options.client.startBinding(
-      { bindingId: binding.bindingId, flowId: binding.flowId },
+      { bindingId: binding.bindingId, flowId: binding.flowId, segment: binding.segment },
       callerInputs,
       clickId ?? crypto.randomUUID(),
       signal,
