@@ -123,6 +123,32 @@ export function useFlowRuntime({
         installationRevision: application.installationRevision,
         releaseKey: application.releaseKey,
       },
+      pageInputs: () => {
+        const search = new URLSearchParams(window.location.search);
+        const parameters: Record<string, string | string[]> = {};
+        for (const name of search.keys()) {
+          const values = search.getAll(name);
+          parameters[name] = values.length === 1 ? values[0]! : values;
+        }
+        const controls: Record<string, string> = {};
+        for (const placementId of Object.keys(model.pageParameters.controls)) {
+          const input = runtimeInputsRef.current[placementId];
+          if (!isRecord(input) || !isRecord(input.data) || input.data.status !== "ready") continue;
+          const values = input.data.values;
+          if (!isRecord(values)) continue;
+          const value = values.value;
+          if (value === null) controls[placementId] = "";
+          else if (
+            typeof value === "string" ||
+            typeof value === "number" ||
+            typeof value === "boolean"
+          )
+            controls[placementId] = String(value);
+          else if (isRecord(value) && typeof value.recordId === "string")
+            controls[placementId] = value.recordId;
+        }
+        return { parameters, controls };
+      },
       ...(subject === undefined ? {} : { subject }),
     };
     const recordResponse = (
@@ -174,7 +200,14 @@ export function useFlowRuntime({
         createFlowInvokeClient({ ...options, endpoint: "/api/flows/invoke/mcp" }),
       ),
     };
-  }, [application, formCancelledRef, subject, unsavedWorkRegistry]);
+  }, [
+    application,
+    formCancelledRef,
+    model.pageParameters.controls,
+    runtimeInputsRef,
+    subject,
+    unsavedWorkRegistry,
+  ]);
   const applicationFrame = useApplicationFrame();
   const startPageChange = applicationFrame?.startPageChange;
   const navigation = model.navigation ?? applicationFrame?.navigation;

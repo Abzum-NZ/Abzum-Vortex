@@ -44,6 +44,15 @@ const requestSchema = z
     applicationKey: z.string().min(1).max(200),
     pageKey: z.string().min(1).max(200),
     pageRecordId: recordIdSchema.optional(),
+    pageInputs: z
+      .object({
+        parameters: z.record(
+          z.string().min(1).max(200),
+          z.union([z.string(), z.array(z.string())]),
+        ),
+        controls: z.record(z.string().min(1).max(200), z.string()),
+      })
+      .strict(),
     invocation: flowBindingInvocationSchema,
   })
   .strict();

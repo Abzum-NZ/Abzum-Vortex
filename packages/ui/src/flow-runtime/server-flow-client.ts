@@ -92,6 +92,11 @@ export type FlowSubjectContext = Readonly<{ recordId: string; revision: number }
 export type FlowInvokeClientOptions = Readonly<{
   address: FlowApplicationAddress;
   installation: FlowInstallationContext;
+  /** Current address and declared control values, sampled when each request is sent. */
+  pageInputs?: () => Readonly<{
+    parameters: Readonly<Record<string, string | readonly string[]>>;
+    controls: Readonly<Record<string, string>>;
+  }>;
   subject?: FlowSubjectContext;
   endpoint?: string;
   fetchImplementation?: typeof fetch;
@@ -255,6 +260,7 @@ export function createFlowInvokeClient(options: FlowInvokeClientOptions): FlowIn
           ...(options.address.pageRecordId === undefined
             ? {}
             : { pageRecordId: options.address.pageRecordId }),
+          pageInputs: options.pageInputs?.() ?? { parameters: {}, controls: {} },
           invocation,
         }),
       });

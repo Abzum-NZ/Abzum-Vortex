@@ -180,6 +180,11 @@ export type FlowInvocationRequest = Readonly<{
   pageKey: string;
   /** The record the addressed page was opened for (an address candidate, never authority). */
   pageRecordId?: string | undefined;
+  /** Untrusted address and declared control values; the page binding resolver validates them. */
+  pageInputs: Readonly<{
+    parameters: Readonly<Record<string, string | readonly string[]>>;
+    controls: Readonly<Record<string, string>>;
+  }>;
   invocation: FlowBindingInvocation;
 }>;
 
