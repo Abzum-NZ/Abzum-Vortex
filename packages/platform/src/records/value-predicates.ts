@@ -15,7 +15,7 @@ export const isCanonicalExactDecimal = (value: unknown): value is string =>
   typeof value === "string" && normalizeExactDecimal(value) === value;
 
 export const currencyCodePattern = /^[A-Z]{3}$/;
-export const isCurrencyCode = (value: unknown): value is string =>
+const isCurrencyCode = (value: unknown): value is string =>
   typeof value === "string" && currencyCodePattern.test(value);
 
 export const isMoneyValue = (value: unknown): value is { amount: string; currency: string } =>
