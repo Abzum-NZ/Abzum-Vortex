@@ -248,6 +248,9 @@ function compileOwnedFlowSources(
               return [
                 {
                   page: page.name,
+                  controls: items
+                    .filter((item) => controls.has(item.props.id))
+                    .map((item) => item.props.id),
                   values: Object.fromEntries(
                     Object.entries(page.values ?? {}).map(([key, value]) => [key, value.type]),
                   ),

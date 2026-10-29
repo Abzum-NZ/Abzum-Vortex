@@ -1,5 +1,7 @@
 import type { FlowFormTypes } from "../../workflows/flow-form-types";
 import type { FlowFormula } from "../../workflows/flow-values";
+import { checkFlowFormula } from "../../rules/flow-formula-check";
+import type { CompiledFlowBindingEnvironment } from "../flow-compilation";
 import type { PlatformPermissionSource } from "../../access/platform-permissions";
 import type { applicationCompilationRequestSchema } from "../definition-compilation-contracts";
 import { inspectApplicationPageReplacements } from "../../pages/application-page-replacement";
@@ -27,7 +29,7 @@ import {
 import { flowBindingSettingsSchema } from "../application-flow-bindings";
 import type { ComponentSemanticEventKind } from "../component-semantic-events";
 import { flowBindingSettingNotYetRunnable } from "../flow-step-settings";
-import { compileFlowPlans, flowBindingPlanIssue } from "../../workflows/flow-plan";
+import { compileFlowPlans, flowBindingPlanIssue, FlowPlanError } from "../../workflows/flow-plan";
 import { applicationSearchSourceReferences } from "../source-identities";
 import {
   materialiseApplicationComposition,
@@ -207,6 +209,7 @@ function compileApplication(
   valueIndex: ApplicationModuleValueIndex,
   flows: readonly FlowDefinition[],
   formTypes: ReadonlyMap<string, FlowFormTypes>,
+  bindingEnvironments: ReadonlyMap<string, readonly CompiledFlowBindingEnvironment[]>,
   platformPermissions: PlatformPermissionSource,
 ) {
   const body = asObject(source.body);
@@ -560,7 +563,13 @@ function compileApplication(
       homePageId: pageId(String(body.home_page)),
       ...(search === undefined ? {} : { search }),
       flows,
-      flowBindings: compileApplicationFlowBindings(source, resolution, flows, formTypes),
+      flowBindings: compileApplicationFlowBindings(
+        source,
+        resolution,
+        flows,
+        formTypes,
+        bindingEnvironments,
+      ),
     },
   });
   return canonical;
@@ -578,6 +587,7 @@ function compileApplicationFlowBindings(
   resolution: Resolution,
   flows: readonly FlowDefinition[],
   formTypes: ReadonlyMap<string, FlowFormTypes>,
+  bindingEnvironments: ReadonlyMap<string, readonly CompiledFlowBindingEnvironment[]>,
 ): JsonObject[] {
   const body = asObject(source.body);
   const definitionKey = String(source.key);
@@ -613,7 +623,23 @@ function compileApplicationFlowBindings(
       conditions.set(flowId, heldConditions);
     }
   }
-  const plans = compileFlowPlans(flows, inputsByFlow, formTypes, conditions).plans;
+  let plans: ReturnType<typeof compileFlowPlans>["plans"];
+  try {
+    plans = compileFlowPlans(flows, inputsByFlow, formTypes, conditions).plans;
+  } catch (error) {
+    if (!(error instanceof FlowPlanError)) throw error;
+    const binding = sourceBindings.find(
+      (candidate) =>
+        resolution.id(definitionKey, "flow", String(candidate.flow), "content") === error.flowId,
+    );
+    throw new DefinitionCompilationError(
+      "vortex.definition.application_flow_binding_inputs",
+      "invalid_value",
+      binding === undefined ? undefined : resolution.location("flow_binding", String(binding.id)),
+      undefined,
+      `${binding === undefined ? "Flow" : `Binding ${String(binding.id)}`}: ${error.reason}`,
+    );
+  }
   return sourceBindings.map((binding) => {
     const flowId = resolution.id(definitionKey, "flow", String(binding.flow), "content");
     const flow = flowsById.get(flowId);
@@ -632,6 +658,53 @@ function compileApplicationFlowBindings(
     const settings = flowBindingSettingsSchema.safeParse(binding.settings);
     if (!settings.success)
       fail("vortex.definition.application_flow_binding_inputs", "invalid_value", location);
+    const resolveForm = (form: string) => resolution.id(definitionKey, "block_placement", form);
+    const canonicalSettings = resolveFlowFormReferences(settings.data, resolveForm);
+    const controlId = resolution.id(definitionKey, "block_placement", String(binding.control));
+    if (canonicalSettings.condition !== null) {
+      const environments = (bindingEnvironments.get(flowId) ?? []).filter((environment) =>
+        environment.controls.some((control) => control.toLowerCase() === controlId.toLowerCase()),
+      );
+      let problem: string | undefined;
+      const type = checkFlowFormula(canonicalSettings.condition, {
+        nowAllowed: true,
+        reference: (reference) => {
+          if (reference.source === "input") {
+            const type = flow.inputs[reference.name]?.type;
+            if (type === undefined) problem ??= `Input ${reference.name} is not declared`;
+            return type;
+          }
+          if (reference.source === "execution_now") return "date_time";
+          if (reference.source === "form") {
+            const types = environments.map(
+              (environment) => environment.forms[reference.form]?.[reference.field],
+            );
+            if (types.length === 0 || types.some((candidate) => candidate === undefined)) {
+              problem ??= `Form field ${reference.form}.${reference.field} is not available on every bound page`;
+              return undefined;
+            }
+            if (types.some((candidate) => candidate !== types[0])) {
+              problem ??= `Form field ${reference.form}.${reference.field} has inconsistent types`;
+              return undefined;
+            }
+            return types[0];
+          }
+          problem ??= `A binding condition cannot read ${reference.source}`;
+          return undefined;
+        },
+        issue: (_path, _rule, _family, message) => {
+          problem ??= message;
+        },
+      });
+      if (problem !== undefined || type !== "yes_no")
+        throw new DefinitionCompilationError(
+          "vortex.definition.application_flow_binding_inputs",
+          "invalid_value",
+          location,
+          undefined,
+          `Binding ${String(binding.id)}: ${problem ?? "a start condition must return yes or no"}`,
+        );
+    }
     // The binding's own plan: latest-wins only on a flow that changes nothing, and an options
     // flow only reads.
     const planIssue = flowBindingPlanIssue(plans.get(flowId)!, {
@@ -659,17 +732,15 @@ function compileApplicationFlowBindings(
         undefined,
         `Binding ${String(binding.id)}: ${notYet}`,
       );
-    const resolveForm = (form: string) => resolution.id(definitionKey, "block_placement", form);
     const canonicalInputs = resolveFlowFormReferences(
       Object.fromEntries(
         Object.entries(inputs).map(([name, value]) => [name, flowBindingInputSchema.parse(value)]),
       ),
       resolveForm,
     );
-    const canonicalSettings = resolveFlowFormReferences(settings.data, resolveForm);
     return {
       bindingId: resolution.id(definitionKey, "flow_binding", String(binding.id), "content"),
-      controlId: resolution.id(definitionKey, "block_placement", String(binding.control)),
+      controlId,
       eventId: resolution.id(definitionKey, "event", String(binding.event_id), "content"),
       event: binding.event,
       flow: { flowId, inputs: canonicalInputs },
@@ -765,6 +836,7 @@ export function compileParsedApplicationRequest(
       valueIndex,
       flowSet.flows,
       flowSet.formTypes,
+      flowSet.bindingEnvironments,
       platformPermissions,
     );
     const ownDefinition = resolution.definition(source.key, "application");

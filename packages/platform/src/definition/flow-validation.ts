@@ -87,6 +87,8 @@ export type FlowSetValidationIssue = FlowValidationIssue & Readonly<{ flowId: st
 
 export type FlowReferenceEnvironment = Readonly<{
   page: string;
+  /** Source control aliases present on this page for the bound flow. */
+  controls?: readonly string[];
   values: Readonly<Record<string, string>>;
   forms: Readonly<Record<string, Readonly<Record<string, string>>>>;
 }>;

@@ -668,9 +668,17 @@ const triggerRecordType = (source: SourceFlow): string | undefined => {
   return aliases.size === 1 ? [...aliases][0] : undefined;
 };
 
-export function compileFlowSources(
-  input: FlowCompilationInput,
-): CompiledFlowSet & { formTypes: ReadonlyMap<string, FlowFormTypes> } {
+/** A binding's page scope, keyed by permanent placement identities. */
+export type CompiledFlowBindingEnvironment = Readonly<{
+  page: string;
+  controls: readonly string[];
+  forms: FlowFormTypes;
+}>;
+
+export function compileFlowSources(input: FlowCompilationInput): CompiledFlowSet & {
+  formTypes: ReadonlyMap<string, FlowFormTypes>;
+  bindingEnvironments: ReadonlyMap<string, readonly CompiledFlowBindingEnvironment[]>;
+} {
   const { resolver } = input;
   const declared = new Set(input.declaredDefinitionKeys);
   const reached = new Set<string>();
@@ -866,14 +874,17 @@ export function compileFlowSources(
   // Publication compiles the plan the runtime builds, and refuses a flow it cannot plan, naming
   // the step. The plan itself is never stored.
   let formTypes: ReadonlyMap<string, FlowFormTypes>;
+  const bindingEnvironments = new Map<string, CompiledFlowBindingEnvironment[]>();
   try {
     formTypes = new Map(
       compiled.map(({ flow, sourceIndex }) => {
         const forms: Record<string, Record<string, string>> = {};
         for (const environment of input.referenceEnvironments?.(input.flows[sourceIndex]!) ?? []) {
+          const canonicalForms: Record<string, Record<string, string>> = {};
           for (const [alias, fields] of Object.entries(environment.forms)) {
             const identity = resolver.form(alias).identifier;
             const known = (forms[identity] ??= {});
+            canonicalForms[identity] = { ...fields };
             for (const [field, type] of Object.entries(fields)) {
               if (known[field] !== undefined && known[field] !== type)
                 throw new FlowPlanError(
@@ -884,6 +895,15 @@ export function compileFlowSources(
               known[field] = type;
             }
           }
+          const held = bindingEnvironments.get(String(flow.id)) ?? [];
+          held.push({
+            page: environment.page,
+            controls: (environment.controls ?? []).map(
+              (alias) => resolver.placement(alias).identifier,
+            ),
+            forms: canonicalForms,
+          });
+          bindingEnvironments.set(String(flow.id), held);
         }
         return [String(flow.id), forms] as const;
       }),
@@ -923,5 +943,5 @@ export function compileFlowSources(
       "vortex.definition.invalid_compilation_output",
       "invalid_value",
     );
-  return { ...result.data, formTypes };
+  return { ...result.data, formTypes, bindingEnvironments };
 }
