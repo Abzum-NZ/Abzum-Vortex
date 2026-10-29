@@ -2127,9 +2127,9 @@ begin
       or (current_manifest #>> '{preparedRecordAccessPlan,mappingFingerprint}') !~ '^sha256:[a-f0-9]{64}$' then
       raise exception using errcode='23514', message='Active runtime bundle manifest differs';
     end if;
-    bundle_index:=vortex_definition.read_installation_runtime_bundle_index(selected_app,selected_revision,2);
+    bundle_index:=vortex_definition.read_installation_runtime_bundle_index(selected_app,selected_revision,3);
   else
-    -- Missing format2 takes a genuine locked active-only cold source path.
+    -- A missing format-3 bundle takes a genuine locked active-only cold source path.
     -- The mapping locker derives identity inline and cannot recurse into this reader.
     mapping:=vortex_definition.lock_active_installation_runtime_mapping_internal(before_identity);
     stable_plan:=vortex_record.resolve_active_bundle_record_access_plan_internal(before_identity);
@@ -2249,6 +2249,8 @@ exception when no_data_found or too_many_rows then
   raise exception using errcode='P0002', message='Active runtime bundle identity is unavailable';
 end
 $function$;
+
+comment on function vortex_definition.read_active_installation_bundle_identity() is 'Returns fresh active format-3 identity and index, or a private exact locked active cold source for the same HUMAN request; carries no viewer permission decision.';
 
 
 -- Preview copies are rebuilt from the converted draft when Studio next opens them; their isolated

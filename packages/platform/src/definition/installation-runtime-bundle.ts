@@ -362,7 +362,7 @@ export const installationRuntimeBundleAccessPlanSectionSchema = z
   })
   .strict();
 
-/** Exact protected source identities and immutable prepared Record plan for format 2. */
+/** Exact protected source identities and immutable prepared Record plan of a runtime bundle. */
 export const installationRuntimeBundleSourceManifestSchema = z
   .object({
     bundleFormatVersion: z.literal(installationRuntimeBundleFormatVersion),
