@@ -1079,6 +1079,49 @@ export const createRecordSaveService = (dependencies: RecordSaveServiceDependenc
   };
 
   return Object.freeze({
+    /** Runs the same save core in a request transaction already owned by the caller. */
+    async saveInTransaction(
+      transaction: RequestDatabaseTransaction,
+      issuedAt: string,
+      selection: OrganizationSelectionCandidate,
+      commandCandidate: unknown,
+    ): Promise<RecordSaveServiceResult> {
+      const command = saveRecordCommandSchema.safeParse(commandCandidate);
+      if (!command.success || selection.applicationRootId === undefined) {
+        console.error(
+          `[record] save refused RECORD_SAVE_COMMAND_INVALID: ${command.success ? "no application selected" : describeFailure(command.error)}`,
+        );
+        return { kind: "unavailable" };
+      }
+      let activityId: string;
+      try {
+        activityId = activityIdSchema.parse(newActivityId());
+      } catch (error) {
+        console.error(`[record] save identity generation failed: ${describeFailure(error)}`);
+        return { kind: "temporarily_unavailable" };
+      }
+      const attempted: { rules?: BeforeSaveRuleExecution; prepared?: PreparedSave } = {};
+      const value = await saveWithinTransaction(
+        transaction,
+        issuedAt,
+        command.data,
+        selection.previewInstallationId !== undefined,
+        activityId,
+        { occurrenceId: undefined },
+        attempted,
+      );
+      if (value === restartRelationshipTotalSave)
+        throw new Error("RECORD_SAVE_RESTART_TRANSACTION");
+      if (value === recordedRefusal) {
+        console.error("[record] save refused RECORD_SAVE_REFUSAL_RECORDED");
+        return { kind: "unavailable" };
+      }
+      const warnings = attempted.rules?.warnings ?? [];
+      return value.outcome === "saved" && warnings.length > 0
+        ? { kind: "available", value, warnings }
+        : { kind: "available", value };
+    },
+
     async save(
       caller: IdentitySession,
       selection: OrganizationSelectionCandidate,
