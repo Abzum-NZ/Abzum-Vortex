@@ -62,6 +62,9 @@ const placementSubtreeIsOptionalPresentation = (item: RecordValue): boolean => {
     vortex.viewPermissionKey === undefined &&
     vortex.usePermissionKey === undefined &&
     vortex.visibilityCondition === undefined &&
+    vortex.requiredCondition === undefined &&
+    vortex.readOnlyCondition === undefined &&
+    vortex.enabledCondition === undefined &&
     vortex.queryId === undefined &&
     // Flow bindings for interactive entries are compared with their owning placements.
     Object.entries(placementSettings(props)).every(([key, value]) => {
@@ -295,6 +298,17 @@ const comparePlacements = (
       "visibility",
       id,
     );
+    for (const condition of ["requiredCondition", "readOnlyCondition", "enabledCondition"] as const)
+      pushChange(
+        reasons,
+        before.vortex[condition],
+        after.vortex[condition],
+        "major",
+        "permission_changed",
+        "block_placement",
+        "behavior",
+        id,
+      );
     pushChange(
       reasons,
       before.vortex.queryId,

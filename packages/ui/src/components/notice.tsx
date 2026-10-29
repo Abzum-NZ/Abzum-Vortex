@@ -7,6 +7,13 @@ import { Button } from "./button";
 
 export type NoticeSeverity = "info" | "success" | "warning" | "error";
 
+export const noticeAlertVariant = {
+  info: "info",
+  success: "success",
+  warning: "warning",
+  error: "critical",
+} as const satisfies Record<NoticeSeverity, string>;
+
 /** A text value or link is represented as data; notice content is never interpreted as markup. */
 export type NoticeContentPart =
   | Readonly<{ kind: "text"; value: string }>
@@ -94,15 +101,15 @@ export function Notice({
   const [dismissed, setDismissed] = useState(false);
   if (dismissed) return null;
 
-  const error = severity === "error";
+  const urgent = severity === "error" || severity === "warning";
 
   return (
     <div data-slot="notice" data-vortex-severity={severity}>
       <Alert
-        role={error ? "alert" : "status"}
-        aria-live={error ? "assertive" : "polite"}
+        role={urgent ? "alert" : "status"}
+        aria-live={urgent ? "assertive" : "polite"}
         aria-atomic="true"
-        variant={error ? "critical" : severity}
+        variant={noticeAlertVariant[severity]}
       >
         <div className="min-w-0">
           <AlertTitle className="mb-1">

@@ -162,6 +162,19 @@ const sourceConditionOperandSchema = z.discriminatedUnion("source", [
 const sourceQualifiedConditionOperandSchema = z.discriminatedUnion("source", [
   z
     .object({
+      source: sourceProvenanceUnchanged(z.literal("page")),
+      name: sourceProvenanceTarget(builderKeySchema, ["left/name", "right/name"]),
+    })
+    .strict(),
+  z
+    .object({
+      source: sourceProvenanceUnchanged(z.literal("form")),
+      form: sourceProvenanceTarget(sourceAliasSchema, ["left/form", "right/form"]),
+      field: sourceProvenanceTarget(builderKeySchema, ["left/field", "right/field"]),
+    })
+    .strict(),
+  z
+    .object({
       source: sourceProvenanceUnchanged(z.literal("field")),
       field: sourceProvenanceTarget(sourceQualifiedFieldSchema, [
         "kind",

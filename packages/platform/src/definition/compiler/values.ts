@@ -113,24 +113,28 @@ export function condition(
   input: unknown,
   resolveField: (alias: string) => string,
   valueContext?: ModuleValueContext,
+  resolveForm?: (alias: string) => string,
 ): unknown {
   const value = asObject(input);
   if ("all" in value)
     return {
       kind: "all",
       conditions: (value.all as unknown[]).map((entry) =>
-        condition(entry, resolveField, valueContext),
+        condition(entry, resolveField, valueContext, resolveForm),
       ),
     };
   if ("any" in value)
     return {
       kind: "any",
       conditions: (value.any as unknown[]).map((entry) =>
-        condition(entry, resolveField, valueContext),
+        condition(entry, resolveField, valueContext, resolveForm),
       ),
     };
   if ("not" in value)
-    return { kind: "not", condition: condition(value.not, resolveField, valueContext) };
+    return {
+      kind: "not",
+      condition: condition(value.not, resolveField, valueContext, resolveForm),
+    };
   const operator = String(value.operator);
   const authoredLeft = "left" in value ? value.left : { source: "field", field: value.field };
   const authoredRight =
@@ -155,6 +159,15 @@ export function condition(
       return { source: "field", fieldId: resolveField(String(source.field)) };
     if (source.source === "parameter")
       return { source: "parameter", key: String(source.parameter) };
+    if (source.source === "page") return { source: "page", name: String(source.name) };
+    if (source.source === "form") {
+      if (resolveForm === undefined) throw new Error("A form condition requires a page placement");
+      return {
+        source: "form",
+        form: resolveForm(String(source.form)),
+        field: String(source.field),
+      };
+    }
     const authoredValue = source.value;
     const normalisedValue =
       valueContext &&

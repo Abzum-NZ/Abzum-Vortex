@@ -441,6 +441,9 @@ const experienceGatedPlacementKeys = [
   "viewPermissionKey",
   "usePermissionKey",
   "visibilityCondition",
+  "requiredCondition",
+  "readOnlyCondition",
+  "enabledCondition",
   "queryId",
 ] as const;
 

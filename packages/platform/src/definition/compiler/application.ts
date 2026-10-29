@@ -675,6 +675,7 @@ const applicationCompositionResolution = (
           authored,
           (reference) => qualifiedField(resolution, reference),
           valueIndex.context(),
+          (alias) => resolution.id(definitionKey, "block_placement", alias, "content"),
         ),
       ),
     recordType: (reference) => resolution.recordType(reference),

@@ -905,6 +905,15 @@ export const materialiseApplicationComposition = (
         ...(authoredPlacement.visibility_condition === undefined
           ? {}
           : { visibilityCondition: resolution.condition(authoredPlacement.visibility_condition) }),
+        ...(authoredPlacement.required_condition === undefined
+          ? {}
+          : { requiredCondition: resolution.condition(authoredPlacement.required_condition) }),
+        ...(authoredPlacement.read_only_condition === undefined
+          ? {}
+          : { readOnlyCondition: resolution.condition(authoredPlacement.read_only_condition) }),
+        ...(authoredPlacement.enabled_condition === undefined
+          ? {}
+          : { enabledCondition: resolution.condition(authoredPlacement.enabled_condition) }),
         ...(authoredPlacement.query === undefined
           ? {}
           : { queryId: resolution.moduleQuery(authoredPlacement.query) }),

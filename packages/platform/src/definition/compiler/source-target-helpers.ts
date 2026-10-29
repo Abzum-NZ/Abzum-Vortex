@@ -110,39 +110,47 @@ function conditionRootPaths(
     });
   }
   if (collection === "pages") {
+    const conditionKeys = [
+      ["visibility_condition", "visibilityCondition"],
+      ["required_condition", "requiredCondition"],
+      ["read_only_condition", "readOnlyCondition"],
+      ["enabled_condition", "enabledCondition"],
+    ] as const;
     if (sourcePath[3] === "blocks" && typeof sourcePath[4] === "number")
-      fixedRoots.push({
-        sourceRoot: ["body", "pages", first, "blocks", sourcePath[4], "visibility_condition"],
-        canonicalRoot: ["content", "pages", first, "blocks", sourcePath[4], "visibilityCondition"],
-      });
+      for (const [sourceKey, canonicalKey] of conditionKeys)
+        fixedRoots.push({
+          sourceRoot: ["body", "pages", first, "blocks", sourcePath[4], sourceKey],
+          canonicalRoot: ["content", "pages", first, "blocks", sourcePath[4], canonicalKey],
+        });
     if (
       sourcePath[3] === "steps" &&
       typeof sourcePath[4] === "number" &&
       sourcePath[5] === "blocks" &&
       typeof sourcePath[6] === "number"
     )
-      fixedRoots.push({
-        sourceRoot: [
-          "body",
-          "pages",
-          first,
-          "steps",
-          sourcePath[4],
-          "blocks",
-          sourcePath[6],
-          "visibility_condition",
-        ],
-        canonicalRoot: [
-          "content",
-          "pages",
-          first,
-          "steps",
-          sourcePath[4],
-          "blocks",
-          sourcePath[6],
-          "visibilityCondition",
-        ],
-      });
+      for (const [sourceKey, canonicalKey] of conditionKeys)
+        fixedRoots.push({
+          sourceRoot: [
+            "body",
+            "pages",
+            first,
+            "steps",
+            sourcePath[4],
+            "blocks",
+            sourcePath[6],
+            sourceKey,
+          ],
+          canonicalRoot: [
+            "content",
+            "pages",
+            first,
+            "steps",
+            sourcePath[4],
+            "blocks",
+            sourcePath[6],
+            canonicalKey,
+          ],
+        });
   }
   return fixedRoots.find(
     ({ sourceRoot }) =>
@@ -218,8 +226,13 @@ export function conditionSourceTargets(
     return [...targets, [...canonicalPath, "right", "value", ...valueSuffix(suffix.slice(1))]];
   if ((suffix[0] === "left" || suffix[0] === "right") && typeof suffix[1] === "string") {
     const operandPath = [...canonicalPath, suffix[0]];
+    const operand = asObject(comparison[suffix[0]]);
     const mappedKey =
-      suffix[1] === "field" ? "fieldId" : suffix[1] === "parameter" ? "key" : suffix[1];
+      suffix[1] === "field" && operand.source === "field"
+        ? "fieldId"
+        : suffix[1] === "parameter"
+          ? "key"
+          : suffix[1];
     return [
       ...targets,
       [

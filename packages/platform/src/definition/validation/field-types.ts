@@ -59,6 +59,10 @@ export function typedConditionTypesValid(
   fields: ReadonlyMap<string, JsonObject>,
   parameters: ReadonlyMap<string, string> = new Map(),
   dialect: ModuleValueDialect = "canonical",
+  pageReferences?: Readonly<{
+    values: ReadonlyMap<string, string>;
+    forms: ReadonlyMap<string, ReadonlyMap<string, JsonObject>>;
+  }>,
 ): boolean {
   if (value === null || value === undefined) return true;
   const condition = object(value);
@@ -82,13 +86,13 @@ export function typedConditionTypesValid(
         : undefined;
   if (all)
     return array(all).every((entry) =>
-      typedConditionTypesValid(entry, fields, parameters, dialect),
+      typedConditionTypesValid(entry, fields, parameters, dialect, pageReferences),
     );
   if (any)
     return array(any).every((entry) =>
-      typedConditionTypesValid(entry, fields, parameters, dialect),
+      typedConditionTypesValid(entry, fields, parameters, dialect, pageReferences),
     );
-  if (not) return typedConditionTypesValid(not, fields, parameters, dialect);
+  if (not) return typedConditionTypesValid(not, fields, parameters, dialect, pageReferences);
   if (dialect === "canonical" && condition.kind !== "comparison") return false;
 
   const authoredLeft =
@@ -116,6 +120,17 @@ export function typedConditionTypesValid(
       if (!type) return undefined;
       const semanticType = typedSemanticFieldType(type);
       return semanticType === undefined ? undefined : { type: semanticType };
+    }
+    if (operand.source === "page") {
+      const type = pageReferences?.values.get(String(operand.name));
+      return type === undefined ? undefined : { type };
+    }
+    if (operand.source === "form") {
+      const field = pageReferences?.forms
+        .get(String(operand.form).toLowerCase())
+        ?.get(String(operand.field));
+      const type = field === undefined ? undefined : typedFieldValueType(field);
+      return field === undefined || type === undefined ? undefined : { field, type };
     }
     return operand.source === "value" ? {} : undefined;
   };

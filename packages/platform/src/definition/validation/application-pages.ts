@@ -35,6 +35,7 @@ import { moduleQueryDefinitionSchema } from "../module-contracts";
 import { queryTotalReferenceProblem } from "../module-query-edit";
 import { queryTotalLabel } from "../module-query-totals";
 import type { ApplicationScope } from "./application-scope";
+import { typedConditionTypesValid } from "./field-types";
 
 export function applicationPageRules(scope: ApplicationScope): void {
   const {
@@ -426,6 +427,23 @@ export function applicationPageRules(scope: ApplicationScope): void {
             ),
           );
     }
+    const pageValues = new Map(
+      Object.entries(object(page.values ?? {})).map(([key, declaration]) => [
+        key,
+        String(object(declaration).type),
+      ]),
+    );
+    const recordFields = array(pageRecord?.fields ?? []);
+    const formFields = new Map(
+      [...formInputs].map(([form, inputs]) => [
+        form,
+        new Map(
+          recordFields
+            .filter((field) => inputs.names.has(String(field.key)))
+            .map((field) => [String(field.key), field]),
+        ),
+      ]),
+    );
     // A Records table or Record detail may map only fields its bound Module query selects, and
     // may order only by fields the query can order (a grouped or aggregating query orders by its
     // grouping fields). The default sort must be the query's leading sort, the order the Query
@@ -444,6 +462,37 @@ export function applicationPageRules(scope: ApplicationScope): void {
           code,
           sentence,
         );
+      for (const condition of [
+        placement.vortex.visibilityCondition,
+        placement.vortex.requiredCondition,
+        placement.vortex.readOnlyCondition,
+        placement.vortex.enabledCondition,
+      ]) {
+        let stored = false;
+        let live = false;
+        walkValues(condition, (entry) => {
+          if (entry.source === "field") stored = true;
+          if (entry.source === "page" || entry.source === "form") live = true;
+        });
+        if (
+          live &&
+          (stored ||
+            !typedConditionTypesValid(condition, new Map(), new Map(), "canonical", {
+              values: pageValues,
+              forms: formFields,
+            }))
+        )
+          failures.push(
+            placementFailure(
+              output,
+              "vortex.definition.application_block_settings",
+              "invalid_value",
+              undefined,
+              undefined,
+              `Placement ${alias ?? String(placement.props.id)} on page ${String(page.key)} has an invalid live condition; stored fields cannot be mixed with page or form values`,
+            ),
+          );
+      }
       const bound =
         placement.vortex.queryId === undefined
           ? undefined

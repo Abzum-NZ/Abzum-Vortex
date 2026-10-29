@@ -201,8 +201,18 @@ export const conditionDepth = (condition: ConditionNode): number => {
 export const conditionLevelForPath = (path: ConditionPath): number =>
   1 + path.filter((part) => part === "conditions" || part === "condition").length;
 
-const referenceKey = (operand: Exclude<ConditionOperand, { source: "value" }>): string =>
-  operand.source === "field" ? `field:${operand.fieldId}` : `parameter:${operand.key}`;
+const referenceKey = (operand: Exclude<ConditionOperand, { source: "value" }>): string => {
+  switch (operand.source) {
+    case "field":
+      return `field:${operand.fieldId}`;
+    case "parameter":
+      return `parameter:${operand.key}`;
+    case "page":
+      return `page:${operand.name}`;
+    case "form":
+      return `form:${operand.form}:${operand.field}`;
+  }
+};
 
 const permissionKey = (permission: StudioConditionOperandPermission): string =>
   referenceKey(permission.operand);

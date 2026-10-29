@@ -3,6 +3,7 @@
 import { builderKeySchema } from "@vortex/platform/schema";
 import type { ReactElement } from "react";
 import { Alert, AlertDescription, AlertTitle } from "../components/alert";
+import { noticeAlertVariant } from "../components/notice";
 import { DefinitionRenderError } from "../definition-error";
 import type { ValidationPayload } from "./projected-data";
 import {
@@ -13,15 +14,9 @@ import {
 
 export type ValidationMessageProps = ControlRenderProps<ValidationPayload>;
 
-const VALIDATION_ALERT_VARIANTS = {
-  error: "critical",
-  warning: "warning",
-  info: "info",
-} as const;
-
 /**
  * Form-wide or field-targeted validation summary. The live region is always present so a later
- * projected error is announced: errors assertively as an alert, warnings and information politely.
+ * projected error is announced: errors and warnings assertively, information politely.
  * It declares no semantic events.
  */
 export function ValidationMessage(props: ValidationMessageProps): ReactElement {
@@ -44,12 +39,13 @@ export function ValidationMessage(props: ValidationMessageProps): ReactElement {
 
   return (
     <Alert
-      role={severity === "error" ? "alert" : "status"}
+      role={severity === "info" ? "status" : "alert"}
+      aria-live={severity === "info" ? "polite" : "assertive"}
       data-vortex-control="validation-message"
       data-vortex-placement-id={props.placementId}
       data-vortex-severity={severity}
       {...(forField === undefined ? {} : { "data-vortex-for-field": forField })}
-      variant={VALIDATION_ALERT_VARIANTS[severity]}
+      variant={noticeAlertVariant[severity]}
     >
       {messages.length === 0 ? null : (
         <>

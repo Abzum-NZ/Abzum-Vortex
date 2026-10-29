@@ -149,6 +149,9 @@ const sourceExperienceGatedPlacementKeys = [
   "view_permission",
   "use_permission",
   "visibility_condition",
+  "required_condition",
+  "read_only_condition",
+  "enabled_condition",
   "query",
 ] as const;
 const declaresGatedSourcePlacement = (value: unknown): boolean => {

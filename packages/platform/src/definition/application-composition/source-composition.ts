@@ -50,6 +50,9 @@ export type SourceItemVortex = {
   view_permission?: string | undefined;
   use_permission?: string | undefined;
   visibility_condition?: z.infer<typeof sourceQualifiedConditionSchema> | undefined;
+  required_condition?: z.infer<typeof sourceQualifiedConditionSchema> | undefined;
+  read_only_condition?: z.infer<typeof sourceQualifiedConditionSchema> | undefined;
+  enabled_condition?: z.infer<typeof sourceQualifiedConditionSchema> | undefined;
   query?: string | undefined;
   responsive: z.infer<typeof sourceResponsivePlacementSchema>;
   slot_orders?: SourceSlotOrders | undefined;
@@ -163,6 +166,9 @@ const sourceItemVortexSchema = z
     view_permission: sourceProvenanceTarget(namespacedKeySchema.optional(), ["viewPermissionKey"]),
     use_permission: sourceProvenanceTarget(namespacedKeySchema.optional(), ["usePermissionKey"]),
     visibility_condition: sourceProvenanceUnchanged(sourceQualifiedConditionSchema.optional()),
+    required_condition: sourceProvenanceUnchanged(sourceQualifiedConditionSchema.optional()),
+    read_only_condition: sourceProvenanceUnchanged(sourceQualifiedConditionSchema.optional()),
+    enabled_condition: sourceProvenanceUnchanged(sourceQualifiedConditionSchema.optional()),
     query: sourceProvenanceTarget(sourceQualifiedQueryReferenceSchema.optional(), ["queryId"]),
     responsive: sourceProvenanceUnchanged(sourceResponsivePlacementSchema),
     slot_orders: sourceProvenanceUnchanged(sourceSlotOrdersSchema.optional()),
