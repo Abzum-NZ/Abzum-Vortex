@@ -23,7 +23,7 @@ begin
   if pg_catalog.jsonb_array_length(p_effects) = 0 then return; end if;
   if exists (
     select 1 from pg_catalog.jsonb_array_elements(p_effects) as item(value)
-    where not (item.value ?& array['effectKind', 'storageContractId', 'recordTypeId', 'recordId', 'preConcurrencyNumber', 'relationshipId', 'previousValue', 'deleteRoots'])
+    where not (item.value ?& array['effectKind', 'storageContractId', 'recordTypeId', 'recordId', 'preConcurrencyNumber', 'relationshipId', 'previousValue', 'deleteRoots', 'restoresCommandId'])
       or item.value ->> 'effectKind' not in ('soft_deleted', 'optional_cleared', 'restored', 'links_restored')
       or pg_catalog.jsonb_typeof(item.value -> 'deleteRoots') is distinct from 'array'
       or item.value -> 'deleteRoots' = '[]'::jsonb
@@ -37,6 +37,10 @@ begin
           or not vortex_platform.is_non_nil_uuid(root.value ->> 'recordTypeId')
           or not vortex_platform.is_non_nil_uuid(root.value ->> 'recordId')
       )
+      or (item.value ->> 'effectKind' in ('restored', 'links_restored')
+        and not vortex_platform.is_non_nil_uuid(item.value ->> 'restoresCommandId'))
+      or (item.value ->> 'effectKind' in ('soft_deleted', 'optional_cleared')
+        and item.value -> 'restoresCommandId' <> 'null'::jsonb)
       or (item.value ->> 'effectKind' = 'optional_cleared' and (
         pg_catalog.jsonb_typeof(item.value -> 'previousValue') is distinct from 'object'
         or not ((item.value -> 'previousValue') ?& array['recordTypeId', 'recordId'])
@@ -99,7 +103,7 @@ begin
     organization_id, application_root_id, actor_organization_account_id,
     command_id, effect_sequence, effect_kind, storage_contract_id,
     record_type_id, record_id, relationship_id,
-    pre_concurrency_number, post_concurrency_number, previous_value, delete_roots
+    pre_concurrency_number, post_concurrency_number, previous_value, delete_roots, restores_command_id
   )
   select (context_value ->> 'organizationId')::uuid, (context_value ->> 'applicationRootId')::uuid,
     (context_value ->> 'organizationAccountId')::uuid, receipt.command_id,
@@ -108,7 +112,8 @@ begin
     (item.value ->> 'recordId')::uuid, (item.value ->> 'relationshipId')::uuid,
     (item.value ->> 'preConcurrencyNumber')::bigint,
     (item.value ->> 'preConcurrencyNumber')::bigint + 1,
-    nullif(item.value -> 'previousValue', 'null'::jsonb), item.value -> 'deleteRoots'
+    nullif(item.value -> 'previousValue', 'null'::jsonb), item.value -> 'deleteRoots',
+    (item.value ->> 'restoresCommandId')::uuid
   from pg_catalog.jsonb_array_elements(effects) with ordinality as item(value, ordinality);
 end
 $function$;

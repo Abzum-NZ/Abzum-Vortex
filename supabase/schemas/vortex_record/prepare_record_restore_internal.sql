@@ -52,6 +52,7 @@ begin
       'recordTypeId', item.value -> 'recordTypeId', 'recordId', item.value -> 'recordId',
       'preConcurrencyNumber', item.value -> 'expectedConcurrencyNumber',
       'relationshipId', null, 'previousValue', null,
+      'restoresCommandId', plan_value -> 'deleteCommandId',
       'deleteRoots', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
         'recordTypeId', p_record_type_id, 'recordId', p_record_id
       ))

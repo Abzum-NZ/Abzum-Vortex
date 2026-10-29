@@ -28,6 +28,8 @@ declare
   missing_links integer;
   current_lifecycle text;
   current_revision bigint;
+  restored_revision_count bigint;
+  prior_restore boolean;
 begin
   context_value := vortex_access.validated_human_request_context();
   if not context_value ? 'applicationRootId' then
@@ -103,6 +105,29 @@ begin
         is distinct from (p_record_type_id, p_record_id) then
       continue;
     end if;
+    prior_restore := false;
+    if not (subject ->> 'deleted')::boolean
+      and current_lifecycle = 'active'
+      and current_revision > (subject ->> 'expectedConcurrencyNumber')::bigint then
+      -- Other roots may already have recovered different links on this row.
+      -- Accept only a complete revision chain of restores of this exact delete;
+      -- an ordinary edit leaves a gap and still refuses the closure.
+      select pg_catalog.count(distinct entry.pre_concurrency_number)
+      into restored_revision_count
+      from vortex_record.record_lifecycle_command_effects as entry
+      where entry.organization_id = (context_value ->> 'organizationId')::uuid
+        and entry.application_root_id = (context_value ->> 'applicationRootId')::uuid
+        and entry.storage_contract_id = (subject ->> 'storageContractId')::uuid
+        and entry.record_id = (subject ->> 'recordId')::uuid
+        and entry.effect_kind = 'links_restored'
+        and entry.restores_command_id = delete_command_id
+        and entry.pre_concurrency_number >= (subject ->> 'expectedConcurrencyNumber')::bigint
+        and entry.post_concurrency_number <= current_revision;
+      if restored_revision_count = current_revision - (subject ->> 'expectedConcurrencyNumber')::bigint then
+        prior_restore := true;
+        subject := subject || pg_catalog.jsonb_build_object('expectedConcurrencyNumber', current_revision);
+      end if;
+    end if;
     loaded := vortex_record.load_record_access_facts_internal(
       (subject ->> 'recordTypeId')::uuid,
       case when (subject ->> 'deleted')::boolean then 'restore' else 'update' end,
@@ -171,6 +196,10 @@ begin
       select item.value into relationship_value
       from pg_catalog.jsonb_array_elements(meta #> '{recordType,relationships}') as item(value)
       where item.value ->> 'relationshipId' = effect ->> 'relationship_id';
+      if prior_restore and pg_catalog.jsonb_array_length(effect -> 'delete_roots') > 1
+        and loaded -> 'fieldValues' -> (relationship_value ->> 'fromFieldId') = effect -> 'previous_value' then
+        continue;
+      end if;
       if relationship_value is null
         or not (bounds -> 'changeableFieldIds') ? (relationship_value ->> 'fromFieldId')
         or coalesce(loaded -> 'fieldValues' -> (relationship_value ->> 'fromFieldId'), 'null'::jsonb)
@@ -188,6 +217,9 @@ begin
         effect -> 'previous_value'
       );
     end loop;
+    if not (subject ->> 'deleted')::boolean and physical_values = '{}'::jsonb then
+      continue;
+    end if;
     subjects := subjects || pg_catalog.jsonb_build_array(subject || pg_catalog.jsonb_build_object(
       'table', meta -> 'table', 'releaseRevision', meta -> 'moduleReleaseRevision',
       'recordType', meta -> 'recordType', 'columns', meta -> 'columns',
@@ -205,7 +237,7 @@ begin
   end loop;
 
   return pg_catalog.jsonb_build_object(
-    'outcome', 'prepared', 'subjects', subjects,
+    'outcome', 'prepared', 'deleteCommandId', delete_command_id, 'subjects', subjects,
     'storageChanges', (select pg_catalog.jsonb_agg(item.value -> 'storageChange')
       from pg_catalog.jsonb_array_elements(subjects) as item(value)),
     'unrestoredLinkCount', missing_links

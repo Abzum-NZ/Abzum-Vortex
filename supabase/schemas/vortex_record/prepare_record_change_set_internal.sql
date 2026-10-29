@@ -13,7 +13,6 @@ declare
   ordinal integer;
   meta jsonb;
   prepared jsonb;
-  context_value jsonb;
   receipt vortex_record.command_receipts%rowtype;
   plans jsonb := '[]'::jsonb;
   storage_changes jsonb := '[]'::jsonb;
@@ -39,6 +38,7 @@ begin
         'operation', 'recordTypeId', 'recordId', 'expectedConcurrencyNumber',
         'submittedValues', 'finalValues', 'selectedGroupId', 'activityId', 'occurrenceId'
       ]::text[] <> '{}'::jsonb
+      or pg_catalog.jsonb_typeof(item.value -> 'operation') is distinct from 'string'
       or item.value ->> 'operation' not in ('create', 'update', 'delete', 'restore')
       or not vortex_platform.is_non_nil_uuid(item.value ->> 'recordTypeId')
       or not vortex_platform.is_non_nil_uuid(item.value ->> 'activityId')
@@ -75,7 +75,7 @@ begin
   ) then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'command_invalid');
   end if;
-  context_value := vortex_access.validated_human_request_context();
+  perform vortex_access.validated_human_request_context();
   receipt := vortex_record.lock_command_receipt_internal('record_changes', p_command_id);
   if receipt.command_id is null or receipt.result is not null then
     raise exception using errcode = '42501', message = 'Record set receipt is unavailable';
@@ -146,6 +146,7 @@ begin
             'recordTypeId', restore_subject -> 'recordTypeId', 'recordId', restore_subject -> 'recordId',
             'preConcurrencyNumber', restore_subject -> 'expectedConcurrencyNumber',
             'relationshipId', null, 'previousValue', null,
+            'restoresCommandId', prepared -> 'deleteCommandId',
             'deleteRoots', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
               'recordTypeId', subject -> 'recordTypeId', 'recordId', subject -> 'recordId'
             ))

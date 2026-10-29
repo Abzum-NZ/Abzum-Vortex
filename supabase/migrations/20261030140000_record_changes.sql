@@ -199,6 +199,14 @@ alter table vortex_record.record_lifecycle_command_effects
       and vortex_platform.is_non_nil_uuid(previous_value ->> 'recordId')
     )
   );
+alter table vortex_record.record_lifecycle_command_effects
+  add column restores_command_id uuid,
+  add constraint record_lifecycle_effects_restores_command_valid check (
+    restores_command_id is null or effect_kind in ('restored', 'links_restored')
+  );
+comment on column vortex_record.record_lifecycle_command_effects.restores_command_id is
+  'The delete command reversed by this restore effect, so another root can distinguish earlier restoration from an intervening edit.';
+
 alter table vortex_record.record_lifecycle_command_effects add column delete_roots jsonb;
 -- Existing commands have one root, recorded in their completed receipt. Rebuild
 -- their journal into the same root format used by new sets.
@@ -261,7 +269,7 @@ begin
   if pg_catalog.jsonb_array_length(p_effects) = 0 then return; end if;
   if exists (
     select 1 from pg_catalog.jsonb_array_elements(p_effects) as item(value)
-    where not (item.value ?& array['effectKind', 'storageContractId', 'recordTypeId', 'recordId', 'preConcurrencyNumber', 'relationshipId', 'previousValue', 'deleteRoots'])
+    where not (item.value ?& array['effectKind', 'storageContractId', 'recordTypeId', 'recordId', 'preConcurrencyNumber', 'relationshipId', 'previousValue', 'deleteRoots', 'restoresCommandId'])
       or item.value ->> 'effectKind' not in ('soft_deleted', 'optional_cleared', 'restored', 'links_restored')
       or pg_catalog.jsonb_typeof(item.value -> 'deleteRoots') is distinct from 'array'
       or item.value -> 'deleteRoots' = '[]'::jsonb
@@ -275,6 +283,10 @@ begin
           or not vortex_platform.is_non_nil_uuid(root.value ->> 'recordTypeId')
           or not vortex_platform.is_non_nil_uuid(root.value ->> 'recordId')
       )
+      or (item.value ->> 'effectKind' in ('restored', 'links_restored')
+        and not vortex_platform.is_non_nil_uuid(item.value ->> 'restoresCommandId'))
+      or (item.value ->> 'effectKind' in ('soft_deleted', 'optional_cleared')
+        and item.value -> 'restoresCommandId' <> 'null'::jsonb)
       or (item.value ->> 'effectKind' = 'optional_cleared' and (
         pg_catalog.jsonb_typeof(item.value -> 'previousValue') is distinct from 'object'
         or not ((item.value -> 'previousValue') ?& array['recordTypeId', 'recordId'])
@@ -337,7 +349,7 @@ begin
     organization_id, application_root_id, actor_organization_account_id,
     command_id, effect_sequence, effect_kind, storage_contract_id,
     record_type_id, record_id, relationship_id,
-    pre_concurrency_number, post_concurrency_number, previous_value, delete_roots
+    pre_concurrency_number, post_concurrency_number, previous_value, delete_roots, restores_command_id
   )
   select (context_value ->> 'organizationId')::uuid, (context_value ->> 'applicationRootId')::uuid,
     (context_value ->> 'organizationAccountId')::uuid, receipt.command_id,
@@ -346,7 +358,8 @@ begin
     (item.value ->> 'recordId')::uuid, (item.value ->> 'relationshipId')::uuid,
     (item.value ->> 'preConcurrencyNumber')::bigint,
     (item.value ->> 'preConcurrencyNumber')::bigint + 1,
-    nullif(item.value -> 'previousValue', 'null'::jsonb), item.value -> 'deleteRoots'
+    nullif(item.value -> 'previousValue', 'null'::jsonb), item.value -> 'deleteRoots',
+    (item.value ->> 'restoresCommandId')::uuid
   from pg_catalog.jsonb_array_elements(effects) with ordinality as item(value, ordinality);
 end
 $function$;
@@ -2948,6 +2961,7 @@ set search_path = ''
 as $function$
 declare
   organization_id_value uuid;
+  changed_parent record;
 begin
   organization_id_value := (vortex_access.validated_human_request_context() ->> 'organizationId')::uuid;
   if pg_catalog.jsonb_typeof(p_changes) is distinct from 'array' or exists (
@@ -3009,6 +3023,34 @@ begin
   ) then
     raise exception using errcode = '23514', message = 'Relationship cardinality is exceeded';
   end if;
+
+  -- Checking each proposal against the old graph cannot detect a cycle formed
+  -- by several proposals together. Reuse the parent checker on the final graph;
+  -- preparation already holds its relationship-wide transaction lock.
+  for changed_parent in
+    select distinct (item.value ->> 'relationshipId')::uuid as relationship_id,
+      (item.value ->> 'sourceStorageContractId')::uuid as storage_contract_id,
+      (item.value ->> 'sourceRecordId')::uuid as source_record_id,
+      (item.value ->> 'targetRecordId')::uuid as target_record_id,
+      (relationship.value ->> 'fromFieldId')::uuid as field_id
+    from pg_catalog.jsonb_array_elements(p_changes) as item(value)
+    join vortex_record.storage_catalogue as storage
+      on storage.storage_contract_id = (item.value ->> 'sourceStorageContractId')::uuid
+    cross join lateral pg_catalog.jsonb_array_elements(
+      storage.record_type_definition -> 'relationships'
+    ) as relationship(value)
+    where relationship.value ->> 'relationshipId' = item.value ->> 'relationshipId'
+      and relationship.value ->> 'cardinality' = 'many_to_one'
+      and item.value -> 'sourceStorageContractId' = item.value -> 'targetStorageContractId'
+      and item.value ->> 'targetRecordId' is not null
+    order by relationship_id, storage_contract_id, source_record_id
+  loop
+    perform vortex_record.assert_relationship_acyclic_internal(
+      changed_parent.relationship_id, organization_id_value,
+      changed_parent.storage_contract_id, changed_parent.field_id,
+      changed_parent.source_record_id, changed_parent.target_record_id
+    );
+  end loop;
 end
 $function$;
 
@@ -3016,7 +3058,7 @@ alter function vortex_record.apply_relationship_edges_internal(jsonb) owner to v
 revoke all on function vortex_record.apply_relationship_edges_internal(jsonb)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 comment on function vortex_record.apply_relationship_edges_internal(jsonb) is
-  'Private set-based edge writer: applies prepared fixed-link replacements in one MERGE and checks one-to-one cardinality on the final graph.';
+  'Private set-based edge writer: applies prepared fixed-link replacements in one MERGE and checks cardinality and parent cycles on the final graph.';
 
 create or replace function vortex_record.apply_relationship_total_parent_internal(
   p_record_type_id uuid,
@@ -5294,6 +5336,7 @@ begin
   -- Each outer root replaces the recursive root tags with its own identity.
   -- The set preparation unions these tags when closures share an effect.
   select coalesce(pg_catalog.jsonb_agg(item.value || pg_catalog.jsonb_build_object(
+    'restoresCommandId', null,
     'deleteRoots', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
       'recordTypeId', p_record_type_id, 'recordId', p_record_id
     ))
@@ -5804,6 +5847,8 @@ declare
   missing_links integer;
   current_lifecycle text;
   current_revision bigint;
+  restored_revision_count bigint;
+  prior_restore boolean;
 begin
   context_value := vortex_access.validated_human_request_context();
   if not context_value ? 'applicationRootId' then
@@ -5879,6 +5924,29 @@ begin
         is distinct from (p_record_type_id, p_record_id) then
       continue;
     end if;
+    prior_restore := false;
+    if not (subject ->> 'deleted')::boolean
+      and current_lifecycle = 'active'
+      and current_revision > (subject ->> 'expectedConcurrencyNumber')::bigint then
+      -- Other roots may already have recovered different links on this row.
+      -- Accept only a complete revision chain of restores of this exact delete;
+      -- an ordinary edit leaves a gap and still refuses the closure.
+      select pg_catalog.count(distinct entry.pre_concurrency_number)
+      into restored_revision_count
+      from vortex_record.record_lifecycle_command_effects as entry
+      where entry.organization_id = (context_value ->> 'organizationId')::uuid
+        and entry.application_root_id = (context_value ->> 'applicationRootId')::uuid
+        and entry.storage_contract_id = (subject ->> 'storageContractId')::uuid
+        and entry.record_id = (subject ->> 'recordId')::uuid
+        and entry.effect_kind = 'links_restored'
+        and entry.restores_command_id = delete_command_id
+        and entry.pre_concurrency_number >= (subject ->> 'expectedConcurrencyNumber')::bigint
+        and entry.post_concurrency_number <= current_revision;
+      if restored_revision_count = current_revision - (subject ->> 'expectedConcurrencyNumber')::bigint then
+        prior_restore := true;
+        subject := subject || pg_catalog.jsonb_build_object('expectedConcurrencyNumber', current_revision);
+      end if;
+    end if;
     loaded := vortex_record.load_record_access_facts_internal(
       (subject ->> 'recordTypeId')::uuid,
       case when (subject ->> 'deleted')::boolean then 'restore' else 'update' end,
@@ -5947,6 +6015,10 @@ begin
       select item.value into relationship_value
       from pg_catalog.jsonb_array_elements(meta #> '{recordType,relationships}') as item(value)
       where item.value ->> 'relationshipId' = effect ->> 'relationship_id';
+      if prior_restore and pg_catalog.jsonb_array_length(effect -> 'delete_roots') > 1
+        and loaded -> 'fieldValues' -> (relationship_value ->> 'fromFieldId') = effect -> 'previous_value' then
+        continue;
+      end if;
       if relationship_value is null
         or not (bounds -> 'changeableFieldIds') ? (relationship_value ->> 'fromFieldId')
         or coalesce(loaded -> 'fieldValues' -> (relationship_value ->> 'fromFieldId'), 'null'::jsonb)
@@ -5964,6 +6036,9 @@ begin
         effect -> 'previous_value'
       );
     end loop;
+    if not (subject ->> 'deleted')::boolean and physical_values = '{}'::jsonb then
+      continue;
+    end if;
     subjects := subjects || pg_catalog.jsonb_build_array(subject || pg_catalog.jsonb_build_object(
       'table', meta -> 'table', 'releaseRevision', meta -> 'moduleReleaseRevision',
       'recordType', meta -> 'recordType', 'columns', meta -> 'columns',
@@ -5981,7 +6056,7 @@ begin
   end loop;
 
   return pg_catalog.jsonb_build_object(
-    'outcome', 'prepared', 'subjects', subjects,
+    'outcome', 'prepared', 'deleteCommandId', delete_command_id, 'subjects', subjects,
     'storageChanges', (select pg_catalog.jsonb_agg(item.value -> 'storageChange')
       from pg_catalog.jsonb_array_elements(subjects) as item(value)),
     'unrestoredLinkCount', missing_links
@@ -6049,6 +6124,7 @@ begin
       'recordTypeId', item.value -> 'recordTypeId', 'recordId', item.value -> 'recordId',
       'preConcurrencyNumber', item.value -> 'expectedConcurrencyNumber',
       'relationshipId', null, 'previousValue', null,
+      'restoresCommandId', plan_value -> 'deleteCommandId',
       'deleteRoots', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
         'recordTypeId', p_record_type_id, 'recordId', p_record_id
       ))
@@ -7490,7 +7566,6 @@ declare
   ordinal integer;
   meta jsonb;
   prepared jsonb;
-  context_value jsonb;
   receipt vortex_record.command_receipts%rowtype;
   plans jsonb := '[]'::jsonb;
   storage_changes jsonb := '[]'::jsonb;
@@ -7516,6 +7591,7 @@ begin
         'operation', 'recordTypeId', 'recordId', 'expectedConcurrencyNumber',
         'submittedValues', 'finalValues', 'selectedGroupId', 'activityId', 'occurrenceId'
       ]::text[] <> '{}'::jsonb
+      or pg_catalog.jsonb_typeof(item.value -> 'operation') is distinct from 'string'
       or item.value ->> 'operation' not in ('create', 'update', 'delete', 'restore')
       or not vortex_platform.is_non_nil_uuid(item.value ->> 'recordTypeId')
       or not vortex_platform.is_non_nil_uuid(item.value ->> 'activityId')
@@ -7552,7 +7628,7 @@ begin
   ) then
     return pg_catalog.jsonb_build_object('outcome', 'refused', 'reasonCode', 'command_invalid');
   end if;
-  context_value := vortex_access.validated_human_request_context();
+  perform vortex_access.validated_human_request_context();
   receipt := vortex_record.lock_command_receipt_internal('record_changes', p_command_id);
   if receipt.command_id is null or receipt.result is not null then
     raise exception using errcode = '42501', message = 'Record set receipt is unavailable';
@@ -7623,6 +7699,7 @@ begin
             'recordTypeId', restore_subject -> 'recordTypeId', 'recordId', restore_subject -> 'recordId',
             'preConcurrencyNumber', restore_subject -> 'expectedConcurrencyNumber',
             'relationshipId', null, 'previousValue', null,
+            'restoresCommandId', prepared -> 'deleteCommandId',
             'deleteRoots', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
               'recordTypeId', subject -> 'recordTypeId', 'recordId', subject -> 'recordId'
             ))

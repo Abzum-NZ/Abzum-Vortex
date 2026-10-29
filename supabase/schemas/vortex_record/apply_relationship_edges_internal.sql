@@ -7,6 +7,7 @@ set search_path = ''
 as $function$
 declare
   organization_id_value uuid;
+  changed_parent record;
 begin
   organization_id_value := (vortex_access.validated_human_request_context() ->> 'organizationId')::uuid;
   if pg_catalog.jsonb_typeof(p_changes) is distinct from 'array' or exists (
@@ -68,6 +69,34 @@ begin
   ) then
     raise exception using errcode = '23514', message = 'Relationship cardinality is exceeded';
   end if;
+
+  -- Checking each proposal against the old graph cannot detect a cycle formed
+  -- by several proposals together. Reuse the parent checker on the final graph;
+  -- preparation already holds its relationship-wide transaction lock.
+  for changed_parent in
+    select distinct (item.value ->> 'relationshipId')::uuid as relationship_id,
+      (item.value ->> 'sourceStorageContractId')::uuid as storage_contract_id,
+      (item.value ->> 'sourceRecordId')::uuid as source_record_id,
+      (item.value ->> 'targetRecordId')::uuid as target_record_id,
+      (relationship.value ->> 'fromFieldId')::uuid as field_id
+    from pg_catalog.jsonb_array_elements(p_changes) as item(value)
+    join vortex_record.storage_catalogue as storage
+      on storage.storage_contract_id = (item.value ->> 'sourceStorageContractId')::uuid
+    cross join lateral pg_catalog.jsonb_array_elements(
+      storage.record_type_definition -> 'relationships'
+    ) as relationship(value)
+    where relationship.value ->> 'relationshipId' = item.value ->> 'relationshipId'
+      and relationship.value ->> 'cardinality' = 'many_to_one'
+      and item.value -> 'sourceStorageContractId' = item.value -> 'targetStorageContractId'
+      and item.value ->> 'targetRecordId' is not null
+    order by relationship_id, storage_contract_id, source_record_id
+  loop
+    perform vortex_record.assert_relationship_acyclic_internal(
+      changed_parent.relationship_id, organization_id_value,
+      changed_parent.storage_contract_id, changed_parent.field_id,
+      changed_parent.source_record_id, changed_parent.target_record_id
+    );
+  end loop;
 end
 $function$;
 
@@ -75,4 +104,4 @@ alter function vortex_record.apply_relationship_edges_internal(jsonb) owner to v
 revoke all on function vortex_record.apply_relationship_edges_internal(jsonb)
   from public, anon, authenticated, service_role, vortex_runtime, vortex_request;
 comment on function vortex_record.apply_relationship_edges_internal(jsonb) is
-  'Private set-based edge writer: applies prepared fixed-link replacements in one MERGE and checks one-to-one cardinality on the final graph.';
+  'Private set-based edge writer: applies prepared fixed-link replacements in one MERGE and checks cardinality and parent cycles on the final graph.';

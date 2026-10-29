@@ -234,6 +234,7 @@ begin
   -- Each outer root replaces the recursive root tags with its own identity.
   -- The set preparation unions these tags when closures share an effect.
   select coalesce(pg_catalog.jsonb_agg(item.value || pg_catalog.jsonb_build_object(
+    'restoresCommandId', null,
     'deleteRoots', pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
       'recordTypeId', p_record_type_id, 'recordId', p_record_id
     ))
