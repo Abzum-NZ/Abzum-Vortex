@@ -445,11 +445,13 @@ export const createFlowOrchestrator = (dependencies: FlowOrchestratorDependencie
             warnings: z.array(flowWarningNoticeSchema),
             bindingId: z.uuid(),
             gestureId: z.uuid(),
-            planIdentity: z.object({
-              installationRevision: z.number().int().positive(),
-              flowId: z.uuid(),
-              fingerprint: z.string().regex(/^sha256:[0-9a-f]{64}$/),
-            }).strict(),
+            planIdentity: z
+              .object({
+                installationRevision: z.number().int().positive(),
+                flowId: z.uuid(),
+                fingerprint: z.string().regex(/^sha256:[0-9a-f]{64}$/),
+              })
+              .strict(),
           })
           .strict()
           .parse(stored.state);

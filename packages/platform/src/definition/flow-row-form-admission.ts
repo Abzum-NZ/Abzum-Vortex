@@ -5,6 +5,7 @@ import type {
   HumanOrganizationRequestDependencies,
 } from "../access/human-organization-request";
 import { isRecord, sameId } from "../catalogue/runtime-primitives";
+import type { JsonValue } from "../catalogue/common";
 import { createReferenceChoiceService } from "../queries/reference-choice-service";
 import { adaptPrivateFormSubmit } from "../pages/form-request";
 import { readPageSubjectInTransaction } from "../pages/page-subject-read";
@@ -118,7 +119,7 @@ export const admitRowForm = async (
           page: form.projectedPage,
           placementId: field.placementId,
           raw,
-          parsed: value as import("../catalogue/common").JsonValue,
+          parsed: value as JsonValue,
           subject: { recordTypeId: rowType, recordId },
           heldValues: row.row.values,
           controls: request.pageInputs.controls,

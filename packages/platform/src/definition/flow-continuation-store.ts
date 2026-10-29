@@ -143,9 +143,12 @@ export const consumeFlowContinuation = async (
 /** Reads a bound continuation for path selection without spending it on a refused admission. */
 export const peekFlowContinuation = async (
   input: FlowContinuationBinding & Readonly<{ tokenHash: string }>,
-): Promise<Readonly<{ runId: string; state: unknown; elapsedMilliseconds: number }> | undefined> => {
-  const rows = await withRuntimeTransaction((transaction) =>
-    transaction.query`
+): Promise<
+  Readonly<{ runId: string; state: unknown; elapsedMilliseconds: number }> | undefined
+> => {
+  const rows = await withRuntimeTransaction(
+    (transaction) =>
+      transaction.query`
       select vortex_platform.peek_flow_continuation(
         ${input.tokenHash}::text,
         ${input.organizationId}::uuid,
