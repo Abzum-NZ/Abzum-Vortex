@@ -6371,4 +6371,33 @@ alter function vortex_access.suspend_organization_account_for_administration(p_d
 grant execute on function vortex_access.suspend_organization_account_for_administration(p_duplicate_key uuid, p_organization_account_id uuid, p_expected_revision bigint) to postgres;
 
 
+
+-- Remove the unconsumed capability policy, reservation and usage projection stack.
+drop table vortex_access.capability_limit_changes;
+drop table vortex_access.capability_reservation_balances;
+drop table vortex_access.capability_reservations;
+drop table vortex_access.capability_policy_assignments;
+drop table vortex_access.capability_policy_definitions;
+drop table vortex_access.usage_projection_reconciliation;
+drop table vortex_access.usage_projection_rollups;
+drop function vortex_access.capability_limit_bounds_internal(uuid,uuid,text,text,timestamp with time zone,boolean);
+drop function vortex_access.capability_reservation_request_context(uuid,uuid);
+drop function vortex_access.consume_capability_reservation(uuid,uuid,text,text,uuid,bigint,uuid,bigint,uuid,numeric,uuid);
+drop function vortex_access.derive_usage_projection(uuid,timestamp with time zone,timestamp with time zone);
+drop function vortex_access.expire_stale_capability_reservations(uuid,uuid,text,text);
+drop function vortex_access.lock_effective_capability_policy(uuid,uuid,text,text,timestamp with time zone);
+drop function vortex_access.publish_capability_policy_definition(uuid,uuid,uuid,uuid,text,text,numeric,bigint);
+drop function vortex_access.read_capability_reservation_balance(uuid,uuid,text,text);
+drop function vortex_access.read_usage_projection(uuid,uuid,text,uuid,timestamp with time zone,timestamp with time zone,text,integer,text);
+drop function vortex_access.rebuild_usage_projection(uuid,uuid,timestamp with time zone,timestamp with time zone);
+drop function vortex_access.refresh_capability_reservation_balance(uuid,uuid,text,text,text,uuid,uuid,bigint,uuid,bigint,numeric,timestamp with time zone);
+drop function vortex_access.refuse_capability_limit_change_edit();
+drop function vortex_access.release_capability_reservation(uuid,uuid,text,text,uuid,bigint,uuid,bigint,uuid,uuid,numeric);
+drop function vortex_access.reserve_capability_quantity(uuid,uuid,text,text,jsonb,numeric,uuid);
+drop function vortex_access.resolve_effective_capability_policy(uuid,uuid,text,text);
+drop function vortex_access.revoke_capability_limit_allocation(uuid,uuid,uuid,uuid,bigint,uuid);
+drop function vortex_access.revoke_capability_policy_ceiling(uuid,uuid,uuid,uuid,bigint);
+drop function vortex_access.set_capability_limit_allocation(uuid,uuid,uuid,uuid,text,text,numeric,timestamp with time zone,bigint,uuid);
+drop function vortex_access.set_capability_policy_ceiling(uuid,uuid,uuid,uuid,uuid,bigint,timestamp with time zone,timestamp with time zone,bigint);
+
 reset role;

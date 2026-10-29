@@ -151,15 +151,6 @@ export {
 export { arrangeDataset, arrangeProtectedBoard } from "./arrangements";
 
 export {
-  createUsageProjectionService,
-  usageProjectionCommandSchema,
-  usageProjectionResultSchema,
-  type UsageProjectionCommand,
-  type UsageProjectionResult,
-  type UsageProjectionServiceDependencies,
-} from "./usage-projection";
-
-export {
   organizationAccountReferenceChoiceCommandSchema,
   recordReferenceChoiceCommandSchema,
   referenceChoiceCommandSchema,
