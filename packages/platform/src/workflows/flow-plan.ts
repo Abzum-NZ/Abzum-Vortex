@@ -469,6 +469,23 @@ export const compileFlowPlan = (
     pageReferences.flatMap((reference) => (reference.source === "input" ? [reference.name] : [])),
   );
   const serverInputs = serverResolvedInputs(bindings);
+  // A protected segment may read an input supplied by a page-only binding expression even when
+  // no page step reads it. The page must hold its declaration to build that segment's typed seed.
+  const pageResolvedInputs = new Set(
+    bindings.flatMap((inputs) =>
+      Object.entries(inputs).flatMap(([name, input]) =>
+        input.kind !== "caller" && input.kind !== "literal" && !serverInputs.has(name) ? [name] : [],
+      ),
+    ),
+  );
+  for (const segment of segments) {
+    if (segment.kind !== "server") continue;
+    for (const key of Object.keys(segment.inputs)) {
+      const [source, name] = key.split(".");
+      if (source === "inputs" && name !== undefined && pageResolvedInputs.has(name))
+        pageInputs.add(name);
+    }
+  }
   const pageVariables = new Set(
     pageReferences.flatMap((reference) =>
       reference.source === "variable" ? [reference.name] : [],
