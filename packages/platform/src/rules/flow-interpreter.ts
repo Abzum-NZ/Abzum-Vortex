@@ -12,6 +12,7 @@ import {
   type PathSegment,
 } from "./flow-interpreter-state";
 import { typedValueMatchesType } from "./condition-types";
+import { flowPathGuardMatches } from "./flow-path-guard";
 import type { JsonValue } from "../catalogue/common";
 import { PLATFORM_SERVICE_OPERATIONS } from "../catalogue/platform-service-operation-catalogue";
 import { recordLinkValueSchema } from "../records/module-field-values";
@@ -1267,34 +1268,14 @@ export const startFlowSegment = (
     machine.state.activations = [activation];
     machine.segment = segment;
     if (replay !== undefined) machine.replay = replay;
-    for (const condition of segment.guard) {
-      const scope = scopeOf(machine.state, activation, flow);
-      if (condition.kind === "if") {
-        const result = evaluateFlowFormula(condition.condition, scope);
-        if (
-          result?.type !== "yes_no" ||
-          typeof result.value !== "boolean" ||
-          result.value !== (condition.branch === "then")
-        )
-          failed("inputs_invalid", "refused", condition.taskId, "segment path does not match");
-      } else {
-        const value = evaluateValue(
-          condition.value,
-          machine.state,
-          activation,
-          flow,
-          condition.taskId,
-        );
-        const matches = ("cases" in condition ? condition.cases : [condition.when]).map((literal) =>
-          flowRuntimeValuesEqual(value, literal),
-        );
-        if (
-          matches.some((match) => match === undefined) ||
-          ("cases" in condition ? matches.some(Boolean) : matches[0] !== true)
-        )
-          failed("inputs_invalid", "refused", condition.taskId, "segment path does not match");
-      }
-    }
+    if (
+      !flowPathGuardMatches(
+        segment.guard,
+        scopeOf(machine.state, activation, flow),
+        (value, task) => evaluateValue(value, machine.state, activation, flow, task),
+      )
+    )
+      failed("inputs_invalid", "refused", undefined, "segment path does not match");
     return completion
       ? {
           kind: "boundary",
@@ -1344,14 +1325,34 @@ export const continueFlowRun = (
   };
   if (previous.awaiting !== undefined || previous.version !== flowRunStateVersion)
     return failedStep(machine, { outcome: "failed", code: "resume_mismatch" });
+  if (segment !== undefined) {
+    try {
+      const activation = topOf(machine);
+      const flow = flowOf(machine, activation);
+      if (
+        (segment.tasks.length > 0 && activation.phase !== segment.section) ||
+        !flowPathGuardMatches(
+          segment.guard,
+          scopeOf(machine.state, activation, flow),
+          (value, task) => evaluateValue(value, machine.state, activation, flow, task),
+        )
+      )
+        failed("inputs_invalid", "refused", undefined, "segment path does not match");
+      if (segment.tasks.length === 0)
+        return {
+          kind: "boundary",
+          state: snapshot(machine),
+          result: finishActivation(machine, activation),
+        };
+    } catch (error) {
+      if (error instanceof Failed) return failedStep(machine, error.failure);
+      throw error;
+    }
+  }
   return drive(machine);
 };
 
-/**
- * Resumes a suspended run with what the host obtained: the safe outcome of the protected task it
- * ran, or the person's answer to the form or confirmation. A resume of the wrong kind is refused,
- * so a page can never answer a protected task or skip a confirmation.
- */
+/** Resumes a suspended run with its protected outcome or the person's answer. */
 export const resumeFlowRun = (
   previous: FlowRunState,
   resume: FlowRunResume,
