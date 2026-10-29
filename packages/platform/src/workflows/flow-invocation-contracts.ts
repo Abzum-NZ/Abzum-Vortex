@@ -3,6 +3,7 @@ import { formContinuationReceiptSchema, formContinuationTargetSchema } from "./f
 import { formContinuationAnswerSchema } from "./form-continuation-answer";
 import { containedComponentIdSchema, recordIdSchema, revisionSchema } from "../catalogue/identifiers";
 import { flowIdSchema } from "../catalogue/identifiers";
+import { jsonValueSchema } from "../catalogue/common";
 
 const installationRevisionSchema = z.number().int().min(1).max(Number.MAX_SAFE_INTEGER);
 const releaseKeySchema = z.string().min(1).max(200);
@@ -27,6 +28,8 @@ const bindingInvocationSchema = z
     ]),
     /** One identity per user gesture, so a repeated request for the same click is the same run. */
     clickId: z.uuid(),
+    seed: z.record(z.string().min(1).max(300), jsonValueSchema),
+    iteration: z.string().min(1).max(200),
     carriedValues: z.string().min(1).max(65_536).optional(),
     /** The values the surface itself supplies, by the name of the binding's `caller` input. */
     callerInputs: z.record(z.string().min(1).max(100), z.unknown()).default({}),

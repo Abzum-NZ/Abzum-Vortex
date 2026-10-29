@@ -77,6 +77,7 @@ export type FlowInvokeClient = Readonly<{
     subject?: FlowSubjectContext,
     sourceTablePlacementId?: string,
     carriedValues?: string,
+    segmentValues?: Readonly<{ seed: Readonly<Record<string, JsonValue>>; iteration: string }>,
   ) => Promise<ServerFlowResponse>;
   resume: (
     flowId: string,
@@ -303,6 +304,7 @@ export function createFlowInvokeClient(options: FlowInvokeClientOptions): FlowIn
       subject,
       sourceTablePlacementId,
       carriedValues,
+      segmentValues,
     ) =>
       send(
         {
@@ -312,6 +314,8 @@ export function createFlowInvokeClient(options: FlowInvokeClientOptions): FlowIn
           flowId: binding.flowId,
           segment: binding.segment,
           clickId,
+          seed: segmentValues?.seed ?? {},
+          iteration: segmentValues?.iteration ?? "0",
           callerInputs,
           ...(carriedValues === undefined ? {} : { carriedValues }),
           ...(sourceTablePlacementId === undefined ? {} : { sourceTablePlacementId }),
