@@ -270,6 +270,8 @@ export type FlowRunStart = Readonly<{
    * and the interpreter's own value-shape check is not applied to them.
    */
   verifiedInputs?: FlowRuntimeValues;
+  /** Binding input names the trusted host resolves in the page, never from a caller's claim. */
+  pageResolvedInputs?: readonly string[];
 }>;
 
 export type FlowRunResume =
@@ -463,6 +465,7 @@ const buildInputs = (
   flow: FlowDefinition,
   supplied: Readonly<Record<string, unknown>>,
   taskId?: string,
+  requiredInputs?: ReadonlySet<string>,
 ): FlowRuntimeValues => {
   const invalid = (reason: string) => failed("inputs_invalid", "validation", taskId, reason);
   if (Object.keys(supplied).some((name) => !Object.hasOwn(flow.inputs, name)))
@@ -473,7 +476,8 @@ const buildInputs = (
     if (candidate === undefined || candidate === null) {
       if (declaration.default !== undefined)
         inputs[name] = typed(declaration.type, declaration.default);
-      else if (declaration.required) invalid(`required input "${name}" is missing`);
+      else if (declaration.required && (requiredInputs === undefined || requiredInputs.has(name)))
+        invalid(`required input "${name}" is missing`);
       continue;
     }
     if (!typedValueMatchesType(candidate, declaration.type, "flow"))
@@ -1221,8 +1225,22 @@ export const startFlowSegment = (
   if (flow.execution !== "interactive")
     return failedStep(machine, { outcome: "refused", code: "flow_not_runnable" });
   try {
-    const inputs = buildInputs(flow, start.inputs);
-    const { variables, outputs, forms } = parseFlowSegmentSeed(flow, segment.inputs, seed);
+    const pageInputNames = new Set(start.pageResolvedInputs ?? []);
+    const parsed = parseFlowSegmentSeed(flow, segment.inputs, seed, pageInputNames);
+    if (Object.keys(parsed.inputs).some((name) => Object.hasOwn(start.inputs, name)))
+      failed("inputs_invalid", "refused", undefined, "page input overrides a server binding");
+    const requiredInputs = new Set(
+      Object.keys(segment.inputs)
+        .filter((name) => name.startsWith("inputs."))
+        .map((name) => name.slice(7)),
+    );
+    const inputs = buildInputs(
+      flow,
+      { ...start.inputs, ...parsed.inputs },
+      undefined,
+      requiredInputs,
+    );
+    const { variables, outputs, forms } = parsed;
     const completion = segment.tasks.length === 0;
     if (completion && segment.firstTaskPath.length !== 0)
       failed("inputs_invalid", "refused", undefined, "completion segment has invalid tasks");
