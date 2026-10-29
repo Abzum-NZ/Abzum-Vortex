@@ -412,8 +412,7 @@ const supportsPlacement = (
         : location === "backend") &&
     allowed.includes(runLocation) &&
     (definition.runLocations.includes(runLocation) || actionFlowTask) &&
-    ((definition.category === "control" && definition.type !== "run_flow") ||
-      definition.runs[location])
+    definition.runs[location]
   );
 };
 

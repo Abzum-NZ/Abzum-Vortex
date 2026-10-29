@@ -8,7 +8,8 @@ import {
   FIELD_INPUT_CONTROL_RELEASES,
   type BuilderTargetFactsReader,
   readBuilderApplicationOrigin,
-  compileFlowPlan,
+  compileFlowPlans,
+  type FlowPlan,
 } from "@vortex/platform/server";
 import type { FieldInputControlReleaseMap, PlatformThemeTokens } from "@vortex/ui";
 import { studioThemeOptions } from "../studio/_lib/studio-theme-catalogue";
@@ -94,7 +95,10 @@ export type StudioFlowPlacements = Readonly<
   Record<string, Readonly<Record<string, FlowPlacement>>>
 >;
 
-const flowPlacements = (flow: FlowDefinition): StudioFlowPlacements[string][string] => {
+const flowPlacements = (
+  flow: FlowDefinition,
+  plan: FlowPlan,
+): StudioFlowPlacements[string][string] => {
   const tasks: Record<string, "page" | "server" | "backend"> = {};
   const initialise = (task: FlowTask) => {
     tasks[task.id] = "page";
@@ -102,7 +106,7 @@ const flowPlacements = (flow: FlowDefinition): StudioFlowPlacements[string][stri
   };
   for (const task of [...flow.tasks, ...flow.errors, ...flow.finally]) initialise(task);
   const bands: { id: string; taskIds: string[] }[] = [];
-  for (const segment of compileFlowPlan(flow).segments) {
+  for (const segment of plan.segments) {
     const ids = new Set(segment.guard.map((guard) => guard.taskId));
     const visit = (task: FlowTask) => {
       tasks[task.id] = task.type === "backend.run" ? "backend" : segment.kind;
@@ -648,10 +652,17 @@ export const loadStudioApplicationDraft = async (
                     [release.key, release.compilationOutput.canonical.content.flows] as const,
                 ),
               ];
+              const plans = compileFlowPlans(owners.flatMap(([, flows]) => flows)).plans;
               placements = Object.fromEntries(
                 owners.map(([key, flows]) => [
                   key,
-                  Object.fromEntries(flows.map((flow) => [flow.key, flowPlacements(flow)])),
+                  Object.fromEntries(
+                    flows.map((flow) => {
+                      const plan = plans.get(String(flow.id));
+                      if (plan === undefined) throw new Error("STUDIO_FLOW_PLAN_MISSING");
+                      return [flow.key, flowPlacements(flow, plan)];
+                    }),
+                  ),
                 ]),
               );
             }
