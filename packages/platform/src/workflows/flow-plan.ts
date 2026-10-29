@@ -557,6 +557,8 @@ export const compileFlowPlan = (flow: FlowDefinition): FlowPlan => {
       setBasedChanges: setBasedChanges(steps),
       endsWithBackendRun: draft.tasks.at(-1)?.type === "backend.run",
       fingerprint: fingerprintCanonicalValue({
+        section: draft.section,
+        guard: draft.guard,
         tasks: draft.tasks,
         inputs,
         outputs,
