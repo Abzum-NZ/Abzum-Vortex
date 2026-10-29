@@ -1,3 +1,4 @@
+import { classifyFlowSegments } from "./flow-plan-classification";
 import { fingerprintCanonicalValue } from "../definition/canonical-json-definition";
 import {
   PLATFORM_SERVICE_OPERATIONS,
@@ -13,12 +14,7 @@ import type { SystemApplicationBoundReleaseSetResult } from "../definition/defin
 import type { FlowBindingInput, FlowDefinition, FlowTask } from "./flow-contracts";
 import { flowTaskChildLists, isFlowControlTask } from "./flow-contracts";
 import { flowTaskRegistry, type FlowTaskTypeKey } from "./flow-task-registry";
-import {
-  type FlowFormula,
-  type FlowLiteral,
-  type FlowReference,
-  type FlowValue,
-} from "./flow-values";
+import type { FlowFormula, FlowLiteral, FlowReference, FlowValue } from "./flow-values";
 
 /**
  * The compiled plan of one flow: its tasks cut into page segments (steps the page performs, no
@@ -394,7 +390,7 @@ const outputMemberTypes = (steps: readonly FlowTask[]): Record<string, string> =
 
 const inputTypes = (
   flow: FlowDefinition,
-  steps: readonly (FlowTask | FlowPathCondition)[],
+  steps: readonly unknown[],
   produced: ReadonlySet<string>,
   segmentId: string,
   formTypes: FlowFormTypes,
@@ -636,6 +632,7 @@ export const compileFlowPlan = (
   formTypes: FlowFormTypes = {},
   conditions: readonly FlowFormula[] = [],
   applicationKey?: string,
+  lookupFlow: (id: string) => FlowDefinition | undefined = () => undefined,
 ): FlowPlan => {
   prepareFlowFormulas(flow);
   for (const step of allSteps([...flow.tasks, ...flow.errors, ...flow.finally])) {
@@ -669,7 +666,7 @@ export const compileFlowPlan = (
     ...cut(flow, "errors", flow.errors, applicationKey),
     ...cut(flow, "finally", flow.finally, applicationKey),
   ];
-  const segments = drafts.map((draft, index): FlowPlanSegment => {
+  const unclassifiedSegments = drafts.map((draft, index): FlowPlanSegment => {
     const id = `${flow.id}:${index}`;
     if (draft.kind === "page")
       return {
@@ -770,6 +767,13 @@ export const compileFlowPlan = (
       }),
     };
   });
+  const serverInputs = serverResolvedInputs(bindings);
+  const segments = classifyFlowSegments(
+    flow, unclassifiedSegments, flowValueReferences,
+    (reference) => serverOnlyReference(reference, serverInputs),
+    (values, produced, id) => inputTypes(flow, values, produced, id, formTypes),
+    lookupFlow,
+  );
   // A declaration belongs in the page only when a page step, a path guard, or a final output
   // reads it. Server-only declarations stay with the server even when the same flow is bound to
   // a page. Defaults are validated literals, so they cannot introduce further references.
@@ -784,7 +788,6 @@ export const compileFlowPlan = (
   const pageInputs = new Set(
     pageReferences.flatMap((reference) => (reference.source === "input" ? [reference.name] : [])),
   );
-  const serverInputs = serverResolvedInputs(bindings);
   // A protected segment may read an input supplied by a page-only binding expression even when
   // no page step reads it. The page must hold its declaration to build that segment's typed seed.
   const pageResolvedInputs = new Set(
@@ -844,6 +847,13 @@ export const compileFlowPlan = (
       reference.source === "variable" ? [reference.name] : [],
     ),
   );
+  for (const segment of segments) {
+    if (segment.kind !== "server") continue;
+    for (const key of Object.keys(segment.inputs)) {
+      const [source, name] = key.split(".");
+      if (source === "vars" && name !== undefined && !Object.hasOwn(segment.carriedInputs, key)) pageVariables.add(name);
+    }
+  }
   const pageTaskOutputs = new Set(
     pageReferences.flatMap((reference) =>
       reference.source === "task_output" ? [`outputs.${reference.task}.${reference.key}`] : [],
@@ -905,9 +915,7 @@ export const compileFlowPlan = (
               section: segment.section,
               guard: segment.guard,
               inputs: segment.inputs,
-              outputs: Object.fromEntries(
-                Object.entries(segment.outputs).filter(([name]) => pageTaskOutputs.has(name)),
-              ),
+              outputs: segment.outputs,
               outputMembers: Object.fromEntries(
                 Object.entries(segment.outputMembers).filter(([name]) => {
                   const [task, output] = name.split(".");
@@ -1040,10 +1048,11 @@ export const compileFlowPlans = (
   applicationKey?: string,
 ): FlowPlanSet => {
   const plans = new Map<string, FlowPlan>();
+  const flowLookup = new Map(flows.map((flow) => [String(flow.id), flow]));
   for (const flow of flows) {
     const id = String(flow.id);
     if (plans.has(id)) throw new FlowPlanError(id, undefined, "two flows share one identity");
-    plans.set(id, compileFlowPlan(flow, bindings.get(id), formTypes.get(id), conditions.get(id), applicationKey));
+    plans.set(id, compileFlowPlan(flow, bindings.get(id), formTypes.get(id), conditions.get(id), applicationKey, (childId) => flowLookup.get(childId)));
   }
   const link = linkFlowPlans(plans, applicationKey);
   return planSet(new Map([...plans.keys()].map((id) => [id, link(id)])));
@@ -1273,10 +1282,9 @@ export const flowPlansOf = (releaseSet: PlannedReleaseSet): FlowPlanSet => {
     }
   }
   let formTypes: FlowFormTypes | undefined;
-  for (const flow of [
-    ...releaseSet.application.content.flows,
-    ...modules.flatMap((content) => content.flows),
-  ]) {
+  const allFlows = [...releaseSet.application.content.flows, ...modules.flatMap((content) => content.flows)];
+  const flowLookup = new Map(allFlows.map((flow) => [String(flow.id), flow]));
+  for (const flow of allFlows) {
     const id = String(flow.id);
     if (plans.has(id) || ambiguous.has(id)) {
       plans.delete(id);
@@ -1296,6 +1304,7 @@ export const flowPlansOf = (releaseSet: PlannedReleaseSet): FlowPlanSet => {
           usesForm ? formTypes : undefined,
           conditions.get(id),
           releaseSet.application.definitionKey,
+          (childId) => flowLookup.get(childId),
         ),
       );
     } catch (error) {
