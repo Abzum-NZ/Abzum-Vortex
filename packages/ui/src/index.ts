@@ -354,6 +354,7 @@ export {
   FLOW_INTENT_KINDS,
   createFlowInvokeClient,
   createFlowRuntime,
+  createFlowRuntimeState,
   createFormBlockRuntime,
   driveServerFlow,
   isFlowIntent,
@@ -383,6 +384,7 @@ export {
   type FlowResumeEvidence,
   type FlowRuntime,
   type FlowRuntimeOptions,
+  type FlowRuntimeState,
   type ServerDrivenResult,
   type ServerFlowResponse,
 } from "./flow-runtime";

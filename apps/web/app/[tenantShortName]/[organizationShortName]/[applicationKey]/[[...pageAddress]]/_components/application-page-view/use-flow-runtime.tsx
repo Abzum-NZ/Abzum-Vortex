@@ -11,6 +11,7 @@ import type { useUnsavedWorkGuard, useUnsavedWorkRegistry } from "@vortex/ui";
 import {
   createFlowInvokeClient,
   createFlowRuntime,
+  createFlowRuntimeState,
   createFormBlockRuntime,
   getAccessibleName,
   type FieldInputControlReleaseMap,
@@ -30,6 +31,7 @@ import {
 } from "@vortex/ui";
 import {
   formContinuationAnswerSchema,
+  type ComponentFlowBinding,
   type ReferenceChoiceSelectionEvidenceMap,
   isRecord,
   sameId,
@@ -363,6 +365,27 @@ export function useFlowRuntime({
   });
   const committedRef = useRef(committed);
   committedRef.current = committed;
+  const runtimeState = useMemo(() => createFlowRuntimeState(), []);
+  const bindingSettings = useMemo(() => {
+    const bindings = new Map<
+      string,
+      { controlId: string; concurrency: ComponentFlowBinding["settings"]["concurrency"] }
+    >(
+      Object.values(model.bindings).flatMap((items) =>
+        items.map(
+          (binding) =>
+            [
+              binding.bindingId,
+              {
+                controlId: binding.controlId,
+                concurrency: binding.settings.concurrency,
+              },
+            ] as const,
+        ),
+      ),
+    );
+    return (bindingId: string) => bindings.get(bindingId);
+  }, [model.bindings]);
   // One flow runtime per host, shared by every event of the page: a gesture dispatches its bound
   // flow once through the one invoke client, and every pause and presentation intent is carried out
   // by the same host before the next answer is sent.
@@ -371,20 +394,24 @@ export function useFlowRuntime({
       createFlowRuntime({
         client: flowClient,
         host,
+        state: runtimeState,
+        bindingSettings,
         committed: (bindingId) => committedRef.current(bindingId),
       }),
-    [flowClient, host],
+    [bindingSettings, flowClient, host, runtimeState],
   );
   const webMcpRuntime = useMemo(
     () =>
       createFlowRuntime({
         client: webMcpClient,
         host,
+        state: runtimeState,
+        bindingSettings,
         committed: (bindingId) => committedRef.current(bindingId),
       }),
-    [webMcpClient, host],
+    [bindingSettings, webMcpClient, host, runtimeState],
   );
   const formBlock = useMemo(() => createFormBlockRuntime(flowRuntime), [flowRuntime]);
 
-  return { formBlock, flowRuntime, webMcpRuntime, intentHostElement };
+  return { formBlock, flowRuntime, webMcpRuntime, runtimeState, intentHostElement };
 }

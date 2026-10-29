@@ -5,11 +5,9 @@ import type { ServerDrivenResult } from "./server-driven-run";
 /**
  * The form block's wiring to the page's flow runtime. A form container emits one
  * `form_submit` for a gesture (a Submit click or Enter in a field); this module turns that gesture
- * into exactly one `FlowRuntime.dispatch` of the flow bound to it. While a dispatch for a binding
- * is in flight every further event for that binding is ignored, so a double click cannot start a
- * second run, and the gesture identity is passed to the server so a repeat of the same request
- * reaches the same run and the effect ledger replays its recorded outcome instead of committing
- * again.
+ * into exactly one `FlowRuntime.dispatch` of the flow bound to it. The shared runtime applies the
+ * binding's concurrency setting, and the gesture identity is passed to the server so a retry of
+ * the same request reaches the same run instead of committing again.
  *
  * The surface's field answers and optional owner Group choice travel as the submission envelope
  * the server's form-submit adapter reads; the client never names a flow input, a node or an outcome.
@@ -18,7 +16,7 @@ import type { ServerDrivenResult } from "./server-driven-run";
 export type FormFieldAnswers = Readonly<Record<string, unknown>>;
 
 export type FormBlockRuntime = Readonly<{
-  /** One form_submit gesture: dispatch the bound flow once, or nothing when already in flight. */
+  /** One form_submit gesture: dispatch the bound flow under its concurrency setting. */
   submit: (
     binding: ComponentFlowBinding,
     values: FormFieldAnswers,
@@ -44,7 +42,6 @@ export function createFormBlockRuntime(
   runtime: FlowRuntime,
   newGestureId: () => string = () => crypto.randomUUID(),
 ): FormBlockRuntime {
-  const inFlight = new Set<string>();
   // The gesture identity of a submission whose outcome is still unknown, keyed by the binding and
   // the exact answers it carried. Sending the same answers again (a retry after a failed request)
   // reaches the same run, so the effect ledger replays its outcome instead of committing twice.
@@ -57,17 +54,14 @@ export function createFormBlockRuntime(
     callerInputs: Readonly<Record<string, unknown>>,
     retryKey?: string,
   ): Promise<ServerDrivenResult | undefined> => {
-    if (inFlight.has(binding.bindingId)) return undefined;
     const gestureId =
       (retryKey === undefined ? undefined : unsettled.get(retryKey)) ?? newGestureId();
-    inFlight.add(binding.bindingId);
     let unknown = true;
     try {
       const result = await runtime.dispatch(binding, callerInputs, gestureId);
       unknown = outcomeUnknown(result);
       return result;
     } finally {
-      inFlight.delete(binding.bindingId);
       if (retryKey !== undefined) {
         if (unknown) unsettled.set(retryKey, gestureId);
         else unsettled.delete(retryKey);

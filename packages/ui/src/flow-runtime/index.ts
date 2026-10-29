@@ -6,9 +6,11 @@ export {
 } from "./form-block-runtime";
 export {
   createFlowRuntime,
+  createFlowRuntimeState,
   type FlowBindingReference,
   type FlowRuntime,
   type FlowRuntimeOptions,
+  type FlowRuntimeState,
 } from "./flow-runtime";
 export {
   FLOW_INTENT_KINDS,
