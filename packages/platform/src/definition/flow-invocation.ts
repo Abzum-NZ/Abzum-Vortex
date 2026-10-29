@@ -61,6 +61,7 @@ import {
 } from "./flow-selected-record-context";
 import { flowPlansOf } from "../workflows/flow-plan";
 import { openFlowAdmissionRun } from "../workflows/start";
+import { admitFlowSegment } from "./flow-admission";
 import { sealFlowCarriedValues } from "../workflows/flow-carried-values";
 import { createHumanInstalledPageBundleContextLoader } from "./installed-page-bundle-context";
 import type { InstalledRuntimeContext } from "./installed-runtime-context";
@@ -411,6 +412,21 @@ export async function invokeInstalledFlow(
       canonicalJson(session) === canonicalJson(boundRequest.session) &&
       canonicalJson(selection) === canonicalJson(boundRequest.selection);
     return {
+      admitSegment: (run, state, segment, execute) =>
+        admitFlowSegment(
+          {
+            requests: requestDependencies,
+            invocation,
+            installationOf: installedFlowBindings,
+            pageGate: gateBindingToAddressedPage,
+            portsFor: dependenciesFor,
+          },
+          installation,
+          run,
+          state,
+          segment,
+          execute,
+        ),
       executor: executorFor(boundRequest),
       records:
         boundRequest === undefined

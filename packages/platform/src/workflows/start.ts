@@ -88,7 +88,7 @@ export type FlowSegmentReceipt = Readonly<{
   effects: FlowSegmentReplay;
   warnings: Readonly<Record<string, readonly z.infer<typeof storedFlowWarningSchema>[]>>;
 }>;
-type SegmentExecution<Value> = Readonly<{
+export type SegmentExecution<Value> = Readonly<{
   value: Value;
   /** Unsuccessful segments roll back their effects and receipt. */
   outcome: "succeeded" | "refused" | "failed";

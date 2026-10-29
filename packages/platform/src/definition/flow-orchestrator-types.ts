@@ -26,7 +26,8 @@ import type {
   FlowTriggerOrigin,
 } from "../workflows/flow-contracts";
 import type { FlowRefusalFeedback } from "../workflows/flow-refusal-feedback";
-import type { FlowPlan } from "../workflows/flow-plan";
+import type { FlowPlan, FlowServerSegment } from "../workflows/flow-plan";
+import type { FlowSegmentReceipt, SegmentExecution, StartFlowResult } from "../workflows/start";
 import type { FlowWarningNotice } from "../workflows/form-continuation-contracts";
 import { formContinuationAnswerSchema } from "../workflows/form-continuation-answer";
 import type { RecordSaveServiceResult } from "../records/save-record";
@@ -38,6 +39,8 @@ import type {
   FlowFailureOutcome,
   FlowInterfaceIntent,
   FlowLibrary,
+  FlowRunState,
+  FlowRunStep,
   FlowRuntimeValues,
 } from "../rules/flow-interpreter";
 import type { ProtectedOperationExecutor } from "./protected-operation-executor";
@@ -177,6 +180,16 @@ type NamedActionRecordPort = Readonly<{
 export type NamedActionExecutionResult = Awaited<ReturnType<NamedActionRecordPort["execute"]>>;
 
 export type FlowOrchestratorDependencies = Readonly<{
+  /** Admits exactly one planned server segment and supplies its transaction-bound ports. */
+  admitSegment: (
+    run: Run,
+    state: FlowRunState,
+    segment: FlowServerSegment,
+    execute: (
+      boundPorts: FlowOrchestratorDependencies,
+      replay: FlowSegmentReceipt | undefined,
+    ) => Promise<SegmentExecution<Readonly<{ step: FlowRunStep; run: Run }>>>,
+  ) => Promise<StartFlowResult<Readonly<{ step: FlowRunStep; run: Run }>>>;
   executor: Pick<ProtectedOperationExecutor, "execute">;
   /** Runs named-action flows; without it an action is unavailable. */
   actionRecords?: NamedActionRecordPort;
