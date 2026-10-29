@@ -210,7 +210,7 @@ export const projectedLinkParentControl = (
   placementId: string,
 ):
   | Readonly<{ kind: "none" }>
-  | Readonly<{ kind: "parent"; placementId: string }>
+  | Readonly<{ kind: "parent"; placementId: string; recordTypeId: string }>
   | Readonly<{ kind: "unavailable" }> => {
   const placements = collectPlacements(page);
   const child = placements.find((placement) => sameId(placement.placementId, placementId));
@@ -233,7 +233,11 @@ export const projectedLinkParentControl = (
     );
   });
   return parents.length === 1
-    ? { kind: "parent", placementId: parents[0]!.placementId }
+    ? {
+        kind: "parent",
+        placementId: parents[0]!.placementId,
+        recordTypeId: dependency.parentTarget.recordTypeId,
+      }
     : { kind: "unavailable" };
 };
 
@@ -516,6 +520,70 @@ export const validateProjectedLinkChoice = async (
         sameId(choice.recordId, request.selected.recordId),
     )
   );
+};
+
+/** Proves dependency parents before asking the same picker to prove the selected link. */
+export const validateProjectedLinkControl = async (
+  bound: Parameters<typeof validateProjectedLinkChoice>[0],
+  context: InstalledRuntimeContext,
+  page: Readonly<Record<string, unknown>>,
+  placementId: string,
+  selected: Readonly<{ recordTypeId: string; recordId: string }>,
+  controls: Readonly<Record<string, string>>,
+  prepareDemand: typeof prepareRuntimePreviewChoices,
+): Promise<boolean> => {
+  const active = new Set<string>();
+  const prove = async (
+    control: string,
+    value: Readonly<{ recordTypeId: string; recordId: string }>,
+  ): Promise<boolean> => {
+    const key = control.toLowerCase();
+    if (active.has(key)) {
+      console.error("[flows] link control dependency cycle");
+      return false;
+    }
+    active.add(key);
+    try {
+      const parent = projectedLinkParentControl(context, page, control);
+      if (parent.kind === "unavailable") {
+        console.error("[flows] link control dependency parent unavailable");
+        return false;
+      }
+      let parentRecordId: string | undefined;
+      if (parent.kind === "parent") {
+        const matches = Object.entries(controls).filter(([id]) => sameId(id, parent.placementId));
+        const parsed = matches.length === 1 ? recordIdSchema.safeParse(matches[0]![1]) : undefined;
+        if (parsed === undefined || !parsed.success) {
+          console.error("[flows] link control dependency parent missing or invalid");
+          return false;
+        }
+        parentRecordId = parsed.data;
+        if (
+          !(await prove(parent.placementId, {
+            recordTypeId: parent.recordTypeId,
+            recordId: parentRecordId,
+          }))
+        ) {
+          console.error("[flows] link control dependency parent not offered");
+          return false;
+        }
+      }
+      return validateProjectedLinkChoice(
+        bound,
+        context,
+        page,
+        {
+          placementId: control,
+          selected: value,
+          ...(parentRecordId === undefined ? {} : { parentRecordId }),
+        },
+        prepareDemand,
+      );
+    } finally {
+      active.delete(key);
+    }
+  };
+  return prove(placementId, selected);
 };
 
 /**
