@@ -53,13 +53,8 @@ import {
 } from "../workflows/flow-limits";
 
 /**
- * The pure interpreter of the in-house flow engine (architecture decision 1). It runs the nested
- * task list of a compiled flow as an explicit, serialisable state machine, so the same code drives
- * a flow in the server orchestrator and in the page, and a run can stop at a task it cannot run
- * itself and resume later from nothing but its state.
- *
- * It performs no effect. Protected tasks and interface intents suspend for the host to answer.
- * The host supplies time, actor and inputs; every refusal is a typed failure.
+ * The pure, serialisable flow interpreter runs on server and page. Protected tasks and interface
+ * intents suspend for the host to answer; the host supplies time, actor and inputs.
  */
 
 export { flowRunStateVersion } from "./flow-interpreter-state";
@@ -1245,8 +1240,17 @@ export const startFlowSegment = (
       else (outputs[parts[1]!] ??= {})[parts[2]!] = value;
     }
     const completion = segment.tasks.length === 0;
-    if (completion && (expected.length !== 0 || segment.firstTaskPath.length !== 0))
-      failed("inputs_invalid", "refused", undefined, "completion segment has page inputs or tasks");
+    if (
+      completion &&
+      (expected.some(([name]) => !name.startsWith("outputs.")) ||
+        segment.firstTaskPath.length !== 0)
+    )
+      failed(
+        "inputs_invalid",
+        "refused",
+        undefined,
+        "completion segment has invalid inputs or tasks",
+      );
     const taskPath = segment.firstTaskPath;
     const index = taskPath.at(-1);
     if (!completion && typeof index !== "number")

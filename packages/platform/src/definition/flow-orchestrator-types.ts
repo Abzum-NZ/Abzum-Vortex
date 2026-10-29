@@ -22,6 +22,7 @@ import type {
   FlowTriggerOrigin,
 } from "../workflows/flow-contracts";
 import type { FlowRefusalFeedback } from "../workflows/flow-refusal-feedback";
+import type { FlowPlan } from "../workflows/flow-plan";
 import type { FlowWarningNotice } from "../workflows/form-continuation-contracts";
 import { formContinuationAnswerSchema } from "../workflows/form-continuation-answer";
 import type { RecordSaveServiceResult } from "../records/save-record";
@@ -47,6 +48,8 @@ export type FlowRelease = Readonly<{
   releaseKey: string;
   /** The release's planned flows (`flowPlansOf`), validated once per release. */
   flows: ReadonlyMap<string, FlowDefinition>;
+  /** The same release's segment plans, compiled together with the flow definitions. */
+  plans: ReadonlyMap<string, FlowPlan>;
   /** The release's record types by lower-case record type id, for the values of a Save record task. */
   recordTypes?: ReadonlyMap<string, FlowRecordType>;
   /** The release's named actions by action key, for a Call protected operation task naming one. */

@@ -680,7 +680,7 @@ export async function invokeInstalledFlow(
     }
     // The release's plans, built once per installed release: one flow per identity (a Module flow
     // never shadows an Application flow; an ambiguous release is refused rather than run).
-    const flows = flowPlansOf(releaseSet).flows;
+    const { flows, plans } = flowPlansOf(releaseSet);
     const selectedReadContext = installedSelectedRecordReadContext(application, releaseSet.modules);
     if (selectedReadContext === undefined)
       throw new Error("SELECTED_RECORD_READ_BINDING_UNAVAILABLE");
@@ -727,6 +727,7 @@ export async function invokeInstalledFlow(
       ].join(":"),
       bindings: application.content.flowBindings,
       flows,
+      plans,
       recordTypes,
       namedActions,
       selectedRecordReadProjections: selectedReadContext.projections,
@@ -799,6 +800,7 @@ export async function invokeInstalledFlow(
     const release: FlowRelease = {
       releaseKey: installed.releaseKey,
       flows: installed.flows,
+      plans: installed.plans,
       ...(installed.recordTypes === undefined ? {} : { recordTypes: installed.recordTypes }),
       ...(installed.namedActions === undefined ? {} : { namedActions: installed.namedActions }),
       ...(installed.selectedRecordReadProjections === undefined

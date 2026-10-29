@@ -108,6 +108,7 @@ export type InstalledFlowBindings = Readonly<{
   bindings: readonly ComponentFlowBinding[];
   /** The release's planned flows (`flowPlansOf`). */
   flows: ReadonlyMap<string, FlowDefinition>;
+  plans: FlowRelease["plans"];
   /** The release's record types, for the values of a Save record task. */
   recordTypes?: ReadonlyMap<string, FlowRecordType>;
   /** The release's named actions by key, for a Call protected operation task that names one. */
@@ -788,6 +789,7 @@ export const createFlowBindingEndpoint = (dependencies: FlowBindingEndpointDepen
         const release: FlowRelease = {
           releaseKey: installation.releaseKey,
           flows: installation.flows,
+          plans: installation.plans,
           ...(installation.recordTypes === undefined
             ? {}
             : { recordTypes: installation.recordTypes }),
