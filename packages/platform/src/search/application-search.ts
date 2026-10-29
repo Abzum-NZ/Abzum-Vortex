@@ -2,6 +2,7 @@ import "server-only";
 
 import type { SelectedOrganizationScope } from "../access/identity-access";
 import type { JsonValue } from "../catalogue/common";
+import type { ModuleField } from "../definition/module-contracts";
 import { sameId } from "../catalogue/runtime-primitives";
 import {
   applicationSearchSchema,
@@ -12,6 +13,7 @@ import {
   type RecordRichTextDocument,
 } from "../records/module-field-values";
 import { matchLiteralSearch } from "./literal-search";
+import { matchesSearchFilters, prepareSearchFilters, splitSearchFilters } from "./search-filters";
 import { searchPriorityWeights, type SearchDocument } from "./document-store";
 import type {
   PermittedSearchCurrentRead,
@@ -33,7 +35,7 @@ export type ApplicationSearchMatch = Readonly<{
 }>;
 export type ApplicationSearchResult =
   | Readonly<{ kind: "disabled" }>
-  | Readonly<{ kind: "refused" }>
+  | Readonly<{ kind: "refused"; reason?: string }>
   | Readonly<{ kind: "available"; matches: readonly ApplicationSearchMatch[] }>;
 
 const boundedDisplayText = (value: string): string | undefined => {
@@ -113,6 +115,7 @@ export const searchConfiguredApplication = async (
     scope: SelectedOrganizationScope;
     configuration: ApplicationSearch | undefined;
     expression: string;
+    fieldsByRecordType: ReadonlyMap<string, readonly ModuleField[]>;
     /** Index documents of one record type in bounded batches; the batch size is the permitted-search candidate bound. */
     candidateBatches(recordTypeId: string): AsyncIterable<readonly SearchDocument[]>;
     /** Keyed by lower-case record identity; a record that cannot be read now is absent. */
@@ -131,12 +134,24 @@ export const searchConfiguredApplication = async (
     return { kind: "refused" };
   }
   const matches: ApplicationSearchMatch[] = [];
+  const expression = splitSearchFilters(input.expression);
+  if (expression === undefined || (expression.literal === "" && expression.filters.length === 0))
+    return { kind: "refused", reason: "Check the search expression." };
   for (const entry of parsed.data.recordTypes) {
     if (entry.recordType.state !== "resolved") {
       console.error("[search] refused SEARCH_RECORD_TYPE_NOT_RESOLVED");
       return { kind: "refused" };
     }
     const recordTypeId = String(entry.recordType.recordTypeId);
+    const fields = input.fieldsByRecordType.get(recordTypeId.toLowerCase());
+    if (fields === undefined) throw new Error("SEARCH_RECORD_TYPE_FIELDS_MISSING");
+    const filters = prepareSearchFilters(
+      expression.filters,
+      fields,
+      entry.fields.map((field) => String(field.fieldId)),
+    );
+    if (filters === undefined)
+      return { kind: "refused", reason: "A filter field or value is not valid for this search." };
     for await (const batch of input.candidateBatches(recordTypeId)) {
       const current = new Map<string, ApplicationSearchRecord>();
       const indexed = new Map(
@@ -144,7 +159,8 @@ export const searchConfiguredApplication = async (
       );
       const result = await matchLiteralSearch(
         {
-          expression: input.expression,
+          expression: expression.literal,
+          ...(expression.literal === "" ? { matchAll: true } : {}),
           search: {
             access: input.scope,
             request: {
@@ -179,6 +195,7 @@ export const searchConfiguredApplication = async (
       for (const match of result.matches) {
         const record = current.get(match.candidate.recordId.toLowerCase());
         if (record === undefined) continue;
+        if (!matchesSearchFilters(filters, record.values)) continue;
         const values = new Map(
           Object.entries(record.values).map(([fieldId, value]) => [fieldId.toLowerCase(), value]),
         );
@@ -209,13 +226,16 @@ export const searchConfiguredApplication = async (
           rank,
         });
       }
+      // Only the best 200 permitted results can be paged through. Keep memory bounded
+      // while still evaluating every candidate for the globally ranked result set.
+      matches.sort(
+        (left, right) => right.rank - left.rank || left.recordId.localeCompare(right.recordId),
+      );
+      matches.length = Math.min(matches.length, 200);
     }
   }
   matches.sort(
-    (left, right) =>
-      right.rank - left.rank ||
-      left.title.localeCompare(right.title) ||
-      left.recordId.localeCompare(right.recordId),
+    (left, right) => right.rank - left.rank || left.recordId.localeCompare(right.recordId),
   );
   return { kind: "available", matches };
 };

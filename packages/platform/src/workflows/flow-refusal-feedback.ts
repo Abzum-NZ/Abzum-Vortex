@@ -22,6 +22,7 @@ export const flowRefusalFeedbackCodeSchema = z.enum([
   "assignments_manage_required",
   "invitation_already_pending",
   "invitation_role_not_delegable",
+  "connection_key_in_use",
 ]);
 
 export type FlowRefusalFeedbackCode = z.infer<typeof flowRefusalFeedbackCodeSchema>;
@@ -54,6 +55,8 @@ export const flowRefusalFeedbackSentences: Readonly<Record<FlowRefusalFeedbackCo
   invitation_role_not_delegable: "You can't give this role.",
   invitation_already_pending:
     "An invitation to this email is already waiting to be accepted. Revoke it first to send a new one.",
+  connection_key_in_use:
+    "A connection with this key already exists in this organisation. Revoked connections keep their key, so choose a different one.",
 };
 
 /**
@@ -72,6 +75,7 @@ const platformGuidanceCodes: ReadonlySet<string> = new Set<FlowRefusalFeedbackCo
   "assignments_manage_required",
   "invitation_already_pending",
   "invitation_role_not_delegable",
+  "connection_key_in_use",
 ]);
 
 export const refusalKeepsPlatformGuidance = (code: string | undefined): boolean =>

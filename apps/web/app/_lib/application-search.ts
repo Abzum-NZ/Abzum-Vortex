@@ -1,5 +1,7 @@
 import "server-only";
 
+import { createHash } from "node:crypto";
+import { z } from "zod";
 import {
   createHumanInstalledPageBundleContextLoader,
   readAddressedApplicationAtAddress,
@@ -20,13 +22,23 @@ import { platformPermissionSource } from "./platform-permission-source";
 type ApplicationSearchView =
   | Readonly<{ kind: "disabled" }>
   | Readonly<{ kind: "unavailable" }>
+  | Readonly<{ kind: "refused"; expression: string; reason: string }>
   | Readonly<{
       kind: "available";
       expression: string;
       results: readonly Readonly<{ href: string; title: string; subtitle?: string }>[];
       more: boolean;
+      cursor?: string;
     }>;
 const unavailable = { kind: "unavailable" } as const;
+const cursorSchema = z
+  .object({
+    query: z.string(),
+    score: z.number(),
+    id: z.uuid(),
+    count: z.number().int().min(1).max(160),
+  })
+  .strict();
 /** Only the expression comes from the browser; address, release and fields are server-bound. */
 export const loadApplicationSearch = async (
   session: IdentitySession,
@@ -36,8 +48,26 @@ export const loadApplicationSearch = async (
     applicationKey: string;
   }>,
   expression: string | undefined,
+  cursor?: string,
 ): Promise<ApplicationSearchView> => {
   try {
+    const query = createHash("sha256")
+      .update(JSON.stringify([address, expression]))
+      .digest("hex");
+    let after: z.infer<typeof cursorSchema> | undefined;
+    if (cursor !== undefined) {
+      if (cursor.length > 1_000) return unavailable;
+      try {
+        const parsed = cursorSchema.safeParse(
+          JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")),
+        );
+        if (!parsed.success || parsed.data.query !== query) return unavailable;
+        after = parsed.data;
+      } catch (error) {
+        console.error("[application-search] invalid continuation", error);
+        return unavailable;
+      }
+    }
     const dependencies = humanOrganizationRequestDependencies();
     const { read } = await readAddressedApplicationAtAddress(
       platformPermissionSource,
@@ -98,6 +128,10 @@ export const loadApplicationSearch = async (
             rootId: module.rootId,
             releaseRevision: module.releaseRevision,
             recordTypeIds: module.content.recordTypes.map((record) => record.recordTypeId),
+            recordTypeFields: module.content.recordTypes.map((record) => ({
+              recordTypeId: record.recordTypeId,
+              fields: record.fields,
+            })),
           })),
         });
         if (result.kind !== "available") return result;
@@ -117,14 +151,23 @@ export const loadApplicationSearch = async (
     if (searched.value.kind === "disabled") return { kind: "disabled" };
     if (searched.value.kind === "ready")
       return { kind: "available", expression: "", results: [], more: false };
+    if (searched.value.kind === "refused" && searched.value.reason !== undefined)
+      return { kind: "refused", expression: expression ?? "", reason: searched.value.reason };
     if (searched.value.kind !== "searched") return unavailable;
     const result = searched.value;
     const links = new Map<
       string,
       Awaited<ReturnType<ReturnType<typeof createApplicationPageLinkReader>["read"]>>
     >();
-    const results: { href: string; title: string; subtitle?: string }[] = [];
+    const results: { href: string; title: string; subtitle?: string; score: number; id: string }[] =
+      [];
     for (const match of result.matches) {
+      if (
+        after !== undefined &&
+        (match.rank > after.score ||
+          (match.rank === after.score && match.recordId.localeCompare(after.id) <= 0))
+      )
+        continue;
       const page = result.pages.find((page) => sameId(page.pageId, match.targetPageId));
       if (page === undefined) continue;
       let link = links.get(page.key);
@@ -148,15 +191,31 @@ export const loadApplicationSearch = async (
       results.push({
         href: `${applicationPageAddressPath(address.tenantShortName, address.organizationShortName, address.applicationKey, page.key)}?record_id=${encodeURIComponent(match.recordId)}`,
         title: match.title,
+        score: match.rank,
+        id: match.recordId,
         ...(match.subtitle === undefined ? {} : { subtitle: match.subtitle }),
       });
-      if (results.length === 51) break;
+      if (results.length === 41) break;
     }
+    const page = results.slice(0, 40);
+    const count = (after?.count ?? 0) + page.length;
+    const last = page[page.length - 1];
+    const next =
+      results.length > 40 && count < 200 && last !== undefined
+        ? Buffer.from(JSON.stringify({ query, score: last.score, id: last.id, count })).toString(
+            "base64url",
+          )
+        : undefined;
     return {
       kind: "available",
       expression: expression!,
-      results: results.slice(0, 50),
-      more: results.length > 50,
+      results: page.map((result) => ({
+        href: result.href,
+        title: result.title,
+        ...(result.subtitle === undefined ? {} : { subtitle: result.subtitle }),
+      })),
+      more: next !== undefined,
+      ...(next === undefined ? {} : { cursor: next }),
     };
   } catch (error) {
     return mapWebError(error, {
