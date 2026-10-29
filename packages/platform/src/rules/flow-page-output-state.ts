@@ -35,10 +35,11 @@ export const browserFlowMemberTypeResolver = (
   return (_task, taskId, outputKey, path) => members.get([taskId, outputKey, ...path].join("."));
 };
 
-/** Builds exactly the page-held variable and task-output seed the server segment declares. */
+/** Builds exactly the page-held variable, task-output and form seed the segment declares. */
 export const pageFlowSegmentSeed = (
   state: FlowRunState,
   declarations: Readonly<Record<string, string>>,
+  resolveForm?: FlowFormReferenceResolver,
 ): Readonly<Record<string, JsonValue>> => {
   const activation = state.activations[0];
   if (
@@ -57,9 +58,16 @@ export const pageFlowSegmentSeed = (
         ? activation.variables[parts[1]!]
         : parts[0] === "outputs" && parts.length === 3
           ? activation.outputs[parts[1]!]?.[parts[2]!]
-          : undefined;
-    if (parts[0] !== "vars" && parts[0] !== "outputs") continue;
-    if (value === undefined || value.type !== type) throw new Error("FLOW_PAGE_SEED_VALUE_INVALID");
+          : parts[0] === "forms" && parts.length === 3
+            ? resolveForm?.({ source: "form", form: parts[1]!, field: parts[2]! })
+            : undefined;
+    if (parts[0] !== "vars" && parts[0] !== "outputs" && parts[0] !== "forms") continue;
+    if (
+      value === undefined ||
+      value.type !== type ||
+      (value.value !== null && !flowValueMatchesType(value.value, type))
+    )
+      throw new Error("FLOW_PAGE_SEED_VALUE_INVALID");
     entries.push([name, value.value]);
   }
   return Object.fromEntries(entries);
