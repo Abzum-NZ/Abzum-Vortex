@@ -56,6 +56,7 @@ const commandIdOf = (
   gestureId: string,
   segmentId: string,
   iteration: string,
+  continuation?: Readonly<{ tokenHash: string; answerHash: string }>,
 ): string => {
   const bytes = createHash("sha256")
     .update(
@@ -65,6 +66,7 @@ const commandIdOf = (
         gestureId.toLowerCase(),
         segmentId,
         iteration,
+        ...(continuation === undefined ? [] : [continuation.tokenHash, continuation.answerHash]),
       ]),
     )
     .digest()
@@ -109,7 +111,9 @@ type StartFlowDependencies<Value> = Readonly<{
   authorizeBinding: (context: SegmentContext) => Promise<boolean>;
   authorizeInvocation: (context: SegmentContext) => Promise<boolean>;
   /** Resolve the installed plan under the same scope that authorizes this admission. */
-  currentPlan: (context: SegmentContext) => Promise<FlowPlan | undefined>;
+  currentPlan: (context: SegmentContext) => Promise<
+    Readonly<{ plan: FlowPlan; installationRevision: number }> | undefined
+  >;
   /** Rebuild the segment frame for each call: a restart rolls back the entire transaction. */
   execute: (
     context: SegmentContext,
@@ -177,7 +181,7 @@ export const startFlow = async <Value>(
     iteration: string;
     channel: "page" | "headless";
     /** Hashed continuation read before path selection; consumed only after admission. */
-    continuation?: Readonly<{ tokenHash: string; releaseKey: string }>;
+    continuation?: Readonly<{ tokenHash: string; releaseKey: string; answerHash: string }>;
     /** Resolved by the server before opening a profile-change scope. */
     profileAccountId?: string;
   }>,
@@ -190,6 +194,9 @@ export const startFlow = async <Value>(
   const completionOnly = serverSegments.length === 1 && hasCompletion;
   if (
     !id.success ||
+    (request.continuation !== undefined &&
+      (!/^[a-f0-9]{64}$/.test(request.continuation.tokenHash) ||
+        !/^[a-f0-9]{64}$/.test(request.continuation.answerHash))) ||
     (!suppliedRunId.success && !(completionOnly && request.runId === undefined)) ||
     (hasCompletion && !bindingId.success) ||
     request.iteration.length > 200
@@ -228,9 +235,10 @@ export const startFlow = async <Value>(
     };
     if (request.channel === "page" && !(await dependencies.authorizeBinding(context)))
       return { kind: "refused" };
-    const currentPlan = await dependencies.currentPlan(context);
-    if (currentPlan === undefined || currentPlan.flowId !== request.plan.flowId)
+    const current = await dependencies.currentPlan(context);
+    if (current === undefined || current.plan.flowId !== request.plan.flowId)
       return { kind: "refused" };
+    const currentPlan = current.plan;
     if (currentPlan.definition.invocationPermissionId === undefined) {
       if (request.channel === "headless") return { kind: "refused" };
     } else if (!(await dependencies.authorizeInvocation(context))) return { kind: "refused" };
@@ -239,7 +247,22 @@ export const startFlow = async <Value>(
       !flowEntrySegmentsMatch(currentPlan, request.entrySegments)
     )
       return { kind: "reload" };
+    const rateLimit = async (kind: "read" | "change"): Promise<number | undefined> => {
+      const rows = await transaction.query`select * from vortex_access.admit_flow_segment_rate(${kind}::text)`;
+      const rate = z
+        .object({ admitted: z.boolean(), retry_after_seconds: z.number().int().nonnegative() })
+        .parse(rows[0]);
+      return rate.admitted ? undefined : rate.retry_after_seconds;
+    };
+    const consumeContinuation = async (runId: string, commandId: string): Promise<boolean> => {
+      if (request.continuation === undefined) return true;
+      const rows = await transaction.query`select vortex_platform.admit_flow_continuation(${request.continuation.tokenHash}::text, ${runId}::uuid, ${currentPlan.flowId}::uuid, ${request.continuation.releaseKey}::text, ${commandId}::uuid) as status`;
+      const status = z.object({ status: z.enum(["admitted", "replay", "already_answered", "unavailable"]) }).parse(rows[0]).status;
+      if (status === "already_answered") console.error("[flows] this step was already answered");
+      return status === "admitted" || status === "replay";
+    };
     if (request.expected === null) {
+      if (request.continuation !== undefined) return { kind: "refused" };
       if (currentPlan.segments.some((part) => part.kind === "server")) return { kind: "reload" };
       return {
         kind: "completed",
@@ -273,6 +296,7 @@ export const startFlow = async <Value>(
       id.data,
       segment.id,
       request.iteration,
+      request.continuation,
     );
     let runId = suppliedRunId.success ? suppliedRunId.data : undefined;
     let evidenceState: "started" | "pending" | "succeeded" | "refused" | "failed" | "closed" | undefined;
@@ -330,19 +354,10 @@ export const startFlow = async <Value>(
       else if (found.status !== "none") return { kind: "refused" };
     }
     if (replay === undefined) {
-      const rows =
-        await transaction.query`select * from vortex_access.admit_flow_segment_rate(${segment.changes ? "change" : "read"}::text)`;
-      const rate = z
-        .object({ admitted: z.boolean(), retry_after_seconds: z.number().int().nonnegative() })
-        .parse(rows[0]);
-      if (!rate.admitted)
-        return { kind: "rate_limited", retryAfterSeconds: rate.retry_after_seconds };
+      const retryAfterSeconds = await rateLimit(segment.changes ? "change" : "read");
+      if (retryAfterSeconds !== undefined) return { kind: "rate_limited", retryAfterSeconds };
     }
-    if (request.continuation !== undefined) {
-      const rows = await transaction.query`select vortex_platform.admit_flow_continuation(${request.continuation.tokenHash}::text, ${runId}::uuid, ${request.plan.flowId}::uuid, ${request.continuation.releaseKey}::text, ${commandId}::uuid) as admitted`;
-      if (!z.object({ admitted: z.boolean() }).parse(rows[0]).admitted)
-        return { kind: "refused" };
-    }
+    if (!(await consumeContinuation(runId, commandId))) return { kind: "refused" };
     if (!segment.changes || replay !== undefined) {
       let executed: SegmentExecution<Value>;
       try {
