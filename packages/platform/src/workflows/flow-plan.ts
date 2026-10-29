@@ -222,16 +222,26 @@ const containsBackendRun = (task: FlowTask): boolean =>
   task.type === "backend.run" ||
   flowTaskChildLists(task).some((list) => list.tasks.some(containsBackendRun));
 
-const unitLocation = (flow: FlowDefinition, task: FlowTask): UnitLocation => {
+const unitLocation = (
+  flow: FlowDefinition,
+  task: FlowTask,
+  applicationKey: string | undefined,
+): UnitLocation => {
   if (!isFlowControlTask(task) || task.type === "stop") return leafLocation(flow, task);
   // A Run flow step and a control step run where their children run; Run flow runs its child on
   // the server today.
   if (task.type === "run_flow") return "server";
   // A Run on back end inside a control step ends the segment, so the control step is cut there.
   if (containsBackendRun(task)) return "mixed";
+  if (
+    allSteps(flowTaskChildLists(task).flatMap((list) => list.tasks)).some((child) =>
+      isCrossApplicationPin(child, applicationKey),
+    )
+  )
+    return "mixed";
   const locations = new Set(
     flowTaskChildLists(task).flatMap((list) =>
-      list.tasks.map((child) => unitLocation(flow, child)),
+      list.tasks.map((child) => unitLocation(flow, child, applicationKey)),
     ),
   );
   locations.delete("neutral");
@@ -351,7 +361,12 @@ const sameGuard = (left: readonly FlowPathCondition[], right: readonly FlowPathC
       condition.taskId === right[index]!.taskId && condition.branch === right[index]!.branch,
   );
 
-const cut = (flow: FlowDefinition, section: FlowPlanSection, tasks: readonly FlowTask[]) => {
+const cut = (
+  flow: FlowDefinition,
+  section: FlowPlanSection,
+  tasks: readonly FlowTask[],
+  applicationKey: string | undefined,
+) => {
   const drafts: Draft[] = [];
   const emit = (
     task: FlowTask,
@@ -363,9 +378,11 @@ const cut = (flow: FlowDefinition, section: FlowPlanSection, tasks: readonly Flo
     const current = drafts.at(-1);
     const kind =
       location === "neutral" ? (current?.kind ?? "server") : (location as "page" | "server");
+    const isolatedPin = isCrossApplicationPin(task, applicationKey);
     if (
       current !== undefined &&
       !current.closed &&
+      !isolatedPin &&
       current.kind === kind &&
       current.lastTaskIndex + 1 === index &&
       current.listPath.length === listPath.length &&
@@ -385,7 +402,7 @@ const cut = (flow: FlowDefinition, section: FlowPlanSection, tasks: readonly Flo
         lastTaskIndex: index,
         closed: false,
       });
-    if (task.type === "backend.run") drafts.at(-1)!.closed = true;
+    if (task.type === "backend.run" || isolatedPin) drafts.at(-1)!.closed = true;
   };
   const walk = (
     list: readonly FlowTask[],
@@ -393,7 +410,7 @@ const cut = (flow: FlowDefinition, section: FlowPlanSection, tasks: readonly Flo
     listPath: readonly (string | number)[],
   ) => {
     for (const [index, task] of list.entries()) {
-      const location = unitLocation(flow, task);
+      const location = unitLocation(flow, task, applicationKey);
       if (location !== "mixed") {
         emit(task, location, guard, listPath, index);
         continue;
@@ -485,9 +502,31 @@ const cut = (flow: FlowDefinition, section: FlowPlanSection, tasks: readonly Flo
   return drafts;
 };
 
+/** A pin with an unknown target must be isolated as a cross-application workflow. */
+const isCrossApplicationPin = (step: FlowTask, applicationKey: string | undefined): boolean => {
+  if (step.type !== "record.pin_identity") return false;
+  if (applicationKey === undefined) return true;
+  const target = (step as Extract<FlowTask, { properties: Record<string, FlowValue> }>)
+    .properties.application_key;
+  return (
+    target !== undefined && (target.kind !== "literal" || target.literal.value !== applicationKey)
+  );
+};
+
 /** Compiles one validated flow into its plan. Throws `FlowPlanError` naming the step it refuses. */
-export const compileFlowPlan = (flow: FlowDefinition): FlowPlan => {
+export const compileFlowPlan = (flow: FlowDefinition, applicationKey?: string): FlowPlan => {
   for (const step of allSteps([...flow.tasks, ...flow.errors, ...flow.finally])) {
+    if (step.type === "for_each") {
+      const pin = allSteps(flowTaskChildLists(step).flatMap((list) => list.tasks)).find((child) =>
+        isCrossApplicationPin(child, applicationKey),
+      );
+      if (pin !== undefined)
+        throw new FlowPlanError(
+          flow.id,
+          pin.id,
+          `Cross-application pin ${pin.id} cannot run inside For each ${step.id}`,
+        );
+    }
     if (step.type !== "switch") continue;
     const cases = (step as Extract<FlowTask, { type: "switch" }>).cases;
     for (let index = 0; index < cases.length; index += 1) {
@@ -503,9 +542,9 @@ export const compileFlowPlan = (flow: FlowDefinition): FlowPlan => {
     }
   }
   const drafts = [
-    ...cut(flow, "tasks", flow.tasks),
-    ...cut(flow, "errors", flow.errors),
-    ...cut(flow, "finally", flow.finally),
+    ...cut(flow, "tasks", flow.tasks, applicationKey),
+    ...cut(flow, "errors", flow.errors, applicationKey),
+    ...cut(flow, "finally", flow.finally, applicationKey),
   ];
   const segments = drafts.map((draft, index): FlowPlanSegment => {
     const id = `${flow.id}:${index}`;
@@ -532,9 +571,17 @@ export const compileFlowPlan = (flow: FlowDefinition): FlowPlan => {
         step.type === "run_flow"
           ? "change"
           : (operations.get(step.id)?.effect ?? registered(step)?.effect);
-      return effect === "change" || effect === "background_start";
+      return (
+        effect === "change" ||
+        effect === "background_start" ||
+        isCrossApplicationPin(step, applicationKey)
+      );
     });
-    const multi = steps.find((step) => operations.get(step.id)?.workflow === "multi_transaction");
+    const multi = steps.find(
+      (step) =>
+        operations.get(step.id)?.workflow === "multi_transaction" ||
+        isCrossApplicationPin(step, applicationKey),
+    );
     if (multi !== undefined && effects.length > 1) {
       const other = effects.find((step) => step.id !== multi.id)!;
       throw new FlowPlanError(
@@ -587,6 +634,7 @@ export const compileFlowPlan = (flow: FlowDefinition): FlowPlan => {
         carriedRetainKeys,
         finalOutputExpressions,
         finalOutputTypes,
+        multiTransaction,
         operations: steps.flatMap((step) => {
           const operation = operations.get(step.id);
           return operation === undefined ? [] : [operation];
@@ -635,7 +683,7 @@ export const compileFlowPlan = (flow: FlowDefinition): FlowPlan => {
 };
 
 /** Links a server segment to every child plan it can run. */
-const linkFlowPlans = (plans: ReadonlyMap<string, FlowPlan>) => {
+const linkFlowPlans = (plans: ReadonlyMap<string, FlowPlan>, applicationKey?: string) => {
   const linked = new Map<string, FlowPlan>();
   const visit = (id: string, active: ReadonlySet<string>): FlowPlan => {
     const known = linked.get(id);
@@ -682,7 +730,11 @@ const linkFlowPlans = (plans: ReadonlyMap<string, FlowPlan>) => {
               part.type === "run_flow"
                 ? "change"
                 : (operationOf(plan.definition, part)?.effect ?? registered(part)?.effect);
-            return effect === "change" || effect === "background_start";
+            return (
+              effect === "change" ||
+              effect === "background_start" ||
+              isCrossApplicationPin(part, applicationKey)
+            );
           });
           if (otherChild !== undefined || otherParent !== undefined)
             throw new FlowPlanError(
@@ -738,14 +790,17 @@ const linkFlowPlans = (plans: ReadonlyMap<string, FlowPlan>) => {
 };
 
 /** Compiles every flow of one release. One flow per identity; an ambiguous release is refused. */
-export const compileFlowPlans = (flows: readonly FlowDefinition[]): FlowPlanSet => {
+export const compileFlowPlans = (
+  flows: readonly FlowDefinition[],
+  applicationKey?: string,
+): FlowPlanSet => {
   const plans = new Map<string, FlowPlan>();
   for (const flow of flows) {
     const id = String(flow.id);
     if (plans.has(id)) throw new FlowPlanError(id, undefined, "two flows share one identity");
-    plans.set(id, compileFlowPlan(flow));
+    plans.set(id, compileFlowPlan(flow, applicationKey));
   }
-  const link = linkFlowPlans(plans);
+  const link = linkFlowPlans(plans, applicationKey);
   return planSet(new Map([...plans.keys()].map((id) => [id, link(id)])));
 };
 
@@ -797,6 +852,7 @@ export const flowBindingPlanIssue = (
 type PlannedContent = Readonly<{ flows: readonly FlowDefinition[] }>;
 type PlannedReleaseSet = Readonly<{
   application: Readonly<{
+    definitionKey: string;
     content: PlannedContent & Readonly<{
       flowBindings: readonly Readonly<{
         event: string;
@@ -816,7 +872,7 @@ type PlannedReleaseSet = Readonly<{
  */
 const releasePlans = new WeakMap<
   PlannedContent,
-  Readonly<{ modules: readonly PlannedContent[]; set: FlowPlanSet }>
+  Readonly<{ applicationKey: string; modules: readonly PlannedContent[]; set: FlowPlanSet }>
 >();
 
 /**
@@ -829,6 +885,7 @@ export const flowPlansOf = (releaseSet: PlannedReleaseSet): FlowPlanSet => {
   const known = releasePlans.get(releaseSet.application.content);
   if (
     known !== undefined &&
+    known.applicationKey === releaseSet.application.definitionKey &&
     known.modules.length === modules.length &&
     known.modules.every((content, index) => content === modules[index])
   )
@@ -846,14 +903,14 @@ export const flowPlansOf = (releaseSet: PlannedReleaseSet): FlowPlanSet => {
       continue;
     }
     try {
-      plans.set(id, compileFlowPlan(flow));
+      plans.set(id, compileFlowPlan(flow, releaseSet.application.definitionKey));
     } catch (error) {
       if (!(error instanceof FlowPlanError)) throw error;
       console.error(`[flows] flow ${id} cannot be planned: ${error.reason}`);
     }
   }
   if (ambiguous.size > 0) throw new Error("FLOW_IDENTITY_AMBIGUOUS");
-  const link = linkFlowPlans(plans);
+  const link = linkFlowPlans(plans, releaseSet.application.definitionKey);
   const available = new Map<string, FlowPlan>();
   for (const id of plans.keys()) {
     try {
@@ -880,6 +937,10 @@ export const flowPlansOf = (releaseSet: PlannedReleaseSet): FlowPlanSet => {
     }
   }
   const set = planSet(available, rowFormsByTable);
-  releasePlans.set(releaseSet.application.content, { modules, set });
+  releasePlans.set(releaseSet.application.content, {
+    applicationKey: releaseSet.application.definitionKey,
+    modules,
+    set,
+  });
   return set;
 };

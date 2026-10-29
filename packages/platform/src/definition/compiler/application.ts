@@ -582,7 +582,7 @@ function compileApplicationFlowBindings(
   const body = asObject(source.body);
   const definitionKey = String(source.key);
   const flowsById = new Map(flows.map((flow) => [String(flow.id), flow]));
-  const plans = compileFlowPlans(flows).plans;
+  const plans = compileFlowPlans(flows, definitionKey).plans;
   return compiledSourceFlowBindings(body).map((binding) => {
     const flowId = resolution.id(definitionKey, "flow", String(binding.flow), "content");
     const flow = flowsById.get(flowId);

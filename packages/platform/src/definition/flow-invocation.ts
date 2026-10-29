@@ -508,9 +508,18 @@ export async function invokeInstalledFlow(
               })
             );
           });
-          return boundRequest === undefined && checked.kind === "available" && checked.value
-            ? recordPinService.acquireIdentity(session, selection, selector)
-            : { outcome: "unavailable" };
+          if (checked.kind !== "available" || !checked.value) return { outcome: "unavailable" };
+          if (boundRequest === undefined)
+            return recordPinService.acquireIdentity(session, selection, selector);
+          if (selector.applicationKey !== address.application.key)
+            return { outcome: "unavailable" };
+          return recordPinService.acquireIdentityInRequest(
+            boundRequest.transaction,
+            boundRequest.scope,
+            selection.organizationId,
+            selection.applicationRootId,
+            selector,
+          );
         },
       },
       authorizeInvocation: async (session, selection, flow) => {
