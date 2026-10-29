@@ -31,7 +31,6 @@ import {
   type PlatformThemeTokens,
 } from "@vortex/ui";
 import {
-  formContinuationAnswerSchema,
   type ComponentFlowBinding,
   type ReferenceChoiceSelectionEvidenceMap,
   isRecord,
@@ -291,9 +290,15 @@ export function useFlowRuntime({
         }
         const events: Record<string, unknown> = {};
         if (placementId.toLowerCase() === form.formId.toLowerCase())
-          events.form_submit = (event: ControlSemanticEvent) => {
+          events.form_submit = async (event: ControlSemanticEvent) => {
             if (event.event !== "form_submit") return;
-            const answer = formContinuationAnswerSchema.safeParse({
+            const validation = await import("@vortex/platform/schema").catch((error: unknown) => {
+              console.error("[flow] form validation failed to load", error);
+              setNotice(unavailableNotice);
+              return undefined;
+            });
+            if (validation === undefined) return;
+            const answer = validation.formContinuationAnswerSchema.safeParse({
               kind: "submit",
               values: event.values,
             });
