@@ -1,91 +1,74 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, type Dispatch, type SetStateAction } from "react";
 import type { ControlSemanticEvent, FlowRuntimeState } from "@vortex/ui";
 import type { PlacementFlowBinding } from "../../../../../../_lib/application-page";
 import { bindingOfEvent } from "./event-values";
+import type { FieldFlowEventDriver } from "./field-flow-event-driver";
+import type { Notice } from "./types";
 import type { usePlacementActions } from "./use-placement-actions";
 
 type RunBinding = ReturnType<typeof usePlacementActions>["runBinding"];
-type Pending = { timer: ReturnType<typeof setTimeout>; fire: () => void };
 
-/** Settles field changes independently and flushes the latest value when focus leaves. */
+/** Loads the field event driver only when a bound field first raises an event. */
 export function useFieldFlowEvents(
   navigationKey: string,
   state: FlowRuntimeState,
   runBinding: RunBinding,
+  setNotice: Dispatch<SetStateAction<Notice | undefined>>,
 ) {
-  const pending = useRef(new Map<string, Pending>());
-  const latest = useRef(
-    new Map<string, Extract<ControlSemanticEvent, { event: "field_changed" }>>(),
+  const driver = useRef<Promise<FieldFlowEventDriver> | undefined>(undefined);
+  const generation = useRef(0);
+  useEffect(
+    () => () => {
+      generation.current += 1;
+      const held = driver.current;
+      driver.current = undefined;
+      if (held !== undefined)
+        void held.then(
+          (value) => value.dispose(),
+          () => {},
+        );
+    },
+    [navigationKey],
   );
-  useEffect(() => {
-    const held = pending.current;
-    return () => {
-      for (const item of held.values()) clearTimeout(item.timer);
-      held.clear();
-      latest.current.clear();
-    };
-  }, [navigationKey]);
 
   return useCallback(
     (placementId: string, bindings: readonly PlacementFlowBinding[]) => {
       const changed = bindingOfEvent(bindings, "field_changed");
       const focusLost = bindingOfEvent(bindings, "field_focus_lost");
-      const flush = () => {
-        if (changed === undefined) return;
-        const item = pending.current.get(changed.bindingId);
-        if (item === undefined) return;
-        clearTimeout(item.timer);
-        pending.current.delete(changed.bindingId);
-        item.fire();
+      if (changed === undefined && focusLost === undefined) return {};
+      const invoke = (run: (driver: FieldFlowEventDriver) => void) => {
+        const currentGeneration = generation.current;
+        const held = (driver.current ??= import("./field-flow-event-driver").then((module) =>
+          module.createFieldFlowEventDriver(runBinding),
+        ));
+        void held.then(
+          (value) => {
+            if (currentGeneration !== generation.current) return;
+            value.setRunBinding(runBinding);
+            run(value);
+          },
+          (error: unknown) => {
+            if (currentGeneration !== generation.current) return;
+            if (driver.current === held) driver.current = undefined;
+            console.error(
+              `[flow] field event driver failed: ${error instanceof Error ? error.name : "unknown"}`,
+            );
+            setNotice({ tone: "problem", text: "The field action could not start. Try again." });
+          },
+        );
       };
       return {
-        ...(changed === undefined && focusLost === undefined
-          ? {}
-          : {
-              changed: (event: ControlSemanticEvent) => {
-                if (event.event !== "field_changed") return;
-                latest.current.set(placementId, event);
-                if (changed === undefined) return;
-                const previous = pending.current.get(changed.bindingId);
-                if (previous !== undefined) clearTimeout(previous.timer);
-                pending.current.delete(changed.bindingId);
-                if (changed.settings.concurrency === "latest_wins") state.cancel(changed.bindingId);
-                const fire = () => {
-                  void runBinding(placementId, changed, {
-                    field_key: event.fieldKey,
-                    value: event.value,
-                    origin: event.origin,
-                    depth: event.depth,
-                  });
-                };
-                const delay = event.immediate ? 0 : changed.settings.debounceMs;
-                if (delay === 0) fire();
-                else {
-                  const timer = setTimeout(() => {
-                    pending.current.delete(changed.bindingId);
-                    fire();
-                  }, delay);
-                  pending.current.set(changed.bindingId, { timer, fire });
-                }
-              },
-            }),
-        ...(changed === undefined && focusLost === undefined
-          ? {}
-          : {
-              focusLost: (event: ControlSemanticEvent) => {
-                if (event.event !== "field_focus_lost") return;
-                const last = latest.current.get(placementId);
-                latest.current.delete(placementId);
-                flush();
-                if (focusLost !== undefined)
-                  void runBinding(placementId, focusLost, {
-                    field_key: event.fieldKey,
-                    value: last === undefined ? event.value : last.value,
-                  });
-              },
-            }),
+        changed: (event: ControlSemanticEvent) => {
+          if (event.event !== "field_changed") return;
+          if (changed?.settings.concurrency === "latest_wins") state.cancel(changed.bindingId);
+          invoke((value) => value.changed(placementId, changed, event));
+        },
+        focusLost: (event: ControlSemanticEvent) => {
+          if (event.event !== "field_focus_lost") return;
+          invoke((value) => value.focusLost(placementId, changed, focusLost, event));
+        },
       };
     },
-    [runBinding, state],
+    [runBinding, setNotice, state],
   );
 }
