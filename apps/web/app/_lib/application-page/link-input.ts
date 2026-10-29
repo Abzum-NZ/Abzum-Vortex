@@ -11,6 +11,7 @@ import {
   type RecordLinkResolver,
   type InstalledRuntimeContext,
   readRecordTypeVisibleFieldIds,
+  flowPlansOf,
 } from "@vortex/platform/server";
 import {
   isRecord,
@@ -22,6 +23,8 @@ import {
   type IdentitySession,
   recordChoicePageSchema,
   optionsSourceNarrowing,
+  compiledPageShellId,
+  type PageDefinition,
 } from "@vortex/platform/schema";
 import { getQueryContinuationKey } from "../query-continuation-key";
 import { requestDependencies } from "./installed-context";
@@ -38,6 +41,7 @@ import {
 } from "./placement-helpers";
 import { projectReferenceChoicePage, type ReferenceChoiceAddress } from "./reference-choice";
 import type { PageDataState, SearchParameters } from "./types";
+import { withContributedFormPlacements, withContributedPlacements } from "./contributed-placements";
 
 /** What a viewer may see of a linked record's title. */
 const titleOf = (
@@ -201,6 +205,59 @@ const installedLinkField = (
           };
         }
   return undefined;
+};
+
+/** The addressed page's installed picker targets and dependency parents for preview preparation. */
+export const previewLinkChoiceTypeIds = (
+  context: InstalledRuntimeContext,
+  page: PageDefinition,
+): readonly string[] => {
+  let raw: Readonly<Record<string, unknown>> = withContributedPlacements(
+    { composition: page.composition },
+    context,
+    page,
+  );
+  const plans = flowPlansOf(context.releaseSet);
+  for (const [tableId, forms] of plans.rowFormsByTable) {
+    const table = collectPlacements(raw).find((placement) =>
+      sameId(placement.placementId, tableId),
+    );
+    const queryId = table?.vortex.queryId;
+    if (typeof queryId !== "string") continue;
+    for (const module of context.releaseSet.modules) {
+      const query = module.content.queries.find((candidate) =>
+        sameId(String(candidate.queryId), queryId),
+      );
+      if (query?.recordType.state !== "resolved") continue;
+      for (const formId of forms)
+        raw = withContributedFormPlacements(raw, context, query.recordType, formId);
+    }
+  }
+  const shellId = compiledPageShellId(page.composition);
+  const shell = context.releaseSet.application.content.shells.find(
+    (item) => shellId !== null && sameId(String(item.shellId), shellId),
+  );
+  const placements = [
+    ...collectPlacements(raw),
+    ...(shell === undefined ? [] : collectPlacements({ composition: shell.layout })),
+  ];
+  const types = new Set<string>();
+  for (const placement of placements) {
+    if (!isLinkInputPlacement(placement)) continue;
+    for (const target of linkInputTargets(placement.settings)) types.add(target.recordTypeId);
+    let fieldId = isRecord(placement.settings.field) ? placement.settings.field.fieldId : undefined;
+    const seen = new Set<string>();
+    while (typeof fieldId === "string" && !seen.has(fieldId.toLowerCase())) {
+      seen.add(fieldId.toLowerCase());
+      const field = installedLinkField(context, fieldId);
+      if (field === undefined) break;
+      types.add(field.recordTypeId);
+      if (field.dependency?.parentTarget !== undefined)
+        types.add(field.dependency.parentTarget.recordTypeId);
+      fieldId = field.dependency?.parentFieldId;
+    }
+  }
+  return [...types];
 };
 
 /** Finds the projected parent control of a dependent link input from the installed field. */

@@ -40,7 +40,15 @@ import {
   projectRowReferenceChoiceForm,
   validateProjectedControlOption,
 } from "../../../_lib/application-page/reference-choice";
-import { validateProjectedLinkControl } from "../../../_lib/application-page/link-input";
+import {
+  previewLinkChoiceTypeIds,
+  validateProjectedLinkControl,
+} from "../../../_lib/application-page/link-input";
+import {
+  loadInstalledContext,
+  requestDependencies,
+} from "../../../_lib/application-page/installed-context";
+import { prepareRuntimePreviewChoices } from "../../../_lib/runtime-preview-demand";
 
 const maximumRequestBodyLength = 131_072;
 const requestSchema = z
@@ -120,6 +128,32 @@ export const createFlowInvocationHandler =
         return privateResponse({ kind: "unavailable" }, 503);
       if (address.kind !== "application_page") return refusedResponse();
 
+      if (address.application.previewInstallationId !== undefined) {
+        const loaded =
+          address.installedContext === undefined
+            ? await loadInstalledContext(identity.session, requestDependencies(), {
+                organizationId: address.read.organizationId,
+                applicationRootId: address.application.applicationRootId,
+                previewInstallationId: address.application.previewInstallationId,
+              })
+            : { kind: "available" as const, value: address.installedContext };
+        if (loaded.kind === "temporarily_unavailable")
+          return privateResponse({ kind: "unavailable" }, 503);
+        if (loaded.kind !== "available") return refusedResponse();
+        const page = loaded.value.releaseSet.application.content.pages.find(
+          (candidate) => candidate.key === body.pageKey,
+        );
+        if (page === undefined) return refusedResponse();
+        const demand = await prepareRuntimePreviewChoices(
+          identity.session,
+          loaded.value,
+          previewLinkChoiceTypeIds(loaded.value, page),
+        );
+        if (demand.kind === "temporarily_unavailable")
+          return privateResponse({ kind: "unavailable" }, 503);
+        if (demand.kind !== "ready") return refusedResponse();
+      }
+
       const result = await invokeInstalledFlow(identity.session, body, address, {
         authorityId: getIdentityAuthorityConfiguration().authorityId,
         applicationStore: applicationStoreService(),
@@ -138,10 +172,6 @@ export const createFlowInvocationHandler =
             subject,
           ),
         validateControlOption: (input) => {
-          if (input.bound.scope.previewInstallationId !== undefined) {
-            console.error("[flows] preview control demand not prepared");
-            return Promise.resolve(false);
-          }
           return validateProjectedControlOption(
             input.bound,
             input.context,
