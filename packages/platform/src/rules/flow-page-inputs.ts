@@ -53,7 +53,8 @@ export const pageFlowFormValue = (type: string, value: unknown): FlowRuntimeValu
     return { type, value: value as JsonValue };
   const converted = flowRuntimeValueOf(type, value);
   return converted.type === type &&
-    (converted.value === null || flowValueMatchesType(converted.value, type))
+    converted.value !== null &&
+    flowValueMatchesType(converted.value, type)
     ? converted
     : undefined;
 };
