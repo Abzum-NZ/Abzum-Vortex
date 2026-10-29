@@ -1,7 +1,5 @@
 set role vortex_owner;
 
-grant create on schema vortex_record to vortex_record_adapter;
-
 grant update on vortex_record.relationship_edges to vortex_record_adapter;
 create policy relationship_edges_adapter_update on vortex_record.relationship_edges
   for update to vortex_record_adapter
@@ -8231,6 +8229,4 @@ grant execute on function
 comment on function vortex_record.prepare_named_action_relationship_value_internal(uuid,uuid,uuid,jsonb,text,uuid,bigint,uuid,uuid,uuid) is
   'Private named-action edge preparation: checks current application access for flagged Person links, uses the ordinary or protected projection target lock and edge flow, and authorises the command subject by re-evaluating the exact installed named action rather than ordinary read.';
 
-set role vortex_owner;
-revoke create on schema vortex_record from vortex_record_adapter;
 reset role;

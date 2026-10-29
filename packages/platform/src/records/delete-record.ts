@@ -411,7 +411,9 @@ const performRecordLifecycle = async (
     warnings.push(
       ...(record.canRead
         ? execution.warnings
-        : execution.warnings.map(() => ({
+        : execution.warnings.map((warning) => ({
+            ...warning,
+            messageIsLiteral: true,
             code: "related_record_rule_warning",
             message: "This change raised a warning on a related record",
           }))),
