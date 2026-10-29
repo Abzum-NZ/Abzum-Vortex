@@ -22,7 +22,7 @@ import {
   type InstalledRuntimeContext,
 } from "../definition/installed-runtime-context";
 
-export type NavigationPermissionBinding = Readonly<{
+type NavigationPermissionBinding = Readonly<{
   permissionKey: string;
   declaration: OrganizationAccessDeclaration;
 }>;
@@ -32,7 +32,7 @@ export type NavigationPermissionBinding = Readonly<{
  * key it names. The declaration comes from the release's prepared registration, never from the
  * browser, so the projection evaluates only authority the server can prove.
  */
-export type FixedAuthenticatedNavigationProjection = Readonly<{
+type FixedAuthenticatedNavigationProjection = Readonly<{
   navigation: readonly NavigationItem[];
   permissionBindings: Readonly<Record<string, NavigationPermissionBinding>>;
   sourceCorrelationId: string;
@@ -120,7 +120,7 @@ const declaration = (
         authority: { kind: "permission" },
       };
 
-export type StoredNavigationProjectionDependencies = Readonly<{
+type StoredNavigationProjectionDependencies = Readonly<{
   /**
    * The single trusted installed context assembled by App. Navigation projects only from this
    * exact release set and never re-reads or rebuilds organisation, release or permission

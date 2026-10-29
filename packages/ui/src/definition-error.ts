@@ -242,7 +242,7 @@ export function validateSlotOrder(
 }
 
 /** How a placement tree is judged: the host's settings reader, and whether a required slot may be empty. */
-export type PlacementTreeOptions = Readonly<{
+type PlacementTreeOptions = Readonly<{
   readSettings: PlacementSettingsReader;
   allowEmptyRequiredSlots?: boolean;
 }>;

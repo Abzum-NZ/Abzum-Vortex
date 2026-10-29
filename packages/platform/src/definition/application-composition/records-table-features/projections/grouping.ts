@@ -3,7 +3,7 @@ import { recordsTableGroupingFeature } from "../grouping";
 
 const textSchema = z.string().min(1);
 const onlyTrue = z.literal(true);
-export const groupingProjectionSchema = z
+const groupingProjectionSchema = z
   .object({
     fieldId: textSchema,
     label: textSchema,

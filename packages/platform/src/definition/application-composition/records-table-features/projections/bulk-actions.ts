@@ -12,7 +12,7 @@ const bulkActionSchema = z
   .strict()
   .readonly();
 
-export const bulkActionsProjectionSchema = z.array(bulkActionSchema).min(1).readonly();
+const bulkActionsProjectionSchema = z.array(bulkActionSchema).min(1).readonly();
 
 /** This feature's viewer projection: its definition's property and the strict schema under it. */
 export const bulkActionsProjection = {

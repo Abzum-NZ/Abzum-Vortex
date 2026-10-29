@@ -53,7 +53,7 @@ const spreadsheetSchema = z
     message: "The status bar needs a range",
   });
 
-export const spreadsheetProjectionSchema = spreadsheetSchema;
+const spreadsheetProjectionSchema = spreadsheetSchema;
 
 /** This feature's viewer projection: its definition's property and the strict schema under it. */
 export const spreadsheetProjection = {
