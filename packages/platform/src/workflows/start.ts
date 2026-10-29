@@ -110,6 +110,18 @@ export type StartFlowResult<Value> =
   | Readonly<{ kind: "rate_limited"; retryAfterSeconds: number }>
   | Readonly<{ kind: "refused" }>;
 
+export type FlowContinuationExecution<Value> =
+  | Readonly<{ kind: "finished"; value: Value }>
+  | Readonly<{
+      kind: "suspended";
+      childTokenHash: string;
+      childState: Readonly<Record<string, unknown>>;
+      elapsedMilliseconds: number;
+      lifetimeSeconds: number;
+      sealedReply: string;
+      value: (expiresAt: string) => Value;
+    }>;
+
 /** The host resolves the page and its binding; protected decisions use the supplied transaction. */
 type StartFlowDependencies<Value> = Readonly<{
   requests: HumanOrganizationRequestDependencies;
@@ -123,18 +135,7 @@ type StartFlowDependencies<Value> = Readonly<{
   executeContinuation?: (
     context: SegmentContext,
     runId: string,
-  ) => Promise<
-    | Readonly<{ kind: "finished"; value: Value }>
-    | Readonly<{
-        kind: "suspended";
-        childTokenHash: string;
-        childState: Readonly<Record<string, unknown>>;
-        elapsedMilliseconds: number;
-        lifetimeSeconds: number;
-        sealedReply: string;
-        value: (expiresAt: string) => Value;
-      }>
-  >;
+  ) => Promise<FlowContinuationExecution<Value>>;
   /** Opens a sealed child reply only after the current caller has been authorized. */
   openContinuationReplay?: (payload: string, expiresAt: string) => Value;
   /** Rebuild the segment frame for each call: a restart rolls back the entire transaction. */

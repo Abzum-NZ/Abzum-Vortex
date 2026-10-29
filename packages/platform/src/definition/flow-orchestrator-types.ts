@@ -27,7 +27,12 @@ import type {
 } from "../workflows/flow-contracts";
 import type { FlowRefusalFeedback } from "../workflows/flow-refusal-feedback";
 import type { FlowPlan, FlowServerSegment } from "../workflows/flow-plan";
-import type { FlowSegmentReceipt, SegmentExecution, StartFlowResult } from "../workflows/start";
+import type {
+  FlowContinuationExecution,
+  FlowSegmentReceipt,
+  SegmentExecution,
+  StartFlowResult,
+} from "../workflows/start";
 import type { FlowWarningNotice } from "../workflows/form-continuation-contracts";
 import { formContinuationAnswerSchema } from "../workflows/form-continuation-answer";
 import type { RecordSaveServiceResult } from "../records/save-record";
@@ -190,6 +195,13 @@ export type FlowOrchestratorDependencies = Readonly<{
       replay: FlowSegmentReceipt | undefined,
     ) => Promise<SegmentExecution<Readonly<{ step: FlowRunStep; run: Run }>>>,
   ) => Promise<StartFlowResult<Readonly<{ step: FlowRunStep; run: Run }>>>;
+  /** Admits a continuation that reaches another page intent or finishes without a segment. */
+  admitContinuation: (
+    run: Run,
+    state: FlowRunState,
+    execute: () => Promise<FlowContinuationExecution<FlowOrchestratorResponse>>,
+    openReplay: (payload: string, expiresAt: string) => FlowOrchestratorResponse,
+  ) => Promise<StartFlowResult<FlowOrchestratorResponse>>;
   executor: Pick<ProtectedOperationExecutor, "execute">;
   /** Runs named-action flows; without it an action is unavailable. */
   actionRecords?: NamedActionRecordPort;

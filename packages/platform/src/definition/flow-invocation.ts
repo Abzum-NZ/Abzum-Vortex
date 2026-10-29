@@ -61,7 +61,7 @@ import {
 } from "./flow-selected-record-context";
 import { flowPlansOf } from "../workflows/flow-plan";
 import { openFlowAdmissionRun } from "../workflows/start";
-import { admitFlowSegment } from "./flow-admission";
+import { admitFlowContinuation, admitFlowSegment, type AdmissionHost } from "./flow-admission";
 import { admitPageGesture } from "./flow-admission-page";
 import { admitRowForm } from "./flow-row-form-admission";
 import { sealFlowCarriedValues } from "../workflows/flow-carried-values";
@@ -441,59 +441,54 @@ export async function invokeInstalledFlow(
       boundRequest !== undefined &&
       canonicalJson(session) === canonicalJson(boundRequest.session) &&
       canonicalJson(selection) === canonicalJson(boundRequest.selection);
-    return {
-      admitSegment: (run, state, segment, execute) =>
-        admitFlowSegment(
+    const admissionHost: AdmissionHost = {
+      requests: requestDependencies,
+      invocation,
+      installationOf: installedFlowBindings,
+      pageGate: async (context, binding, bound, currentInstallation, state) => {
+        if (!(await gateBindingToAddressedPage(context, binding.controlId, bound))) return false;
+        const page = admittedProjection?.page;
+        if (page === undefined) return false;
+        const guided = guidedControls.get(binding.controlId.toLowerCase());
+        if (
+          guided !== undefined &&
+          (guided === null || !guided.summary || binding.event !== "form_submit")
+        )
+          return false;
+        return admitPageGesture(
           {
-            requests: requestDependencies,
-            invocation,
-            installationOf: installedFlowBindings,
-            pageGate: async (context, binding, bound, currentInstallation, state) => {
-              if (!(await gateBindingToAddressedPage(context, binding.controlId, bound)))
-                return false;
-              const page = admittedProjection?.page;
-              if (page === undefined) return false;
-              const guided = guidedControls.get(binding.controlId.toLowerCase());
-              if (
-                guided !== undefined &&
-                (guided === null || !guided.summary || binding.event !== "form_submit")
-              )
-                return false;
-              return admitPageGesture(
-                {
-                  validateOption: dependencies.validateControlOption,
-                  projectRowForm: (rowBound, rowContext, rowPage, tableId, formId, recordId) =>
-                    admitRowForm(
-                      dependencies,
-                      requestDependencies,
-                      rowBound,
-                      rowContext,
-                      rowPage,
-                      body,
-                      binding,
-                      state,
-                      tableId,
-                      formId,
-                      recordId,
-                    ),
-                },
-                bound,
-                context,
-                currentInstallation,
-                page,
+            validateOption: dependencies.validateControlOption,
+            projectRowForm: (rowBound, rowContext, rowPage, tableId, formId, recordId) =>
+              admitRowForm(
+                dependencies,
+                requestDependencies,
+                rowBound,
+                rowContext,
+                rowPage,
                 body,
                 binding,
                 state,
-              );
-            },
-            portsFor: dependenciesFor,
+                tableId,
+                formId,
+                recordId,
+              ),
           },
-          installation,
-          run,
+          bound,
+          context,
+          currentInstallation,
+          page,
+          body,
+          binding,
           state,
-          segment,
-          execute,
-        ),
+        );
+      },
+      portsFor: dependenciesFor,
+    };
+    return {
+      admitSegment: (run, state, segment, execute) =>
+        admitFlowSegment(admissionHost, installation, run, state, segment, execute),
+      admitContinuation: (run, state, execute, openReplay) =>
+        admitFlowContinuation(admissionHost, installation, run, state, execute, openReplay),
       executor: executorFor(boundRequest),
       records:
         boundRequest === undefined
