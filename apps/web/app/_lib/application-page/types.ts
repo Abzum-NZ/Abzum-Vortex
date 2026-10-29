@@ -12,6 +12,8 @@ import type {
   PageDefinition,
   RecordsTablePageRequest,
   ComponentFlowBinding,
+  BrowserFlowPlan,
+  FlowBindingInput,
 } from "@vortex/platform/schema";
 import type { PageWebMcpTool } from "./webmcp-projection";
 export type { PageWebMcpTool } from "./webmcp-projection";
@@ -26,6 +28,8 @@ export type PlacementFlowBinding = Readonly<{
   event: ComponentFlowBinding["event"];
   flowId: ComponentFlowBinding["flow"]["flowId"];
   settings: ComponentFlowBinding["settings"];
+  /** A safe page-only plan and its browser-resolvable binding inputs. */
+  browser?: Readonly<{ plan: BrowserFlowPlan; inputs: Readonly<Record<string, FlowBindingInput>> }>;
   /** The names of the caller inputs the bound flow declares; the surface may fill only these. */
   callerInputs: readonly string[];
   /** The whole values input feeds a record-save task in this bound flow. */
@@ -131,6 +135,7 @@ export type PlacementReadModel = Readonly<{
     pageKey: string;
     installationRevision: number;
     releaseKey: string;
+    flowTimeZone?: string;
   }>;
 }>;
 

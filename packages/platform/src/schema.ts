@@ -14,6 +14,7 @@ export * from "./events/schema";
 
 export * from "./events/client";
 export * from "./definition/component-request-generation";
+export * from "./workflows/flow-result-descriptors";
 export * from "./rules/flow-interpreter-core";
 export type { BrowserFlowPlan } from "./workflows/flow-plan";
 export * from "./rules/flow-page-inputs";

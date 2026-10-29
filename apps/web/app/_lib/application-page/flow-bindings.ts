@@ -3,6 +3,7 @@ import {
   readOrganizationRuntimeSettings,
   type HumanOrganizationRequestDependencies,
   type InstalledRuntimeContext,
+  type FlowPlanSet,
 } from "@vortex/platform/server";
 import {
   ATTACHMENT_LIST_BLOCK_RELEASE,
@@ -307,6 +308,7 @@ export const projectFlowBindingTargets = (input: {
 export const projectPlacementBindings = (
   input: Readonly<{
     application: InstalledRuntimeContext["releaseSet"]["application"];
+    plans: FlowPlanSet;
     recordTypeByPlacement: Map<string, string>;
     bindings: Record<string, PlacementFlowBinding[]>;
     pageDefinition: PageDefinition;
@@ -317,6 +319,7 @@ export const projectPlacementBindings = (
 ): void => {
   const {
     application,
+    plans,
     recordTypeByPlacement,
     bindings,
     pageDefinition,
@@ -374,7 +377,26 @@ export const projectPlacementBindings = (
           return flowTaskChildLists(task).some((child) => savesValues(child.tasks));
         });
       const flow = application.content.flows.find((entry) => sameId(entry.id, binding.flow.flowId));
+      const plan = plans.plans.get(String(binding.flow.flowId))?.browser;
+      const pageInputs =
+        plan === undefined
+          ? {}
+          : Object.fromEntries(
+              Object.entries(binding.flow.inputs).filter(([name]) =>
+                Object.hasOwn(plan.inputs, name),
+              ),
+            );
+      const safePageOnly =
+        plan !== undefined &&
+        plan.segments.every((segment) => segment.kind === "page" && segment.guard.length === 0) &&
+        Object.values(plan.outputs).every(
+          ({ value }) => value.kind !== "reference" || value.reference.source !== "final_output",
+        ) &&
+        Object.values(pageInputs).every(
+          (value) => value.kind === "caller" || value.kind === "literal",
+        );
       return {
+        ...(safePageOnly ? { browser: { plan, inputs: pageInputs } } : {}),
         savesFormValues: flow !== undefined && savesValues(flow.tasks),
         bindingId: binding.bindingId,
         controlId: binding.controlId,

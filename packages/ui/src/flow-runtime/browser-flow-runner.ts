@@ -1,6 +1,8 @@
 import {
   browserFlowMemberTypeResolver,
   pageFlowFinalOutputs,
+  resolvePageFlowInputs,
+  type FlowBindingInput,
   type BrowserFlowPlan,
   type FlowFailure,
   type FlowFormReferenceResolver,
@@ -10,6 +12,7 @@ import {
   type JsonValue,
 } from "@vortex/platform/schema";
 import { drivePageFlowSegment } from "./page-flow-segment";
+import { pageFlowClock } from "./page-flow-clock";
 import type { FlowIntentHost } from "./intents";
 
 export type BrowserFlowResult =
@@ -120,5 +123,35 @@ export async function runBrowserFlow(
   } catch (error) {
     console.error("[flow] page-only run failed", error);
     return { kind: "failed", failure: { outcome: "failed", code: "flow_unavailable" } };
+  }
+}
+
+/** Resolves the permitted binding inputs against one organisation-local instant. */
+export async function startBrowserFlow(
+  input: Readonly<{
+    plan: BrowserFlowPlan;
+    bindings: Readonly<Record<string, FlowBindingInput>>;
+    caller: Readonly<Record<string, unknown>>;
+    runId: string;
+    timeZone: string;
+    host: FlowIntentHost;
+    signal?: AbortSignal;
+  }>,
+): Promise<BrowserFlowResult> {
+  try {
+    const clock = pageFlowClock(input.timeZone);
+    const inputs = resolvePageFlowInputs(input.plan.inputs, input.bindings, input.caller, {
+      ...clock,
+      reference: () => undefined,
+    });
+    return await runBrowserFlow({
+      plan: input.plan,
+      start: { runId: input.runId, flowId: input.plan.flowId, inputs, ...clock },
+      host: input.host,
+      ...(input.signal === undefined ? {} : { signal: input.signal }),
+    });
+  } catch (error) {
+    console.error("[flow] page input resolution failed", error);
+    return { kind: "failed", failure: { outcome: "failed", code: "inputs_invalid" } };
   }
 }

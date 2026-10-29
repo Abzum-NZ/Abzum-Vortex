@@ -1,5 +1,6 @@
 import {
   useCallback,
+  useEffect,
   useMemo,
   useRef,
   type Dispatch,
@@ -386,6 +387,19 @@ export function useFlowRuntime({
     );
     return (bindingId: string) => bindings.get(bindingId);
   }, [model.bindings]);
+  const browserBindings = useMemo(() => {
+    const bindings = new Map<
+      string,
+      NonNullable<(typeof model.bindings)[string][number]["browser"]>
+    >(
+      Object.values(model.bindings).flatMap((items) =>
+        items.flatMap((binding) =>
+          binding.browser === undefined ? [] : [[binding.bindingId, binding.browser] as const],
+        ),
+      ),
+    );
+    return (bindingId: string) => bindings.get(bindingId);
+  }, [model.bindings]);
   // One flow runtime per host, shared by every event of the page: a gesture dispatches its bound
   // flow once through the one invoke client, and every pause and presentation intent is carried out
   // by the same host before the next answer is sent.
@@ -396,9 +410,11 @@ export function useFlowRuntime({
         host,
         state: runtimeState,
         bindingSettings,
+        browserBinding: browserBindings,
+        ...(application.flowTimeZone === undefined ? {} : { timeZone: application.flowTimeZone }),
         committed: (bindingId) => committedRef.current(bindingId),
       }),
-    [bindingSettings, flowClient, host, runtimeState],
+    [application.flowTimeZone, bindingSettings, browserBindings, flowClient, host, runtimeState],
   );
   const webMcpRuntime = useMemo(
     () =>
@@ -407,10 +423,31 @@ export function useFlowRuntime({
         host,
         state: runtimeState,
         bindingSettings,
+        browserBinding: browserBindings,
+        ...(application.flowTimeZone === undefined ? {} : { timeZone: application.flowTimeZone }),
         committed: (bindingId) => committedRef.current(bindingId),
       }),
-    [bindingSettings, webMcpClient, host, runtimeState],
+    [application.flowTimeZone, bindingSettings, browserBindings, webMcpClient, host, runtimeState],
   );
+  useEffect(() => {
+    if (
+      !Object.values(model.bindings).some((items) =>
+        items.some((binding) => binding.browser !== undefined),
+      )
+    )
+      return;
+    if (Object.values(currentData).some((entry) => entry.status === "loading")) return;
+    if ("requestIdleCallback" in window) {
+      const handle = window.requestIdleCallback(() => {
+        void flowRuntime.prefetch();
+      });
+      return () => window.cancelIdleCallback(handle);
+    }
+    const handle = globalThis.setTimeout(() => {
+      void flowRuntime.prefetch();
+    }, 0);
+    return () => globalThis.clearTimeout(handle);
+  }, [currentData, flowRuntime, model.bindings]);
   const formBlock = useMemo(() => createFormBlockRuntime(flowRuntime), [flowRuntime]);
 
   return { formBlock, flowRuntime, webMcpRuntime, runtimeState, intentHostElement };

@@ -1,3 +1,4 @@
+import { safeFlowResultDescriptors } from "../workflows/flow-result-descriptors";
 import { recordsTableRowEditEvent } from "./application-composition/records-table-features/row-edit";
 import "server-only";
 
@@ -37,11 +38,7 @@ import {
   type FlowWarningNotice,
 } from "../workflows/form-continuation-contracts";
 import type { ApplicationContent } from "./application-contracts";
-import {
-  safeFlowResultDescriptors,
-  type ComponentFlowBinding,
-  type SafeFlowResultDescriptor,
-} from "./application-flow-bindings";
+import type { ComponentFlowBinding, SafeFlowResultDescriptor } from "./application-flow-bindings";
 import type { ModuleDefinitionConsumerReadResult } from "./definition-consumer-read";
 import {
   FORM_CONTAINER_BLOCK_RELEASE,

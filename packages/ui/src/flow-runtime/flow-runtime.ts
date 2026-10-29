@@ -1,4 +1,10 @@
-import type { ComponentFlowBinding, FlowBindingConcurrency } from "@vortex/platform/schema";
+import {
+  safeFlowResultDescriptors,
+  type BrowserFlowPlan,
+  type FlowBindingInput,
+  type ComponentFlowBinding,
+  type FlowBindingConcurrency,
+} from "@vortex/platform/schema";
 import type { FlowIntentHost } from "./intents";
 import type { ServerDrivenResult } from "./server-driven-run";
 import type { FlowInvokeClient, FlowSubjectContext } from "./server-flow-client";
@@ -7,6 +13,12 @@ import type { TypedFieldValue } from "../controls/projected-data";
 
 export type FlowRuntimeOptions = Readonly<{
   client: FlowInvokeClient;
+  browserBinding?: (
+    bindingId: string,
+  ) =>
+    | Readonly<{ plan: BrowserFlowPlan; inputs: Readonly<Record<string, FlowBindingInput>> }>
+    | undefined;
+  timeZone?: string;
   host: FlowIntentHost;
   state: FlowRuntimeState;
   bindingSettings: (
@@ -131,6 +143,8 @@ export type FlowBindingReference = Readonly<{
 }>;
 
 export type FlowRuntime = Readonly<{
+  /** Loads the page runner after visible data has been served. */
+  prefetch: () => Promise<void>;
   /**
    * Runs the flow bound to one component event: the server starts it and the page drives it through
    * its continuations. `clickId` is the one identity of the user gesture: supplying the same
@@ -180,6 +194,41 @@ export function createFlowRuntime(options: FlowRuntimeOptions): FlowRuntime {
           cycle ?? startFlowEventCycle(binding.flowId, settings.controlId),
         );
         try {
+          const browser = options.browserBinding?.(binding.bindingId);
+          if (browser !== undefined && options.timeZone !== undefined) {
+            const { startBrowserFlow } = await import("./browser-flow-runner");
+            const result = await startBrowserFlow({
+              plan: browser.plan,
+              bindings: browser.inputs,
+              caller: callerInputs ?? {},
+              runId: clickId,
+              timeZone: options.timeZone,
+              host: options.host,
+              signal: runSignal,
+            });
+            if (result.kind === "abandoned") return { kind: "abandoned", unanswered: true };
+            if (result.kind === "completed")
+              return {
+                kind: "finished",
+                runId: clickId,
+                descriptor: safeFlowResultDescriptors.completed,
+                outputs: result.outputs,
+              };
+            if (result.kind === "failed")
+              return {
+                kind: "finished",
+                runId: clickId,
+                descriptor: safeFlowResultDescriptors[result.failure.outcome],
+                outputs: {},
+                failure: {
+                  code: result.failure.code,
+                  ...(result.failure.taskId === undefined ? {} : { taskId: result.failure.taskId }),
+                  ...(result.failure.diagnostic === undefined
+                    ? {}
+                    : { diagnostic: result.failure.diagnostic }),
+                },
+              };
+          }
           const [first, { driveServerFlow }] = await Promise.all([
             options.client.startBinding(
               { bindingId: binding.bindingId, flowId: binding.flowId },
@@ -207,6 +256,9 @@ export function createFlowRuntime(options: FlowRuntimeOptions): FlowRuntime {
     );
   };
   return Object.freeze({
+    prefetch: async () => {
+      await import("./browser-flow-runner");
+    },
     dispatchReference,
     dispatch: (binding, callerInputs = {}, clickId, subject, cycle) =>
       dispatchReference(

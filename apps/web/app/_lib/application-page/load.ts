@@ -15,6 +15,7 @@ import {
   isTablePlacement,
   fieldControl,
   formFieldOf,
+  flowPlansOf,
 } from "@vortex/platform/server";
 import { runtimeContextSelection, runtimePreviewOf } from "@vortex/platform/server";
 import {
@@ -71,6 +72,7 @@ import { startStreamedPlacementReads } from "./streamed-placements";
 import { projectInitialLinkInputs } from "./link-input";
 import {
   projectPlacementBindings,
+  readFlowOrganizationTimeZone,
   projectPlacementRecordTypes,
   projectFlowBindingTargets,
 } from "./flow-bindings";
@@ -677,6 +679,7 @@ const loadApplicationPageJoined = async (
   };
   const flowBindingInput = {
     application,
+    plans: flowPlansOf(context.releaseSet),
     recordTypeByPlacement,
     bindings,
     pageDefinition,
@@ -684,6 +687,15 @@ const loadApplicationPageJoined = async (
     selectedReadTypesByFlow,
   };
   for (const entry of placements) projectPlacementBindings(flowBindingInput, entry);
+  let flowTimeZone: string | undefined;
+  if (
+    Object.values(bindings).some((items) => items.some((binding) => binding.browser !== undefined))
+  ) {
+    const read = await readFlowOrganizationTimeZone({ session, selection, dependencies });
+    if (read.kind !== "available") return read;
+    if (read.value.accessVersion !== page.accessVersion) return { kind: "temporarily_unavailable" };
+    flowTimeZone = read.value.timeZone;
+  }
   // A page load may stream the placements that only show their own query's rows: the frame, the
   // title and every other placement are decided and sent first, each streamed placement shows its
   // loading state until its own read settles. A placement reread by id is always read in full.
@@ -916,6 +928,7 @@ const loadApplicationPageJoined = async (
       applicationKey: address.application.key,
       pageKey: address.pageKey,
       installationRevision: context.applicationReleaseRevision,
+      ...(flowTimeZone === undefined ? {} : { flowTimeZone }),
       releaseKey: [
         application.releaseVersion,
         application.contentFingerprint,
