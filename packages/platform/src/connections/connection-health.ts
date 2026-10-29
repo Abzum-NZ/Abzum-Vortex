@@ -4,7 +4,7 @@ import { z } from "zod";
 import type { SelectedOrganizationScope } from "../access/identity-access";
 import type { DatabaseRow, RequestDatabaseTransaction } from "../db/request-transaction";
 import { createRequestBoundConnectionExecution } from "../identity/tenant-governance-request-bound";
-import { healthConnectionCommandSchema } from "./connection-administration";
+import type { healthConnectionCommandSchema } from "./connection-administration";
 import { connectionProviderAdapters, executeConnectionOperation } from "./outbound-executor";
 import { PLATFORM_CONNECTION_TYPE_RELEASES } from "./platform-connection-type-catalogue";
 
