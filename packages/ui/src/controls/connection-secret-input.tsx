@@ -11,6 +11,7 @@ import {
 } from "./control-context";
 import {
   describedBy,
+  fieldFocusLost,
   FieldLabelText,
   FieldMessages,
   inactiveNote,
@@ -21,7 +22,7 @@ import { useFormField, useFormFieldError } from "./form-context";
 
 /** The form sees only the one-use reference returned by the write-only endpoint. */
 export function ConnectionSecretInput(props: ControlRenderProps<never>): ReactElement {
-  const context = resolveControlContext(props, ["field_changed"]);
+  const context = resolveControlContext(props, ["field_changed", "field_focus_lost"]);
   const settings = readControlSettings(props, context.location);
   const ids = useFieldIds();
   const fieldKey = settings.fieldKey();
@@ -60,7 +61,14 @@ export function ConnectionSecretInput(props: ControlRenderProps<never>): ReactEl
     setBusy(true);
     setFailure(undefined);
     setReference(null);
-    context.events?.field_changed?.({ event: "field_changed", fieldKey, value: null });
+    context.events?.field_changed?.({
+      event: "field_changed",
+      fieldKey,
+      value: null,
+      origin: "user",
+      depth: 0,
+      immediate: true,
+    });
     try {
       const response = await fetch("/api/connection-secrets", {
         method: "POST",
@@ -83,6 +91,9 @@ export function ConnectionSecretInput(props: ControlRenderProps<never>): ReactEl
         event: "field_changed",
         fieldKey,
         value: result.reference,
+        origin: "user",
+        depth: 0,
+        immediate: true,
       });
     } catch {
       setFailure("The secret could not be stored. Enter it again to retry.");
@@ -94,6 +105,10 @@ export function ConnectionSecretInput(props: ControlRenderProps<never>): ReactEl
 
   return (
     <Field
+      onBlur={(event) => {
+        if (!disabled && !readOnly)
+          fieldFocusLost(event, context.events?.field_focus_lost, fieldKey, reference);
+      }}
       data-vortex-control="connection-secret-input"
       data-vortex-field-key={fieldKey}
       hidden={feedback?.hidden === true}

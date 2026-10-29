@@ -4659,7 +4659,7 @@
       "accessibleName": "required",
       "accessibleNamePropertyPath": ["label"]
     },
-    "supportedEvents": ["field_changed"],
+    "supportedEvents": ["field_changed", "field_focus_lost"],
     "supportedStateOperations": []
   }
 }
