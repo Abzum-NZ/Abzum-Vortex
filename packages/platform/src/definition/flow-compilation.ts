@@ -201,7 +201,9 @@ export function resolveFlowFormReferences<Value>(
     return Object.fromEntries(
       Object.entries(record).map(([key, entry]) => [
         key,
-        key === "terminalStatusValues" ? entry : walk(entry, [...current, key]),
+        record.op === "deadline_passed" && key === "terminalStatusValues"
+          ? entry
+          : walk(entry, [...current, key]),
       ]),
     );
   };

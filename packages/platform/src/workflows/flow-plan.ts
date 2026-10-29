@@ -205,18 +205,17 @@ const referencesIn = (value: unknown, found: FlowReference[] = []): FlowReferenc
     // Validated literals are data, even when their text or JSON resembles a reference.
     if (record.kind === "literal" || record.op === "literal") return found;
     const reference = record.reference;
-    if (
+    const hasReference =
+      (record.kind === "reference" || record.op === "reference") &&
       typeof reference === "object" &&
       reference !== null &&
-      typeof (reference as { source?: unknown }).source === "string"
-    )
-      found.push(reference as FlowReference);
+      typeof (reference as { source?: unknown }).source === "string";
+    if (hasReference) found.push(reference as FlowReference);
     for (const [key, item] of Object.entries(record))
       if (
-        key !== "reference" &&
-        key !== "when" &&
-        key !== "terminalStatusValues" &&
-        !(record.kind === "switch" && key === "cases")
+        !(hasReference && key === "reference") &&
+        !(record.op === "deadline_passed" && key === "terminalStatusValues") &&
+        !(record.kind === "switch" && (key === "when" || key === "cases"))
       )
         referencesIn(item, found);
   }
