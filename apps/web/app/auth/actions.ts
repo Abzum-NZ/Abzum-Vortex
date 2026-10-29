@@ -20,7 +20,13 @@ import {
   serializeSignInContinuation,
   type SignInContinuation,
 } from "./_lib/sign-in-continuation";
-import { bootstrapIdentitySession, endIdentitySession } from "./_lib/session-server";
+import {
+  bootstrapIdentitySession,
+  endIdentitySession,
+  enrollMfaFactor,
+  readMfaFactor,
+  verifyMfaFactor,
+} from "./_lib/session-server";
 import { mapWebError } from "../_lib/web-error-mapper";
 
 const formValue = (formData: FormData, name: string, trim = true): string => {
@@ -92,6 +98,15 @@ export async function signIn(formData: FormData): Promise<never> {
   );
 
   const session = result.ok ? await bootstrapIdentitySession(result) : undefined;
+  if (result.ok && session?.kind === "active") {
+    const factor = await readMfaFactor();
+    if (factor.kind !== "setup") {
+      const query = new URLSearchParams({ mfa: "1" });
+      if (continuation !== undefined)
+        query.set("continuation", serializeSignInContinuation(continuation));
+      redirect(`/auth/sign-in?${query.toString()}`);
+    }
+  }
   redirect(
     result.ok && session?.kind === "active"
       ? continuation === undefined
@@ -99,6 +114,33 @@ export async function signIn(formData: FormData): Promise<never> {
         : signInContinuationAddressPath(continuation)
       : signInStatusPath(result.ok ? "unavailable" : failureStatus(result.code), continuation),
   );
+}
+
+export type MfaFormState =
+  | { kind: "setup"; error?: string }
+  | { kind: "enrolled"; factorId: string; secret: string; error?: string }
+  | { kind: "challenge"; factorId: string; error?: string };
+
+export async function completeMfa(
+  previous: MfaFormState,
+  formData: FormData,
+): Promise<MfaFormState> {
+  if (formValue(formData, "intent") === "enroll") {
+    const enrolled = await enrollMfaFactor();
+    return enrolled.kind === "enrolled"
+      ? enrolled
+      : { kind: "setup", error: "Two-step verification could not be set up. Try again." };
+  }
+  const factorId = formValue(formData, "factor_id");
+  const code = formValue(formData, "code");
+  if (
+    !/^[0-9a-f-]{36}$/iu.test(factorId) ||
+    !/^\d{6}$/u.test(code) ||
+    !(await verifyMfaFactor(factorId, code))
+  )
+    return { ...previous, error: "The code could not be verified. Check it and try again." };
+  const continuation = parseSingleSignInContinuation(formData.getAll("continuation"));
+  redirect(continuation === undefined ? "/signed-in" : signInContinuationAddressPath(continuation));
 }
 
 export async function signOut(): Promise<never> {

@@ -124,7 +124,7 @@ begin
       'action', pg_catalog.jsonb_build_object('actionKind', 'manage'),
       'target', pg_catalog.jsonb_build_object('kind', 'organization'),
       'requiredPermission', vortex_access.required_platform_permission('platform.organization.assignments.manage'),
-      'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'none'),
+      'recentAuthentication', pg_catalog.jsonb_build_object('kind', 'multi_factor', 'maximumAgeSeconds', 3600),
       'authority', pg_catalog.jsonb_build_object(
         'kind', 'delegated_management',
         'before', affected_authority,
