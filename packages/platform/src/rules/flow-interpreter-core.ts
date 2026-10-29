@@ -11,7 +11,7 @@ import { flowTaskChildLists } from "../workflows/flow-task-tree";
 import { refusalKeepsPlatformGuidance } from "../workflows/flow-refusal-guidance";
 import {
   flowTaskRegistry,
-  type PageStepType,
+  type PageIntentStepType,
   type ServerStepType,
 } from "../workflows/flow-task-registry-data";
 import type { FlowReference, FlowValue } from "../workflows/flow-values";
@@ -826,7 +826,7 @@ const execute = (machine: Machine, task: FlowTask, taskPath: readonly PathSegmen
 
   if (definition.effect === "interface") {
     const kind = Object.hasOwn(pageStepIntents, registered.type)
-      ? pageStepIntents[registered.type as PageStepType]
+      ? pageStepIntents[registered.type as PageIntentStepType]
       : undefined;
     if (kind === undefined) return failed("task_not_available", "failed", taskId);
     const intent: FlowInterfaceIntent = { kind, taskId, properties };

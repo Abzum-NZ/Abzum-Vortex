@@ -50,16 +50,17 @@ export type FlowTaskTypeKey = FlowControlTaskTypeKey | FlowRegisteredTaskTypeKey
 
 const page = { page: true, server: false, backend: false } as const;
 const server = { page: false, server: true, backend: false } as const;
+const pageAndServer = { page: true, server: true, backend: false } as const;
 const nowhere = { page: false, server: false, backend: false } as const;
 
 /** Where each step runs today; each later batch flips a flag when it lands the implementation. */
 export const flowTaskRuns = Object.freeze({
-  if: server,
-  switch: server,
-  for_each: server,
-  sequential: server,
+  if: pageAndServer,
+  switch: pageAndServer,
+  for_each: pageAndServer,
+  sequential: pageAndServer,
   run_flow: server,
-  stop: server,
+  stop: pageAndServer,
   "record.save": server,
   "record.create": server,
   "record.set_fields": server,
@@ -96,8 +97,10 @@ export const flowTaskRuns = Object.freeze({
 type StepsRunning<Where extends keyof FlowStepRuns> = {
   [Type in FlowTaskTypeKey]: (typeof flowTaskRuns)[Type][Where] extends true ? Type : never;
 }[FlowTaskTypeKey];
-/** The steps with a page implementation; the page's implementation map covers exactly these. */
+/** The steps with a page implementation, including control tasks handled by the interpreter. */
 export type PageStepType = StepsRunning<"page">;
+/** Registered page steps are dispatched through the page intent implementation map. */
+export type PageIntentStepType = Extract<PageStepType, FlowRegisteredTaskTypeKey>;
 /** The steps with a server implementation; the server's implementation map covers exactly these. */
 export type ServerStepType = StepsRunning<"server">;
 

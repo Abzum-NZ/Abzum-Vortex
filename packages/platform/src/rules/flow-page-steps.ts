@@ -1,4 +1,4 @@
-import type { PageStepType } from "../workflows/flow-task-registry-data";
+import type { PageIntentStepType } from "../workflows/flow-task-registry-data";
 import type { FlowInterfaceIntent } from "./flow-interpreter-core";
 
 /**
@@ -13,4 +13,4 @@ export const pageStepIntents = {
   "interface.refresh": "refresh",
   "interface.set_panel": "set_panel",
   "interface.set_filter": "set_filter",
-} as const satisfies Record<PageStepType, FlowInterfaceIntent["kind"]>;
+} as const satisfies Record<PageIntentStepType, FlowInterfaceIntent["kind"]>;

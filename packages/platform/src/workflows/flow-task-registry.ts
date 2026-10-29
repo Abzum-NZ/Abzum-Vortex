@@ -6,6 +6,7 @@ export type {
   FlowControlTaskTypeKey,
   FlowTaskTypeKey,
   PageStepType,
+  PageIntentStepType,
   ServerStepType,
 } from "./flow-task-registry-data";
 import { z } from "zod";
@@ -45,7 +46,8 @@ export type FlowTaskRunLocation = z.infer<typeof flowTaskRunLocationSchema>;
  * contract's `runLocations` say where a step may be placed; these flags say where it runs today.
  * Publication refuses a step placed where it does not run, naming it, and Studio's palette offers
  * a step only where it runs. The page and server implementation maps are typed from these flags
- * (`PageStepType`, `ServerStepType`), so a flag without an implementation fails the type check.
+ * for registered tasks (`PageIntentStepType`, `ServerStepType`); control tasks are handled by the
+ * shared interpreter.
  */
 export const flowStepRunsSchema = z
   .object({ page: z.boolean(), server: z.boolean(), backend: z.boolean() })

@@ -1,4 +1,4 @@
-import type { FormContinuationAnswer, PageStepType } from "@vortex/platform/schema";
+import type { FormContinuationAnswer, PageIntentStepType } from "@vortex/platform/schema";
 import {
   confirmAnswer,
   performPresentationIntent,
@@ -19,7 +19,7 @@ const presentation: PageStepImplementation = async (intent, host, signal) => {
   return undefined;
 };
 
-/** Every step marked runs.page in the registry has an implementation here. */
+/** Registered page steps have an intent implementation; the interpreter handles control steps. */
 const pageStepImplementations = {
   "interface.show_message": presentation,
   "interface.show_form": async (intent, host, signal) => {
@@ -36,11 +36,11 @@ const pageStepImplementations = {
   "interface.refresh": presentation,
   "interface.set_panel": presentation,
   "interface.set_filter": presentation,
-} satisfies Record<PageStepType, PageStepImplementation>;
+} satisfies Record<PageIntentStepType, PageStepImplementation>;
 
 /** The same page implementations handle both local steps and server-returned intents. */
 export const performPageFlowIntent: PageStepImplementation = (intent, host, signal) => {
-  const implementation = pageStepImplementations[`interface.${intent.kind}` as PageStepType];
+  const implementation = pageStepImplementations[`interface.${intent.kind}` as PageIntentStepType];
   if (implementation === undefined) throw new Error("FLOW_PAGE_STEP_UNAVAILABLE");
   return implementation(intent, host, signal);
 };
