@@ -116,6 +116,26 @@
           ],
           "changeable_fields": []
         }
+      },
+      {
+        "id": "app_permission_role_read",
+        "key": "vortex.organisation_administration.role.read",
+        "label": "Read roles",
+        "description": "Allows reading the role names an invitation can carry.",
+        "record_type": "vortex.system_directory:role",
+        "action_kind": "read",
+        "administrative": false,
+        "record_scope": {
+          "routes": [
+            {
+              "kind": "all_records"
+            }
+          ]
+        },
+        "field_policy": {
+          "readable_fields": ["organization_id", "revision", "key", "label", "lifecycle"],
+          "changeable_fields": []
+        }
       }
     ],
     "roles": [
@@ -150,6 +170,7 @@
           "vortex.organisation_administration.privacy_request_case.refuse",
           "vortex.organisation_administration.person.read",
           "vortex.organisation_administration.organization_invitation.read",
+          "vortex.organisation_administration.role.read",
           "vortex.organisation_administration.organization_settings.read",
           "vortex.organisation_administration.activity_entry.read"
         ]
