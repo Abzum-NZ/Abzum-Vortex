@@ -1,3 +1,4 @@
+import { flowRuntimeValueOf } from "../../rules/flow-runtime-value";
 import { sourceFlowCollectionSchema } from "../../workflows/flow-source-contracts";
 import {
   sourceItemTree,
@@ -159,9 +160,11 @@ function compileOwnedFlowSources(
       const fields: Record<string, string> = {};
       for (const field of record.fields as JsonObject[]) {
         const settings = asObject(field.settings);
-        fields[String(field.key)] = ["calculation", "total"].includes(String(field.type))
-          ? String(settings.resultType)
-          : String(field.type);
+        fields[String(field.key)] = flowRuntimeValueOf(
+          String(field.type),
+          null,
+          typeof settings.resultType === "string" ? settings.resultType : undefined,
+        ).type;
       }
       recordsByReference.set(`${output.artifact.definitionKey}:${String(record.key)}`, fields);
     }

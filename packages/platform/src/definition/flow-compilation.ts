@@ -1,3 +1,4 @@
+import { flowRuntimeValueOf } from "../rules/flow-runtime-value";
 import type { JsonValue } from "../catalogue/common";
 import type { DefinitionValidationLocation } from "../catalogue/validation-errors";
 import {
@@ -651,7 +652,9 @@ export function compileFlowSources(input: FlowCompilationInput): CompiledFlowSet
             try {
               const identity = resolver.field(recordType, field);
               const matches = resolver.fieldMetadata(identity.identifier);
-              return matches.length === 1 ? (matches[0]!.valueType ?? matches[0]!.type) : undefined;
+              return matches.length === 1
+                ? flowRuntimeValueOf(matches[0]!.type, null, matches[0]!.valueType).type
+                : undefined;
             } catch (error) {
               if (error instanceof DefinitionCompilationError) return undefined;
               throw error;

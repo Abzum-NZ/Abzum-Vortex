@@ -10,7 +10,7 @@ import { sameId } from "../catalogue/runtime-primitives";
 import type { HumanOrganizationRequestResult } from "../access/human-organization-request";
 import type { RequestDatabaseTransaction } from "../db/request-transaction";
 import type { ViewerSafeRecordLinkReadService } from "../queries/viewer-safe-record-link-read";
-import { flowRuntimeValueOf } from "../rules/action-flow-run";
+import { flowRuntimeValueOf } from "../rules/flow-runtime-value";
 import type { InstalledFlowBindings } from "./flow-binding-endpoint";
 import type { FlowCurrentRecordRead } from "./flow-orchestrator-types";
 
@@ -99,7 +99,13 @@ export const createFlowCurrentRecordReader = (
         values: Object.fromEntries(
           owner.recordType.fields.map((field) => [
             String(field.key),
-            flowRuntimeValueOf(field.type, readable(String(field.fieldId))),
+            flowRuntimeValueOf(
+              field.type,
+              readable(String(field.fieldId)),
+              field.type === "calculation" || field.type === "total"
+                ? field.settings.resultType
+                : undefined,
+            ),
           ]),
         ),
       };

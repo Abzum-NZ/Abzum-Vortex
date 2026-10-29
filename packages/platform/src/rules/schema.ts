@@ -5,3 +5,4 @@ export {
   type FlowFormulaPath,
 } from "./flow-formula";
 export { flowInstantMicros } from "./flow-instant";
+export { flowRuntimeValueOf } from "./flow-runtime-value";

@@ -1,3 +1,4 @@
+import { flowRuntimeValueOf } from "../rules/flow-runtime-value";
 import { checkFlowFormula } from "../rules/flow-formula";
 import { flowFormulaChildren, type FlowFormula } from "../workflows/flow-values";
 
@@ -34,7 +35,7 @@ export const checkCalculationFormula = (
             : undefined;
       const type = key === undefined ? undefined : fieldType(key);
       if (type === undefined) valid = false;
-      return type;
+      return type === undefined ? undefined : flowRuntimeValueOf(type, null).type;
     },
     issue: () => {
       valid = false;

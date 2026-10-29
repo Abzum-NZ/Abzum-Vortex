@@ -8,7 +8,7 @@ import type { ConditionNode } from "../definition/module-foundation-contracts";
 import type { FlowFormula } from "../workflows/flow-values";
 import { moneyValueSchema } from "./module-field-values";
 import { compareFlowText, evaluateFlowFormula } from "../rules/flow-formula";
-import { flowRuntimeValueOf } from "../rules/action-flow-run";
+import { flowRuntimeValueOf } from "../rules/flow-runtime-value";
 import { evaluateTypedCondition } from "../rules/typed-condition";
 import { persistedRecordFieldValueMatches } from "./field-values";
 import { isRecord } from "../catalogue/runtime-primitives";

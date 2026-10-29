@@ -10,7 +10,7 @@ import type { FlowFormula } from "../workflows/flow-values";
 import { formatExactDecimal, parseExactDecimal } from "./exact-decimal";
 import { moneyValueSchema } from "./module-field-values";
 import { evaluateFlowFormula, type FlowFormulaScope } from "../rules/flow-formula";
-import { flowRuntimeValueOf } from "../rules/action-flow-run";
+import { flowRuntimeValueOf } from "../rules/flow-runtime-value";
 import { persistedRecordFieldValueMatches } from "./field-values";
 import { isRecord } from "../catalogue/runtime-primitives";
 
@@ -266,7 +266,7 @@ export const evaluateRecordCalculations = (
         const dependency = fields.get(reference.fieldId);
         if (dependency === undefined) return undefined;
         return {
-          type: flowRuntimeValueOf(resultTypeOf(dependency), null).type,
+          type: flowRuntimeValueOf(dependency.type, null, resultTypeOf(dependency)).type,
           value: values.get(reference.fieldId) ?? null,
         };
       },
