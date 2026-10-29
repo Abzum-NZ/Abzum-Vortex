@@ -1,10 +1,10 @@
 import type { ReactElement } from "react";
 import { Card, CardContent, CardHeader } from "../components/card";
-import { DisplayCellView } from "./cell";
 import { DisplayHeader } from "./controls";
 import { resolveDisplayContext, type DisplayRenderProps } from "./context";
 import { DisplayStateContainer } from "./display-state-container";
 import type { TextPayload } from "./projected-data";
+import { displayValueSource, ValueSourceView } from "./value-source";
 
 /**
  * Shared browser-safe display component for plain text, rendered with the shadcn Card parts.
@@ -29,6 +29,7 @@ export function PlainTextDisplay(props: DisplayRenderProps<TextPayload>): ReactE
       (text) => text.value.kind === "empty",
       "No text to show",
     );
+  const source = displayValueSource(props.settings.value_source);
 
   return (
     <DisplayStateContainer
@@ -45,7 +46,7 @@ export function PlainTextDisplay(props: DisplayRenderProps<TextPayload>): ReactE
             </CardHeader>
           )}
           <CardContent>
-            <DisplayCellView value={values.value} />
+            <ValueSourceView source={source} projection={values.value} />
           </CardContent>
         </Card>
       )}
