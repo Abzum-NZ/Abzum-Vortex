@@ -397,6 +397,7 @@ export function useStudioFlowsTab({
     if (outline === null || flowSelection === null) return [];
     return studioFlowStepTypesAt(
       stepTypes,
+      outline.flow,
       outline.entries,
       path,
       draft.updatingCanvas || draft.view.failure !== null

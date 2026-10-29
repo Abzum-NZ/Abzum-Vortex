@@ -198,7 +198,7 @@ const StudioFlowNode = memo(function StudioFlowNode({
         <div className="text-xs text-muted-foreground">
           <span className="font-medium">Behaviour</span>
           {data.behaviour?.length ? (
-            <ul>
+            <ul className="m-0 list-none p-0">
               {data.behaviour.map((entry) => (
                 <li key={entry}>{entry}</li>
               ))}

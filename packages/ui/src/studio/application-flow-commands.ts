@@ -3,6 +3,7 @@ import {
   flowMaximumTaskCount,
   flowMaximumForEachItemsOther,
   flowTaskRegistry,
+  flowExecutionRunLocations,
   parseFlowReference,
   sourceFlowTaskSchema,
   validateFlowTaskPlacement,
@@ -391,6 +392,31 @@ export type StudioFlowStepType = Readonly<{
 /** The control steps a person adds from the palette: a decision and an early end. */
 const paletteControls = ["if", "switch", "for_each", "sequential", "run_flow", "stop"] as const;
 
+const supportsPlacement = (
+  definition: FlowTaskTypeDefinition,
+  flow: SourceFlow,
+  location: "page" | "server" | "backend",
+): boolean => {
+  const runLocation =
+    location === "page" ? "browser" : flow.execution === "transaction" ? "transaction" : "server";
+  const allowed = flowExecutionRunLocations[flow.execution] as readonly string[];
+  const actionFlowTask =
+    runLocation === "transaction" &&
+    flow.triggers.length === 0 &&
+    definition.actionFlowTransaction === true;
+  return (
+    (flow.execution === "interactive"
+      ? location !== "backend"
+      : flow.execution === "transaction"
+        ? location === "server"
+        : location === "backend") &&
+    allowed.includes(runLocation) &&
+    (definition.runLocations.includes(runLocation) || actionFlowTask) &&
+    ((definition.category === "control" && definition.type !== "run_flow") ||
+      definition.runs[location])
+  );
+};
+
 /** Registered step types the flow's execution kind accepts and that can start from seeds. */
 const registeredTypes = (
   flow: SourceFlow,
@@ -399,6 +425,12 @@ const registeredTypes = (
 ): FlowTaskTypeDefinition[] =>
   Object.values(flowTaskRegistry).filter((definition) => {
     if (definition.category !== "registered") return false;
+    if (
+      !(["page", "server", "backend"] as const).some((location) =>
+        supportsPlacement(definition, flow, location),
+      )
+    )
+      return false;
     const choices = stepBuilderChoices(definition, flow, source, context);
     // The type is offered when each decision has at least one option; the probe only proves the
     // step would be valid, and is never inserted.
@@ -432,7 +464,12 @@ const stepTypes = (
               type === "if" ||
               type === "stop",
           )
-          .map((type) => flowTaskRegistry[type]);
+          .map((type) => flowTaskRegistry[type])
+          .filter((definition) =>
+            (["page", "server", "backend"] as const).some((location) =>
+              supportsPlacement(definition, flow, location),
+            ),
+          );
   return [...registered, ...controls].map((definition) => ({
     type: definition.type,
     title: definition.title,
@@ -650,6 +687,7 @@ export const projectStudioFlowStepTypes = (
 /** A loop runs in one place: its body cannot mix page and server implementations. */
 export const studioFlowStepTypesAt = (
   types: readonly StudioFlowStepType[],
+  flow: SourceFlow,
   entries: readonly Readonly<{ task: SourceFlowTask; path: StudioFlowPath }>[],
   listPath: StudioFlowPath,
   placements: Readonly<Record<string, "page" | "server" | "backend">> | null,
@@ -665,11 +703,7 @@ export const studioFlowStepTypesAt = (
   if (location === undefined) return [];
   return types.filter((entry) => {
     const definition = studioFlowDefinitionOf(entry.type);
-    return (
-      definition !== undefined &&
-      ((definition.category === "control" && entry.type !== "run_flow") ||
-        definition.runs[location])
-    );
+    return definition !== undefined && supportsPlacement(definition, flow, location);
   });
 };
 
