@@ -113,6 +113,7 @@ export function useRuntimeInputs({
   router,
   requestChoicePage,
   runtimeInputsRef,
+  controlDraftsRef,
   setPanelRef,
 }: Readonly<{
   currentData: ApplicationPageModel["data"];
@@ -234,6 +235,7 @@ export function useRuntimeInputs({
     formId?: string,
   ) => Promise<void>;
   runtimeInputsRef: RefObject<Readonly<Record<string, unknown>>>;
+  controlDraftsRef: RefObject<{ scope: string; values: Record<string, unknown> }>;
   setPanelRef: RefObject<FlowIntentHost["setPanel"]>;
 }>) {
   const pageParameters = usePageParameters({
@@ -669,12 +671,14 @@ export function useRuntimeInputs({
           );
         };
       const publishedParameter = model.pageParameters.controls[placementId];
-      if (publishedParameter !== undefined && supportsEvent("field_changed")) {
+      if (supportsEvent("field_changed")) {
         const fieldChanged = events.field_changed as
           ((event: ControlSemanticEvent) => void) | undefined;
         events.field_changed = (event: ControlSemanticEvent) => {
           fieldChanged?.(event);
-          pageParameters.change(placementId, event);
+          if (event.event === "field_changed" && controlDraftsRef.current.scope === navigationKey)
+            controlDraftsRef.current.values[placementId] = event.value;
+          if (publishedParameter !== undefined) pageParameters.change(placementId, event);
         };
       }
       // A table whose click is bound to a flow keeps that flow; the flow publishes the record when

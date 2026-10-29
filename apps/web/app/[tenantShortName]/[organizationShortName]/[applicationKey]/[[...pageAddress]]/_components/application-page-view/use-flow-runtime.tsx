@@ -58,6 +58,7 @@ export function useFlowRuntime({
   model,
   platformComponentRegistry,
   runtimeInputsRef,
+  controlDraftsRef,
   choicePayloadFor,
   fieldInputControlReleases,
   setNotice,
@@ -82,6 +83,7 @@ export function useFlowRuntime({
   model: ApplicationPageModel;
   platformComponentRegistry: ReturnType<typeof createPlatformComponentRegistryForReleases>;
   runtimeInputsRef: RefObject<Readonly<Record<string, unknown>>>;
+  controlDraftsRef: RefObject<{ scope: string; values: Record<string, unknown> }>;
   choicePayloadFor: (placementId: string, formId?: string) => ChoiceInputPayload | undefined;
   fieldInputControlReleases: FieldInputControlReleaseMap;
   setNotice: Dispatch<SetStateAction<Notice | undefined>>;
@@ -131,11 +133,7 @@ export function useFlowRuntime({
           parameters[name] = values.length === 1 ? values[0]! : values;
         }
         const controls: Record<string, string> = {};
-        for (const [placementId, input] of Object.entries(runtimeInputsRef.current)) {
-          if (!isRecord(input) || !isRecord(input.data) || input.data.status !== "ready") continue;
-          const values = input.data.values;
-          if (!isRecord(values)) continue;
-          const value = values.value;
+        const forward = (placementId: string, value: unknown) => {
           if (value === null) controls[placementId] = "";
           else if (
             typeof value === "string" ||
@@ -145,7 +143,15 @@ export function useFlowRuntime({
             controls[placementId] = String(value);
           else if (isRecord(value) && typeof value.recordId === "string")
             controls[placementId] = value.recordId;
+        };
+        for (const [placementId, input] of Object.entries(runtimeInputsRef.current)) {
+          if (!isRecord(input) || !isRecord(input.data) || input.data.status !== "ready") continue;
+          const values = input.data.values;
+          if (!isRecord(values)) continue;
+          forward(placementId, values.value);
         }
+        for (const [placementId, value] of Object.entries(controlDraftsRef.current.values))
+          forward(placementId, value);
         return { parameters, controls };
       },
       ...(subject === undefined ? {} : { subject }),
@@ -233,6 +239,7 @@ export function useFlowRuntime({
     formCancelledRef,
     model.pageParameters.controls,
     runtimeInputsRef,
+    controlDraftsRef,
     subject,
     unsavedWorkRegistry,
   ]);
