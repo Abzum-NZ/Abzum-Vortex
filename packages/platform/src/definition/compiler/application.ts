@@ -21,6 +21,9 @@ import {
   DefinitionCompilationError,
   type DefinitionCompilerRefusalCode,
 } from "../compilation-error";
+import { flowBindingSettingsSchema } from "../application-flow-bindings";
+import type { ComponentSemanticEventKind } from "../component-semantic-events";
+import { flowBindingSettingNotYetRunnable } from "../flow-step-settings";
 import { applicationSearchSourceReferences } from "../source-identities";
 import {
   materialiseApplicationComposition,
@@ -578,6 +581,21 @@ function compileApplicationFlowBindings(
     for (const [name, declared] of Object.entries(flow.inputs))
       if (declared.required && !Object.hasOwn(inputs, name))
         fail("vortex.definition.application_flow_binding_inputs", "required_value", location);
+    const settings = flowBindingSettingsSchema.safeParse(binding.settings);
+    if (!settings.success)
+      fail("vortex.definition.application_flow_binding_inputs", "invalid_value", location);
+    const notYet = flowBindingSettingNotYetRunnable(
+      binding.event as ComponentSemanticEventKind,
+      settings.data,
+    );
+    if (notYet !== undefined)
+      throw new DefinitionCompilationError(
+        "vortex.definition.unsupported_workflow_node",
+        "unsupported_choice",
+        location,
+        undefined,
+        `Binding ${String(binding.id)}: ${notYet}`,
+      );
     return {
       bindingId: resolution.id(definitionKey, "flow_binding", String(binding.id), "content"),
       controlId: resolution.id(definitionKey, "block_placement", String(binding.control)),

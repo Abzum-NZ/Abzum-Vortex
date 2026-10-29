@@ -2255,18 +2255,25 @@
                   ]
                 }
               },
-              "tone": {
-                "kind": "literal",
-                "literal": {
-                  "type": "text",
-                  "value": "success"
-                }
-              },
               "title": {
                 "kind": "literal",
                 "literal": {
                   "type": "text",
                   "value": "Invite person"
+                }
+              },
+              "target": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "dialog"
+                }
+              },
+              "severity": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "success"
                 }
               }
             }

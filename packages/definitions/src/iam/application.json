@@ -4445,6 +4445,20 @@
                                           "type": "text",
                                           "value": "Make organisation steward"
                                         }
+                                      },
+                                      "target": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "dialog"
+                                        }
+                                      },
+                                      "severity": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "info"
+                                        }
                                       }
                                     }
                                   }
@@ -4475,6 +4489,20 @@
                                           "type": "text",
                                           "value": "Make organisation steward"
                                         }
+                                      },
+                                      "target": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "dialog"
+                                        }
+                                      },
+                                      "severity": {
+                                        "kind": "literal",
+                                        "literal": {
+                                          "type": "text",
+                                          "value": "info"
+                                        }
                                       }
                                     }
                                   }
@@ -4499,6 +4527,20 @@
                                     "literal": {
                                       "type": "text",
                                       "value": "Make organisation steward"
+                                    }
+                                  },
+                                  "target": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "dialog"
+                                    }
+                                  },
+                                  "severity": {
+                                    "kind": "literal",
+                                    "literal": {
+                                      "type": "text",
+                                      "value": "info"
                                     }
                                   }
                                 }
@@ -4532,6 +4574,20 @@
                                   "type": "text",
                                   "value": "Make organisation steward"
                                 }
+                              },
+                              "target": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "dialog"
+                                }
+                              },
+                              "severity": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "info"
+                                }
                               }
                             }
                           }
@@ -4561,6 +4617,20 @@
                                 "literal": {
                                   "type": "text",
                                   "value": "Make organisation steward"
+                                }
+                              },
+                              "target": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "dialog"
+                                }
+                              },
+                              "severity": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "info"
                                 }
                               }
                             }
@@ -4592,6 +4662,20 @@
                                   "type": "text",
                                   "value": "Make organisation steward"
                                 }
+                              },
+                              "target": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "dialog"
+                                }
+                              },
+                              "severity": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "info"
+                                }
                               }
                             }
                           }
@@ -4616,6 +4700,20 @@
                             "literal": {
                               "type": "text",
                               "value": "Make organisation steward"
+                            }
+                          },
+                          "target": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "dialog"
+                            }
+                          },
+                          "severity": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "info"
                             }
                           }
                         }
@@ -4988,18 +5086,25 @@
                   ]
                 }
               },
-              "tone": {
-                "kind": "literal",
-                "literal": {
-                  "type": "text",
-                  "value": "success"
-                }
-              },
               "title": {
                 "kind": "literal",
                 "literal": {
                   "type": "text",
                   "value": "Add member"
+                }
+              },
+              "target": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "dialog"
+                }
+              },
+              "severity": {
+                "kind": "literal",
+                "literal": {
+                  "type": "text",
+                  "value": "success"
                 }
               }
             }
@@ -5490,18 +5595,25 @@
                           ]
                         }
                       },
-                      "tone": {
-                        "kind": "literal",
-                        "literal": {
-                          "type": "text",
-                          "value": "success"
-                        }
-                      },
                       "title": {
                         "kind": "literal",
                         "literal": {
                           "type": "text",
                           "value": "Assign role"
+                        }
+                      },
+                      "target": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "dialog"
+                        }
+                      },
+                      "severity": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "success"
                         }
                       }
                     }
@@ -5908,18 +6020,25 @@
                           ]
                         }
                       },
-                      "tone": {
-                        "kind": "literal",
-                        "literal": {
-                          "type": "text",
-                          "value": "success"
-                        }
-                      },
                       "title": {
                         "kind": "literal",
                         "literal": {
                           "type": "text",
                           "value": "Assign role"
+                        }
+                      },
+                      "target": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "dialog"
+                        }
+                      },
+                      "severity": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "success"
                         }
                       }
                     }
@@ -6547,6 +6666,20 @@
                                   "type": "text",
                                   "value": "Grant app installation"
                                 }
+                              },
+                              "target": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "dialog"
+                                }
+                              },
+                              "severity": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "info"
+                                }
                               }
                             }
                           }
@@ -6576,6 +6709,20 @@
                                 "literal": {
                                   "type": "text",
                                   "value": "Grant app installation"
+                                }
+                              },
+                              "target": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "dialog"
+                                }
+                              },
+                              "severity": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "info"
                                 }
                               }
                             }
@@ -6607,6 +6754,20 @@
                                   "type": "text",
                                   "value": "Grant app installation"
                                 }
+                              },
+                              "target": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "dialog"
+                                }
+                              },
+                              "severity": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "info"
+                                }
                               }
                             }
                           }
@@ -6637,6 +6798,20 @@
                                   "type": "text",
                                   "value": "Grant app installation"
                                 }
+                              },
+                              "target": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "dialog"
+                                }
+                              },
+                              "severity": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "info"
+                                }
                               }
                             }
                           }
@@ -6661,6 +6836,20 @@
                             "literal": {
                               "type": "text",
                               "value": "Grant app installation"
+                            }
+                          },
+                          "target": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "dialog"
+                            }
+                          },
+                          "severity": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "info"
                             }
                           }
                         }
@@ -6821,6 +7010,20 @@
                                   "type": "text",
                                   "value": "Grant app installation"
                                 }
+                              },
+                              "target": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "dialog"
+                                }
+                              },
+                              "severity": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "info"
+                                }
                               }
                             }
                           }
@@ -6850,6 +7053,20 @@
                                 "literal": {
                                   "type": "text",
                                   "value": "Grant app installation"
+                                }
+                              },
+                              "target": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "dialog"
+                                }
+                              },
+                              "severity": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "info"
                                 }
                               }
                             }
@@ -6881,6 +7098,20 @@
                                   "type": "text",
                                   "value": "Grant app installation"
                                 }
+                              },
+                              "target": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "dialog"
+                                }
+                              },
+                              "severity": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "info"
+                                }
                               }
                             }
                           }
@@ -6911,6 +7142,20 @@
                                   "type": "text",
                                   "value": "Grant app installation"
                                 }
+                              },
+                              "target": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "dialog"
+                                }
+                              },
+                              "severity": {
+                                "kind": "literal",
+                                "literal": {
+                                  "type": "text",
+                                  "value": "info"
+                                }
                               }
                             }
                           }
@@ -6935,6 +7180,20 @@
                             "literal": {
                               "type": "text",
                               "value": "Grant app installation"
+                            }
+                          },
+                          "target": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "dialog"
+                            }
+                          },
+                          "severity": {
+                            "kind": "literal",
+                            "literal": {
+                              "type": "text",
+                              "value": "info"
                             }
                           }
                         }

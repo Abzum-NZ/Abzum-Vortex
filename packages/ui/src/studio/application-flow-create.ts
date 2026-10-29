@@ -696,7 +696,12 @@ export const applyStudioFlowCreate = (
             type: "interface.show_message",
             version: "1.0.0",
             // The message is headed by what the person was doing: the flow's name.
-            properties: { message: message(step.message.trim()), title: message(name) },
+            properties: {
+              message: message(step.message.trim()),
+              target: { kind: "literal", literal: { type: "text", value: "dialog" } },
+              severity: { kind: "literal", literal: { type: "text", value: "info" } },
+              title: message(name),
+            },
           },
         ];
       } else {

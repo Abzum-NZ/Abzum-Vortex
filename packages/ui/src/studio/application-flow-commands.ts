@@ -299,13 +299,20 @@ const seededTask = (
     const seed =
       definition.type === "rule.refuse" && key === "reason"
         ? refusalReasonSeed
-        : definition.type === "interface.show_message" && key === "title"
-          ? // A message is headed by what the person was doing: the flow's name.
-            text(flow.labels?.name ?? "")
-          : seedValue(declaration.type, flow, source);
+        : definition.type === "interface.show_message" && key === "target"
+          ? // The page shows messages in a dialog today.
+            text("dialog")
+          : definition.type === "interface.show_message" && key === "severity"
+            ? text("info")
+            : definition.type === "data.calculate" && key === "result_type"
+              ? text("decimal_number")
+              : seedValue(declaration.type, flow, source);
     if (seed === undefined) return undefined;
     properties[key] = seed;
   }
+  // A dialog is headed by what the person was doing: the flow's name.
+  if (definition.type === "interface.show_message")
+    properties.title = text(flow.labels?.name ?? "");
   return { id, type: definition.type, version: definition.version, properties };
 };
 

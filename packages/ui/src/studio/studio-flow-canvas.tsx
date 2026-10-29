@@ -21,20 +21,17 @@ import {
 import {
   ArchiveRestore,
   Braces,
-  Cable,
   Calculator,
   CaseSensitive,
-  CheckCheck,
   CircleCheck,
   CircleHelp,
   CircleX,
+  ClipboardCheck,
   ClipboardList,
   Clock,
-  FileOutput,
   FilePlus2,
   Filter,
   Flag,
-  FolderInput,
   GitBranch,
   GitFork,
   Layers,
@@ -46,10 +43,10 @@ import {
   Maximize,
   Megaphone,
   MessageSquare,
+  MessageSquareX,
   Navigation,
   Octagon,
   PanelLeft,
-  Paperclip,
   Play,
   Plug,
   Plus,
@@ -77,14 +74,22 @@ import { cn } from "../lib/utils";
 import type { ThemeMode } from "../theme";
 import type { StudioFlowNewStepSettings } from "./application-flow-commands";
 import type { StudioFlowPath, StudioFlowTaskListOutline } from "./application-flow-model";
-import { StudioFlowStepPicker, type StudioFlowStepChoice, type StudioFlowStepPickerContext } from "./studio-flow-step-picker";
+import {
+  StudioFlowStepPicker,
+  type StudioFlowStepChoice,
+  type StudioFlowStepPickerContext,
+} from "./studio-flow-step-picker";
 
 /** The graph is a view of the authored lists; no canvas positions or graph state are stored. */
 type NodeKind = "start" | "step" | "group" | "end";
 type FlowNodeData = Readonly<{ title: string; caption: string; kind: NodeKind; taskType?: string }>;
 type Insertion = Readonly<{ listPath: StudioFlowPath; index: number }>;
 type FlowEdge = Edge<Readonly<{ insertion: Insertion; label: string }>, "studio">;
-type AddStep = (insertion: Insertion, taskType: string, settings: StudioFlowNewStepSettings) => true | string;
+type AddStep = (
+  insertion: Insertion,
+  taskType: string,
+  settings: StudioFlowNewStepSettings,
+) => true | string;
 type CanvasActions = Readonly<{
   types: readonly StudioFlowStepChoice[];
   disabled: boolean;
@@ -120,13 +125,8 @@ const taskIcons: Readonly<Record<string, LucideIcon>> = {
   "record.read_fields": ListFilter,
   "record.pin_identity": MapPin,
   "operation.call": Plug,
-  "flow.run_background": Timer,
+  "backend.run": Timer,
   "event.announce": Megaphone,
-  "connection.call": Cable,
-  "message.acknowledge": CheckCheck,
-  "file.export": FileOutput,
-  "file.attach": Paperclip,
-  "file.move": FolderInput,
   "data.calculate": Calculator,
   "data.record_link": Link,
   "data.set_values": Braces,
@@ -136,6 +136,9 @@ const taskIcons: Readonly<Record<string, LucideIcon>> = {
   "rule.warn": TriangleAlert,
   "rule.refuse": CircleX,
   "interface.show_message": MessageSquare,
+  "interface.clear_message": MessageSquareX,
+  "interface.set_value": Variable,
+  "interface.validate_form": ClipboardCheck,
   "interface.show_form": ClipboardList,
   "interface.confirm": CircleHelp,
   "interface.navigate": Navigation,

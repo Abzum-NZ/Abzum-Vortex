@@ -13,7 +13,7 @@ const NOTICE_SEVERITIES = [
   "info",
   "success",
   "warning",
-  "critical",
+  "error",
 ] as const satisfies readonly NoticeSeverity[];
 const NOTICE_CONTENT_KINDS = ["text", "link"] as const;
 const NOTICE_RELEASE = PLATFORM_BLOCK_RELEASE_IDENTITIES.NOTICE_BLOCK_RELEASE;

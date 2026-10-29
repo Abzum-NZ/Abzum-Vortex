@@ -16,7 +16,11 @@ import {
   refusalKeepsPlatformGuidance,
   type FlowRefusalFeedback,
 } from "../workflows/flow-refusal-feedback";
-import { flowTaskRegistry } from "../workflows/flow-task-registry";
+import {
+  flowTaskRegistry,
+  type PageStepType,
+  type ServerStepType,
+} from "../workflows/flow-task-registry";
 import {
   flowMaximumTaskOutputPathDepth,
   type FlowReference,
@@ -674,7 +678,11 @@ const validReadFieldsResume = (
   );
 };
 
-const interfaceKinds = {
+/**
+ * The page's implementation map: the intent the page performs for each step that runs in the page
+ * today (`PageStepType`). The page runner's own map replaces it when page segments run in the page.
+ */
+export const pageStepIntents = {
   "interface.show_message": "show_message",
   "interface.show_form": "show_form",
   "interface.confirm": "confirm",
@@ -682,9 +690,41 @@ const interfaceKinds = {
   "interface.refresh": "refresh",
   "interface.set_panel": "set_panel",
   "interface.set_filter": "set_filter",
-} as const;
+} as const satisfies Record<PageStepType, FlowInterfaceIntent["kind"]>;
 
-const unavailablePureTasks = new Set(["data.set_values", "data.format"]);
+/**
+ * Which server runner executes each step that runs on the server today (`ServerStepType`): this
+ * interpreter, the protected task runner (`definition/flow-task-runner.ts`), or a named action's
+ * transaction flow (`rules/action-flow-run.ts`, which collects record steps into one change).
+ */
+export type ServerStepRunner = "interpreter" | "protected_task" | "action_flow";
+export const serverStepRunners = {
+  if: "interpreter",
+  switch: "interpreter",
+  for_each: "interpreter",
+  sequential: "interpreter",
+  run_flow: "interpreter",
+  stop: "interpreter",
+  "data.calculate": "interpreter",
+  "data.record_link": "interpreter",
+  "data.set_variable": "interpreter",
+  "rule.require": "interpreter",
+  "rule.warn": "interpreter",
+  "rule.refuse": "interpreter",
+  "record.save": "protected_task",
+  "record.read_fields": "protected_task",
+  "record.pin_identity": "protected_task",
+  "operation.call": "protected_task",
+  "record.create": "action_flow",
+  "record.set_fields": "action_flow",
+  "record.delete": "action_flow",
+  "record.changes": "action_flow",
+  "event.announce": "action_flow",
+} as const satisfies Record<ServerStepType, ServerStepRunner>;
+
+/** Whether the server runs this step with the given runner. */
+export const serverRuns = (type: string, runner: ServerStepRunner): boolean =>
+  Object.hasOwn(serverStepRunners, type) && serverStepRunners[type as ServerStepType] === runner;
 
 const branch = (
   machine: Machine,
@@ -800,7 +840,7 @@ const execute = (machine: Machine, task: FlowTask, taskPath: readonly PathSegmen
   const properties = evaluateProperties(registered.properties, state, activation, flow, taskId);
 
   if (definition.effect === "pure") {
-    if (unavailablePureTasks.has(registered.type)) failed("task_not_available", "failed", taskId);
+    if (!serverRuns(registered.type, "interpreter")) failed("task_not_available", "failed", taskId);
     if (registered.type === "data.record_link") {
       const recordType = registered.properties.record_type;
       const record = registered.properties.record;
@@ -899,7 +939,9 @@ const execute = (machine: Machine, task: FlowTask, taskPath: readonly PathSegmen
   }
 
   if (definition.effect === "interface") {
-    const kind = interfaceKinds[registered.type as keyof typeof interfaceKinds];
+    const kind = Object.hasOwn(pageStepIntents, registered.type)
+      ? pageStepIntents[registered.type as PageStepType]
+      : undefined;
     if (kind === undefined) return failed("task_not_available", "failed", taskId);
     const intent: FlowInterfaceIntent = { kind, taskId, properties };
     replaceTop(machine, next);

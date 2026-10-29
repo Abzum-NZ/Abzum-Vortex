@@ -37,7 +37,6 @@ import {
   carriesSensitive,
   dedupeFieldCorrections,
   effectCommandId,
-  unavailableTaskMessages,
   redactSensitiveOutputs,
   refusalOutcome,
   requestOutcome,
@@ -392,7 +391,7 @@ export const createFlowTaskRunner = (
       return notAvailable(
         run,
         call,
-        unavailableTaskMessages[call.taskType] ?? "This action can't be completed in a workflow.",
+        "This action can't be completed in a workflow.",
         "no server runner for this task type",
       );
 

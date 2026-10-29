@@ -33,6 +33,19 @@ import { flowMaximumServerSeconds } from "./flow-limits";
 export const flowTaskRunLocationSchema = z.enum(["browser", "server", "transaction", "durable"]);
 export type FlowTaskRunLocation = z.infer<typeof flowTaskRunLocationSchema>;
 
+/**
+ * Where a step has an implementation: the page (the page performs it), the server (the server
+ * interpreter or a server runner executes it) and the back end (a back-end adapter runs it). The
+ * contract's `runLocations` say where a step may be placed; these flags say where it runs today.
+ * Publication refuses a step placed where it does not run, naming it, and Studio's palette offers
+ * a step only where it runs. The page and server implementation maps are typed from these flags
+ * (`PageStepType`, `ServerStepType`), so a flag without an implementation fails the type check.
+ */
+export const flowStepRunsSchema = z
+  .object({ page: z.boolean(), server: z.boolean(), backend: z.boolean() })
+  .strict();
+export type FlowStepRuns = z.infer<typeof flowStepRunsSchema>;
+
 
 /**
  * How a task compiles to a Kestra flow when it is placed in a durable flow. Customer text is never
@@ -116,6 +129,8 @@ export const flowTaskTypeDefinitionSchema = z
     title: z.string().min(1).max(60),
     summary: z.string().min(1).max(300),
     runLocations: z.array(flowTaskRunLocationSchema).min(1).max(4),
+    /** Where an implementation exists today (`flowTaskRuns`); the contract allows `runLocations`. */
+    runs: flowStepRunsSchema,
     effect: flowTaskEffectClassSchema,
     /**
      * When the effect is declared by the protected operation the task calls, `effect` is the widest
@@ -266,13 +281,8 @@ export const flowRegisteredTaskTypeKeys = [
   "record.read_fields",
   "record.pin_identity",
   "operation.call",
-  "flow.run_background",
+  "backend.run",
   "event.announce",
-  "connection.call",
-  "message.acknowledge",
-  "file.export",
-  "file.attach",
-  "file.move",
   "data.calculate",
   "data.record_link",
   "data.set_values",
@@ -282,6 +292,9 @@ export const flowRegisteredTaskTypeKeys = [
   "rule.warn",
   "rule.refuse",
   "interface.show_message",
+  "interface.clear_message",
+  "interface.set_value",
+  "interface.validate_form",
   "interface.show_form",
   "interface.confirm",
   "interface.navigate",
@@ -292,6 +305,62 @@ export const flowRegisteredTaskTypeKeys = [
 export type FlowRegisteredTaskTypeKey = (typeof flowRegisteredTaskTypeKeys)[number];
 export type FlowControlTaskTypeKey = (typeof flowControlTaskTypeKeys)[number];
 export type FlowTaskTypeKey = FlowControlTaskTypeKey | FlowRegisteredTaskTypeKey;
+
+const page = { page: true, server: false, backend: false } as const;
+const server = { page: false, server: true, backend: false } as const;
+const nowhere = { page: false, server: false, backend: false } as const;
+
+/** Where each step runs today; each later batch flips a flag when it lands the implementation. */
+export const flowTaskRuns = Object.freeze({
+  if: server,
+  switch: server,
+  for_each: server,
+  sequential: server,
+  run_flow: server,
+  stop: server,
+  parallel: nowhere,
+  wait_until: nowhere,
+  wait_for_person: nowhere,
+  "record.save": server,
+  "record.create": server,
+  "record.set_fields": server,
+  "record.link": nowhere,
+  "record.delete": server,
+  "record.restore": nowhere,
+  "record.changes": server,
+  "record.query": nowhere,
+  "record.read_fields": server,
+  "record.pin_identity": server,
+  "operation.call": server,
+  "backend.run": nowhere,
+  "event.announce": server,
+  "data.calculate": server,
+  "data.record_link": server,
+  "data.set_values": nowhere,
+  "data.set_variable": server,
+  "data.format": nowhere,
+  "rule.require": server,
+  "rule.warn": server,
+  "rule.refuse": server,
+  "interface.show_message": page,
+  "interface.clear_message": nowhere,
+  "interface.set_value": nowhere,
+  "interface.validate_form": nowhere,
+  "interface.show_form": page,
+  "interface.confirm": page,
+  "interface.navigate": page,
+  "interface.refresh": page,
+  "interface.set_panel": page,
+  "interface.set_filter": page,
+} as const satisfies Record<FlowTaskTypeKey, FlowStepRuns>);
+
+type StepsRunning<Where extends keyof FlowStepRuns> = {
+  [Type in FlowTaskTypeKey]: (typeof flowTaskRuns)[Type][Where] extends true ? Type : never;
+}[FlowTaskTypeKey];
+/** The steps with a page implementation; the page's implementation map covers exactly these. */
+export type PageStepType = StepsRunning<"page">;
+/** The steps with a server implementation; the server's implementation map covers exactly these. */
+export type ServerStepType = StepsRunning<"server">;
 
 type SafeResult = z.infer<typeof safeFlowResultKindSchema>;
 const outcomesByEffect = {
@@ -576,15 +645,19 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
     kestra: "protected_callback",
     retry: durableRetry,
   },
-  "flow.run_background": {
-    title: "Run background flow",
-    summary: "Commits the start of a background or durable flow and continues without waiting.",
-    runLocations: protectedLocations,
+  "backend.run": {
+    title: "Run on back end",
+    summary:
+      "Runs a flow on the back end after this step's changes commit: await returns its outputs, start returns a run reference at once.",
+    runLocations: ["server"],
     effect: "background_start",
-    properties: { flow: required("flow_id"), inputs: optional("input_map") },
-    outputs: [output("run", "workflow_run_reference")],
-    kestra: "protected_callback",
-    retry: durableRetry,
+    properties: {
+      flow: required("flow_id"),
+      mode: required("builder_key"),
+      inputs: optional("input_map"),
+    },
+    outputs: [output("run", "workflow_run_reference"), output("outputs", "json")],
+    kestra: "not_compiled",
   },
   "event.announce": {
     title: "Announce event",
@@ -596,89 +669,15 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
     kestra: "protected_callback",
     retry: durableRetry,
   },
-  // External calls run on Kestra (decision 1, "One start path"), never inside a request.
-  "connection.call": {
-    title: "Call connection",
-    summary: "Calls an operation of a bound external connection from a durable flow.",
-    runLocations: ["durable"],
-    effect: "change",
-    properties: {
-      connection: required("connection_binding_id"),
-      operation: required("builder_key"),
-      inputs: optional("input_map"),
-    },
-    outputs: [output("response", "json")],
-    kestra: "protected_callback",
-    retry: durableRetry,
-  },
-  "message.acknowledge": {
-    title: "Acknowledge message",
-    summary: "Acknowledges the incoming message that started the run.",
-    runLocations: protectedLocations,
-    effect: "change",
-    properties: { message: required("builder_key") },
-    kestra: "protected_callback",
-    retry: durableRetry,
-  },
-  "file.export": {
-    title: "Export to file",
-    summary: "Generates a file from a query, within a row limit.",
-    runLocations: protectedLocations,
-    effect: "change",
-    properties: { query: required("query_id"), maximum_rows: required("whole_number") },
-    outputs: [output("file", "file_reference")],
-    kestra: "protected_callback",
-    retry: durableRetry,
-  },
-  "file.attach": {
-    title: "Attach file",
-    summary:
-      "Adds an existing active file to a target record attachment field in its organisation.",
-    runLocations: protectedLocations,
-    effect: "change",
-    properties: {
-      file: required("file_reference"),
-      target_record_type: required("record_type_id"),
-      target_record: required("record_reference"),
-      target_attachment_field: required("field_id"),
-      expected_target_revision: required("whole_number"),
-    },
-    outputs: [output("file", "file_reference"), output("target_record", "record_reference")],
-    kestra: "protected_callback",
-    retry: durableRetry,
-  },
-  "file.move": {
-    title: "Move file",
-    summary: "Moves one active file attachment between record fields in its organisation.",
-    runLocations: protectedLocations,
-    effect: "change",
-    properties: {
-      file: required("file_reference"),
-      source_record_type: required("record_type_id"),
-      source_record: required("record_reference"),
-      source_attachment_field: required("field_id"),
-      expected_source_revision: required("whole_number"),
-      target_record_type: required("record_type_id"),
-      target_record: required("record_reference"),
-      target_attachment_field: required("field_id"),
-      expected_target_revision: required("whole_number"),
-    },
-    outputs: [
-      output("file", "file_reference"),
-      output("source_record", "record_reference"),
-      output("target_record", "record_reference"),
-    ],
-    kestra: "protected_callback",
-    retry: durableRetry,
-  },
 
   // Pure tasks: computed from their inputs, so they may run anywhere.
   "data.calculate": {
     title: "Calculate",
-    summary: "Evaluates a typed formula and returns its result.",
+    summary: "Evaluates a typed formula and returns its result, of the declared result type.",
     runLocations: allLocations,
     effect: "pure",
-    properties: { formula: required("formula") },
+    // `result_type` names a value type; the formula's type must match it and `value` takes it.
+    properties: { formula: required("formula"), result_type: required("builder_key") },
     outputs: [output("value", "json")],
     kestra: "evaluator_callback",
   },
@@ -753,15 +752,49 @@ const registeredDefinitions: Record<FlowRegisteredTaskTypeKey, DefinitionInput> 
   // Interface tasks: browser-only. A server-driven flow returns a typed intent and a continuation.
   "interface.show_message": {
     title: "Show message",
-    summary: "Shows a safe message to the person.",
+    summary:
+      "Shows a safe message: in a dialog, a toast, the page banner, under a component or in a message slot.",
     runLocations: ["browser"],
     effect: "interface",
     properties: {
       message: required("message_text"),
-      tone: optional("builder_key"),
-      /** The dialog's heading: what the person was doing ("Install or upgrade"). */
-      title: required("message_text"),
+      /** dialog, toast, banner, inline (under `component`) or slot (the message slot `component`). */
+      target: required("builder_key"),
+      /** The placement an inline message sits under, or the message slot it fills. */
+      component: optional("placement_id"),
+      /** info, success, warning or error. */
+      severity: required("builder_key"),
+      /** A dialog's heading: what the person was doing ("Install or upgrade"). */
+      title: optional("message_text"),
+      /** One action the message offers, bound to a flow ("Undo"). */
+      action_label: optional("message_text"),
+      action_flow: optional("flow_id"),
     },
+    kestra: "not_compiled",
+  },
+  "interface.clear_message": {
+    title: "Clear message",
+    summary: "Removes the message a target shows.",
+    runLocations: ["browser"],
+    effect: "interface",
+    properties: { target: required("builder_key"), component: optional("placement_id") },
+    kestra: "not_compiled",
+  },
+  "interface.set_value": {
+    title: "Set page value",
+    summary: "Sets a declared page value; the page shows and reads it, the server never trusts it.",
+    runLocations: ["browser"],
+    effect: "interface",
+    properties: { value: required("builder_key"), to: required("any_value") },
+    kestra: "not_compiled",
+  },
+  "interface.validate_form": {
+    title: "Validate form",
+    summary: "Checks a form's fields and stops the flow with the problems shown when one is invalid.",
+    runLocations: ["browser"],
+    effect: "interface",
+    properties: { form: required("form_id") },
+    outputs: [output("valid", "yes_no")],
     kestra: "not_compiled",
   },
   "interface.show_form": {
@@ -843,6 +876,7 @@ const buildDefinition = (type: string, input: DefinitionInput): FlowTaskTypeDefi
     title: input.title,
     summary: input.summary,
     runLocations: [...input.runLocations],
+    runs: { ...flowTaskRuns[type as FlowTaskTypeKey] },
     effect: input.effect,
     effectDeclaredBy: input.effectDeclaredBy ?? "task",
     ...(input.transactionScope ? { transactionScope: input.transactionScope } : {}),
@@ -874,6 +908,14 @@ export const flowTaskRegistry: Readonly<Record<FlowTaskTypeKey, FlowTaskTypeDefi
 
 // ─── Publication: every task's run location ──────────────────────────────────────────────────
 
+/** Where each execution kind runs its steps today: the page and the server, or the back end. */
+const flowExecutionImplementations = {
+  interactive: ["page", "server"],
+  transaction: ["server"],
+  background: ["backend"],
+  durable: ["backend"],
+} as const satisfies Record<FlowExecutionKind, readonly (keyof FlowStepRuns)[]>;
+
 /** Where each execution kind runs its tasks. A task may be placed only where it can run. */
 export const flowExecutionRunLocations = {
   interactive: ["browser", "server"],
@@ -891,7 +933,8 @@ export type FlowTaskPlacementIssue = {
     | "unknown_property"
     | "missing_property"
     | "saved_record_target"
-    | "refusal_not_possible";
+    | "refusal_not_possible"
+    | "not_yet_runnable";
   message: string;
 };
 
@@ -977,6 +1020,16 @@ export const validateFlowTaskPlacement = (
             message: `${definition.title} runs only in ${definition.runLocations
               .map((location) => locationLabels[location])
               .join(" or ")}, so it cannot be placed in a ${flow.execution} flow`,
+          });
+        if (
+          !(flowExecutionImplementations[flow.execution] as readonly (keyof FlowStepRuns)[]).some(
+            (where) => definition.runs[where],
+          )
+        )
+          issues.push({
+            path: [...taskPath, "type"],
+            code: "not_yet_runnable",
+            message: `${definition.title} cannot run in a ${flow.execution} flow yet`,
           });
         if (!isFlowControlTask(flowTask)) {
           const registered = flowTask as Extract<FlowTask, { properties: unknown }>;

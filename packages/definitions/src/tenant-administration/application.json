@@ -1938,7 +1938,14 @@
                           "value": "Move organisation"
                         }
                       },
-                      "tone": {
+                      "target": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "dialog"
+                        }
+                      },
+                      "severity": {
                         "kind": "literal",
                         "literal": {
                           "type": "text",
@@ -1975,7 +1982,14 @@
                           "value": "Move organisation"
                         }
                       },
-                      "tone": {
+                      "target": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "dialog"
+                        }
+                      },
+                      "severity": {
                         "kind": "literal",
                         "literal": {
                           "type": "text",
@@ -2012,7 +2026,14 @@
                           "value": "Move organisation"
                         }
                       },
-                      "tone": {
+                      "target": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "dialog"
+                        }
+                      },
+                      "severity": {
                         "kind": "literal",
                         "literal": {
                           "type": "text",
@@ -2049,7 +2070,14 @@
                           "value": "Move organisation"
                         }
                       },
-                      "tone": {
+                      "target": {
+                        "kind": "literal",
+                        "literal": {
+                          "type": "text",
+                          "value": "dialog"
+                        }
+                      },
+                      "severity": {
                         "kind": "literal",
                         "literal": {
                           "type": "text",

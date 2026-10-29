@@ -1,4 +1,4 @@
-import { valueTypesCompatible } from "../catalogue/catalogues";
+import { valueTypesCompatible, workflowValueTypeSchema } from "../catalogue/catalogues";
 import { recordTypeIdSchema } from "../catalogue/identifiers";
 import type {
   DefinitionRuleFailureFamily,
@@ -27,6 +27,7 @@ import {
 } from "../workflows/flow-values";
 import type { DefinitionCompilerRefusalCode } from "./compilation-error";
 import { flowTaskOutputMembers } from "./flow-output-members";
+import { flowStepSettingIssues } from "./flow-step-settings";
 import {
   allTasksIn,
   checkDeclaration,
@@ -130,6 +131,7 @@ const placementCodes: Readonly<
   missing_property: ["vortex.definition.workflow_node_values", "required_value"],
   saved_record_target: ["vortex.definition.workflow_node_values", "invalid_value"],
   refusal_not_possible: ["vortex.definition.workflow_node_values", "invalid_value"],
+  not_yet_runnable: ["vortex.definition.unsupported_workflow_node", "unsupported_choice"],
 };
 
 const callCodes = {
@@ -205,6 +207,16 @@ const isTextLiteral = (value: FlowValue | undefined): boolean =>
   value.literal.type === "text" &&
   typeof value.literal.value === "string";
 
+/** The value type a Calculate step declares as its result, when it names a known one. */
+const calculationResultType = (task: FlowTask): StaticType | undefined => {
+  const value = (task as { properties?: Record<string, FlowValue> }).properties?.result_type;
+  return value?.kind === "literal" &&
+    typeof value.literal.value === "string" &&
+    workflowValueTypeSchema.safeParse(value.literal.value).success
+    ? (value.literal.value as StaticType)
+    : undefined;
+};
+
 // ─── The validator ─────────────────────────────────────────────────────────────────────────────
 
 type Scope = Map<string, FlowTask>;
@@ -229,6 +241,17 @@ export function validateFlow(
     const [ruleCode, family] = placementCodes[placement.code];
     add(placement.path, ruleCode, family, placement.message);
   }
+
+  // ── Contract 4 step settings: closed values, and settings that do not run yet. ──
+  for (const issue of flowStepSettingIssues(flow))
+    if (issue.notYetRunnable)
+      add(
+        issue.path,
+        "vortex.definition.unsupported_workflow_node",
+        "unsupported_choice",
+        issue.message,
+      );
+    else add(issue.path, "vortex.definition.workflow_node_values", "invalid_value", issue.message);
 
   // ── Structure and limits. ──
   validateStructure(flow, add);
@@ -330,6 +353,8 @@ export function validateFlow(
       : undefined;
     // An unregistered type is already refused by the placement check.
     if (definition === undefined) return { known: true as const, type: undefined };
+    if (task.type === "data.calculate" && key === "value")
+      return { known: true as const, type: calculationResultType(task) };
     const declared = definition.outputs.find((output) => output.key === key);
     return declared === undefined
       ? { known: false as const }
@@ -926,7 +951,23 @@ export function validateFlow(
           "invalid_value",
           `${name} must be a formula`,
         );
-      else formulaType(value.formula, where, [...path, "formula"]);
+      else {
+        const type = formulaType(value.formula, where, [...path, "formula"]);
+        // A calculation declares its result type, and its formula must produce it.
+        const declaredResult = calculationResultType(task);
+        if (
+          task.type === "data.calculate" &&
+          type !== undefined &&
+          declaredResult !== undefined &&
+          !valueTypesCompatible(type, declaredResult, "flow")
+        )
+          add(
+            path,
+            "vortex.definition.workflow_node_values",
+            "invalid_value",
+            `This calculation produces ${type}, not its declared result type ${declaredResult}`,
+          );
+      }
       return;
     }
     if (literalOnlyPropertyTypes.has(declared.type)) {
@@ -940,16 +981,12 @@ export function validateFlow(
       else if (declared.type === "flow_id") {
         const target = findFlow(String((value as { literal: { value: unknown } }).literal.value));
         if (target === undefined) refuseUnknownTarget(path);
-        else if (
-          task.type === "flow.run_background" &&
-          target.execution !== "background" &&
-          target.execution !== "durable"
-        )
+        else if (task.type === "backend.run" && target.execution !== "background")
           add(
             path,
             "vortex.definition.workflow_child_reference",
             "invalid_value",
-            "Run background flow starts only a background or durable flow",
+            "Run on back end runs only a back-end (background) flow",
           );
       }
       return;

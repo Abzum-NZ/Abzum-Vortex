@@ -5,7 +5,7 @@ import { Fragment, useState, type ReactElement, type ReactNode } from "react";
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "./alert";
 import { Button } from "./button";
 
-export type NoticeSeverity = "info" | "success" | "warning" | "critical";
+export type NoticeSeverity = "info" | "success" | "warning" | "error";
 
 /** A text value or link is represented as data; notice content is never interpreted as markup. */
 export type NoticeContentPart =
@@ -29,7 +29,7 @@ const SEVERITY_LABELS: Readonly<Record<NoticeSeverity, string>> = {
   info: "Information",
   success: "Success",
   warning: "Warning",
-  critical: "Critical",
+  error: "Error",
 };
 
 /** Accept only root-relative application paths or credential-free HTTPS addresses. */
@@ -94,18 +94,15 @@ export function Notice({
   const [dismissed, setDismissed] = useState(false);
   if (dismissed) return null;
 
-  const critical = severity === "critical";
+  const error = severity === "error";
 
   return (
-    <div
-      data-slot="notice"
-      data-vortex-severity={severity}
-    >
+    <div data-slot="notice" data-vortex-severity={severity}>
       <Alert
-        role={critical ? "alert" : "status"}
-        aria-live={critical ? "assertive" : "polite"}
+        role={error ? "alert" : "status"}
+        aria-live={error ? "assertive" : "polite"}
         aria-atomic="true"
-        variant={severity}
+        variant={error ? "critical" : severity}
       >
         <div className="min-w-0">
           <AlertTitle className="mb-1">
