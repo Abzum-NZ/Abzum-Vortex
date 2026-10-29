@@ -1973,6 +1973,162 @@
       "pipelines": [],
       "relationships": [],
       "before_save_rules": []
+    },
+    {
+      "id": "rt_system_directory_connection_instance",
+      "key": "connection_instance",
+      "name": "Connection",
+      "plural_name": "Connections",
+      "title_field": "destination_key",
+      "storage_contract_id": "srt_system_directory_connection",
+      "storage_scope": "organization_shared",
+      "ownership_mode": "none",
+      "standard_actions": ["read"],
+      "custom_actions": [],
+      "system_projection": {
+        "protected_view": "connection_instances",
+        "organization_field": "organization_id",
+        "revision_field": "revision",
+        "filterable_fields": ["destination_key", "state"],
+        "sortable_fields": ["destination_key", "state"]
+      },
+      "fields": [
+        {
+          "id": "fld_connection_organization_id",
+          "key": "organization_id",
+          "label": "Organisation",
+          "required": true,
+          "unique": false,
+          "filterable": false,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "text",
+          "settings": {
+            "max_length": 36
+          }
+        },
+        {
+          "id": "fld_connection_revision",
+          "key": "revision",
+          "label": "Revision",
+          "required": true,
+          "unique": false,
+          "filterable": false,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "whole_number",
+          "settings": {}
+        },
+        {
+          "id": "fld_connection_destination_key",
+          "key": "destination_key",
+          "label": "Destination",
+          "required": false,
+          "unique": false,
+          "filterable": true,
+          "sortable": true,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "text",
+          "settings": {
+            "max_length": 80
+          },
+          "search_priority": "first"
+        },
+        {
+          "id": "fld_connection_connection_type_id",
+          "key": "connection_type_id",
+          "label": "Connection type",
+          "required": false,
+          "unique": false,
+          "filterable": false,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "text",
+          "settings": {
+            "max_length": 36
+          }
+        },
+        {
+          "id": "fld_connection_connection_type_version",
+          "key": "connection_type_version",
+          "label": "Type version",
+          "required": false,
+          "unique": false,
+          "filterable": false,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "text",
+          "settings": {
+            "max_length": 80
+          }
+        },
+        {
+          "id": "fld_connection_state",
+          "key": "state",
+          "label": "State",
+          "required": false,
+          "unique": false,
+          "filterable": true,
+          "sortable": true,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "text",
+          "settings": {
+            "max_length": 20
+          }
+        },
+        {
+          "id": "fld_connection_last_health_outcome",
+          "key": "last_health_outcome",
+          "label": "Health",
+          "required": false,
+          "unique": false,
+          "filterable": false,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "text",
+          "settings": {
+            "max_length": 20
+          }
+        },
+        {
+          "id": "fld_connection_token_expires_at",
+          "key": "token_expires_at",
+          "label": "Token expires",
+          "required": false,
+          "unique": false,
+          "filterable": false,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "date_time",
+          "settings": {
+            "display_time_zone": "organization"
+          }
+        },
+        {
+          "id": "fld_connection_secret_set",
+          "key": "secret_set",
+          "label": "Secret set",
+          "required": true,
+          "unique": false,
+          "filterable": false,
+          "sortable": false,
+          "personal_data": "none",
+          "public_display": "refused",
+          "type": "yes_no",
+          "settings": {}
+        }
+      ],
+      "pipelines": [],
+      "relationships": [],
+      "before_save_rules": []
     }
   ],
   "permissions": [
@@ -2294,6 +2450,34 @@
       "sort": [
         {
           "field": "starts_at",
+          "direction": "ascending"
+        }
+      ],
+      "page_size": 50,
+      "relationship_hops": 0
+    },
+    {
+      "id": "qry_connection_instances",
+      "key": "connection_instances",
+      "exposure": "private",
+      "label": "Connections",
+      "record_type": "connection_instance",
+      "inputs": [],
+      "select": [
+        "destination_key",
+        "connection_type_id",
+        "connection_type_version",
+        "state",
+        "last_health_outcome",
+        "token_expires_at",
+        "secret_set"
+      ],
+      "filter": null,
+      "group_by": [],
+      "aggregates": [],
+      "sort": [
+        {
+          "field": "destination_key",
           "direction": "ascending"
         }
       ],

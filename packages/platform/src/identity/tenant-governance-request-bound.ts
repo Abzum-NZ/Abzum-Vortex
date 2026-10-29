@@ -54,7 +54,6 @@ type TransactionInvocationState = {
   queue: Promise<void>;
   activeMethod?: TenantGovernanceMethod;
   runtimeCallUsed: boolean;
-  identityQueryUsed: boolean;
   invocationTransaction?: SavepointRequestDatabaseTransaction;
   boundRequest?: BoundHumanRequest;
   poisonedTransaction?: Error;
@@ -68,7 +67,6 @@ const invocationStateFor = (transaction: RequestDatabaseTransaction) => {
   const created: TransactionInvocationState = {
     queue: Promise.resolve(),
     runtimeCallUsed: false,
-    identityQueryUsed: false,
   };
   invocationStates.set(transaction, created);
   return created;
@@ -116,15 +114,57 @@ const identityFunctionForMethod: Readonly<Record<TenantGovernanceMethod, string>
   reactivateOrganization: "vortex_identity.reactivate_tenant_organization",
 };
 
+/** Enter the runtime role for exactly one named SQL call, then restore the request role. */
+const runExactRuntimeCall = async <Result>(
+  transaction: SavepointRequestDatabaseTransaction,
+  expectedFunction: string,
+  operation: (transaction: RequestDatabaseTransaction) => Promise<Result>,
+  verifyRequest: (transaction: RequestDatabaseTransaction) => Promise<void>,
+  poison: (code: string, cause?: unknown) => Error,
+  observeSqlFailure: (error: unknown) => void,
+): Promise<Result> => {
+  let queryUsed = false;
+  return transaction.withSavepoint(async (child) => {
+    await child.query`select pg_catalog.set_config('role', 'vortex_runtime', true)`;
+    const exact: RequestDatabaseTransaction = {
+      query: async <Row extends DatabaseRow>(
+        strings: TemplateStringsArray,
+        ...values: readonly DatabaseValue[]
+      ) => {
+        const statement = strings.join("?").replace(/\s+/g, " ").trim().toLowerCase();
+        if (
+          queryUsed ||
+          !statement.startsWith(`select * from ${expectedFunction}(`) ||
+          !statement.endsWith(")") ||
+          statement.includes(";")
+        )
+          throw poison("TENANT_GOVERNANCE_METHOD_BOUNDARY_VIOLATION");
+        queryUsed = true;
+        try {
+          return await child.query<Row>(strings, ...values);
+        } catch (error) {
+          observeSqlFailure(error);
+          throw error;
+        }
+      },
+    };
+    const result = await operation(exact);
+    if (!queryUsed) throw poison("TENANT_GOVERNANCE_METHOD_BOUNDARY_VIOLATION");
+    await child.query`select pg_catalog.set_config('role', 'vortex_request', true)`;
+    await verifyRequest(child);
+    return result;
+  });
+};
+
 /**
  * Binds the organization-governance methods to an already-resolved human request transaction.
  * The runtime role is entered only around the existing typed Identity method call; callers receive
  * neither a role-switch function nor a general elevated query callback.
  */
-export const createRequestBoundTenantGovernanceService = (
+const createRequestBoundRuntimeServices = (
   transaction: RequestDatabaseTransaction,
   scopeCandidate: SelectedOrganizationScope,
-): RequestBoundTenantGovernanceService => {
+) => {
   const parsedScope = selectedOrganizationScopeSchema.safeParse(scopeCandidate);
   if (!parsedScope.success) throw failure("TENANT_GOVERNANCE_SCOPE_UNAVAILABLE");
   const scope = parsedScope.data;
@@ -225,7 +265,6 @@ export const createRequestBoundTenantGovernanceService = (
 
     const expectedFunction = identityFunctionForMethod[state.activeMethod];
     state.runtimeCallUsed = true;
-    state.identityQueryUsed = false;
 
     try {
       await assertBoundHumanContext(invocationTransaction, boundRequest);
@@ -236,42 +275,17 @@ export const createRequestBoundTenantGovernanceService = (
     let identitySqlFailureObserved = false;
     let identitySqlFailure: unknown;
     try {
-      return await invocationTransaction.withSavepoint(async (identityTransactionScope) => {
-        await identityTransactionScope.query`select pg_catalog.set_config('role', 'vortex_runtime', true)`;
-
-        const identityTransaction: RequestDatabaseTransaction = {
-          query: async <ResultRow extends DatabaseRow>(
-            strings: TemplateStringsArray,
-            ...values: readonly DatabaseValue[]
-          ) => {
-            const statement = strings.join("?").replace(/\s+/g, " ").trim().toLowerCase();
-            if (
-              state.identityQueryUsed ||
-              !statement.startsWith(`select * from ${expectedFunction}(`) ||
-              !statement.endsWith(")") ||
-              statement.includes(";")
-            )
-              throw poison("TENANT_GOVERNANCE_METHOD_BOUNDARY_VIOLATION");
-
-            state.identityQueryUsed = true;
-            try {
-              return await identityTransactionScope.query<ResultRow>(strings, ...values);
-            } catch (error) {
-              identitySqlFailureObserved = true;
-              identitySqlFailure = error;
-              throw error;
-            }
-          },
-        };
-
-        const result = await operation(identityTransaction);
-        if (!state.identityQueryUsed) throw poison("TENANT_GOVERNANCE_METHOD_BOUNDARY_VIOLATION");
-
-        // Restore and verify the least-privileged request role before the exact-call child settles.
-        await identityTransactionScope.query`select pg_catalog.set_config('role', 'vortex_request', true)`;
-        await assertBoundHumanContext(identityTransactionScope, boundRequest);
-        return result;
-      });
+      return await runExactRuntimeCall(
+        invocationTransaction,
+        expectedFunction,
+        operation,
+        (child) => assertBoundHumanContext(child, boundRequest),
+        poison,
+        (error) => {
+          identitySqlFailureObserved = true;
+          identitySqlFailure = error;
+        },
+      );
     } catch (error) {
       try {
         // The native exact-call child has now settled. Its rollback must leave the parent request
@@ -313,7 +327,6 @@ export const createRequestBoundTenantGovernanceService = (
 
       state.activeMethod = method;
       state.runtimeCallUsed = false;
-      state.identityQueryUsed = false;
       state.boundRequest = boundRequest;
       try {
         const result = await parentTransaction.withSavepoint(async (invocationTransaction) => {
@@ -355,11 +368,52 @@ export const createRequestBoundTenantGovernanceService = (
         delete state.invocationTransaction;
         delete state.boundRequest;
         state.runtimeCallUsed = false;
-        state.identityQueryUsed = false;
+      }
+    });
+
+  const executeConnectionCall = <Result>(
+    name:
+      | "vortex_platform.read_connection_credential_for_execution"
+      | "vortex_platform.record_connection_health_result",
+    operation: (transaction: RequestDatabaseTransaction) => Promise<Result>,
+  ): Promise<Result> =>
+    serialized(async () => {
+      const bound = await readBoundHumanContext();
+      try {
+        return await runExactRuntimeCall(
+          parentTransaction,
+          name,
+          operation,
+          (child) => assertBoundHumanContext(child, bound),
+          poison,
+          () => undefined,
+        );
+      } catch (error) {
+        try {
+          await assertBoundHumanContext(parentTransaction, bound);
+        } catch (recoveryError) {
+          throw poison("CONNECTION_RUNTIME_RECOVERY_FAILED", recoveryError);
+        }
+        throw poison("CONNECTION_RUNTIME_CALL_FAILED", error);
       }
     });
 
   return Object.freeze({
+    readConnectionCredential: (ticket: string) =>
+      executeConnectionCall(
+        "vortex_platform.read_connection_credential_for_execution",
+        (child) =>
+          child.query`select * from vortex_platform.read_connection_credential_for_execution(${ticket}::uuid)`,
+      ),
+    recordConnectionHealth: (
+      ticket: string,
+      outcome: "healthy" | "unhealthy" | "unknown" | "no_adapter",
+    ) =>
+      executeConnectionCall(
+        "vortex_platform.record_connection_health_result",
+        (child) =>
+          child.query`select * from vortex_platform.record_connection_health_result(${ticket}::uuid, ${outcome}::text)`,
+      ),
     createOrganization: (
       session: IdentitySession,
       command: Parameters<typeof service.createOrganization>[1],
@@ -385,5 +439,30 @@ export const createRequestBoundTenantGovernanceService = (
       invoke("reactivateOrganization", session, () =>
         service.reactivateOrganization(session, command),
       ),
+  });
+};
+
+export const createRequestBoundTenantGovernanceService = (
+  transaction: RequestDatabaseTransaction,
+  scope: SelectedOrganizationScope,
+): RequestBoundTenantGovernanceService => {
+  const services = createRequestBoundRuntimeServices(transaction, scope);
+  return Object.freeze({
+    createOrganization: services.createOrganization,
+    renameOrganization: services.renameOrganization,
+    reparentOrganization: services.reparentOrganization,
+    suspendOrganization: services.suspendOrganization,
+    reactivateOrganization: services.reactivateOrganization,
+  });
+};
+
+export const createRequestBoundConnectionExecution = (
+  transaction: RequestDatabaseTransaction,
+  scope: SelectedOrganizationScope,
+) => {
+  const services = createRequestBoundRuntimeServices(transaction, scope);
+  return Object.freeze({
+    readCredential: services.readConnectionCredential,
+    recordHealth: services.recordConnectionHealth,
   });
 };

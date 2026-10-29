@@ -30,6 +30,8 @@ import { runOrganizationAccessOperation } from "../access/organization-access-de
 import { createHumanOrganizationRequestService } from "../access/human-organization-request";
 import { createRequestBoundTenantGovernanceService } from "../identity/tenant-governance-request-bound";
 import { createReferenceChoiceService } from "../queries/reference-choice-service";
+import { changeConnectionInstance } from "../connections/connection-administration";
+import { checkConnectionHealth } from "../connections/connection-health";
 import { createViewerSafeRecordLinkReadService } from "../queries/viewer-safe-record-link-read";
 import { adaptPrivateFormSubmit } from "../pages/form-request";
 import { createPageSubjectReader } from "../pages/page-subject-read";
@@ -288,6 +290,14 @@ export async function invokeInstalledFlow(
   });
   const executor = createProtectedOperationExecutor({
     accessAdministration: createOrganizationAccessAdministrationService(requestDependencies),
+    connectionAdministration: (session, selection, change) =>
+      requests.runChange(session, selection, (transaction) =>
+        changeConnectionInstance(transaction, change),
+      ),
+    connectionHealth: (session, selection, command) =>
+      requests.runChange(session, selection, (transaction, scope) =>
+        checkConnectionHealth(transaction, scope, command),
+      ),
     applicationStore: dependencies.applicationStore,
     tenantGovernance: {
       run: (session, selection, operation) =>

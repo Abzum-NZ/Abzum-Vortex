@@ -13,6 +13,26 @@ export const protectedOperationMetadata: Record<
   PlatformServiceOperationKey,
   ProtectedOperationMetadata
 > = {
+  create_connection_instance: {
+    authorityKind: "permission",
+    transaction: "change",
+    workflow: "single",
+  },
+  edit_connection_instance: {
+    authorityKind: "permission",
+    transaction: "change",
+    workflow: "single",
+  },
+  revoke_connection_instance: {
+    authorityKind: "permission",
+    transaction: "change",
+    workflow: "single",
+  },
+  health_check_connection_instance: {
+    authorityKind: "permission",
+    transaction: "change",
+    workflow: "single",
+  },
   create_group: { authorityKind: "permission", transaction: "access_change", workflow: "single" },
   create_tenant_organization: {
     authorityKind: "tenant_capability",

@@ -68,6 +68,15 @@ import type { ApplicationStoreService } from "./installation-application-store";
 import { z } from "zod";
 import { assignRoleAssignment, prepareRoleAssignment } from "./role-assignment-operation";
 import { protectedOperationMetadata } from "./protected-operation-metadata";
+import {
+  createConnectionCommandSchema,
+  editConnectionCommandSchema,
+  revokeConnectionCommandSchema,
+  healthConnectionCommandSchema,
+  type ConnectionCommand,
+  type changeConnectionInstance,
+} from "../connections/connection-administration";
+import type { checkConnectionHealth } from "../connections/connection-health";
 
 /**
  * One server executor for the registered platform-service protected operations. The caller (the
@@ -163,6 +172,18 @@ type TenantGovernanceRequestScope = Readonly<{
 }>;
 
 type ProtectedOperationServices = Readonly<{
+  connectionHealth: (
+    session: IdentitySession,
+    selection: OrganizationSelectionCandidate,
+    command: z.output<typeof healthConnectionCommandSchema>,
+  ) => Promise<HumanOrganizationRequestResult<Awaited<ReturnType<typeof checkConnectionHealth>>>>;
+  connectionAdministration: (
+    session: IdentitySession,
+    selection: OrganizationSelectionCandidate,
+    change: ConnectionCommand,
+  ) => Promise<
+    HumanOrganizationRequestResult<Awaited<ReturnType<typeof changeConnectionInstance>>>
+  >;
   accessAdministration: Pick<
     ReturnType<typeof createOrganizationAccessAdministrationService>,
     | "createGroup"
@@ -237,6 +258,26 @@ type OperationRunner = (
 type Operation = Readonly<{
   execute: OperationRunner;
 }>;
+
+const connectionChangeOutputs = (
+  result: Awaited<ReturnType<ProtectedOperationServices["connectionAdministration"]>>,
+): OperationResult => {
+  if (result.kind !== "available") return result;
+  if (result.value.outcome === "conflict") return "conflict";
+  if (result.value.outcome === "key_in_use")
+    return {
+      kind: "confirmed_failure",
+      outcome: "refused",
+      diagnostic: flowRefusalFeedbackSchema.parse({ code: "connection_key_in_use" }),
+    };
+  return {
+    kind: "available",
+    value: {
+      connection_instance_id: result.value.connectionInstanceId,
+      revision: result.value.revision,
+    },
+  };
+};
 
 /**
  * A stable administration duplicate key for one claimed effect: the same run, task path and
@@ -1054,6 +1095,79 @@ const operations: Readonly<Record<PlatformServiceOperationKey, Operation>> = Obj
       return {
         kind: "available",
         value: { appointment_outcome: attempt.value.outcome },
+      };
+    },
+  }),
+  create_connection_instance: operation({
+    schema: createConnectionCommandSchema,
+    command: (inputs, _selection, effectKey) => ({
+      commandId: duplicateKeyFor(effectKey, randomUUID),
+      connectionTypeKey: inputs.connection_type_key,
+      destinationKey: inputs.destination_key,
+      secretReferenceId: inputs.secret_reference_id,
+    }),
+    run: async (services, caller, command) => {
+      const result = await services.connectionAdministration(caller.session, caller.selection, {
+        operation: "create",
+        command,
+      });
+      return connectionChangeOutputs(result);
+    },
+  }),
+  edit_connection_instance: operation({
+    schema: editConnectionCommandSchema,
+    command: (inputs, _selection, effectKey) => ({
+      commandId: duplicateKeyFor(effectKey, randomUUID),
+      connectionInstanceId: inputs.connection_instance_id,
+      expectedRevision: inputs.expected_revision,
+      destinationKey: inputs.destination_key,
+      ...(optionalText(inputs.secret_reference_id) === undefined
+        ? {}
+        : { secretReferenceId: optionalText(inputs.secret_reference_id) }),
+    }),
+    run: async (services, caller, command) => {
+      const result = await services.connectionAdministration(caller.session, caller.selection, {
+        operation: "edit",
+        command,
+      });
+      return connectionChangeOutputs(result);
+    },
+  }),
+  revoke_connection_instance: operation({
+    schema: revokeConnectionCommandSchema,
+    command: (inputs, _selection, effectKey) => ({
+      commandId: duplicateKeyFor(effectKey, randomUUID),
+      connectionInstanceId: inputs.connection_instance_id,
+      expectedRevision: inputs.expected_revision,
+    }),
+    run: async (services, caller, command) => {
+      const result = await services.connectionAdministration(caller.session, caller.selection, {
+        operation: "revoke",
+        command,
+      });
+      return connectionChangeOutputs(result);
+    },
+  }),
+  health_check_connection_instance: operation({
+    schema: healthConnectionCommandSchema,
+    command: (inputs, _selection, effectKey) => ({
+      commandId: duplicateKeyFor(effectKey, randomUUID),
+      connectionInstanceId: inputs.connection_instance_id,
+      expectedRevision: inputs.expected_revision,
+    }),
+    run: async (services, caller, command) => {
+      const result = await services.connectionHealth(caller.session, caller.selection, command);
+      if (result.kind !== "available") return result;
+      if (result.value.outcome === "conflict") return "conflict";
+      return {
+        kind: "available",
+        value: {
+          revision: result.value.revision,
+          health_outcome:
+            result.value.healthOutcome === "no_adapter"
+              ? "No adapter available"
+              : result.value.healthOutcome,
+        },
       };
     },
   }),
