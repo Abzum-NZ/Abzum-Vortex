@@ -78,6 +78,8 @@ export type FlowServerSegment = Readonly<{
   /** Server-only reads and writes transported in an opaque carried-values token. */
   carriedInputs: FlowPlanValueTypes;
   carriedOutputs: FlowPlanValueTypes;
+  /** Prior carried values still needed after this segment. */
+  carriedRetainKeys: readonly string[];
   /** Server-only expressions for final outputs evaluated after the segment completes. */
   finalOutputExpressions: Readonly<Record<string, FlowValue>>;
   finalOutputTypes: FlowPlanValueTypes;
@@ -521,6 +523,7 @@ export const compileFlowPlan = (flow: FlowDefinition): FlowPlan => {
     const outputs = outputTypes(steps);
     const carriedInputs: FlowPlanValueTypes = {};
     const carriedOutputs: FlowPlanValueTypes = {};
+    const carriedRetainKeys: readonly string[] = [];
     const finalOutputExpressions: Readonly<Record<string, FlowValue>> = {};
     const finalOutputTypes: FlowPlanValueTypes = {};
     const operations = new Map(steps.map((step) => [step.id, operationOf(flow, step)]));
@@ -564,6 +567,7 @@ export const compileFlowPlan = (flow: FlowDefinition): FlowPlan => {
       outputs,
       carriedInputs,
       carriedOutputs,
+      carriedRetainKeys,
       finalOutputExpressions,
       finalOutputTypes,
       changes: effects.length > 0,
@@ -580,6 +584,7 @@ export const compileFlowPlan = (flow: FlowDefinition): FlowPlan => {
         outputs,
         carriedInputs,
         carriedOutputs,
+        carriedRetainKeys,
         finalOutputExpressions,
         finalOutputTypes,
         operations: steps.flatMap((step) => {
