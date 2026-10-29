@@ -349,6 +349,45 @@ export function applicationPageRules(scope: ApplicationScope): void {
         `${String(block.blockId)}:${String(block.releaseVersion)}`,
       );
     };
+    const placementById = new Map(
+      placementEntries.map(([id, placement]) => [id.toLowerCase(), placement]),
+    );
+    const pageFlowIds = new Set(
+      array(content.flowBindings)
+        .filter((binding) => placementById.has(String(binding.controlId).toLowerCase()))
+        .map((binding) => String(object(binding.flow).flowId)),
+    );
+    for (const flow of array(content.flows)) {
+      if (!pageFlowIds.has(String(flow.id))) continue;
+      walkValues(flow, (step) => {
+        if (step.type !== "interface.show_message" && step.type !== "interface.clear_message")
+          return;
+        const properties = object(step.properties ?? {});
+        const target = object(object(properties.target ?? {}).literal ?? {}).value;
+        if (target !== "inline" && target !== "slot") return;
+        const component = object(object(properties.component ?? {}).literal ?? {}).value;
+        const placement = placementById.get(String(component).toLowerCase());
+        const release = placement === undefined ? undefined : releaseOf(placement);
+        const key = release?.key;
+        const allowed =
+          target === "slot"
+            ? key === "platform.display.notice"
+            : key === "platform.layout.container" ||
+              (key?.startsWith("platform.form.") === true &&
+                key !== "platform.form.validation_message");
+        if (!allowed)
+          failures.push(
+            failure(
+              output,
+              "vortex.definition.application_block_settings",
+              "broken_reference",
+              { kind: "page", key: String(page.key) },
+              undefined,
+              `Step ${String(step.id)} names an invalid ${String(target)} message target on page ${String(page.key)}`,
+            ),
+          );
+      });
+    }
     // Every query-bound block binds each input of its query explicitly, from a source this page
     // offers; publication refuses with the same sentence Studio shows beside the input.
     const bindingFacts = compiledPageBindingFacts(
