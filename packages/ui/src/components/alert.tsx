@@ -25,24 +25,21 @@ const dangerVariant =
   "[&_[data-slot=alert-title]]:font-bold [&_[data-slot=alert-title]]:text-destructive " +
   "[&_[data-slot=alert-description]]:text-foreground";
 
-const alertVariants = cva(
-  "cn-alert group/alert relative w-full",
-  {
-    variants: {
-      variant: {
-        default: "cn-alert-variant-default",
-        destructive: "cn-alert-variant-destructive",
-        info: infoVariant,
-        success: successVariant,
-        warning: warningVariant,
-        critical: `cn-alert-variant-destructive ${dangerVariant}`,
-      },
-    },
-    defaultVariants: {
-      variant: "default",
+const alertVariants = cva("cn-alert group/alert relative w-full", {
+  variants: {
+    variant: {
+      default: "cn-alert-variant-default",
+      destructive: "cn-alert-variant-destructive",
+      info: infoVariant,
+      success: successVariant,
+      warning: warningVariant,
+      critical: `cn-alert-variant-destructive ${dangerVariant}`,
     },
   },
-);
+  defaultVariants: {
+    variant: "default",
+  },
+});
 
 function Alert({
   className,
@@ -86,9 +83,7 @@ function AlertDescription({ className, ...props }: React.ComponentProps<"div">) 
 }
 
 function AlertAction({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div data-slot="alert-action" className={cn("cn-alert-action", className)} {...props} />
-  );
+  return <div data-slot="alert-action" className={cn("cn-alert-action", className)} {...props} />;
 }
 
 export { Alert, alertVariants, AlertTitle, AlertDescription, AlertAction };

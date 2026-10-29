@@ -6,5 +6,7 @@ export default function Error({
   error,
   reset,
 }: Readonly<{ error: Error & { digest?: string }; reset: () => void }>) {
-  return <RouteErrorState route="application-address" region="content" error={error} reset={reset} />;
+  return (
+    <RouteErrorState route="application-address" region="content" error={error} reset={reset} />
+  );
 }

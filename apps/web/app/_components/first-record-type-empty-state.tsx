@@ -1,7 +1,12 @@
 import type { ReactNode } from "react";
 import { Icon } from "@vortex/ui";
 import {
-  Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle,
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
 } from "@vortex/ui/components/empty";
 
 /**
@@ -11,13 +16,18 @@ import {
  */
 export function FirstRecordTypeEmptyState({ action }: Readonly<{ action: ReactNode }>) {
   return (
-    <Empty data-vortex-first-record-type="" className="rounded-xl border border-dashed border-border p-6">
+    <Empty
+      data-vortex-first-record-type=""
+      className="rounded-xl border border-dashed border-border p-6"
+    >
       <EmptyHeader>
-        <EmptyMedia variant="icon"><Icon name="database" /></EmptyMedia>
+        <EmptyMedia variant="icon">
+          <Icon name="database" />
+        </EmptyMedia>
         <EmptyTitle>Add your first record type</EmptyTitle>
         <EmptyDescription>
-          A record type is a kind of record people keep here, such as assets or companies. Add one in the Data
-          tab, then show its records on this page.
+          A record type is a kind of record people keep here, such as assets or companies. Add one
+          in the Data tab, then show its records on this page.
         </EmptyDescription>
       </EmptyHeader>
       <EmptyContent>{action}</EmptyContent>

@@ -467,9 +467,7 @@ export type RecordChangeResult = z.infer<typeof recordChangeResultSchema>;
 export type RecordScope = z.infer<typeof recordScopeSchema>;
 export type SaveRecordCommand = z.infer<typeof saveRecordCommandSchema>;
 
-export type TransferRecordOwnershipCommand = z.infer<
-  typeof transferRecordOwnershipCommandSchema
->;
+export type TransferRecordOwnershipCommand = z.infer<typeof transferRecordOwnershipCommandSchema>;
 export type TransferRecordOwnershipResult = z.infer<typeof transferRecordOwnershipResultSchema>;
 export type RecordSaveFieldCorrection = z.infer<typeof recordSaveFieldCorrectionSchema>;
 export type SaveRecordResult = z.infer<typeof saveRecordResultSchema>;

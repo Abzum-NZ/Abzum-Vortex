@@ -23,7 +23,9 @@ export const configuredComponentOrigin = (): string => {
     componentHost.endsWith(`.${siteHost}`) ||
     siteHost.endsWith(`.${componentHost}`)
   )
-    throw new Error("The component bundle origin must be a dedicated domain, never the Vortex site");
+    throw new Error(
+      "The component bundle origin must be a dedicated domain, never the Vortex site",
+    );
   componentOrigin = component.origin;
   return componentOrigin;
 };

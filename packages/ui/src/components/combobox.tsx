@@ -44,10 +44,7 @@ function ComboboxPortal({ container, ...props }: ComboboxPrimitive.Portal.Props)
   const styleRoot = useVortexStylePortalRoot();
   if (styleRoot !== null && styleRoot.element === null && container === undefined) return null;
   return (
-    <ComboboxPrimitive.Portal
-      container={container ?? styleRoot?.element ?? undefined}
-      {...props}
-    />
+    <ComboboxPrimitive.Portal container={container ?? styleRoot?.element ?? undefined} {...props} />
   );
 }
 
@@ -112,9 +109,7 @@ function ComboboxItem({ className, children, ...props }: ComboboxPrimitive.Item.
       {...props}
     >
       <span className="cn-combobox-item-text">{children}</span>
-      <ComboboxPrimitive.ItemIndicator
-        render={<span className="cn-combobox-item-indicator" />}
-      >
+      <ComboboxPrimitive.ItemIndicator render={<span className="cn-combobox-item-indicator" />}>
         <Icon name="check" className="cn-combobox-item-indicator-icon" />
       </ComboboxPrimitive.ItemIndicator>
     </ComboboxPrimitive.Item>

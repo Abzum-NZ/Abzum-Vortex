@@ -31,9 +31,7 @@ export const installedReleaseCatalogue: ImmutableDefinitionPublicationCatalogueD
       ({ contentFingerprint, customComponent, ...definition }) => definition,
     ),
     platformThemeReleases: [
-      (({ contentFingerprint, ...definition }) => definition)(
-        DEFAULT_PLATFORM_THEME_RELEASE,
-      ),
+      (({ contentFingerprint, ...definition }) => definition)(DEFAULT_PLATFORM_THEME_RELEASE),
     ],
   },
 };

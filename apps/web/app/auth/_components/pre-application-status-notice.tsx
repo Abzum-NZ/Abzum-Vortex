@@ -49,10 +49,5 @@ export function PreApplicationStatusNotice({
     { kind: "text", value: notice.message.slice(linkIndex + notice.linkLabel.length) },
   ];
 
-  return (
-    <Notice
-      severity={notice.severity}
-      content={content}
-    />
-  );
+  return <Notice severity={notice.severity} content={content} />;
 }

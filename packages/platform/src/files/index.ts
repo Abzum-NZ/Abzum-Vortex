@@ -34,10 +34,7 @@ export {
 export * from "./storage-credentials";
 export { resolveFileStorageDestination, type FileStorageDestination } from "./storage-destination";
 export { createStoredUploadInspection } from "./upload-inspection";
-export type {
-  FileRemovalEligibilityDecision,
-  FileRemovalRefusalReason,
-} from "./file-contracts";
+export type { FileRemovalEligibilityDecision, FileRemovalRefusalReason } from "./file-contracts";
 export {
   PENDING_UPLOAD_WINDOW_SECONDS,
   completeFileUpload,

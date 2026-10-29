@@ -12,12 +12,14 @@ import {
 
 export const maximumApplicationSourceImportBytes = 2 * 1024 * 1024;
 
-export const studioApplicationSourceReviewRequestSchema = z.object({
-  rootId: applicationRootIdSchema,
-  expectedDraftRevision: revisionSchema,
-  expectedSavedSourceFingerprint: fingerprintSchema,
-  source: applicationSourceDocumentSchema,
-}).strict();
+export const studioApplicationSourceReviewRequestSchema = z
+  .object({
+    rootId: applicationRootIdSchema,
+    expectedDraftRevision: revisionSchema,
+    expectedSavedSourceFingerprint: fingerprintSchema,
+    source: applicationSourceDocumentSchema,
+  })
+  .strict();
 
 const sourceReviewBinding = {
   organizationId: organizationIdSchema,
@@ -30,33 +32,45 @@ const sourceReviewBinding = {
 };
 
 export const studioApplicationSourceReviewResultSchema = z.discriminatedUnion("kind", [
-  z.object({
-    kind: z.literal("available"),
-    ...sourceReviewBinding,
-    source: applicationSourceDocumentSchema,
-  }).strict(),
-  z.object({
-    kind: z.literal("validation_failed"),
-    ...sourceReviewBinding,
-    validation: definitionValidationResultSchema,
-  }).strict(),
-  z.object({
-    kind: z.literal("identity_conflict"),
-    ...sourceReviewBinding,
-    conflicts: z.array(z.object({ kind: z.string(), name: z.string() }).strict()).min(1),
-  }).strict(),
+  z
+    .object({
+      kind: z.literal("available"),
+      ...sourceReviewBinding,
+      source: applicationSourceDocumentSchema,
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("validation_failed"),
+      ...sourceReviewBinding,
+      validation: definitionValidationResultSchema,
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("identity_conflict"),
+      ...sourceReviewBinding,
+      conflicts: z.array(z.object({ kind: z.string(), name: z.string() }).strict()).min(1),
+    })
+    .strict(),
   z.object({ kind: z.literal("invalid") }).strict(),
   z.object({ kind: z.literal("conflict") }).strict(),
   z.object({ kind: z.literal("refused") }).strict(),
   z.object({ kind: z.literal("temporarily_unavailable") }).strict(),
 ]);
 
-export type StudioApplicationSourceReviewResult = z.infer<typeof studioApplicationSourceReviewResultSchema>;
+export type StudioApplicationSourceReviewResult = z.infer<
+  typeof studioApplicationSourceReviewResultSchema
+>;
 
 /** A local editor frame, never a permission decision or a saved-draft receipt. */
 export type StudioApplicationSourceImportSnapshot = Readonly<{
-  organizationId: string; rootId: string; key: string; rootAlias: string;
-  draftRevision: number; savedSourceFingerprint: string;
+  organizationId: string;
+  rootId: string;
+  key: string;
+  rootAlias: string;
+  draftRevision: number;
+  savedSourceFingerprint: string;
   source: ApplicationSourceDocument;
   localLifetime: number;
 }>;
@@ -64,10 +78,16 @@ export type StudioApplicationSourceImportSnapshot = Readonly<{
 export const sameStudioApplicationSourceImportSnapshot = (
   expected: StudioApplicationSourceImportSnapshot,
   current: StudioApplicationSourceImportSnapshot | null,
-): boolean => current !== null && expected.organizationId === current.organizationId &&
-  expected.rootId === current.rootId && expected.key === current.key && expected.rootAlias === current.rootAlias &&
-  expected.draftRevision === current.draftRevision && expected.savedSourceFingerprint === current.savedSourceFingerprint &&
-  expected.localLifetime === current.localLifetime && canonicalJson(expected.source) === canonicalJson(current.source);
+): boolean =>
+  current !== null &&
+  expected.organizationId === current.organizationId &&
+  expected.rootId === current.rootId &&
+  expected.key === current.key &&
+  expected.rootAlias === current.rootAlias &&
+  expected.draftRevision === current.draftRevision &&
+  expected.savedSourceFingerprint === current.savedSourceFingerprint &&
+  expected.localLifetime === current.localLifetime &&
+  canonicalJson(expected.source) === canonicalJson(current.source);
 
 /** Inspect raw member names before JSON.parse can silently discard a duplicate. */
 function hasUnambiguousMembers(text: string): boolean {
@@ -103,15 +123,23 @@ function hasUnambiguousMembers(text: string): boolean {
 }
 
 export function readStudioApplicationSourceImport(
-  text: string, key: string, rootAlias: string,
-): Readonly<{ kind: "valid"; source: ApplicationSourceDocument }> |
-  Readonly<{ kind: "invalid"; message: string }> {
-  if (text.length > maximumApplicationSourceImportBytes ||
-    new TextEncoder().encode(text).byteLength > maximumApplicationSourceImportBytes)
+  text: string,
+  key: string,
+  rootAlias: string,
+):
+  | Readonly<{ kind: "valid"; source: ApplicationSourceDocument }>
+  | Readonly<{ kind: "invalid"; message: string }> {
+  if (
+    text.length > maximumApplicationSourceImportBytes ||
+    new TextEncoder().encode(text).byteLength > maximumApplicationSourceImportBytes
+  )
     return { kind: "invalid", message: "The JSON source must be at most 2 MiB." };
   try {
     if (!hasUnambiguousMembers(text))
-      return { kind: "invalid", message: "The JSON source has duplicate members or exceeds its nesting limit." };
+      return {
+        kind: "invalid",
+        message: "The JSON source has duplicate members or exceeds its nesting limit.",
+      };
     const input: unknown = JSON.parse(text);
     const parsed = applicationSourceDocumentSchema.safeParse(input);
     if (!parsed.success) {
@@ -122,9 +150,15 @@ export function readStudioApplicationSourceImport(
       };
     }
     if (parsed.data.key !== key || parsed.data.root_alias !== rootAlias)
-      return { kind: "invalid", message: "The source must keep this draft's Application key and root alias." };
+      return {
+        kind: "invalid",
+        message: "The source must keep this draft's Application key and root alias.",
+      };
     return { kind: "valid", source: parsed.data };
   } catch {
-    return { kind: "invalid", message: "The source could not be read as valid authored Application JSON." };
+    return {
+      kind: "invalid",
+      message: "The source could not be read as valid authored Application JSON.",
+    };
   }
 }

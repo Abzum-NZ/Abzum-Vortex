@@ -8,7 +8,9 @@ import { createAppTelemetryCollector, createOperationsAlertSink } from "@vortex/
 import type { IdentityAuthorityId } from "@vortex/platform/schema";
 import { getIdentityAuthorityConfiguration } from "../auth/_lib/authority-configuration";
 
-export const appTelemetry = createAppTelemetryCollector({ downstream: createOperationsAlertSink() });
+export const appTelemetry = createAppTelemetryCollector({
+  downstream: createOperationsAlertSink(),
+});
 
 export const humanOrganizationRequestDependencies = (
   identityAuthorityId: IdentityAuthorityId = getIdentityAuthorityConfiguration().authorityId,

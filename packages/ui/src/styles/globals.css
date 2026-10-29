@@ -133,11 +133,35 @@ body {
  * component rules in shared-components.css and style-variants.css use the same two selectors.
  */
 @custom-variant dark {
-  &:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *)) {
+  &:where(
+      :is(.dark, [data-vortex-theme-mode="dark"]),
+      :is(.dark, [data-vortex-theme-mode="dark"]) *
+    ):not(
+      :where(
+        :is(.dark, [data-vortex-theme-mode="dark"])
+          :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]),
+        :is(.dark, [data-vortex-theme-mode="dark"])
+          :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"])
+          *
+      )
+    ) {
     @slot;
   }
   @media (prefers-color-scheme: dark) {
-    &:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *))) {
+    &:not(
+      :where(
+        :is(.light, [data-vortex-theme-mode="light"]),
+        :is(.light, [data-vortex-theme-mode="light"]) *
+      ):not(
+        :where(
+          :is(.light, [data-vortex-theme-mode="light"])
+            :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]),
+          :is(.light, [data-vortex-theme-mode="light"])
+            :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"])
+            *
+        )
+      )
+    ) {
       @slot;
     }
   }
@@ -145,12 +169,40 @@ body {
 
 /* The exact negation of the dark variant above. */
 @custom-variant not-dark {
-  &:not(:where(:is(.dark, [data-vortex-theme-mode="dark"]), :is(.dark, [data-vortex-theme-mode="dark"]) *):not(:where(:is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]), :is(.dark, [data-vortex-theme-mode="dark"]) :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]) *))) {
+  &:not(
+    :where(
+      :is(.dark, [data-vortex-theme-mode="dark"]),
+      :is(.dark, [data-vortex-theme-mode="dark"]) *
+    ):not(
+      :where(
+        :is(.dark, [data-vortex-theme-mode="dark"])
+          :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"]),
+        :is(.dark, [data-vortex-theme-mode="dark"])
+          :is(.light, [data-vortex-theme-mode="light"], [data-vortex-theme-mode="system"])
+          *
+      )
+    )
+  ) {
     @media (prefers-color-scheme: light) {
       @slot;
     }
     @media (prefers-color-scheme: dark) {
-      &:not(:not(:where(:is(.light, [data-vortex-theme-mode="light"]), :is(.light, [data-vortex-theme-mode="light"]) *):not(:where(:is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]), :is(.light, [data-vortex-theme-mode="light"]) :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]) *)))) {
+      &:not(
+        :not(
+          :where(
+            :is(.light, [data-vortex-theme-mode="light"]),
+            :is(.light, [data-vortex-theme-mode="light"]) *
+          ):not(
+            :where(
+              :is(.light, [data-vortex-theme-mode="light"])
+                :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"]),
+              :is(.light, [data-vortex-theme-mode="light"])
+                :is(.dark, [data-vortex-theme-mode="dark"], [data-vortex-theme-mode="system"])
+                *
+            )
+          )
+        )
+      ) {
         @slot;
       }
     }

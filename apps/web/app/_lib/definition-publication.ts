@@ -12,14 +12,18 @@ import { mapWebError } from "./web-error-mapper";
 
 /** Each call resolves the current human; the browser supplies only a strict command. */
 export const prepareHumanDefinitionPublication = async (
-  organizationId: string, candidate: unknown,
+  organizationId: string,
+  candidate: unknown,
 ): Promise<HumanDefinitionPublicationPreparationResult> => {
   try {
     const resolved = await resolveIdentitySession();
-    if (resolved.kind !== "active") return resolved.kind === "temporarily_unavailable"
-      ? { kind: "temporarily_unavailable" } : { kind: "refused" };
+    if (resolved.kind !== "active")
+      return resolved.kind === "temporarily_unavailable"
+        ? { kind: "temporarily_unavailable" }
+        : { kind: "refused" };
     return await createHumanDefinitionPublisher({
-      requests: humanOrganizationRequests(), catalogue: installedReleaseCatalogue,
+      requests: humanOrganizationRequests(),
+      catalogue: installedReleaseCatalogue,
     }).prepare(resolved.session, organizationId, candidate);
   } catch (error) {
     return mapWebError(error, {
@@ -32,14 +36,18 @@ export const prepareHumanDefinitionPublication = async (
 };
 
 export const publishHumanDefinition = async (
-  organizationId: string, candidate: unknown,
+  organizationId: string,
+  candidate: unknown,
 ): Promise<HumanDefinitionPublicationResult> => {
   try {
     const resolved = await resolveIdentitySession();
-    if (resolved.kind !== "active") return resolved.kind === "temporarily_unavailable"
-      ? { kind: "temporarily_unavailable" } : { kind: "refused" };
+    if (resolved.kind !== "active")
+      return resolved.kind === "temporarily_unavailable"
+        ? { kind: "temporarily_unavailable" }
+        : { kind: "refused" };
     return await createHumanDefinitionPublisher({
-      requests: humanOrganizationRequests(), catalogue: installedReleaseCatalogue,
+      requests: humanOrganizationRequests(),
+      catalogue: installedReleaseCatalogue,
     }).publish(resolved.session, organizationId, candidate);
   } catch (error) {
     return mapWebError(error, {

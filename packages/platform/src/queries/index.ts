@@ -222,5 +222,3 @@ export {
   type ActivityAggregateGroup,
   type ActivityHistoryServiceDependencies,
 } from "./activity-history";
-
-

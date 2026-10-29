@@ -49,7 +49,9 @@ function SidebarProvider({
         data-sidebar-provider=""
         data-vortex-sidebar-state={value.open ? "expanded" : "collapsed"}
         className="group/sidebar-provider flex min-h-svh w-full min-w-0 flex-col"
-        style={{ "--sidebar-width": "16rem", "--sidebar-width-icon": "3rem" } as React.CSSProperties}
+        style={
+          { "--sidebar-width": "16rem", "--sidebar-width-icon": "3rem" } as React.CSSProperties
+        }
       >
         {children}
       </div>
