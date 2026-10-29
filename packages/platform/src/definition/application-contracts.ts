@@ -62,6 +62,25 @@ import { flowSchema } from "../workflows/flow-contracts";
 import { maximumFlowConfirmationDetailLines } from "../workflows/flow-confirmation-limits";
 import { vortexIconNameSchema } from "../catalogue/icon-names";
 
+/** Finds repeated bindings for a control event, including board events dispatched without an id. */
+export function duplicateFlowBindings<
+  T extends Readonly<{ control: string; eventId: string; event: string }>,
+>(bindings: readonly T[]): ReadonlyArray<Readonly<{ first: T; second: T }>> {
+  const byEvent = new Map<string, T>();
+  const boardByEvent = new Map<string, T>();
+  const duplicates: { first: T; second: T }[] = [];
+  for (const binding of bindings) {
+    const key = JSON.stringify([binding.control, binding.eventId]);
+    const boardKey = JSON.stringify([binding.control, binding.event]);
+    const boardEvent = binding.event === "card_moved" || binding.event === "card_added";
+    const first = byEvent.get(key) ?? (boardEvent ? boardByEvent.get(boardKey) : undefined);
+    if (first !== undefined) duplicates.push({ first, second: binding });
+    if (!byEvent.has(key)) byEvent.set(key, binding);
+    if (boardEvent && !boardByEvent.has(boardKey)) boardByEvent.set(boardKey, binding);
+  }
+  return duplicates;
+}
+
 /** The typed inputs and shape of one Application-owned action. */
 const actionInputBase = {
   key: builderKeySchema,
@@ -934,16 +953,21 @@ export const applicationContentSchema = applicationSharedContentSchema
     const flowIdSet = new Set(flowIds);
     const placementIdSet = new Set(placementIds.map(String));
     const flowBindingIds = value.flowBindings.map((binding) => String(binding.bindingId));
-    const flowBindingEvents = value.flowBindings.map(
-      (binding) => `${String(binding.controlId)}:${String(binding.eventId)}`,
-    );
     if (new Set(flowBindingIds).size !== flowBindingIds.length)
       context.addIssue({
         code: "custom",
         path: ["flowBindings"],
         message: "Flow binding identities must be unique",
       });
-    if (new Set(flowBindingEvents).size !== flowBindingEvents.length)
+    if (
+      duplicateFlowBindings(
+        value.flowBindings.map((binding) => ({
+          control: String(binding.controlId),
+          eventId: String(binding.eventId),
+          event: binding.event,
+        })),
+      ).length > 0
+    )
       context.addIssue({
         code: "custom",
         path: ["flowBindings"],

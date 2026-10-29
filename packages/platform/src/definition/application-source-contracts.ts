@@ -956,20 +956,11 @@ export const sourceApplicationBodySchema = z
     const flowReferences = new Set(value.flows.flatMap((flow) => [flow.id, flow.key]));
     const placementAliasSet = new Set(placementEntries.map(([alias]) => alias));
     const flowBindingAliases = value.flow_bindings.map((binding) => binding.id);
-    const flowBindingEvents = value.flow_bindings.map(
-      (binding) => `${binding.control}:${binding.event_id}`,
-    );
     if (new Set(flowBindingAliases).size !== flowBindingAliases.length)
       context.addIssue({
         code: "custom",
         path: ["flow_bindings"],
         message: "Flow binding aliases must be unique",
-      });
-    if (new Set(flowBindingEvents).size !== flowBindingEvents.length)
-      context.addIssue({
-        code: "custom",
-        path: ["flow_bindings"],
-        message: "A control event can have only one flow binding",
       });
     for (const [bindingIndex, binding] of value.flow_bindings.entries()) {
       if (!flowReferences.has(binding.flow))

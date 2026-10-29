@@ -7,6 +7,7 @@ import {
   sourcePageItems,
 } from "../application-composition/source-composition";
 import type { ApplicationSourceDocument } from "../definition-source";
+import { duplicateFlowBindings } from "../application-contracts";
 import {
   type PreparedValidationContext,
   editSaveSources,
@@ -116,10 +117,49 @@ const containsSubmitButton = (item: SourceItem): boolean =>
     ),
   );
 
+/** One binding per control event; board moves and adds also have one per semantic event. */
+export function applicationFlowBindingUniquenessRule(
+  source: ApplicationSourceDocument,
+): DefinitionRuleFailure[] {
+  const body = object(source.body);
+  const eventOwners = new Map<string, string>();
+  for (const declared of array(body.events)) {
+    const id = String(declared.id);
+    eventOwners.set(id, id);
+    if (typeof declared.key === "string") eventOwners.set(declared.key, id);
+  }
+  const bindings = array(body.flow_bindings).map((binding) => {
+    const eventId = String(binding.event_id);
+    return {
+      control: String(binding.control),
+      event: String(binding.event),
+      eventId: eventOwners.get(eventId) ?? eventId,
+      authoredEventId: eventId,
+      id: String(binding.id),
+    };
+  });
+  return duplicateFlowBindings(bindings).map(({ first, second }): DefinitionRuleFailure => {
+    const controlKey = builderKeySchema.safeParse(second.control);
+    const bindingKey = builderKeySchema.safeParse(second.id);
+    return {
+      ruleCode: "vortex.definition.application_control_binding",
+      family: "duplicate_key",
+      sentence: `Control ${boundedBindingName(second.control)} has two bindings for ${second.event} (${boundedBindingName(second.authoredEventId)}): ${boundedBindingName(first.id)} and ${boundedBindingName(second.id)}.`,
+      location: {
+        documentKind: "application",
+        documentKey: source.key,
+        segments: [
+          { kind: "application", key: source.key },
+          ...(controlKey.success ? [{ kind: "block" as const, key: controlKey.data }] : []),
+          ...(bindingKey.success ? [{ kind: "flow_binding" as const, key: bindingKey.data }] : []),
+        ],
+      },
+    };
+  });
+}
+
 /**
  * Refuses, before an Application publishes, a control that would render enabled but run nothing.
- * Each control event has at most one flow binding. Board move and add events also have one
- * binding per semantic event because the board dispatches them without an event identity.
  * A form container with a submit path needs a `form_submit` binding: it holds a Submit button at
  * any depth, or it sits on a form or guided-form page. An action button needs an `action` binding
  * unless its `disabled` setting is the literal `true`.
@@ -140,48 +180,10 @@ export function applicationControlBindingRule(
     const source = parsed.data as ApplicationSourceDocument;
     const body = object(source.body);
     const boundEvents = new Map<string, Set<string>>();
-    const bindingsByEvent = new Map<string, string>();
-    const boardBindingsByEvent = new Map<string, string>();
-    const failures: DefinitionRuleFailure[] = [];
-    const eventOwners = new Map<string, string>();
-    for (const declared of array(body.events)) {
-      const id = String(declared.id);
-      eventOwners.set(id, id);
-      if (typeof declared.key === "string") eventOwners.set(declared.key, id);
-    }
+    const failures = applicationFlowBindingUniquenessRule(source);
     for (const binding of array(body.flow_bindings)) {
       const control = String(binding.control);
       const event = String(binding.event);
-      const eventId = String(binding.event_id);
-      const bindingId = String(binding.id);
-      const key = JSON.stringify([control, eventOwners.get(eventId) ?? eventId]);
-      const boardKey = JSON.stringify([control, event]);
-      const boardEvent = event === "card_moved" || event === "card_added";
-      const previous =
-        bindingsByEvent.get(key) ?? (boardEvent ? boardBindingsByEvent.get(boardKey) : undefined);
-      if (previous !== undefined) {
-        const controlKey = builderKeySchema.safeParse(control);
-        const bindingKey = builderKeySchema.safeParse(bindingId);
-        failures.push({
-          ruleCode: "vortex.definition.application_control_binding",
-          family: "duplicate_key",
-          sentence: `Control ${boundedBindingName(control)} has two bindings for ${event} (${boundedBindingName(eventId)}): ${boundedBindingName(previous)} and ${boundedBindingName(bindingId)}.`,
-          location: {
-            documentKind: "application",
-            documentKey: source.key,
-            segments: [
-              { kind: "application", key: source.key },
-              ...(controlKey.success ? [{ kind: "block" as const, key: controlKey.data }] : []),
-              ...(bindingKey.success
-                ? [{ kind: "flow_binding" as const, key: bindingKey.data }]
-                : []),
-            ],
-          },
-        });
-      }
-      if (!bindingsByEvent.has(key)) bindingsByEvent.set(key, bindingId);
-      if (boardEvent && !boardBindingsByEvent.has(boardKey))
-        boardBindingsByEvent.set(boardKey, bindingId);
       const events = boundEvents.get(control) ?? new Set<string>();
       events.add(event);
       boundEvents.set(control, events);
