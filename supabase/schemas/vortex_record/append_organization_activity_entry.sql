@@ -20,7 +20,11 @@ as $function$
 declare
   inserted_activity_id uuid;
   existing_entry vortex_record.organization_activity_entries%rowtype;
+  channel_value text := vortex_platform.channel();
+  agent_channel_value text;
 begin
+  agent_channel_value := case when channel_value in ('webmcp', 'mcp')
+    then channel_value else null end;
   if p_source is null
     or p_source <> all (array[
       'web', 'webmcp', 'mcp', 'programmatic_interface', 'connection', 'federation',
@@ -31,11 +35,11 @@ begin
 
   insert into vortex_record.organization_activity_entries (
     organization_id, activity_id, occurred_at, actor_kind, actor_id, action,
-    subject_ids, changed_field_ids, source, correlation_id, outcome
+    subject_ids, changed_field_ids, source, correlation_id, outcome, agent_channel
   ) values (
     p_organization_id, p_activity_id, p_occurred_at, p_actor_kind, p_actor_id,
     p_action, p_subject_ids, p_changed_field_ids, p_source, p_correlation_id,
-    p_outcome
+    p_outcome, agent_channel_value
   )
   on conflict (organization_id, activity_id) do nothing
   returning activity_id into inserted_activity_id;
@@ -53,6 +57,7 @@ begin
   if existing_entry.occurred_at is distinct from p_occurred_at
     or existing_entry.actor_kind is distinct from p_actor_kind
     or existing_entry.actor_id is distinct from p_actor_id
+    or existing_entry.agent_channel is distinct from agent_channel_value
     or existing_entry.action is distinct from p_action
     or existing_entry.subject_ids is distinct from p_subject_ids
     or existing_entry.changed_field_ids is distinct from p_changed_field_ids

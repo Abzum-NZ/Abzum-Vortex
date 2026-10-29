@@ -73,4 +73,4 @@ revoke all on function vortex_record.append_record_activity_internal(uuid, text,
 grant execute on function vortex_record.append_record_activity_internal(uuid, text, uuid[], uuid[], text)
   to vortex_owner, vortex_record_adapter;
 comment on function vortex_record.append_record_activity_internal(uuid, text, uuid[], uuid[], text) is
-  'The one Record Activity composer: derives the organisation, account, correlation and channel from the validated request context and appends one entry for a record save, named action, delete, restore, ownership transfer or lifecycle policy change.';
+  'The one Record Activity composer: derives the organisation, account, correlation and channel from the validated request context and appends one entry for a record save, named action, delete, restore, ownership transfer or lifecycle policy change. The append records webmcp or mcp as the agent channel while the actor remains the person.';
