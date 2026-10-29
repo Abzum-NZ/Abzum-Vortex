@@ -37,11 +37,8 @@ export const parseFlowSegmentSeed = (
       (["vars.", "outputs.", "forms."].some((prefix) => name.startsWith(prefix)) ||
         (name.startsWith("inputs.") && pageInputNames.has(name.slice("inputs.".length)))),
   );
-  if (
-    Object.keys(seed).length !== expected.length ||
-    Object.keys(seed).some((name) => !expected.some(([key]) => key === name))
-  )
-    failed("inputs_invalid", "refused", undefined, "segment seed has undeclared or missing values");
+  if (Object.keys(seed).some((name) => !expected.some(([key]) => key === name)))
+    failed("inputs_invalid", "refused", undefined, "segment seed has undeclared values");
   for (const [name, type] of Object.entries(carriedDeclarations)) {
     if (
       declarations[name] !== type ||
@@ -50,7 +47,7 @@ export const parseFlowSegmentSeed = (
       failed("inputs_invalid", "refused", undefined, `carried input ${name} is invalid`);
   }
   for (const [name, type] of [
-    ...expected,
+    ...expected.filter(([name]) => Object.hasOwn(seed, name)),
     ...Object.entries(carriedDeclarations).filter(([name]) => carried[name] !== undefined),
   ]) {
     const parts = name.split(".");
