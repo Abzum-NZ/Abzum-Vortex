@@ -502,7 +502,7 @@ export const createConfiguredTenantAdministrationService = (
         const value = command.data;
         const rows = await run(
           (transaction) =>
-            transaction.query<ClusterIdentityLifecycleRow>`select * from vortex_identity.suspend_cluster_identity(${operator.clusterId}::uuid, ${operator.systemActorId}::uuid, ${value.duplicateKey}::uuid, ${fingerprint(value)}::text, ${value.identityId}::uuid, ${value.expectedRevision}::bigint)`,
+            transaction.query<ClusterIdentityLifecycleRow>`select * from vortex_identity.suspend_cluster_identity(${operator.clusterId}::uuid, ${operator.systemActorId}::uuid, ${value.duplicateKey}::uuid, ${value.identityId}::uuid, ${value.expectedRevision}::bigint)`,
         );
         return suspendClusterIdentityResultSchema.parse(lifecycleResult(one(rows)));
       } catch (error) {
@@ -534,7 +534,7 @@ export const createConfiguredTenantAdministrationService = (
         const value = command.data;
         const rows = await run(
           (transaction) =>
-            transaction.query<ClusterIdentityLifecycleRow>`select * from vortex_identity.reactivate_cluster_identity(${operator.clusterId}::uuid, ${operator.systemActorId}::uuid, ${value.duplicateKey}::uuid, ${fingerprint(value)}::text, ${value.identityId}::uuid, ${value.expectedRevision}::bigint)`,
+            transaction.query<ClusterIdentityLifecycleRow>`select * from vortex_identity.reactivate_cluster_identity(${operator.clusterId}::uuid, ${operator.systemActorId}::uuid, ${value.duplicateKey}::uuid, ${value.identityId}::uuid, ${value.expectedRevision}::bigint)`,
         );
         return reactivateClusterIdentityResultSchema.parse(lifecycleResult(one(rows)));
       } catch (error) {
@@ -562,7 +562,7 @@ export const createConfiguredTenantAdministrationService = (
         const value = command.data;
         const rows = await run(
           (transaction) =>
-            transaction.query<ClusterIdentityLifecycleRow>`select * from vortex_identity.close_cluster_identity(${operator.clusterId}::uuid, ${operator.systemActorId}::uuid, ${value.duplicateKey}::uuid, ${fingerprint(value)}::text, ${value.identityId}::uuid, ${value.expectedRevision}::bigint)`,
+            transaction.query<ClusterIdentityLifecycleRow>`select * from vortex_identity.close_cluster_identity(${operator.clusterId}::uuid, ${operator.systemActorId}::uuid, ${value.duplicateKey}::uuid, ${value.identityId}::uuid, ${value.expectedRevision}::bigint)`,
         );
         return closeClusterIdentityResultSchema.parse(lifecycleResult(one(rows)));
       } catch (error) {
