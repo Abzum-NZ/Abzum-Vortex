@@ -1,6 +1,7 @@
 import "server-only";
 
 import { z } from "zod";
+import { organizationInvitationRoleIntentsSchema } from "./organization-invitation-access";
 import { databaseTimestamp, databaseRevision } from "../catalogue/runtime-primitives";
 import { invitationIdSchema, organizationIdSchema } from "../catalogue/identifiers";
 import {
@@ -103,7 +104,7 @@ const parseAccount = (row: AcceptanceRow): OrganizationAccount => {
 
 const parseAcceptance = (row: AcceptanceRow): InvitationAcceptanceWithAccessVersion => {
   const candidate =
-    row.outcome === "unavailable" || row.outcome === "identity_inactive"
+    row.outcome !== "accepted"
       ? { outcome: row.outcome }
       : {
           outcome: row.outcome,
@@ -123,6 +124,7 @@ const pendingInvitationSchema = z
     organizationName: z.string().min(1),
     tenantName: z.string().min(1),
     expiresAt: z.string().min(1),
+    roleIntents: organizationInvitationRoleIntentsSchema,
   })
   .strict();
 
@@ -158,7 +160,7 @@ export const createAccessVersionStore = (dependencies: AccessVersionStoreDepende
         return await runtimeTransaction(async (transaction) => {
           const rows = await transaction.query`
             select invitation_id, organization_id, organization_display_name,
-              tenant_display_name, expires_at
+              tenant_display_name, expires_at, role_intents
             from vortex_access.list_pending_invitations_for_identity(
               ${verified.data.identityId}::uuid,
               ${normalizeEmail(verified.data.verifiedPrimaryEmail)}::text
@@ -171,6 +173,7 @@ export const createAccessVersionStore = (dependencies: AccessVersionStoreDepende
               organizationName: row.organization_display_name,
               tenantName: row.tenant_display_name,
               expiresAt: databaseTimestamp(row.expires_at),
+              roleIntents: row.role_intents,
             });
             if (!parsed.success)
               throw new AccessVersionError("INVALID_ACCESS_VERSION_STORAGE_RESULT");

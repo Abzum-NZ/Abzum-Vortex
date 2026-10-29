@@ -27,7 +27,7 @@ import {
   organizationInvitationsPlacementId,
   type PendingInvitation,
 } from "@vortex/platform/server";
-import { correlationIdSchema, describeFailure } from "@vortex/platform/schema";
+import { correlationIdSchema, describeFailure, invitationIdSchema } from "@vortex/platform/schema";
 import { Badge } from "@vortex/ui/components/badge";
 import { Button } from "@vortex/ui/components/button";
 import {
@@ -132,6 +132,7 @@ const DAY_MS = 86_400_000;
 
 /** How long an invitation stays open, in whole days: the same in every time zone. */
 const invitationOpenFor = (expiresAt: string, now: number): string => {
+  if (Date.parse(expiresAt) <= now) return "Invitation expired. Ask for a new invitation.";
   const days = Math.floor((Date.parse(expiresAt) - now) / DAY_MS);
   return days < 1
     ? "Invitation closes within a day"
@@ -180,6 +181,11 @@ const readPendingInvitations = async (): Promise<readonly PendingInvitation[] | 
 const joinOutcomeSentences: Readonly<Record<string, string>> = {
   closed: "That invitation is no longer open. Ask the organisation to invite you again.",
   inactive: "Your account is not active, so it cannot join an organisation.",
+  wrong_address: "This invitation was sent to a different email address.",
+  expired: "This invitation has expired. Ask for a new invitation.",
+  inviter_not_allowed:
+    "The person who invited you can no longer grant this access. Ask for a new invitation.",
+  role_changed: "A role in this invitation has changed. Ask for a new invitation.",
   unavailable: "Joining is not available right now. Try again shortly.",
 };
 
@@ -205,22 +211,28 @@ async function joinOrganization(event: DisplaySemanticEvent): Promise<void> {
   if (identity.kind === "temporarily_unavailable") return joinRefused("unavailable");
   const verified = await resolveVerifiedIdentity();
   if (verified === undefined) return joinRefused("unavailable");
-  const pending = await readPendingInvitations();
-  if (pending === undefined) return joinRefused("unavailable");
-  const invitation = pending.find((candidate) => candidate.invitationId === event.recordId);
-  if (invitation === undefined) return joinRefused("closed");
+  const invitationId = invitationIdSchema.safeParse(event.recordId);
+  if (!invitationId.success) return joinRefused("closed");
   const accepted = await acceptOrganizationInvitation(verified, {
-    invitationId: invitation.invitationId,
+    invitationId: invitationId.data,
     correlationId: correlationIdSchema.parse(randomUUID()),
   });
-  if (accepted.outcome !== "accepted" && accepted.outcome !== "already_accepted") {
+  if (accepted.outcome !== "accepted") {
     console.info("[chooser] join refused: INVITATION_" + accepted.outcome.toUpperCase());
-    return joinRefused(accepted.outcome === "identity_inactive" ? "inactive" : "closed");
+    return joinRefused(
+      accepted.outcome === "identity_inactive"
+        ? "inactive"
+        : accepted.outcome === "unavailable"
+          ? "closed"
+          : accepted.outcome,
+    );
   }
   const current = await loadOrganizationLauncher(identity.session);
   const entry =
     current.kind === "available"
-      ? current.entries.find((candidate) => candidate.organizationId === invitation.organizationId)
+      ? current.entries.find(
+          (candidate) => candidate.organizationId === accepted.account.organizationId,
+        )
       : undefined;
   if (entry === undefined) redirect("/signed-in");
   redirect(organizationAddressPath(entry.tenantShortName, entry.organizationShortName));
