@@ -665,7 +665,7 @@ export const createOrganizationLocalAdministrationService = (
       const command =
         createOrganizationInvitationForAdministrationCommandSchema.safeParse(commandCandidate);
       if (!command.success) return { kind: "unavailable" };
-      return requests.runChangeWithRefusal(
+      return requests.runAccessChangeWithRefusal(
         session,
         selection,
         async (transaction, scope) => {
@@ -674,7 +674,8 @@ export const createOrganizationLocalAdministrationService = (
               select * from vortex_access.create_organization_invitation_for_administration(
                 ${command.data.duplicateKey}::uuid,
                 ${command.data.invitedEmail}::text,
-                ${command.data.expiresAt}::timestamptz
+                ${command.data.expiresAt}::timestamptz,
+                array(select pg_catalog.jsonb_array_elements_text(${JSON.stringify(command.data.roleIds)}::jsonb)::uuid)
               )
             `,
           );
@@ -691,7 +692,12 @@ export const createOrganizationLocalAdministrationService = (
                 outcome: "already_pending",
                 operation: "create_organization_invitation",
               })
-            : undefined,
+            : code === "V3145"
+              ? createOrganizationInvitationForAdministrationResultSchema.parse({
+                  outcome: "role_not_delegable",
+                  operation: "create_organization_invitation",
+                })
+              : undefined,
       );
     },
 

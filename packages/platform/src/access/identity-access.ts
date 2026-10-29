@@ -1,3 +1,4 @@
+import { organizationInvitationRoleIntentsSchema } from "./organization-invitation-access";
 import { z } from "zod";
 import {
   builderKeySchema,
@@ -588,15 +589,12 @@ export const invitationAcceptanceWithAccessVersionSchema = z.discriminatedUnion(
       accessVersion: revisionSchema,
     })
     .strict(),
-  z
-    .object({
-      outcome: z.literal("already_accepted"),
-      account: organizationAccountSchema,
-      accessVersion: revisionSchema,
-    })
-    .strict(),
   z.object({ outcome: z.literal("unavailable") }).strict(),
   z.object({ outcome: z.literal("identity_inactive") }).strict(),
+  z.object({ outcome: z.literal("wrong_address") }).strict(),
+  z.object({ outcome: z.literal("expired") }).strict(),
+  z.object({ outcome: z.literal("inviter_not_allowed") }).strict(),
+  z.object({ outcome: z.literal("role_changed") }).strict(),
 ]);
 
 export const invitationSchema = z
@@ -605,6 +603,7 @@ export const invitationSchema = z
     organizationId: organizationIdSchema,
     invitedEmail: z.email(),
     invitedBy: organizationAccountIdSchema,
+    roleIntents: organizationInvitationRoleIntentsSchema,
     createdAt: timestampSchema,
     invitedAt: timestampSchema,
     expiresAt: timestampSchema,

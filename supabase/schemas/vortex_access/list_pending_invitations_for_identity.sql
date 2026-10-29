@@ -7,7 +7,8 @@ returns table (
   organization_id uuid,
   organization_display_name text,
   tenant_display_name text,
-  expires_at timestamptz
+  expires_at timestamptz,
+  role_intents jsonb
 )
 language plpgsql
 stable
@@ -21,11 +22,11 @@ begin
     or p_verified_email is distinct from pg_catalog.lower(pg_catalog.btrim(p_verified_email)) then
     raise exception using errcode = '22023', message = 'Pending invitation lookup is invalid';
   end if;
-  -- The invitations a signed-in person may accept: sent to their verified email, still pending,
-  -- in an active organisation where they hold no active account. At most 20, soonest expiry first.
+  -- Include expired invitations so their recipient can see why joining is no longer possible.
+  -- At most 20, soonest expiry first, in an active organisation without an active account.
   return query
   select invitation.invitation_id, invitation.organization_id, organization.display_name,
-    tenant.display_name, invitation.expires_at
+    tenant.display_name, invitation.expires_at, invitation.role_intents
   from vortex_identity.organization_invitations as invitation
   join vortex_identity.organizations as organization
     on organization.organization_id = invitation.organization_id
@@ -34,7 +35,6 @@ begin
   where invitation.invited_email = p_verified_email
     and invitation.accepted_at is null
     and invitation.revoked_at is null
-    and invitation.expires_at > pg_catalog.statement_timestamp()
     and organization.state = 'active'
     and tenant.state = 'active'
     and not exists (
@@ -44,7 +44,7 @@ begin
         and account.identity_id = p_identity_id
         and account.state = 'active'
     )
-  order by invitation.expires_at, invitation.invitation_id
+  order by (invitation.expires_at <= pg_catalog.statement_timestamp()), invitation.expires_at, invitation.invitation_id
   limit 20;
 end
 $function$;
